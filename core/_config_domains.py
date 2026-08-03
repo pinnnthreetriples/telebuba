@@ -174,11 +174,20 @@ class NeurocommentSettings(BaseSettings):
     # Caption-less PHOTO posts are commented on by showing the image to the model
     # (vision) instead of skipping — over four days live that was 85 skipped posts
     # against 39 published comments. This caps the photo we are willing to inline into
-    # the LLM request; a bigger one is skipped without being downloaded. 4 MB clears any
-    # normal Telegram photo (they arrive well under 1 MB) while bounding a pathological
-    # one. 0 turns the whole vision path off — the escape hatch if an operator decides
-    # the extra image tokens per caption-less post are not worth the comments they buy.
-    vision_max_image_bytes: int = Field(default=4_000_000, ge=0)
+    # the LLM request. The gateway picks the biggest size that FITS rather than refusing
+    # an oversized original, so this is a resolution knob far more than a skip rule: a
+    # 3 MB 2560px photo simply rides along as its ~150 KB 800px sibling, which is all a
+    # vision model resolves anyway.
+    # It is also the ONLY thing bounding what the vision path costs in memory, so the
+    # number is chosen from that arithmetic, not from photo sizes: one in-flight post
+    # holds the raw bytes, their base64 (x4/3, kept across all three regenerations), the
+    # serialized request body and its encoded copy — ~5x the cap — and
+    # ``max_concurrent_post_tasks`` (50) of those may be in flight at once. 1 MB is
+    # therefore a fleet ceiling of ~250 MB; the 4 MB this shipped with was ~1 GB, which
+    # nobody had chosen and which whoever posts in a watched channel got to spend.
+    # 0 turns the whole vision path off — the escape hatch if an operator decides the
+    # extra image tokens per caption-less post are not worth the comments they buy.
+    vision_max_image_bytes: int = Field(default=1_000_000, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
     # L4: cap on concurrently in-flight on-post handler tasks (excess dropped under flood).

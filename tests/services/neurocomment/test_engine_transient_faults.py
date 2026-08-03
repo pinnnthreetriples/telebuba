@@ -16,6 +16,12 @@ refuses to overwrite, so it burns the post for every account in the fleet, perma
 but merely leaving it ``claimed`` still spends quota (``_quota`` counts ``claimed``
 alongside ``posted``, and only process startup ages stale claims out), billing the account
 a day-cap slot for 24 hours. So the transient paths RELEASE the row: it must be gone.
+
+With ONE exception, the last section here: ``UNCONFIRMED_ERROR_TYPE`` is the half of
+``unavailable`` where the request reached Telegram and only the answer was lost. Releasing
+a row whose comment may be LIVE hands the post back to be commented on twice, so that half
+keeps the ``failed`` the rest of the file argues against — and the tests below pin that it
+costs the post without also costing the account.
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ from core.db import (
     fetch_readiness,
     list_recent_logs,
 )
+from core.telegram_client import UNCONFIRMED_ERROR_TYPE
 from schemas.gemini import GeminiResult
 from schemas.telegram_actions import NewPostEvent
 from services.content import try_reserve_sent
@@ -204,6 +211,95 @@ async def test_unavailable_does_not_spend_the_channels_daily_quota(
     # WAS delivered still fills the cap of 1, so the next post is refused as normal.
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=3, text="hi"))
     assert await _latest_extra("neurocomment_no_account_available", "reason") == "quota_day"
+
+
+# --------------------------------------------------------------------------- #
+# ...but only the half of it that proves nothing was sent may release the claim
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_an_unconfirmed_send_is_not_released_back_for_a_second_comment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The double-comment the release path opened: the send DID go out, the answer didn't.
+
+    ``release_claim`` DELETEs the row, so the post became claimable again — and Telethon
+    closes an updates gap by RE-DELIVERING the post it missed. The second delivery won a
+    fresh claim and commented a second time under a post that may already carry our
+    comment. A terminal row is the only thing that can stop it.
+    """
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    comment = _CommentStub(status="unavailable", error_type=UNCONFIRMED_ERROR_TYPE)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "failed"
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert len(comment.posts) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unconfirmed_send_still_costs_the_pair_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Burning the POST is the price of the ambiguity; billing the ACCOUNT is not.
+
+    The row goes terminal because the comment may be live, but the fault is still the
+    gateway's — so no cooldown, no readiness write, no channel pause, and the reserved
+    text goes back so a later regeneration is not filtered as its own duplicate.
+    """
+    monkeypatch.setattr(settings.neurocomment, "peer_flood_cooldown_seconds", 3600)
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="unavailable", error_type=UNCONFIRMED_ERROR_TYPE)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    now = datetime.now(UTC)
+    assert _state.in_cooldown("acc-1", now, "@chan") is False
+    assert _state.in_cooldown("acc-1", now) is False
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert (readiness.ready, readiness.banned) == (True, False)
+    assert await fetch_channel_paused_until("@chan") is None
+    assert await try_reserve_sent("a nice comment") is True
+    assert await _has_event("neurocomment_post_unavailable") is True
+    assert await _latest_extra("neurocomment_post_unavailable", "error_type") == (
+        UNCONFIRMED_ERROR_TYPE
+    )
+
+
+@pytest.mark.asyncio
+async def test_an_unconfirmed_send_frees_the_quota_slot_it_held(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No phantom slot: ``failed`` stops counting the moment the attempt ends.
+
+    ``_quota`` counts ``claimed`` and ``posted``, so the terminal row costs the account
+    nothing on the next post — the same accounting the DELETE bought, without handing the
+    post back. Pinned at a day cap of 1 so one unconfirmed send would be the whole day.
+    """
+    monkeypatch.setattr(settings.neurocomment, "max_comments_per_hour", 100)
+    monkeypatch.setattr(settings.neurocomment, "max_comments_per_channel_per_day", 1)
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="unavailable", error_type=UNCONFIRMED_ERROR_TYPE)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+
+    comment.status = "ok"
+    comment.message_id = 7
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    record = await fetch_comment("@chan", 2)
+    assert record is not None
+    assert record.status == "posted"
 
 
 # --------------------------------------------------------------------------- #

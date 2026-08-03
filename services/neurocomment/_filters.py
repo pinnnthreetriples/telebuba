@@ -35,8 +35,11 @@ def _no_caption_reason(kind: PostMediaKind) -> str | None:
     A caption-less photo is no longer dead weight: ``_generate`` downloads it and the
     model comments on what it sees. Everything else that arrives without a caption keeps
     its own reason, so the skip log prices what is genuinely still left on the table
-    (``media_no_image``) apart from what never was (``media_album_item`` — a duplicate of
-    the album head we already commented on) and from the operator's own off-switch
+    (``media_no_image``) apart from what an album never offers (``media_album_item`` — every
+    item of an album lands in ONE discussion thread, so answering each would post three to
+    five comments under a single visible post; we answer an album at most once, via its
+    captioned head, and nothing here knows whether that head actually got a comment) and
+    from the operator's own off-switch
     (``media_no_caption``, the pre-vision behaviour, when the size cap is set to 0).
     """
     if kind == "none":

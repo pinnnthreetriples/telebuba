@@ -294,7 +294,6 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     claim_comment,
     clear_channel_pause,
     clear_join_request,
-    clear_pair_banned,
     clear_rejoin_attempts,
     count_account_channel_comments_since,
     count_account_comments_since,

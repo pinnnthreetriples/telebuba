@@ -19,7 +19,6 @@ from typing import Literal
 
 from core.config import settings
 from core.db import (
-    clear_pair_banned,
     fetch_active_campaign_for_channel,
     fetch_campaign,
     list_campaign_accounts,
@@ -72,15 +71,13 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
         if not serving:
             return ChannelBanCheck(channel=channel, status="unknown")
         states = await asyncio.gather(*(_probe(acc, channel) for acc in serving))
-        # Recovery (#30): a live can_send verdict is proof the account may write again,
-        # so lift any sticky auto-ban on that pair — this button is the un-ban path.
-        # A restricted verdict is the mirror image: it is the one authoritative
-        # per-group ban signal, so run the confirmation ladder on it (state passed in —
-        # the probe above already paid for it) and leave the group if it holds.
+        # A restricted verdict is the one authoritative per-group ban signal, so run the
+        # confirmation ladder on it (state passed in — the probe above already paid for it)
+        # and leave the group if it holds. There is no mirror branch: a can_send verdict
+        # does NOT lift a ban. The pair-level ban is permanent by decision (#30), so this
+        # button REPORTS the channel's state and only ever adds bans — never removes one.
         for account_id, state in zip(serving, states, strict=True):
-            if state == "can_send":
-                await clear_pair_banned(account_id, channel)
-            elif state == "restricted":
+            if state == "restricted":
                 await confirm_group_ban_and_leave(account_id, channel, known_state=state)
         return ChannelBanCheck(channel=channel, status=_aggregate(list(states)))
 
@@ -129,8 +126,13 @@ async def confirm_group_ban_and_leave(
         else:
             state = probe.state if isinstance(probe, BanCheckResult) else "probe_error"
     if state != "restricted":
+        # INFO, not WARNING: this is the NEGATIVE answer to a question we asked, and it is
+        # the common one — every gated post runs the ladder, so a closed channel produced
+        # two amber rows per blocked post and the operator's warning filter filled up with
+        # a check that found nothing wrong. The row that IS the problem (the gate, the
+        # refused write) is logged by the caller at WARNING and still says so.
         await log_event(
-            "WARNING",
+            "INFO",
             "neurocomment_group_ban_unconfirmed",
             account_id=account_id,
             extra={"channel": channel, "state": state},
@@ -150,12 +152,15 @@ async def confirm_group_ban_and_leave(
     # group (that is what the restricted record means) but cannot write there.
     await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
     # Sticky (#30), and deliberately so: for this pair the channel is closed for good.
-    # There is no way back. Not the can_send probe that clears an ordinary ban above —
-    # once we leave, this pair can only ever probe as not_member — and not the operator
-    # either: ``challenge.retry_pair`` would delete the readiness row and re-onboard, and
-    # ``POST /api/v1/neurocomment/retry`` still reaches it, but its only caller is the
-    # captcha-queue button, which is fed by ``list_campaign_challenges`` — and a banned
-    # pair has no challenge row, so no button in the UI points here. The operator's
+    # There is no way back, and nothing in the codebase offers one. "Проверить каналы"
+    # used to un-ban on a live can_send verdict, defended as unreachable because a pair we
+    # left can only probe as not_member — but the leave below is best-effort and has its
+    # own failing-leave test, so that verdict WAS reachable and the button quietly undid
+    # the ban the hints call permanent. It was removed rather than the hints softened.
+    # The operator has no path either: ``challenge.retry_pair`` would delete the readiness
+    # row and re-onboard, and ``POST /api/v1/neurocomment/retry`` still reaches it, but its
+    # only caller is the captcha-queue button, which is fed by ``list_campaign_challenges``
+    # — and a banned pair has no challenge row, so no button in the UI points here. The
     # remedy is another account in the campaign; when every serving account is banned the
     # channel is unlinked below. Marked BEFORE the leave — the ban is the truth and must
     # persist even if the leave RPC fails.

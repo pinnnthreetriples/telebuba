@@ -26,6 +26,7 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import log_event
+from core.telegram_client import UNCONFIRMED_ERROR_TYPE
 from services.content import release_sent_text
 from services.neurocomment import _channel_pause, _state, bans
 
@@ -61,14 +62,20 @@ _COOLDOWN_STATUSES = frozenset(
 # (``status="unavailable"`` — pool connect / socket / timeout, see
 # ``core.telegram_client._action_results._unavailable_result``) and a Gemini 429 that
 # exhausted generation (``_generate._gemini_reason``). Neither gets a cooldown — one proxy
-# flap would park the fleet channel by channel — and neither marks the claim ``failed``:
-# that status is TERMINAL (``_mark_comment`` refuses to re-transition it) on a row
-# ``claim_comment`` already refuses to overwrite, so a seconds-long outage would burn the
-# post for every account, forever. The claim is ``release_claim``d instead: leaving it
-# ``claimed`` is not free either, because quota counts ``claimed`` alongside ``posted`` and
-# the sweep's reclaim pass only ages a claim out after ``stale_claim_reclaim_seconds``, so
-# the account paid a day-cap slot (a THIRD of its day on that channel at the shipped cap of
-# 3) for a comment it never sent — for a quarter of an hour, over a fault of ours.
+# flap would park the fleet channel by channel.
+#
+# What happens to the CLAIM then splits on one question the gateway answers and we cannot:
+# did the request reach Telegram? When it did not (the pool never connected), the claim is
+# ``release_claim``d, because marking it ``failed`` is TERMINAL (``_mark_comment`` refuses
+# to re-transition it) on a row ``claim_comment`` already refuses to overwrite — a
+# seconds-long outage would burn the post for every account, forever — while leaving it
+# ``claimed`` is not free either: quota counts ``claimed`` alongside ``posted`` and the
+# sweep's reclaim pass only ages a claim out after ``stale_claim_reclaim_seconds``, so the
+# account paid a day-cap slot (a THIRD of its day on that channel at the shipped cap of 3)
+# for a comment it never sent — for a quarter of an hour, over a fault of ours.
+# When the request DID reach Telegram and only the reply was lost
+# (``UNCONFIRMED_ERROR_TYPE``), none of that reasoning survives: the comment may be live
+# under the post, so the row must not be handed back. See the branch.
 _UNAVAILABLE_STATUS = "unavailable"
 _RATE_LIMITED_REASON = "gemini_rate_limited"
 
@@ -155,12 +162,11 @@ async def _classify_post(
     _remove_inflight(event.channel, text)
     await release_sent_text(text)
     if result.status == _UNAVAILABLE_STATUS:
-        # Returns before every write below: no burnt claim, no cooldown, no readiness
-        # write, no write failure. The pair is fine, the gateway was not (see
-        # _UNAVAILABLE_STATUS), and its own event name keeps the outage legible instead of
-        # masquerading as a post this account could not make. Releasing the claim is what
-        # makes "not charged" true of the quota too, not just of the status.
-        await release_claim(event.channel, event.post_id)
+        # Returns before every write below: no cooldown, no readiness write, no write
+        # failure. The pair is fine, the gateway was not (see _UNAVAILABLE_STATUS), and its
+        # own event name keeps the outage legible instead of masquerading as a post this
+        # account could not make. Only the claim differs — see the helper.
+        await _resolve_unavailable_claim(event, result)
         await _log_outcome(event, account_id, result, "neurocomment_post_unavailable")
         return
     await mark_comment_failed(event.channel, event.post_id)
@@ -246,6 +252,30 @@ async def _classify_post(
         await _apply_cooldown(account_id, None, event.channel)
         event_name = "neurocomment_post_failed"
     await _log_outcome(event, account_id, result, event_name)
+
+
+async def _resolve_unavailable_claim(event: NewPostEvent, result: ActionResult) -> None:
+    """Settle the claim of a gateway outage, on what that outage can actually prove.
+
+    Nothing was sent (the pool never connected) → release. The DELETE is what makes "not
+    charged" true of the quota too, not just of the status, and it hands the post back so
+    another account — or this one, later — can still comment on it.
+
+    The send went out and only the answer was lost (``UNCONFIRMED_ERROR_TYPE``) → the
+    comment may be LIVE under the post, and releasing then re-opened the very window
+    ``claim_comment`` exists to close: Telethon closes an updates gap by re-delivering the
+    post it missed, that re-delivery wins a fresh claim, and we comment a SECOND time under
+    a post we may already have commented on. So the row is burnt instead. ``failed`` frees
+    the quota slot just as immediately (``_quota`` counts only ``claimed`` and ``posted``)
+    while staying terminal, and it is the same verdict ``_sweep._reclaim_stale_claims``
+    already writes for the same ambiguity — the honest record of an attempt we cannot
+    confirm delivered. Under-counting a comment that did land is the residue of not
+    knowing; counting it instead over-counts every time it did not, and holds the slot too.
+    """
+    if result.error_type == UNCONFIRMED_ERROR_TYPE:
+        await mark_comment_failed(event.channel, event.post_id)
+    else:
+        await release_claim(event.channel, event.post_id)
 
 
 async def _log_outcome(

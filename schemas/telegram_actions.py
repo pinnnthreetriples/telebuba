@@ -402,10 +402,12 @@ class ActionResult(BaseModel):
 class PostImageResult(BaseModel):
     """Gateway output for ``download_post_image`` — the photo, or why there isn't one.
 
-    ``reason`` is set exactly when ``image_b64`` is ``None``: ``unavailable`` (the post
-    is gone, carries no photo, the download yielded no bytes, or the gateway faulted) or
-    ``too_large`` (over the caller's byte ceiling). The caller turns it into a post-skip
-    reason, so the operator sees which of the two happened.
+    ``reason`` is set exactly when ``image_b64`` is ``None``: ``unavailable`` (the post is
+    gone, carries no photo, the download yielded no bytes, the gateway faulted, or the
+    fetch outstayed its deadline) or ``too_large`` (the photo offers no size at all under
+    the caller's byte ceiling — an oversized ORIGINAL is not refused, it rides along as
+    its biggest size that fits). The caller turns it into a post-skip reason, so the
+    operator sees which of the two happened.
     """
 
     image_b64: str | None = None

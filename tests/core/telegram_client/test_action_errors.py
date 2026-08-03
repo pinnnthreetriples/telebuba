@@ -11,10 +11,11 @@ from PIL import Image
 from telethon import errors
 
 from core.config import settings
-from core.telegram_client import create_telegram_client, execute
+from core.telegram_client import UNCONFIRMED_ERROR_TYPE, create_telegram_client, execute
 from core.telegram_client._pool import TelegramClientPoolError
 from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
+    CommentOnPost,
     JoinChannel,
     SetProfilePhoto,
 )
@@ -307,6 +308,39 @@ async def test_execute_classifies_infrastructure_failures_unavailable(
 
     assert result.status == "unavailable"
     assert result.error_type == type(exc).__name__
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [ConnectionError("socket closed"), TimeoutError("read timed out")],
+)
+async def test_a_transient_fault_after_the_request_went_out_is_reported_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+) -> None:
+    """The same exception classes mean something else once the pool handed back a client.
+
+    ``TimeoutError`` raised while ``get_client`` connects proves nothing was sent;
+    raised out of ``send_message`` it means the request is already on the wire and only
+    the ANSWER was lost — Telegram may well have applied it. The class name alone cannot
+    tell those apart, so the gateway (the only layer that knows which call raised)
+    reports the second half under its own ``error_type``.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_message(self, *_args: object, **_kwargs: object) -> object:
+            raise exc
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-8", CommentOnPost(channel="@chan", post_id=10, text="hi"))
+
+    assert result.status == "unavailable"
+    assert result.error_type == UNCONFIRMED_ERROR_TYPE
 
 
 # --------------------------------------------------------------------------- #

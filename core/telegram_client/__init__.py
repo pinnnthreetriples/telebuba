@@ -22,6 +22,7 @@ Tests that monkeypatch internals target the submodule that owns the name
 
 from __future__ import annotations
 
+from core.telegram_client._action_results import UNCONFIRMED_ERROR_TYPE
 from core.telegram_client._actions import execute
 from core.telegram_client._auth import (
     log_out_session,
@@ -59,6 +60,7 @@ from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
 
 __all__ = [
+    "UNCONFIRMED_ERROR_TYPE",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",

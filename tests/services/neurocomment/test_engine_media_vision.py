@@ -135,27 +135,41 @@ async def test_photo_with_a_caption_stays_a_plain_text_request(
         (PostImageResult(reason="too_large"), "media_too_large"),
     ],
 )
-async def test_failed_download_skips_the_post_and_frees_the_claim(
+async def test_failed_download_skips_the_post_and_spends_it(
     monkeypatch: pytest.MonkeyPatch,
     result: PostImageResult,
     reason: str,
 ) -> None:
+    """The attempt costs the POST, not the account — and it costs it exactly once.
+
+    Releasing the claim (a DELETE) refunded the whole attempt, so the same post could be
+    re-delivered and re-run the eleven-odd reads, the account pick and the fetch again,
+    for free, as often as the channel cared to make it happen. ``failed`` keeps the row
+    that ``claim_comment`` wins against, so the second delivery is a no-op — while the
+    quota (which counts only ``claimed``/``posted``) still charges the account nothing
+    for a picture the gateway would not hand over.
+    """
     await _make_campaign("@chan", "acc-1")
     comment = _CommentStub()
     gen = _CapturingGen()
     _patch_io(monkeypatch, comment=comment)
     monkeypatch.setattr(_seams, "generate_text", gen.generate_text)
-    _patch_download(monkeypatch, result)
+    downloads = _patch_download(monkeypatch, result)
 
+    await engine.handle_new_post(_photo_post())
     await engine.handle_new_post(_photo_post())
 
     # Nothing generated (no comment about nothing) and nothing posted...
     assert gen.requests == []
     assert comment.calls == []
     assert await _skip_reasons() == [reason]
-    # ...and the claim is released, not burnt: the row is gone, so the account's day-cap
-    # slot is not spent on a photo it never got to see.
-    assert await fetch_comment("@chan", 10) is None
+    # ...the post is terminal, so the second delivery never reaches the gateway again...
+    assert len(downloads.calls) == 1
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "failed"
+    # ...and it is 'failed', not 'claimed': the day-cap slot comes straight back.
+    assert record.comment_text is None
 
 
 # --------------------------------------------------------------------------- #

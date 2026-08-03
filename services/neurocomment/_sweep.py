@@ -67,6 +67,12 @@ async def _sweep_loop() -> None:
     every lifecycle rule simply stopped until an operator hit Start again. Guarding here is
     what makes the promise true — no pass can abort the loop or its siblings, and every
     fault leaves a ``neurocomment_sweep_failed`` line naming the pass that raised.
+
+    The one way a pass ends this loop is by stopping it on purpose: a drop rule that unlinks
+    the LAST watch channel reconciles the listener, which unsubscribes and stops the sweep.
+    That stop cannot cancel us from inside us (see ``_runtime._cancel_bounded``), so it
+    clears the handle instead and we retire below — after the tick drains, so the siblings
+    of the pass that dropped the channel still run and the drop's own log line is written.
     """
     interval = settings.neurocomment.deletion_sweep_interval_seconds
     while True:
@@ -92,6 +98,15 @@ async def _sweep_loop() -> None:
                     "neurocomment_sweep_failed",
                     extra={"pass": name, "error_type": type(exc).__name__},
                 )
+        # Late import: ``_runtime`` imports this module, so a top-level import cycles.
+        from services.neurocomment import _runtime  # noqa: PLC0415
+
+        # De-registered mid-tick = a pass stopped us (last channel dropped, or the listener
+        # account turned out to be warming). Retire instead of sweeping on for a listener
+        # that is already unsubscribed. Identity, not ``is None``: a later pass in the same
+        # tick can re-link and start a FRESH task, and then this one must yield to it.
+        if _runtime._SWEEP_TASK is not asyncio.current_task():  # noqa: SLF001 - peer module
+            return
 
 
 async def _prune_history_if_due(now: datetime) -> None:
@@ -271,9 +286,11 @@ async def _reclaim_stale_claims(now: datetime) -> None:
 
     The cutoff is the startup one (``stale_claim_reclaim_seconds``, 900s), unchanged and
     unshared with the tick interval on purpose: the longest legitimate in-flight stretch at
-    shipped defaults is ~4 minutes — three generate rounds of two 30s Gemini attempts plus
-    backoff (183s), the reply delay (<=10s), then the send (pool + RPC, ~50s) — so 15
-    minutes still clears it three times over.
+    shipped defaults is ~4.5 minutes — three generate rounds of two 30s Gemini attempts plus
+    backoff (183s), the reply delay (<=10s), the vision download (<=30s, bounded inside
+    ``download_post_image`` precisely so this sum stays finite — unbounded it ran to ~34
+    minutes on a slow proxy and outlived the cutoff), then the send (pool + RPC, ~50s) — so
+    15 minutes still clears it three times over.
     """
     cutoff = (
         now - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)

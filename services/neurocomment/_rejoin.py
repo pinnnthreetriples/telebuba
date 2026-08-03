@@ -283,9 +283,9 @@ async def _drop_channel_if_nothing_works(
     await campaigns_service.deactivate_channel(campaign_id, channel)
     # Two verdicts, two lines: "every account spent its four re-joins here" is a claim
     # about the chat, and reporting it for a channel whose address Telegram says does not
-    # exist told the operator to wait for a recovery nobody was working on. Both codes are
-    # written out in full — the i18n drift guard reads the literal at the call site, and a
-    # single call picking its code from a variable would hide both from it.
+    # exist told the operator to wait for a recovery nobody was working on. Two calls rather
+    # than one picking its code from a variable: the i18n drift guard does now follow a name
+    # bound to a literal, but two branches that mean different things read better as two.
     if all(terminal(row) for row in parked):
         await log_event(
             "WARNING",

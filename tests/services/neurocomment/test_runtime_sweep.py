@@ -660,13 +660,13 @@ async def _run_until_second_tick(monkeypatch: pytest.MonkeyPatch) -> None:
             second.set()
 
     monkeypatch.setattr(_sweep, "_sweep_once", counted)
-    task = asyncio.create_task(_sweep._sweep_loop())
+    # Started through the runtime, not by hand: the loop retires the moment it is not the
+    # registered sweep task, so a hand-built one would quit after tick one.
+    _runtime._ensure_sweep_running()
     try:
         await asyncio.wait_for(second.wait(), timeout=5.0)
     finally:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        await _runtime._stop_sweep()  # bounded cancel, and clears the handle
 
 
 @pytest.mark.asyncio

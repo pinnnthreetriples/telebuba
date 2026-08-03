@@ -86,9 +86,15 @@ async def _generate_and_post(
         )
         if image.image_b64 is None:
             # No image means nothing to comment ON: degrade to the skip the filter used to
-            # hand out, and release rather than burn the claim — an undownloadable photo is
-            # the gateway's problem, not this pair's, and ``failed`` is terminal.
-            await release_claim(event.channel, event.post_id)
+            # hand out. ``failed``, not ``release_claim``'s DELETE, and for the reason
+            # ``_reclaim_stale_claims`` already spells out — the row is the idempotency
+            # gate ``claim_comment`` wins, so dropping it hands the attempt back for free:
+            # every re-delivery of the same post would re-run the selection reads, the
+            # claim and the fetch again, at the say-so of whoever posts here. ``failed``
+            # is terminal AND costs the account nothing, because ``_quota`` counts only
+            # ``claimed``/``posted`` — which is the point: a gateway that will not hand
+            # over a picture must not eat into an account's hourly or per-channel cap.
+            await mark_comment_failed(event.channel, event.post_id)
             await log_event(
                 "INFO",
                 "neurocomment_post_skipped",

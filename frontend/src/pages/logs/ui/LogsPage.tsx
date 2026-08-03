@@ -13,6 +13,17 @@ const PAGE_SIZE = 50;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
+// The channel an event is about, when it carries one. Four rules unlink a channel by
+// themselves (re-join exhausted, address impossible, join request never approved, pause
+// rounds spent) and the handle they name lives only here, in `extra.channel`. Reading it
+// on THIS page is the whole point: the neurocomment activity card shows the same field but
+// only for the last ~50 streamed lines, so an unattended overnight drop became a level and
+// a label with nothing to act on. `extra` is a free-form object, hence the type check.
+function extraChannel(extra: LogEntry['extra']): string | undefined {
+  const value = extra?.channel;
+  return typeof value === 'string' ? value : undefined;
+}
+
 export function LogsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -104,9 +115,25 @@ export function LogsPage() {
         } satisfies DataTableColumnMeta,
       },
       {
+        id: 'channel',
+        header: () => t('logs.col.channel'),
+        cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
+        meta: {
+          className: 'w-[170px]',
+          cellClassName: 'truncate text-[12.5px] text-[#3a3a3a]',
+        } satisfies DataTableColumnMeta,
+      },
+      {
         id: 'event',
         header: () => t('logs.col.event'),
-        cell: ({ row }) => eventLabel(t, row.original.event),
+        // Same hover hint as the neurocomment activity card: the label alone says a
+        // channel left the campaign, the hint says why and what to do about it. Empty
+        // string → no `title`, so an event without a hint gets no blank tooltip.
+        cell: ({ row }) => (
+          <span title={t(`logEventHint.${row.original.event}`, { defaultValue: '' }) || undefined}>
+            {eventLabel(t, row.original.event)}
+          </span>
+        ),
         meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
       },
     ],

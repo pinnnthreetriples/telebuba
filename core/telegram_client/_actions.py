@@ -102,6 +102,9 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
             error_message="Account not found in database",
         )
 
+    # Bound before the try so the transient clause below can read how far we got: still
+    # None only while ``get_client`` runs, non-None once ``_dispatch_action`` is entered.
+    client: TelegramClient | None = None
     try:
         client = await get_client(account_id)
         outcome = await _dispatch_action(client, action)
@@ -170,8 +173,15 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
         return await _generic_error(account_id, action, exc, domain=domain)
     except errors.InviteRequestSentError as exc:
         return await _join_by_request_result(account_id, action, exc, domain=domain)
+    # One exception family, two meanings, and this is the ONLY frame that can tell them
+    # apart: a socket dying while the pool connects raises the same ``ConnectionError`` /
+    # ``TimeoutError`` as one dying while we wait for the reply to a request already sent.
+    # Above the gateway the class name is all there is, so callers assumed the
+    # safe-looking half — and a comment that HAD been delivered was treated as never sent.
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
-        return await _unavailable_result(account_id, action, exc, domain=domain)
+        return await _unavailable_result(
+            account_id, action, exc, dispatched=client is not None, domain=domain
+        )
     except Exception as exc:  # noqa: BLE001
         return await _generic_error(account_id, action, exc, domain=domain)
 

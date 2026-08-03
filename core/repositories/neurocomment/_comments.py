@@ -226,16 +226,22 @@ def _release_claim(channel: str, post_id: int) -> None:
 
 
 async def release_claim(channel: str, post_id: int) -> None:
-    """Drop an in-flight claim the attempt never charged to the account.
+    """Drop an in-flight claim for an attempt that provably sent nothing.
 
-    The transient outcomes (``status="unavailable"``, a Gemini 429) are nobody's fault,
-    so they must not mark the row ``failed`` — but leaving it ``claimed`` is not free
-    either: ``_quota`` counts ``claimed`` alongside ``posted``, and ``reclaim_stale_claims``
-    is a backstop that only ages a claim out once it is 15 minutes old, so the slot stayed
-    spent long after the attempt was over. Deleting the row frees it at once. A DELETE
-    rather than a new status because the row records nothing worth keeping: nothing was
-    generated or sent — which is exactly what the periodic reclaim can NOT infer from age,
-    and why it marks ``failed`` instead of deleting.
+    Callable ONLY when the caller knows no comment left the process: an undownloadable
+    post image and a Gemini 429 both fail before generation finishes, and a gateway
+    ``status="unavailable"`` qualifies only when it is NOT ``UNCONFIRMED_ERROR_TYPE``,
+    i.e. when the pool never connected. Those are nobody's fault, so they must not mark
+    the row ``failed`` — but leaving it ``claimed`` is not free either: ``_quota`` counts
+    ``claimed`` alongside ``posted``, and ``reclaim_stale_claims`` is a backstop that only
+    ages a claim out once it is 15 minutes old, so the slot stayed spent long after the
+    attempt was over. Deleting the row frees it at once.
+
+    A DELETE rather than a new status because the row records nothing worth keeping — and
+    that is also the whole danger: it makes ``(channel, post_id)`` claimable again, so a
+    caller that merely HOPES nothing was sent re-opens the double-comment window
+    ``claim_comment`` exists to close. Which is exactly what the periodic reclaim can NOT
+    infer from age, and why it marks ``failed`` instead of deleting.
     """
     return await asyncio.to_thread(_release_claim, channel, post_id)
 

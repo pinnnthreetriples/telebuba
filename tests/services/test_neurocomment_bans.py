@@ -126,8 +126,15 @@ async def test_probe_error_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_can_send_probe_clears_a_sticky_ban(monkeypatch: pytest.MonkeyPatch) -> None:
-    """#30 recovery: 'Проверить каналы' lifts the auto-ban when the account can send again."""
+async def test_can_send_probe_does_not_lift_a_ban(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A per-pair ban is permanent — 'Проверить каналы' reports, it does not un-ban.
+
+    The button used to lift the ban on a live ``can_send`` verdict, defended as
+    unreachable ("once we leave, this pair can only ever probe as not_member"). The leave
+    is best-effort and has its own failing-leave test, so the pair could stay a member and
+    probe ``can_send`` — and then a hint that says the channel is closed to this account
+    for good would be a lie the operator could disprove by pressing a button.
+    """
     cid = await _seed(["@a"], ["acc-1"])
     await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
     await mark_pair_banned("acc-1", "@a")
@@ -136,16 +143,18 @@ async def test_can_send_probe_clears_a_sticky_ban(monkeypatch: pytest.MonkeyPatc
     result = await check_campaign_channel_bans(cid)
 
     assert result is not None
+    # The channel is reachable (some account can write there) — but the banned pair stays
+    # banned and stays out of selection.
     assert _status_of(result.items, "@a") == "ok"
     readiness = await fetch_readiness("acc-1", "@a")
     assert readiness is not None
-    assert readiness.banned is False  # the ban was lifted
-    assert readiness.ready is True
+    assert readiness.banned is True
+    assert readiness.ready is False
 
 
 @pytest.mark.asyncio
 async def test_still_banned_probe_keeps_the_ban(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A restricted probe must NOT clear the ban — only a can_send verdict does."""
+    """A restricted probe keeps the ban — and nothing else ever lifts it either."""
     cid = await _seed(["@a"], ["acc-1"])
     await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
     await mark_pair_banned("acc-1", "@a")
