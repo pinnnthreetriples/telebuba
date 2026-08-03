@@ -33,7 +33,7 @@ from schemas.neurocomment import (
     NeurocommentBoard,
     NeurocommentChannelRow,
 )
-from services.neurocomment import _state, settings_store
+from services.neurocomment import _rejoin, _state, settings_store
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -55,7 +55,7 @@ class _ChannelFlags(NamedTuple):
     """Per-channel signals that travel together into a channel row."""
 
     challenged: bool
-    backed_off: bool
+    paused: bool  # serving out a round of the "will not let us write" rule (#147)
     deleted_recent: int  # our comments removed from this channel in the 24h window
 
 
@@ -68,7 +68,11 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     account_links = (await list_campaign_accounts(campaign_id)).links
     account_ids = [link.account_id for link in account_links]
     pins = {link.account_id: link.channels for link in account_links}
-    channels = [link.channel for link in (await list_campaign_channels(campaign_id)).links]
+    # The links, not just their handles: each one carries its own pause deadline (#147),
+    # so the board reads every channel's pause out of this one query instead of one
+    # lookup per rendered row.
+    channel_links = (await list_campaign_channels(campaign_id)).links
+    channels = [link.channel for link in channel_links]
 
     accounts = {acc.account_id: acc for acc in (await list_accounts_by_ids(account_ids)).accounts}
     readiness = (await list_campaign_readiness(campaign_id)).readiness
@@ -103,16 +107,16 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             deleted_by_channel[comment.channel] = deleted_by_channel.get(comment.channel, 0) + 1
     rows = [
         _build_channel_row(
-            channel,
+            link.channel,
             readiness,
-            linked.get(channel),
+            linked.get(link.channel),
             _ChannelFlags(
-                challenged=channel in challenged,
-                backed_off=_state.is_channel_in_challenge_backoff(channel, now),
-                deleted_recent=deleted_by_channel.get(channel, 0),
+                challenged=link.channel in challenged,
+                paused=_state.channel_paused(link.paused_until, now),
+                deleted_recent=deleted_by_channel.get(link.channel, 0),
             ),
         )
-        for channel in channels
+        for link in channel_links
     ]
     feed = sorted(posted, key=lambda c: c.created_at, reverse=True)[
         : settings.neurocomment.board_comment_feed_limit
@@ -156,6 +160,12 @@ def _build_card(
                 ready=r.ready,
                 joined=r.joined,
                 captcha_passed=r.captcha_passed,
+                human_skipped=r.human_skipped,
+                # Both of the "this pair is out of service" flags travel to the card:
+                # the channel row aggregates them away (a channel with one ready
+                # account reads ``ready``), so the card is the only surface that can
+                # say which account is banned (#30) or skipped (#148) where.
+                banned=r.banned,
             )
             for r in readiness
         ],
@@ -173,7 +183,7 @@ def _build_channel_row(
     return NeurocommentChannelRow(
         channel=channel,
         status=_channel_status(
-            rows, linked, ready_count, challenged=flags.challenged, backed_off=flags.backed_off
+            rows, linked, ready_count, challenged=flags.challenged, paused=flags.paused
         ),
         ready_accounts=ready_count,
         total_accounts=len(rows),
@@ -187,23 +197,22 @@ def _channel_status(
     ready_count: int,
     *,
     challenged: bool,
-    backed_off: bool,
+    paused: bool,
 ) -> ChannelStatus:
     """Aggregate a channel's status from its readiness rows + linked-group cache.
 
-    Precedence: a comments-off channel can never be commented on; a channel in
-    challenge back-off (Ф2 #147, K solver failures) is paused regardless of
+    Precedence: a comments-off channel can never be commented on; a channel serving out
+    a "will not let us write" round (Ф2 #147) is paused regardless of
     readiness; otherwise an account that's ready wins; then an auto-ban (#30) when no
     account is ready but one is banned here; then the joined-but-blocked failure modes
     — ``bot_challenge`` when a guardian-bot challenge row exists for the channel
-    (#145), else ``chat_restricted`` (a Telegram-level write block) — then, for a
-    not-joined row, ``join_failed`` (onboarding's hard-failure sentinel) vs
-    ``join_by_request`` (approval gate); ``throttled`` is the catch-all.
+    (#145), else ``chat_restricted`` (a Telegram-level write block) — then the
+    not-joined readings, which :func:`_not_joined_status` splits.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
-    if backed_off:
-        return "bot_challenge_backoff"
+    if paused:
+        return "channel_paused"
     if ready_count > 0:
         return "ready"
     if any(r.banned for r in rows):
@@ -216,12 +225,27 @@ def _channel_status(
 def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
     """Status for a channel none of whose accounts are joined-and-ready.
 
-    ``join_failed`` is onboarding's hard-failure sentinel (joined=False,
-    captcha_passed=True) — a terminal join failure that never self-resolves, distinct
-    from the approval gate ``join_by_request``; ``throttled`` is the catch-all.
+    The unjoined-but-captcha_passed row is ONE sentinel with two readings, and the badge
+    used to give both the terminal one. It is written by a hard join failure AND by an
+    account kicked out of the chat (``_rejoin``'s module docstring: both mean "this pair
+    needs a fresh join"), and since the re-join rule shipped it does self-resolve — one
+    attempt within minutes, then one a day, four in all. So a pair with attempts left is
+    ``rejoining`` (the re-join timeline is running), and only a pair that has spent them
+    — or one ``_rejoin`` refuses to retry at all, i.e. skipped (#148) — is the terminal
+    ``join_failed``. Since #44 the row also says WHY the pair is out, and ``exhausted``
+    folds that in: a verdict a re-join can never beat (a handle nobody owns, a revoked
+    invite key) is finished on arrival, so the badge stops offering «Возвращаемся в чат»
+    for a chat nothing is walking back into. Then the approval gate ``join_by_request``;
+    ``throttled`` is the catch-all.
     """
     if not rows:
         return "no_data"  # onboarding hasn't produced readiness data for this channel yet
+    # Both halves read straight off the rule that does the retrying, never a second copy
+    # of its threshold: ``access_lost`` is the retryable half of the sentinel (it excludes
+    # the skipped and banned rows the rule will not touch) and ``exhausted`` is the budget
+    # it spends. A banned row never reaches here — ``banned`` wins one branch up.
+    if any(_rejoin.access_lost(r) and not _rejoin.exhausted(r) for r in rows):
+        return "rejoining"
     if any(not r.joined and r.captcha_passed for r in rows):
         return "join_failed"
     if any(not r.joined for r in rows):

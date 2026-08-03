@@ -6,6 +6,10 @@ neurocomment). They are re-exported from ``core.config`` so existing
 the ``Settings`` aggregate and the ``settings`` instance stay in ``core.config``.
 """
 
+# aislop-ignore-file ai-slop/hardcoded-url -- every URL here is an env-overridable
+# Settings default (validated HTTPS); that is what a config default IS, not a URL
+# buried in business logic, which is what the rule is for.
+
 from __future__ import annotations
 
 from typing import Literal
@@ -126,6 +130,14 @@ class NeurocommentSettings(BaseSettings):
     # hits this; skipped joins resume as the window rolls / on the next reconcile.
     # 20 is a conservative safe default.
     max_joins_per_account_per_day: int = Field(default=20, ge=0)
+    # Approval-gated discussion groups ("join by request"): a request is re-sent at most
+    # once, this long after the previous one, and never more than max_attempts times.
+    # Onboarding used to re-request on every pass — 32 live pairs re-requested ~6 times
+    # in three days, which is what an admin sees as spam. Their product is also the
+    # patience budget: after retry_hours x max_attempts (48h) with nobody approving, the
+    # sweep drops the channel from its campaign.
+    join_request_retry_hours: float = Field(default=24.0, gt=0.0)
+    join_request_max_attempts: int = Field(default=2, ge=1)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
     # Cap on how many recent posted comments the board's published-comments feed
@@ -163,6 +175,23 @@ class NeurocommentSettings(BaseSettings):
     # A post whose text, stripped of links, leaves at most this many word chars is
     # treated as link-only / an ad and skipped.
     link_only_max_word_chars: int = Field(default=10, ge=0)
+    # Caption-less PHOTO posts are commented on by showing the image to the model
+    # (vision) instead of skipping — over four days live that was 85 skipped posts
+    # against 39 published comments. This caps the photo we are willing to inline into
+    # the LLM request. The gateway picks the biggest size that FITS rather than refusing
+    # an oversized original, so this is a resolution knob far more than a skip rule: a
+    # 3 MB 2560px photo simply rides along as its ~150 KB 800px sibling, which is all a
+    # vision model resolves anyway.
+    # It is also the ONLY thing bounding what the vision path costs in memory, so the
+    # number is chosen from that arithmetic, not from photo sizes: one in-flight post
+    # holds the raw bytes, their base64 (x4/3, kept across all three regenerations), the
+    # serialized request body and its encoded copy — ~5x the cap — and
+    # ``max_concurrent_post_tasks`` (50) of those may be in flight at once. 1 MB is
+    # therefore a fleet ceiling of ~250 MB; the 4 MB this shipped with was ~1 GB, which
+    # nobody had chosen and which whoever posts in a watched channel got to spend.
+    # 0 turns the whole vision path off — the escape hatch if an operator decides the
+    # extra image tokens per caption-less post are not worth the comments they buy.
+    vision_max_image_bytes: int = Field(default=1_000_000, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
     # L4: cap on concurrently in-flight on-post handler tasks (excess dropped under flood).
@@ -271,11 +300,17 @@ class NeurocommentSettings(BaseSettings):
             "authoris",
         ]
     )
-    # Ф2 #147 channel challenge back-off: K consecutive solver failures on a channel
-    # trip an escalating cooldown that stops onboarding new accounts there.
+    # Ф2 #147 "this channel will not let us write": K consecutive write failures on a
+    # channel — a captcha the solver lost or a write gate — end a round, and the channel
+    # is paused for a flat window in which nothing posts there and no account is
+    # onboarded to it. The escalating 1h→24h doubling it replaced only delayed the
+    # verdict; four flat days do decide one. Round counter and deadline are PERSISTED on
+    # the campaign link (migration #42), because the process restarted 7 times in three
+    # days and an in-memory counter never reached round 4.
     channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)
-    channel_challenge_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
-    channel_challenge_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
+    channel_pause_hours: float = Field(default=24.0, gt=0.0)
+    # Rounds a channel gets before it leaves its campaign instead of pausing again.
+    channel_max_rounds: int = Field(default=4, ge=1)
     # Minimum warming age (whole days) for an account to count as "warmed" in the
     # neurocomment page's top overview field.
     warmed_min_days: int = Field(default=14, ge=1)
@@ -310,9 +345,6 @@ class NeurocommentSettings(BaseSettings):
             raise ValueError(msg)
         if self.challenge_click_delay_min_seconds > self.challenge_click_delay_max_seconds:
             msg = "challenge_click_delay_min_seconds must not exceed _max_seconds"
-            raise ValueError(msg)
-        if self.channel_challenge_backoff_base_seconds > self.channel_challenge_backoff_max_seconds:
-            msg = "channel_challenge_backoff_base_seconds must not exceed _max_seconds"
             raise ValueError(msg)
         if self.discovery_qualify_delay_min_seconds > self.discovery_qualify_delay_max_seconds:
             msg = "discovery_qualify_delay_min_seconds must not exceed _max_seconds"

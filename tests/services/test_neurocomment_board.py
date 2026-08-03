@@ -16,6 +16,7 @@ import pytest
 from core.config import settings
 from core.db import (
     assign_account_to_campaign,
+    bump_channel_pause,
     claim_comment,
     configure_database,
     create_account,
@@ -25,8 +26,10 @@ from core.db import (
     link_channel_to_campaign,
     mark_comment_posted,
     mark_comments_deleted,
+    mark_human_skipped,
     mark_pair_banned,
     save_neurocomment_settings,
+    stamp_rejoin_attempt,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -47,7 +50,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
-    _state.reset_for_tests()  # challenge back-off is module-global; isolate per test
+    _state.reset_for_tests()  # the in-memory channel state is module-global; isolate per test
     reset_logging_for_tests()
     setup_logging()
 
@@ -332,21 +335,20 @@ async def test_channel_status_bot_challenge_when_challenge_row_exists() -> None:
 
 
 @pytest.mark.asyncio
-async def test_channel_status_bot_challenge_backoff() -> None:
-    # Ф2 #147: a channel in challenge back-off shows bot_challenge_backoff (paused),
-    # taking precedence over readiness.
+async def test_channel_status_channel_paused() -> None:
+    # Ф2 #147: a channel serving out a "will not let us write" round shows channel_paused,
+    # taking precedence over readiness. The board reads the deadline off the channel link
+    # it already lists — no extra query per rendered row.
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
     await create_account(AccountCreate(account_id="acc-1"))
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
     await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    _state.register_challenge_failure(
-        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
-    )
+    await bump_channel_pause("@chan", (datetime.now(UTC) + timedelta(hours=24)).isoformat())
 
     board = await load_neurocomment_board(campaign.campaign_id)
 
     assert board is not None
-    assert board.channels[0].status == "bot_challenge_backoff"
+    assert board.channels[0].status == "channel_paused"
 
 
 @pytest.mark.asyncio
@@ -364,21 +366,82 @@ async def test_channel_status_join_by_request() -> None:
 
 
 @pytest.mark.asyncio
-async def test_channel_status_join_failed_is_distinct_from_join_by_request() -> None:
-    # A hard-failed join (invalid invite / banned) must NOT render as "awaiting
-    # approval". Onboarding persists a distinct signal (captcha_passed on an unjoined
-    # row) that the board maps to join_failed, leaving the approval-gate row untouched.
+async def test_channel_status_rejoining_while_attempts_remain() -> None:
+    # The join sentinel (captcha_passed on an unjoined row) is what a KICKED pair
+    # carries while ``_rejoin`` walks it back into the chat, so it must not read as a
+    # terminal "Не удалось вступить" — it self-resolves, and it is distinct from the
+    # approval gate either way.
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
     await create_account(AccountCreate(account_id="acc-1"))
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
     await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    # The terminal-failure readiness shape onboarding writes for a hard fail.
     await upsert_readiness("acc-1", "@chan", joined=False, captcha_passed=True, ready=False)
 
     board = await load_neurocomment_board(campaign.campaign_id)
 
     assert board is not None
+    assert board.channels[0].status == "rejoining"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_join_failed_once_the_rejoins_are_spent() -> None:
+    # The same row with every re-join spent: nothing will retry it now, so this is the
+    # one state the terminal join-failure badge is honest about.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_readiness("acc-1", "@chan", joined=False, captcha_passed=True, ready=False)
+    for _ in range(settings.neurocomment.channel_max_rounds):
+        await stamp_rejoin_attempt("acc-1", "@chan")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
     assert board.channels[0].status == "join_failed"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_join_failed_for_a_skipped_pair() -> None:
+    # ``_rejoin`` refuses to re-join a pair the operator skipped (#148), so its sentinel
+    # row never self-resolves either — terminal, not "getting back in".
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_readiness("acc-1", "@chan", joined=False, captcha_passed=True, ready=False)
+    await mark_human_skipped("acc-1", "@chan")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "join_failed"
+
+
+@pytest.mark.asyncio
+async def test_card_readiness_carries_the_banned_and_skipped_pairs() -> None:
+    # A permanent per-pair ban (#30) is invisible on the channel row as soon as one
+    # sibling account still posts there, so the card must carry it per (account,
+    # channel) — that is the only place the operator can read WHICH account is burnt
+    # WHERE. ``human_skipped`` (#148) rides the same row and was never populated.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@burnt")
+    await link_channel_to_campaign(campaign.campaign_id, "@skipped")
+    await link_channel_to_campaign(campaign.campaign_id, "@fine")
+    for channel in ("@burnt", "@skipped", "@fine"):
+        await upsert_readiness("acc-1", channel, joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@burnt")
+    await mark_human_skipped("acc-1", "@skipped")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    readiness = {r.channel: r for r in board.accounts[0].readiness}
+    assert [r.channel for r in readiness.values() if r.banned] == ["@burnt"]
+    assert [r.channel for r in readiness.values() if r.human_skipped] == ["@skipped"]
+    assert not readiness["@fine"].banned
 
 
 @pytest.mark.asyncio

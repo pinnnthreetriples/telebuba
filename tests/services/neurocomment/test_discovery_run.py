@@ -86,7 +86,20 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
     racing over the same candidate rows, and unreachable by shutdown.
     """
     reader = ReadRecorder(search=matches(("alpha", "Alpha", None)))
-    monkeypatch.setattr(_seams, "execute_read", reader)
+    hold = asyncio.Event()
+
+    async def _held_read(account_id: str, action: TelegramReadAction) -> BaseModel:
+        # Pin the spawned run open until both starts have answered. Gating account
+        # resolution alone is not enough: ``start_discovery`` awaits ``log_event``
+        # right after ``spawn``, and during that yield the whole run can finish and
+        # drop out of ``is_running``. The second start then claims the slot for real
+        # — two "started" replies that are CORRECT, because by then there was nothing
+        # left to be concurrent with. Holding the run's Telegram reads keeps it
+        # un-finishable, so the window under test genuinely stays open.
+        await hold.wait()
+        return await reader(account_id, action)
+
+    monkeypatch.setattr(_seams, "execute_read", _held_read)
     await seed_listener()
     campaign_id = await new_campaign()
 
@@ -113,6 +126,9 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
     await both_arrived.wait()
     gate.set()
     first, second = await both
+    # Only now, with both verdicts in hand, may the run proceed and be awaited — a
+    # release before this point would reopen the very race the hold exists to close.
+    hold.set()
     await drain_discovery(campaign_id)
 
     assert first is not None

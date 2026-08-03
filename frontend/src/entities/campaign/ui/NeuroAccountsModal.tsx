@@ -8,6 +8,10 @@ export interface NeuroAccountRow {
   name: string;
   linked: boolean;
   pinned_channels: string[];
+  // Channels this account is banned in for good (#30). The board's channel row cannot
+  // show it — one banned account among five ready ones still reads "Готов" — and this
+  // modal is where the only remedy lives: add another account to the campaign.
+  banned_channels?: string[];
 }
 
 // Stable React key for the "all channels" row (an empty subset = serve all).
@@ -54,6 +58,7 @@ function AccountRow({
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [open, setOpen] = useState(false);
+  const banned = account.banned_channels ?? [];
 
   // A linked account targets a subset of the campaign's channels, or an empty
   // subset = all of them. Any already-selected channel no longer on the campaign
@@ -151,6 +156,16 @@ function AccountRow({
           </svg>
         </button>
       </div>
+      {banned.length > 0 ? (
+        // A per-pair ban is permanent — no retry, no un-ban — so the line states the
+        // fact and nothing else; the operator's move is the "Добавить в кампанию"
+        // button already on this screen.
+        <div className="mt-[6px] text-[11.5px] text-danger">
+          {t('neurocomment.modal.neuroAccounts.banned', {
+            channels: banned.map(shortChannel).join(', '),
+          })}
+        </div>
+      ) : null}
       {account.linked ? (
         // The list expands inside the row instead of floating over it: the modal is its
         // own scroll box, so an absolutely-positioned menu was clipped at the modal edge

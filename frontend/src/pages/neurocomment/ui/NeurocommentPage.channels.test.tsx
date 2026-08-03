@@ -34,6 +34,29 @@ test('the gear in the board header opens the accounts modal', async () => {
   expect(screen.getByText('Готово')).toBeInTheDocument();
 });
 
+test('the accounts modal names the channel an account is permanently banned in', async () => {
+  // The channel row still reads "Готов" (a sibling account posts there), which is
+  // exactly why the ban has to reach the account list — the modal is where the only
+  // remedy, adding another account, lives.
+  routeApi({
+    ...BOARD,
+    accounts: [
+      {
+        ...BOARD.accounts[0],
+        readiness: [
+          { channel: '@news', ready: false, joined: true, captcha_passed: false, banned: true },
+        ],
+      },
+    ],
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
+  expect(screen.getByText('Забанен навсегда: @news')).toBeInTheDocument();
+});
+
 test('removing a campaign channel asks for confirmation, then calls the deactivate endpoint', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);

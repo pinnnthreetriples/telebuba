@@ -20,19 +20,19 @@ from core.config import settings
 from core.db import (
     count_account_joins_since,
     fetch_active_campaign_for_channel,
+    fetch_channel_paused_until,
     fetch_readiness,
     record_join,
     upsert_linked_group,
-    upsert_readiness,
 )
 from core.logging import log_event
-from schemas.neurocomment import AccountChannelOnboarding
+from schemas.neurocomment import AccountChannelOnboarding, NeurocommentReadiness
 from schemas.telegram_actions import (
     GetLinkedDiscussionGroup,
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
-from services.neurocomment import _seams, _state
+from services.neurocomment import _rejoin, _seams, _state
 
 # The join ActionResult → OnboardingState mapping + solver recording live in
 # ``_classify`` (file-size cap); ``_join_and_classify`` below delegates to it.
@@ -95,24 +95,63 @@ async def _join_and_classify(
 ) -> AccountChannelOnboarding:
     """Join the (already-resolved, comment-enabled) group and persist readiness.
 
-    A channel in challenge back-off (#147, K solver failures) is left alone — no
-    join, no solver — until its cooldown expires; the board renders it
-    ``bot_challenge_backoff`` from the in-memory back-off state.
+    A channel serving out a pause (#147, K consecutive write failures) is left alone — no
+    join, no solver — until its deadline passes; the board renders it ``channel_paused``
+    off the same persisted column. One point read per pair, which this loop (jittered
+    sleeps between joins) can afford where the engine's per-post path could not.
 
     An operator-skipped pair (#148) or an auto-banned pair (#30) is left alone:
     re-joining would run the solver and flip readiness back to ready, undoing the
     skip / reviving the ban. Cleared via ``retry_pair`` (skip) or a can_send probe (ban).
+
+    A pair with an approval request still in flight is left alone the same way, and sits
+    next to those guards for the same reason: both must cost zero join RPCs. An admin
+    reads a re-request as spam, and every pass used to send one.
     """
     existing = await fetch_readiness(account_id, channel)
     if existing is not None and (existing.human_skipped or existing.banned):
         state = "human_skipped" if existing.human_skipped else "banned"
         return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
-    if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
-        await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+    if existing is not None and _join_request_in_flight(existing, datetime.now(UTC)):
+        # One line per pair per pass, and only for pairs actually held back — the old
+        # behaviour logged a fresh join_by_request every pass *and* paid the RPC for it.
+        await log_event(
+            "INFO",
+            "neurocomment_onboard_join_request_pending",
+            account_id=account_id,
+            extra={"channel": channel, "attempts": existing.join_request_attempts},
+        )
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
-            state="bot_challenge_backoff",
+            state="join_by_request",
+        )
+    if _state.channel_paused(await fetch_channel_paused_until(channel), datetime.now(UTC)):
+        # Readiness is deliberately NOT written: a pause is a verdict on the channel, not
+        # on this pair, and the row we would overwrite may be the access-lost sentinel —
+        # erasing it drops the pair out of the re-join rule for good and makes the board
+        # render "awaiting admin approval" for a request nobody ever sent.
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="channel_paused",
+        )
+    if (
+        existing is not None
+        and _rejoin.access_lost(existing)
+        and not _rejoin.attempt_owed(existing)
+    ):
+        # A pair that lost chat access gets one re-join a day, four in total (#43), and
+        # the sweep review is what stamps them. Held back here because every operator
+        # Start, every campaign reconcile and every other channel's poke starts a pass
+        # too: without this guard each of them would re-join every parked pair in the
+        # fleet and pin accounts at their 20/day join cap. ``retry_pair`` (which deletes
+        # the row) is the way past it, exactly as for a pending join request.
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="joining",
+            reason="rejoin_backoff",
         )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
     if result.status == "ok":
@@ -124,6 +163,31 @@ async def _join_and_classify(
     return await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
     )
+
+
+def _join_request_in_flight(readiness: NeurocommentReadiness, now: datetime) -> bool:
+    """True while an approval request must NOT be re-sent for this pair.
+
+    Two ways to be in flight: the next request is not due yet, or the pair has already
+    used all its attempts (it then stays in flight forever — the sweep is what ends it,
+    by dropping the channel).
+
+    Due at ``first + attempts x retry_hours``, the exact complement of the sweep's own
+    schedule in ``_sweep._review_join_requests`` — the sweep is what wakes onboarding for
+    a retry, so the two must agree or a pass would undo the pacing the sweep asked for.
+    ``join_requested_at`` is the FIRST request and never moves (the repository coalesces
+    it), so a bare retry window here would authorize the next request the instant the
+    FIRST one lapsed, however many had gone out since; only the shipped
+    ``join_request_max_attempts=2`` and the attempts guard above kept that off the wire.
+    """
+    if readiness.join_requested_at is None:
+        return False
+    nc = settings.neurocomment
+    if readiness.join_request_attempts >= nc.join_request_max_attempts:
+        return True
+    requested = datetime.fromisoformat(readiness.join_requested_at)
+    due_after = timedelta(hours=nc.join_request_retry_hours * readiness.join_request_attempts)
+    return now - requested < due_after
 
 
 async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussionGroupResult:

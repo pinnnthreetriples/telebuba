@@ -30,6 +30,7 @@ from core.db import (
     count_channel_comments_per_account_since,
     count_comments_per_account_since,
     fetch_active_campaign_for_channel,
+    fetch_channel_paused_until,
     list_accounts_by_ids,
     list_campaign_accounts,
     list_campaign_channels,
@@ -41,6 +42,7 @@ from core.db import (
 )
 from core.logging import log_event
 from services.neurocomment import _filters, _seams, _state
+from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
@@ -109,11 +111,14 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         return
 
     now = datetime.now(UTC)
-    if _state.channel_in_backoff(event.channel, now) or _state.is_channel_in_challenge_backoff(
-        event.channel, now
+    if _state.channel_in_backoff(event.channel, now) or _state.channel_paused(
+        await fetch_channel_paused_until(event.channel), now
     ):
-        # Backed off — by the deletion sweep (mass deletions) or K solver failures
-        # (#147). Skip before selection so we leave the channel alone until it expires.
+        # Parked — by the deletion sweep (mass deletions, in-memory) or by a round of the
+        # "this channel will not let us write" rule (#147, persisted on the campaign link).
+        # Skip before selection so we leave the channel alone until the pause expires.
+        # One extra point read per post, on the same partial index the campaign fetch above
+        # just used; the pause has to be persisted, so it cannot be answered from memory.
         await log_event(
             "INFO",
             "neurocomment_channel_cooled",
@@ -246,13 +251,12 @@ async def _select_account(
     On a miss returns the binding blocker (``_selection_block_reason``) so the
     activity log can tell the operator *why* — busy quota vs cooldown vs not warmed.
     """
-    # An account with a channel subset is eligible only for channels in it; an
-    # account with an empty subset is eligible for every channel of the campaign.
-    account_ids = [
-        link.account_id
-        for link in (await list_campaign_accounts(campaign.campaign_id)).links
-        if not link.channels or channel in link.channels
-    ]
+    # Who serves this channel — the shared ``_pins`` rule the four channel-drop rules
+    # read, not a fifth inline copy of it: selection is the load-bearing consumer, and
+    # an edit there that missed this line would leave the engine working a channel
+    # those rules already consider unserved (or the reverse).
+    links = (await list_campaign_accounts(campaign.campaign_id)).links
+    account_ids = serving_accounts(links, channel)
     if not account_ids:
         return _Selection(None, "no_accounts_linked")
     channel_count = max(1, len((await list_campaign_channels(campaign.campaign_id)).links))
@@ -399,5 +403,4 @@ from services.neurocomment._generate import (  # noqa: E402, F401 - re-export af
     _generate_acceptable,
     _generate_and_post,
     _recent_channel_comments,
-    _register_challenge_failure,
 )

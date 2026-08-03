@@ -1,7 +1,10 @@
-"""Unit tests for the challenge back-off state machine (Ф2 #147).
+"""Unit tests for the in-memory channel state in ``services.neurocomment._state``.
 
-Pure in-memory escalation/self-healing logic in ``services.neurocomment._state`` —
-the engine/onboarding/board integration is covered in their own test modules.
+Two mechanisms live there: the write-failure *window* that decides when a
+"this channel will not let us write" round ends (#147 — the round counter and the
+pause deadline it feeds are persisted, and covered in
+``tests/services/neurocomment/test_channel_pause.py``), and the deletion sweep's own
+escalating back-off, which is unchanged and still entirely in memory.
 """
 
 from __future__ import annotations
@@ -22,76 +25,56 @@ def _reset() -> None:
     _state.reset_for_tests()
 
 
-def _fail(channel: str, now: datetime, *, k: int = 3) -> float | None:
-    return _state.register_challenge_failure(
-        channel, now, min_failures=k, base_seconds=_BASE, max_seconds=_MAX
-    )
+def _fail(channel: str, *, k: int = 3) -> bool:
+    return _state.register_write_failure(channel, min_failures=k)
 
 
-def test_below_k_failures_not_in_backoff() -> None:
-    assert _fail("@c", _NOW) is None
-    assert _fail("@c", _NOW) is None
-    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is False
+def test_below_k_failures_does_not_close_a_round() -> None:
+    assert _fail("@c") is False
+    assert _fail("@c") is False
 
 
-def test_kth_failure_trips_base_cooldown() -> None:
-    _fail("@c", _NOW)
-    _fail("@c", _NOW)
-    seconds = _fail("@c", _NOW)
+def test_kth_failure_closes_the_round() -> None:
+    _fail("@c")
+    _fail("@c")
 
-    assert seconds == _BASE
-    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is True
+    assert _fail("@c") is True
 
 
-def test_register_returns_none_until_the_trip() -> None:
-    assert _fail("@c", _NOW, k=2) is None
-    assert _fail("@c", _NOW, k=2) == _BASE
-
-
-def test_second_trip_escalates_to_double_base() -> None:
+def test_window_restarts_after_a_closed_round() -> None:
+    # The K counter zeroes on the round it closes, so the next round needs K more
+    # failures — the escalation that used to live here is now four flat rounds in the DB.
     for _ in range(3):
-        _fail("@c", _NOW)  # 1st trip @ base
-    second = [_fail("@c", _NOW) for _ in range(3)][-1]  # K more failures → 2nd trip
+        _fail("@c")
 
-    assert second == _BASE * 2
-
-
-def test_cooldown_is_capped_at_max() -> None:
-    last: float | None = None
-    for _ in range(6):  # base, 2x, 4x(=max), max, max, max
-        for _ in range(3):
-            last = _fail("@c", _NOW)
-
-    assert last == _MAX
+    assert _fail("@c") is False
+    assert _fail("@c") is False
+    assert _fail("@c") is True
 
 
 def test_reset_zeroes_the_failure_window() -> None:
-    # A solved challenge resets the K counter, so sporadic failures spread across many
-    # successes never accumulate to K and park a mostly-working channel.
-    assert _fail("@c", _NOW) is None  # 1 failure
-    _state.reset_challenge_failures("@c")
-    assert _fail("@c", _NOW) is None  # counter restarted at 1, not 2
-    _state.reset_challenge_failures("@c")
-    assert _fail("@c", _NOW) is None  # still 1, not 3
-    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is False
+    # A delivered comment resets the K counter, so sporadic failures spread across many
+    # successes never accumulate to K and pause a mostly-working channel.
+    assert _fail("@c") is False  # 1 failure
+    _state.reset_write_failures("@c")
+    assert _fail("@c") is False  # counter restarted at 1, not 2
+    _state.reset_write_failures("@c")
+    assert _fail("@c") is False  # still 1, not 3
 
 
-def test_k_consecutive_failures_still_trip_after_reset() -> None:
-    # A genuine run of K consecutive failures (no interleaved success) still trips.
-    _state.reset_challenge_failures("@c")  # reset on a clean channel is a no-op
-    _fail("@c", _NOW)
-    _fail("@c", _NOW)
-    assert _fail("@c", _NOW) == _BASE
-    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is True
+def test_k_consecutive_failures_still_close_a_round_after_reset() -> None:
+    _state.reset_write_failures("@c")  # reset on a clean channel is a no-op
+    _fail("@c")
+    _fail("@c")
+
+    assert _fail("@c") is True
 
 
-def test_self_healing_when_cooldown_expires() -> None:
-    for _ in range(3):
-        _fail("@c", _NOW)
-    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is True
-
-    after = _NOW + timedelta(seconds=_BASE + 1)
-    assert _state.is_channel_in_challenge_backoff("@c", after) is False
+def test_channel_paused_reads_the_persisted_deadline() -> None:
+    assert _state.channel_paused(None, _NOW) is False
+    assert _state.channel_paused((_NOW + timedelta(hours=1)).isoformat(), _NOW) is True
+    # Expiry needs no sweep: the channel is simply tried again by the next post.
+    assert _state.channel_paused((_NOW - timedelta(seconds=1)).isoformat(), _NOW) is False
 
 
 # --------------------------------------------------------------------------- #

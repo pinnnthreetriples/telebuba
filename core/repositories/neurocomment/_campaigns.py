@@ -21,6 +21,7 @@ from core.repositories.neurocomment._tables import (
     _neurocomment_campaigns,
     _neurocomment_comments,
     _neurocomment_discovery_candidates,
+    _neurocomment_readiness,
 )
 from schemas.neurocomment import (
     CampaignChannelLink,
@@ -191,6 +192,26 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
                     created_at=_now_iso(),
                 ),
             )
+            # A link is a fresh start for the channel, per-pair counters included. The
+            # pause rounds reset by themselves (they live on this brand-new row), but the
+            # join-request and re-join counters live on readiness and survived: a channel
+            # the give-up rule dropped came back with its pairs already at max attempts,
+            # onboarding refused to join any of them, and the next sweep tick dropped it
+            # again — which is exactly what the drop's "link it again" hint promises.
+            connection.execute(
+                update(_neurocomment_readiness)
+                .where(_channel_matches(_neurocomment_readiness.c.channel, channel))
+                .values(
+                    join_requested_at=None,
+                    join_request_attempts=0,
+                    rejoin_attempted_at=None,
+                    rejoin_attempts=0,
+                    # The verdict (#44) too, and for the same reason: a terminal one
+                    # out-lives the counters, and the sweep would unlink the re-linked
+                    # channel again within five minutes on evidence about the old handle.
+                    access_lost_reason=None,
+                ),
+            )
             link = _active_channel_link(connection, channel)
     except IntegrityError:
         with _get_engine().connect() as connection:
@@ -207,6 +228,9 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
 
 async def link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannelLink:
     """Bind a channel to a campaign as active.
+
+    Clears the channel's per-pair join-request and re-join counters: linking is a fresh
+    start for the channel, and those counters otherwise outlive the link that earned them.
 
     Raises ``ChannelAlreadyAssignedError`` if the channel is already active in any
     campaign (the DB partial-unique index is the source of truth). Handles are

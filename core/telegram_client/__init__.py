@@ -10,6 +10,7 @@ to keep each file small:
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
+- ``_read_post_image`` — in-memory fetch of a channel post's photo (vision path)
 - ``_listener``— standing NewMessage subscription → typed NewPostEvent callback
 - ``_media``   — profile photo / story / music actions
 - ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
@@ -21,6 +22,7 @@ Tests that monkeypatch internals target the submodule that owns the name
 
 from __future__ import annotations
 
+from core.telegram_client._action_results import UNCONFIRMED_ERROR_TYPE
 from core.telegram_client._actions import execute
 from core.telegram_client._auth import (
     log_out_session,
@@ -53,16 +55,19 @@ from core.telegram_client._read import (
     execute_read,
     execute_read_many,
 )
+from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
 
 __all__ = [
+    "UNCONFIRMED_ERROR_TYPE",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
+    "download_post_image",
     "evict_client",
     "execute",
     "execute_read",

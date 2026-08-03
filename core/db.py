@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -139,35 +140,55 @@ async def run_db_maintenance_loop() -> None:
         await asyncio.to_thread(run_db_maintenance)
 
 
+# Guards the lazy build below. Every DB call runs in its own ``asyncio.to_thread``
+# worker, so the first two after ``configure_database`` genuinely race the ``is None``
+# check: unguarded, both build an engine, both run ``create_all`` + ``apply_migrations``
+# against the same file at once ("database is locked"), and the loser is dropped WITHOUT
+# ``dispose()`` — its pooled sqlite3 connection then trips "ResourceWarning: unclosed
+# database" at some later GC, which ``filterwarnings = error`` charges to whichever test
+# was running. Reentrant: the body publishes the engine before migrating, so a migration
+# step that reaches back through ``_get_engine`` resolves instead of deadlocking.
+_ENGINE_LOCK = threading.RLock()
+
+
 def _get_engine() -> Engine:
-    if _state.engine is None:
-        database_path = _state.database_path or settings.db.path
-        database_path.parent.mkdir(parents=True, exist_ok=True)
-        engine = create_engine(
-            f"sqlite:///{database_path}",
-            connect_args={"check_same_thread": False},
-            pool_size=settings.db.pool_size,
-            max_overflow=settings.db.max_overflow,
-            pool_timeout=settings.db.pool_timeout_seconds,
-            future=True,
-        )
+    engine = _state.engine
+    if engine is not None:
+        return engine  # hot path: one unsynchronised read, exactly as before.
+    with _ENGINE_LOCK:
+        engine = _state.engine
+        return _build_engine() if engine is None else engine
 
-        # SQLite ignores ForeignKey constraints unless PRAGMA foreign_keys is
-        # set on every connection. WAL + busy_timeout + synchronous=NORMAL let
-        # concurrent warming loops write without "database is locked".
-        @event.listens_for(engine, "connect")
-        def _configure_sqlite(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
-            cursor.close()
 
-        _state.engine = engine
-        _metadata.create_all(engine)
-        apply_migrations(engine)
-    return _state.engine
+def _build_engine() -> Engine:
+    """Create, configure, and publish the process engine. Callers hold ``_ENGINE_LOCK``."""
+    database_path = _state.database_path or settings.db.path
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(
+        f"sqlite:///{database_path}",
+        connect_args={"check_same_thread": False},
+        pool_size=settings.db.pool_size,
+        max_overflow=settings.db.max_overflow,
+        pool_timeout=settings.db.pool_timeout_seconds,
+        future=True,
+    )
+
+    # SQLite ignores ForeignKey constraints unless PRAGMA foreign_keys is
+    # set on every connection. WAL + busy_timeout + synchronous=NORMAL let
+    # concurrent warming loops write without "database is locked".
+    @event.listens_for(engine, "connect")
+    def _configure_sqlite(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
+
+    _state.engine = engine
+    _metadata.create_all(engine)
+    apply_migrations(engine)
+    return engine
 
 
 # --------------------------------------------------------------------------- #
@@ -269,8 +290,11 @@ from core.repositories.logs import (  # noqa: E402, F401
 from core.repositories.neurocomment import (  # noqa: E402, F401
     ChannelAlreadyAssignedError,
     assign_account_to_campaign,
+    bump_channel_pause,
     claim_comment,
-    clear_pair_banned,
+    clear_channel_pause,
+    clear_join_request,
+    clear_rejoin_attempts,
     count_account_channel_comments_since,
     count_account_comments_since,
     count_account_joins_since,
@@ -285,6 +309,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     fetch_active_campaign_for_channel,
     fetch_active_campaigns_for_channels,
     fetch_campaign,
+    fetch_channel_paused_until,
     fetch_comment,
     fetch_linked_group,
     fetch_readiness,
@@ -292,6 +317,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     get_listener_running,
     insert_challenge,
     link_channel_to_campaign,
+    list_access_lost_readiness,
     list_active_watch_channels,
     list_campaign_accounts,
     list_campaign_channels,
@@ -303,6 +329,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_failed_for_channels,
     list_joined_watch_channels,
     list_linked_groups,
+    list_pending_join_readiness,
     list_posted_comments_for_channel_since,
     list_posted_comments_page,
     list_posted_comments_since,
@@ -316,11 +343,14 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     purge_neurocomment_history_older_than,
     reclaim_stale_claims,
     record_join,
+    release_claim,
     remove_account_from_campaign,
     resolve_pending_outcome,
     save_neurocomment_settings,
     set_listener_account_id,
     set_listener_running,
+    stamp_join_request,
+    stamp_rejoin_attempt,
     update_campaign_prompt,
     update_solver_enabled,
     upsert_linked_group,

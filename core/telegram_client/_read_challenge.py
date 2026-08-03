@@ -10,7 +10,6 @@ can get the account kicked; a missed challenge is recoverable).
 from __future__ import annotations
 
 import asyncio
-import base64
 from typing import TYPE_CHECKING
 
 from telethon import events
@@ -22,11 +21,22 @@ from telethon.tl.types import (
     ReplyInlineMarkup,
 )
 
+from core.telegram_client._read_post_image import (
+    PHOTO_FETCH_TIMEOUT_SECONDS,
+    download_photo_b64,
+)
 from schemas.challenge import BotChallengeMessage
 from schemas.telegram_actions import BotChallengeWaitResult, WaitForBotChallenge
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
+
+# A guardian bot's captcha is a few KB of rendered text; a megabyte is already far past
+# anything a solver could be looking at, and the bytes are exactly as third-party as a
+# channel post's. Fixed rather than configurable: an operator who wants captchas smaller
+# has no such wish, and the vision path's own knob must NOT be reused — its 0 means
+# "stop commenting on pictures", which would silently take joining down with it.
+_MAX_CHALLENGE_IMAGE_BYTES = 1_000_000
 
 
 def _inline_button_rows(message: object) -> list[list[str]]:
@@ -95,17 +105,21 @@ def _extract_bot_challenge(
 async def download_challenge_image(client: TelegramClient, message: object) -> str | None:
     """Base64 of the challenge photo (fetched in-memory), or ``None`` if unavailable.
 
-    Uses Telethon's ``download_media(..., file=bytes)`` to get an in-memory
-    bytestring (no temp file) that the solver hands straight to Gemini vision.
-    A missing/undownloadable photo returns ``None`` so the solver gives up
-    cleanly rather than raising.
+    Shares ``download_photo_b64`` with the neurocomment vision path: both pull a photo a
+    third party chose straight into this process's RAM for a vision model, so both get
+    the same ceiling, the same still-only size choice and the same deadline. This one had
+    none of the three — an unbounded in-memory pull sitting inside a Telethon event
+    handler, where a stalled download leaks the handler task and the solver's own
+    ``wait_for`` merely reports no challenge.
+    Only the answer differs: the solver has no use for WHY there is no image, it just
+    gives up, so the typed reason collapses back to ``None`` here.
     """
-    # Telethon idiom: passing the `bytes` type downloads in-memory (its stub types
-    # `file` too narrowly to admit it).
-    data = await client.download_media(message, file=bytes)  # ty: ignore[invalid-argument-type]
-    if not isinstance(data, (bytes, bytearray)):
+    try:
+        async with asyncio.timeout(PHOTO_FETCH_TIMEOUT_SECONDS):
+            result = await download_photo_b64(client, message, _MAX_CHALLENGE_IMAGE_BYTES)
+    except TimeoutError:
         return None
-    return base64.b64encode(bytes(data)).decode("ascii")
+    return result.image_b64
 
 
 async def dispatch_wait_for_bot_challenge(

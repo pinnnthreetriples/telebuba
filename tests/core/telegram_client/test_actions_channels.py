@@ -18,6 +18,7 @@ from schemas.telegram_actions import (
     JoinChannel,
     JoinDiscussionGroup,
     LeaveChannel,
+    LeaveDiscussionGroup,
 )
 from tests.core.telegram_client.helpers import patch_action_client as _patch_client
 
@@ -263,3 +264,80 @@ async def test_join_by_request_is_logged_at_info_not_error(
     logged = [e for e in await list_recent_logs(limit=50) if "by_request" in e.event]
     assert [e.level for e in logged] == ["INFO"]
     assert [e.extra.get("channel") for e in logged] == ["@gated"]
+
+
+@pytest.mark.asyncio
+async def test_leave_discussion_group_leaves_resolved_entity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+    linked_entity = MagicMock(id=4423)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, GetFullChannelRequest):
+                full = MagicMock()
+                full.full_chat = MagicMock(linked_chat_id=4423)
+                full.chats = [MagicMock(id=999), linked_entity]
+                return full
+            return None
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-1", LeaveDiscussionGroup(channel="@news"))
+
+    assert result.status == "ok"
+    assert result.action_type == "leave_discussion_group"
+    leave_reqs = [r for r in captured if isinstance(r, LeaveChannelRequest)]
+    assert len(leave_reqs) == 1
+    # left the resolved linked group, not the parent broadcast channel
+    assert leave_reqs[0].channel is linked_entity
+
+
+@pytest.mark.asyncio
+async def test_leave_discussion_group_not_participant_is_ok_not_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Already out of the group is the state we asked for — no ERROR row, no traceback."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, GetFullChannelRequest):
+                return _chat_full(4423, chat_ids=(4423,))
+            raise errors.UserNotParticipantError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-out", LeaveDiscussionGroup(channel="@news"))
+
+    assert result.status == "ok"
+    logged = [e for e in await list_recent_logs(limit=50) if "leave_discussion_group" in e.event]
+    assert [e.level for e in logged] == ["INFO"]
+    assert [e.extra.get("already_left") for e in logged] == [True]
+
+
+@pytest.mark.asyncio
+async def test_leave_discussion_group_no_linked_group_classified_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, GetFullChannelRequest)
+            return _chat_full(None, chat_ids=())
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-silent", LeaveDiscussionGroup(channel="@silent"))
+
+    assert result.status == "failed"
+    assert result.error_type == "ValueError"

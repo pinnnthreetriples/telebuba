@@ -124,6 +124,37 @@ test('a pinned account shows its pinned channel, not the first joined one', () =
   expect(screen.queryByText('@news')).not.toBeInTheDocument();
 });
 
+test('an account banned in its row’s channel does not inherit the channel’s healthy status', () => {
+  // The ban is per (account, channel) and permanent — no un-ban, no retry. The other
+  // five accounts still post in @news, so the CHANNEL aggregate is 'ready'; reading that
+  // aggregate into this account's row told the operator a burnt pair was fine, while the
+  // only remedy (add another account) was being suggested elsewhere.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [{ channel: '@news', status: 'ready', ready_accounts: 5, total_accounts: 6 }],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        readiness: [
+          { channel: '@news', ready: false, joined: false, captcha_passed: true, banned: true },
+        ],
+      },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.queryByText('Готов')).not.toBeInTheDocument();
+  // The permanent reading, not the temporary "Возвращаемся в чат" one.
+  expect(screen.getByText('Забанен')).toBeInTheDocument();
+  expect(screen.queryByText('Возвращаемся в чат')).not.toBeInTheDocument();
+});
+
 test('during onboarding, a not-yet-armed account animates progress instead of "no data"', () => {
   render(
     <NeurocommentBoard

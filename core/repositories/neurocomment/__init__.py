@@ -18,7 +18,7 @@ from core.repositories.neurocomment._accounts import (
     remove_account_from_campaign,
     set_campaign_account_channels,
 )
-from core.repositories.neurocomment._bans import clear_pair_banned, mark_pair_banned
+from core.repositories.neurocomment._bans import mark_pair_banned
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
     create_campaign,
@@ -56,6 +56,7 @@ from core.repositories.neurocomment._comments import (
     mark_comment_failed,
     mark_comment_posted,
     reclaim_stale_claims,
+    release_claim,
     upsert_linked_group,
 )
 from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
@@ -71,6 +72,11 @@ from core.repositories.neurocomment._joins import (
     list_joined_watch_channels,
     record_join,
 )
+from core.repositories.neurocomment._pauses import (
+    bump_channel_pause,
+    clear_channel_pause,
+    fetch_channel_paused_until,
+)
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
     count_account_comments_since,
@@ -78,11 +84,17 @@ from core.repositories.neurocomment._quota import (
     count_comments_per_account_since,
 )
 from core.repositories.neurocomment._readiness import (
+    clear_join_request,
+    clear_rejoin_attempts,
     delete_readiness,
     fetch_readiness,
+    list_access_lost_readiness,
     list_campaign_readiness,
     list_channel_readiness,
+    list_pending_join_readiness,
     mark_human_skipped,
+    stamp_join_request,
+    stamp_rejoin_attempt,
     upsert_readiness,
 )
 from core.repositories.neurocomment._retention import purge_neurocomment_history_older_than
@@ -101,8 +113,11 @@ __all__ = [
     "ChannelAlreadyAssignedError",
     "ChannelNotInCampaignError",
     "assign_account_to_campaign",
+    "bump_channel_pause",
     "claim_comment",
-    "clear_pair_banned",
+    "clear_channel_pause",
+    "clear_join_request",
+    "clear_rejoin_attempts",
     "count_account_channel_comments_since",
     "count_account_comments_since",
     "count_account_joins_since",
@@ -117,6 +132,7 @@ __all__ = [
     "fetch_active_campaign_for_channel",
     "fetch_active_campaigns_for_channels",
     "fetch_campaign",
+    "fetch_channel_paused_until",
     "fetch_comment",
     "fetch_linked_group",
     "fetch_readiness",
@@ -124,6 +140,7 @@ __all__ = [
     "get_listener_running",
     "insert_challenge",
     "link_channel_to_campaign",
+    "list_access_lost_readiness",
     "list_active_watch_channels",
     "list_campaign_accounts",
     "list_campaign_channels",
@@ -137,6 +154,7 @@ __all__ = [
     "list_joined_watch_channels",
     "list_linked_groups",
     "list_pending_discovery_candidates",
+    "list_pending_join_readiness",
     "list_posted_comments_for_channel_since",
     "list_posted_comments_page",
     "list_posted_comments_since",
@@ -153,6 +171,7 @@ __all__ = [
     "purge_neurocomment_history_older_than",
     "reclaim_stale_claims",
     "record_join",
+    "release_claim",
     "remove_account_from_campaign",
     "replace_discovery_candidates",
     "resolve_pending_outcome",
@@ -161,6 +180,8 @@ __all__ = [
     "set_campaign_status",
     "set_listener_account_id",
     "set_listener_running",
+    "stamp_join_request",
+    "stamp_rejoin_attempt",
     "update_campaign_prompt",
     "update_solver_enabled",
     "upsert_linked_group",

@@ -56,6 +56,14 @@ _neurocomment_campaign_channels = Table(
     Column("channel", String, nullable=False),
     Column("active", Integer, nullable=False),
     Column("created_at", String, nullable=False),
+    # "This channel will not let us write" (migration #42). Every K consecutive write
+    # failures end a round: ``pause_rounds`` counts them and ``paused_until`` (ISO-8601
+    # UTC, NULL = not paused) parks the channel meanwhile. Persisted rather than kept in
+    # memory because the four rounds span four days and the process restarts far more
+    # often than that. Relinking a channel inserts a FRESH row, so a re-linked channel
+    # starts its rounds over — the operator asked for it again.
+    Column("pause_rounds", Integer, nullable=False, server_default="0"),
+    Column("paused_until", String, nullable=True),
 )
 
 
@@ -189,10 +197,30 @@ _neurocomment_readiness = Table(
     Column("checked_at", String, nullable=False),
     # Operator "Skip channel for this account" (#148); migration #15 backfills 0.
     Column("human_skipped", Integer, nullable=False, server_default="0"),
-    # Auto-detected hard ban: the account got UserBannedInChannelError posting here.
+    # Auto-detected hard ban: the group's own participant record has this account
+    # restricted from sending (UserBannedInChannelError alone is account-wide, not
+    # per-group, so it never sets this — see services.neurocomment.bans).
     # Sticky (survives re-onboarding); migration #30 backfills 0. Cleared by a
     # successful "Проверить каналы" probe (can_send) or an operator retry.
     Column("banned", Integer, nullable=False, server_default="0"),
+    # Approval-gated group ("join by request"): when the MOST RECENT request was sent
+    # and how many have been sent. NULL / 0 = nothing outstanding; migration #41
+    # backfills that. Never touched by upsert_readiness — a re-onboard must not reset
+    # the counter, or the pair would re-request forever.
+    Column("join_requested_at", String, nullable=True),
+    Column("join_request_attempts", Integer, nullable=False, server_default="0"),
+    # Automatic recovery from a lost discussion chat (#43): when the MOST RECENT re-join
+    # went out and how many have. NULL / 0 = never retried. Never touched by
+    # upsert_readiness, for the same reason as the join-request pair above — every failed
+    # re-join re-writes the row, and a reset there would retry forever.
+    Column("rejoin_attempted_at", String, nullable=True),
+    Column("rejoin_attempts", Integer, nullable=False, server_default="0"),
+    # WHY the pair is out of the chat (#44): the Telegram error class that parked it, or
+    # NULL when nobody knows — a row from before this column, or a gateway failure that
+    # carried no error type. Written BY upsert_readiness (unlike the two counter pairs
+    # above): it describes the very write that parks the pair, so any other readiness
+    # write means the loss it described is over and the column goes back to NULL.
+    Column("access_lost_reason", String, nullable=True),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

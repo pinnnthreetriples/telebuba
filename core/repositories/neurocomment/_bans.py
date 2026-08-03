@@ -1,16 +1,19 @@
-"""Auto-ban readiness writes (#30): mark a (account, channel) pair banned / clear it.
+"""Auto-ban readiness write (#30): mark a (account, channel) pair banned.
 
 Split from ``_comments.py`` for the file-size budget (mirrors ``_deletions.py``).
-A ban is sticky — ``upsert_readiness`` never touches ``banned``, so a re-onboard
-can't revive it; only ``clear_pair_banned`` (a live can_send probe) or
-``delete_readiness`` (operator retry) removes it.
+A ban is PERMANENT, by product decision — a channel that banned an account is closed
+to it for good, and the operator's remedy is another account, not a way back. So there
+is deliberately no un-ban here: ``upsert_readiness`` never touches ``banned`` (a
+re-onboard cannot revive the pair), and only ``delete_readiness`` — which drops the row
+entirely — clears it. The live can_send probe behind "Проверить каналы" used to lift a
+ban; it was removed rather than left contradicting what the UI now tells the operator.
 """
 
 from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import case, update
+from sqlalchemy import update
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import _neurocomment_readiness
@@ -31,34 +34,3 @@ def _mark_pair_banned(account_id: str, channel: str) -> None:
 async def mark_pair_banned(account_id: str, channel: str) -> None:
     """Auto-ban (#30): a UserBannedInChannelError parks this pair (ready=0, banned=1)."""
     await asyncio.to_thread(_mark_pair_banned, account_id, channel)
-
-
-def _clear_pair_banned(account_id: str, channel: str) -> None:
-    with _get_engine().begin() as connection:
-        connection.execute(
-            update(_neurocomment_readiness)
-            .where(
-                # Only un-ban an actually-banned row; a can_send probe on a normal pair
-                # must not spuriously flip its readiness.
-                (_neurocomment_readiness.c.account_id == account_id)
-                & (_neurocomment_readiness.c.channel == channel)
-                & (_neurocomment_readiness.c.banned == 1),
-            )
-            .values(
-                banned=0,
-                # can_send restores selectability — UNLESS the operator also skipped the
-                # pair, in which case the skip outlives the un-ban (else the board would
-                # read it "ready" while the engine still excludes it via human_skipped).
-                ready=case((_neurocomment_readiness.c.human_skipped == 1, 0), else_=1),
-                checked_at=_now_iso(),
-            ),
-        )
-
-
-async def clear_pair_banned(account_id: str, channel: str) -> None:
-    """Lift an auto-ban after a live probe confirms the account can send again.
-
-    ``can_send`` is direct proof of comment-ability, so the pair is restored to
-    selectable (banned=0, ready=1) immediately — no re-onboard. No-op if not banned.
-    """
-    await asyncio.to_thread(_clear_pair_banned, account_id, channel)

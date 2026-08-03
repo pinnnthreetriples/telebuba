@@ -414,6 +414,116 @@ def test_neurocomment_cooldowns_migration_is_idempotent(legacy_engine: _EngineFa
     assert {"account_id", "channel", "until"} == columns
 
 
+def test_campaign_channel_pause_columns_added_and_default_to_unpaused(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#42: a legacy channel-link table gains the round counter + pause deadline.
+
+    Existing links must read as "never paused, zero rounds" — the four-round rule starts
+    everyone from a clean slate rather than inheriting whatever the in-memory back-off
+    happened to hold at upgrade time.
+    """
+    from core.migration_steps_channel_pause import _add_campaign_channel_pause  # noqa: PLC0415
+
+    engine = legacy_engine("legacy-pause.db")
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_channels ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id VARCHAR NOT NULL, "
+            "channel VARCHAR NOT NULL, active INTEGER NOT NULL, created_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at) VALUES ('c1', '@news', 1, ?)",
+            (now,),
+        )
+        _add_campaign_channel_pause(connection)
+        _add_campaign_channel_pause(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        rounds, until = connection.exec_driver_sql(
+            "SELECT pause_rounds, paused_until FROM neurocomment_campaign_channels",
+        ).one()
+    assert (int(rounds), until) == (0, None)
+
+
+def test_campaign_channel_pause_migration_skips_missing_table(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """The #42 body is a no-op when the channel-link table does not exist yet."""
+    from core.migration_steps_channel_pause import _add_campaign_channel_pause  # noqa: PLC0415
+
+    engine = legacy_engine("empty-pause.db")
+    with engine.begin() as connection:
+        _add_campaign_channel_pause(connection)  # no table → returns, no raise.
+
+
+def test_readiness_rejoin_columns_added_and_default_to_never_retried(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#43: a legacy readiness table gains the re-join counter + its last attempt.
+
+    Existing rows must read as "never retried", so the first sweep after the upgrade gives
+    every parked pair its four attempts rather than inheriting somebody else's counter.
+    """
+    from core.migration_steps_rejoin import _add_readiness_rejoin  # noqa: PLC0415
+
+    engine = legacy_engine("legacy-rejoin.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_readiness ("
+            "account_id VARCHAR NOT NULL, channel VARCHAR NOT NULL, joined INTEGER NOT NULL, "
+            "captcha_passed INTEGER NOT NULL, ready INTEGER NOT NULL, "
+            "checked_at VARCHAR NOT NULL, PRIMARY KEY (account_id, channel))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness VALUES ('a1', '@news', 0, 1, 0, '2026-01-01')",
+        )
+        _add_readiness_rejoin(connection)
+        _add_readiness_rejoin(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        attempts, attempted_at = connection.exec_driver_sql(
+            "SELECT rejoin_attempts, rejoin_attempted_at FROM neurocomment_readiness",
+        ).one()
+    assert (int(attempts), attempted_at) == (0, None)
+
+
+def test_readiness_access_lost_reason_added_and_defaults_to_unknown(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#44: a legacy readiness table gains the verdict that parked each pair.
+
+    NULL on every existing row, and NULL must read as "unknown" — the re-join rule treats
+    it exactly as it treated every row before the column existed. A default that read as a
+    terminal verdict would unlink live channels on the first sweep after the upgrade.
+    """
+    from core.migration_steps_access_reason import (  # noqa: PLC0415
+        _add_readiness_access_lost_reason,
+    )
+
+    engine = legacy_engine("legacy-access-reason.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_readiness ("
+            "account_id VARCHAR NOT NULL, channel VARCHAR NOT NULL, joined INTEGER NOT NULL, "
+            "captcha_passed INTEGER NOT NULL, ready INTEGER NOT NULL, "
+            "checked_at VARCHAR NOT NULL, PRIMARY KEY (account_id, channel))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness VALUES ('a1', '@news', 0, 1, 0, '2026-01-01')",
+        )
+        _add_readiness_access_lost_reason(connection)
+        _add_readiness_access_lost_reason(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        reason = connection.exec_driver_sql(
+            "SELECT access_lost_reason FROM neurocomment_readiness",
+        ).scalar_one()
+    assert reason is None
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]

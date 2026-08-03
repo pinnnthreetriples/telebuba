@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -38,19 +38,24 @@ async def fetch_readiness(account_id: str, channel: str) -> NeurocommentReadines
     return await asyncio.to_thread(_fetch_readiness, account_id, channel)
 
 
-def _upsert_readiness(
+def _upsert_readiness(  # noqa: PLR0913 - one keyword per readiness column reads clearer
     account_id: str,
     channel: str,
     *,
     joined: bool,
     captcha_passed: bool,
     ready: bool,
+    access_lost_reason: str | None,
 ) -> NeurocommentReadiness:
     fields = {
         "joined": int(joined),
         "captcha_passed": int(captcha_passed),
         "ready": int(ready),
         "checked_at": _now_iso(),
+        # Always written, default None: the reason describes THIS state of the pair, so a
+        # write that is not an access loss must erase the one that was. Unlike the
+        # re-join counters, which the same write would reset into an endless retry.
+        "access_lost_reason": access_lost_reason,
     }
     statement = (
         sqlite_insert(_neurocomment_readiness)
@@ -72,17 +77,20 @@ def _upsert_readiness(
     return record
 
 
-async def upsert_readiness(
+async def upsert_readiness(  # noqa: PLR0913 - mirrors the explicit column list below.
     account_id: str,
     channel: str,
     *,
     joined: bool,
     captcha_passed: bool,
     ready: bool,
+    access_lost_reason: str | None = None,
 ) -> NeurocommentReadiness:
     """Record per-(account, channel) join/captcha/ready state at onboarding.
 
     Leaves ``human_skipped`` untouched (an operator skip survives a re-onboard).
+    ``access_lost_reason`` is the Telegram verdict behind an access-loss write and is
+    cleared by every other one — only the two writers of the access-lost sentinel pass it.
     """
     return await asyncio.to_thread(
         _upsert_readiness,
@@ -91,7 +99,169 @@ async def upsert_readiness(
         joined=joined,
         captcha_passed=captcha_passed,
         ready=ready,
+        access_lost_reason=access_lost_reason,
     )
+
+
+def _stamp_join_request(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel),
+            )
+            .values(
+                # COALESCE, not a fresh stamp: the column means "FIRST requested at", and
+                # the sweep's 48h give-up clock hangs off it. Overwritten on attempt two,
+                # it handed the channel another full window every time a request went out
+                # again — 48h became 72h. The operator's rule is 48h from the first
+                # request, with both requests paced inside it, so this anchor never moves;
+                # ``join_request_attempts`` is what counts the requests.
+                join_requested_at=func.coalesce(
+                    _neurocomment_readiness.c.join_requested_at,
+                    _now_iso(),
+                ),
+                join_request_attempts=_neurocomment_readiness.c.join_request_attempts + 1,
+            ),
+        )
+
+
+async def stamp_join_request(account_id: str, channel: str) -> None:
+    """Record that an approval-gated join request just went out for this pair.
+
+    Deliberately NOT part of ``upsert_readiness``: the join-request branch upserts the
+    readiness row first and stamps here, so a plain re-onboard (which re-upserts) cannot
+    reset the counter — that reset is exactly what let the same pair re-request forever.
+
+    ``join_requested_at`` records the first request only; ``clear_join_request`` (approval
+    landed) and the campaign re-link are the two paths that put it back to NULL, which is
+    what keeps "NULL means never requested" true.
+    """
+    await asyncio.to_thread(_stamp_join_request, account_id, channel)
+
+
+def _clear_join_request(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                # Only rows that actually hold a stamp — a normal join must not pay an
+                # UPDATE on every onboarding pass just to write the values already there.
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel)
+                & _neurocomment_readiness.c.join_requested_at.is_not(None),
+            )
+            .values(join_requested_at=None, join_request_attempts=0),
+        )
+
+
+async def clear_join_request(account_id: str, channel: str) -> None:
+    """Forget a pending join request once the pair is in the group (approval landed)."""
+    await asyncio.to_thread(_clear_join_request, account_id, channel)
+
+
+def _list_pending_join_readiness() -> ReadinessList:
+    # Every readiness row of every channel that has at least one outstanding request —
+    # not just the pending rows. The sweep's give-up rule needs BOTH halves in one read:
+    # the pending stamps to age, and the sibling rows to prove no account is ready there
+    # (one stubborn account must never kill a channel the others comment in fine).
+    channels = select(_neurocomment_readiness.c.channel).where(
+        _neurocomment_readiness.c.join_requested_at.is_not(None),
+    )
+    statement = select(_neurocomment_readiness).where(
+        _neurocomment_readiness.c.channel.in_(channels),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return ReadinessList(
+        readiness=[NeurocommentReadiness.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_pending_join_readiness() -> ReadinessList:
+    """Readiness rows for every channel holding at least one pending join request."""
+    return await asyncio.to_thread(_list_pending_join_readiness)
+
+
+def _stamp_rejoin_attempt(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel),
+            )
+            .values(
+                rejoin_attempted_at=_now_iso(),
+                rejoin_attempts=_neurocomment_readiness.c.rejoin_attempts + 1,
+            ),
+        )
+
+
+async def stamp_rejoin_attempt(account_id: str, channel: str) -> None:
+    """Record that a re-join for a pair that lost chat access just went out.
+
+    Separate from ``upsert_readiness`` for the same reason as ``stamp_join_request``: a
+    failed re-join re-writes the readiness row with the very sentinel that asked for the
+    retry, so a counter carried by that write would reset itself and retry forever.
+    """
+    await asyncio.to_thread(_stamp_rejoin_attempt, account_id, channel)
+
+
+def _clear_rejoin_attempts(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                # Only rows actually carrying attempts — an ordinary onboarding pass must
+                # not pay an UPDATE per pair to write the zeros already there.
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel)
+                & _neurocomment_readiness.c.rejoin_attempted_at.is_not(None),
+            )
+            .values(rejoin_attempted_at=None, rejoin_attempts=0),
+        )
+
+
+async def clear_rejoin_attempts(account_id: str, channel: str) -> None:
+    """Forget a pair's re-join attempts once it is back in the group."""
+    await asyncio.to_thread(_clear_rejoin_attempts, account_id, channel)
+
+
+# The hard-join-failure sentinel: an unjoined row with captcha_passed set, which no other
+# path writes. It is what both a post-time access loss and a hard join failure leave
+# behind, and it means "this pair needs a fresh join". Skipped and banned pairs are
+# excluded — onboarding refuses to re-join those, so retrying them is not a thing.
+_ACCESS_LOST = (
+    (_neurocomment_readiness.c.joined == 0)
+    & (_neurocomment_readiness.c.captcha_passed == 1)
+    & (_neurocomment_readiness.c.ready == 0)
+    & (_neurocomment_readiness.c.banned == 0)
+    & (_neurocomment_readiness.c.human_skipped == 0)
+)
+
+
+def _list_access_lost_readiness() -> ReadinessList:
+    channels = select(_neurocomment_readiness.c.channel).where(_ACCESS_LOST)
+    statement = select(_neurocomment_readiness).where(
+        _neurocomment_readiness.c.channel.in_(channels),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return ReadinessList(
+        readiness=[NeurocommentReadiness.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_access_lost_readiness() -> ReadinessList:
+    """Readiness rows for every channel holding at least one pair that lost access.
+
+    Every row of those channels, not just the parked ones — the give-up rule needs the
+    siblings too, to prove no account still works there (mirrors
+    ``list_pending_join_readiness``).
+    """
+    return await asyncio.to_thread(_list_access_lost_readiness)
 
 
 def _mark_human_skipped(account_id: str, channel: str) -> None:

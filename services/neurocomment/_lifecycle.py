@@ -12,18 +12,16 @@ so ``_runtime.<name>`` and the package re-exports resolve unchanged.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from core.config import settings
 from core.db import (
     get_listener_account_id,
     get_listener_running,
     list_active_watch_channels,
-    reclaim_stale_claims,
 )
-from core.logging import log_event
 from schemas.neurocomment import NeurocommentRuntimeStatus
-from services.neurocomment import _signals, _state
+from services.neurocomment import _signals, _state, _sweep
 
 
 async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
@@ -96,9 +94,10 @@ async def reconcile_neurocomment_on_startup() -> None:
     ``listener_running`` False) stays paused across a reboot — resuming it would
     silently re-enable a runtime the operator turned off (audit 2026-07-02).
 
-    Stale claims are reclaimed unconditionally first: a crash mid-post leaves rows
-    stuck ``claimed`` forever (the post_id is then permanently un-claimable), and
-    that must be cleaned up even for a runtime that boots paused.
+    Stale claims are reclaimed unconditionally first. The sweep runs that same pass on
+    every tick now, but only ever for a RUNNING listener, so this call is what still
+    covers a runtime that boots paused: a crash mid-post otherwise leaves rows stuck
+    ``claimed`` (quota spent, the post_id un-claimable) until an operator hits Start.
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a parent import cycle.
 
@@ -117,13 +116,14 @@ async def reconcile_neurocomment_on_startup() -> None:
 
 
 async def _reclaim_stale_claims_on_startup() -> None:
-    """Mark claims stuck 'claimed' since before the reclaim cutoff as 'failed'."""
-    cutoff = (
-        datetime.now(UTC) - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)
-    ).isoformat()
-    reclaimed = await reclaim_stale_claims(cutoff)
-    if reclaimed:
-        await log_event("INFO", "neurocomment_stale_claims_reclaimed", extra={"count": reclaimed})
+    """Run the sweep's stale-claim pass once at boot, before the running-gate decides.
+
+    The pass itself lives with the sweep's other passes, so the cutoff and the log line
+    can't drift between the two triggers; this is only the boot one. Both are needed: the
+    sweep task exists only while the listener runs, and a runtime that boots paused or
+    stopped would otherwise carry a crash's orphans until an operator hit Start.
+    """
+    await _sweep._reclaim_stale_claims(datetime.now(UTC))  # noqa: SLF001 - peer module
 
 
 async def shutdown_neurocomment_on_shutdown() -> None:

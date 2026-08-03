@@ -39,6 +39,8 @@ from core.migration_steps import (
     _add_warming_user_controls,
     _rename_proxy_type_http_to_https,
 )
+from core.migration_steps_access_reason import _add_readiness_access_lost_reason
+from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
@@ -52,6 +54,7 @@ from core.migration_steps_neurocomment import (
     _add_neurocomment_cooldowns,
     _add_neurocomment_join_log,
     _add_neurocomment_join_log_watch_channel,
+    _add_readiness_join_request,
 )
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
@@ -59,6 +62,7 @@ from core.migration_steps_pool import (
     _add_proxy_pool,
     _add_warming_state_activity_persona,
 )
+from core.migration_steps_rejoin import _add_readiness_rejoin
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -127,6 +131,10 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         "add_neurocomment_join_log_watch_channel",
         _add_neurocomment_join_log_watch_channel,
     ),
+    (41, "add_readiness_join_request", _add_readiness_join_request),
+    (42, "add_campaign_channel_pause", _add_campaign_channel_pause),
+    (43, "add_readiness_rejoin", _add_readiness_rejoin),
+    (44, "add_readiness_access_lost_reason", _add_readiness_access_lost_reason),
 )
 
 

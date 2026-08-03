@@ -274,8 +274,22 @@ async def _cancel_bounded(*tasks: asyncio.Task[None] | None) -> None:
 
     One body for all four cancel sites (sweep/onboarding/join + on-post tasks): they only
     differ in which handle they clear, and ``_runtime`` sits under the aislop size cap.
+
+    The CURRENT task is skipped rather than cancelled, because a task cannot cancel itself
+    and then await itself. A lifecycle rule running inside the sweep can drop the last watch
+    channel; ``deactivate_channel`` reconciles the listener, which finds an empty watch set
+    and stops the sweep — i.e. asks this very task to cancel itself. ``cancel()`` on the
+    running task only arms ``_must_cancel``, and the ``gather`` below then suspends on a
+    future whose only child is that same task: delivering the arm cancels the gather, which
+    cancels its child, which re-enters the gather it is waiting on — unbounded recursion, a
+    task wedged "cancelling" forever and uncancellable, and the caller (mid-drop, its reason
+    not yet logged) never returning. The caller has already cleared the handle, and that is
+    the stop signal a self-stopped loop reads: it drains the tick it is in and retires (see
+    ``_sweep._sweep_loop``), which is what its caller wants anyway — the drop finishes and
+    is logged, and the loop still ends promptly.
     """
-    live = [task for task in tasks if task is not None]
+    current = asyncio.current_task()
+    live = [task for task in tasks if task is not None and task is not current]
     if not live:
         return
     for task in live:

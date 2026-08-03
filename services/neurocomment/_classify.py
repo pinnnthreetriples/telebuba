@@ -12,17 +12,25 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import mark_pair_banned, upsert_readiness
+from core.db import (
+    clear_join_request,
+    clear_rejoin_attempts,
+    stamp_join_request,
+    upsert_readiness,
+)
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
-from services.neurocomment import challenge
+from services.neurocomment import bans, challenge
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
 
 # Writes Telegram-blocked at join → chat_restricted (Ф2 #120); solver can't clear it.
 _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
-# A hard ban at join → sticky ban (#30), same as a ban hit while commenting (never retried).
+# Telegram's ACCOUNT-WIDE anti-spam write restriction (what @SpamBot reports as limited),
+# not a per-chat moderator action — those arrive as the _GATE_ERRORS above (mute) or as
+# ChannelPrivateError (kick). So it only prompts the per-group confirmation ladder; the
+# sticky ban (#30) is gated on it, same as a ban hit while commenting.
 _BAN_ERROR = "UserBannedInChannelError"
 # Rate-limit families: never terminal, retry later, must return promptly.
 _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
@@ -59,6 +67,11 @@ async def _classify_join(
         )
     if result.error_type == "InviteRequestSentError":
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+        # Stamp the request AFTER the upsert (which cannot carry these columns without
+        # a re-onboard resetting them). The stamp is what stops the next pass re-sending
+        # the same request: it is the only thing distinguishing this row from the
+        # challenge-backoff row, which is identical field for field.
+        await stamp_join_request(account_id, channel)
         # The state itself was invisible in the log: only the gateway's join line was
         # written, so an operator could not tell "waiting for admin approval" from a
         # broken join, and the channel just silently produced no comments.
@@ -74,13 +87,17 @@ async def _classify_join(
             state="join_by_request",
         )
     if result.error_type == _BAN_ERROR:
-        # Hard ban at join → sticky ban (#30) so a re-onboard stops re-joining the group.
+        # Readiness first either way: we are in (or reachable from) the group but cannot
+        # write, so the pair must stop being selected. The sticky ban (#30) that also
+        # stops a re-onboard re-joining is gated on THIS group having actually banned us
+        # — otherwise the block is account-wide and the group is innocent, which is
+        # exactly what chat_restricted (a Telegram-level write block) already says.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-        await mark_pair_banned(account_id, channel)
+        confirmed = await bans.confirm_group_ban_and_leave(account_id, channel)
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
-            state="banned",
+            state="banned" if confirmed else "chat_restricted",
         )
     if result.error_type in _GATE_ERRORS:
         # Telegram-level write block (mute / restrict) → chat_restricted (Ф2 #120).
@@ -97,7 +114,17 @@ async def _classify_join(
     # (which is also joined=False) so the board renders join_failed, not "awaiting
     # approval": captcha_passed=True on an unjoined row is the sentinel (no other path
     # produces that combination). ready stays False so the pair is never selected.
-    await upsert_readiness(account_id, channel, joined=False, captcha_passed=True, ready=False)
+    # The verdict rides along (#44) so the re-join rule can tell a chat that might let us
+    # in later from an address that will never resolve. The error CLASS only: the message
+    # is free-form text no rule can key on, and a wrong reading here costs four days.
+    await upsert_readiness(
+        account_id,
+        channel,
+        joined=False,
+        captcha_passed=True,
+        ready=False,
+        access_lost_reason=result.error_type,
+    )
     return AccountChannelOnboarding(
         account_id=account_id,
         channel=channel,
@@ -124,6 +151,15 @@ async def _solve_and_record(
     def _result(state: OnboardingState) -> AccountChannelOnboarding:
         return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
 
+    # We are a member, so any earlier approval request landed — drop its stamp here
+    # rather than in the ready branch alone: a joined-but-challenged pair is approved
+    # too, and leaving the counter at max would make the sweep drop a live channel.
+    await clear_join_request(account_id, channel)
+    # Same idea for the re-join counter (#43): we are in the group, so whatever kicked us
+    # out is over and the next access loss must start from attempt one. Cleared here
+    # rather than in the ready branch alone — a joined-but-challenged pair is back in too,
+    # and leaving it at its cap would make the sweep drop a channel we just re-entered.
+    await clear_rejoin_attempts(account_id, channel)
     if solver_enabled:
         outcome = await challenge.solve_if_present(account_id, channel, group_id)
         if outcome == "rate_limited":

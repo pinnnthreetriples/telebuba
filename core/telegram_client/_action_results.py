@@ -23,6 +23,17 @@ if TYPE_CHECKING:
 # explicitly rather than read from the ambient handler.
 logger = logging.getLogger(__name__)
 
+# ``ActionResult.error_type`` for the half of ``unavailable`` where the request was
+# ALREADY on the wire: only the answer was lost, so Telegram may well have applied the
+# action. The other half — the pool never handed back a client — keeps the raw exception
+# class, because only that one PROVES nothing left this process. The classes cannot tell
+# them apart (a socket dies the same way at either end), so the gateway, which alone knows
+# WHICH call raised, spends ``error_type`` on the distinction, exactly as the frozen /
+# dead-session ladders spend it on theirs. Re-exported from ``core.telegram_client``
+# because it is a term of the ``ActionResult`` contract, not a gateway internal: any
+# caller whose action is unsafe to repeat has to branch on it.
+UNCONFIRMED_ERROR_TYPE = "UnconfirmedRequest"
+
 
 @dataclass(frozen=True)
 class _DispatchResult:
@@ -82,13 +93,24 @@ async def _unavailable_result(
     action: TelegramAction,
     exc: Exception,
     *,
+    dispatched: bool,
     domain: str | None = None,
 ) -> ActionResult:
     """Infrastructure failure (pool connect / socket / timeout) — not the caller's fault.
 
     Distinct from ``failed`` so the API layer maps it to 503 unavailable
     instead of billing an internal outage as a 400 client error.
+
+    ``dispatched`` splits the family by what it PROVES, and is the caller's only way
+    to learn it: ``False`` means the pool never handed back a client, so the request
+    never left this process and repeating the action is free; ``True`` means it was
+    already on the wire and the fault took the ANSWER, so Telegram may have applied it
+    and a caller that must not act twice has to treat it as done. That half reports
+    ``UNCONFIRMED_ERROR_TYPE`` rather than the exception class, because the classes are
+    identical on both sides of the line. Nothing is lost — the real exception goes to
+    stderr with its full traceback just below.
     """
+    error_type = UNCONFIRMED_ERROR_TYPE if dispatched else type(exc).__name__
     logger.warning(
         "action %s unavailable for %s",
         action.action_type,
@@ -104,7 +126,7 @@ async def _unavailable_result(
         account_id=account_id,
         extra={
             "action_type": action.action_type,
-            "error_type": type(exc).__name__,
+            "error_type": error_type,
         },
     )
     return ActionResult(
@@ -112,7 +134,7 @@ async def _unavailable_result(
         action_type=action.action_type,
         account_id=account_id,
         applied_privacy_keys=_applied_privacy_keys(exc),
-        error_type=type(exc).__name__,
+        error_type=error_type,
         error_message=str(exc),
     )
 

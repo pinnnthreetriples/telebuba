@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -209,6 +209,41 @@ async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | Non
     record is the *current* row — ``None`` only when no row exists.
     """
     return await asyncio.to_thread(_mark_comment, channel, post_id, status="failed")
+
+
+def _release_claim(channel: str, post_id: int) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_neurocomment_comments).where(
+                (_neurocomment_comments.c.channel == channel)
+                & (_neurocomment_comments.c.post_id == post_id)
+                # Guarded, not blind: only a still-in-flight claim may be dropped, so a
+                # delivered ('posted') or already-terminal ('failed') row is untouchable
+                # even if a late caller aims this at the wrong post.
+                & (_neurocomment_comments.c.status == "claimed"),
+            ),
+        )
+
+
+async def release_claim(channel: str, post_id: int) -> None:
+    """Drop an in-flight claim for an attempt that provably sent nothing.
+
+    Callable ONLY when the caller knows no comment left the process: an undownloadable
+    post image and a Gemini 429 both fail before generation finishes, and a gateway
+    ``status="unavailable"`` qualifies only when it is NOT ``UNCONFIRMED_ERROR_TYPE``,
+    i.e. when the pool never connected. Those are nobody's fault, so they must not mark
+    the row ``failed`` — but leaving it ``claimed`` is not free either: ``_quota`` counts
+    ``claimed`` alongside ``posted``, and ``reclaim_stale_claims`` is a backstop that only
+    ages a claim out once it is 15 minutes old, so the slot stayed spent long after the
+    attempt was over. Deleting the row frees it at once.
+
+    A DELETE rather than a new status because the row records nothing worth keeping — and
+    that is also the whole danger: it makes ``(channel, post_id)`` claimable again, so a
+    caller that merely HOPES nothing was sent re-opens the double-comment window
+    ``claim_comment`` exists to close. Which is exactly what the periodic reclaim can NOT
+    infer from age, and why it marks ``failed`` instead of deleting.
+    """
+    return await asyncio.to_thread(_release_claim, channel, post_id)
 
 
 def _reclaim_stale_claims(cutoff_iso: str) -> int:

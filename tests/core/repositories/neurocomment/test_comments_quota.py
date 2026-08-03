@@ -20,6 +20,7 @@ from core.db import (  # type: ignore[attr-defined]
     mark_comment_failed,
     mark_comment_posted,
     reclaim_stale_claims,
+    release_claim,
 )
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
@@ -65,6 +66,47 @@ async def test_mark_comment_does_not_override_a_terminal_status() -> None:
     assert result is not None
     assert result.status == "posted"
     assert result.comment_text == "nice"
+
+
+@pytest.mark.asyncio
+async def test_release_claim_only_touches_a_still_claimed_row() -> None:
+    """The guard that makes the DELETE safe: terminal rows are never reachable by it."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    for post_id in (100, 101, 102):
+        assert await claim_comment("@chan", post_id, campaign.campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 101, comment_text="nice", comment_msg_id=555)
+    await mark_comment_failed("@chan", 102)
+
+    await release_claim("@chan", 100)
+    await release_claim("@chan", 101)
+    await release_claim("@chan", 102)
+
+    # Only the in-flight claim goes; a delivered comment and a burnt post both survive,
+    # so no accounting of a real outcome can be erased by aiming this at the wrong post.
+    assert await fetch_comment("@chan", 100) is None
+    delivered = await fetch_comment("@chan", 101)
+    assert delivered is not None
+    assert (delivered.status, delivered.comment_msg_id) == ("posted", 555)
+    burnt = await fetch_comment("@chan", 102)
+    assert burnt is not None
+    assert burnt.status == "failed"
+    # A post nobody claimed is a no-op, not an error.
+    await release_claim("@chan", 999)
+
+
+@pytest.mark.asyncio
+async def test_release_claim_frees_the_quota_slot_the_claim_held() -> None:
+    """Requirement (a) at the source: quota counts ``claimed``, so the row must go."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    assert await claim_comment("@chan", 100, campaign.campaign_id, "acc-1") is True
+    day_ago = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    assert await count_account_channel_comments_since("acc-1", "@chan", day_ago) == 1
+
+    await release_claim("@chan", 100)
+
+    assert await count_account_channel_comments_since("acc-1", "@chan", day_ago) == 0
 
 
 async def _backdate_created_at(post_id: int, when: datetime) -> None:

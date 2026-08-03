@@ -86,10 +86,28 @@ class CampaignChannelLink(BaseModel):
     channel: str = Field(min_length=1)
     active: bool
     created_at: str = Field(min_length=1)
+    # "This channel will not let us write" (#147): completed pause rounds, and the
+    # ISO-8601 UTC instant the current pause ends (``None`` = not paused). Carried on the
+    # link so the board and the onboarding loop get the pause state out of a read they
+    # already make, instead of one query per channel.
+    pause_rounds: int = 0
+    paused_until: str | None = None
 
 
 class CampaignChannelList(BaseModel):
     links: list[CampaignChannelLink] = Field(default_factory=list)
+
+
+class ChannelPauseState(BaseModel):
+    """What one channel link looks like after a round of the pause rule just ended.
+
+    ``campaign_id`` is what ``deactivate_channel`` needs when the last round runs out —
+    the caller holds the channel handle already, so the model does not repeat it.
+    """
+
+    campaign_id: str = Field(min_length=1)
+    pause_rounds: int
+    paused_until: str
 
 
 ChannelLinkStatus = Literal["linked", "already_assigned"]
@@ -166,6 +184,19 @@ class NeurocommentReadiness(BaseModel):
     # Operator skip (#148); auto-ban (#30). Both make the engine never select the pair.
     human_skipped: bool = False
     banned: bool = False
+    # Approval-gated join request: when the most recent one was sent (None = none
+    # outstanding) and how many have gone out. Drives the 24h retry / 48h channel drop.
+    join_requested_at: str | None = None
+    join_request_attempts: int = 0
+    # Automatic re-join after the pair lost access to the chat: when the most recent
+    # attempt went out (None = none yet) and how many have. Drives the daily retry /
+    # the channel drop once every account has used its attempts.
+    rejoin_attempted_at: str | None = None
+    rejoin_attempts: int = 0
+    # The Telegram verdict that took this pair out of the chat — the error class itself,
+    # so the rule can tell a kick (retryable) from a dead address (not). None = unknown,
+    # which every rule reads as retryable.
+    access_lost_reason: str | None = None
 
 
 class ReadinessList(BaseModel):
@@ -223,7 +254,9 @@ OnboardingState = Literal[
     "join_by_request",
     "chat_restricted",
     "bot_challenge",
-    "bot_challenge_backoff",
+    # The CHANNEL is paused because it will not let us write (a lost captcha or a write
+    # gate) — not a property of this account, which is why it is not "bot_challenge_*".
+    "channel_paused",
     "joining",
     "human_skipped",
     "banned",
@@ -264,10 +297,14 @@ ChannelStatus = Literal[
     "comments_off",
     "join_by_request",
     "join_failed",
+    # Kicked out of the chat and walking itself back in (``_rejoin``): the same row
+    # shape as ``join_failed``, but with re-join attempts still to spend.
+    "rejoining",
     "chat_restricted",
     "banned",  # no account ready here and at least one auto-banned (#30)
     "bot_challenge",
-    "bot_challenge_backoff",
+    # Paused: the channel refuses our writes and is serving out one of its rounds (#147).
+    "channel_paused",
     "throttled",
     # no readiness rows yet — onboarding hasn't produced data for this channel
     "no_data",
@@ -282,6 +319,10 @@ class AccountChannelReadiness(BaseModel):
     joined: bool
     captcha_passed: bool
     human_skipped: bool = False
+    # Permanent per-pair ban (#30). Carried per (account, channel) because the channel
+    # row hides it: one banned account among five ready ones still reports ``ready``,
+    # and the only remedy — add another account — needs to know WHO is burnt WHERE.
+    banned: bool = False
 
 
 class NeurocommentAccountCard(BaseModel):

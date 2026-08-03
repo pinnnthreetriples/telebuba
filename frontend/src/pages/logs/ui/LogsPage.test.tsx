@@ -13,8 +13,14 @@ function renderWithClient(ui: ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-function logRow(id: number, event: string, status = 'success', accountId: string | null = 'acc-1') {
-  return { id, created_at: 'now', level: 'INFO', status, account_id: accountId, event, extra: {} };
+function logRow(
+  id: number,
+  event: string,
+  status = 'success',
+  accountId: string | null = 'acc-1',
+  extra: Record<string, unknown> = {},
+) {
+  return { id, created_at: 'now', level: 'INFO', status, account_id: accountId, event, extra };
 }
 
 // Two accounts: acc-1 has log rows, acc-2 never appears on any log page — it must
@@ -95,6 +101,41 @@ test('prefers the Telegram name, and keeps the operator label when there is no p
   expect(await screen.findByRole('cell', { name: 'Alisa K' })).toBeInTheDocument();
   expect(screen.getByText('ops-3')).toBeInTheDocument();
   expect(screen.queryByText('acc-2')).not.toBeInTheDocument();
+});
+
+test('names the channel of an automatic drop, and explains it, with no account on the row', async () => {
+  // Four rules unlink a channel on their own, overnight and unattended. The handle only
+  // ever lived in `extra.channel`, which until now ONLY the neurocomment activity card
+  // rendered — a rolling window of ~50 lines. This page is the durable, paginated
+  // surface, so a drop scrolled out of that window left the operator a level and an event
+  // label and no way to learn WHICH channel went. These rows also carry no account_id, so
+  // without the channel they were a bare label between two empty columns.
+  routeLogs({
+    items: [
+      logRow(1, 'neurocomment_channel_rejoin_exhausted', 'warning', null, {
+        channel: '@lost_channel',
+        reason: 'rejoin_exhausted',
+      }),
+    ],
+    next_cursor: null,
+  });
+  renderWithClient(<LogsPage />);
+
+  expect(await screen.findByRole('cell', { name: '@lost_channel' })).toBeInTheDocument();
+  // And the hint — the row's only instruction ("link it again when an account can get in")
+  // is useless without both the channel and the reason it went.
+  expect(
+    screen.getByTitle(/израсходовали попытки вернуться в его чат/, { exact: false }),
+  ).toBeInTheDocument();
+});
+
+test('leaves the channel cell empty when the event has no channel', async () => {
+  routeLogs({ items: [logRow(1, 'warming_started')], next_cursor: null });
+  renderWithClient(<LogsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Прогрев запущен')).toBeInTheDocument();
+  });
+  expect(screen.getAllByRole('cell', { name: '—' }).length).toBeGreaterThan(0);
 });
 
 test('falls back to the raw code for an unknown event', async () => {

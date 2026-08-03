@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from core.config import settings
-from core.db import (
+from core.db import (  # type: ignore[attr-defined]
+    _get_engine,
+    bump_channel_pause,
     create_account,
     create_campaign,
     fetch_linked_group,
@@ -20,7 +22,7 @@ from core.db import (
 from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
 from schemas.neurocomment import CampaignCreate
-from services.neurocomment import _seams, _state, onboarding
+from services.neurocomment import _seams, onboarding
 from tests.services.neurocomment.onboarding_support import (
     _JoinStub,
     _ReadStub,
@@ -266,12 +268,11 @@ async def test_solver_off_by_default_when_both_unset(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_channel_in_challenge_backoff_skips_join(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ф2 #147: a backed-off channel is left alone — no join, no solver → bot_challenge_backoff."""
+async def test_paused_channel_skips_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ф2 #147: a paused channel is left alone — no join, no solver → channel_paused."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    _state.register_challenge_failure(
-        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
-    )
+    await _campaign_with_channel("@chan", solver_enabled=None)
+    await bump_channel_pause("@chan", (datetime.now(UTC) + timedelta(hours=24)).isoformat())
     read = _ReadStub(linked_chat_id=77, comments_enabled=True)
     join = _JoinStub()
     monkeypatch.setattr(_seams, "execute_read", read.execute_read)
@@ -279,7 +280,7 @@ async def test_channel_in_challenge_backoff_skips_join(monkeypatch: pytest.Monke
 
     outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
 
-    assert outcome.state == "bot_challenge_backoff"
+    assert outcome.state == "channel_paused"
     assert join.calls == []  # no join attempted
 
 
@@ -322,3 +323,140 @@ async def test_generic_failure_is_failed_state(monkeypatch: pytest.MonkeyPatch) 
     # so the board renders join_failed, not join_by_request. It never joined.
     assert readiness.joined is False
     assert readiness.captcha_passed is True
+
+
+# --------------------------------------------------------------------------- #
+# Pending admin-approval requests: at most two, 24h apart.
+# --------------------------------------------------------------------------- #
+
+
+def _backdate_join_request(account_id: str, channel: str, *, hours: float) -> None:
+    """Age a pair's outstanding request so the retry window looks elapsed."""
+    stamp = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_readiness SET join_requested_at = ? "
+            "WHERE account_id = ? AND channel = ?",
+            (stamp, account_id, channel),
+        )
+
+
+async def _gated_pair(monkeypatch: pytest.MonkeyPatch) -> _JoinStub:
+    """Onboard acc-1 against an approval-gated @gated once; return the join stub."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    read = _ReadStub(linked_chat_id=77, comments_enabled=True)
+    join = _JoinStub()
+    join.set("@gated", status="failed", error_type="InviteRequestSentError")
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+    return join
+
+
+@pytest.mark.asyncio
+async def test_join_by_request_stamps_the_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _gated_pair(monkeypatch)
+
+    readiness = await fetch_readiness("acc-1", "@gated")
+    assert readiness is not None
+    assert readiness.join_request_attempts == 1
+    assert readiness.join_requested_at is not None
+
+
+@pytest.mark.asyncio
+async def test_pending_join_request_is_not_re_sent_inside_the_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The live regression: every pass re-sent the request, six times in three days."""
+    join = await _gated_pair(monkeypatch)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert outcome.state == "join_by_request"  # non-terminal, the pair is not stuck
+    assert len(join.calls) == 1  # the second pass cost zero join RPCs
+    readiness = await fetch_readiness("acc-1", "@gated")
+    assert readiness is not None
+    assert readiness.join_request_attempts == 1
+    held = [
+        e
+        for e in await list_recent_logs(limit=50)
+        if e.event == "neurocomment_onboard_join_request_pending"
+    ]
+    assert [(e.level, e.extra.get("channel")) for e in held] == [("INFO", "@gated")]
+
+
+@pytest.mark.asyncio
+async def test_join_request_is_re_sent_once_after_the_retry_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert len(join.calls) == 2
+    readiness = await fetch_readiness("acc-1", "@gated")
+    assert readiness is not None
+    assert readiness.join_request_attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_join_request_stops_at_the_attempt_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Past the cap the pair stays held however old the stamp — the sweep ends it."""
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+    _backdate_join_request("acc-1", "@gated", hours=200.0)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert outcome.state == "join_by_request"
+    assert len(join.calls) == 2  # never a third request
+
+
+@pytest.mark.asyncio
+async def test_a_spent_attempt_waits_out_its_own_window_not_the_first_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The next request is due at ``first + attempts x retry_hours`` — the sweep's schedule.
+
+    ``join_requested_at`` is the FIRST request and never moves, so comparing its age
+    against a bare retry window authorized the next request the instant the FIRST window
+    lapsed, however many had gone out since. At the shipped cap of two the attempts guard
+    above hides it, which is why this raises the cap: nothing else makes it visible.
+    """
+    monkeypatch.setattr(settings.neurocomment, "join_request_max_attempts", 3)
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+    await onboarding.onboard_account_channel("acc-1", "@gated")  # attempt 2, due at +24h
+    assert len(join.calls) == 2
+
+    # Still only 25h past the anchor: attempt 3 is not due until +48h.
+    outcome = await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert outcome.state == "join_by_request"
+    assert len(join.calls) == 2
+    readiness = await fetch_readiness("acc-1", "@gated")
+    assert readiness is not None
+    assert readiness.join_request_attempts == 2
+
+    _backdate_join_request("acc-1", "@gated", hours=49.0)
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert len(join.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_approved_join_clears_the_request_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An approved request must not leave a counter the sweep would later act on."""
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+    join.by_channel.pop("@gated")  # the admin pressed Approve; the re-join succeeds
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert outcome.state == "ready"
+    readiness = await fetch_readiness("acc-1", "@gated")
+    assert readiness is not None
+    assert readiness.join_requested_at is None
+    assert readiness.join_request_attempts == 0

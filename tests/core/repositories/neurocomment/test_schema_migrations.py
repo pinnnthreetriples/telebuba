@@ -179,6 +179,30 @@ def test_migration_30_adds_banned_column() -> None:
     assert 30 in versions
 
 
+@pytest.mark.asyncio
+async def test_migration_41_adds_join_request_columns() -> None:
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            row["name"]: row
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_readiness)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    # Nullable stamp, NOT NULL counter — an existing row reads as "no request
+    # outstanding", which is what it was.
+    assert columns["join_requested_at"]["notnull"] == 0
+    assert columns["join_request_attempts"]["notnull"] == 1
+    assert 41 in versions
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    row = await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    assert (row.join_requested_at, row.join_request_attempts) == (None, 0)
+
+
 def test_migration_35_adds_join_log_table_and_index() -> None:
     engine = _get_engine()
     inspector = inspect(engine)

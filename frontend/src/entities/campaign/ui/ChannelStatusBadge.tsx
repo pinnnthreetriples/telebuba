@@ -15,10 +15,13 @@ const STATUS_COLOR: Record<ChannelStatus, { color: string; bg: string }> = {
   throttled: { color: '#9a7b22', bg: '#fbf3e2' },
   join_by_request: { color: '#9a7b22', bg: '#fbf3e2' },
   join_failed: { color: '#c0473f', bg: '#fbecec' },
+  // Amber, not danger: the pair was kicked out and is walking itself back in (one
+  // attempt within minutes, then one a day) — nothing for the operator to do yet.
+  rejoining: { color: '#9a7b22', bg: '#fbf3e2' },
   chat_restricted: { color: '#c0473f', bg: '#fbecec' },
   banned: { color: '#c0473f', bg: '#fbecec' },
   bot_challenge: { color: '#9a7b22', bg: '#fbf3e2' },
-  bot_challenge_backoff: { color: '#9a7b22', bg: '#fbf3e2' },
+  channel_paused: { color: '#9a7b22', bg: '#fbf3e2' },
 };
 
 export function ChannelStatusBadge({ status }: { status: ChannelStatus }) {

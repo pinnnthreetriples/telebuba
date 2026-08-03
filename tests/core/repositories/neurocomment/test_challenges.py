@@ -325,6 +325,37 @@ async def test_queue_drops_a_failure_whose_pair_has_since_passed() -> None:
 
 
 @pytest.mark.asyncio
+async def test_queue_keeps_a_failure_whose_pair_was_kicked_after_it() -> None:
+    """``captcha_passed`` on an UNJOINED row is a sentinel, not a solve.
+
+    ``_outcomes`` writes ``(joined=0, captcha_passed=1, ready=0)`` when a post attempt
+    finds the pair out of the chat, and ``_classify`` writes the identical row on a hard
+    join failure — the flag is load-bearing for the re-join rule, so it cannot move.
+    Keying the exclusion on it alone meant a kick silently deleted the pair's real
+    ``give_up`` from the operator's drill-down, as if a human had already dealt with it.
+    """
+    await create_account(AccountCreate(account_id="kicked", label="K", session_name="kicked"))
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h-kicked",
+            account_id="kicked",
+            channel="@chan",
+            raw_text="press the button",
+            button_labels=["ok"],
+            outcome="give_up",
+        ),
+    )
+    # The solver gave up, and only afterwards did the pair lose chat access.
+    await upsert_readiness("kicked", "@chan", joined=False, captcha_passed=True, ready=False)
+
+    per_channel = await list_failed_for_channel("@chan", limit=10)
+    campaign = await list_failed_for_channels(["@chan"], limit=10)
+
+    assert [r.account_id for r in per_channel.rows] == ["kicked"]
+    assert [r.account_id for r in campaign.rows] == ["kicked"]
+
+
+@pytest.mark.asyncio
 async def test_queue_keeps_a_failure_with_no_readiness_row() -> None:
     """An operator retry erases readiness; nothing yet proves that pair passed."""
     await create_account(AccountCreate(account_id="reset", label="R", session_name="reset"))

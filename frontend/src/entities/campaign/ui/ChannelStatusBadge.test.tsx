@@ -20,3 +20,8 @@ test('renders banned in the danger colour', () => {
   render(<ChannelStatusBadge status="banned" />);
   expect(screen.getByText('Забанен')).toHaveStyle({ color: '#c0473f' });
 });
+
+test('a kicked pair getting itself back in is amber, not the red join failure', () => {
+  render(<ChannelStatusBadge status="rejoining" />);
+  expect(screen.getByText('Возвращаемся в чат')).toHaveStyle({ color: '#9a7b22' });
+});

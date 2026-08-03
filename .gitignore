@@ -51,7 +51,10 @@ htmlcov/
 
 # AI agent caches / per-machine config
 .serena/
-.aislop/
+# ...except aislop's config, which is project policy (gate scope + telemetry off),
+# not a per-machine cache: untracked, the CI gate silently scanned frontend/ too.
+.aislop/*
+!.aislop/config.yml
 .agents/
 .codex/
 .friday/

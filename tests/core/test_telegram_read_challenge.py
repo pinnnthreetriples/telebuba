@@ -20,6 +20,8 @@ from telethon.tl.types import (
     MessageEntityMentionName,
     MessageEntityTextUrl,
     MessageMediaPhoto,
+    Photo,
+    PhotoSize,
     ReplyInlineMarkup,
 )
 
@@ -134,21 +136,54 @@ class _FakeDownloadClient:
 
     def __init__(self, data: object) -> None:
         self._data = data
+        self.requested_thumbs: list[object] = []
 
-    async def download_media(self, _message: object, *, file: object) -> object:
+    async def download_media(
+        self, _message: object, *, file: object, thumb: object = None
+    ) -> object:
         assert file is bytes  # in-memory download, not a path
+        self.requested_thumbs.append(thumb)
         return self._data
+
+
+def _captcha_message(*, size_bytes: int) -> SimpleNamespace:
+    """A photo captcha as Telegram actually sends it — a real ``Photo`` with sizes."""
+    media = MessageMediaPhoto(
+        photo=Photo(
+            id=1,
+            access_hash=2,
+            file_reference=b"ref",
+            date=None,
+            sizes=[PhotoSize("y", 1, 1, size_bytes)],
+            dc_id=2,
+        ),
+    )
+    return SimpleNamespace(media=media)
 
 
 @pytest.mark.asyncio
 async def test_download_challenge_image_returns_base64() -> None:
     client = _FakeDownloadClient(b"\x89PNG-bytes")
-    result = await download_challenge_image(client, object())  # ty: ignore[invalid-argument-type]
+    message = _captcha_message(size_bytes=len(b"\x89PNG-bytes"))
+    result = await download_challenge_image(client, message)  # ty: ignore[invalid-argument-type]
     assert result == base64.b64encode(b"\x89PNG-bytes").decode("ascii")
+    # Named, not left to Telethon's picker, which ranks an attached video above every
+    # still — the captcha is the still.
+    assert client.requested_thumbs == ["y"]
 
 
 @pytest.mark.asyncio
 async def test_download_challenge_image_none_when_no_bytes() -> None:
     # A media message that yields no bytes (e.g. download failed) → None, not a crash.
     client = _FakeDownloadClient(None)
-    assert await download_challenge_image(client, object()) is None  # ty: ignore[invalid-argument-type]
+    message = _captcha_message(size_bytes=100)
+    assert await download_challenge_image(client, message) is None  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.asyncio
+async def test_download_challenge_image_refuses_an_absurd_captcha() -> None:
+    """The older hole: this pull had no ceiling at all, on bytes a guardian bot chose."""
+    client = _FakeDownloadClient(b"never reached")
+    message = _captcha_message(size_bytes=50_000_000)
+    assert await download_challenge_image(client, message) is None  # ty: ignore[invalid-argument-type]
+    assert client.requested_thumbs == []

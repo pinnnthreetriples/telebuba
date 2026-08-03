@@ -90,6 +90,19 @@ class LeaveChannel(BaseModel):
     channel: str = Field(min_length=1)
 
 
+class LeaveDiscussionGroup(BaseModel):
+    """Leave the discussion group linked to ``channel`` — mirror of ``JoinDiscussionGroup``.
+
+    ``LeaveChannel`` cannot do this: it issues ``LeaveChannelRequest`` against the
+    broadcast channel named by the handle, while the commenting membership lives in
+    the linked group, which usually has no username of its own. The gateway resolves
+    that group from the parent channel and leaves the resolved entity.
+    """
+
+    action_type: Literal["leave_discussion_group"] = "leave_discussion_group"
+    channel: str = Field(min_length=1)
+
+
 class PostComment(BaseModel):
     action_type: Literal["post_comment"] = "post_comment"
     chat_id: int
@@ -253,6 +266,7 @@ TelegramAction = Annotated[
     JoinChannel
     | JoinDiscussionGroup
     | LeaveChannel
+    | LeaveDiscussionGroup
     | PostComment
     | CommentOnPost
     | ClickButton
@@ -385,6 +399,29 @@ class ActionResult(BaseModel):
     error_message: str | None = None
 
 
+class PostImageResult(BaseModel):
+    """Gateway output for ``download_post_image`` — the photo, or why there isn't one.
+
+    ``reason`` is set exactly when ``image_b64`` is ``None``: ``unavailable`` (the post is
+    gone, carries no photo, the download yielded no bytes, the gateway faulted, or the
+    fetch outstayed its deadline) or ``too_large`` (the photo offers no size at all under
+    the caller's byte ceiling — an oversized ORIGINAL is not refused, it rides along as
+    its biggest size that fits). The caller turns it into a post-skip reason, so the
+    operator sees which of the two happened.
+    """
+
+    image_b64: str | None = None
+    reason: Literal["unavailable", "too_large"] | None = None
+
+
+# What the post carries besides its text, classified by what a comment generator could
+# actually make a comment OUT of — not by Telegram's media union. ``photo`` is the only
+# kind the vision path can read; ``album`` is called out separately because a caption-less
+# album item is not a missed opportunity but a duplicate of its own album's head (every
+# item fires its own event, and every comment on them lands in the same discussion thread).
+PostMediaKind = Literal["none", "photo", "album", "other"]
+
+
 class NewPostEvent(BaseModel):
     """A fresh channel broadcast post surfaced by the push listener.
 
@@ -396,5 +433,5 @@ class NewPostEvent(BaseModel):
     channel: str = Field(min_length=1)
     post_id: int
     text: str = ""
-    has_media: bool = False
+    media_kind: PostMediaKind = "none"
     is_forward: bool = False

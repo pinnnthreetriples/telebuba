@@ -7535,7 +7535,7 @@
               "join_by_request",
               "chat_restricted",
               "bot_challenge",
-              "bot_challenge_backoff",
+              "channel_paused",
               "joining",
               "human_skipped",
               "banned",
@@ -7586,6 +7586,11 @@
           "human_skipped": {
             "type": "boolean",
             "title": "Human Skipped",
+            "default": false
+          },
+          "banned": {
+            "type": "boolean",
+            "title": "Banned",
             "default": false
           }
         },
@@ -10230,10 +10235,11 @@
               "comments_off",
               "join_by_request",
               "join_failed",
+              "rejoining",
               "chat_restricted",
               "banned",
               "bot_challenge",
-              "bot_challenge_backoff",
+              "channel_paused",
               "throttled",
               "no_data"
             ],
