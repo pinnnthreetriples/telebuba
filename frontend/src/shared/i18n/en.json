@@ -772,7 +772,8 @@
     "neurocomment_join_request_review_failed": "Join-request review failed",
     "neurocomment_channel_rejoin_exhausted": "Channel dropped: could not get back into the chat",
     "neurocomment_channel_join_impossible": "Channel dropped: Telegram does not know this address",
-    "neurocomment_rejoin_review_failed": "Re-join review failed"
+    "neurocomment_rejoin_review_failed": "Re-join review failed",
+    "db_maintenance_failed": "Database maintenance failed"
   },
   "logEventReason": {
     "chance": "chance didn't hit",

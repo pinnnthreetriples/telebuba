@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from pathlib import Path
 
-    from sqlalchemy.engine import Engine
+    from sqlalchemy.engine import Connection, Engine
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +98,20 @@ atexit.register(dispose_engine)
 # --------------------------------------------------------------------------- #
 _BACKUP_STEM = "telebuba"
 _BACKUP_SUFFIX = ".db"
+# The vacuum writes here and is renamed onto its real name only on success, so a
+# failed run (disk full) cannot leave a half-written file that _prune_backups
+# would count as a backup — and, being the newest, keep in place of a good one.
+_BACKUP_PARTIAL_SUFFIX = ".part"
 _BACKUP_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
 
 
 def _default_backup_clock() -> datetime:
     return datetime.now(UTC)
+
+
+def _vacuum_into(connection: Connection, path: Path) -> None:
+    """Copy a consistent snapshot to ``path``. The path is bound, never interpolated."""
+    connection.execute(text("VACUUM INTO :path"), {"path": str(path)})
 
 
 def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock) -> Path | None:
@@ -121,14 +130,21 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         backup_dir.mkdir(parents=True, exist_ok=True)
         stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
         target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
-        # VACUUM INTO copies a consistent snapshot without holding a long lock;
-        # the path is a bound parameter, never interpolated SQL.
-        connection.execute(text("VACUUM INTO :path"), {"path": str(target)})
+        partial = target.with_name(target.name + _BACKUP_PARTIAL_SUFFIX)
+        # VACUUM INTO refuses an existing output, so clear a leftover from an
+        # earlier crash first. It holds no long lock, so the copy is safe online.
+        partial.unlink(missing_ok=True)
+        _vacuum_into(connection, partial)
+    partial.replace(target)  # atomic publish: only a complete file gets the real name.
     _prune_backups(backup_dir)
     return target
 
 
 def _prune_backups(backup_dir: Path) -> None:
+    # Leftover partials (a crash mid-vacuum) are not backups: the glob below cannot
+    # match them, and they are swept here so a chronic failure cannot pile them up.
+    for orphan in backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}{_BACKUP_PARTIAL_SUFFIX}"):
+        orphan.unlink(missing_ok=True)
     backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
     # max(0, ...): a negative count is not "delete nothing" in a slice, it means
     # "all but the last N" — under the limit that deleted the oldest backups.
@@ -144,8 +160,19 @@ async def run_db_maintenance_loop() -> None:
         await asyncio.sleep(interval_seconds)
         try:
             await asyncio.to_thread(run_db_maintenance)
-        except Exception:  # one bad run must not end maintenance for the process.
+        except Exception as exc:  # one bad run must not end maintenance for the process.
             logger.exception("db maintenance run failed; retrying next interval")
+            # The stdlib logger above is file-only by design (see core/logging.py), so
+            # on its own it means the loop retries forever with no Logs row and no
+            # Sentry event. Exception type only — the traceback, which can carry file
+            # paths, stays in debug.log.
+            from core.logging import log_event  # noqa: PLC0415 - avoids an import cycle
+
+            await log_event(
+                "ERROR",
+                "db_maintenance_failed",
+                extra={"error": type(exc).__name__},
+            )
 
 
 # Guards the lazy build below. Every DB call runs in its own ``asyncio.to_thread``

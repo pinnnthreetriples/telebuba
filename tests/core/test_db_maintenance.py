@@ -19,6 +19,7 @@ from sqlalchemy.pool import QueuePool
 from core.config import settings
 from core.db import (
     _get_engine,  # type: ignore[attr-defined]
+    _vacuum_into,  # type: ignore[attr-defined]
     configure_database,
     run_db_maintenance,
     run_db_maintenance_loop,
@@ -89,6 +90,50 @@ def test_maintenance_prunes_to_backup_keep(
     assert "T000002" in remaining[0].name
 
 
+def test_partial_backup_never_takes_a_keep_slot_from_a_good_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A half-written backup must not be counted, let alone preferred.
+
+    ``VACUUM INTO`` raises before the pruner runs, so a chronic failure (disk full)
+    piles up partial outputs un-pruned. The first later success then keeps the
+    newest N — the partials, since their timestamps are newest — and deletes the
+    last good backup. With the loop now retrying forever this can run for months,
+    ending with a backup directory of nothing restorable.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+    monkeypatch.setattr(settings.db, "backup_keep", 2)
+
+    for index in range(3):
+        run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
+    good = sorted(backup_dir.glob("telebuba-*.db"))
+    assert len(good) == 2
+
+    def _partial_then_enospc(_connection: object, path: Path) -> None:
+        # What sqlite leaves behind when the device fills mid-copy.
+        path.write_bytes(b"")
+        msg = "no space left on device"
+        raise OSError(msg)
+
+    monkeypatch.setattr("core.db._vacuum_into", _partial_then_enospc)
+    with pytest.raises(OSError, match="no space left"):
+        run_db_maintenance(clock=lambda: _fixed_clock(9))
+    # The failed run left nothing the pruner will rank as a backup.
+    assert sorted(backup_dir.glob("telebuba-*.db")) == good
+
+    monkeypatch.setattr("core.db._vacuum_into", _vacuum_into)
+    run_db_maintenance(clock=lambda: _fixed_clock(10))
+
+    remaining = sorted(backup_dir.glob("telebuba-*.db"))
+    assert len(remaining) == 2
+    assert good[-1] in remaining  # the newest good backup was not pruned for a partial
+    assert all(path.stat().st_size > 0 for path in remaining)
+    assert list(backup_dir.glob("*.part")) == []  # and the leftover was swept
+
+
 @pytest.mark.asyncio
 async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
     # Sleep almost forever so cancellation, not a real interval, ends the task.
@@ -104,7 +149,11 @@ async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch)
 @pytest.mark.asyncio
 async def test_maintenance_loop_survives_a_failed_run(monkeypatch: pytest.MonkeyPatch) -> None:
     """A raising run must not end maintenance for the rest of the process."""
-    monkeypatch.setattr(settings.db, "backup_interval_hours", 0.0)
+    # 1e-9h, not 0.0: `backup_interval_hours` is Field(gt=0), so 0.0 is a value
+    # monkeypatch can reach but Pydantic forbids — assert on a legal config. It has
+    # to be this small, not merely small: 0.001h is 3.6s, and this test waits out
+    # two intervals.
+    monkeypatch.setattr(settings.db, "backup_interval_hours", 1e-9)
     calls = 0
     ran_again = asyncio.Event()
 
@@ -119,12 +168,54 @@ async def test_maintenance_loop_survives_a_failed_run(monkeypatch: pytest.Monkey
     monkeypatch.setattr("core.db.run_db_maintenance", _flaky)
     task = asyncio.create_task(run_db_maintenance_loop())
     try:
+        # Only the second call sets the event, so reaching it IS the assertion.
         await asyncio.wait_for(ran_again.wait(), timeout=5)
     finally:
         task.cancel()
         with suppress(asyncio.CancelledError):
             await task
-    assert calls >= 2
+
+
+@pytest.mark.asyncio
+async def test_maintenance_loop_reports_failure_to_the_operator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed run must reach ``log_event`` — ``logger.exception`` is file-only.
+
+    Without this the loop retries forever with nothing on the Logs page, nothing in
+    Sentry and no UI signal, for the sole datastore holding users and auth.
+    """
+    monkeypatch.setattr(settings.db, "backup_interval_hours", 1e-9)  # legal (gt=0), instant
+    events: list[tuple[str, str, dict[str, object] | None]] = []
+    reported = asyncio.Event()
+
+    async def _capture(  # signature mirrors log_event; the handler passes no account_id.
+        level: str,
+        event: str,
+        _account_id: str | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        events.append((level, event, extra))
+        reported.set()
+
+    def _always_fails() -> None:
+        msg = "no space left on device"
+        raise OSError(msg)
+
+    # core.db imports log_event inside the handler (import cycle), so patching the
+    # owning module is what the call site actually resolves.
+    monkeypatch.setattr("core.logging.log_event", _capture)
+    monkeypatch.setattr("core.db.run_db_maintenance", _always_fails)
+    task = asyncio.create_task(run_db_maintenance_loop())
+    try:
+        await asyncio.wait_for(reported.wait(), timeout=5)
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    # Exception type only: no path, no credentials, nothing the log must not carry.
+    assert events[0] == ("ERROR", "db_maintenance_failed", {"error": "OSError"})
 
 
 def test_engine_uses_configured_pool_sizing(monkeypatch: pytest.MonkeyPatch) -> None:
