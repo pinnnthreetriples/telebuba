@@ -384,3 +384,64 @@ async def test_a_failed_action_logs_the_channel_it_was_acting_on(
             "extra": {"error_type": "ChannelPrivateError", "channel": "@MeineDNEWS"},
         },
     ]
+
+
+@pytest.mark.asyncio
+async def test_a_stable_code_wrapper_logs_its_code_and_still_returns_its_class_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both halves in one test, because the pair IS the contract.
+
+    The operator reads the log row, and ``ProfileGatewayError`` is one word covering
+    every refusal the wrapper carries, so a dead session read "ошибка ·
+    ProfileGatewayError" while the code the SPA already labels was thrown away. Callers
+    read ``error_type`` and branch on the class name, so that side must not move.
+    """
+    logged: list[dict[str, object]] = []
+
+    async def fake_log(_level: str, event: str, **kwargs: object) -> None:
+        logged.append({"event": event, **kwargs})
+
+    _patch_client(monkeypatch, _raising_client(errors.AuthKeyUnregisteredError(request=None)))
+    monkeypatch.setattr("core.telegram_client._action_results.log_event", fake_log)
+
+    result = await execute("acc-dead-log", JoinChannel(channel="@hot"))
+
+    assert logged == [
+        {
+            "event": "telegram_join_channel_failed",
+            "account_id": "acc-dead-log",
+            "extra": {"error_type": "session_dead", "channel": "@hot"},
+        },
+    ]
+    assert result.error_type == "ProfileGatewayError"
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_telethon_error_still_logs_its_class_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telethon spends ``.code`` on the integer transport code, which is not the answer.
+
+    An unmapped ``RPCError`` has a ``.code`` just like the wrappers do, but it is ``400``
+    — a number that tells the operator strictly less than the class name does.
+    """
+    logged: list[dict[str, object]] = []
+
+    async def fake_log(_level: str, event: str, **kwargs: object) -> None:
+        logged.append({"event": event, **kwargs})
+
+    rpc_error = errors.RPCError(request=None, message="X", code=400)
+    _patch_client(monkeypatch, _raising_client(rpc_error))
+    monkeypatch.setattr("core.telegram_client._action_results.log_event", fake_log)
+
+    result = await execute("acc-rpc-log", JoinChannel(channel="@hot"))
+
+    assert logged == [
+        {
+            "event": "telegram_join_channel_failed",
+            "account_id": "acc-rpc-log",
+            "extra": {"error_type": "RPCError", "channel": "@hot"},
+        },
+    ]
+    assert result.error_type == "RPCError"

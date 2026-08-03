@@ -109,6 +109,33 @@ test('a failed join says in words what Telegram refused, and against which chann
   expect(screen.getByText('· чат закрыт: не пускают или выгнали')).toBeInTheDocument();
 });
 
+test('spells out a gateway stable code, which arrives instead of an exception class', () => {
+  render(
+    <ActivityLogCard
+      logLines={[
+        entry({
+          id: 1,
+          level: 'ERROR',
+          status: 'error',
+          event: 'neurocomment_telegram_join_channel_failed',
+          extra: { channel: '@a', error_type: 'session_dead' },
+        }),
+        entry({
+          id: 2,
+          level: 'ERROR',
+          status: 'error',
+          event: 'neurocomment_telegram_post_comment_failed',
+          extra: { channel: '@b', error_type: 'chat_admin_required' },
+        }),
+      ]}
+    />,
+  );
+  expect(
+    screen.getByText('· Сессия аккаунта в Telegram недействительна — войдите заново'),
+  ).toBeInTheDocument();
+  expect(screen.getByText('· Нужны права администратора канала')).toBeInTheDocument();
+});
+
 test('colours an attempted-but-failed event red even though it is logged INFO', () => {
   render(
     <ActivityLogCard
