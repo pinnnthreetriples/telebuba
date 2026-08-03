@@ -378,6 +378,7 @@ async def test_a_cancel_on_the_finalize_paths_reconcile_still_propagates(
     monkeypatch.setattr(_loop, "_calculate_next_run", hand_the_row_to_a_new_generation)
     real_upsert = _state.upsert_warming_state
     cancelled_once = False
+    hand_back_cas: list[str | None] = []
     task: asyncio.Task[None]
 
     async def cancel_the_reconciling_write(write: WarmingStateWrite) -> WarmingStateWriteResult:
@@ -387,6 +388,7 @@ async def test_a_cancel_on_the_finalize_paths_reconcile_still_propagates(
         # write on the way out, and a second cancel would prove nothing.
         if not cancelled_once and write.daily_actions == 4:
             cancelled_once = True
+            hand_back_cas.append(write.expected_run_id)
             task.cancel()
             await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
         return await real_upsert(write)
@@ -399,12 +401,15 @@ async def test_a_cancel_on_the_finalize_paths_reconcile_still_propagates(
         await task
 
     assert cancelled_once
+    # Pin the guard, not the row: this write is shielded, so the cancel above leaves
+    # it landing as a detached task and the read below usually wins the race. What
+    # must hold either way is the predicate the hand-back went in under — dropping
+    # ``run_id`` at the call site makes the write unconditional, so it would clobber
+    # the row with this cycle's ``daily_count + spent`` and let ``run-2`` overspend
+    # the day (#208 inverted).
+    assert hand_back_cas == ["run-1"]
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    # The hand-back is threaded through the CAS, so ``run-2``'s own reservation
-    # survives it: dropping ``run_id`` at the call site would clobber the row with
-    # this cycle's ``daily_count + spent`` and let ``run-2`` overspend the day (#208
-    # inverted).
     assert record.run_id == "run-2"
     assert record.daily_actions == settings.warming.phase_daily_cap["intro"]
 
