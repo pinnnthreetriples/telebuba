@@ -886,6 +886,20 @@
       "peer_flood": "ограничение по спаму",
       "already_participant": "уже участник",
       "by_request": "заявка отправлена, ждём одобрения"
+    },
+    "error": {
+      "ChannelPrivateError": "чат закрыт: не пускают или выгнали",
+      "ChannelInvalidError": "Telegram не узнал этот канал",
+      "UserBannedInChannelError": "Telegram запретил аккаунту писать",
+      "ChatWriteForbiddenError": "в чате запрещено писать",
+      "ChatGuestSendForbiddenError": "писать могут только участники чата",
+      "UserNotParticipantError": "аккаунт не состоит в чате",
+      "UsernameNotOccupiedError": "такого адреса не существует",
+      "UsernameInvalidError": "адрес написан неверно",
+      "InviteHashExpiredError": "ссылка-приглашение устарела",
+      "InviteHashInvalidError": "ссылка-приглашение неверная",
+      "InviteHashEmptyError": "в ссылке нет приглашения",
+      "UnconfirmedRequest": "связь оборвалась, ответ не дошёл"
     }
   },
   "neurocomment": {

@@ -89,6 +89,26 @@ test('a failed post shows the Telegram error type next to the translated reason'
   expect(screen.getByText('· Telegram отклонил · SomeUnmappedRpcError')).toBeInTheDocument();
 });
 
+test('a failed join says in words what Telegram refused, and against which channel', () => {
+  // The row an operator could not read: "Вступление в чат канала — ошибка ·
+  // ChannelPrivateError" named neither the channel nor anything they could act on.
+  render(
+    <ActivityLogCard
+      logLines={[
+        entry({
+          level: 'ERROR',
+          status: 'error',
+          event: 'neurocomment_telegram_join_discussion_group_failed',
+          extra: { channel: '@MeineDNEWS', error_type: 'ChannelPrivateError' },
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByText('@MeineDNEWS')).toBeInTheDocument();
+  expect(screen.getByText('Вступление в чат канала — ошибка')).toBeInTheDocument();
+  expect(screen.getByText('· чат закрыт: не пускают или выгнали')).toBeInTheDocument();
+});
+
 test('colours an attempted-but-failed event red even though it is logged INFO', () => {
   render(
     <ActivityLogCard

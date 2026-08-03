@@ -885,6 +885,20 @@
       "peer_flood": "spam limit",
       "already_participant": "already a member",
       "by_request": "join request sent, awaiting approval"
+    },
+    "error": {
+      "ChannelPrivateError": "chat is closed — not admitted, or removed",
+      "ChannelInvalidError": "Telegram did not recognise this channel",
+      "UserBannedInChannelError": "Telegram blocked this account from writing",
+      "ChatWriteForbiddenError": "writing is not allowed in this chat",
+      "ChatGuestSendForbiddenError": "only members may write here",
+      "UserNotParticipantError": "the account is not in the chat",
+      "UsernameNotOccupiedError": "no such address",
+      "UsernameInvalidError": "the address is malformed",
+      "InviteHashExpiredError": "the invite link has expired",
+      "InviteHashInvalidError": "the invite link is not valid",
+      "InviteHashEmptyError": "the link carries no invite",
+      "UnconfirmedRequest": "connection dropped, the reply never arrived"
     }
   },
   "neurocomment": {

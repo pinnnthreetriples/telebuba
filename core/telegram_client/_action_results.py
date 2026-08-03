@@ -182,7 +182,11 @@ async def _generic_error(
         "ERROR",
         event_name(domain, f"telegram_{action.action_type}_failed"),
         account_id=account_id,
-        extra={"error_type": type(exc).__name__},
+        # The channel rides along for the same reason it does on the success row and on
+        # ``_join_by_request_result``: without it a failed join is the ONE line in the
+        # feed that never says what it was acting on, so the operator reads "join failed"
+        # in a feed where every neighbouring row names its channel and cannot tell which.
+        extra={"error_type": type(exc).__name__, "channel": getattr(action, "channel", None)},
     )
     return ActionResult(
         status="failed",

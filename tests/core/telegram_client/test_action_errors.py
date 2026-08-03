@@ -17,6 +17,7 @@ from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
     CommentOnPost,
     JoinChannel,
+    JoinDiscussionGroup,
     SetProfilePhoto,
 )
 from tests.factories import DeviceFingerprintFactory
@@ -346,3 +347,40 @@ async def test_a_transient_fault_after_the_request_went_out_is_reported_unconfir
 # --------------------------------------------------------------------------- #
 # JoinDiscussionGroup — resolve the linked group from the parent, then join it
 # --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_a_failed_action_logs_the_channel_it_was_acting_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The failure row names its channel, like the success row and the by-request row.
+
+    Without it a failed join was the one line in the operator's feed that never said
+    what it was acting on: "Вступление в чат канала — ошибка · ChannelPrivateError",
+    surrounded by rows that all name theirs, and no way to tell which channel refused.
+    """
+    logged: list[dict[str, object]] = []
+
+    async def fake_log(_level: str, event: str, **kwargs: object) -> None:
+        logged.append({"event": event, **kwargs})
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.ChannelPrivateError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+    monkeypatch.setattr("core.telegram_client._action_results.log_event", fake_log)
+
+    result = await execute("acc-9", JoinDiscussionGroup(channel="@MeineDNEWS"))
+
+    assert result.status == "failed"
+    assert logged == [
+        {
+            "event": "telegram_join_discussion_group_failed",
+            "account_id": "acc-9",
+            "extra": {"error_type": "ChannelPrivateError", "channel": "@MeineDNEWS"},
+        },
+    ]
