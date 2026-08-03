@@ -48,33 +48,46 @@ const protectedRoute = createRoute({
   component: AppShell,
 });
 
+// Every page below carries `errorComponent` so a render error fails at the page's own
+// match, inside AppShell: the nav — and "Log out" — stays around it. Without one the
+// error bubbled to the protected layout's boundary, which reported it as a failed
+// SESSION check, stripped the nav and offered a sign-in that landed back on the same
+// crashing page. Scoped per page and NOT the router-wide `defaultErrorComponent`: that
+// also covered /login and the root, where there is no nav to recover through, and it
+// swallowed those crashes before React's uncaught-error path could report them to the
+// error tracker.
 const indexRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/',
+  errorComponent: PageErrorPanel,
   component: lazyRouteComponent(() => import('@/pages/accounts'), 'AccountsPage'),
 });
 
 const warmingRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/warming',
+  errorComponent: PageErrorPanel,
   component: lazyRouteComponent(() => import('@/pages/warming'), 'WarmingPage'),
 });
 
 const neurocommentRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/neurocomment',
+  errorComponent: PageErrorPanel,
   component: lazyRouteComponent(() => import('@/pages/neurocomment'), 'NeurocommentPage'),
 });
 
 const logsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/logs',
+  errorComponent: PageErrorPanel,
   component: lazyRouteComponent(() => import('@/pages/logs'), 'LogsPage'),
 });
 
 const settingsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/settings',
+  errorComponent: PageErrorPanel,
   component: lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage'),
 });
 
@@ -89,11 +102,7 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-// `defaultErrorComponent` gives every child route the boundary it lacked. Without one
-// a render error inside any page bubbled up to the protected layout's boundary, which
-// reported it as a failed SESSION check — nav stripped, and its "go to sign-in" landed
-// back on the same crashing page. Each page now fails inside AppShell instead.
-export const router = createRouter({ routeTree, defaultErrorComponent: PageErrorPanel });
+export const router = createRouter({ routeTree });
 
 declare module '@tanstack/react-router' {
   interface Register {

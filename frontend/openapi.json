@@ -12422,24 +12422,48 @@
       "WarmingSettingsUpdate": {
         "properties": {
           "inter_account_chat": {
-            "type": "boolean",
-            "title": "Inter Account Chat",
-            "default": false
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inter Account Chat"
           },
           "reactions_enabled": {
-            "type": "boolean",
-            "title": "Reactions Enabled",
-            "default": true
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactions Enabled"
           },
           "join_enabled": {
-            "type": "boolean",
-            "title": "Join Enabled",
-            "default": true
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Enabled"
           },
           "enforce_readiness": {
-            "type": "boolean",
-            "title": "Enforce Readiness",
-            "default": true
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enforce Readiness"
           },
           "gemini_api_key": {
             "anyOf": [

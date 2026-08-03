@@ -657,7 +657,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {avatarUri ? '' : initial}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[16px] font-bold">{fullName}</div>
+              {/* A heading, not a div: the dialog's own name is fixed (see above), so
+                  this is the only place the account's identity is exposed, and heading
+                  navigation is how a screen-reader user reaches it. */}
+              <h2 className="truncate text-[16px] font-bold">{fullName}</h2>
               <div className="truncate text-[12px] text-ink-subtle">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}

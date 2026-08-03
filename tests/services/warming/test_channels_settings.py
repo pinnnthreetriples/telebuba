@@ -105,7 +105,7 @@ async def test_save_settings_persists_gemini_tuning() -> None:
 
 @pytest.mark.asyncio
 async def test_save_settings_keeps_gemini_tuning_when_the_fields_are_omitted() -> None:
-    """A save that omits the two knobs keeps the stored values, not 1 and 0.0.
+    """A save that omits the knobs and the model keeps the stored values, not the defaults.
 
     The schema defaults them to ``None`` and the repository reads ``None`` as "keep",
     but the service sits between the two: substituting a default of its own here
@@ -113,11 +113,16 @@ async def test_save_settings_keeps_gemini_tuning_when_the_fields_are_omitted() -
     from the warming board's config modal, which omits them, reset the settings
     page's rate-limit knobs. Neither the API-level test (its ``save_settings`` is
     monkeypatched) nor the repository test crosses this pass-through.
+
+    ``gemini_model`` rides along because the modal stopped echoing it too, so its own
+    keep path is now load-bearing: a truthiness default anywhere on the way down
+    (``gemini_model or settings.gemini.model``) would discard the operator's model.
     """
     await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
+            gemini_model="ui-model",
             gemini_max_retries=3,
             gemini_min_interval_seconds=4.5,
         ),
@@ -125,8 +130,32 @@ async def test_save_settings_keeps_gemini_tuning_when_the_fields_are_omitted() -
     masked = await warming.save_settings(
         WarmingSettingsUpdate(inter_account_chat=False, reactions_enabled=False),
     )
+    assert masked.gemini_model == "ui-model"
     assert masked.gemini_max_retries == 3
     assert masked.gemini_min_interval_seconds == 4.5
+
+
+@pytest.mark.asyncio
+async def test_save_settings_keeps_the_toggles_when_they_are_omitted() -> None:
+    """A save that omits the four toggles keeps them, instead of resetting each default.
+
+    Same trap as the knobs above, one field group over: a PUT is a full replacement and
+    the write path applies every field it is handed, so hard defaults here turned a
+    partial save into "reset everything the caller did not mention".
+    """
+    await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=True,
+            reactions_enabled=False,
+            join_enabled=False,
+            enforce_readiness=False,
+        ),
+    )
+    masked = await warming.save_settings(WarmingSettingsUpdate())
+    assert masked.inter_account_chat is True
+    assert masked.reactions_enabled is False
+    assert masked.join_enabled is False
+    assert masked.enforce_readiness is False
 
 
 @pytest.mark.asyncio

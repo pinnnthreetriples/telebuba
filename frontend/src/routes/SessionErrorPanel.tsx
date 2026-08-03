@@ -1,4 +1,4 @@
-import { Link, useRouter } from '@tanstack/react-router';
+import { Link, useRouter, useRouterState } from '@tanstack/react-router';
 
 import { i18n } from '@/shared/i18n';
 
@@ -16,16 +16,20 @@ import { i18n } from '@/shared/i18n';
 // Its own file so `router.tsx` keeps exporting no components (react-refresh).
 export function SessionErrorPanel() {
   const router = useRouter();
+  // One retry at a time: each click starts its own invalidate → guard run, so rapid
+  // clicks stacked them.
+  const retrying = useRouterState({ select: (state) => state.isLoading });
   return (
     <div role="alert" className="p-8">
       <p className="text-[13px] text-ink">{i18n.t('shell.sessionError')}</p>
       <div className="mt-4 flex items-center gap-2">
         <button
           type="button"
+          disabled={retrying}
           onClick={() => {
             void router.invalidate();
           }}
-          className="rounded-full bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white"
+          className="rounded-full bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
         >
           {i18n.t('shell.sessionRetry')}
         </button>

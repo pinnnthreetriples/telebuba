@@ -13,6 +13,9 @@ test('confirm fires onConfirm then onClose, cancel only closes', async () => {
     <CampaignDeleteModal name="Крипто" onClose={onClose} onConfirm={onConfirm} />,
   );
   expect(screen.getByText('Удалить кампанию «Крипто»?')).toBeInTheDocument();
+  // The dialog's own name has to name the campaign too: it is all a screen reader
+  // announces on open, and "Удалить кампанию?" would not say which one.
+  expect(screen.getByRole('dialog').getAttribute('aria-label')).toContain('Крипто');
 
   await userEvent.click(screen.getByText('Удалить'));
   expect(onConfirm).toHaveBeenCalledTimes(1);

@@ -525,7 +525,9 @@ test('the dialog keeps one accessible name across the snapshot read', async () =
   renderWithClient(<ProfileModal account={{ ...ACCOUNT, first_name: null }} onClose={vi.fn()} />);
 
   expect(screen.getByRole('dialog', { name: 'Профиль аккаунта' })).toBeInTheDocument();
-  // The heading moves on to the snapshot's name; the container's name does not.
-  expect(await screen.findByText('Алиса')).toBeInTheDocument();
+  // The heading moves on to the snapshot's name; the container's name does not. It is a
+  // real heading because the fixed dialog name never carries the identity, so heading
+  // navigation is the only way to it.
+  expect(await screen.findByRole('heading', { level: 2, name: 'Алиса' })).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: 'Профиль аккаунта' })).toBeInTheDocument();
 });

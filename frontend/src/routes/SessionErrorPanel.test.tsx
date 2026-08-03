@@ -16,9 +16,13 @@ import '@/shared/i18n';
 import { router } from './router';
 import { SessionErrorPanel } from './SessionErrorPanel';
 
+// The page boundary the real router installs on each protected child, read off `router`
+// itself rather than imported — so dropping it there breaks the second test.
+const pageErrorComponent = router.routesById['/protected/logs'].options.errorComponent;
+
 // A stand-in for the protected layout, wired as `router.tsx` wires it: the same boundary
-// component over a pathless route whose guard can fail, one child page, and the REAL
-// router's `defaultErrorComponent` — so dropping it there breaks the second test.
+// component over a pathless route whose guard can fail, and one child page carrying the
+// real router's page boundary.
 // A router of our own is the only way to drive a guard failure and count the retries; a
 // `reset = vi.fn()` mock could only pin the wiring, which is how the panel shipped with a
 // Retry button that did nothing.
@@ -39,12 +43,12 @@ function buildRouter(guard: (() => void) | undefined, page: () => ReactElement) 
   const pageRoute = createRoute({
     getParentRoute: () => protectedRoute,
     path: '/',
+    errorComponent: pageErrorComponent,
     component: page,
   });
   return createRouter({
     routeTree: rootRoute.addChildren([protectedRoute.addChildren([pageRoute])]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
-    defaultErrorComponent: router.options.defaultErrorComponent,
   });
 }
 

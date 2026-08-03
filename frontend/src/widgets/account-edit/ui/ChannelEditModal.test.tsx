@@ -236,7 +236,10 @@ test('the dialog keeps one accessible name across the detail read', async () => 
   renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
 
   expect(screen.getByRole('dialog', { name: 'Редактор канала' })).toBeInTheDocument();
-  // The visible heading follows the title once it lands; the name does not.
+  // The visible heading follows the title once it lands; the name does not. It is a real
+  // heading because the fixed dialog name never carries the title, so heading navigation
+  // is the only way to it.
   expect(await screen.findByDisplayValue('Мой канал')).toBeInTheDocument();
+  expect(screen.getByRole('heading', { level: 2, name: 'Мой канал' })).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: 'Редактор канала' })).toBeInTheDocument();
 });

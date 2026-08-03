@@ -146,10 +146,10 @@ async def load_warming_settings() -> WarmingSettingsSecret:
 
 def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting reads clearer.
     *,
-    inter_account_chat: bool,
-    reactions_enabled: bool,
-    join_enabled: bool = True,
-    enforce_readiness: bool = True,
+    inter_account_chat: bool | None = None,
+    reactions_enabled: bool | None = None,
+    join_enabled: bool | None = None,
+    enforce_readiness: bool | None = None,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
     gemini_max_retries: int | None = None,
@@ -173,10 +173,23 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
         )
         cur: Mapping[str, object] = dict(current) if current is not None else {}
         values: dict[str, object] = {
-            "inter_account_chat": int(inter_account_chat),
-            "reactions_enabled": int(reactions_enabled),
-            "join_enabled": int(join_enabled),
-            "enforce_readiness": int(enforce_readiness),
+            # Keep-semantics like everything below: ``None`` keeps the stored value (else
+            # the config default, for a row written before the column existed).
+            "inter_account_chat": int(
+                _bool_or(inter_account_chat, _bool_or(cur.get("inter_account_chat"), default=False))
+            ),
+            "reactions_enabled": int(
+                _bool_or(reactions_enabled, _bool_or(cur.get("reactions_enabled"), default=True))
+            ),
+            "join_enabled": int(
+                _bool_or(join_enabled, _bool_or(cur.get("join_enabled"), default=True))
+            ),
+            "enforce_readiness": int(
+                _bool_or(
+                    enforce_readiness,
+                    _bool_or(cur.get("enforce_readiness"), settings.warming.enforce_readiness),
+                )
+            ),
             "gemini_api_key": _keep(gemini_api_key, cur.get("gemini_api_key")),
             "gemini_model": _keep_nonempty(
                 gemini_model, cur.get("gemini_model"), settings.gemini.model
@@ -218,10 +231,10 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
 
 async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column list.
     *,
-    inter_account_chat: bool,
-    reactions_enabled: bool,
-    join_enabled: bool = True,
-    enforce_readiness: bool = True,
+    inter_account_chat: bool | None = None,
+    reactions_enabled: bool | None = None,
+    join_enabled: bool | None = None,
+    enforce_readiness: bool | None = None,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
     gemini_max_retries: int | None = None,
@@ -235,7 +248,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
 
     LLM keys/models + the captcha provider use keep/clear/replace semantics:
     ``None`` keeps the stored value, ``""`` clears a key, any other value replaces.
-    The two Gemini rate-limit knobs keep on ``None`` the same way.
+    The two Gemini rate-limit knobs and the four toggles keep on ``None`` the same way.
     """
     return await asyncio.to_thread(
         _save_warming_settings,
