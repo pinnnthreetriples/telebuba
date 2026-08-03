@@ -76,19 +76,25 @@ class _ReadReactOutcome:
     reactions: int = 0
     flood: ActionResult | None = None
     failures: int = 0
-    attempts: int = 0
 
 
 async def _read_and_react(  # noqa: PLR0913
     account_id: str,
     channel: str,
+    tally: _ChannelTally,
     *,
     reactions_enabled: bool,
     reaction_probability: float,
-    attempts_so_far: int,
     remaining_actions: int | None,
 ) -> _ReadReactOutcome:
-    """Read a channel and maybe react, tallying reads / reactions / fails / flood."""
+    """Read a channel and maybe react, tallying reads / reactions / fails / flood.
+
+    ``attempts`` is counted on the caller's ``tally`` the instant each request
+    returns — NOT folded in with the rest of the outcome after this returns. The
+    reading pause between the two RPCs is the longest await in a cycle, so a
+    cancellation there would otherwise hand the loop's reconcile a count that is
+    short by everything this channel already spent (#208).
+    """
     warm = settings.warming
     out = _ReadReactOutcome()
     # Read the larger reaction pool in one pass so the react reuses these ids.
@@ -96,7 +102,7 @@ async def _read_and_react(  # noqa: PLR0913
         account_id,
         ReadChannel(channel=channel, message_limit=warm.reaction_message_limit),
     )
-    out.attempts += 1
+    tally.attempts += 1
     if read_result.status == "ok":
         out.reads = 1
     elif read_result.status in _FAILURE_STATUSES:
@@ -109,7 +115,7 @@ async def _read_and_react(  # noqa: PLR0913
     # request on a ban-risk account and yields a contradictory status=failed +
     # reactions_sent=1 result (#100).
     can_react = read_result.status == "ok"
-    if remaining_actions is not None and (attempts_so_far + out.attempts) >= remaining_actions:
+    if remaining_actions is not None and tally.attempts >= remaining_actions:
         can_react = False
 
     if can_react and reactions_enabled and _seams.rng.random() < reaction_probability:
@@ -122,7 +128,7 @@ async def _read_and_react(  # noqa: PLR0913
                 message_ids=[int(x) for x in read_result.recent_message_ids or []] or None,
             ),
         )
-        out.attempts += 1
+        tally.attempts += 1
         if react_result.status in _HALT_STATUSES:
             out.flood = react_result
             return out
@@ -184,11 +190,15 @@ def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str)
 
 
 def _apply_read_result(tally: _ChannelTally, outcome: _ReadReactOutcome, channel: str) -> bool:
-    """Fold a read/react outcome into the tally. Returns True if the cycle should stop."""
+    """Fold a read/react outcome into the tally. Returns True if the cycle should stop.
+
+    ``attempts`` is deliberately absent: ``_read_and_react`` already counted each
+    request on this same tally as it was spent, so adding it here again would
+    double-bill every read and reaction (#208).
+    """
     tally.reads += outcome.reads
     tally.reactions += outcome.reactions
     tally.failures += outcome.failures
-    tally.attempts += outcome.attempts
     if outcome.failures:
         tally.last_failed_action = "read_or_react"
         tally.last_failed_channel = channel
@@ -245,9 +255,9 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         outcome = await _read_and_react(
             account_id,
             channel.channel,
+            tally,
             reactions_enabled=secret.reactions_enabled,
             reaction_probability=reaction_probability,
-            attempts_so_far=tally.attempts,
             remaining_actions=remaining_actions,
         )
         if outcome.reads:

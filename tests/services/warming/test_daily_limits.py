@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from datetime import UTC, datetime
 
@@ -26,9 +27,10 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _runtime, _seams
+from services.warming import _loop, _runtime, _seams, _state, _steps
 from services.warming._state import _set_state
 from tests.services.warming._support import (
     _fake_loop,
@@ -481,12 +483,201 @@ async def test_daily_counter_accumulates_on_top_of_a_mid_day_count(
 
     await warming.run_loop_iteration("acc-1")
 
-    # 10 already spent today + the 5 still available, booked up front.
-    assert booked == [settings.warming.phase_daily_cap["intro"]]
+    # 10 already spent today + the 5 still available, booked up front. Spelled out
+    # rather than as the cap: the daily gate guarantees count <= cap, so comparing
+    # against the cap cannot tell ``daily_count + remaining`` from a bare cap.
+    assert booked == [10 + 5]
     record = await fetch_warming_state("acc-1")
     assert record is not None
     # 10 already spent today + set_online + join + read + the story glance.
     assert record.daily_actions == 14
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_cycle_reconciles_on_top_of_a_mid_day_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reconcile ADDS to today's count — it must not overwrite it (#208).
+
+    Every other reconcile test starts the day at zero, where the left operand of
+    ``daily_count + spent`` is invisible. From 10 spent under a cap of 15, writing
+    a bare ``spent`` would hand the restarted loop 13 more actions.
+    """
+    _no_quiet_days(monkeypatch)
+    cancelled = _CancelAfter(2)
+    monkeypatch.setattr(_seams, "execute", cancelled.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            daily_actions=10,
+            daily_count_date=datetime.now(UTC).date().isoformat(),
+        ),
+    )
+
+    with pytest.raises(asyncio.CancelledError):
+        await warming.run_loop_iteration("acc-1")
+
+    assert cancelled.actions == ["set_online", "join_channel"]
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.daily_actions == 10 + 2
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_in_the_reading_pause_counts_the_read_it_already_spent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reconcile must count requests that left the process, not folds (#208).
+
+    The post-read pause is the longest await in a cycle (8-45s), so it is where a
+    deploy's cancel most often lands — and the read RPC is already spent by then.
+    Counting it only when the channel walk folds the outcome in, after the pause,
+    under-counts: the restarted loop would then re-spend that action on top.
+    """
+    _no_quiet_days(monkeypatch)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+
+    async def cancel_in_the_reading_pause(_min_seconds: float, _max_seconds: float) -> None:
+        if recorder.types()[-1:] == ["read_channel"]:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr(_steps, "_human_pause", cancel_in_the_reading_pause)
+    await _seed_warming_account()
+
+    with pytest.raises(asyncio.CancelledError):
+        await warming.run_loop_iteration("acc-1")
+
+    # set_online + join + the read really left the process; the trailing entry is
+    # the offline cleanup, which never counts against the cap.
+    assert recorder.types() == ["set_online", "join_channel", "read_channel", "set_online"]
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.daily_actions == 3
+
+
+@pytest.mark.asyncio
+async def test_the_uncancelled_cycle_counts_every_action_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Counting at the spend site must not double-count on the normal path.
+
+    Reactions on, so both of the read/react step's requests are exercised: if the
+    per-request increments and a fold-on-return ever coexist, the daily counter
+    doubles and the account parks at half its cap.
+    """
+    _no_quiet_days(monkeypatch)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="", enforce_readiness=False)
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.run_loop_iteration("acc-1")
+
+    assert recorder.types() == [
+        "set_online",
+        "join_channel",
+        "read_channel",
+        "react_to_post",
+        "watch_peer_stories",
+        "set_online",
+    ]
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # The five billable requests above, each counted once (the offline cleanup is
+    # excluded by design).
+    assert record.daily_actions == 5
+
+
+@pytest.mark.asyncio
+async def test_a_second_cancel_during_the_reconcile_keeps_the_original_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``shutdown_warming_runtime`` cancels a second time when its 5s gather times out.
+
+    That cancel lands on the reconcile's own write. Unshielded it would abandon
+    the write (the whole reservation stays booked, silently) and replace the
+    exception being propagated — a genuine crash relabelled ``CancelledError``
+    skips ``_runner``'s crash branch, so nothing is logged and the account is
+    never parked in ``error``.
+    """
+    _no_quiet_days(monkeypatch)
+    crash = _CrashAfter(2)
+    monkeypatch.setattr(_seams, "execute", crash.execute)
+    real_upsert = _state.upsert_warming_state
+    written = asyncio.Event()
+    task: asyncio.Task[None]
+
+    async def cancel_then_write(write: WarmingStateWrite) -> WarmingStateWriteResult:
+        # ``daily_actions == 2`` identifies the reconcile's hand-back: the
+        # cycle_started reservation and the progress writes all carry 15.
+        reconciling = write.daily_actions == 2
+        if reconciling:
+            task.cancel()
+            await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
+        result = await real_upsert(write)
+        if reconciling:
+            written.set()
+        return result
+
+    monkeypatch.setattr(_state, "upsert_warming_state", cancel_then_write)
+    await _seed_warming_account()
+    task = asyncio.create_task(_iteration())
+
+    with (
+        caplog.at_level(logging.ERROR, logger="services.warming._loop"),
+        pytest.raises(RuntimeError),
+    ):
+        await task
+
+    # The write finished despite the second cancel, and the failure was not silent.
+    await asyncio.wait_for(written.wait(), timeout=5)
+    assert "reservation reconcile failed" in caplog.text
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.daily_actions == 2
+
+
+@pytest.mark.asyncio
+async def test_a_raising_finalize_still_hands_back_the_reservation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A finalize that raises must not cost the rest of the day as well (#208).
+
+    ``_finalize_after_cycle`` is three DB round-trips; this module already
+    anticipates a transient SQLite lock on them. Outside the handler's reach, such
+    a lock left the full reservation booked, so the operator's next Start parked
+    the account on a phantom "daily limit" on top of the ``error`` state.
+    """
+    _no_quiet_days(monkeypatch)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+
+    async def park_then_raise(*_args: object, **_kwargs: object) -> WarmingCycleResult:
+        # A readiness park moved the row behind the cycle, then the finalize write
+        # trips on a lock — the reconcile must echo the row's state, not "active".
+        await _set_state("acc-1", "error", expected_run_id="run-1")
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_loop, "_finalize_after_cycle", park_then_raise)
+    await _seed_warming_account(run_id="run-1")
+
+    with pytest.raises(RuntimeError):
+        await warming.run_loop_iteration("acc-1", run_id="run-1")
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # Echoed back, not resurrected as ``active``.
+    assert record.state == "error"
+    # set_online + join + read + the story glance, not the 15-action reservation.
+    assert record.daily_actions == 4
 
 
 @pytest.mark.asyncio

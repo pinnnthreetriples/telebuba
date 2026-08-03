@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -176,32 +175,52 @@ async def _reconcile_reservation(
     Writes ``daily_actions`` only (``state`` is the row's current state, echoed
     back so an ``error``/``sleeping`` row is not resurrected as ``active``), and
     stays CAS-guarded: a newer generation's row, or one the operator already
-    stopped, is left alone. Failures are swallowed because this runs on the way
-    out of another exception and must never mask it.
+    stopped, is left alone. Failures are swallowed — never propagated — because
+    this runs on the way out of another exception and must never mask it, but
+    they are always logged: a silent reconcile failure is the forfeited day this
+    function exists to prevent.
     """
     daily_count, daily_date = daily
-    with suppress(Exception):
-        write = await _set_state(
-            account_id,
-            state,
-            daily_actions=daily_count + spent,
-            daily_count_date=daily_date,
-            expected_run_id=run_id,
+    try:
+        # ``shield``: ``shutdown_warming_runtime`` cancels a second time when its
+        # 5s ``gather`` times out, and that second cancel lands on this write's
+        # ``to_thread``. An abandoned write leaves the full reservation booked and
+        # replaces whatever exception was propagating — a genuine crash would then
+        # look like a cancellation to ``_runner`` and never park the account.
+        write = await asyncio.shield(
+            _set_state(
+                account_id,
+                state,
+                daily_actions=daily_count + spent,
+                daily_count_date=daily_date,
+                expected_run_id=run_id,
+            ),
         )
-        # A forfeited day is otherwise indistinguishable from a legitimate park:
-        # ``_gate_daily_limit`` writes the same ``last_event="daily_limit"`` either
-        # way, so without this the fleet can lose a day of warming per deploy in
-        # total silence.
-        await log_event(
-            "WARNING",
-            "warming_reservation_reconciled",
-            account_id=account_id,
-            extra={
-                "spent": spent,
-                "daily_actions": daily_count + spent,
-                "applied": write.applied,
-            },
-        )
+        if not write.applied:
+            # The CAS refused (a newer generation owns the row, or a stop already
+            # wrote ``idle``): the reservation stays booked and nothing else will
+            # clear it before the next UTC midnight, so this is the case the
+            # operator actually has to see — not a successful hand-back.
+            await log_event(
+                "WARNING",
+                "warming_reservation_stranded",
+                account_id=account_id,
+                extra={"spent": spent, "daily_actions": daily_count + spent},
+            )
+        elif spent:
+            # A forfeited day is otherwise indistinguishable from a legitimate park:
+            # ``_gate_daily_limit`` writes the same ``last_event="daily_limit"`` either
+            # way, so without this the fleet can lose a day of warming per deploy in
+            # total silence. Silent when nothing was spent (cancelled while queued on
+            # the semaphore), or every deploy would log one WARNING per account.
+            await log_event(
+                "WARNING",
+                "warming_reservation_reconciled",
+                account_id=account_id,
+                extra={"spent": spent, "daily_actions": daily_count + spent},
+            )
+    except BaseException:
+        logger.exception("reservation reconcile failed for %s", account_id)
 
 
 async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs read clearer than a bag.
@@ -417,14 +436,30 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
                 tally=tally,
             )
         schedule = await _calculate_next_run(account_id, result, persona, effective_cap)
+        # Inside the ``try`` as well: the finalize is three DB round-trips, and the
+        # transient SQLite lock this module already anticipates would otherwise
+        # escape with the whole reservation still booked — costing the rest of the
+        # day on top of parking the account in ``error``.
+        return await _finalize_after_cycle(
+            account_id, result, age_hours, daily, schedule, run_id=run_id
+        )
     except BaseException:
         # ``BaseException`` on purpose: ``CancelledError`` does not inherit from
         # ``Exception``, and cancellation is the leak path that costs a whole day of
-        # warming per restart. The state is still ``active`` here — only the
-        # ``cycle_started`` write above has landed. Re-raised unchanged so
-        # cancellation keeps propagating to the task that asked for it.
-        await _reconcile_reservation(account_id, "active", daily, tally.attempts, run_id=run_id)
+        # warming per restart. Re-raised unchanged so cancellation keeps propagating
+        # to the task that asked for it, and so a genuine crash still reaches
+        # ``_runner``'s ``except Exception``.
+        try:
+            # Echo the row's own state back rather than a literal ``active``: a
+            # readiness park or a stop may have moved it while the cycle ran.
+            latest = await fetch_warming_state(account_id)
+            await _reconcile_reservation(
+                account_id,
+                latest.state if latest is not None else "active",
+                daily,
+                tally.attempts,
+                run_id=run_id,
+            )
+        except BaseException:
+            logger.exception("reservation reconcile failed for %s", account_id)
         raise
-    return await _finalize_after_cycle(
-        account_id, result, age_hours, daily, schedule, run_id=run_id
-    )
