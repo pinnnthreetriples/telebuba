@@ -136,19 +136,18 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         # gets that far, and every run stamps a fresh name, so partials would pile
         # up one full-DB-sized file per interval on the volume holding the sole
         # datastore. VACUUM INTO holds no long lock, so the copy is safe online.
-        # Two different obligations, deliberately not folded into one unlink:
-        # other runs' leftovers are hygiene, so a stuck one (a live handle, the
-        # path turned into a directory, EPERM/EBUSY) is suppressed — unguarded it
+        # The glob covers this run's own output name too, so it needs no unlink of
+        # its own. Leftovers are best-effort hygiene, so a stuck one (a live handle,
+        # the path turned into a directory, EPERM/EBUSY) is suppressed — unguarded it
         # raises before the vacuum and no backup is ever taken again while it
-        # persists. Our own output path is not hygiene: VACUUM INTO fails on an
-        # existing output, so this run cannot proceed without it, and that unlink
-        # must surface. Deleting a foreign in-flight .part is only safe because
-        # maintenance is single-process: one uvicorn worker (a non-negotiable)
-        # and one task, whose runs serialise on ``await asyncio.to_thread``.
+        # persists. Suppressing our own path costs nothing: VACUUM INTO fails on an
+        # existing output, so the run still raises, only from sqlite. Deleting a
+        # foreign in-flight .part is only safe because maintenance is single-process:
+        # one uvicorn worker (a non-negotiable) and one task, whose runs serialise
+        # on ``await asyncio.to_thread``.
         for orphan in backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}{_BACKUP_PARTIAL_SUFFIX}"):
             with suppress(OSError):
                 orphan.unlink(missing_ok=True)
-        partial.unlink(missing_ok=True)
         _vacuum_into(connection, partial)
     partial.replace(target)  # atomic publish: only a complete file gets the real name.
     _prune_backups(backup_dir)
@@ -162,8 +161,12 @@ def _prune_backups(backup_dir: Path) -> None:
     # max(0, ...): a negative count is not "delete nothing" in a slice, it means
     # "all but the last N" — under the limit that deleted the oldest backups.
     excess = max(0, len(backups) - settings.db.backup_keep)
+    # Same best-effort rule as the entry sweep: retention must never cost a backup
+    # that already published, and one un-removable old file must not stop the rest
+    # going. ``excess`` is recomputed every run, so a transient handle self-heals.
     for stale in backups[:excess]:
-        stale.unlink(missing_ok=True)
+        with suppress(OSError):
+            stale.unlink(missing_ok=True)
 
 
 async def run_db_maintenance_loop() -> None:

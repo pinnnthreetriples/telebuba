@@ -194,6 +194,40 @@ def test_unremovable_leftover_partial_does_not_block_the_backup(
     assert stuck.is_dir()  # left alone, and it did not stop the run
 
 
+def test_unremovable_old_backup_does_not_block_the_run_or_retention(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retention is hygiene too, and it runs AFTER the backup published.
+
+    Unguarded, one old backup that cannot be unlinked (the operator inspecting it in
+    a SQLite browser, a backup agent, Defender mid-scan) raises on every run from
+    then on: the loop reports ``db_maintenance_failed`` although the backup DID
+    publish, and retention stops entirely, so the directory grows by one full-DB
+    -sized file per interval.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+    monkeypatch.setattr(settings.db, "backup_keep", 1)
+
+    # A non-empty directory is un-unlinkable on both platforms (IsADirectoryError /
+    # PermissionError) without needing a real foreign open handle. It sorts oldest, so
+    # unguarded it raises before the second stale file is reached.
+    stuck = backup_dir / "telebuba-19990101T000000000000Z.db"
+    stuck.mkdir(parents=True)
+    (stuck / "wedged").write_bytes(b"")
+    stale = backup_dir / "telebuba-19990102T000000000000Z.db"
+    stale.write_bytes(b"")
+
+    written = run_db_maintenance(clock=lambda: _fixed_clock(1))
+
+    assert written is not None
+    assert written.exists()  # the backup published despite the failing prune
+    assert stuck.is_dir()  # left alone
+    assert not stale.exists()  # and the other stale file still got pruned
+
+
 @pytest.mark.asyncio
 async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
     # Sleep almost forever so cancellation, not a real interval, ends the task.
