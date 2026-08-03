@@ -202,6 +202,31 @@ async def mark_comment_posted(
     )
 
 
+def _record_comment_msg_id(channel: str, post_id: int, comment_msg_id: int) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_comments)
+            .where(
+                (_neurocomment_comments.c.channel == channel)
+                & (_neurocomment_comments.c.post_id == post_id),
+            )
+            .values(comment_msg_id=comment_msg_id, updated_at=_now_iso()),
+        )
+
+
+async def record_comment_msg_id(channel: str, post_id: int, comment_msg_id: int) -> None:
+    """Stamp the delivered comment's message id, whatever the row's status says.
+
+    Deliberately NOT guarded by the terminal-status rule ``_mark_comment`` enforces: the
+    status is a verdict and can be wrong (a reclaimed claim reads ``failed`` while the
+    comment is live under the post), but a message id is a fact Telegram just handed us,
+    and it never contradicts a status — it only says which message this row produced.
+    Without it a mis-classified comment stays invisible to the deletion sweep forever,
+    since that scan can only look at rows carrying an id.
+    """
+    await asyncio.to_thread(_record_comment_msg_id, channel, post_id, comment_msg_id)
+
+
 async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | None:
     """Mark a claimed comment as failed.
 
@@ -246,13 +271,43 @@ async def release_claim(channel: str, post_id: int) -> None:
     return await asyncio.to_thread(_release_claim, channel, post_id)
 
 
+def _touch_comment_claim(channel: str, post_id: int) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_comments)
+            .where(
+                (_neurocomment_comments.c.channel == channel)
+                & (_neurocomment_comments.c.post_id == post_id)
+                # Heartbeat an IN-FLIGHT claim only: a terminal row is settled, and
+                # bumping its stamp would just hide its real age from the reclaim.
+                & (_neurocomment_comments.c.status == "claimed"),
+            )
+            .values(updated_at=_now_iso()),
+        )
+
+
+async def touch_comment_claim(channel: str, post_id: int) -> None:
+    """Heartbeat a claim the worker is still holding, so the reclaim can see it is alive.
+
+    ``reclaim_stale_claims`` can only judge a claim by its age, and between winning the
+    claim and resolving it the worker wrote nothing at all — so a slow-but-live attempt
+    was indistinguishable from a dead one and got failed underneath itself. This is the
+    beat that tells them apart; no-op when the row is already terminal or gone.
+    """
+    await asyncio.to_thread(_touch_comment_claim, channel, post_id)
+
+
 def _reclaim_stale_claims(cutoff_iso: str) -> int:
     with _get_engine().begin() as connection:
         result = connection.execute(
             update(_neurocomment_comments)
             .where(
                 (_neurocomment_comments.c.status == "claimed")
-                & (_neurocomment_comments.c.created_at < cutoff_iso),
+                # ``updated_at``, not ``created_at``: the claim stamps both, so an
+                # un-beaten row ages exactly as it used to, while a worker that beats
+                # (``touch_comment_claim``) is no longer failed out from under a send it
+                # is still making — the one thing age alone could never see.
+                & (_neurocomment_comments.c.updated_at < cutoff_iso),
             )
             .values(status="failed", updated_at=_now_iso()),
         )
@@ -260,7 +315,7 @@ def _reclaim_stale_claims(cutoff_iso: str) -> int:
 
 
 async def reclaim_stale_claims(cutoff_iso: str) -> int:
-    """Release claims stuck 'claimed' since before cutoff_iso (mark 'failed'); returns count."""
+    """Release claims untouched since before cutoff_iso (mark 'failed'); returns count."""
     return await asyncio.to_thread(_reclaim_stale_claims, cutoff_iso)
 
 

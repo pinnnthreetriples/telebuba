@@ -53,6 +53,27 @@ async def list_joined_watch_channels(account_id: str) -> set[str]:
     return await asyncio.to_thread(_list_joined_watch_channels, account_id)
 
 
+def _forget_watch_channel_join(account_id: str, watch_channel: str) -> None:
+    statement = _neurocomment_join_log.delete().where(
+        (_neurocomment_join_log.c.account_id == account_id)
+        & (_neurocomment_join_log.c.watch_channel == watch_channel),
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def forget_watch_channel_join(account_id: str, watch_channel: str) -> None:
+    """Erase the rows claiming ``account_id`` is inside ``watch_channel``.
+
+    Callable only when Telegram has PROVEN the account is out (kicked / banned / the
+    channel went private): this log is the restart-safe join cache, so a row that
+    outlived the membership is exactly what stops the listener from ever re-joining.
+    Dropping it also lowers the rolling-24h count, which is honest — that join no
+    longer stands — and cheap, since a re-join records a fresh row.
+    """
+    await asyncio.to_thread(_forget_watch_channel_join, account_id, watch_channel)
+
+
 def _count_account_joins_since(account_id: str, since_iso: str) -> int:
     statement = select(func.count()).where(
         (_neurocomment_join_log.c.account_id == account_id)

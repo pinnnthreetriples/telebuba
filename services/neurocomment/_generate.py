@@ -24,6 +24,7 @@ from core.db import (
     load_warming_settings,
     mark_comment_failed,
     release_claim,
+    touch_comment_claim,
 )
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
@@ -135,6 +136,12 @@ async def _generate_and_post(
         await asyncio.sleep(
             _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
         )
+        # The claim's only heartbeat, placed at the last moment before the send because
+        # everything ahead of it is the part that can outlast ``stale_claim_reclaim_seconds``
+        # on operator-set values inside the allowed ranges (the shared Gemini throttle, the
+        # reply delay above). Without it the sweep read a 15-minute-old ``created_at``, failed
+        # this very claim, and the send below then landed on a row already marked failed.
+        await touch_comment_claim(event.channel, event.post_id)
         result = await _seams.execute(
             account_id,
             CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),

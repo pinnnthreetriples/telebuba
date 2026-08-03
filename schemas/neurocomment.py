@@ -427,7 +427,13 @@ class NeurocommentSettingsUpdate(BaseModel):
     max_comments_per_hour: int = Field(ge=1)
     max_comments_per_channel_per_day: int = Field(ge=0)
     reply_delay_min_seconds: float = Field(ge=0)
-    reply_delay_max_seconds: float = Field(ge=0)
+    # Bounded because the delay is spent INSIDE a claim: past
+    # ``stale_claim_reclaim_seconds`` every claim is reclaimed while its worker is still
+    # waiting to send. The heartbeat makes that survivable, but an unbounded human "beat"
+    # is not a setting anyone needs — five minutes is already far past plausible. Only the
+    # write gate is bounded; the read model must keep loading whatever an older,
+    # unvalidated save left in the DB. ``min <= max`` is checked below, so this caps both.
+    reply_delay_max_seconds: float = Field(ge=0, le=300)
     min_trust_score: int = Field(ge=0, le=100)
 
     @model_validator(mode="after")

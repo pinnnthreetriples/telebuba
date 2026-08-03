@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
+from telethon import errors
 from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
 from core.config import settings
@@ -21,6 +22,7 @@ from core.telegram_client import _listener as listener_mod
 from core.telegram_client import (
     stop_post_listener,
     subscribe_posts,
+    take_lost_access_channels,
     update_post_subscription,
 )
 from schemas.telegram_actions import NewPostEvent
@@ -510,6 +512,37 @@ async def test_failed_resolution_is_not_cached(monkeypatch: pytest.MonkeyPatch) 
     # Second reconcile must re-attempt the unresolved channel (no poisoned cache).
     await subscribe_posts("listener-retry", ["@gone"], on_post)
     assert client.peer_id_calls == ["@gone", "@gone"]
+
+
+@pytest.mark.asyncio
+async def test_only_a_proven_kick_is_reported_as_lost_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A kick must be told apart from any other resolution failure — and drained once.
+
+    The join log is the listener's restart-safe join cache, so its owner re-joins on this
+    report alone; a transient failure leaking into it would re-send ``JoinChannel`` for a
+    channel the account is still in, every reconcile.
+    """
+
+    class KickedClient(FakeClient):
+        async def get_peer_id(self, channel: str) -> int:
+            self.peer_id_calls.append(channel)
+            if channel == "@kicked":
+                raise errors.ChannelPrivateError(request=None)
+            return await super().get_peer_id(channel)  # "@gone" raises KeyError
+
+    client = KickedClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-kick", ["@kicked", "@gone"], on_post)
+
+    assert take_lost_access_channels("listener-kick") == {"@kicked"}
+    # Draining IS the report: the caller acts on each loss once.
+    assert take_lost_access_channels("listener-kick") == set()
 
 
 @pytest.mark.asyncio

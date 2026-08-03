@@ -85,6 +85,18 @@ def test_settings_update_rejects_inverted_reply_delay_range() -> None:
         )
 
 
+def test_settings_update_rejects_a_reply_delay_that_outlives_a_claim() -> None:
+    """The delay is spent inside a claim, so an unbounded one reclaims every claim."""
+    with pytest.raises(ValidationError):
+        NeurocommentSettingsUpdate(
+            max_comments_per_hour=1,
+            max_comments_per_channel_per_day=0,
+            reply_delay_min_seconds=0.0,
+            reply_delay_max_seconds=1000.0,
+            min_trust_score=0,
+        )
+
+
 def test_campaign_create_rejects_over_long_name_and_prompt() -> None:
     with pytest.raises(ValidationError):
         CampaignCreate(name="x" * 129, prompt="p")

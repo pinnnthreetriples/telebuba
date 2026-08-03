@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import asyncio
 
-from core.db import list_active_watch_channels, list_joined_watch_channels, record_join
+from core.db import (
+    forget_watch_channel_join,
+    list_active_watch_channels,
+    list_joined_watch_channels,
+    record_join,
+)
 from core.logging import log_event
 from schemas.telegram_actions import JoinChannel
 from services.neurocomment import _seams
@@ -35,11 +40,12 @@ async def run_join_pass(listener_account_id: str) -> None:
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
     channels = (await list_active_watch_channels()).channels
+    # Before the seeding below, so a channel we were kicked from is no longer in either
+    # cache by the time the loop reads them.
+    await _forget_lost_channels(listener_account_id)
     # Seed the cache from the join log: Telegram answers "ok" (never already_participant)
     # when a public channel is re-joined, so before this every restart re-sent the whole
     # watch set as real joins and pinned the account at its rolling-24h cap.
-    # ponytail: never invalidated — a channel the account was kicked from is not
-    # re-joined; delete its join-log rows if that shows up.
     _runtime._JOINED_CHANNELS.update(  # noqa: SLF001 - peer module
         (listener_account_id, channel)
         for channel in await list_joined_watch_channels(listener_account_id)
@@ -93,4 +99,32 @@ async def run_join_pass(listener_account_id: str) -> None:
             "neurocomment_listener_join_failed",
             account_id=listener_account_id,
             extra=extra,
+        )
+
+
+async def _forget_lost_channels(listener_account_id: str) -> None:
+    """Undo the join bookkeeping for channels Telegram proved the listener is out of.
+
+    Both caches say "joined" forever otherwise: the in-memory pair set for the life of
+    the process, and the join log across restarts (#40 made it restart-safe on purpose).
+    A kick therefore silenced the channel permanently — the listener only receives
+    updates for channels it is in, the pass skipped it on the cache hit, and nothing
+    ever re-joined it. ``_rejoin`` does not cover this: it recovers the comment account's
+    access to a channel's *discussion group*, a different pair and a different table.
+
+    Only proven losses arrive here (``core.telegram_client._listener._LOST_ACCESS_ERRORS``),
+    never a transient resolution failure, so this cannot become the re-join storm the
+    join-log cache was introduced to stop — and the rolling-24h cap still bounds whatever
+    the next pass does.
+    """
+    from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
+
+    for channel in _runtime.take_lost_access_channels(listener_account_id):
+        _runtime._JOINED_CHANNELS.discard((listener_account_id, channel))  # noqa: SLF001 - peer module
+        await forget_watch_channel_join(listener_account_id, channel)
+        await log_event(
+            "WARNING",
+            "neurocomment_listener_access_lost",
+            account_id=listener_account_id,
+            extra={"channel": channel},
         )

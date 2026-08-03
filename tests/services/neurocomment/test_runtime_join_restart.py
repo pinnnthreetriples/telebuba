@@ -14,6 +14,7 @@ from core.db import (
     count_account_joins_since,
     create_campaign,
     link_channel_to_campaign,
+    list_joined_watch_channels,
     record_join,
 )
 from schemas.neurocomment import CampaignCreate
@@ -51,6 +52,53 @@ async def test_restart_does_not_rejoin_channels_from_the_join_log(
     await _drain_joins()
 
     assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@b")]
+    assert await count_account_joins_since("listener-1", "1970-01-01") == 2
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_a_kicked_channel_is_rejoined_on_the_next_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other half of #40: a cache that never forgets makes a kick permanent.
+
+    The listener only receives updates for channels it is IN, so once the log said
+    "joined" the pass skipped the channel forever and the campaign went quiet on it with
+    no error anywhere. Only a proven loss re-opens it, and only for that channel — the
+    flood guard the join log exists to be must still hold for everything else.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _drain_joins()
+    assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@b")]
+
+    # Telegram proved the listener is out of @a (kicked / banned / gone private).
+    lost = ["@a"]
+
+    def _take(_account_id: str) -> set[str]:
+        taken = set(lost)
+        lost.clear()  # drains, like the real report
+        return taken
+
+    monkeypatch.setattr(_runtime, "take_lost_access_channels", _take)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _drain_joins()
+
+    # @a joined again; @b never re-sent (its cache entry is untouched).
+    assert exec_spy.joined == [
+        ("listener-1", "@a"),
+        ("listener-1", "@b"),
+        ("listener-1", "@a"),
+    ]
+    # The log is honest either way: the stale row went, the fresh join is recorded.
+    assert await list_joined_watch_channels("listener-1") == {"@a", "@b"}
     assert await count_account_joins_since("listener-1", "1970-01-01") == 2
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 

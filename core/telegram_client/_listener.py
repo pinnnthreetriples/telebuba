@@ -40,6 +40,7 @@ logger = logging.getLogger(__name__)
 __all__ = [
     "stop_post_listener",
     "subscribe_posts",
+    "take_lost_access_channels",
     "update_post_subscription",
 ]
 
@@ -56,6 +57,23 @@ _FILTERS: dict[str, object] = {}
 # harmless. ponytail: process-lifetime, never invalidated — only successful
 # resolutions are cached, so a failure simply retries on the next reconcile.
 _PEER_IDS: dict[str, int] = {}
+# Telethon's answer when the account is no longer inside a channel it once joined
+# (kicked, banned, or the channel went private): the peer stops resolving, so no post
+# from it can EVER arrive again. Distinguished from every other resolution failure
+# because only these are proof of lost membership, and the join log still claims the
+# account is in the channel — which is what makes the silence permanent.
+_LOST_ACCESS_ERRORS = frozenset(
+    {"ChannelPrivateError", "UserNotParticipantError", "UserBannedInChannelError"},
+)
+# Channels each account provably lost access to, drained by the caller. This layer only
+# witnesses the loss; what to do about it (drop the join-log row, re-join) is the join
+# pass's policy. ponytail: single-process, in-memory, like ``_PEER_IDS`` above.
+_LOST_ACCESS: dict[str, set[str]] = {}
+
+
+def take_lost_access_channels(account_id: str) -> set[str]:
+    """Channels ``account_id`` was proven out of since the last call (drains the report)."""
+    return _LOST_ACCESS.pop(account_id, set())
 
 
 async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
@@ -113,6 +131,8 @@ async def subscribe_posts(
                 # _watch.py), so a neutral ``telegram_*`` name would be invisible in the
                 # 'neurocomment' view. A second consumer is the ceiling: at that point
                 # the rows need a real domain column instead of a prefix convention.
+                if type(exc).__name__ in _LOST_ACCESS_ERRORS:
+                    _LOST_ACCESS.setdefault(account_id, set()).add(channel)
                 await log_event(
                     "WARNING",
                     "neurocomment_listener_channel_unresolved",
@@ -224,3 +244,4 @@ def _reset_for_tests() -> None:
     _HANDLERS.clear()
     _FILTERS.clear()
     _PEER_IDS.clear()
+    _LOST_ACCESS.clear()

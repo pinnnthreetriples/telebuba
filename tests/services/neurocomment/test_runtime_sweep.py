@@ -631,16 +631,15 @@ async def test_review_failure_is_logged_and_does_not_propagate(
 
 
 async def _claim_aged(minutes: float) -> None:
-    """Claim @a post 1 for acc-1, then age the row ``minutes`` into the past."""
+    """Claim @a post 1 for acc-1, then age both its stamps back (the heartbeat included)."""
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     await link_channel_to_campaign(campaign.campaign_id, "@a")
     await create_account(AccountCreate(account_id="acc-1", session_name="acc-1"))
     assert await claim_comment("@a", 1, campaign.campaign_id, "acc-1") is True
+    aged = (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+    sql = "UPDATE neurocomment_comments SET created_at = ?, updated_at = ? WHERE post_id = 1"
     with _get_engine().begin() as connection:
-        connection.exec_driver_sql(
-            "UPDATE neurocomment_comments SET created_at = ? WHERE post_id = 1",
-            ((datetime.now(UTC) - timedelta(minutes=minutes)).isoformat(),),
-        )
+        connection.exec_driver_sql(sql, (aged, aged))
 
 
 async def _spent_day_slots() -> int:

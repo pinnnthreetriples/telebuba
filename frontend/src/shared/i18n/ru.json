@@ -612,6 +612,7 @@
   },
   "logEvent": {
     "neurocomment_posted": "Комментарий опубликован",
+    "neurocomment_posted_after_reclaim": "Комментарий опубликован после возврата заявки",
     "neurocomment_post_failed": "Ошибка публикации",
     "neurocomment_post_unavailable": "Комментарий не отправлен: нет связи с Telegram",
     "neurocomment_comment_deleted": "Комментарий удалён",
@@ -639,6 +640,7 @@
     "neurocomment_onboard_spam_probe_failed": "Ошибка проверки на спам",
     "neurocomment_listener_join_failed": "Слушатель не вступил в канал",
     "neurocomment_listener_join_flood": "Вступления слушателя приостановлены (флуд-контроль)",
+    "neurocomment_listener_access_lost": "Слушатель потерял доступ к каналу, вступит заново",
     "neurocomment_join_daily_cap": "Достигнут суточный лимит вступлений",
     "neurocomment_runtime_reconciled": "Движок восстановлен",
     "neurocomment_channels_unwatched": "Каналы вне прослушивания",

@@ -9,6 +9,8 @@ import pytest
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     count_account_joins_since,
+    forget_watch_channel_join,
+    list_joined_watch_channels,
     record_join,
 )
 
@@ -50,3 +52,20 @@ async def test_join_older_than_window_is_not_counted() -> None:
     # A fresh join lands back inside the window.
     await record_join("acc-1")
     assert await count_account_joins_since("acc-1", day_ago) == 1
+
+
+@pytest.mark.asyncio
+async def test_forget_watch_channel_join_drops_only_that_pair() -> None:
+    """A kick erases one account's membership of one channel — nothing else."""
+    await record_join("acc-1", watch_channel="@a")
+    await record_join("acc-1", watch_channel="@b")
+    await record_join("acc-2", watch_channel="@a")
+    await record_join("acc-1")  # a discussion-group join carries no watch channel
+
+    await forget_watch_channel_join("acc-1", "@a")
+
+    assert await list_joined_watch_channels("acc-1") == {"@b"}
+    assert await list_joined_watch_channels("acc-2") == {"@a"}
+    # The rolling-24h count drops by exactly the one join that no longer stands.
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    assert await count_account_joins_since("acc-1", past) == 2

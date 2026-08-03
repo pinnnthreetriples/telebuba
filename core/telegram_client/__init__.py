@@ -39,6 +39,7 @@ from core.telegram_client._client import (
 from core.telegram_client._listener import (
     stop_post_listener,
     subscribe_posts,
+    take_lost_access_channels,
     update_post_subscription,
 )
 from core.telegram_client._media import refresh_account_avatar
@@ -84,6 +85,7 @@ __all__ = [
     "stop_post_listener",
     "submit_phone_code",
     "subscribe_posts",
+    "take_lost_access_channels",
     "telegram_client",
     "update_post_subscription",
 ]
