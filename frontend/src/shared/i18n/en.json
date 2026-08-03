@@ -769,6 +769,8 @@
     "neurocomment_channel_comments_off": "Channel comments are disabled",
     "neurocomment_onboard_join_by_request": "Join request sent",
     "neurocomment_onboard_join_request_pending": "Join request still awaiting approval",
+    "neurocomment_onboard_join_request_approved": "Join request approved",
+    "neurocomment_onboard_pair_ready": "Account is ready to comment on the channel",
     "neurocomment_join_request_expired": "Channel dropped: join request never approved",
     "neurocomment_join_request_review_failed": "Join-request review failed",
     "neurocomment_channel_rejoin_exhausted": "Channel dropped: could not get back into the chat",

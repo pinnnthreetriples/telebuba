@@ -770,6 +770,8 @@
     "neurocomment_channel_comments_off": "Комментарии в канале отключены",
     "neurocomment_onboard_join_by_request": "Заявка на вступление отправлена",
     "neurocomment_onboard_join_request_pending": "Заявка на вступление ещё ждёт одобрения",
+    "neurocomment_onboard_join_request_approved": "Заявку на вступление одобрили",
+    "neurocomment_onboard_pair_ready": "Аккаунт готов комментировать канал",
     "neurocomment_join_request_expired": "Канал отключён: заявку так и не одобрили",
     "neurocomment_join_request_review_failed": "Не удалось проверить заявки на вступление",
     "neurocomment_channel_rejoin_exhausted": "Канал отключён: не удалось вернуться в чат",

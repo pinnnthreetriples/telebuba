@@ -460,3 +460,75 @@ async def test_approved_join_clears_the_request_stamp(monkeypatch: pytest.Monkey
     assert readiness is not None
     assert readiness.join_requested_at is None
     assert readiness.join_request_attempts == 0
+
+
+_APPROVED = "neurocomment_onboard_join_request_approved"
+_PAIR_READY = "neurocomment_onboard_pair_ready"
+
+
+async def _win_events() -> list[str]:
+    """The two good-news codes, oldest first — ``list_recent_logs`` reads newest first."""
+    recent = reversed(await list_recent_logs(limit=50))
+    return [e.event for e in recent if e.event in {_APPROVED, _PAIR_READY}]
+
+
+@pytest.mark.asyncio
+async def test_approved_join_logs_the_approval_then_the_ready_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The good outcome was the one thing the log never said.
+
+    Every other onboarding event is a refusal or a wait, so an approval landing looked
+    exactly like an ordinary re-onboard (the gateway's "already a member") followed by
+    silence — the account just started commenting.
+    """
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+    join.by_channel.pop("@gated")  # the admin pressed Approve; the re-join succeeds
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert outcome.state == "ready"
+    # Both lines, in that order: it reads as the sequence it is.
+    assert await _win_events() == [_APPROVED, _PAIR_READY]
+    logged = [e for e in await list_recent_logs(limit=50) if e.event in {_APPROVED, _PAIR_READY}]
+    assert {(e.level, e.extra.get("channel")) for e in logged} == {("INFO", "@gated")}
+
+
+@pytest.mark.asyncio
+async def test_a_second_pass_over_a_ready_pair_repeats_neither_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flood guard: nothing short-circuits a ready pair here, so only the log can.
+
+    ``_join_and_classify`` re-joins and re-writes ``ready`` on every pass, and a pass is
+    started by operator Start, by every campaign reconcile and by every other channel's
+    poke — so a "pair is ready" line that was not gated on the transition would fire for
+    every ready pair in the fleet, every time.
+    """
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+    join.by_channel.pop("@gated")
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert len(join.calls) == 3  # the pass still re-joins; only the LOG is transition-gated
+    assert await _win_events() == [_APPROVED, _PAIR_READY]
+
+
+@pytest.mark.asyncio
+async def test_first_onboarding_logs_ready_without_an_approval_line(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pair that never had a request must not be reported as approved."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    read = _ReadStub(linked_chat_id=4423, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "ready"
+    assert await _win_events() == [_PAIR_READY]
