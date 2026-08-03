@@ -13,6 +13,9 @@ test('confirm fires onConfirm then onClose, cancel only closes', async () => {
     <DeleteAccountModal phone="+79991234567" onClose={onClose} onConfirm={onConfirm} />,
   );
   expect(screen.getByText('Удалить аккаунт +79991234567?')).toBeInTheDocument();
+  // The accessible name has to be the SAME sentence: dropping the interpolation
+  // announced the raw "Удалить аккаунт {{phone}}?" template to a screen reader.
+  expect(screen.getByRole('dialog', { name: 'Удалить аккаунт +79991234567?' })).toBeInTheDocument();
 
   await userEvent.click(screen.getByText('Удалить'));
   expect(onConfirm).toHaveBeenCalledTimes(1);

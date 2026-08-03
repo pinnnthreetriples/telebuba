@@ -75,8 +75,11 @@ class WarmingSettingsUpdate(BaseModel):
     enforce_readiness: bool = True
     gemini_api_key: str | None = None
     gemini_model: str | None = None
-    gemini_max_retries: int = Field(default=1, ge=0, le=5)
-    gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
+    # Keep-semantics as well (``None`` keeps the stored value): a PUT is a full
+    # replacement, so a caller sending only some of the fields — the warming board's
+    # config modal does — reset these to the old defaults 1 and 0.0.
+    gemini_max_retries: int | None = Field(default=None, ge=0, le=5)
+    gemini_min_interval_seconds: float | None = Field(default=None, ge=0.0, le=60.0)
     clear_gemini_key: bool = False
     # Same keep/clear/replace semantics for the captcha OpenAI key + model, plus
     # the provider selector (None keeps the stored value).

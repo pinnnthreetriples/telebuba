@@ -508,3 +508,21 @@ test('a successful save clears the dirty state so closing does not prompt', asyn
   expect(screen.queryByText('Отменить изменения?')).not.toBeInTheDocument();
   expect(onClose).toHaveBeenCalled();
 });
+
+// Same rule for this dialog: the stored row has no Telegram name, so it is announced
+// by phone, and the live snapshot then brings a name in. The heading may follow the
+// snapshot — the accessible name must not, because nothing re-announces it.
+test('the dialog keeps the accessible name it was announced with', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, first_name: 'Алиса' }));
+    }
+    return Promise.resolve(jsonResponse({ ...ACCOUNT }));
+  });
+  renderWithClient(<ProfileModal account={{ ...ACCOUNT, first_name: null }} onClose={vi.fn()} />);
+
+  expect(screen.getByRole('dialog', { name: '+79991234567' })).toBeInTheDocument();
+  expect(await screen.findByText('Алиса')).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: '+79991234567' })).toBeInTheDocument();
+});

@@ -8,9 +8,10 @@ import {
 } from '@tanstack/react-router';
 
 import { meQueryOptions } from '@/shared/auth';
-import { i18n } from '@/shared/i18n';
 import { isUnauthorized, queryClient } from '@/shared/lib';
 import { AppShell } from '@/widgets/nav';
+
+import { SessionErrorPanel } from './SessionErrorPanel';
 
 // Each page is code-split: a dynamic import per route so the login screen (and
 // any single screen) doesn't pull the whole app's JS up front.
@@ -42,11 +43,7 @@ const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'protected',
   beforeLoad: ensureSession,
-  errorComponent: () => (
-    <p role="alert" className="p-8">
-      {i18n.t('shell.sessionError')}
-    </p>
-  ),
+  errorComponent: ({ reset }) => <SessionErrorPanel reset={reset} />,
   component: AppShell,
 });
 

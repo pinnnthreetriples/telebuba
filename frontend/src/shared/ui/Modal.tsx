@@ -120,7 +120,13 @@ export function Modal({
     if (event.key !== 'Tab') return;
     const node = dialogRef.current;
     if (!node) return;
-    const focusables = node.querySelectorAll<HTMLElement>(FOCUSABLE);
+    // An inert element still MATCHES the selector but cannot take focus. The
+    // .tb-dd dropdowns are inert while closed, so one sitting at either END of
+    // this list would make the wrap's .focus() a silent browser no-op — with
+    // preventDefault already called, that freezes Tab inside the dialog.
+    const focusables = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (element) => element.closest('[inert]') === null,
+    );
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
     if (!first || !last) return;

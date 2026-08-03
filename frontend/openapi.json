@@ -12464,18 +12464,30 @@
             "title": "Gemini Model"
           },
           "gemini_max_retries": {
-            "type": "integer",
-            "maximum": 5.0,
-            "minimum": 0.0,
-            "title": "Gemini Max Retries",
-            "default": 1
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gemini Max Retries"
           },
           "gemini_min_interval_seconds": {
-            "type": "number",
-            "maximum": 60.0,
-            "minimum": 0.0,
-            "title": "Gemini Min Interval Seconds",
-            "default": 0.0
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gemini Min Interval Seconds"
           },
           "clear_gemini_key": {
             "type": "boolean",

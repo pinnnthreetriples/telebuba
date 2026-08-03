@@ -226,3 +226,17 @@ test('a failed detail load shows the translated reason and retry recovers', asyn
   await userEvent.click(screen.getByText('Повторить'));
   expect(await screen.findByDisplayValue('Мой канал')).toBeInTheDocument();
 });
+
+// The dialog opens BEFORE the detail read lands, and an ARIA name change while a
+// dialog is open is never re-announced — so a name taken from the channel title
+// would only ever be announced as "Загрузка…". A fixed name also cannot go empty,
+// which `?? ` did not prevent: a blank title left the dialog nameless.
+test('the dialog keeps one accessible name across the detail read', async () => {
+  routeApi();
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+
+  expect(screen.getByRole('dialog', { name: 'Редактор канала' })).toBeInTheDocument();
+  // The visible heading follows the title once it lands; the name does not.
+  expect(await screen.findByDisplayValue('Мой канал')).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Редактор канала' })).toBeInTheDocument();
+});

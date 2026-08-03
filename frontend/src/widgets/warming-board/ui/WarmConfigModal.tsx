@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -8,6 +8,7 @@ import {
   warmingSettingsQueryOptions,
 } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
+import { mutationErrorText } from '@/shared/lib';
 
 import { Modal } from '@/shared/ui';
 
@@ -97,9 +98,18 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
 
   // On a cold cache the first render has no settings, so the lazy initial state is
   // the hardcoded fallback above — and a Save from that state writes those
-  // fallbacks over the stored row. Re-seed once the real row lands.
+  // fallbacks over the stored row. Seed ONCE, when the real row lands.
+  //
+  // Once, not on every `settings` identity change: a refetch (the invalidation a
+  // failed save still fires, or a reconnect) returns a row with a fresh
+  // `updated_at`, which defeats React Query's structural sharing, so re-seeding
+  // reverted the operator's unsaved edits — while the failure was still on screen.
+  // `local_time` is UI-only and never in the row, so it survives the seed too.
+  const seeded = useRef(false);
   useEffect(() => {
-    if (settings) setToggles(initialToggles(settings));
+    if (!settings || seeded.current) return;
+    seeded.current = true;
+    setToggles((prev) => ({ ...initialToggles(settings), local_time: prev.local_time }));
   }, [settings]);
 
   const flip = (key: keyof Toggles) => {
@@ -271,8 +281,11 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           </div>
         ) : null}
         {save.isError ? (
+          // The same text the global mutation toast shows, not the generic copy:
+          // this alert is the in-context report and must not be the less
+          // informative of the two. Falls back to shell.mutationError itself.
           <div role="alert" className="mb-[12px] text-[11.5px] leading-[1.45] text-danger">
-            {t('shell.mutationError')}
+            {mutationErrorText(save.error)}
           </div>
         ) : null}
         <div className="flex gap-2">

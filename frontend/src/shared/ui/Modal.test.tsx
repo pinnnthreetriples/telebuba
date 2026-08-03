@@ -151,3 +151,23 @@ test('Tab is trapped inside the dialog and wraps around', async () => {
   await userEvent.tab({ shift: true });
   expect(screen.getByText('два')).toHaveFocus();
 });
+
+// A closed .tb-dd dropdown is inert, and its options still match the focusable
+// selector. One at the END of a dialog's focusable list made the wrap target an
+// element whose .focus() the browser ignores — and since the trap has already
+// called preventDefault, Shift+Tab would then go nowhere at all.
+test('the Tab trap wraps past an inert element instead of freezing on it', async () => {
+  render(
+    <Modal onClose={vi.fn()} label="диалог">
+      <button type="button">один</button>
+      <button type="button">два</button>
+      <div inert>
+        <button type="button">закрытый</button>
+      </div>
+    </Modal>,
+  );
+
+  screen.getByText('один').focus();
+  await userEvent.tab({ shift: true });
+  expect(screen.getByText('два')).toHaveFocus();
+});

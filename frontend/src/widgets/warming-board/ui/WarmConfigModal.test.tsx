@@ -30,17 +30,34 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function routeApi(settings: unknown = SETTINGS, putStatus = 200) {
+function routeApi(settings: Record<string, unknown> = SETTINGS, putStatus = 200) {
+  let reads = 0;
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     if (new URL(request.url).pathname === '/api/v1/warming/settings') {
       if (request.method === 'PUT' && putStatus !== 200) {
         return Promise.resolve(jsonResponse({ error: { code: 'internal_error' } }, putStatus));
       }
-      return Promise.resolve(jsonResponse(settings));
+      // Every GET carries a fresh `updated_at`, exactly as the real singleton row
+      // does — it is rewritten on every save, and a refetch happens on a
+      // reconnect too. A byte-identical row would let React Query's structural
+      // sharing keep the object identity, which hides anything keyed on it.
+      reads += 1;
+      return Promise.resolve(jsonResponse({ ...settings, updated_at: `read-${String(reads)}` }));
     }
     return Promise.resolve(jsonResponse({}));
   });
+}
+
+// How many times the modal has READ the settings row.
+function settingsReads(): number {
+  return vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([input]) =>
+        new URL((input as Request).url).pathname === '/api/v1/warming/settings' &&
+        (input as Request).method !== 'PUT',
+    ).length;
 }
 
 // The body of the PUT the modal sent.
@@ -206,6 +223,12 @@ test('a rejected save keeps the dialog open with the operator input', async () =
   // over a failed PUT.
   await waitFor(() => {
     expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+  // onSettled also invalidates the settings key regardless of outcome, so a GET
+  // follows the rejected PUT. Wait for that row to land: re-seeding the toggles
+  // from it reverted the flip while the error was still on screen.
+  await waitFor(() => {
+    expect(settingsReads()).toBeGreaterThan(1);
   });
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByRole('switch', { name: 'Взаимный чат' })).toHaveAttribute(

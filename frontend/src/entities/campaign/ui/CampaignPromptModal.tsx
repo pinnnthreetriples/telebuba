@@ -69,7 +69,10 @@ export function CampaignPromptModal({
           }}
           rows={5}
           placeholder={t('neurocomment.modal.campaignPrompt.placeholder')}
-          aria-label={t('neurocomment.modal.campaignPrompt.title')}
+          // Its own name, not the dialog's: two elements sharing one accessible
+          // name is what made getByLabelText ambiguous, and "Campaign prompt"
+          // announced twice tells a screen-reader user nothing about the field.
+          aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
           className="w-full resize-none rounded-[12px] border border-line-input bg-white px-[13px] py-[11px] font-[inherit] text-[13px] leading-[1.5] outline-none"
         />
 

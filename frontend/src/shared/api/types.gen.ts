@@ -2862,11 +2862,11 @@ export type WarmingSettingsUpdate = {
   /**
    * Gemini Max Retries
    */
-  gemini_max_retries?: number;
+  gemini_max_retries?: number | null;
   /**
    * Gemini Min Interval Seconds
    */
-  gemini_min_interval_seconds?: number;
+  gemini_min_interval_seconds?: number | null;
   /**
    * Clear Gemini Key
    */

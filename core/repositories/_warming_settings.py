@@ -152,8 +152,8 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     enforce_readiness: bool = True,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
-    gemini_max_retries: int = 1,
-    gemini_min_interval_seconds: float = 0.0,
+    gemini_max_retries: int | None = None,
+    gemini_min_interval_seconds: float | None = None,
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
@@ -181,8 +181,20 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
             "gemini_model": _keep_nonempty(
                 gemini_model, cur.get("gemini_model"), settings.gemini.model
             ),
-            "gemini_max_retries": gemini_max_retries,
-            "gemini_min_interval_seconds": gemini_min_interval_seconds,
+            # Keep-semantics like every neighbour above: ``None`` keeps the stored
+            # value (else the config default). Written unconditionally, any caller
+            # that omitted them — the warming board's config modal, a partial PUT —
+            # silently reset the settings page's rate-limit knobs to 1 and 0.0.
+            "gemini_max_retries": _int_or(
+                gemini_max_retries,
+                _int_or(cur.get("gemini_max_retries"), settings.gemini.max_retries),
+            ),
+            "gemini_min_interval_seconds": _float_or(
+                gemini_min_interval_seconds,
+                _float_or(
+                    cur.get("gemini_min_interval_seconds"), settings.gemini.min_interval_seconds
+                ),
+            ),
             "openai_api_key": _keep(openai_api_key, cur.get("openai_api_key")),
             "openai_model": _keep_nonempty(
                 openai_model, cur.get("openai_model"), settings.openai.model
@@ -212,8 +224,8 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     enforce_readiness: bool = True,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
-    gemini_max_retries: int = 1,
-    gemini_min_interval_seconds: float = 0.0,
+    gemini_max_retries: int | None = None,
+    gemini_min_interval_seconds: float | None = None,
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
@@ -223,6 +235,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
 
     LLM keys/models + the captcha provider use keep/clear/replace semantics:
     ``None`` keeps the stored value, ``""`` clears a key, any other value replaces.
+    The two Gemini rate-limit knobs keep on ``None`` the same way.
     """
     return await asyncio.to_thread(
         _save_warming_settings,
