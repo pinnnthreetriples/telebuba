@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
-import { eventLabel, formatLocalTime, type FeedbackResult } from '@/shared/lib';
+import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
 import { FeedbackMark } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
@@ -50,12 +50,16 @@ function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-// Human-readable tail for a log line: why a reaction was/wasn't placed, or how
-// many stories were seen — the honest "the engine considered this" breadcrumb.
+// Human-readable tail for a log line: why a reaction was/wasn't placed, how many
+// stories were seen — the honest "the engine considered this" breadcrumb — and,
+// for every other row, why it turned out the way it did.
 function lineDetail(t: TFunction, line: LogEntry): string {
-  const skip =
-    extraStr(line.extra, 'reaction_skip') ??
-    (line.event === 'warming_reaction_skipped' ? extraStr(line.extra, 'reason') : undefined);
+  // The two warming-specific facts win over the general reason because they answer
+  // the same question for their own row more precisely, and nothing is lost by
+  // preferring them: the gateway reports an outcome it reached (`reaction_skip`,
+  // `stories_seen`) while a refusal is a separate `*_failed` row carrying
+  // `error_type`, so no row ever holds one of each.
+  const skip = extraStr(line.extra, 'reaction_skip');
   if (skip) return t(`logEventReason.${skip}`, { defaultValue: '' });
   const seen = line.extra?.stories_seen;
   // Gateway rows carry the calling domain as a prefix (`warming_telegram_*`).
@@ -64,7 +68,11 @@ function lineDetail(t: TFunction, line: LogEntry): string {
       ? t('warming.card.storiesSeen', { count: seen })
       : t('warming.card.storiesNone');
   }
-  return '';
+  // Everything else used to end here saying nothing, so a warming failure named the
+  // action and never the cause. `reaction_skipped`'s own `extra.reason` is covered by
+  // eventReason too — it was the only `reason` warming wrote when this was written,
+  // which is why gating on that event name excluded nothing and hid the rest.
+  return eventReason(t, line);
 }
 
 // The rail reflects the engine's real cycle progress: waiting states park on

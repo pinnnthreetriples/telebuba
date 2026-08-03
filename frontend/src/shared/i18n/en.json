@@ -602,7 +602,8 @@
       "level": "Level",
       "account": "Account",
       "channel": "Channel",
-      "event": "Event"
+      "event": "Event",
+      "reason": "Reason"
     },
     "pagination": {
       "prev": "Prev",

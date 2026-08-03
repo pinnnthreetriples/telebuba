@@ -603,7 +603,8 @@
       "level": "Уровень",
       "account": "Аккаунт",
       "channel": "Канал",
-      "event": "Событие"
+      "event": "Событие",
+      "reason": "Причина"
     },
     "pagination": {
       "prev": "Назад",

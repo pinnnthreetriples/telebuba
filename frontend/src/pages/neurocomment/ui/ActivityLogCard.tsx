@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
-import { eventLabel, formatLocalTime, logSeverity } from '@/shared/lib';
+import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
 import { CollapsibleCard } from '@/shared/ui';
 
 // Activity-feed line colour by the event's display severity (see `logSeverity`).
@@ -12,17 +12,6 @@ const NEURO_LOG_COLOR: Record<'success' | 'warning' | 'error', string> = {
   warning: '#ffd27f',
   error: '#e5736b',
 };
-
-// Where a label for `extra.error_type` may live. `accounts.*.code.*` are the gateway's
-// own stable codes (`session_dead`, `chat_admin_required`) — gateway-wide vocabulary that
-// sits under an `accounts` key only because the accounts page was the first screen to
-// translate them, and the gateway now logs them here too. Copying those 36 strings into a
-// log-private namespace would buy nothing but two wordings of the same refusal.
-const ERROR_LABEL_PREFIXES = [
-  'logEventTelegram.error',
-  'accounts.profile.code',
-  'accounts.channel.code',
-];
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
   const value = extra?.[key];
@@ -46,25 +35,7 @@ function LogLine({
   // with no account_id (listener / sweep) leave the column empty, like `channel`.
   const accountId = line.account_id;
   const account = accountId ? (accountName?.(accountId) ?? accountId) : undefined;
-  // Most negative outcomes carry a `reason`; a failed post carries the Telegram `status`.
-  const reasonCode = extraStr(line.extra, 'reason') ?? extraStr(line.extra, 'status');
-  const reason = reasonCode ? t(`logEventReason.${reasonCode}`, { defaultValue: '' }) : '';
-  // What Telegram refused — an exception class or a gateway stable code. Shown NEXT TO
-  // the reason rather than as a fallback behind it: `status: "failed"` always translates,
-  // so a fallback would never fire and the line would keep saying a post failed without
-  // saying why. Translated because this half IS the answer to "what went wrong", and
-  // `ChannelPrivateError` next to the word "ошибка" says nothing twice; anything none of
-  // the maps know still renders raw, like eventLabel's raw-event-code fallback.
-  const errorType = extraStr(line.extra, 'error_type');
-  // i18next resolves a key ARRAY to the first one that exists, so the ladder is its job,
-  // not ours — and `defaultValue` then carries the raw value through untouched.
-  const error = errorType
-    ? t(
-        ERROR_LABEL_PREFIXES.map((prefix) => `${prefix}.${errorType}`),
-        { defaultValue: errorType },
-      )
-    : '';
-  const detail = [reason, error].filter(Boolean).join(' · ');
+  const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
     <div className="flex gap-[10px]" title={hint || undefined}>
