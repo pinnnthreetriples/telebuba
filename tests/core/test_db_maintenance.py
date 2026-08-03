@@ -159,8 +159,39 @@ def test_chronic_failure_leaves_at_most_one_partial(
         with pytest.raises(OSError, match="no space left"):
             run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
 
-    # Exactly one: the last run's own leftover. The four before it were swept.
-    assert len(list(backup_dir.glob("*.part"))) == 1
+    # At most one, not one per interval. `<= 1` and not `== 1`: staging is an
+    # implementation detail and leaving none would be strictly better, while `5 <= 1`
+    # still fails if the sweep moves back off the entry path. Which leftover survives
+    # is not asserted, only that they do not accumulate.
+    assert len(list(backup_dir.glob("*.part"))) <= 1
+
+
+def test_unremovable_leftover_partial_does_not_block_the_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Best-effort hygiene must never cost us the backup itself.
+
+    Sweeping other runs' leftovers is hygiene; the entry sweep runs BEFORE the
+    vacuum, so unguarded, one leftover that cannot be unlinked (a live handle on
+    Windows, the path turned into a directory, EPERM/EBUSY) raises first and no
+    backup is ever taken again while it persists.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+
+    # A non-empty directory is un-unlinkable on both platforms (IsADirectoryError /
+    # PermissionError) without needing a real foreign open handle.
+    stuck = backup_dir / "telebuba-19990101T000000000000Z.db.part"
+    stuck.mkdir(parents=True)
+    (stuck / "wedged").write_bytes(b"")
+
+    written = run_db_maintenance(clock=lambda: _fixed_clock(1))
+
+    assert written is not None
+    assert written.exists()
+    assert stuck.is_dir()  # left alone, and it did not stop the run
 
 
 @pytest.mark.asyncio

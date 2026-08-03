@@ -17,6 +17,7 @@ import asyncio
 import atexit
 import logging
 import threading
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -134,10 +135,20 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         # Sweep on ENTRY, not after a successful publish: a run that raises never
         # gets that far, and every run stamps a fresh name, so partials would pile
         # up one full-DB-sized file per interval on the volume holding the sole
-        # datastore. This also clears our own name, which VACUUM INTO refuses to
-        # overwrite. VACUUM INTO holds no long lock, so the copy is safe online.
+        # datastore. VACUUM INTO holds no long lock, so the copy is safe online.
+        # Two different obligations, deliberately not folded into one unlink:
+        # other runs' leftovers are hygiene, so a stuck one (a live handle, the
+        # path turned into a directory, EPERM/EBUSY) is suppressed — unguarded it
+        # raises before the vacuum and no backup is ever taken again while it
+        # persists. Our own output path is not hygiene: VACUUM INTO fails on an
+        # existing output, so this run cannot proceed without it, and that unlink
+        # must surface. Deleting a foreign in-flight .part is only safe because
+        # maintenance is single-process: one uvicorn worker (a non-negotiable)
+        # and one task, whose runs serialise on ``await asyncio.to_thread``.
         for orphan in backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}{_BACKUP_PARTIAL_SUFFIX}"):
-            orphan.unlink(missing_ok=True)
+            with suppress(OSError):
+                orphan.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
         _vacuum_into(connection, partial)
     partial.replace(target)  # atomic publish: only a complete file gets the real name.
     _prune_backups(backup_dir)
@@ -169,8 +180,10 @@ async def run_db_maintenance_loop() -> None:
             # event. This writes INTO the database whose maintenance just failed, so on
             # the headline scenario (disk full) the row insert fails too, log_event
             # swallows it, and the surface is Sentry — or, with no DSN configured,
-            # debug.log alone. Exception type only: the traceback, which can carry file
-            # paths, stays in debug.log.
+            # debug.log alone. The structured event carries the exception type only, but
+            # that is not containment: with a DSN set, sentry_sdk's default logging
+            # integration ships this ERROR record's traceback and frame locals (the
+            # backup paths) too. Paths to a private error tracker, no secrets.
             from core.logging import log_event  # noqa: PLC0415 - avoids an import cycle
 
             await log_event(
