@@ -175,10 +175,14 @@ async def _reconcile_reservation(
     Writes ``daily_actions`` only (``state`` is the row's current state, echoed
     back so an ``error``/``sleeping`` row is not resurrected as ``active``), and
     stays CAS-guarded: a newer generation's row, or one the operator already
-    stopped, is left alone. Failures are swallowed — never propagated — because
-    this runs on the way out of another exception and must never mask it, but
-    they are always logged: a silent reconcile failure is the forfeited day this
-    function exists to prevent.
+    stopped, is left alone. ``Exception`` failures are swallowed — never
+    propagated — because this runs on the way out of another exception and must
+    never mask it, but they are always logged: a silent reconcile failure is the
+    forfeited day this function exists to prevent. A ``CancelledError`` is
+    deliberately NOT swallowed (``except Exception``, not ``BaseException``):
+    every caller sits inside the loop's own abnormal-exit handler, which logs it
+    and re-raises the original exception, so eating it here would only break
+    asyncio's contract — the finalize call site has no other backstop.
     """
     daily_count, daily_date = daily
     try:
@@ -219,7 +223,7 @@ async def _reconcile_reservation(
                 account_id=account_id,
                 extra={"spent": spent, "daily_actions": daily_count + spent},
             )
-    except BaseException:
+    except Exception:
         logger.exception("reservation reconcile failed for %s", account_id)
 
 
@@ -303,7 +307,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     return result
 
 
-async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gates, each early-exits.
+async def run_loop_iteration(  # noqa: PLR0911, PLR0915, C901 - sequential gates, each early-exits.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -451,15 +455,22 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
         # ``_runner``'s ``except Exception``.
         try:
             # Echo the row's own state back rather than a literal ``active``: a
-            # readiness park or a stop may have moved it while the cycle ran.
+            # readiness park or a stop may have moved it while the cycle ran. A row
+            # that is gone entirely (``remove_account`` proceeds after its 5s cancel
+            # wait, so ``delete_account`` can purge it while we are still here) holds
+            # no reservation to hand back, and the FK would reject the insert anyway
+            # — same skip as the finalize call site above.
             latest = await fetch_warming_state(account_id)
-            await _reconcile_reservation(
-                account_id,
-                latest.state if latest is not None else "active",
-                daily,
-                tally.attempts,
-                run_id=run_id,
-            )
+            if latest is not None:
+                await _reconcile_reservation(
+                    account_id, latest.state, daily, tally.attempts, run_id=run_id
+                )
+        except asyncio.CancelledError:
+            # A cancellation here interrupted the hand-back rather than failing it:
+            # the reconcile's write is shielded, so one already in flight still
+            # lands. WARNING without a traceback — the ERROR this used to log read
+            # as "the reservation is stranded", the one thing the shield prevents.
+            logger.warning("reservation reconcile interrupted for %s", account_id)
         except BaseException:
             logger.exception("reservation reconcile failed for %s", account_id)
         raise

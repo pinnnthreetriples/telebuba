@@ -10,6 +10,7 @@ import pytest
 from core.config import settings
 from core.db import (
     create_account,
+    fetch_warming_state,
     load_warming_settings,
     oldest_unreplied_for,
     purge_sent_hashes_older_than,
@@ -19,7 +20,7 @@ from core.db import (
 )
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.gemini import GeminiResult
-from schemas.telegram_actions import ActionResult, TelegramAction
+from schemas.telegram_actions import ActionResult, SendDirectMessage, TelegramAction
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import (
     WarmingCycleRequest,
@@ -28,13 +29,16 @@ from schemas.warming import (
 from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
-from services.warming import _seams
+from services.warming import _chat, _seams
+from services.warming._chat import ChatResult
 from tests.services.warming._support import (
     _account,
+    _no_quiet_days,
     _Recorder,
     _resolve,
     _seed_channel,
     _seed_two_warming_accounts,
+    _seed_warming_account,
     _set_settings,
     fetch_account_helper,
 )
@@ -579,3 +583,74 @@ async def test_open_with_partner_rests_on_a_faded_pair(monkeypatch: pytest.Monke
 
     assert result.messages_sent == 0
     assert sent == []  # faded pair -> opener rests, no one-sided DM
+
+
+async def _dm_billing_ready(monkeypatch: pytest.MonkeyPatch) -> _Recorder:
+    """A loop iteration whose chat step is forced on, with the dialogue turn stubbed.
+
+    The gates themselves are covered above, so ``_should_chat`` is pinned rather
+    than reconstructed out of age/trust/settings: what is under test here is only
+    how the step accounts for its one action against the daily cap (#208).
+    """
+    recorder = _Recorder()
+    _no_quiet_days(monkeypatch)
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_chat, "_should_chat", lambda *_args, **_kwargs: True)
+    await _seed_warming_account()
+    return recorder
+
+
+@pytest.mark.parametrize("boom", [RuntimeError("bookkeeping blew up"), asyncio.CancelledError()])
+@pytest.mark.asyncio
+async def test_a_dm_that_left_the_process_is_billed_even_if_the_turn_never_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    boom: BaseException,
+) -> None:
+    """The step books its action BEFORE the turn, so a real send is never under-counted.
+
+    Between the send RPC returning and the fold sit the dialogue bookkeeping writes
+    and the event log; a cancellation or crash at any of them would otherwise hand
+    the loop's reconcile a count short by that DM, and the restarted loop would
+    re-spend it on top (#208).
+    """
+    recorder = await _dm_billing_ready(monkeypatch)
+
+    async def send_then_die(sender_id: str, _secret: object) -> ChatResult:
+        await _seams.execute(sender_id, SendDirectMessage(user_id=999, text="hi"))
+        raise boom
+
+    monkeypatch.setattr(_chat, "_maybe_inter_account_chat", send_then_die)
+
+    with pytest.raises(type(boom)):
+        await warming.run_loop_iteration("acc-1")
+
+    assert "send_dm" in recorder.types()
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # set_online + join + read + the story glance + the DM that really left.
+    assert record.daily_actions == 5
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_dialogue_turn_gives_its_booked_action_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A turn that sends nothing (no partner, faded thread, unresolvable peer) nets zero.
+
+    The pre-book only fails closed for the length of the turn: erring one action
+    high permanently would shave a slot off every cycle's cap.
+    """
+    recorder = await _dm_billing_ready(monkeypatch)
+
+    async def no_turn(_sender_id: str, _secret: object) -> ChatResult:
+        return ChatResult()
+
+    monkeypatch.setattr(_chat, "_maybe_inter_account_chat", no_turn)
+
+    await warming.run_loop_iteration("acc-1")
+
+    assert "send_dm" not in recorder.types()
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # set_online + join + read + the story glance; the booked action was handed back.
+    assert record.daily_actions == 4

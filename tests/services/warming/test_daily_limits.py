@@ -6,6 +6,7 @@ import asyncio
 import logging
 from contextlib import suppress
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,7 +18,6 @@ from core.db import (
     upsert_warming_state,
 )
 from schemas.accounts import AccountCreate
-from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.warming import (
     ActivityPersona,
     StartWarmingRequest,
@@ -33,11 +33,20 @@ from services import warming
 from services.warming import _loop, _runtime, _seams, _state, _steps
 from services.warming._state import _set_state
 from tests.services.warming._support import (
+    _BlockOnce,
+    _CancelAfter,
+    _CrashAfter,
     _fake_loop,
+    _iteration,
+    _no_quiet_days,
     _Recorder,
     _seed_channel,
+    _seed_warming_account,
     _set_settings,
 )
+
+if TYPE_CHECKING:
+    from schemas.telegram_actions import ActionResult, TelegramAction
 
 
 def test_roll_daily_resets_on_new_day() -> None:
@@ -181,92 +190,6 @@ async def test_daily_limit_excludes_offline_cleanup(
     assert types == ["set_online", "join_channel", "set_online"]
     assert result.channels_joined == 1
     assert result.channels_read == 0
-
-
-def _ok(account_id: str, action: TelegramAction) -> ActionResult:
-    return ActionResult(
-        status="ok",
-        action_type=action.action_type,
-        account_id=account_id,
-        recent_message_ids=["101", "102"] if action.action_type == "read_channel" else None,
-    )
-
-
-class _CrashAfter:
-    """Dispatcher that raises after N actions — models a cycle that blew up in-process."""
-
-    def __init__(self, limit: int) -> None:
-        self.actions: list[str] = []
-        self._limit = limit
-
-    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
-        if len(self.actions) >= self._limit:
-            msg = "process killed"
-            raise RuntimeError(msg)
-        self.actions.append(action.action_type)
-        return _ok(account_id, action)
-
-
-class _CancelAfter(_CrashAfter):
-    """Dispatcher that raises ``CancelledError`` after N actions.
-
-    Byte-for-byte what ``task.cancel()`` does: the error surfaces at the innermost
-    await, which is where every real cancellation of a warming cycle lands —
-    lifespan shutdown, ``stop_warming``, and ``start_warming``'s cancel-and-replace.
-    """
-
-    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
-        if len(self.actions) >= self._limit:
-            raise asyncio.CancelledError
-        return await super().execute(account_id, action)
-
-
-class _BlockOnce:
-    """Dispatcher that parks forever on action N+1, then lets later ones through.
-
-    Models a cycle caught mid-RPC. Actions after the park must be served normally:
-    the cycle's ``SetOnline(False)`` cleanup runs while a cancellation unwinds, and
-    a second park there would hang the cancel instead of letting it finish.
-    """
-
-    def __init__(self, limit: int) -> None:
-        self.actions: list[str] = []
-        self.reached = asyncio.Event()
-        self._limit = limit
-        self._parked = False
-
-    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
-        if len(self.actions) >= self._limit and not self._parked:
-            self._parked = True
-            self.reached.set()
-            await asyncio.Event().wait()
-        self.actions.append(action.action_type)
-        return _ok(account_id, action)
-
-
-async def _seed_warming_account(run_id: str | None = None) -> None:
-    """One account, one channel, readiness + chat off, parked in ``active``."""
-    await _seed_channel()
-    await save_warming_settings(
-        inter_account_chat=False,
-        reactions_enabled=False,
-        enforce_readiness=False,
-        gemini_api_key="",
-    )
-    await create_account(AccountCreate(account_id="acc-1"))
-    await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="active", run_id=run_id),
-    )
-
-
-async def _iteration(run_id: str | None = None) -> None:
-    """One loop iteration, returning None so it can live in ``_RUNTIME``."""
-    await warming.run_loop_iteration("acc-1", run_id=run_id)
-
-
-def _no_quiet_days(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
-    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
 
 
 @pytest.mark.asyncio
@@ -631,14 +554,16 @@ async def test_a_second_cancel_during_the_reconcile_keeps_the_original_exception
     task = asyncio.create_task(_iteration())
 
     with (
-        caplog.at_level(logging.ERROR, logger="services.warming._loop"),
+        caplog.at_level(logging.WARNING, logger="services.warming._loop"),
         pytest.raises(RuntimeError),
     ):
         await task
 
-    # The write finished despite the second cancel, and the failure was not silent.
+    # The write finished despite the second cancel, and the cancel was not silent —
+    # logged as "interrupted", not "failed": the shielded write did land.
     await asyncio.wait_for(written.wait(), timeout=5)
-    assert "reservation reconcile failed" in caplog.text
+    assert "reservation reconcile interrupted" in caplog.text
+    assert "reservation reconcile failed" not in caplog.text
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_actions == 2
@@ -678,6 +603,83 @@ async def test_a_raising_finalize_still_hands_back_the_reservation(
     assert record.state == "error"
     # set_online + join + read + the story glance, not the 15-action reservation.
     assert record.daily_actions == 4
+
+
+@pytest.mark.parametrize(
+    ("spent", "run_id", "event", "daily_actions"),
+    [
+        # Applied, real spend: the only signal a forfeited day ever produces, since
+        # ``_gate_daily_limit`` writes the same ``last_event`` for a legitimate park.
+        (2, None, "warming_reservation_reconciled", 2),
+        # Applied, nothing spent (cancelled while queued on the semaphore):
+        # deliberately silent, or every deploy logs one WARNING per account.
+        (0, None, None, 0),
+        # CAS refused: the reservation stays booked past the next UTC midnight, so
+        # this is the case the operator actually has to see.
+        (2, "stale-run", "warming_reservation_stranded", 0),
+    ],
+)
+@pytest.mark.asyncio
+async def test_the_reconcile_reports_each_of_its_three_outcomes(
+    monkeypatch: pytest.MonkeyPatch,
+    spent: int,
+    run_id: str | None,
+    event: str | None,
+    daily_actions: int,
+) -> None:
+    """#208's two log codes, and the deliberate silence in between."""
+    logged: list[tuple[str, str, object]] = []
+
+    async def capture(level: str, code: str, **kwargs: object) -> None:
+        logged.append((level, code, kwargs["extra"]))
+
+    monkeypatch.setattr(_loop, "log_event", capture)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-1", daily_actions=0),
+    )
+    today = datetime.now(UTC).date().isoformat()
+
+    await _loop._reconcile_reservation("acc-1", "active", (0, today), spent, run_id=run_id)
+
+    expected = [("WARNING", event, {"spent": spent, "daily_actions": spent})] if event else []
+    assert logged == expected
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.daily_actions == daily_actions
+
+
+@pytest.mark.parametrize("boom", [RuntimeError("handler blew up"), asyncio.CancelledError()])
+@pytest.mark.asyncio
+async def test_a_failing_reconcile_never_replaces_the_cycles_own_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    boom: BaseException,
+) -> None:
+    """The hand-back runs on the way out of another exception and must not mask it.
+
+    ``_runner`` parks the account in ``error`` from the cycle's own exception; a
+    handler that let its own failure escape would deliver that crash relabelled,
+    and as a ``CancelledError`` it would skip the crash branch altogether.
+    """
+    _no_quiet_days(monkeypatch)
+    crash = _CrashAfter(2)
+    monkeypatch.setattr(_seams, "execute", crash.execute)
+    real_fetch = _loop.fetch_warming_state
+
+    async def fetch_then_raise(account_id: str) -> WarmingStateRecord | None:
+        # Only the handler's read: the pre-cycle one runs before any action lands,
+        # and the crash means the finalize's read is never reached.
+        if crash.actions:
+            raise boom
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fetch_then_raise)
+    await _seed_warming_account()
+
+    # No hand-back is possible, so the day is forfeited — but the cycle's own
+    # ``RuntimeError`` is what ``_runner`` sees, not the handler's.
+    with pytest.raises(RuntimeError, match="process killed"):
+        await warming.run_loop_iteration("acc-1")
 
 
 @pytest.mark.asyncio

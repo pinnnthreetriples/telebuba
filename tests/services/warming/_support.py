@@ -271,3 +271,89 @@ async def _exercise_migration_seven(engine) -> None:  # type: ignore[no-untyped-
             "SELECT account_id FROM schema_remediations WHERE migration = 7",
         ).all()
         assert [r[0] for r in remediations] == ["acc-2"]
+
+
+def _ok(account_id: str, action: TelegramAction) -> ActionResult:
+    return ActionResult(
+        status="ok",
+        action_type=action.action_type,
+        account_id=account_id,
+        recent_message_ids=["101", "102"] if action.action_type == "read_channel" else None,
+    )
+
+
+class _CrashAfter:
+    """Dispatcher that raises after N actions — models a cycle that blew up in-process."""
+
+    def __init__(self, limit: int) -> None:
+        self.actions: list[str] = []
+        self._limit = limit
+
+    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
+        if len(self.actions) >= self._limit:
+            msg = "process killed"
+            raise RuntimeError(msg)
+        self.actions.append(action.action_type)
+        return _ok(account_id, action)
+
+
+class _CancelAfter(_CrashAfter):
+    """Dispatcher that raises ``CancelledError`` after N actions.
+
+    Byte-for-byte what ``task.cancel()`` does: the error surfaces at the innermost
+    await, which is where every real cancellation of a warming cycle lands —
+    lifespan shutdown, ``stop_warming``, and ``start_warming``'s cancel-and-replace.
+    """
+
+    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
+        if len(self.actions) >= self._limit:
+            raise asyncio.CancelledError
+        return await super().execute(account_id, action)
+
+
+class _BlockOnce:
+    """Dispatcher that parks forever on action N+1, then lets later ones through.
+
+    Models a cycle caught mid-RPC. Actions after the park must be served normally:
+    the cycle's ``SetOnline(False)`` cleanup runs while a cancellation unwinds, and
+    a second park there would hang the cancel instead of letting it finish.
+    """
+
+    def __init__(self, limit: int) -> None:
+        self.actions: list[str] = []
+        self.reached = asyncio.Event()
+        self._limit = limit
+        self._parked = False
+
+    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
+        if len(self.actions) >= self._limit and not self._parked:
+            self._parked = True
+            self.reached.set()
+            await asyncio.Event().wait()
+        self.actions.append(action.action_type)
+        return _ok(account_id, action)
+
+
+async def _seed_warming_account(run_id: str | None = None) -> None:
+    """One account, one channel, readiness + chat off, parked in ``active``."""
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id=run_id),
+    )
+
+
+async def _iteration(run_id: str | None = None) -> None:
+    """One loop iteration, returning None so it can live in ``_RUNTIME``."""
+    await warming.run_loop_iteration("acc-1", run_id=run_id)
+
+
+def _no_quiet_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)

@@ -433,7 +433,11 @@ async def test_cycle_hard_daily_limit_react_skip(
 ) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    monkeypatch.setattr(_seams.rng, "random", lambda: 0.5)
+    # 0.0, not 0.5: the normal persona reacts with probability 0.4, so a 0.5 roll
+    # had the *dice* skip the reaction and the remaining-actions gate was never
+    # exercised at all. Passing the dice makes the gate the only thing that can
+    # skip it, which is what this test claims to check.
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)
     await _seed_channel()
     await save_warming_settings(
         inter_account_chat=False,
