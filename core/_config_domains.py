@@ -6,6 +6,10 @@ neurocomment). They are re-exported from ``core.config`` so existing
 the ``Settings`` aggregate and the ``settings`` instance stay in ``core.config``.
 """
 
+# aislop-ignore-file ai-slop/hardcoded-url -- every URL here is an env-overridable
+# Settings default (validated HTTPS); that is what a config default IS, not a URL
+# buried in business logic, which is what the rule is for.
+
 from __future__ import annotations
 
 from typing import Literal
