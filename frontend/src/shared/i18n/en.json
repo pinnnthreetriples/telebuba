@@ -231,6 +231,7 @@
       }
     },
     "profile": {
+      "dialog": "Account profile",
       "close": "Close",
       "tab": {
         "text": "Text",
@@ -508,7 +509,8 @@
     "mutationError": "Something went wrong. Please try again.",
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
-    "sessionLogin": "Go to sign-in"
+    "sessionLogin": "Go to sign-in",
+    "pageError": "Something went wrong on this page. Use the menu to go elsewhere."
   },
   "settings": {
     "title": "Settings",

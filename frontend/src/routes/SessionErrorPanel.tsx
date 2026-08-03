@@ -1,23 +1,30 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useRouter } from '@tanstack/react-router';
 
 import { i18n } from '@/shared/i18n';
 
-// The protected layout's error boundary. It REPLACES AppShell, so the nav — and with
-// it "Log out" — is gone while it shows: the panel has to carry the way out itself.
-// `reset` re-runs the failed beforeLoad, which is what a backend hiccup or a dropped
-// connection needs; reloading the page (all the old copy offered) just loops while the
-// backend stays down. Only translated strings are rendered — never the thrown error,
-// which can carry request detail.
+// The protected layout's error boundary: a failed session check, and nothing else now
+// that every page carries a boundary of its own. It REPLACES AppShell, so the nav —
+// and with it "Log out" — is gone while it shows: the panel has to carry the way out
+// itself. Retry invalidates the router, which re-runs the failed `beforeLoad`. The
+// boundary's own `reset` cannot: it only clears the boundary's state, and the
+// re-mounted match reads the same stored error and throws it straight back, so the
+// panel replaced itself with an identical copy and logged a second error. Reloading
+// the page (all the old copy offered) just loops while the backend stays down. Only
+// translated strings are rendered — never the thrown error, which can carry request
+// detail.
 //
 // Its own file so `router.tsx` keeps exporting no components (react-refresh).
-export function SessionErrorPanel({ reset }: { reset: () => void }) {
+export function SessionErrorPanel() {
+  const router = useRouter();
   return (
     <div role="alert" className="p-8">
       <p className="text-[13px] text-ink">{i18n.t('shell.sessionError')}</p>
       <div className="mt-4 flex items-center gap-2">
         <button
           type="button"
-          onClick={reset}
+          onClick={() => {
+            void router.invalidate();
+          }}
           className="rounded-full bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white"
         >
           {i18n.t('shell.sessionRetry')}

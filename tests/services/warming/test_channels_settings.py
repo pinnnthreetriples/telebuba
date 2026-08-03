@@ -104,6 +104,32 @@ async def test_save_settings_persists_gemini_tuning() -> None:
 
 
 @pytest.mark.asyncio
+async def test_save_settings_keeps_gemini_tuning_when_the_fields_are_omitted() -> None:
+    """A save that omits the two knobs keeps the stored values, not 1 and 0.0.
+
+    The schema defaults them to ``None`` and the repository reads ``None`` as "keep",
+    but the service sits between the two: substituting a default of its own here
+    (``data.gemini_max_retries or 1``) re-introduces the original bug — every save
+    from the warming board's config modal, which omits them, reset the settings
+    page's rate-limit knobs. Neither the API-level test (its ``save_settings`` is
+    monkeypatched) nor the repository test crosses this pass-through.
+    """
+    await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False,
+            reactions_enabled=False,
+            gemini_max_retries=3,
+            gemini_min_interval_seconds=4.5,
+        ),
+    )
+    masked = await warming.save_settings(
+        WarmingSettingsUpdate(inter_account_chat=False, reactions_enabled=False),
+    )
+    assert masked.gemini_max_retries == 3
+    assert masked.gemini_min_interval_seconds == 4.5
+
+
+@pytest.mark.asyncio
 async def test_save_settings_clear_gemini_key_falls_back_to_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -124,13 +124,11 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
-          gemini_model: settings?.gemini_model,
-          // A PUT is a full replacement, and unlike the key/model/provider fields
-          // these two have no keep-semantics on the write path: omitting them
-          // resets the settings page's Gemini rate-limit knobs to 1 and 0.0. Echo
-          // the stored values, exactly as gemini_model above does.
-          gemini_max_retries: settings?.gemini_max_retries,
-          gemini_min_interval_seconds: settings?.gemini_min_interval_seconds,
+          // The Gemini model and the two rate-limit knobs are deliberately ABSENT,
+          // not echoed: the write path keeps every one of them on an omitted field,
+          // and echoing read a cache this modal never refetches on focus, so a Save
+          // from a tab left open wrote a stale row over whatever the settings page
+          // had persisted since.
           gemini_api_key: null,
           clear_gemini_key: false,
         },

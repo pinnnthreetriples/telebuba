@@ -36,7 +36,15 @@ function routeApi(settings: Record<string, unknown> = SETTINGS, putStatus = 200)
     const request = input as Request;
     if (new URL(request.url).pathname === '/api/v1/warming/settings') {
       if (request.method === 'PUT' && putStatus !== 200) {
-        return Promise.resolve(jsonResponse({ error: { code: 'internal_error' } }, putStatus));
+        // With a `message` — an envelope without one falls back to the generic
+        // shell.mutationError, which is the very branch that hid whether the alert
+        // reports the specific reason at all.
+        return Promise.resolve(
+          jsonResponse(
+            { error: { code: 'internal_error', message: 'settings_row_locked' } },
+            putStatus,
+          ),
+        );
       }
       // Every GET carries a fresh `updated_at`, exactly as the real singleton row
       // does — it is rewritten on every save, and a refetch happens on a
@@ -173,7 +181,7 @@ test('saving invalidates the settings and the board, not the whole cache', async
   }
 });
 
-test('save carries the settings-page Gemini knobs instead of resetting them', async () => {
+test('save leaves the settings-page Gemini fields out of the body entirely', async () => {
   routeApi();
   renderWithClient(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);
 
@@ -182,11 +190,14 @@ test('save carries the settings-page Gemini knobs instead of resetting them', as
   });
   await userEvent.click(screen.getByText('Сохранить'));
 
-  // Omitting them made every Save from this modal reset the operator's retry
-  // count and call spacing to the schema defaults 1 and 0.0.
+  // The write path keeps all three on an omitted field, so absence is what preserves
+  // them. Echoing the query's values instead wrote whatever this modal last read —
+  // and it never refetches on window focus, so a tab left open overwrote the
+  // settings page with a stale row.
   const body = await savedBody();
-  expect(body.gemini_max_retries).toBe(4);
-  expect(body.gemini_min_interval_seconds).toBe(2.5);
+  expect(body).not.toHaveProperty('gemini_max_retries');
+  expect(body).not.toHaveProperty('gemini_min_interval_seconds');
+  expect(body).not.toHaveProperty('gemini_model');
 });
 
 test('a cold cache saves the stored toggles, not the hardcoded fallbacks', async () => {
@@ -220,9 +231,10 @@ test('a rejected save keeps the dialog open with the operator input', async () =
   await userEvent.click(screen.getByText('Сохранить'));
 
   // onSettled fires on failure too, so closing there threw away the whole form
-  // over a failed PUT.
+  // over a failed PUT. The alert reports the envelope's OWN reason, not the generic
+  // copy: this modal stays open over the failure, so it is the in-context report.
   await waitFor(() => {
-    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('settings_row_locked');
   });
   // onSettled also invalidates the settings key regardless of outcome, so a GET
   // follows the rejected PUT. Wait for that row to land: re-seeding the toggles

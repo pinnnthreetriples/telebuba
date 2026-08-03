@@ -541,16 +541,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const initial = (liveFirst ?? account.phone ?? account.account_id).trim().charAt(0).toUpperCase();
   const fullName =
     [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
-  // The dialog's accessible name is latched when it opens. `fullName` flips once the
-  // live snapshot lands — and again after a rename saves — and an ARIA name change
-  // while the dialog is open is never re-announced, so the heading may move on but
-  // the name must not. `||` throughout: '' is no name at all, unlike `??`.
-  const [dialogName] = useState(
-    () =>
-      [account.first_name, account.last_name].filter(Boolean).join(' ') ||
-      account.phone ||
-      account.account_id,
-  );
 
   // Bulk profile-photo upload. Sequential on purpose: each uploadProfilePhoto
   // becomes the account's current avatar and Telegram orders the photo history
@@ -637,7 +627,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
   return (
     <>
-      <Modal onClose={requestClose} z={70} className="w-[580px]" label={dialogName}>
+      <Modal
+        onClose={requestClose}
+        z={70}
+        className="w-[580px]"
+        // A fixed name, unlike the visible heading below it — the same choice as
+        // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
+        // after a rename saves, and an ARIA name change while a dialog is open is
+        // never re-announced. Latching the row's name instead only moved the problem:
+        // the container was then announced by phone while the heading read a
+        // different name, and it went stale on a renamed row's new `account` prop.
+        label={t('accounts.profile.dialog')}
+      >
         <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">

@@ -11,6 +11,7 @@ import { meQueryOptions } from '@/shared/auth';
 import { isUnauthorized, queryClient } from '@/shared/lib';
 import { AppShell } from '@/widgets/nav';
 
+import { PageErrorPanel } from './PageErrorPanel';
 import { SessionErrorPanel } from './SessionErrorPanel';
 
 // Each page is code-split: a dynamic import per route so the login screen (and
@@ -43,7 +44,7 @@ const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'protected',
   beforeLoad: ensureSession,
-  errorComponent: ({ reset }) => <SessionErrorPanel reset={reset} />,
+  errorComponent: SessionErrorPanel,
   component: AppShell,
 });
 
@@ -88,7 +89,11 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export const router = createRouter({ routeTree });
+// `defaultErrorComponent` gives every child route the boundary it lacked. Without one
+// a render error inside any page bubbled up to the protected layout's boundary, which
+// reported it as a failed SESSION check — nav stripped, and its "go to sign-in" landed
+// back on the same crashing page. Each page now fails inside AppShell instead.
+export const router = createRouter({ routeTree, defaultErrorComponent: PageErrorPanel });
 
 declare module '@tanstack/react-router' {
   interface Register {
