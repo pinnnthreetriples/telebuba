@@ -160,9 +160,60 @@ async def _join_and_classify(
         # NOT be recorded, else a re-onboard would inflate the cap with joins that
         # never happened.
         await record_join(account_id)
-    return await _classify_join(
+    outcome = await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
     )
+    await _log_join_wins(
+        account_id,
+        channel,
+        existing,
+        outcome,
+        member=result.status in {"ok", "already_participant"},
+    )
+    return outcome
+
+
+async def _log_join_wins(
+    account_id: str,
+    channel: str,
+    existing: NeurocommentReadiness | None,
+    outcome: AccountChannelOnboarding,
+    *,
+    member: bool,
+) -> None:
+    """Log the two good outcomes of a join — each on its TRANSITION only.
+
+    Every other ``neurocomment_onboard_*`` event is a refusal or a wait, so an approval
+    and a pair going comment-able passed with nothing in the log but the gateway's join
+    line, which reads exactly like an ordinary re-onboard.
+
+    Both verdicts come from ``existing`` — the readiness row as it was BEFORE this join —
+    because nothing else can tell a transition from a repeat: this function re-joins and
+    re-writes ``ready`` on every pass, so a bare "pair is ready" would fire for every ready
+    pair in the fleet on every operator Start, every campaign reconcile and every other
+    channel's poke. That is the same flood the pending-request guard above was written to
+    stop.
+
+    ``join_request_attempts`` is 0 until a request actually goes out (and back to 0 once
+    ``clear_join_request`` forgets one), so a non-zero count plus a join that made us a
+    member is exactly "the admin approved it". A pair approved straight into a bot
+    challenge logs the approval alone, which is right: it is in the group, just not
+    comment-able yet.
+    """
+    if existing is not None and existing.join_request_attempts > 0 and member:
+        await log_event(
+            "INFO",
+            "neurocomment_onboard_join_request_approved",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
+    if outcome.state == "ready" and (existing is None or not existing.ready):
+        await log_event(
+            "INFO",
+            "neurocomment_onboard_pair_ready",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
 
 
 def _join_request_in_flight(readiness: NeurocommentReadiness, now: datetime) -> bool:
