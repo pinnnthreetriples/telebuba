@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -139,35 +140,55 @@ async def run_db_maintenance_loop() -> None:
         await asyncio.to_thread(run_db_maintenance)
 
 
+# Guards the lazy build below. Every DB call runs in its own ``asyncio.to_thread``
+# worker, so the first two after ``configure_database`` genuinely race the ``is None``
+# check: unguarded, both build an engine, both run ``create_all`` + ``apply_migrations``
+# against the same file at once ("database is locked"), and the loser is dropped WITHOUT
+# ``dispose()`` — its pooled sqlite3 connection then trips "ResourceWarning: unclosed
+# database" at some later GC, which ``filterwarnings = error`` charges to whichever test
+# was running. Reentrant: the body publishes the engine before migrating, so a migration
+# step that reaches back through ``_get_engine`` resolves instead of deadlocking.
+_ENGINE_LOCK = threading.RLock()
+
+
 def _get_engine() -> Engine:
-    if _state.engine is None:
-        database_path = _state.database_path or settings.db.path
-        database_path.parent.mkdir(parents=True, exist_ok=True)
-        engine = create_engine(
-            f"sqlite:///{database_path}",
-            connect_args={"check_same_thread": False},
-            pool_size=settings.db.pool_size,
-            max_overflow=settings.db.max_overflow,
-            pool_timeout=settings.db.pool_timeout_seconds,
-            future=True,
-        )
+    engine = _state.engine
+    if engine is not None:
+        return engine  # hot path: one unsynchronised read, exactly as before.
+    with _ENGINE_LOCK:
+        engine = _state.engine
+        return _build_engine() if engine is None else engine
 
-        # SQLite ignores ForeignKey constraints unless PRAGMA foreign_keys is
-        # set on every connection. WAL + busy_timeout + synchronous=NORMAL let
-        # concurrent warming loops write without "database is locked".
-        @event.listens_for(engine, "connect")
-        def _configure_sqlite(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.execute("PRAGMA journal_mode=WAL")
-            cursor.execute("PRAGMA synchronous=NORMAL")
-            cursor.execute("PRAGMA busy_timeout=5000")
-            cursor.close()
 
-        _state.engine = engine
-        _metadata.create_all(engine)
-        apply_migrations(engine)
-    return _state.engine
+def _build_engine() -> Engine:
+    """Create, configure, and publish the process engine. Callers hold ``_ENGINE_LOCK``."""
+    database_path = _state.database_path or settings.db.path
+    database_path.parent.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(
+        f"sqlite:///{database_path}",
+        connect_args={"check_same_thread": False},
+        pool_size=settings.db.pool_size,
+        max_overflow=settings.db.max_overflow,
+        pool_timeout=settings.db.pool_timeout_seconds,
+        future=True,
+    )
+
+    # SQLite ignores ForeignKey constraints unless PRAGMA foreign_keys is
+    # set on every connection. WAL + busy_timeout + synchronous=NORMAL let
+    # concurrent warming loops write without "database is locked".
+    @event.listens_for(engine, "connect")
+    def _configure_sqlite(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=5000")
+        cursor.close()
+
+    _state.engine = engine
+    _metadata.create_all(engine)
+    apply_migrations(engine)
+    return engine
 
 
 # --------------------------------------------------------------------------- #
