@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -10,6 +11,7 @@ import pytest
 from core.config import settings
 from core.db import (
     create_account,
+    delete_account,
     fetch_warming_state,
     save_warming_settings,
     upsert_warming_state,
@@ -17,16 +19,24 @@ from core.db import (
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.warming import (
+    ActivityPersona,
     WarmingCycleRequest,
     WarmingCycleResult,
+    WarmingState,
+    WarmingStateRecord,
     WarmingStateWrite,
     WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _seams
+from services.warming import _loop, _seams, _state
+from services.warming._state import _set_state
 from tests.services.warming._support import (
+    _CrashAfter,
+    _iteration,
+    _no_quiet_days,
     _Recorder,
     _seed_channel,
+    _seed_warming_account,
     _set_settings,
 )
 
@@ -292,3 +302,136 @@ async def test_warming_phase_advanced_logged_when_finalize_applies(
     )
 
     assert "warming_phase_advanced" in events
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_before_the_reconcile_is_reported_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A cancel on the handler's own read never reached the hand-back at all (#208).
+
+    ``shutdown_warming_runtime`` cancels a second time when its 5s gather times out,
+    and that cancel can land on the handler's ``fetch_warming_state`` — before any
+    shielded write exists. Nothing is in flight, so the whole reservation stays
+    booked and the next Start parks the account on a phantom "daily limit" until the
+    next UTC midnight. That is an ERROR with a traceback, not the benign
+    "interrupted" WARNING that says a shielded write is still landing.
+    """
+    _no_quiet_days(monkeypatch)
+    crash = _CrashAfter(2)
+    monkeypatch.setattr(_seams, "execute", crash.execute)
+    real_fetch = _loop.fetch_warming_state
+
+    async def cancel_the_handlers_read(account_id: str) -> WarmingStateRecord | None:
+        # Only the handler's read: the pre-cycle one runs before any action lands.
+        if crash.actions:
+            raise asyncio.CancelledError
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", cancel_the_handlers_read)
+    await _seed_warming_account()
+
+    with (
+        caplog.at_level(logging.WARNING, logger="services.warming._loop"),
+        pytest.raises(RuntimeError, match="process killed"),
+    ):
+        await warming.run_loop_iteration("acc-1")
+
+    assert "reservation reconcile failed" in caplog.text
+    assert "reservation reconcile interrupted" not in caplog.text
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # Not one action handed back: the reservation is stranded, which is why the log
+    # above must not read as a mere interruption.
+    assert record.daily_actions == settings.warming.phase_daily_cap["intro"]
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_on_the_finalize_paths_reconcile_still_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reconcile swallows ``Exception``, never ``CancelledError`` (#208).
+
+    The finalize's stale-run call site sits OUTSIDE the loop's abnormal-exit
+    handler, so it is the one caller with no backstop: swallowing a cancel there
+    returns a normal ``ok`` result and the task never reports as cancelled, so a
+    shutdown that lands on this write waits on a task that claims it finished.
+    """
+    _no_quiet_days(monkeypatch)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    calculate_next_run = _loop._calculate_next_run
+
+    async def hand_the_row_to_a_new_generation(
+        account_id: str,
+        result: WarmingCycleResult,
+        persona: ActivityPersona,
+        daily_cap: int,
+    ) -> tuple[int, datetime, WarmingState]:
+        # A restart's cancel-and-replace minted a new generation behind the cycle,
+        # so the finalize reconciles the reservation instead of writing its own
+        # transition — the call site with no handler above it.
+        await _set_state(account_id, "active", run_id="run-2", expected_run_id="run-1")
+        return await calculate_next_run(account_id, result, persona, daily_cap)
+
+    monkeypatch.setattr(_loop, "_calculate_next_run", hand_the_row_to_a_new_generation)
+    real_upsert = _state.upsert_warming_state
+    cancelled_once = False
+    task: asyncio.Task[None]
+
+    async def cancel_the_reconciling_write(write: WarmingStateWrite) -> WarmingStateWriteResult:
+        nonlocal cancelled_once
+        # ``daily_actions == 4`` identifies the hand-back: the reservation and the
+        # progress writes all carry 15. Once only — the handler retries the same
+        # write on the way out, and a second cancel would prove nothing.
+        if not cancelled_once and write.daily_actions == 4:
+            cancelled_once = True
+            task.cancel()
+            await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
+        return await real_upsert(write)
+
+    monkeypatch.setattr(_state, "upsert_warming_state", cancel_the_reconciling_write)
+    await _seed_warming_account(run_id="run-1")
+    task = asyncio.create_task(_iteration("run-1"))
+
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert cancelled_once
+
+
+@pytest.mark.asyncio
+async def test_a_row_purged_mid_handler_is_not_reconciled(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``remove_account`` can purge the row while the abnormal-exit handler runs (#208).
+
+    ``delete_account`` proceeds once its 5s cancel wait is up, so the handler's read
+    can come back empty. A row that is gone holds no reservation to hand back and
+    the accounts FK would reject re-inserting it, so the reconcile must be skipped —
+    not attempted and logged as a failure the operator can do nothing about.
+    """
+    _no_quiet_days(monkeypatch)
+    crash = _CrashAfter(2)
+    monkeypatch.setattr(_seams, "execute", crash.execute)
+    real_fetch = _loop.fetch_warming_state
+
+    async def purge_then_read(account_id: str) -> WarmingStateRecord | None:
+        # Only the handler's read: the pre-cycle one runs before any action lands.
+        if crash.actions:
+            await delete_account(account_id)
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", purge_then_read)
+    await _seed_warming_account()
+
+    with (
+        caplog.at_level(logging.ERROR, logger="services.warming._loop"),
+        pytest.raises(RuntimeError, match="process killed"),
+    ):
+        await warming.run_loop_iteration("acc-1")
+
+    assert [r.getMessage() for r in caplog.records if r.name == "services.warming._loop"] == []
+    assert await fetch_warming_state("acc-1") is None

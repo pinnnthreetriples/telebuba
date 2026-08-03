@@ -307,7 +307,42 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     return result
 
 
-async def run_loop_iteration(  # noqa: PLR0911, PLR0915, C901 - sequential gates, each early-exits.
+async def _release_reservation_on_exit(
+    account_id: str,
+    daily: tuple[int, str],
+    spent: int,
+    *,
+    run_id: str | None,
+) -> None:
+    """Hand the reservation back while an exception unwinds ``run_loop_iteration``.
+
+    Never raises: the caller re-raises the original exception unchanged, and a
+    failure here must not replace it.
+    """
+    try:
+        # Echo the row's own state back rather than a literal ``active``: a
+        # readiness park or a stop may have moved it while the cycle ran. A row
+        # that is gone entirely (``remove_account`` proceeds after its 5s cancel
+        # wait, so ``delete_account`` can purge it while we are still here) holds
+        # no reservation to hand back, and the FK would reject the insert anyway
+        # — same skip as the finalize call site above.
+        latest = await fetch_warming_state(account_id)
+        if latest is not None:
+            try:
+                await _reconcile_reservation(account_id, latest.state, daily, spent, run_id=run_id)
+            except asyncio.CancelledError:
+                # Scoped to the reconcile call alone: its write is shielded, so one
+                # already in flight still lands — hence WARNING without a traceback.
+                # A cancel on the read above never reached that write, so the whole
+                # reservation is stranded and stays an ERROR below. (A cancel landing
+                # on the reconcile's own ``stranded`` WARNING also reads as
+                # "interrupted": by then the write is final, only its report is lost.)
+                logger.warning("reservation reconcile interrupted for %s", account_id)
+    except BaseException:
+        logger.exception("reservation reconcile failed for %s", account_id)
+
+
+async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each early-exits.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -453,24 +488,5 @@ async def run_loop_iteration(  # noqa: PLR0911, PLR0915, C901 - sequential gates
         # warming per restart. Re-raised unchanged so cancellation keeps propagating
         # to the task that asked for it, and so a genuine crash still reaches
         # ``_runner``'s ``except Exception``.
-        try:
-            # Echo the row's own state back rather than a literal ``active``: a
-            # readiness park or a stop may have moved it while the cycle ran. A row
-            # that is gone entirely (``remove_account`` proceeds after its 5s cancel
-            # wait, so ``delete_account`` can purge it while we are still here) holds
-            # no reservation to hand back, and the FK would reject the insert anyway
-            # — same skip as the finalize call site above.
-            latest = await fetch_warming_state(account_id)
-            if latest is not None:
-                await _reconcile_reservation(
-                    account_id, latest.state, daily, tally.attempts, run_id=run_id
-                )
-        except asyncio.CancelledError:
-            # A cancellation here interrupted the hand-back rather than failing it:
-            # the reconcile's write is shielded, so one already in flight still
-            # lands. WARNING without a traceback — the ERROR this used to log read
-            # as "the reservation is stranded", the one thing the shield prevents.
-            logger.warning("reservation reconcile interrupted for %s", account_id)
-        except BaseException:
-            logger.exception("reservation reconcile failed for %s", account_id)
+        await _release_reservation_on_exit(account_id, daily, tally.attempts, run_id=run_id)
         raise
