@@ -1,0 +1,31 @@
+# aislop configuration — the quality gate wired as a pre-push hook and a CI job
+# (``tools/aislop_gate.py``). Kept here rather than as CLI flags because the
+# ``ci`` subcommand silently IGNORES ``--exclude``: passing it changed nothing
+# (620 files scanned either way, 65 frontend findings either way), while the
+# same list here brings the scan down to the 380 Python files it claims to
+# check. The wrapper used to filter the frontend out of the results afterwards,
+# which made the gate correct but made its "files scanned" count a lie.
+version: 1
+
+# ``exclude`` REPLACES the built-in defaults rather than adding to them, so the
+# usual suspects have to be named again. ``frontend/`` is the React SPA and has
+# its own gate set (eslint, steiger, tsc, vitest) — it is not Python project
+# code and does not belong to this gate.
+exclude:
+  - node_modules
+  - .git
+  - dist
+  - build
+  - coverage
+  - .venv
+  - htmlcov
+  - .serena
+  - frontend
+
+# Off by default it is not: the CLI posts cli_command_started/completed to
+# https://eu.i.posthog.com on every run. Nothing about this repo — a Telegram
+# operations dashboard whose non-negotiables start with "never expose secrets,
+# sessions, tdata, JWTs, or proxy credentials" — should phone out from a gate as
+# an unexamined default, whatever the payload happens to contain today.
+telemetry:
+  enabled: false
