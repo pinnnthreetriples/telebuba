@@ -421,6 +421,108 @@ test('shows reaction-skip reasons and stories-seen detail in the log', async () 
   expect(screen.getByText('· нет активных историй')).toBeInTheDocument();
 });
 
+test('says what Telegram refused on a failed warming action', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: '2026-06-30T12:00:00+00:00',
+              level: 'ERROR',
+              status: 'error',
+              account_id: '79051184490',
+              event: 'warming_telegram_join_channel_failed',
+              extra: { channel: '@news', error_type: 'ChannelPrivateError' },
+            },
+            {
+              id: 2,
+              created_at: '2026-06-30T12:01:00+00:00',
+              level: 'WARNING',
+              status: 'warning',
+              account_id: '79051184490',
+              event: 'warming_telegram_action_unavailable',
+              extra: { action_type: 'read_channel', error_type: 'session_dead' },
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(
+    <WarmingBoard
+      warming={[account('79051184490', 'error')]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+    />,
+  );
+  await userEvent.click(screen.getByText('Лог активности'));
+  // A Telethon class name (logEventTelegram.error.*) and a gateway stable code
+  // (accounts.profile.code.*) both reach the operator as the real refusal, where
+  // the card used to show the action label and nothing else.
+  await waitFor(() => {
+    expect(screen.getByText('· чат закрыт: не пускают или выгнали')).toBeInTheDocument();
+  });
+  expect(screen.getByText('· Сессия аккаунта в Telegram недействительна')).toBeInTheDocument();
+});
+
+test('explains a cycle that ended badly, and stays quiet about a healthy one', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: '2026-06-30T12:00:00+00:00',
+              level: 'WARNING',
+              status: 'warning',
+              account_id: '79051184490',
+              event: 'warming_cycle_completed',
+              extra: { status: 'peer_flood', failures: 1 },
+            },
+            {
+              id: 2,
+              created_at: '2026-06-30T11:00:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'warming_cycle_completed',
+              extra: { status: 'ok', reads: 2 },
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(
+    <WarmingBoard
+      warming={[account('79051184490', 'active')]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+    />,
+  );
+  await userEvent.click(screen.getByText('Лог активности'));
+  // The engine writes a cycle's outcome as extra.status; only the bad ones have a
+  // label, so a normal cycle keeps its one-line "завершён" instead of gaining a tail.
+  await waitFor(() => {
+    expect(screen.getByText('· флуд-ограничение')).toBeInTheDocument();
+  });
+  expect(screen.getAllByText('Цикл прогрева завершён')).toHaveLength(2);
+  expect(screen.queryByText(/· ok/)).not.toBeInTheDocument();
+});
+
 test('clear button hides the existing log lines', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

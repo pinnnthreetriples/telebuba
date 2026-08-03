@@ -138,6 +138,50 @@ test('leaves the channel cell empty when the event has no channel', async () => 
   expect(screen.getAllByRole('cell', { name: '—' }).length).toBeGreaterThan(0);
 });
 
+test('says what Telegram refused, not only that the attempt failed', async () => {
+  // The event label names the attempt ("Вступление в чат канала — ошибка") and never the
+  // refusal. `extra.error_type` carried it all along; the reason column translates it.
+  routeLogs({
+    items: [
+      logRow(1, 'neurocomment_telegram_join_channel_failed', 'error', 'acc-1', {
+        error_type: 'ChannelPrivateError',
+      }),
+    ],
+    next_cursor: null,
+  });
+  renderWithClient(<LogsPage />);
+
+  expect(
+    await screen.findByRole('cell', { name: 'чат закрыт: не пускают или выгнали' }),
+  ).toBeInTheDocument();
+});
+
+test('shows the reason of a row that carries one', async () => {
+  routeLogs({
+    items: [
+      logRow(1, 'neurocomment_channel_rejoin_exhausted', 'warning', null, {
+        reason: 'rejoin_exhausted',
+      }),
+    ],
+    next_cursor: null,
+  });
+  renderWithClient(<LogsPage />);
+
+  expect(
+    await screen.findByRole('cell', { name: 'попытки вернуться в чат закончились' }),
+  ).toBeInTheDocument();
+});
+
+test('places the em-dash in the reason cell when the row explains nothing', async () => {
+  routeLogs({ items: [logRow(1, 'warming_started')], next_cursor: null });
+  renderWithClient(<LogsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Прогрев запущен')).toBeInTheDocument();
+  });
+  // Two placeholders on this row: no channel and no reason. The account resolves.
+  expect(screen.getAllByRole('cell', { name: '—' })).toHaveLength(2);
+});
+
 test('falls back to the raw code for an unknown event', async () => {
   routeLogs({ items: [logRow(1, 'totally_unknown_event')], next_cursor: null });
   renderWithClient(<LogsPage />);

@@ -89,6 +89,51 @@ test('a failed post shows the Telegram error type next to the translated reason'
   expect(screen.getByText('· Telegram отклонил · SomeUnmappedRpcError')).toBeInTheDocument();
 });
 
+test('a failed join says in words what Telegram refused, and against which channel', () => {
+  // The row an operator could not read: "Вступление в чат канала — ошибка ·
+  // ChannelPrivateError" named neither the channel nor anything they could act on.
+  render(
+    <ActivityLogCard
+      logLines={[
+        entry({
+          level: 'ERROR',
+          status: 'error',
+          event: 'neurocomment_telegram_join_discussion_group_failed',
+          extra: { channel: '@MeineDNEWS', error_type: 'ChannelPrivateError' },
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByText('@MeineDNEWS')).toBeInTheDocument();
+  expect(screen.getByText('Вступление в чат канала — ошибка')).toBeInTheDocument();
+  expect(screen.getByText('· чат закрыт: не пускают или выгнали')).toBeInTheDocument();
+});
+
+test('spells out a gateway stable code, which arrives instead of an exception class', () => {
+  render(
+    <ActivityLogCard
+      logLines={[
+        entry({
+          id: 1,
+          level: 'ERROR',
+          status: 'error',
+          event: 'neurocomment_telegram_join_channel_failed',
+          extra: { channel: '@a', error_type: 'session_dead' },
+        }),
+        entry({
+          id: 2,
+          level: 'ERROR',
+          status: 'error',
+          event: 'neurocomment_telegram_post_comment_failed',
+          extra: { channel: '@b', error_type: 'chat_admin_required' },
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByText('· Сессия аккаунта в Telegram недействительна')).toBeInTheDocument();
+  expect(screen.getByText('· Нужны права администратора канала')).toBeInTheDocument();
+});
+
 test('colours an attempted-but-failed event red even though it is logged INFO', () => {
   render(
     <ActivityLogCard
