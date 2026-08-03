@@ -162,7 +162,7 @@ async def _mark_lost_channels(
             # stamped, so it would otherwise print on every reconcile for ever.
             if (listener_account_id, channel) in _runtime._JOINED_CHANNELS:  # noqa: SLF001 - peer module
                 await log_event(
-                    "INFO",
+                    "WARNING",
                     "neurocomment_listener_access_lost_untracked",
                     account_id=listener_account_id,
                     extra={"channel": channel},

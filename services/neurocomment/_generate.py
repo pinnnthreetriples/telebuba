@@ -60,6 +60,12 @@ if TYPE_CHECKING:
 # one a minute even on an operator delay measured in hours.
 _CLAIM_BEAT_INTERVAL_SECONDS = 60.0
 
+# Bound rather than inlined at the return below: a literal in a positional ``_GenOutcome``
+# field is the one reason shape ``tests.test_logevent_i18n_parity`` cannot see, and this one
+# reaches the operator through ``logEventReason`` — where a missing label renders as a blank,
+# not as the code. A ``*_reason`` NAME is what puts it back under that guard.
+_CLAIM_LOST_REASON = "claim_lost"
+
 
 class _GenOutcome(NamedTuple):
     """A generated comment, or ``None`` with the last attempt's failure reason."""
@@ -178,8 +184,9 @@ async def _sleep_beating(event: NewPostEvent, seconds: float) -> bool:
     The reply delay is the one long stretch the operator sets directly, and it is spent
     INSIDE a claim — so a single beat placed after it covers nothing at all. Sliced instead,
     a delay of any length keeps its claim alive, which is why the write schema needs no
-    arbitrary upper bound on it (and why the one it briefly had would have locked the
-    Settings form for values it had already accepted).
+    arbitrary upper bound on it — and why the one it briefly had would have locked the
+    Settings form: the read model is unbounded and every save resends the whole object, so
+    one already-stored value above the cap 422s every unrelated edit with no field flagged.
     """
     remaining = seconds
     while remaining > 0:
@@ -239,7 +246,7 @@ async def _generate_acceptable(
         # six paid attempts left. Reported as an exhaustion reason, which is what that field
         # is for; the send's own abandon line stays for the claims lost after this point.
         if not await touch_comment_claim(channel, event.post_id):
-            return _GenOutcome(None, "claim_lost")
+            return _GenOutcome(None, _CLAIM_LOST_REASON)
         request = _build_request(campaign.prompt, event.text, secret=secret, image_b64=image_b64)
         generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:

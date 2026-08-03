@@ -807,6 +807,7 @@
     "too_short": "слишком короткий",
     "not_acceptable": "не прошёл фильтр",
     "duplicate": "дубликат",
+    "claim_lost": "заявка была возвращена",
     "failed": "Telegram отклонил",
     "flood_wait": "флуд-контроль",
     "slow_mode_wait": "медленный режим",

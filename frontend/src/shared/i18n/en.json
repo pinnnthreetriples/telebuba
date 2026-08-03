@@ -806,6 +806,7 @@
     "too_short": "too short",
     "not_acceptable": "failed content filter",
     "duplicate": "duplicate",
+    "claim_lost": "the claim was reclaimed first",
     "failed": "Telegram rejected",
     "flood_wait": "flood wait",
     "slow_mode_wait": "slow mode",

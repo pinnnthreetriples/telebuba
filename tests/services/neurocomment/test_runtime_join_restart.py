@@ -198,6 +198,11 @@ async def test_the_give_up_expires_once_its_losses_leave_the_window(
         await _drain_joins()
     # Budget spent: the original join plus one re-join, then the pass gives up.
     assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@a")]
+    # And gives up QUIETLY: a given-up channel is evicted from the cache when its last row
+    # is stamped, so the untracked-loss report has nothing to say about it — without that
+    # gate it would print once per reconcile, for ever, at the operator.
+    events = [e.event for e in await list_recent_logs(limit=100)]
+    assert "neurocomment_listener_access_lost_untracked" not in events
 
     # A week passes with the channel healthy — the same rows, still counted by the join cap.
     _age_losses("listener-1", hours=200.0)
