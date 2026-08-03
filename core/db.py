@@ -140,8 +140,9 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         # its own. Leftovers are best-effort hygiene, so a stuck one (a live handle,
         # the path turned into a directory, EPERM/EBUSY) is suppressed — unguarded it
         # raises before the vacuum and no backup is ever taken again while it
-        # persists. Suppressing our own path costs nothing: VACUUM INTO fails on an
-        # existing output, so the run still raises, only from sqlite. Deleting a
+        # persists. Suppressing our own path costs nothing: VACUUM INTO fails on a
+        # non-empty existing output, so the run still raises either way — from sqlite
+        # there, and from the publish rename on an empty one. Deleting a
         # foreign in-flight .part is only safe because maintenance is single-process:
         # one uvicorn worker (a non-negotiable) and one task, whose runs serialise
         # on ``await asyncio.to_thread``.
