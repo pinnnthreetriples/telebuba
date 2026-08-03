@@ -14,6 +14,7 @@ from core.db import (
     upsert_warming_state,
 )
 from schemas.accounts import AccountCreate
+from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.warming import (
     WarmingCycleRequest,
     WarmingStateRecord,
@@ -169,6 +170,65 @@ async def test_daily_limit_excludes_offline_cleanup(
     assert types == ["set_online", "join_channel", "set_online"]
     assert result.channels_joined == 1
     assert result.channels_read == 0
+
+
+class _CrashAfter:
+    """Dispatcher that stops responding after N actions — models a killed process."""
+
+    def __init__(self, limit: int) -> None:
+        self.actions: list[str] = []
+        self._limit = limit
+
+    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
+        if len(self.actions) >= self._limit:
+            msg = "process killed"
+            raise RuntimeError(msg)
+        self.actions.append(action.action_type)
+        return ActionResult(
+            status="ok",
+            action_type=action.action_type,
+            account_id=account_id,
+            recent_message_ids=["101", "102"] if action.action_type == "read_channel" else None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_daily_budget_is_not_respent_after_a_crash_mid_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#208: a crash before the finalize write must not hand the loop a fresh budget."""
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
+    crash = _CrashAfter(2)
+    monkeypatch.setattr(_seams, "execute", crash.execute)
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    with pytest.raises(RuntimeError):
+        await warming.run_loop_iteration("acc-1")
+
+    # The process died after SetOnline + the join, before ``_finalize_after_cycle``.
+    assert crash.actions == ["set_online", "join_channel"]
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # The row still carries the pre-cycle reservation, so today's budget is spent.
+    assert record.daily_actions == settings.warming.phase_daily_cap["intro"]
+
+    # Restart: the reconciled loop re-runs the iteration on the same calendar day.
+    survivor = _Recorder()
+    monkeypatch.setattr(_seams, "execute", survivor.execute)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.detail == "daily limit"
+    assert survivor.actions == []
 
 
 @pytest.mark.asyncio

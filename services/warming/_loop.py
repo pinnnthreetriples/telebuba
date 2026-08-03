@@ -273,6 +273,17 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
     if gated is not None:
         return gated
 
+    remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
+    # #208: reserve the whole remaining budget on the row BEFORE the cycle spends
+    # any of it. Only ``_finalize_after_cycle`` ever incremented ``daily_actions``,
+    # so a crash between here and there left today's count untouched — and because
+    # the stale ``next_run_at`` is already past due, the restarted loop re-read a
+    # full budget and spent it again on top of the actions this cycle had already
+    # performed. The finalize write reconciles the reservation back down to the
+    # real ``daily_count + actions_done``, so the crash path now fails closed: the
+    # worst case is losing the rest of today's budget, never exceeding it. The
+    # ``_on_step`` hook below cannot carry this — it is gated to the monotonic step
+    # rail, so it fires once per step name and never sees the per-action tally.
     started = await _set_state(
         account_id,
         "active",
@@ -281,7 +292,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
         last_error=None,
         last_action="set_online",
         last_channel=None,
-        daily_actions=daily_count,
+        daily_actions=daily_count if remaining is None else daily_count + remaining,
         daily_count_date=daily_date,
         expected_run_id=run_id,
     )
@@ -321,7 +332,6 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
             )
 
     persona = record.activity_persona if record is not None else "normal"
-    remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
     # The semaphore caps fleet-wide concurrent cycles; hold it only for the
     # Telegram-heavy cycle, not the surrounding state writes or inter-cycle sleep.
     async with _cycle_semaphore:
