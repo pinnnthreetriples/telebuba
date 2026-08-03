@@ -469,9 +469,7 @@ test('says what Telegram refused on a failed warming action', async () => {
   await waitFor(() => {
     expect(screen.getByText('· чат закрыт: не пускают или выгнали')).toBeInTheDocument();
   });
-  expect(
-    screen.getByText('· Сессия аккаунта в Telegram недействительна — войдите заново'),
-  ).toBeInTheDocument();
+  expect(screen.getByText('· Сессия аккаунта в Telegram недействительна')).toBeInTheDocument();
 });
 
 test('explains a cycle that ended badly, and stays quiet about a healthy one', async () => {

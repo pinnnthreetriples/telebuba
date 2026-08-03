@@ -445,3 +445,77 @@ async def test_an_ordinary_telethon_error_still_logs_its_class_name(
         },
     ]
     assert result.error_type == "RPCError"
+
+
+class DescriptionCodeError(Exception):
+    """Stand-in for SQLAlchemy's ``HasDescriptionCode`` family — a CLASS-level str code.
+
+    Module level, not local to the test: the failure path hands the exception to loguru,
+    whose queue sink pickles it, and a class defined inside a function cannot be pickled.
+    """
+
+    code = "e3q8"
+
+
+@pytest.mark.asyncio
+async def test_a_third_party_string_code_is_not_mistaken_for_one_of_our_wrappers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A string ``.code`` is not proof the code is ours, so the class name still wins.
+
+    Shaped after SQLAlchemy, which hangs a doc-anchor slug on twelve of its errors
+    (``OperationalError.code == "e3q8"``). Nothing routes one here today, but the guard
+    must reject it by construction rather than by the accident that ``get_client`` is the
+    only DB touch inside ``execute``'s try.
+    """
+    logged: list[dict[str, object]] = []
+
+    async def fake_log(_level: str, event: str, **kwargs: object) -> None:
+        logged.append({"event": event, **kwargs})
+
+    _patch_client(monkeypatch, _raising_client(DescriptionCodeError("connection lost")))
+    monkeypatch.setattr("core.telegram_client._action_results.log_event", fake_log)
+
+    result = await execute("acc-slug", JoinChannel(channel="@hot"))
+
+    assert logged == [
+        {
+            "event": "telegram_join_channel_failed",
+            "account_id": "acc-slug",
+            "extra": {"error_type": "DescriptionCodeError", "channel": "@hot"},
+        },
+    ]
+    assert result.error_type == "DescriptionCodeError"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_action_without_a_channel_logs_no_channel_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Most actions have no channel, and a null one is dead JSON on every such row.
+
+    ``set_profile_photo``, ``post_story``, ``update_profile``, ``set_privacy_settings``
+    and ``send_dm`` all persisted ``"channel": null``, which says nothing the
+    ``action_type`` in the event name does not already say.
+    """
+    logged: list[dict[str, object]] = []
+
+    async def fake_log(_level: str, event: str, **kwargs: object) -> None:
+        logged.append({"event": event, **kwargs})
+
+    _patch_client(monkeypatch, _raising_client(RuntimeError("boom")))
+    monkeypatch.setattr("core.telegram_client._action_results.log_event", fake_log)
+
+    result = await execute(
+        "acc-no-chan",
+        SetProfilePhoto(filename="a.jpg", content=_jpeg_bytes()),
+    )
+
+    assert result.status == "failed"
+    assert logged == [
+        {
+            "event": "telegram_set_profile_photo_failed",
+            "account_id": "acc-no-chan",
+            "extra": {"error_type": "RuntimeError"},
+        },
+    ]

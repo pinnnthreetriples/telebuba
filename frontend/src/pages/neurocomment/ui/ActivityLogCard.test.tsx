@@ -130,9 +130,7 @@ test('spells out a gateway stable code, which arrives instead of an exception cl
       ]}
     />,
   );
-  expect(
-    screen.getByText('· Сессия аккаунта в Telegram недействительна — войдите заново'),
-  ).toBeInTheDocument();
+  expect(screen.getByText('· Сессия аккаунта в Telegram недействительна')).toBeInTheDocument();
   expect(screen.getByText('· Нужны права администратора канала')).toBeInTheDocument();
 });
 

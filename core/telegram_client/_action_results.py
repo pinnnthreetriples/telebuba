@@ -188,12 +188,24 @@ async def _generic_error(
     # day it is written instead of the day someone remembers this line. Only the LOG row
     # switches: the returned
     # ``error_type`` below stays the class name because callers branch on it as a string
-    # and persist it (``access_lost_reason``). Telethon spends ``.code`` on its integer
-    # transport code (400, 420), so a str one belongs to a wrapper and nothing else.
+    # and persist it (``access_lost_reason``).
+    # Two conditions, because a string ``.code`` is not by itself proof of ownership: the
+    # attribute name is popular and a third party's vocabulary is not ours — SQLAlchemy
+    # hangs a CLASS-level one on twelve of its errors (``OperationalError.code == "e3q8"``),
+    # which would reach the operator as a doc-anchor slug where a class name at least named
+    # the fault. ``str`` excludes Telethon, which spends ``.code`` on the integer transport
+    # code (400, 420); ``ValueError`` excludes everything else found carrying a string one,
+    # our five wrappers being the only ``ValueError`` subclasses among them. No DB error can
+    # reach this line today — ``get_client`` is the only DB touch inside ``execute``'s try
+    # and its failures route to ``_unavailable_result`` — which is exactly why the guard
+    # must not lean on that: routing is not a property of this function, and the day a
+    # dispatcher reads the DB the operator starts reading "e3q8".
     # No ``__cause__`` hop like ``_applied_privacy_keys``: ``privacy_applied`` is annotated
     # on the error the ladder then WRAPS, whereas the code is what the wrapper is
     # constructed FROM, so it is always on the exception in hand.
     code = getattr(exc, "code", None)
+    is_stable_code = isinstance(code, str) and isinstance(exc, ValueError)
+    channel = getattr(action, "channel", None)
     await log_event(
         "ERROR",
         event_name(domain, f"telegram_{action.action_type}_failed"),
@@ -202,9 +214,12 @@ async def _generic_error(
         # ``_join_by_request_result``: without it a failed join is the ONE line in the
         # feed that never says what it was acting on, so the operator reads "join failed"
         # in a feed where every neighbouring row names its channel and cannot tell which.
+        # Only the channel actions have one, though, so the key is omitted rather than
+        # nulled: every profile, story and DM failure would otherwise persist a
+        # ``"channel": null`` that says nothing the action_type does not already say.
         extra={
-            "error_type": code if isinstance(code, str) else type(exc).__name__,
-            "channel": getattr(action, "channel", None),
+            "error_type": code if is_stable_code else type(exc).__name__,
+            **({"channel": channel} if channel else {}),
         },
     )
     return ActionResult(
