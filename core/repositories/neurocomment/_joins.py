@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from core.db import _get_engine
 from core.repositories.neurocomment._tables import _neurocomment_join_log
@@ -42,36 +42,81 @@ async def record_join(account_id: str, watch_channel: str | None = None) -> None
 def _list_joined_watch_channels(account_id: str) -> set[str]:
     statement = select(_neurocomment_join_log.c.watch_channel).where(
         (_neurocomment_join_log.c.account_id == account_id)
-        & _neurocomment_join_log.c.watch_channel.is_not(None),
+        & _neurocomment_join_log.c.watch_channel.is_not(None)
+        # A join Telegram has since disproven is not a membership, so it must not seed the
+        # pass's skip cache — but the row stays, because the cap above still counts it.
+        & _neurocomment_join_log.c.lost_at.is_(None),
     )
     with _get_engine().connect() as connection:
         return {str(row[0]) for row in connection.execute(statement)}
 
 
 async def list_joined_watch_channels(account_id: str) -> set[str]:
-    """Watch channels ``account_id`` has already joined — the restart-safe join cache."""
+    """Watch channels ``account_id`` is still inside — the restart-safe join cache."""
     return await asyncio.to_thread(_list_joined_watch_channels, account_id)
 
 
-def _forget_watch_channel_join(account_id: str, watch_channel: str) -> None:
-    statement = _neurocomment_join_log.delete().where(
+def _mark_watch_channel_join_lost(account_id: str, watch_channel: str) -> int | None:
+    pair = (
         (_neurocomment_join_log.c.account_id == account_id)
-        & (_neurocomment_join_log.c.watch_channel == watch_channel),
+        # Never widened to a whole class of rows: ``watch_channel=None`` would render
+        # ``IS NULL`` and swallow every discussion-group join this account ever made.
+        & _neurocomment_join_log.c.watch_channel.is_not(None)
+        & (_neurocomment_join_log.c.watch_channel == watch_channel)
     )
     with _get_engine().begin() as connection:
-        connection.execute(statement)
+        stamped = connection.execute(
+            update(_neurocomment_join_log)
+            .where(pair & _neurocomment_join_log.c.lost_at.is_(None))
+            .values(lost_at=datetime.now(UTC).isoformat()),
+        ).rowcount
+        if not stamped:
+            return None
+        return int(
+            connection.execute(
+                select(func.count()).where(pair & _neurocomment_join_log.c.lost_at.is_not(None)),
+            ).scalar_one(),
+        )
 
 
-async def forget_watch_channel_join(account_id: str, watch_channel: str) -> None:
-    """Erase the rows claiming ``account_id`` is inside ``watch_channel``.
+async def mark_watch_channel_join_lost(account_id: str, watch_channel: str) -> int | None:
+    """Stamp the standing join of ``watch_channel`` as disproven; return attempts spent.
 
     Callable only when Telegram has PROVEN the account is out (kicked / banned / the
-    channel went private): this log is the restart-safe join cache, so a row that
-    outlived the membership is exactly what stops the listener from ever re-joining.
-    Dropping it also lowers the rolling-24h count, which is honest — that join no
-    longer stands — and cheap, since a re-join records a fresh row.
+    channel went private). The row is stamped, never deleted: deleting it made the
+    rolling-24h cap unreachable — one row out, one row in per pass, so the count stayed
+    flat and the brake meant to bound the re-join loop could never engage.
+
+    Returns the number of joins of this pair now known lost, which IS the re-join attempt
+    count the caller bounds, or ``None`` when there was no standing join to disprove
+    (already stamped this loss, or the join never landed a row) — nothing new to report.
     """
-    await asyncio.to_thread(_forget_watch_channel_join, account_id, watch_channel)
+    return await asyncio.to_thread(_mark_watch_channel_join_lost, account_id, watch_channel)
+
+
+def _list_exhausted_watch_channels(account_id: str, max_attempts: int) -> set[str]:
+    statement = (
+        select(_neurocomment_join_log.c.watch_channel)
+        .where(
+            (_neurocomment_join_log.c.account_id == account_id)
+            & _neurocomment_join_log.c.watch_channel.is_not(None)
+            & _neurocomment_join_log.c.lost_at.is_not(None),
+        )
+        .group_by(_neurocomment_join_log.c.watch_channel)
+        .having(func.count() >= max_attempts)
+    )
+    with _get_engine().connect() as connection:
+        return {str(row[0]) for row in connection.execute(statement)}
+
+
+async def list_exhausted_watch_channels(account_id: str, max_attempts: int) -> set[str]:
+    """Watch channels this account has already spent ``max_attempts`` joins losing.
+
+    Persisted rather than remembered, deliberately: the events that re-arm a re-join are
+    boot, Start and every channel link, so an in-memory counter would reset before it ever
+    bounded anything (the lesson of #147's module dicts).
+    """
+    return await asyncio.to_thread(_list_exhausted_watch_channels, account_id, max_attempts)
 
 
 def _count_account_joins_since(account_id: str, since_iso: str) -> int:

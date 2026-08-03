@@ -271,9 +271,9 @@ async def release_claim(channel: str, post_id: int) -> None:
     return await asyncio.to_thread(_release_claim, channel, post_id)
 
 
-def _touch_comment_claim(channel: str, post_id: int) -> None:
+def _touch_comment_claim(channel: str, post_id: int) -> bool:
     with _get_engine().begin() as connection:
-        connection.execute(
+        result = connection.execute(
             update(_neurocomment_comments)
             .where(
                 (_neurocomment_comments.c.channel == channel)
@@ -284,17 +284,23 @@ def _touch_comment_claim(channel: str, post_id: int) -> None:
             )
             .values(updated_at=_now_iso()),
         )
+    return result.rowcount > 0
 
 
-async def touch_comment_claim(channel: str, post_id: int) -> None:
-    """Heartbeat a claim the worker is still holding, so the reclaim can see it is alive.
+async def touch_comment_claim(channel: str, post_id: int) -> bool:
+    """Heartbeat a claim the worker is still holding; ``False`` if it is no longer ours.
 
     ``reclaim_stale_claims`` can only judge a claim by its age, and between winning the
     claim and resolving it the worker wrote nothing at all — so a slow-but-live attempt
     was indistinguishable from a dead one and got failed underneath itself. This is the
-    beat that tells them apart; no-op when the row is already terminal or gone.
+    beat that tells them apart.
+
+    The answer matters as much as the write: this used to return ``None`` whether or not it
+    matched, so a worker whose claim had been reclaimed out from under it could not tell
+    and sent anyway. ``False`` means the row is terminal or gone — the beat had no claim to
+    keep alive, and the caller must not send under it.
     """
-    await asyncio.to_thread(_touch_comment_claim, channel, post_id)
+    return await asyncio.to_thread(_touch_comment_claim, channel, post_id)
 
 
 def _reclaim_stale_claims(cutoff_iso: str) -> int:

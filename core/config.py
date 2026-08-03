@@ -52,6 +52,10 @@ class TelegramSettings(BaseSettings):
     # below this threshold; longer waits raise so we can handle them ourselves.
     # Default 0 = surface every flood event to our own state machine (no silent
     # auto-sleep) so flood-type differentiation and quarantine logic always see it.
+    # Left unbounded, but raising it past ``stale_claim_reclaim_seconds`` (900) is the one
+    # stretch the neurocomment claim heartbeat cannot reach: the sleep happens inside the
+    # send RPC, after the last beat, so the claim is reclaimed while the comment still goes
+    # out. The send abandons on a dead claim, so this costs a skipped comment, not a double.
     flood_sleep_threshold: int = Field(default=0, ge=0)
     # Phone-login: how long a requested SMS code's ``phone_code_hash`` stays
     # valid in the in-memory login cache before the operator must re-request.

@@ -85,7 +85,7 @@ _JOIN_RERUN = False
 # before this guard — a real Telegram flood risk). Joins are idempotent, so this is
 # a flood guard, not a correctness cache. ponytail: process-lifetime; a failed join
 # simply retries on the next reconcile, and only a PROVEN access loss evicts an entry
-# (see ``_join._forget_lost_channels``).
+# (see ``_join._mark_lost_channels``), and only while re-join attempts remain.
 _JOINED_CHANNELS: set[tuple[str, str]] = set()
 
 # Watch channels the listener could not resolve to a peer id: absent from the NewMessage

@@ -74,8 +74,9 @@ from core.repositories.neurocomment._discovery import (
 )
 from core.repositories.neurocomment._joins import (
     count_account_joins_since,
-    forget_watch_channel_join,
+    list_exhausted_watch_channels,
     list_joined_watch_channels,
+    mark_watch_channel_join_lost,
     record_join,
 )
 from core.repositories.neurocomment._pauses import (
@@ -142,7 +143,6 @@ __all__ = [
     "fetch_comment",
     "fetch_linked_group",
     "fetch_readiness",
-    "forget_watch_channel_join",
     "get_listener_account_id",
     "get_listener_running",
     "insert_challenge",
@@ -157,6 +157,7 @@ __all__ = [
     "list_channel_readiness",
     "list_delivered_comments_since",
     "list_discovery_candidates",
+    "list_exhausted_watch_channels",
     "list_failed_for_channel",
     "list_failed_for_channels",
     "list_joined_watch_channels",
@@ -175,6 +176,7 @@ __all__ = [
     "mark_discovery_qualified",
     "mark_human_skipped",
     "mark_pair_banned",
+    "mark_watch_channel_join_lost",
     "persist_cooldown",
     "purge_neurocomment_history_older_than",
     "reclaim_stale_claims",

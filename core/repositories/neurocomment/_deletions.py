@@ -49,13 +49,17 @@ def _mark_comments_deleted(channel: str, comment_msg_ids: list[int]) -> CommentL
     now = _now_iso()
     with _get_engine().begin() as connection:
         # Only stamp still-live rows, so re-noticing the same deletion (the sweep
-        # re-reads the same window for hours) never re-marks or double-logs. Status is
-        # not part of the filter: carrying one of these ids IS delivery, and a
-        # mis-classified row must still be markable — see the reader above.
+        # re-reads the same window for hours) never re-marks or double-logs. The status
+        # predicate is loosened rather than dropped: carrying one of these ids IS delivery,
+        # so a row mis-classified ``failed`` must still be markable (see the reader above) —
+        # but a ``claimed`` row is a claim someone may still be holding, and this write
+        # bumps ``updated_at``, which would defer the stale-claim reclaim another cutoff and
+        # leave the nonsense state ``claimed`` WITH ``deleted_at`` that nothing prunes.
         connection.execute(
             update(_neurocomment_comments)
             .where(
                 (_neurocomment_comments.c.channel == channel)
+                & (_neurocomment_comments.c.status != "claimed")
                 & _neurocomment_comments.c.deleted_at.is_(None)
                 & _neurocomment_comments.c.comment_msg_id.in_(comment_msg_ids),
             )

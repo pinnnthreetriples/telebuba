@@ -295,8 +295,14 @@ async def _reclaim_stale_claims(now: datetime) -> None:
     Those are the DEFAULTS, though, and the cutoff is not what makes this safe: operator
     values inside the allowed ranges (the shared Gemini throttle, the reply delay) push a
     perfectly live attempt past 15 minutes, and age alone cannot tell it from a dead one.
-    So the worker beats before it sends (``touch_comment_claim``) and this ages
-    ``updated_at`` — a claim nobody is holding still ages exactly as it did.
+    So the worker beats (``touch_comment_claim``) and this ages ``updated_at`` — a claim
+    nobody is holding still ages exactly as it did. The beats bracket every long stretch:
+    one per generation round, one per 60-second slice of the reply delay, and one last one
+    gating the send, so the widest gap between two of them is a single ``generate_text``
+    (~245s at the operator-settable ``le`` bounds) rather than the whole pipeline. What the
+    beat cannot cover is a flood-wait Telethon sleeps off INSIDE the send RPC
+    (``TELEGRAM__FLOOD_SLEEP_THRESHOLD``); a threshold above this cutoff still ends with a
+    live send under a reclaimed row, which is why the send asks the beat first and abandons.
     """
     cutoff = (
         now - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)

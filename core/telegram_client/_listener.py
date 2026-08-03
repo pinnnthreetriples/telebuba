@@ -19,6 +19,11 @@ import logging
 from typing import TYPE_CHECKING
 
 from telethon import events
+from telethon.errors import (
+    ChannelPrivateError,
+    UserBannedInChannelError,
+    UserNotParticipantError,
+)
 from telethon.tl.types import MessageMediaPhoto
 
 from core.logging import log_event
@@ -57,22 +62,33 @@ _FILTERS: dict[str, object] = {}
 # harmless. ponytail: process-lifetime, never invalidated — only successful
 # resolutions are cached, so a failure simply retries on the next reconcile.
 _PEER_IDS: dict[str, int] = {}
-# Telethon's answer when the account is no longer inside a channel it once joined
-# (kicked, banned, or the channel went private): the peer stops resolving, so no post
-# from it can EVER arrive again. Distinguished from every other resolution failure
-# because only these are proof of lost membership, and the join log still claims the
-# account is in the channel — which is what makes the silence permanent.
-_LOST_ACCESS_ERRORS = frozenset(
-    {"ChannelPrivateError", "UserNotParticipantError", "UserBannedInChannelError"},
-)
-# Channels each account provably lost access to, drained by the caller. This layer only
-# witnesses the loss; what to do about it (drop the join-log row, re-join) is the join
-# pass's policy. ponytail: single-process, in-memory, like ``_PEER_IDS`` above.
+# Telethon errors that mean the account is not inside a channel it is trying to resolve.
+# The classes themselves, not their names: the set used to hold strings compared against
+# ``type(exc).__name__``, so a rename upstream or one wrong guess here would simply stop
+# matching, in silence. ``ChannelPrivateError`` is the one ``get_peer_id`` actually raises;
+# the other two are kept because the same verdict reaches this module by other routes
+# (``GetParticipant`` and message sending respectively) and cost nothing to name.
+_LOST_ACCESS_ERRORS = (ChannelPrivateError, UserNotParticipantError, UserBannedInChannelError)
+# Channels each account is known to be out of, drained by the caller. This layer only
+# witnesses the loss; what to do about it (stamp the join-log row, re-join, give up) is the
+# join pass's policy. ponytail: single-process, in-memory, like ``_PEER_IDS`` above.
+#
+# NARROW, deliberately stated: the only witness is a FAILED ``get_peer_id`` below, which
+# runs at subscribe time and only for a channel with no cached peer id. So a kick is noticed
+# on the next reconcile that has to re-resolve — after a restart, or for a channel that
+# never resolved — and NOT while the process runs. A public channel is not covered at all:
+# its ``@username`` keeps resolving to the same peer after a kick, so the loss shows up as
+# silence, not as an error. Closing that needs a runtime signal (an update handler for
+# ``channelParticipantLeft``/``ChannelForbidden``), which this slice does not add.
 _LOST_ACCESS: dict[str, set[str]] = {}
 
 
 def take_lost_access_channels(account_id: str) -> set[str]:
-    """Channels ``account_id`` was proven out of since the last call (drains the report)."""
+    """Channels ``account_id`` failed to resolve as a member since the last call (drains).
+
+    Not "every channel it was kicked from": see ``_LOST_ACCESS`` for what this can and
+    cannot see.
+    """
     return _LOST_ACCESS.pop(account_id, set())
 
 
@@ -131,7 +147,7 @@ async def subscribe_posts(
                 # _watch.py), so a neutral ``telegram_*`` name would be invisible in the
                 # 'neurocomment' view. A second consumer is the ceiling: at that point
                 # the rows need a real domain column instead of a prefix convention.
-                if type(exc).__name__ in _LOST_ACCESS_ERRORS:
+                if isinstance(exc, _LOST_ACCESS_ERRORS):
                     _LOST_ACCESS.setdefault(account_id, set()).add(channel)
                 await log_event(
                     "WARNING",
@@ -178,6 +194,10 @@ async def stop_post_listener(account_id: str) -> None:
     """
     handler = _HANDLERS.pop(account_id, None)
     _FILTERS.pop(account_id, None)
+    # The gap report goes with the subscription that witnessed it: this is also the account
+    # switch and shutdown path, so a previous listener's undrained losses must not be handed
+    # to whatever runs next. Dropped before the early return, which only skips the detach.
+    _LOST_ACCESS.pop(account_id, None)
     if handler is None:
         return
     client = _CLIENTS.get(account_id)

@@ -15,6 +15,7 @@ from core.db import (
     create_campaign,
     link_channel_to_campaign,
     list_joined_watch_channels,
+    list_recent_logs,
     record_join,
 )
 from schemas.neurocomment import CampaignCreate
@@ -97,9 +98,53 @@ async def test_a_kicked_channel_is_rejoined_on_the_next_pass(
         ("listener-1", "@b"),
         ("listener-1", "@a"),
     ]
-    # The log is honest either way: the stale row went, the fresh join is recorded.
+    # The log is honest either way: the disproven join is still counted (the RPC was
+    # spent), and the fresh one is recorded beside it.
     assert await list_joined_watch_channels("listener-1") == {"@a", "@b"}
-    assert await count_account_joins_since("listener-1", "1970-01-01") == 2
+    assert await count_account_joins_since("listener-1", "1970-01-01") == 3
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_a_channel_that_never_comes_back_stops_being_rejoined(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The re-join must converge on giving up, and the anti-freeze count must only grow.
+
+    A channel whose peer will not resolve refills the lost-access report on EVERY pass, and
+    every boot / Start / channel link is a pass. Deleting the join-log row to re-open the
+    re-join made the rolling-24h cap structurally unreachable here — one row out, one row
+    in, so the count stayed flat at 2 for ever and the brake never engaged. The bound is
+    now the pair's own spent attempts.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+    # @a is lost on every single pass — the shape of a kick from a channel whose handle
+    # stops resolving, which is what refills the report unconditionally.
+    monkeypatch.setattr(_runtime, "take_lost_access_channels", lambda _account_id: {"@a"})
+
+    counts: list[int] = []
+    for _ in range(6):
+        await _runtime.reconcile_neurocomment_runtime("listener-1")
+        await _drain_joins()
+        counts.append(await count_account_joins_since("listener-1", "1970-01-01"))
+
+    # Two joins of @a (the original plus one re-join) and one of @b, then silence.
+    assert exec_spy.joined == [
+        ("listener-1", "@a"),
+        ("listener-1", "@b"),
+        ("listener-1", "@a"),
+    ]
+    # Monotonic, which is what makes the account-wide cap a real backstop.
+    assert counts == sorted(counts)
+    assert counts[-1] == 3
+    logs = await list_recent_logs(limit=100)
+    exhausted = [e for e in logs if e.event == "neurocomment_listener_rejoin_exhausted"]
+    assert len(exhausted) == 1  # said once, not once per pass
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 

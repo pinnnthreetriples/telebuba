@@ -18,6 +18,8 @@ from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     create_account,
     create_campaign,
+    list_joined_watch_channels,
+    record_join,
     upsert_readiness,
 )
 from core.migration_steps_neurocomment import _add_neurocomment_channel_case_fold_index
@@ -374,3 +376,25 @@ def test_channel_fold_index_skips_a_db_without_the_link_table(
     engine = legacy_engine("empty-fold.db")
     with engine.begin() as connection:
         _add_neurocomment_channel_case_fold_index(connection)  # no table → returns, no raise.
+
+
+@pytest.mark.asyncio
+async def test_migration_45_adds_join_log_lost_at() -> None:
+    """The stamp that replaced deleting a disproven join, so the join cap keeps counting."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            row["name"]: row
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_join_log)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    # Nullable: an existing row means "this join still stands", which is what it meant.
+    assert columns["lost_at"]["notnull"] == 0
+    assert 45 in versions
+
+    await record_join("acc-1", watch_channel="@chan")
+    assert await list_joined_watch_channels("acc-1") == {"@chan"}

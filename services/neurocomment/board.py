@@ -23,6 +23,7 @@ from core.db import (
     list_campaign_channels,
     list_campaign_readiness,
     list_challenged_channels,
+    list_delivered_comments_since,
     list_linked_groups,
     list_posted_comments_since,
 )
@@ -101,8 +102,14 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         for account_id in account_ids
         if account_id in accounts
     ]
+    # The DELIVERED set, not ``posted``: the sweep stamps ``deleted_at`` on any row carrying
+    # a message id, so a comment mis-classified ``failed`` (its claim reclaimed mid-send)
+    # can trip the channel back-off while contributing nothing to the number meant to
+    # explain it — an unexplained back-off on the operator's board. The cards above keep
+    # counting only ``posted``, which is what "comments this account published" means.
+    delivered = (await list_delivered_comments_since(campaign_id, day_ago)).comments
     deleted_by_channel: dict[str, int] = {}
-    for comment in posted:
+    for comment in delivered:
         if comment.deleted_at:
             deleted_by_channel[comment.channel] = deleted_by_channel.get(comment.channel, 0) + 1
     rows = [

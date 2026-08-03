@@ -612,6 +612,8 @@
   "logEvent": {
     "neurocomment_posted": "Comment posted",
     "neurocomment_posted_after_reclaim": "Comment posted after its claim was reclaimed",
+    "neurocomment_posted_row_missing": "Comment posted but its record is gone",
+    "neurocomment_claim_lost_before_send": "Comment not sent: its claim was reclaimed first",
     "neurocomment_post_failed": "Comment failed",
     "neurocomment_post_unavailable": "Comment not sent — no connection to Telegram",
     "neurocomment_comment_deleted": "Comment deleted",
@@ -640,6 +642,7 @@
     "neurocomment_listener_join_failed": "Listener failed to join channel",
     "neurocomment_listener_join_flood": "Listener joins paused (flood control)",
     "neurocomment_listener_access_lost": "Listener lost access to channel, will re-join",
+    "neurocomment_listener_rejoin_exhausted": "Listener gave up re-joining channel",
     "neurocomment_join_daily_cap": "Daily join limit reached",
     "neurocomment_runtime_reconciled": "Engine reconciled",
     "neurocomment_channels_unwatched": "Channels not being watched",

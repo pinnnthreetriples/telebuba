@@ -55,6 +55,12 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingSettingsSecret
 
 
+# Longest stretch the pipeline may go without telling the reclaim it is alive. Any value
+# well under ``stale_claim_reclaim_seconds`` (900) works; 60s keeps the beat writes down to
+# one a minute even on an operator delay measured in hours.
+_CLAIM_BEAT_INTERVAL_SECONDS = 60.0
+
+
 class _GenOutcome(NamedTuple):
     """A generated comment, or ``None`` with the last attempt's failure reason."""
 
@@ -109,7 +115,7 @@ async def _generate_and_post(
             return
         image_b64 = image.image_b64
 
-    outcome = await _generate_acceptable(campaign, event.channel, event.text, image_b64=image_b64)
+    outcome = await _generate_acceptable(campaign, event, image_b64=image_b64)
     text = outcome.text
     if text is None:
         # An exhaustion caused by a 429 is the Gemini gateway's state, not this post's, so
@@ -133,15 +139,28 @@ async def _generate_and_post(
     # releases it — a delayed/cancelled attempt must not leave the hash reserved, or a
     # later regeneration of the same text is filtered as its own duplicate.
     try:
-        await asyncio.sleep(
+        alive = await _sleep_beating(
+            event,
             _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
         )
-        # The claim's only heartbeat, placed at the last moment before the send because
-        # everything ahead of it is the part that can outlast ``stale_claim_reclaim_seconds``
-        # on operator-set values inside the allowed ranges (the shared Gemini throttle, the
-        # reply delay above). Without it the sweep read a 15-minute-old ``created_at``, failed
-        # this very claim, and the send below then landed on a row already marked failed.
-        await touch_comment_claim(event.channel, event.post_id)
+        # The last beat, and the one that gates the send: everything ahead of it is beaten
+        # too (each generation round, and every slice of the delay above), so no operator
+        # value can put a live attempt past ``stale_claim_reclaim_seconds`` unnoticed. And
+        # the beat is now asked what it found: a claim that is no longer ``claimed`` has
+        # been reclaimed to ``failed`` and its quota slot handed back, so sending under it
+        # would publish a comment the account was never charged for and the campaign counts
+        # as a failure. Nobody else can take the post either — the reclaim marks ``failed``
+        # rather than deleting — so abandoning costs this one post and nothing more.
+        if not alive or not await touch_comment_claim(event.channel, event.post_id):
+            _remove_inflight(event.channel, text)
+            await release_sent_text(text)
+            await log_event(
+                "WARNING",
+                "neurocomment_claim_lost_before_send",
+                account_id=account_id,
+                extra={"channel": event.channel, "post_id": event.post_id},
+            )
+            return
         result = await _seams.execute(
             account_id,
             CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),
@@ -151,6 +170,25 @@ async def _generate_and_post(
         await release_sent_text(text)
         raise
     await _classify_post(event, account_id, text, result)
+
+
+async def _sleep_beating(event: NewPostEvent, seconds: float) -> bool:
+    """Wait ``seconds``, beating the claim between slices; ``False`` if the claim went.
+
+    The reply delay is the one long stretch the operator sets directly, and it is spent
+    INSIDE a claim — so a single beat placed after it covers nothing at all. Sliced instead,
+    a delay of any length keeps its claim alive, which is why the write schema needs no
+    arbitrary upper bound on it (and why the one it briefly had would have locked the
+    Settings form for values it had already accepted).
+    """
+    remaining = seconds
+    while remaining > 0:
+        if not await touch_comment_claim(event.channel, event.post_id):
+            return False
+        chunk = min(remaining, _CLAIM_BEAT_INTERVAL_SECONDS)
+        await asyncio.sleep(chunk)
+        remaining -= chunk
+    return True
 
 
 def _gemini_reason(result: GeminiResult) -> str:
@@ -164,8 +202,7 @@ def _gemini_reason(result: GeminiResult) -> str:
 
 async def _generate_acceptable(
     campaign: NeurocommentCampaign,
-    channel: str,
-    post_text: str,
+    event: NewPostEvent,
     *,
     image_b64: str | None = None,
 ) -> _GenOutcome:
@@ -180,8 +217,14 @@ async def _generate_acceptable(
     comments) is layered after it as a cross-account near-duplicate guard. A
     reserved-but-rejected text is released so a later attempt isn't filtered as its own
     duplicate. On exhaustion the last attempt's failure reason travels back for the log.
+
+    Takes the whole ``event`` because this loop is the longest stretch of the pipeline and
+    has to beat the claim while it runs: at the operator-settable ``le`` bounds one round is
+    ~245s (the shared Gemini throttle plus six timed-out attempts and their backoff), so
+    three rounds already outlive ``stale_claim_reclaim_seconds`` on their own.
     """
     nc = settings.neurocomment
+    channel = event.channel
     recent = await _recent_channel_comments(campaign.campaign_id, channel)
     now = datetime.now(UTC)
     # Comment generation always uses Gemini; read the operator's key from the DB
@@ -189,7 +232,12 @@ async def _generate_acceptable(
     secret = await load_warming_settings()
     reason: str | None = None
     for _ in range(nc.max_retries + 1):
-        request = _build_request(campaign.prompt, post_text, secret=secret, image_b64=image_b64)
+        # One beat per round, so the gap between beats is a single ``generate_text`` — the
+        # only await here that cannot be sliced, since it waits inside ``core.gemini``.
+        # Deliberately not acted on: a lost claim is settled at the send, and stopping here
+        # would need a whole new exhaustion reason for something the send already reports.
+        await touch_comment_claim(channel, event.post_id)
+        request = _build_request(campaign.prompt, event.text, secret=secret, image_b64=image_b64)
         generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:
             reason = _gemini_reason(generated)

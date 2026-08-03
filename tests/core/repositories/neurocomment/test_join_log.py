@@ -9,8 +9,9 @@ import pytest
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     count_account_joins_since,
-    forget_watch_channel_join,
+    list_exhausted_watch_channels,
     list_joined_watch_channels,
+    mark_watch_channel_join_lost,
     record_join,
 )
 
@@ -55,17 +56,55 @@ async def test_join_older_than_window_is_not_counted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_forget_watch_channel_join_drops_only_that_pair() -> None:
-    """A kick erases one account's membership of one channel — nothing else."""
+async def test_marking_a_join_lost_touches_only_that_pair() -> None:
+    """A kick disproves one account's membership of one channel — nothing else."""
     await record_join("acc-1", watch_channel="@a")
     await record_join("acc-1", watch_channel="@b")
     await record_join("acc-2", watch_channel="@a")
     await record_join("acc-1")  # a discussion-group join carries no watch channel
 
-    await forget_watch_channel_join("acc-1", "@a")
+    assert await mark_watch_channel_join_lost("acc-1", "@a") == 1
 
     assert await list_joined_watch_channels("acc-1") == {"@b"}
     assert await list_joined_watch_channels("acc-2") == {"@a"}
-    # The rolling-24h count drops by exactly the one join that no longer stands.
+    # The rolling-24h count does NOT drop: the join RPC was spent, and the anti-freeze cap
+    # is a budget of RPCs. Deleting the row instead made the cap unreachable for a channel
+    # that keeps failing — one row out, one row in, net zero, for ever.
     past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
-    assert await count_account_joins_since("acc-1", past) == 2
+    assert await count_account_joins_since("acc-1", past) == 3
+
+
+@pytest.mark.asyncio
+async def test_marking_a_join_lost_is_idempotent_within_one_report() -> None:
+    """Both refill sites report the same loss in one pass; only the first spends an attempt."""
+    await record_join("acc-1", watch_channel="@a")
+
+    assert await mark_watch_channel_join_lost("acc-1", "@a") == 1
+    assert await mark_watch_channel_join_lost("acc-1", "@a") is None
+    # Nor is there anything to charge when the pair never landed a join row at all.
+    assert await mark_watch_channel_join_lost("acc-1", "@never") is None
+
+
+@pytest.mark.asyncio
+async def test_a_lost_join_never_widens_to_the_group_joins() -> None:
+    """``watch_channel`` NULL renders ``IS NULL``, which would swallow every group join."""
+    await record_join("acc-1")
+    await record_join("acc-1")
+
+    assert await mark_watch_channel_join_lost("acc-1", "") is None
+    assert await list_exhausted_watch_channels("acc-1", 1) == set()
+
+
+@pytest.mark.asyncio
+async def test_exhausted_channels_are_the_ones_with_no_attempts_left() -> None:
+    """The attempt counter is the pair's own lost rows, so it survives a restart."""
+    await record_join("acc-1", watch_channel="@a")
+    await mark_watch_channel_join_lost("acc-1", "@a")
+    await record_join("acc-1", watch_channel="@b")
+    await mark_watch_channel_join_lost("acc-1", "@b")
+    await record_join("acc-1", watch_channel="@b")  # the re-join
+    assert await mark_watch_channel_join_lost("acc-1", "@b") == 2
+
+    assert await list_exhausted_watch_channels("acc-1", 2) == {"@b"}
+    assert await list_exhausted_watch_channels("acc-1", 3) == set()
+    assert await list_exhausted_watch_channels("acc-2", 2) == set()
