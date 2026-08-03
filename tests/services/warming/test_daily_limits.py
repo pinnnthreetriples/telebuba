@@ -30,7 +30,7 @@ from schemas.warming import (
     WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _runtime, _seams, _state, _steps
+from services.warming import _loop, _reservation, _runtime, _seams, _state, _steps
 from services.warming._state import _set_state
 from tests.services.warming._support import (
     _BlockOnce,
@@ -554,7 +554,7 @@ async def test_a_second_cancel_during_the_reconcile_keeps_the_original_exception
     task = asyncio.create_task(_iteration())
 
     with (
-        caplog.at_level(logging.WARNING, logger="services.warming._loop"),
+        caplog.at_level(logging.WARNING, logger="services.warming._reservation"),
         pytest.raises(RuntimeError),
     ):
         await task
@@ -633,14 +633,14 @@ async def test_the_reconcile_reports_each_of_its_three_outcomes(
     async def capture(level: str, code: str, **kwargs: object) -> None:
         logged.append((level, code, kwargs["extra"]))
 
-    monkeypatch.setattr(_loop, "log_event", capture)
+    monkeypatch.setattr(_reservation, "log_event", capture)
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
         WarmingStateWrite(account_id="acc-1", state="active", run_id="run-1", daily_actions=0),
     )
     today = datetime.now(UTC).date().isoformat()
 
-    await _loop._reconcile_reservation("acc-1", "active", (0, today), spent, run_id=run_id)
+    await _reservation._reconcile_reservation("acc-1", "active", (0, today), spent, run_id=run_id)
 
     expected = [("WARNING", event, {"spent": spent, "daily_actions": spent})] if event else []
     assert logged == expected
@@ -664,7 +664,7 @@ async def test_a_failing_reconcile_never_replaces_the_cycles_own_exception(
     _no_quiet_days(monkeypatch)
     crash = _CrashAfter(2)
     monkeypatch.setattr(_seams, "execute", crash.execute)
-    real_fetch = _loop.fetch_warming_state
+    real_fetch = _reservation.fetch_warming_state
 
     async def fetch_then_raise(account_id: str) -> WarmingStateRecord | None:
         # Only the handler's read: the pre-cycle one runs before any action lands,
@@ -673,7 +673,7 @@ async def test_a_failing_reconcile_never_replaces_the_cycles_own_exception(
             raise boom
         return await real_fetch(account_id)
 
-    monkeypatch.setattr(_loop, "fetch_warming_state", fetch_then_raise)
+    monkeypatch.setattr(_reservation, "fetch_warming_state", fetch_then_raise)
     await _seed_warming_account()
 
     # No hand-back is possible, so the day is forfeited — but the cycle's own
