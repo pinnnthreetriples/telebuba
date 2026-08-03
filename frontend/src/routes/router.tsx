@@ -53,9 +53,9 @@ const protectedRoute = createRoute({
 // error bubbled to the protected layout's boundary, which reported it as a failed
 // SESSION check, stripped the nav and offered a sign-in that landed back on the same
 // crashing page. Scoped per page and NOT the router-wide `defaultErrorComponent`: that
-// also covered /login and the root, where there is no nav to recover through, and it
-// swallowed those crashes before React's uncaught-error path could report them to the
-// error tracker.
+// also covered /login and the root, whose copy would point at a nav those two matches do
+// not have. They keep the boundary they had before this branch either way — the router
+// wraps the whole match tree in its own `CatchBoundary` (`MatchesInner`).
 const indexRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/',

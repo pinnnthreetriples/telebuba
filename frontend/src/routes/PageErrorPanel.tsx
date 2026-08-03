@@ -6,9 +6,10 @@ import { i18n } from '@/shared/i18n';
 // all and any render error bubbled to the protected layout's, which announced a
 // failed SESSION check, stripped the nav and offered a sign-in that navigates back
 // to the same crashing page. The copy points at that nav, which is why this must not
-// be the router-wide default: on /login there is no nav, and catching a crash there
-// would only hide it from the error tracker. Only translated strings are rendered —
-// never the thrown error, which can carry request detail.
+// be the router-wide default: on /login and the root there is no nav, and a crash there
+// is handled above the match by the router's own top-level boundary regardless. Only
+// translated strings are rendered — never the thrown error, which can carry request
+// detail.
 export function PageErrorPanel() {
   return (
     <div role="alert" className="p-8 text-[13px] text-ink">

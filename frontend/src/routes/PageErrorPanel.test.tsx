@@ -27,6 +27,9 @@ test('every page inside the nav shell carries the page-error boundary', () => {
   for (const id of pages) {
     expect(router.routesById[id].options.errorComponent).toBe(PageErrorPanel);
   }
+  // And on no route that has no nav around it, however it gets there.
+  expect(router.routesById['/login'].options.errorComponent).toBeUndefined();
+  expect(router.routesById.__root__.options.errorComponent).toBeUndefined();
 });
 
 test('a crash outside the nav shell is not dressed up as a page error', async () => {

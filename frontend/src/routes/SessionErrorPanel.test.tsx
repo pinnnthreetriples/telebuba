@@ -103,3 +103,45 @@ test('a crashing page is reported as a page error, not as a failed session check
   expect(screen.queryByText(/Не удалось проверить сессию/)).not.toBeInTheDocument();
   expect(screen.getByRole('navigation')).toBeInTheDocument();
 });
+
+test('Retry is disabled until the retry it started finishes', async () => {
+  let guardCalls = 0;
+  let releaseGuard = (): void => {};
+  const secondCall = new Promise<void>((resolve) => {
+    releaseGuard = resolve;
+  });
+  render(
+    <RouterProvider
+      router={buildRouter(
+        async () => {
+          guardCalls += 1;
+          // The retry parks here so the in-flight state is observable: the router keeps
+          // `isLoading` true for the whole guard run and leaves this panel mounted until
+          // the pending matches commit.
+          if (guardCalls > 1) await secondCall;
+          throw new Error('session check failed');
+        },
+        () => (
+          <div>страница</div>
+        ),
+      )}
+    />,
+  );
+
+  const retry = await screen.findByRole('button', { name: 'Повторить' });
+  await waitFor(() => {
+    expect(retry).toBeEnabled();
+  });
+
+  await userEvent.click(retry);
+
+  // Otherwise a second click stacked another invalidate → guard run on top of the first.
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeDisabled();
+  });
+
+  releaseGuard();
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeEnabled();
+  });
+});
