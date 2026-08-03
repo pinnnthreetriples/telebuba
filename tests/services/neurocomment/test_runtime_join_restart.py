@@ -8,9 +8,12 @@ no-op counted against the rolling-24h cap and starved the joins that mattered.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
-from core.db import (
+from core.db import (  # type: ignore[attr-defined]
+    _get_engine,
     count_account_joins_since,
     create_campaign,
     link_channel_to_campaign,
@@ -145,6 +148,102 @@ async def test_a_channel_that_never_comes_back_stops_being_rejoined(
     logs = await list_recent_logs(limit=100)
     exhausted = [e for e in logs if e.event == "neurocomment_listener_rejoin_exhausted"]
     assert len(exhausted) == 1  # said once, not once per pass
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+def _age_losses(account_id: str, hours: float) -> None:
+    """Push a listener's stamped losses ``hours`` into the past, keeping them distinct.
+
+    Distinct because the attempt count is over DISTINCT ``lost_at``: collapsing them onto
+    one instant would read as a single attempt whether the window applies or not.
+    """
+    with _get_engine().begin() as connection:
+        ids = [
+            int(row[0])
+            for row in connection.exec_driver_sql(
+                "SELECT id FROM neurocomment_join_log WHERE account_id = ? "
+                "AND lost_at IS NOT NULL ORDER BY id",
+                (account_id,),
+            )
+        ]
+        for offset, row_id in enumerate(ids):
+            aged = datetime.now(UTC) - timedelta(hours=hours, minutes=offset)
+            connection.exec_driver_sql(
+                "UPDATE neurocomment_join_log SET lost_at = ? WHERE id = ?",
+                (aged.isoformat(), row_id),
+            )
+
+
+@pytest.mark.asyncio
+async def test_the_give_up_expires_once_its_losses_leave_the_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The give-up must self-heal, because nothing in the product can clear it by hand.
+
+    Nothing ever resets ``lost_at`` (unlike both sibling budgets, which are zeroed on
+    approval and on regained access), and the retention purge may never run at all —
+    ``retention_days=0`` keeps rows for ever. So an all-time count made two transient
+    losses months apart a permanent silence: an admin re-invite, relinking the channel,
+    a campaign restart and every reconcile all leave it exhausted.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+    monkeypatch.setattr(_runtime, "take_lost_access_channels", lambda _account_id: {"@a"})
+
+    for _ in range(4):
+        await _runtime.reconcile_neurocomment_runtime("listener-1")
+        await _drain_joins()
+    # Budget spent: the original join plus one re-join, then the pass gives up.
+    assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@a")]
+
+    # A week passes with the channel healthy — the same rows, still counted by the join cap.
+    _age_losses("listener-1", hours=200.0)
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _drain_joins()
+
+    assert exec_spy.joined == [
+        ("listener-1", "@a"),
+        ("listener-1", "@a"),
+        ("listener-1", "@a"),  # eligible again, without an operator touching the database
+    ]
+    assert await count_account_joins_since("listener-1", "1970-01-01") == 3
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_a_loss_with_no_join_row_to_charge_is_reported_not_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pair stays cached (correctly) and unwatched (silently) — so it must say so.
+
+    Reachable whenever a cached pair carries no standing row: the ``already_participant``
+    route caches without recording one, and the retention purge can take one away. Not
+    evicting is deliberate — with nothing to count, re-opening the pair would be a re-join
+    no budget could ever bound — but the channel then receives nothing until a restart.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _drain_joins()
+    assert exec_spy.joined == [("listener-1", "@a")]
+    # The retention purge takes the standing row; the in-memory cache still holds the pair.
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql("DELETE FROM neurocomment_join_log")
+    monkeypatch.setattr(_runtime, "take_lost_access_channels", lambda _account_id: {"@a"})
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _drain_joins()
+
+    assert exec_spy.joined == [("listener-1", "@a")]  # not re-joined, and not re-charged
+    events = [e.event for e in await list_recent_logs(limit=100)]
+    assert "neurocomment_listener_access_lost_untracked" in events
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 

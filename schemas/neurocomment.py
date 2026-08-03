@@ -427,12 +427,7 @@ class NeurocommentSettingsUpdate(BaseModel):
     max_comments_per_hour: int = Field(ge=1)
     max_comments_per_channel_per_day: int = Field(ge=0)
     reply_delay_min_seconds: float = Field(ge=0)
-    # Deliberately unbounded above: the delay is spent INSIDE a claim, and that is handled
-    # where the waiting happens — ``_generate._sleep_beating`` spends it in slices with a
-    # claim heartbeat between them, so no length outlives ``stale_claim_reclaim_seconds``.
-    # A cap here would instead lock the whole Settings form: it seeds from the unbounded
-    # read model, the client schema allows 3600, and every save resends the full object, so
-    # one legally stored value above the cap would 422 every unrelated edit, no field marked.
+    # No upper bound, deliberately — ``_generate._sleep_beating``'s docstring says why.
     reply_delay_max_seconds: float = Field(ge=0)
     min_trust_score: int = Field(ge=0, le=100)
 

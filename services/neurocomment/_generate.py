@@ -234,9 +234,12 @@ async def _generate_acceptable(
     for _ in range(nc.max_retries + 1):
         # One beat per round, so the gap between beats is a single ``generate_text`` — the
         # only await here that cannot be sliced, since it waits inside ``core.gemini``.
-        # Deliberately not acted on: a lost claim is settled at the send, and stopping here
-        # would need a whole new exhaustion reason for something the send already reports.
-        await touch_comment_claim(channel, event.post_id)
+        # Acted on, because the pre-send gate WILL abandon once the claim is gone: every
+        # Gemini call from here on is guaranteed waste, and there are up to three rounds of
+        # six paid attempts left. Reported as an exhaustion reason, which is what that field
+        # is for; the send's own abandon line stays for the claims lost after this point.
+        if not await touch_comment_claim(channel, event.post_id):
+            return _GenOutcome(None, "claim_lost")
         request = _build_request(campaign.prompt, event.text, secret=secret, image_b64=image_b64)
         generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:

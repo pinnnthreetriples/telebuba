@@ -13,6 +13,7 @@ the join cache so tests that monkeypatch ``_runtime._join_jitter_seconds`` /
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 from core.config import settings
 from core.db import (
@@ -42,10 +43,16 @@ async def run_join_pass(listener_account_id: str) -> None:
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
     channels = (await list_active_watch_channels()).channels
-    max_attempts = settings.neurocomment.listener_rejoin_max_attempts
+    nc = settings.neurocomment
+    max_attempts = nc.listener_rejoin_max_attempts
+    # One window value for both the charge and the verdict below, read once, so a pass can
+    # never charge an attempt against a boundary the eligibility read has already moved past.
+    since_iso = (
+        datetime.now(UTC) - timedelta(hours=nc.listener_rejoin_attempt_window_hours)
+    ).isoformat()
     # Before the seeding below, so a channel we were kicked from is no longer in either
     # cache by the time the loop reads them.
-    await _mark_lost_channels(listener_account_id, max_attempts)
+    await _mark_lost_channels(listener_account_id, max_attempts, since_iso)
     # Seed the cache from the join log: Telegram answers "ok" (never already_participant)
     # when a public channel is re-joined, so before this every restart re-sent the whole
     # watch set as real joins and pinned the account at its rolling-24h cap.
@@ -57,7 +64,7 @@ async def run_join_pass(listener_account_id: str) -> None:
     # the log, not from the in-memory cache, because the trigger for a fresh pass IS a
     # restart / Start / channel edit — a memory-only verdict would be forgiven by the very
     # events that re-run this, which is how the loop stayed unbounded.
-    given_up = await list_exhausted_watch_channels(listener_account_id, max_attempts)
+    given_up = await list_exhausted_watch_channels(listener_account_id, max_attempts, since_iso)
     first_join = True
     for channel in channels:
         if (listener_account_id, channel) in _runtime._JOINED_CHANNELS:  # noqa: SLF001 - peer module
@@ -115,7 +122,11 @@ async def run_join_pass(listener_account_id: str) -> None:
         )
 
 
-async def _mark_lost_channels(listener_account_id: str, max_attempts: int) -> None:
+async def _mark_lost_channels(
+    listener_account_id: str,
+    max_attempts: int,
+    since_iso: str,
+) -> None:
     """Disprove the standing joins of channels Telegram proved the listener is out of.
 
     Both caches say "joined" forever otherwise: the in-memory pair set for the life of
@@ -128,9 +139,10 @@ async def _mark_lost_channels(listener_account_id: str, max_attempts: int) -> No
     Bounded by attempts, not by the rolling-24h join cap: that cap counts joins per
     ACCOUNT, and a looping channel spends exactly one join per pass while its stamped row
     stays counted, so the cap can never accumulate against it. The attempt budget is the
-    brake, spelled the way the approval budget is (``listener_rejoin_max_attempts``, same
-    default of 2), and it is spent on the LOSS rather than on the poke, so a channel whose
-    peer never resolves converges on "leave it alone" instead of looping.
+    brake (``listener_rejoin_max_attempts``), and it is spent on the LOSS rather than on the
+    poke, so a channel whose peer never resolves converges on "leave it alone" instead of
+    looping. Only losses inside ``since_iso`` count, so that verdict expires by itself
+    rather than silencing a channel for ever the way an all-time count did.
 
     The in-memory eviction is deliberately tied to the stamp landing: with no standing join
     to disprove there is also nothing to count, so re-opening the pair would be a re-join
@@ -139,10 +151,22 @@ async def _mark_lost_channels(listener_account_id: str, max_attempts: int) -> No
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
     for channel in _runtime.take_lost_access_channels(listener_account_id):
-        attempts = await mark_watch_channel_join_lost(listener_account_id, channel)
+        attempts = await mark_watch_channel_join_lost(listener_account_id, channel, since_iso)
         if attempts is None:
-            # Nothing new: both refill sites report the same loss inside one pass, and a
-            # loss on a pair that never landed a join row has no attempt to charge.
+            # Nothing to charge, so nothing to evict either (see above) — and if the pair is
+            # ALSO cached as joined, the loop below skips it and the channel goes unwatched
+            # until a restart. Reachable via ``already_participant`` (caches the pair, records
+            # no row) and after a retention purge takes a standing row. Gated on the cache
+            # because the other two ways here are harmless: an uncached channel is re-joined
+            # by the loop anyway, and a given-up one was evicted when its last row was
+            # stamped, so it would otherwise print on every reconcile for ever.
+            if (listener_account_id, channel) in _runtime._JOINED_CHANNELS:  # noqa: SLF001 - peer module
+                await log_event(
+                    "INFO",
+                    "neurocomment_listener_access_lost_untracked",
+                    account_id=listener_account_id,
+                    extra={"channel": channel},
+                )
             continue
         _runtime._JOINED_CHANNELS.discard((listener_account_id, channel))  # noqa: SLF001 - peer module
         if attempts >= max_attempts:

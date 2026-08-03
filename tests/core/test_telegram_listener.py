@@ -546,6 +546,42 @@ async def test_only_a_proven_kick_is_reported_as_lost_access(
 
 
 @pytest.mark.asyncio
+async def test_stopping_a_listener_drops_only_its_own_undrained_losses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A loss belongs to the subscription that witnessed it, so stopping must discard it.
+
+    This is the account-switch and shutdown path: handing a previous listener's undrained
+    losses to whatever runs next would charge a re-join attempt against an account that
+    never saw the channel. The other account's report must survive untouched, and the drop
+    has to happen even when there is no cached handler to detach.
+    """
+
+    class KickedClient(FakeClient):
+        async def get_peer_id(self, channel: str) -> int:
+            self.peer_id_calls.append(channel)
+            raise errors.ChannelPrivateError(request=None)
+
+    client = KickedClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-a", ["@kicked"], on_post)
+    await subscribe_posts("listener-b", ["@kicked"], on_post)
+    # A third account with a witnessed loss but no handler — the early-return path.
+    listener_mod._LOST_ACCESS["listener-c"] = {"@kicked"}
+
+    await stop_post_listener("listener-a")
+    await stop_post_listener("listener-c")
+
+    assert take_lost_access_channels("listener-a") == set()
+    assert take_lost_access_channels("listener-c") == set()
+    assert take_lost_access_channels("listener-b") == {"@kicked"}
+
+
+@pytest.mark.asyncio
 async def test_callback_error_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     client = FakeClient()
     _patch_client(monkeypatch, client)

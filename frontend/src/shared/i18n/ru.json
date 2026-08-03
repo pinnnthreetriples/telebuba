@@ -643,6 +643,7 @@
     "neurocomment_listener_join_failed": "Слушатель не вступил в канал",
     "neurocomment_listener_join_flood": "Вступления слушателя приостановлены (флуд-контроль)",
     "neurocomment_listener_access_lost": "Слушатель потерял доступ к каналу, вступит заново",
+    "neurocomment_listener_access_lost_untracked": "Слушатель потерял канал без записи о вступлении; вне прослушивания до перезапуска",
     "neurocomment_listener_rejoin_exhausted": "Слушатель прекратил попытки вернуться в канал",
     "neurocomment_join_daily_cap": "Достигнут суточный лимит вступлений",
     "neurocomment_runtime_reconciled": "Движок восстановлен",

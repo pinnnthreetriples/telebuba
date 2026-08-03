@@ -28,6 +28,7 @@ from core.db import (  # type: ignore[attr-defined]
     mark_comment_failed,
     mark_comments_deleted,
     record_comment_msg_id,
+    release_claim,
     touch_comment_claim,
 )
 from schemas.telegram_actions import CheckMessagesAliveResult, NewPostEvent
@@ -285,6 +286,87 @@ async def test_the_send_is_abandoned_when_the_claim_is_no_longer_ours(
     assert row.comment_msg_id is None  # nothing was published, so there is no id to keep
     logs = await list_recent_logs(limit=50)
     assert [e for e in logs if e.event == "neurocomment_claim_lost_before_send"]
+
+
+class _RowLosingComment(_CommentStub):
+    """The claim row disappears while the send is in flight — the third commit path.
+
+    Only ``release_claim`` deletes a row and only this worker calls it, so the real thing
+    should be unreachable; the branch exists because if it ever happens a live comment is
+    under the post with nothing at all recording it.
+    """
+
+    async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
+        await release_claim("@a", 10)
+        return await super().execute(account_id, action)
+
+
+@pytest.mark.asyncio
+async def test_a_delivery_onto_a_vanished_row_is_reported_as_the_error_it_is(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Exactly one line per delivery, on the third path too — and the RIGHT line.
+
+    Without the ``None`` check the missing row reaches ``record.status`` instead, and the
+    blanket handler downgrades it to ``neurocomment_post_commit_failed`` — a generic commit
+    error for the one case where a comment is live and completely unrecorded.
+    """
+    await _make_campaign("@a", "acc-1")
+    comment = _RowLosingComment(status="ok")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@a", post_id=10, text="hi there"))
+
+    assert len(comment.posts) == 1  # the comment IS live under the post
+    assert await fetch_comment("@a", 10) is None  # ... and nothing records it
+    events = [e.event for e in await list_recent_logs(limit=50)]
+    assert "neurocomment_posted_row_missing" in events
+    assert "neurocomment_post_commit_failed" not in events
+
+
+class _ClaimLosingGen(_GenStub):
+    """The claim is reclaimed during the first round, which is then rejected on word count.
+
+    So round two's beat is the first thing to find the claim gone — exactly the case the
+    in-loop beat used to notice and throw away.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("word " * 99, "a nice comment")  # too_long, then acceptable
+
+    async def generate_text(self, _request: object) -> GeminiResult:
+        if self.calls == 0:
+            # A cutoff that catches even a beaten claim: a misfire, or the crash-between-
+            # send-and-commit it cannot be told apart from.
+            await _sweep._reclaim_stale_claims(datetime.now(UTC) + timedelta(seconds=1000))
+        return await super().generate_text(_request)
+
+
+@pytest.mark.asyncio
+async def test_a_claim_lost_mid_ladder_stops_paying_for_more_generations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The in-loop beat's answer is acted on, because the pre-send gate will abandon anyway.
+
+    Every Gemini call after the claim goes is guaranteed waste — up to three rounds of six
+    paid attempts, ~735s of wall clock — spent on a comment that cannot be sent. Reported
+    as an exhaustion ``reason``, which is what that field is for.
+    """
+    await _make_campaign("@a", "acc-1")
+    comment = _CommentStub(status="ok")
+    gen = _ClaimLosingGen()
+    _patch_io(monkeypatch, comment=comment, gen=gen)
+
+    await engine.handle_new_post(NewPostEvent(channel="@a", post_id=10, text="hi there"))
+
+    assert gen.calls == 1  # round two never pays Gemini, because round two cannot send
+    assert comment.posts == []
+    row = await fetch_comment("@a", 10)
+    assert row is not None
+    assert row.status == "failed"
+    logs = await list_recent_logs(limit=50)
+    exhausted = [e for e in logs if e.event == "neurocomment_generation_exhausted"]
+    assert [e.extra.get("reason") for e in exhausted] == ["claim_lost"]
 
 
 @pytest.mark.asyncio

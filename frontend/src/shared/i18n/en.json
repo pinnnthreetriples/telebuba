@@ -642,6 +642,7 @@
     "neurocomment_listener_join_failed": "Listener failed to join channel",
     "neurocomment_listener_join_flood": "Listener joins paused (flood control)",
     "neurocomment_listener_access_lost": "Listener lost access to channel, will re-join",
+    "neurocomment_listener_access_lost_untracked": "Listener lost a channel it holds no join record for; unwatched until restart",
     "neurocomment_listener_rejoin_exhausted": "Listener gave up re-joining channel",
     "neurocomment_join_daily_cap": "Daily join limit reached",
     "neurocomment_runtime_reconciled": "Engine reconciled",

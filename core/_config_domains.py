@@ -138,14 +138,22 @@ class NeurocommentSettings(BaseSettings):
     # sweep drops the channel from its campaign.
     join_request_retry_hours: float = Field(default=24.0, gt=0.0)
     join_request_max_attempts: int = Field(default=2, ge=1)
-    # How many joins the LISTENER may spend losing one watch channel before it leaves that
-    # channel alone for good. Same shape and same default as the approval budget above,
-    # for the same reason: a channel whose peer will not resolve refills the lost-access
-    # report on every reconcile, and every boot / Start / channel edit is a reconcile — so
-    # without a bound the pass re-joins it for ever. The rolling-24h cap cannot be that
-    # bound, because it counts joins per ACCOUNT and one looping channel spends only one
-    # join per pass. Counted off the join log's own lost rows, so it survives a restart.
+    # How many losses of one watch channel the LISTENER absorbs, inside the window below,
+    # before it leaves that channel alone. Needed because a channel whose peer will not
+    # resolve refills the lost-access report on every reconcile, and every boot / Start /
+    # channel edit is a reconcile — so without a bound the pass re-joins it for ever. The
+    # rolling-24h cap cannot be that bound: it counts joins per ACCOUNT and one looping
+    # channel spends only one join per pass. Counted off the join log's own lost rows, so
+    # it survives a restart.
+    # NOT the same arithmetic as the approval budget above, despite the same default: there
+    # the original request IS attempt 1, so 2 sends two requests, while here the original
+    # join is already spent, so 2 buys exactly ONE re-join (and 1 buys none at all).
     listener_rejoin_max_attempts: int = Field(default=2, ge=1)
+    # Window the losses above are counted over. Without it the count was every loss for all
+    # time and nothing ever cleared it, so a channel healthy for months was given up on its
+    # first later blip, with no in-product way back. A week: two losses that close together
+    # is a channel genuinely gone, while losses further apart are unrelated blips.
+    listener_rejoin_attempt_window_hours: float = Field(default=168.0, gt=0.0)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
     # Cap on how many recent posted comments the board's published-comments feed
