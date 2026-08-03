@@ -134,6 +134,35 @@ def test_partial_backup_never_takes_a_keep_slot_from_a_good_one(
     assert list(backup_dir.glob("*.part")) == []  # and the leftover was swept
 
 
+def test_chronic_failure_leaves_at_most_one_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated failures must not pile up one partial per interval.
+
+    The sweep has to run on ENTRY: a raising run never reaches the pruner, and every
+    run stamps a fresh filename, so sweeping only on success leaves one file per
+    interval — each up to the full size of the database — on the volume holding the
+    sole datastore, for as long as the failure lasts. The loop retries forever.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+
+    def _partial_then_enospc(_connection: object, path: Path) -> None:
+        path.write_bytes(b"x" * 1024)  # sqlite had already written part of the copy
+        msg = "no space left on device"
+        raise OSError(msg)
+
+    monkeypatch.setattr("core.db._vacuum_into", _partial_then_enospc)
+    for index in range(5):
+        with pytest.raises(OSError, match="no space left"):
+            run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
+
+    # Exactly one: the last run's own leftover. The four before it were swept.
+    assert len(list(backup_dir.glob("*.part"))) == 1
+
+
 @pytest.mark.asyncio
 async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch) -> None:
     # Sleep almost forever so cancellation, not a real interval, ends the task.

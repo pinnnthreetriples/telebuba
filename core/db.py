@@ -131,9 +131,13 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
         target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
         partial = target.with_name(target.name + _BACKUP_PARTIAL_SUFFIX)
-        # VACUUM INTO refuses an existing output, so clear a leftover from an
-        # earlier crash first. It holds no long lock, so the copy is safe online.
-        partial.unlink(missing_ok=True)
+        # Sweep on ENTRY, not after a successful publish: a run that raises never
+        # gets that far, and every run stamps a fresh name, so partials would pile
+        # up one full-DB-sized file per interval on the volume holding the sole
+        # datastore. This also clears our own name, which VACUUM INTO refuses to
+        # overwrite. VACUUM INTO holds no long lock, so the copy is safe online.
+        for orphan in backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}{_BACKUP_PARTIAL_SUFFIX}"):
+            orphan.unlink(missing_ok=True)
         _vacuum_into(connection, partial)
     partial.replace(target)  # atomic publish: only a complete file gets the real name.
     _prune_backups(backup_dir)
@@ -141,10 +145,8 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
 
 
 def _prune_backups(backup_dir: Path) -> None:
-    # Leftover partials (a crash mid-vacuum) are not backups: the glob below cannot
-    # match them, and they are swept here so a chronic failure cannot pile them up.
-    for orphan in backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}{_BACKUP_PARTIAL_SUFFIX}"):
-        orphan.unlink(missing_ok=True)
+    # A partial is never ranked as a backup: the glob below cannot match the
+    # ``.part`` suffix. Sweeping them is the caller's job, on entry.
     backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
     # max(0, ...): a negative count is not "delete nothing" in a slice, it means
     # "all but the last N" — under the limit that deleted the oldest backups.
@@ -163,8 +165,11 @@ async def run_db_maintenance_loop() -> None:
         except Exception as exc:  # one bad run must not end maintenance for the process.
             logger.exception("db maintenance run failed; retrying next interval")
             # The stdlib logger above is file-only by design (see core/logging.py), so
-            # on its own it means the loop retries forever with no Logs row and no
-            # Sentry event. Exception type only — the traceback, which can carry file
+            # without this the loop retries forever with no Logs row and no Sentry
+            # event. This writes INTO the database whose maintenance just failed, so on
+            # the headline scenario (disk full) the row insert fails too, log_event
+            # swallows it, and the surface is Sentry — or, with no DSN configured,
+            # debug.log alone. Exception type only: the traceback, which can carry file
             # paths, stays in debug.log.
             from core.logging import log_event  # noqa: PLC0415 - avoids an import cycle
 
