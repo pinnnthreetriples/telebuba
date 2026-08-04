@@ -31,7 +31,11 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   const { data } = useQuery(proxyPoolQueryOptions());
   const remove = useMutation(deleteProxyMutation());
   const check = useMutation(checkProxyMutation());
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // A Set, not one id: re-check and delete are per card and both can be in flight
+  // at once. With a single string the second card's click cleared the first card's
+  // spinner and re-enabled both its buttons mid-request, and the first response to
+  // land cleared the OTHER card's spinner.
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [toDelete, setToDelete] = useState<ProxyRead | null>(null);
 
   const proxies = data?.proxies ?? [];
@@ -41,29 +45,34 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   const invalidate = () => {
     invalidateAccountViews(queryClient);
   };
+  const markBusy = (id: string, busy: boolean) => {
+    setBusyIds((ids) => {
+      const next = new Set(ids);
+      if (busy) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+  // mutateAsync, not mutate+onSettled: one useMutation is ONE callback slot, so
+  // acting on a second card took the slot over and the first card's invalidate was
+  // dropped — a re-checked proxy kept its stale status, a deleted one stayed on
+  // screen. A promise per call also captures its own id, not the hook's latest
+  // variables. The global mutationCache still toasts the failure; .catch only
+  // keeps the rejection from escaping as unhandled.
+  const runOnCard = (id: string, call: Promise<unknown>) => {
+    markBusy(id, true);
+    void call
+      .finally(() => {
+        markBusy(id, false);
+        invalidate();
+      })
+      .catch(() => undefined);
+  };
   const onDelete = (id: string) => {
-    setBusyId(id);
-    remove.mutate(
-      { path: { proxy_id: id } },
-      {
-        onSettled: () => {
-          setBusyId(null);
-          invalidate();
-        },
-      },
-    );
+    runOnCard(id, remove.mutateAsync({ path: { proxy_id: id } }));
   };
   const onCheck = (id: string) => {
-    setBusyId(id);
-    check.mutate(
-      { path: { proxy_id: id } },
-      {
-        onSettled: () => {
-          setBusyId(null);
-          invalidate();
-        },
-      },
-    );
+    runOnCard(id, check.mutateAsync({ path: { proxy_id: id } }));
   };
 
   return (
@@ -140,7 +149,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             <ProxyCard
               key={proxy.id}
               proxy={proxy}
-              busy={busyId === proxy.id}
+              busy={busyIds.has(proxy.id)}
               onDelete={() => {
                 setToDelete(proxy);
               }}
