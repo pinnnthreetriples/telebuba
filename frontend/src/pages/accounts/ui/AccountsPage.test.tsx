@@ -325,6 +325,60 @@ test('deleting one row does not re-enable another row mid-check', async () => {
   expect(screen.getAllByTitle('Проверить')[0]).toBeDisabled();
 });
 
+test("a second delete does not swallow the first row's list refresh", async () => {
+  // remove.mutate(vars, {onSettled}) put the handler in the hook's ONE observer
+  // slot. The delete modal closes on the same tick, so a second row's delete is
+  // immediately reachable: it took the slot over and the first row's invalidate()
+  // never ran, leaving the deleted account on screen.
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 2, active: 2, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse({ items: [account('acc-1'), account('acc-2')], next_cursor: null }),
+      );
+    }
+    if (request.method === 'DELETE') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-2')).toBeInTheDocument();
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByTitle('Удалить')[index]!);
+    await userEvent.click(screen.getByText('Удалить'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+  // Both rows are being deleted, so neither can be acted on again.
+  expect(screen.getAllByTitle('Удалить')[0]).toBeDisabled();
+  expect(screen.getAllByTitle('Удалить')[1]).toBeDisabled();
+
+  // Row 2 settles first, then row 1 — the late one must still refresh the list.
+  releases[1]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(listGets()).toBeGreaterThan(1);
+  });
+  const afterSecond = listGets();
+  releases[0]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(listGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
 test('the add button opens the add-account wizard', async () => {
   routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
   renderWithClient(<AccountsPage />);

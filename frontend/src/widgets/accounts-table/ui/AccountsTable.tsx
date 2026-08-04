@@ -89,9 +89,11 @@ export function AccountsTable({
 }: AccountsTableProps) {
   const { t } = useTranslation();
 
-  // Not memoized: every dependency (`t`, `busyIds` and all four callbacks — the
-  // page passes two as inline arrows) is a fresh identity per parent render, so
-  // a useMemo here could never hit and only claimed otherwise.
+  // Not memoized: the page passes two of the four callbacks as inline arrows, so
+  // those alone are a fresh identity on every parent render and a useMemo here
+  // could never hit — it would only claim otherwise. (`busyIds` is useState, so
+  // its identity IS stable between the renders that do not touch the set; the
+  // inline arrows are what settles this.)
   const columns: ColumnDef<AccountRead>[] = [
     {
       id: 'phone',

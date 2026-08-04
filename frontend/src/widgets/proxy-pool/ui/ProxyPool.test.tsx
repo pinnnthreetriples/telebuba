@@ -227,6 +227,58 @@ test("a second check does not swallow the first card's pool refresh", async () =
   });
 });
 
+test("a second delete does not swallow the first card's pool refresh", async () => {
+  // remove.mutate(vars, {onSettled}) put the handler in the hook's ONE observer
+  // slot, and the confirm dialog closes on the same tick — so a second card's
+  // delete took the slot over and the first card's invalidate() never ran, leaving
+  // the deleted proxy on screen.
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (request.method === 'DELETE') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(
+      jsonResponse({ proxies: [proxy(), { ...proxy(), id: 'p2', host: 'de.example' }] }),
+    );
+  });
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('de.example:1080')).toBeInTheDocument();
+  });
+  const poolGets = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([input]) => new URL((input as Request).url).pathname === '/api/v1/proxies',
+      ).length;
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByLabelText('Удалить')[index]!);
+    // The dialog's confirm is the only element whose TEXT is "Удалить" (the card
+    // buttons carry it as an aria-label on an icon).
+    await userEvent.click(screen.getByText('Удалить'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+  expect(screen.getAllByLabelText('Удалить')[0]).toBeDisabled();
+  expect(screen.getAllByLabelText('Удалить')[1]).toBeDisabled();
+
+  // Card 2 settles first, then card 1 — the late one must still refresh the pool.
+  releases[1]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(poolGets()).toBeGreaterThan(1);
+  });
+  const afterSecond = poolGets();
+  releases[0]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(poolGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
 test('cancelling the confirm dialog does not delete', async () => {
   routeWithDelete();
   renderWithClient(<ProxyPool onAdd={vi.fn()} />);
