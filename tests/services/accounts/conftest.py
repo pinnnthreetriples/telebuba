@@ -55,11 +55,16 @@ def _isolate_runtime(
     # artefact instead of on the behaviour.
     #
     # Compared by DIFF, not by emptiness: a developer's checkout legitimately holds real
-    # sessions, and failing their test run over those would be its own bug. Leaked files
-    # are removed as well as reported, so a single escape cannot poison every later run.
+    # sessions, and failing their test run over those would be its own bug.
+    #
+    # It REPORTS and does not clean up, deliberately. "New since setup" is not "written
+    # by this test": this directory is the one the live instance uses, so an operator
+    # importing an account while the suite runs would have appeared in the diff and had
+    # their credential deleted — with no backup, blamed on a test that never wrote it.
+    # Deciding whether a stray ``.session`` is garbage or a live login is a human call.
+    # The assert alone still closes the failure mode that mattered: a leak turns the run
+    # RED, and a red run cannot pass on the artefact the way round 3's did.
     leaked = sorted(_repo_session_files() - before)
-    for name in leaked:
-        (_REPO_SESSIONS / name).unlink(missing_ok=True)
     # Both values are copied into plain locals first. Asserting on
     # ``settings.telegram.session_dir`` directly makes pytest's assertion rewriting walk
     # the attribute chain and print the whole ``Settings`` repr on failure — which
@@ -68,8 +73,10 @@ def _isolate_runtime(
     final_dir = Path(settings.telegram.session_dir)
     escaped = not final_dir.is_relative_to(tmp_path)
     assert leaked == [], (
-        f"this test wrote {leaked} into the real sessions dir — session_dir isolation "
-        f"was lost (a blanket monkeypatch.undo()?); restore only the seam you patched"
+        f"{leaked} appeared in the real sessions dir ({_REPO_SESSIONS}) during this test "
+        f"— session_dir isolation was probably lost (a blanket monkeypatch.undo()?); "
+        f"restore only the seam you patched. Left in place on purpose: inspect before "
+        f"deleting, it may be a real credential another process just wrote"
     )
     assert not escaped, (
         f"session_dir points outside tmp_path at teardown ({final_dir}) — isolation was "

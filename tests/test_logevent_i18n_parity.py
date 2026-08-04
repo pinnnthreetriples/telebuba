@@ -310,8 +310,12 @@ def _rollback_residual_codes() -> set[str]:
 
     Derived from the ``Literal`` rather than hardcoded, so a fourth outcome is caught
     the moment it is declared. ``clean`` is excluded because it is the success path:
-    both callers log only when ``outcome != "clean"``, so it never reaches ``reason``
-    — and :func:`test_the_clean_outcome_is_never_a_reason_code` pins that.
+    both callers log only when ``outcome != "clean"``, so it never reaches ``reason``.
+    That exclusion is what makes the omission safe, so it is pinned behaviourally by
+    ``tests/services/accounts/test_import_rollback.py``'s
+    ``test_a_clean_rollback_emits_no_reason_code`` — on the emitted payload, because a
+    source-text check for the guard passed with the guard removed and its literal left
+    behind in a comment.
     """
     return set(get_args(RollbackOutcome)) - {"clean"}
 
@@ -347,18 +351,6 @@ def test_every_backend_reason_has_ru_and_en_translation() -> None:
     for locale in ("ru", "en"):
         keys = set(_i18n(locale)["logEventReason"])
         assert sorted(reasons - keys) == [], f"reasons missing a {locale} logEventReason label"
-
-
-def test_the_clean_outcome_is_never_a_reason_code() -> None:
-    """``clean`` is excluded from the residuals above only because nothing logs it.
-
-    Both rollback callers guard with ``if result.outcome != "clean"``. If either ever
-    logged unconditionally, ``clean`` would ride ``reason`` with no label and render
-    raw, and the exclusion here would be the reason nothing caught it.
-    """
-    for module in ("services/accounts/sessions.py", "services/accounts/_tdata.py"):
-        source = (_ROOT / module).read_text(encoding="utf-8")
-        assert '!= "clean"' in source, f"{module} no longer gates its rollback logging"
 
 
 def test_reason_enumeration_reaches_a_ladder_variable_and_a_reason_function() -> None:

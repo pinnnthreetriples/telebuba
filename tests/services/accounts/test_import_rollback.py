@@ -439,6 +439,46 @@ async def test_a_clean_rollback_reports_the_import_cause_not_the_outcome(
 
 
 @pytest.mark.asyncio
+async def test_a_clean_rollback_emits_no_reason_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rollback that worked must not put ``clean`` in the operator's reason column.
+
+    ``clean`` is the one ``RollbackOutcome`` member the i18n parity gate does NOT
+    require a translation for (``tests/test_logevent_i18n_parity.py``), and the only
+    thing making that safe is that both callers log a ``reason`` only when the outcome is
+    not clean. Drop that guard and ``clean`` rides ``reason`` with no label, rendering
+    raw for the operator.
+
+    Asserted on the emitted payloads, not on the source text: a substring check for the
+    guard stayed green when the guard was replaced by ``if True:`` and its literal left
+    behind in a trailing comment.
+    """
+    payloads: list[dict[str, object]] = []
+
+    async def fake_log(
+        _level: str,
+        event: str,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        payloads.append({"event": event, **(extra or {})})
+
+    _break_after_commit(monkeypatch)
+    monkeypatch.setattr("services.accounts.sessions.log_event", fake_log)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(
+            AccountSessionFileImport(filename="live.session", content=_CREDENTIAL),
+        )
+
+    # The rollback reached "neither row nor file", so it reports the import cause and
+    # no residual at all — the failure event must not have fired.
+    assert [p["event"] for p in payloads] == ["account_session_import_rolled_back"]
+    assert [p for p in payloads if "reason" in p] == []
+
+
+@pytest.mark.asyncio
 async def test_a_kept_row_also_reports_through_the_same_event(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
