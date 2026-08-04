@@ -12,6 +12,17 @@ ever sees the final measured part size — after the transfer. Counting the
 ``http.request`` messages as they arrive is the only limit chunked input cannot
 walk past.
 
+One ceiling is not enough either, and this is what the first attempt got wrong.
+The upload routes genuinely need ~200 MB for a ``tdata.zip``, so a single limit is
+necessarily the largest budget any route needs — and 3.1 MB is 1.5% of it, so that
+very probe still drained in full at the shipped default. The budget is therefore
+split on whether the request carries a session cookie at all: no cookie, no
+upload budget. Header inspection only — no DB, no signature check — because a
+forged cookie merely buys back the 210 MB an attacker already has today, while a
+caller who sends none is held to ``max_anonymous_request_bytes``. Route-based
+scoping cannot help here: the defective route IS the upload route, and FastAPI
+reads the body before ``solve_dependencies`` runs.
+
 Written against the bare ASGI signature: ``api/`` may import ``fastapi`` but not
 ``starlette`` (``tests/test_architecture.py::test_api_imports_only_allowlisted``),
 and neither a byte counter nor a header stamp needs anything from either.
@@ -74,7 +85,11 @@ class _BodyLimitExceededError(OSError):
 
 
 class BodySizeLimitMiddleware:
-    """Refuse a request whose body exceeds ``max_bytes``, counting as it arrives.
+    """Refuse a request whose body exceeds its budget, counting as it arrives.
+
+    The budget is ``max_bytes`` for a request carrying ``cookie_name``, and
+    ``max_anonymous_bytes`` for one that does not — see the module docstring for
+    why one number cannot do the job.
 
     On overflow the caller gets a 413 and the wrapped app's ``receive()`` fails, so
     it unwinds instead of parsing bytes we already refused. Whatever it then tries
@@ -82,19 +97,36 @@ class BodySizeLimitMiddleware:
     real response.
     """
 
-    def __init__(self, app: ASGIApp, *, max_bytes: int) -> None:
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        max_bytes: int,
+        max_anonymous_bytes: int,
+        cookie_name: str,
+    ) -> None:
         self.app = app
         self.max_bytes = max_bytes
+        self.max_anonymous_bytes = max_anonymous_bytes
+        self._cookie_name = cookie_name.encode()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        counted = _BodyCounter(receive, max_bytes=self.max_bytes)
+        budget = (
+            self.max_bytes if _has_cookie(scope, self._cookie_name) else self.max_anonymous_bytes
+        )
+        counted = _BodyCounter(receive, max_bytes=budget)
+        started = False
 
         async def guarded_send(message: Message) -> None:
-            if not counted.rejected:
-                await send(message)
+            nonlocal started
+            if counted.rejected:
+                return
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
 
         try:
             await self.app(scope, counted.receive, guarded_send)
@@ -105,12 +137,40 @@ class BodySizeLimitMiddleware:
             # Starlette's ServerErrorMiddleware.
             if not counted.rejected:
                 raise
-        if counted.rejected:
+        # ``started`` guards a second ``http.response.start``, which is a protocol
+        # error uvicorn rejects. Latent today — it needs a route that streams a
+        # response and only then reads past the cap, and none does — but the cost of
+        # being wrong about that is a 500 on a path meant to answer 413.
+        if counted.rejected and not started:
             await _send_too_large(send)
 
 
+def _has_cookie(scope: Scope, name: bytes) -> bool:
+    """Whether the request carries a cookie called ``name``.
+
+    Presence only. Nothing here validates or decodes the session — that is
+    ``api.deps.get_current_user``'s job and it needs the body already parsed, which
+    is the whole reason this runs first.
+    """
+    for header, value in scope.get("headers", ()):
+        if header.lower() != b"cookie":
+            continue
+        # Compare the key, not a substring: ``x{name}=`` must not pass as ``{name}``.
+        if any(part.partition(b"=")[0].strip() == name for part in value.split(b";")):
+            return True
+    return False
+
+
 class _BodyCounter:
-    """Tallies ``http.request`` body bytes and cuts the stream off past the cap."""
+    """Tallies ``http.request`` body bytes and cuts the stream off past the cap.
+
+    Rejection lands on the message that crosses the cap, so the overshoot is one
+    ASGI message. How big that is belongs to the SERVER, not to this class: uvicorn
+    pauses reading once ``flow_control.HIGH_WATER_LIMIT`` (65,536) is buffered, so
+    in production the overshoot is ~64 KiB. An in-process transport that hands over
+    one enormous message will see one enormous overshoot, which is a property of
+    that transport rather than a hole here.
+    """
 
     def __init__(self, receive: Receive, *, max_bytes: int) -> None:
         self._receive = receive

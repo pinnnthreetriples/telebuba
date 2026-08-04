@@ -78,8 +78,14 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
 
 @pytest.fixture
 def capped(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
-    """A raw app (real auth dependency) with a small body ceiling."""
+    """A raw app (real auth dependency) with both ceilings pulled down to ``_CAP``.
+
+    For the cases about the counter's own mechanics, where a 210 MB body would be
+    absurd to stream. The cases about what SHIPS take no fixture — see
+    ``test_the_reported_case_is_cut_off_at_the_shipped_default``.
+    """
     monkeypatch.setattr(settings.api, "max_request_bytes", _CAP)
+    monkeypatch.setattr(settings.api, "max_anonymous_request_bytes", _CAP)
     return create_app()
 
 
@@ -100,10 +106,89 @@ async def test_chunked_body_past_the_cap_is_refused_and_cut_off(capped: FastAPI)
     assert resp.json() == {
         "error": {"code": "payload_too_large", "message": "payload_too_large"},
     }
-    # The stream was cut off, not drained: the server can only stop after the chunk
-    # that crosses the cap, so one chunk of overshoot is the whole exposure.
+    # The stream was cut off, not drained. The middleware can only reject after the
+    # `http.request` message that crosses the cap, so the overshoot is one message —
+    # and what bounds a MESSAGE is uvicorn, not this middleware: `h11_impl` stops
+    # reading once `flow_control.HIGH_WATER_LIMIT` (65536) is buffered. This test
+    # feeds 64 KiB chunks itself, so it pins the middleware's half of that contract
+    # (reject on the first crossing message) and not the transport's.
     assert not body.finished
     assert body.sent <= _CAP + len(_CHUNK)
+
+
+@pytest.mark.asyncio
+async def test_the_reported_case_is_cut_off_at_the_shipped_default() -> None:
+    """No fixture, no monkeypatch: the real 210 MB / 1 MB config, as deployed.
+
+    This is the test the first attempt was missing. Both proofs ran under `capped`,
+    which tightens the ceiling 210x, so nothing exercised what ships — and at the
+    shipped default the reported 3.1 MB is 1.5% of the ceiling, so the middleware
+    never engaged and the original probe still drained in full behind a 401.
+    """
+    assert settings.api.max_request_bytes == 210_000_000
+    body = _StreamedUpload(chunks=48)  # 3_145_728 bytes: the reported case
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={"Content-Type": _CONTENT_TYPE},
+        )
+    assert resp.request.headers.get("transfer-encoding") == "chunked"
+    assert resp.status_code == 413
+    assert not body.finished
+    assert body.sent <= settings.api.max_anonymous_request_bytes + len(_CHUNK)
+
+
+@pytest.mark.asyncio
+async def test_a_session_cookie_buys_the_upload_budget() -> None:
+    """The split is on cookie PRESENCE, so a real operator's upload still works.
+
+    The cookie here is forged, and that is the point: the middleware does not
+    validate it, so this request gets the 210 MB budget and is then refused by the
+    auth dependency on its merits (401, body drained). A forger buys back only the
+    budget they already had before this change — no reduction is lost, because the
+    caller who sends NO cookie is the one now held to 1 MB.
+    """
+    body = _StreamedUpload(chunks=48)
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={"Content-Type": _CONTENT_TYPE, "Cookie": "tb_session=forged"},
+        )
+    assert resp.status_code == 401
+    assert body.finished
+
+
+@pytest.mark.asyncio
+async def test_a_lookalike_cookie_name_does_not_buy_the_budget() -> None:
+    """``xtb_session`` must not pass as ``tb_session``: compare the key, not a substring."""
+    body = _StreamedUpload(chunks=48)
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={"Content-Type": _CONTENT_TYPE, "Cookie": "xtb_session=forged; other=1"},
+        )
+    assert resp.status_code == 413
+    assert not body.finished
+
+
+@pytest.mark.asyncio
+async def test_the_cookie_is_found_among_others(app: FastAPI) -> None:
+    """A browser sends the session cookie alongside whatever else is set for the host."""
+    body = _StreamedUpload(chunks=1)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={
+                "Content-Type": _CONTENT_TYPE,
+                "Cookie": "theme=dark; tb_session=forged; lang=ru",
+            },
+        )
+    assert resp.status_code == 200
+    assert body.finished
 
 
 @pytest.mark.asyncio
@@ -219,9 +304,54 @@ async def test_a_response_that_set_its_own_policy_keeps_it() -> None:
     assert headers[b"x-content-type-options"] == b"nosniff"
 
 
+@pytest.mark.asyncio
+async def test_a_started_response_is_never_followed_by_a_413() -> None:
+    """Two ``http.response.start`` messages on one request is a protocol error.
+
+    Latent: it needs a route that starts streaming and only THEN reads past the cap,
+    and none does. But if one ever did, the caller would get a 200 start, a body
+    chunk, and then a 413 start on the same request — uvicorn rejects that, so a
+    path meant to answer 413 would answer 500 instead.
+    """
+    sent: list[Message] = []
+    pending = [
+        {"type": "http.request", "body": b"x" * 100, "more_body": True},
+        {"type": "http.request", "body": b"x" * 100, "more_body": True},
+    ]
+
+    async def _receive() -> Message:
+        return pending.pop(0)
+
+    async def _app(_scope: Scope, receive: Receive, send: Send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"partial", "more_body": True})
+        while True:  # reads the body late, and runs past the cap doing it
+            await receive()
+
+    async def _capture(message: Message) -> None:
+        sent.append(message)
+
+    wrapped = BodySizeLimitMiddleware(
+        _app,
+        max_bytes=150,
+        max_anonymous_bytes=150,
+        cookie_name="tb_session",
+    )
+    await wrapped({"type": "http", "headers": []}, _receive, _capture)
+    assert [m["status"] for m in sent if m["type"] == "http.response.start"] == [200]
+
+
 @pytest.mark.parametrize(
     "wrap",
-    [SecurityHeadersMiddleware, lambda app: BodySizeLimitMiddleware(app, max_bytes=1)],
+    [
+        SecurityHeadersMiddleware,
+        lambda app: BodySizeLimitMiddleware(
+            app,
+            max_bytes=1,
+            max_anonymous_bytes=1,
+            cookie_name="tb_session",
+        ),
+    ],
 )
 @pytest.mark.asyncio
 async def test_non_http_scopes_pass_straight_through(wrap: Callable[[ASGIApp], ASGIApp]) -> None:

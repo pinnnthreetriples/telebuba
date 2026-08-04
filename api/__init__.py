@@ -41,7 +41,12 @@ def create_app(lifespan: Lifespan | None = None) -> FastAPI:
     # Added last = outermost (``add_middleware`` prepends, the stack builds in
     # reverse), which is what both need: the byte counter must reject before
     # routing resolves the auth dependency, and the header stamp must wrap its 413.
-    app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.api.max_request_bytes)
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.api.max_request_bytes,
+        max_anonymous_bytes=settings.api.max_anonymous_request_bytes,
+        cookie_name=settings.auth.cookie_name,
+    )
     app.add_middleware(SecurityHeadersMiddleware)
     register_error_handlers(app)
     app.include_router(v1_router, prefix=f"/api/{settings.api.version}")
