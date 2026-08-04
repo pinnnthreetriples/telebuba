@@ -9,6 +9,7 @@ nothing at all and raise nothing either.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import stat
 from typing import TYPE_CHECKING
@@ -16,6 +17,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core import secure_paths
+from core.config import settings
+from core.db import configure_database, fetch_account
+from core.db_maintenance import run_db_maintenance
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -86,6 +90,54 @@ def test_off_posix_the_directory_is_created_but_never_chmodded(
     secure_paths.make_private_file(target)
     assert target.is_dir()
     assert calls == []
+
+
+def _recorded_modes(monkeypatch: pytest.MonkeyPatch) -> dict[str, int]:
+    """Capture the modes requested, so both call sites are provable off POSIX."""
+    modes: dict[str, int] = {}
+    monkeypatch.setattr(secure_paths, "_IS_POSIX", True)
+    monkeypatch.setattr(
+        "pathlib.Path.chmod",
+        lambda self, mode: modes.__setitem__(self.name, mode),
+    )
+    return modes
+
+
+def test_the_database_and_its_directory_are_owner_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """telebuba.db is a credential store, not just application state.
+
+    The proxies table holds PLAINTEXT proxy passwords (read back verbatim by
+    ``core.repositories.proxies``) next to every ``password_hash``, and SQLite
+    creates the file at the default umask — so it sat world-readable beside the
+    ``sessions/`` dir this slice hardened to 0700.
+    """
+    modes = _recorded_modes(monkeypatch)
+    db_dir = tmp_path / "data"
+    configure_database(db_dir / "telebuba.db")
+    asyncio.run(fetch_account("nobody"))  # forces _build_engine
+
+    assert modes["data"] == 0o700
+    assert modes["telebuba.db"] == 0o600
+
+
+def test_the_backup_and_its_directory_are_owner_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A backup is a byte-for-byte copy of that same credential store."""
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", tmp_path / "backups")
+    modes = _recorded_modes(monkeypatch)
+
+    target = run_db_maintenance()
+
+    assert target is not None
+    assert modes["backups"] == 0o700
+    assert modes[target.name] == 0o600
 
 
 def test_a_filesystem_that_refuses_chmod_does_not_break_the_write(
