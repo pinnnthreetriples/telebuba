@@ -95,12 +95,32 @@ def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:
 #
 # The guard matches field NAMES rather than a hand-listed set of fields, so a
 # newly added secret field is caught rather than silently unprotected. Substrings,
-# not suffixes: a suffix rule let ``private_key_pem``, ``basic_auth``,
-# ``session_string`` and 20 other plausible credential names through.
-# Measured over all 245 (namespace, field) pairs: catches all 13 protected fields
-# with zero false positives.
+# not suffixes: a suffix rule let ``private_key_pem``, ``basic_auth`` and
+# ``session_string`` through. Measured over all 245 (namespace, field) pairs:
+# catches all 13 protected fields with zero false positives.
+#
+# The matching is NOT complete, and no single number describes how complete it is —
+# any "N of M names covered" figure only holds against the list of names whoever
+# wrote it happened to think of. These are the gaps we knowingly accept, with what
+# closing each would cost in false positives across those 245 pairs:
+#   ``session``  5 (session_ttl_minutes, session_dir, session_max_bytes,
+#                expected_actions_per_session, persona_sessions) — so the
+#                ``session_*`` family beyond ``session_str`` slips: ``session_data``,
+#                ``session_b64``, ``takeout_session``. Accepted reluctantly: a
+#                Telethon session IS a whole account (see core/config.py's own note
+#                on ``.session`` files), but 5 false positives is too high a price.
+#   ``_url``     5 (all five ``*_base_url`` fields) — so ``sentry_url``, a Sentry DSN
+#                under another name, slips even though ``dsn`` is a pattern.
+#   ``iv``       9, ``sk`` 2, ``tdata`` 1 — bare crypto abbreviations and
+#                ``tdata_bundle`` slip.
+# ``pk``, ``nonce`` and ``kdf`` would cost nothing but are not patterns either: no
+# field here is named that way and this codebase spells things out
+# (``admin_password``, not ``pw``). Add them the day a field needs them.
+#
+# The field pin below is the backstop for all of this: it does not care why a field
+# stopped being flagged.
 
-_SECRET_NAME_SUFFIXES = ("_id", "_key", "_hash")
+_SECRET_NAME_SUFFIXES = ("_id", "_key", "_keys", "_hash")
 _SECRET_NAME_SUBSTRINGS = (
     "secret",
     "pass",
@@ -114,6 +134,9 @@ _SECRET_NAME_SUBSTRINGS = (
     "recovery",
     "otp",
     "2fa",
+    # A Python identifier cannot start with a digit, so the spelled-out form is the
+    # likelier one to actually appear as a field name.
+    "twofa",
     "bearer",
     "signing",
     "cert",
@@ -122,7 +145,9 @@ _SECRET_NAME_SUBSTRINGS = (
     "license",
     "dsn",
     "salt",
-    "username",
+    "user",
+    "jwt",
+    "hmac",
     "webhook",
     "database_url",
     "service_account",
@@ -134,6 +159,7 @@ _SECRET_NAME_SUBSTRINGS = (
 _PATTERN_EXAMPLES = {
     "_id": "api_id",
     "_key": "encryption_key",
+    "_keys": "api_keys",
     "_hash": "api_hash",
     "secret": "secret_key_base",
     "pass": "master_pass",
@@ -147,6 +173,7 @@ _PATTERN_EXAMPLES = {
     "recovery": "recovery_code",
     "otp": "otp",
     "2fa": "tg_2fa",
+    "twofa": "twofa",
     "bearer": "bearer",
     "signing": "signing",
     "cert": "cert",
@@ -155,7 +182,9 @@ _PATTERN_EXAMPLES = {
     "license": "license",
     "dsn": "dsn",
     "salt": "salt",
-    "username": "admin_username",
+    "user": "proxy_user",
+    "jwt": "jwt",
+    "hmac": "hmac",
     "webhook": "webhook_url",
     "database_url": "database_url",
     "service_account": "service_account_json",
@@ -166,15 +195,23 @@ _PATTERN_EXAMPLES = {
 # in the diff where a reviewer sees it. Empty today — both structural exceptions
 # (a bool, and a plural integer token budget) are expressed as rules in
 # ``_is_secret_field`` instead, so nobody has to grow this to stay green.
+#
+# The length floor below buys nothing on its own: one plausible sentence would
+# silently unguard any field here. Review is the actual control; the floor only
+# stops a bare "n/a" from passing for a justification.
 _NOT_SECRET: dict[str, str] = {}
 _MIN_EXEMPTION_REASON_CHARS = 40
 
 
 def _matches_secret_name(name: str, *, without: str = "") -> bool:
-    """Whether ``name`` looks credential-bearing, optionally ignoring one pattern."""
+    """Whether ``name`` looks credential-bearing, optionally ignoring one pattern.
+
+    Case-folded so ``API_KEY`` and ``apiKey`` match too; every pattern is lowercase.
+    """
+    folded = name.casefold()
     suffixes = tuple(s for s in _SECRET_NAME_SUFFIXES if s != without)
-    return name.endswith(suffixes) or any(
-        s in name for s in _SECRET_NAME_SUBSTRINGS if s != without
+    return folded.endswith(suffixes) or any(
+        s in folded for s in _SECRET_NAME_SUBSTRINGS if s != without
     )
 
 
@@ -201,9 +238,13 @@ def _fake_value(model: type[BaseSettings], name: str) -> object:
 
     40 ``z``s clear ``AuthSettings``' 32-byte HMAC floor.
     """
-    if model.model_fields[name].annotation is int:
+    annotation = model.model_fields[name].annotation
+    if annotation is int:
         return 987654321
-    return f"FAKE-{name}-{'z' * 40}"
+    fake = f"FAKE-{name}-{'z' * 40}"
+    # ``*_keys`` anticipates a ``list[str]`` of provider keys; wrap so validation
+    # accepts it instead of raising and losing the report.
+    return [fake] if annotation == list[str] else fake
 
 
 _SECRET_NAMESPACES = [
@@ -235,20 +276,37 @@ def test_every_secret_name_pattern_is_load_bearing(pattern: str, example: str) -
     )
 
 
-def test_every_namespace_holding_a_secret_is_covered() -> None:
-    """Pin the count: a silently shrinking parametrization is the failure mode here.
+def test_the_protected_field_set_is_pinned() -> None:
+    """Pin the FIELDS the sweep covers, not just the namespaces.
 
-    Typo'ing patterns used to drop namespaces from the sweep without complaint.
+    Deleting a pattern *together with its example* is otherwise invisible — and
+    ``test_every_secret_name_pattern_has_an_example`` actively pushes a contributor
+    pruning a pattern to delete its example in the same edit, which is exactly the
+    motion that hid the loss. This pin makes a field falling out of the swept set
+    red no matter what happened to the patterns.
+
+    A new secret field therefore lands here deliberately, next to its
+    ``repr=False`` and its ``.env.example`` key.
     """
-    assert [namespace for namespace, _ in _SECRET_NAMESPACES] == [
-        "telegram",
-        "auth",
-        "proxy",
-        "logging",
-        "warming",
-        "gemini",
-        "openai",
-        "telemetr",
+    swept = sorted(
+        (namespace, name)
+        for namespace, model in _SECRET_NAMESPACES
+        for name in _secret_field_names(model)
+    )
+    assert swept == [
+        ("auth", "admin_password"),
+        ("auth", "admin_username"),
+        ("auth", "secret"),
+        ("gemini", "api_key"),
+        ("logging", "sentry_dsn"),
+        ("openai", "api_key"),
+        ("proxy", "ipinfo_token"),
+        ("proxy", "maxmind_account_id"),
+        ("proxy", "maxmind_license_key"),
+        ("telegram", "api_hash"),
+        ("telegram", "api_id"),
+        ("telemetr", "api_key"),
+        ("warming", "fleet_hash_salt"),
     ]
 
 
