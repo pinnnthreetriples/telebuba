@@ -225,10 +225,15 @@ def _module_reason_codes(source: str, path: Path) -> set[str]:
     """Every literal reason code one module can put in ``extra["reason"]``.
 
     A second, separate vocabulary from the event codes: ``ActivityLogCard`` renders
-    ``extra.reason`` through ``logEventReason.*`` with an empty-string fallback, so a
-    reason with no entry is not a raw code the operator can at least read back — it is a
-    blank. ``too_short`` (``services.neurocomment._generate``) has been rendering as
-    nothing at all, which is what this exists to stop.
+    ``extra.reason`` through ``eventReason``, whose ``label`` tries the log prefixes with
+    an empty default and then the TOAST prefixes with ``defaultValue: code`` — so an
+    unmapped reason reaches the operator as a raw snake_case token where prose belongs,
+    not as a blank. ``too_short`` (``services.neurocomment._generate``) is what this guard
+    was written after; it is translated in both locales now (search ``logEventReason``).
+    The genuinely blank fallback is a different key in a different component:
+    ``WarmingBoard`` resolves ``extra.reaction_skip`` through ``logEventReason.*`` with
+    ``defaultValue: ''``, so a miss there shows nothing at all. ``LogsPage`` prints an em
+    dash for an empty reason, which is the third spelling of the same fallback.
 
     Two shapes are read, because they are how the codebase actually writes reasons: the
     value under a literal ``"reason"`` key of an ``extra={...}`` dict, and any literal a
