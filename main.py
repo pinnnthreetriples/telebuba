@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
 from api import create_app
 from core.config import settings
@@ -74,6 +74,29 @@ async def _log_app_started() -> None:
     await log_event("INFO", "app_started", extra={"git_sha": _git_sha()})
 
 
+async def _shutdown_step(name: str, close: Callable[[], Awaitable[None]]) -> None:
+    """Run one teardown step; log a failure but never let it skip the rest.
+
+    These ran as a bare sequence of ``await``s, so the FIRST one to raise abandoned
+    every later step — leaking exactly what they exist to release: the pooled
+    Telethon clients (each holding a ``.session`` SQLite file open) and the three
+    long-lived HTTP clients. The failure is reported, not swallowed: by exception
+    TYPE only, because a gateway's ``str(exc)`` can carry a proxy URL with
+    credentials or a session path (non-negotiable #7).
+
+    Sequential and not ``asyncio.gather``: the order is load-bearing — see the
+    lifespan docstring on draining warming before tearing the pool down.
+    """
+    try:
+        await close()
+    except Exception as exc:  # noqa: BLE001 — one step must never abort the rest.
+        await log_event(
+            "ERROR",
+            "app_shutdown_step_failed",
+            extra={"step": name, "error_type": type(exc).__name__},
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Start/stop the in-process runtimes around the server's lifetime.
@@ -95,15 +118,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await shutdown_warming_runtime()
-        await shutdown_neurocomment_on_shutdown()
-        await shutdown_telegram_pool()
+        await _shutdown_step("warming", shutdown_warming_runtime)
+        await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
+        await _shutdown_step("telegram_pool", shutdown_telegram_pool)
         maintenance_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await maintenance_task
-        await close_gemini_client()
-        await close_openai_client()
-        await close_telemetr_client()
+        await _shutdown_step("gemini", close_gemini_client)
+        await _shutdown_step("openai", close_openai_client)
+        await _shutdown_step("telemetr", close_telemetr_client)
 
 
 def _safe_spa_file(path: str) -> Path | None:
