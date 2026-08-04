@@ -2155,6 +2155,28 @@ export type ProxyRead = {
 };
 
 /**
+ * ReadinessStatus
+ *
+ * Whether the process can actually SERVE, not merely that it is running.
+ *
+ * Booleans only, one per dependency. This probe is unauthenticated, so the body
+ * must carry no diagnostic detail whatsoever: ``str(exc)`` on a SQLAlchemy
+ * ``StatementError`` appends the failing SQL and its bound parameters, which for
+ * this datastore includes its filesystem path. "Reachable / not" is the entire
+ * contract; the operator reads the cause from the server log.
+ */
+export type ReadinessStatus = {
+  /**
+   * Status
+   */
+  status: 'ok' | 'unavailable';
+  /**
+   * Database
+   */
+  database: boolean;
+};
+
+/**
  * RemoveChannelRequest
  */
 export type RemoveChannelRequest = {
@@ -3030,6 +3052,35 @@ export type GetHealthResponses = {
 };
 
 export type GetHealthResponse = GetHealthResponses[keyof GetHealthResponses];
+
+export type GetReadinessData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/ready';
+};
+
+export type GetReadinessErrors = {
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * A dependency is unreachable
+   */
+  503: ReadinessStatus;
+};
+
+export type GetReadinessError = GetReadinessErrors[keyof GetReadinessErrors];
+
+export type GetReadinessResponses = {
+  /**
+   * Successful Response
+   */
+  200: ReadinessStatus;
+};
+
+export type GetReadinessResponse = GetReadinessResponses[keyof GetReadinessResponses];
 
 export type ListAccountsData = {
   body?: never;

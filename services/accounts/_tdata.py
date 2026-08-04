@@ -9,17 +9,18 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from contextlib import AsyncExitStack, suppress
+from contextlib import AsyncExitStack
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from core.config import settings
-from core.db import delete_account, fetch_account
+from core.db import fetch_account
 from core.logging import log_event
-from core.telegram_client import removing_client
+from core.secure_paths import make_private_dir
 from schemas.accounts import AccountCheckRequest, AccountCreate
 from services.accounts._import_locks import import_lock
+from services.accounts._import_rollback import discard_imported_session
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -63,31 +64,39 @@ async def _rollback_tdata_import(
 ) -> None:
     """Best-effort: remove DB rows + .session files written during a failed import.
 
-    Under the same pool tombstone ``lifecycle.remove_account`` uses, and for the
-    same reason: ``check_account_session`` has already pooled a client per placed
-    account, and on Windows that live ``.session`` handle makes the unlink raise.
+    Delegates each plan to ``discard_imported_session``, which owns the pool
+    tombstone, the row/file ordering, and the reasoning for both.
 
-    A failed unlink is logged, never swallowed. An orphaned ``.session`` with no
-    DB row is the one state the operator cannot repair from the UI — preflight
-    refuses the re-import ("delete it before importing") and there is no account
-    left to delete — so a retryable failure must not be turned into a silent
-    permanent block.
+    ``account_ids`` is now only what gets REPORTED. It used to gate the row
+    delete, and that was the same hole this shared helper closes: the id whose
+    ``add_account`` raised *after* its commit never made it into that list, so its
+    row survived while the unlink went ahead — leaving a live account with no
+    credential. The helper decides by looking, so the pair always leaves together.
+
+    An orphaned ``.session`` with no DB row is the one state the operator cannot
+    repair from the UI — preflight refuses the re-import ("delete it before
+    importing") and there is no account left to delete — so a retryable failure
+    must not be turned into a silent permanent block.
     """
-    added = set(account_ids)
     for plan in placed:
-        async with removing_client(plan.account_id):
-            if plan.account_id in added:
-                with suppress(Exception):
-                    await delete_account(plan.account_id)
-            try:
-                plan.final_path.unlink(missing_ok=True)
-            except OSError as exc:
-                await log_event(
-                    "ERROR",
-                    "tdata_rollback_unlink_failed",
-                    account_id=plan.account_id,
-                    extra={"file": plan.final_path.name, "error_type": type(exc).__name__},
-                )
+        result = await discard_imported_session(plan.account_id, plan.final_path)
+        if result.outcome != "clean":
+            await log_event(
+                "ERROR",
+                "tdata_rollback_unlink_failed",
+                account_id=plan.account_id,
+                extra={
+                    "file": plan.final_path.name,
+                    # Same vocabulary as the single-session rollback: the residual in
+                    # ``reason``, and in ``error_type`` the class of the failure that
+                    # caused it — PermissionError (a live handle) needs a different
+                    # remedy from a full disk. ``origin/main`` logged that class for the
+                    # unlink branch only; it suppressed the row-delete failure outright,
+                    # so ``row_kept`` and its class are reported here for the first time.
+                    "reason": result.outcome,
+                    "error_type": result.error_type,
+                },
+            )
     await log_event(
         "WARNING",
         "tdata_import_rolled_back",
@@ -121,7 +130,7 @@ async def import_account_tdata(
     the post-preflight move is a rename) and is wiped on both success and failure.
     """
     session_dir = settings.telegram.session_dir
-    session_dir.mkdir(parents=True, exist_ok=True)
+    make_private_dir(session_dir)
     staging_dir = Path(tempfile.mkdtemp(prefix="tdata_staging_", dir=str(session_dir.parent)))
     try:
         return await _run_tdata_import(
@@ -190,7 +199,7 @@ async def _run_tdata_import(
         try:
             for plan in plans:
                 if plan.staging_path.resolve() != plan.final_path.resolve():
-                    plan.final_path.parent.mkdir(parents=True, exist_ok=True)
+                    make_private_dir(plan.final_path.parent)
                     shutil.move(str(plan.staging_path), str(plan.final_path))
                 placed.append(plan)
                 await add_account(

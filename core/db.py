@@ -13,6 +13,7 @@ keep working.
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import threading
 from datetime import UTC, datetime
@@ -41,6 +42,7 @@ from core._schema_tables import (  # noqa: F401 - re-exported for existing impor
 )
 from core.config import settings
 from core.migrations import apply_migrations
+from core.secure_paths import make_private_dir, make_private_file
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
@@ -108,7 +110,12 @@ def _get_engine() -> Engine:
 def _build_engine() -> Engine:
     """Create, configure, and publish the process engine. Callers hold ``_ENGINE_LOCK``."""
     database_path = _state.database_path or settings.db.path
-    database_path.parent.mkdir(parents=True, exist_ok=True)
+    # telebuba.db is a credential store, not just application state: the proxies
+    # table holds plaintext proxy passwords (``core._schema_tables``, read back
+    # verbatim by ``core.repositories.proxies``) alongside every ``password_hash``.
+    # SQLite creates it at the default umask (0644), so it was world-readable right
+    # beside the ``sessions/`` dir hardened to 0700 — same defect, different path.
+    make_private_dir(database_path.parent)
     engine = create_engine(
         f"sqlite:///{database_path}",
         connect_args={"check_same_thread": False},
@@ -133,6 +140,8 @@ def _build_engine() -> Engine:
     _state.engine = engine
     _metadata.create_all(engine)
     apply_migrations(engine)
+    # After create_all, so the file exists to be restricted.
+    make_private_file(database_path)
     return engine
 
 
@@ -153,6 +162,22 @@ def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerpri
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _run_liveness_query() -> None:
+    with _get_engine().connect() as connection:
+        connection.exec_driver_sql("SELECT 1")
+
+
+async def check_database_reachable() -> None:
+    """Round-trip a trivial query, raising if the datastore cannot serve it.
+
+    Backs the readiness probe (``services.health``). Deliberately a real
+    checkout + query rather than an ``_state.engine is not None`` test: the
+    failures worth reporting — a missing, locked, or corrupt SQLite file, an
+    exhausted pool — all leave a configured engine looking perfectly healthy.
+    """
+    await asyncio.to_thread(_run_liveness_query)
 
 
 def _optional_str(value: object) -> str | None:

@@ -17,6 +17,20 @@ class HealthStatus(BaseModel):
     status: Literal["ok"] = "ok"
 
 
+class ReadinessStatus(BaseModel):
+    """Whether the process can actually SERVE, not merely that it is running.
+
+    Booleans only, one per dependency. This probe is unauthenticated, so the body
+    must carry no diagnostic detail whatsoever: ``str(exc)`` on a SQLAlchemy
+    ``StatementError`` appends the failing SQL and its bound parameters, which for
+    this datastore includes its filesystem path. "Reachable / not" is the entire
+    contract; the operator reads the cause from the server log.
+    """
+
+    status: Literal["ok", "unavailable"]
+    database: bool
+
+
 class ErrorDetail(BaseModel):
     code: str
     message: str

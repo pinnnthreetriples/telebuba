@@ -248,6 +248,48 @@
         }
       }
     },
+    "/api/v1/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Ready",
+        "description": "Answer 503 while a dependency is down, so a supervisor can hold traffic back.\n\nThe one route that answers a non-2xx with something other than the\n``ErrorEnvelope``, deliberately: this is consumed by an orchestrator's probe,\nnot the SPA, and the per-dependency verdict is the whole point of the body.\nThe status CODE has to carry the signal \u2014 a 200 saying \"unavailable\" is\ninvisible to every probe implementation.",
+        "operationId": "getReadiness",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "A dependency is unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts": {
       "get": {
         "tags": [
@@ -12274,6 +12316,29 @@
         ],
         "title": "ProxyRead",
         "description": "A pool proxy as shown on the Accounts page (masked credentials)."
+      },
+      "ReadinessStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "database": {
+            "type": "boolean",
+            "title": "Database"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "database"
+        ],
+        "title": "ReadinessStatus",
+        "description": "Whether the process can actually SERVE, not merely that it is running.\n\nBooleans only, one per dependency. This probe is unauthenticated, so the body\nmust carry no diagnostic detail whatsoever: ``str(exc)`` on a SQLAlchemy\n``StatementError`` appends the failing SQL and its bound parameters, which for\nthis datastore includes its filesystem path. \"Reachable / not\" is the entire\ncontract; the operator reads the cause from the server log."
       },
       "RemoveChannelRequest": {
         "properties": {

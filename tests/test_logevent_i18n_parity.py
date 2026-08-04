@@ -26,6 +26,9 @@ import ast
 import json
 import re
 from pathlib import Path
+from typing import get_args
+
+from services.accounts._import_rollback import RollbackOutcome
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CODE_ROOTS = ("api", "services", "core")
@@ -306,11 +309,31 @@ def _module_reason_codes(source: str, path: Path) -> set[str]:
     return reasons
 
 
+def _rollback_residual_codes() -> set[str]:
+    """The import-rollback residuals, read off ``RollbackOutcome`` itself.
+
+    Both call sites write ``extra={"reason": result.outcome}`` — an ATTRIBUTE read, and
+    :func:`_module_reason_codes`'s ``_literals`` handles ``Constant``/``Name``/``IfExp``
+    but not ``Attribute``, so the literal scan cannot see these two codes at all. They
+    shipped untranslated-and-unnoticed exactly once, which is what this closes.
+
+    Derived from the ``Literal`` rather than hardcoded, so a fourth outcome is caught
+    the moment it is declared. ``clean`` is excluded because it is the success path:
+    both callers log only when ``outcome != "clean"``, so it never reaches ``reason``.
+    That exclusion is what makes the omission safe, so it is pinned behaviourally by
+    ``tests/services/accounts/test_import_rollback.py``'s
+    ``test_a_clean_rollback_emits_no_reason_code`` — on the emitted payload, because a
+    source-text check for the guard passed with the guard removed and its literal left
+    behind in a comment.
+    """
+    return set(get_args(RollbackOutcome)) - {"clean"}
+
+
 def _backend_reason_codes() -> set[str]:
     reasons: set[str] = set()
     for path in _backend_files():
         reasons.update(_module_reason_codes(path.read_text(encoding="utf-8"), path))
-    return reasons
+    return reasons | _rollback_residual_codes()
 
 
 def _i18n(locale: str) -> dict:

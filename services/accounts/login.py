@@ -23,6 +23,7 @@ from core.telegram_client import log_out_session, request_phone_code, submit_pho
 from schemas.accounts import AccountCreate
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeRequestResult, PhoneCodeSubmit
+from services.accounts._import_locks import import_lock
 from services.accounts._login_state import forget_code, peek_code, remember_code
 from services.accounts.lifecycle import add_account
 from services.accounts.sessions import SessionAlreadyExistsError
@@ -52,21 +53,32 @@ async def start_phone_login(phone: str, label: str | None = None) -> AccountRead
     The digits of the phone become both ``account_id`` and ``session_name`` (the
     ``AccountCreate`` pattern forbids the leading ``+``); re-adding the same phone
     surfaces as :class:`SessionAlreadyExistsError` the API maps to 409.
+
+    Holds ``import_lock`` over the check-then-add for the same reason the two
+    importers do, and it is not optional here: this is the THIRD writer of an
+    account row, and ``_import_rollback`` deletes a row it finds present on the
+    assumption that only a lock-holder could have created one under that key. A
+    phone whose digits equal an uploaded session's stem (or a tdata ``user_id``)
+    landing inside a failed import's window would otherwise have the operator's
+    row deleted by that import's rollback. It also closes this function's own
+    check-then-act race, which the ``DuplicateSessionNameError`` branch below was
+    left to catch after the fact.
     """
     digits = "".join(ch for ch in phone if ch.isdigit())
     if not digits:
         msg = "Phone number must contain digits."
         raise PhoneLoginError(msg)
-    if await fetch_account(digits) is not None:
-        msg = f"An account for {phone} already exists."
-        raise SessionAlreadyExistsError(msg)
-    try:
-        account = await add_account(
-            AccountCreate(account_id=digits, session_name=digits, phone=phone, label=label),
-        )
-    except DuplicateSessionNameError as exc:
-        msg = f"An account for {phone} already exists."
-        raise SessionAlreadyExistsError(msg) from exc
+    async with import_lock(digits):
+        if await fetch_account(digits) is not None:
+            msg = f"An account for {phone} already exists."
+            raise SessionAlreadyExistsError(msg)
+        try:
+            account = await add_account(
+                AccountCreate(account_id=digits, session_name=digits, phone=phone, label=label),
+            )
+        except DuplicateSessionNameError as exc:
+            msg = f"An account for {phone} already exists."
+            raise SessionAlreadyExistsError(msg) from exc
     await log_event("INFO", "phone_login_started", account_id=account.account_id)
     return account
 

@@ -32,6 +32,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from core.logging import log_event
+from core.secure_paths import make_private_dir, make_private_file
 from schemas.tdata import (
     TdataAccountSummary,
     TdataConvertRequest,
@@ -307,6 +308,11 @@ async def _convert_one_account(
     with suppress(Exception):
         await client.disconnect()
 
+    # Telethon creates the ``.session`` SQLite file itself, at the default umask —
+    # this is the only point that owns it before ``_tdata`` moves it into the live
+    # sessions dir, and ``shutil.move`` (a rename on one volume) carries the mode.
+    make_private_file(session_path)
+
     await log_event(
         "INFO",
         "tdata_convert_account_done",
@@ -327,7 +333,9 @@ async def convert_tdata_zip(
     ``log_event`` is fired at every major step so a stuck import can be
     diagnosed from the activity feed.
     """
-    sessions_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
+    # Blocking, as the ``mkdir`` it replaces was: one stat+mkdir on the local
+    # sessions dir, at the top of an import that is about to do far heavier I/O.
+    make_private_dir(sessions_dir)
     tmp_dir = Path(
         tempfile.mkdtemp(
             prefix="tdata_import_",

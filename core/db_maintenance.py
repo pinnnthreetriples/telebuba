@@ -18,6 +18,7 @@ from sqlalchemy import text
 
 from core.config import settings
 from core.db import _get_engine
+from core.secure_paths import make_private_dir, make_private_file
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -65,7 +66,11 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
         if not settings.db.backup_enabled:
             return None
         backup_dir = settings.db.backup_dir
-        backup_dir.mkdir(parents=True, exist_ok=True)
+        # A backup is a byte-for-byte copy of the credential store — plaintext proxy
+        # passwords and every password_hash — so it needs the same 0700/0600 as the
+        # database it copies. Restricting the dir also covers the ``.part`` staging
+        # file, which holds the same bytes before it is published.
+        make_private_dir(backup_dir)
         stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
         target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
         partial = target.with_name(target.name + _BACKUP_PARTIAL_SUFFIX)
@@ -88,6 +93,7 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
                 orphan.unlink(missing_ok=True)
         _vacuum_into(connection, partial)
     partial.replace(target)  # atomic publish: only a complete file gets the real name.
+    make_private_file(target)
     _prune_backups(backup_dir)
     return target
 

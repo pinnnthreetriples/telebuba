@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from contextlib import suppress
 from pathlib import Path
+
+from core.secure_paths import make_private_dir, make_private_file
 
 _PROFILE_PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 _STORY_IMAGE_SUFFIXES = _PROFILE_PHOTO_SUFFIXES
@@ -23,13 +24,11 @@ def _session_filename(filename: str) -> str:
 
 
 def _write_session_file(path: Path, content: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # Directory first: a 0600 file inside a 0755 directory still leaks its name and
+    # size to every local account. See ``core.secure_paths`` for the POSIX caveat.
+    make_private_dir(path.parent)
     path.write_bytes(content)
-    # Best-effort chmod 0600. ``os.chmod`` on Windows only affects the read-only
-    # bit, so the protection is mainly relevant on POSIX. We swallow OSError to
-    # keep imports working on systems where chmod is unavailable.
-    with suppress(OSError):
-        path.chmod(0o600)
+    make_private_file(path)
 
 
 def _validate_content(

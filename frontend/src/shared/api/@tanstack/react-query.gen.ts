@@ -40,6 +40,7 @@ import {
   getNeurocommentBoard,
   getNeurocommentRuntime,
   getNeurocommentSettings,
+  getReadiness,
   getWarmingBoard,
   getWarmingSettings,
   handoffToNeurocomment,
@@ -196,6 +197,9 @@ import type {
   GetNeurocommentSettingsData,
   GetNeurocommentSettingsError,
   GetNeurocommentSettingsResponse,
+  GetReadinessData,
+  GetReadinessError,
+  GetReadinessResponse,
   GetWarmingBoardData,
   GetWarmingBoardError,
   GetWarmingBoardResponse,
@@ -497,6 +501,39 @@ export const getHealthOptions = (options?: Options<GetHealthData>) =>
       return data;
     },
     queryKey: getHealthQueryKey(options),
+  });
+
+export const getReadinessQueryKey = (options?: Options<GetReadinessData>) =>
+  createQueryKey('getReadiness', options);
+
+/**
+ * Ready
+ *
+ * Answer 503 while a dependency is down, so a supervisor can hold traffic back.
+ *
+ * The one route that answers a non-2xx with something other than the
+ * ``ErrorEnvelope``, deliberately: this is consumed by an orchestrator's probe,
+ * not the SPA, and the per-dependency verdict is the whole point of the body.
+ * The status CODE has to carry the signal — a 200 saying "unavailable" is
+ * invisible to every probe implementation.
+ */
+export const getReadinessOptions = (options?: Options<GetReadinessData>) =>
+  queryOptions<
+    GetReadinessResponse,
+    GetReadinessError,
+    GetReadinessResponse,
+    ReturnType<typeof getReadinessQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getReadiness({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getReadinessQueryKey(options),
   });
 
 export const listAccountsQueryKey = (options?: Options<ListAccountsData>) =>

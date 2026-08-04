@@ -14,6 +14,7 @@ from contextlib import AbstractAsyncContextManager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api._middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from api.errors import register_error_handlers
 from api.v1 import router as v1_router
 from core.config import settings
@@ -37,6 +38,16 @@ def create_app(lifespan: Lifespan | None = None) -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Added last = outermost (``add_middleware`` prepends, the stack builds in
+    # reverse), which is what both need: the byte counter must reject before
+    # routing resolves the auth dependency, and the header stamp must wrap its 413.
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.api.max_request_bytes,
+        max_anonymous_bytes=settings.api.max_anonymous_request_bytes,
+        cookie_name=settings.auth.cookie_name,
+    )
+    app.add_middleware(SecurityHeadersMiddleware)
     register_error_handlers(app)
     app.include_router(v1_router, prefix=f"/api/{settings.api.version}")
     return app

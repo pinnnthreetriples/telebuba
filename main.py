@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import subprocess  # nosec B404 — read-only git rev-parse, no user input.
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
@@ -23,7 +24,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
 from api import create_app
 from core.config import settings
@@ -39,6 +40,9 @@ from services.neurocomment import (
     shutdown_neurocomment_on_shutdown,
 )
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
+
+# Stdlib sink for full text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 _GIT_SHA_TIMEOUT_SECONDS = 2
 _ROOT = Path(__file__).resolve().parent
@@ -74,6 +78,35 @@ async def _log_app_started() -> None:
     await log_event("INFO", "app_started", extra={"git_sha": _git_sha()})
 
 
+async def _shutdown_step(name: str, close: Callable[[], Awaitable[None]]) -> None:
+    """Run one teardown step; log a failure but never let it skip the rest.
+
+    These ran as a bare sequence of ``await``s, so the FIRST one to raise abandoned
+    every later step — leaking exactly what they exist to release: the pooled
+    Telethon clients (each holding a ``.session`` SQLite file open) and the three
+    long-lived HTTP clients. The failure is reported, not swallowed: by exception
+    TYPE only, because a gateway's ``str(exc)`` can carry a proxy URL with
+    credentials or a session path (non-negotiable #7).
+
+    Sequential and not ``asyncio.gather``: the order is load-bearing — see the
+    lifespan docstring on draining warming before tearing the pool down.
+    """
+    try:
+        await close()
+    except Exception as exc:  # one step must never abort the rest
+        # Both sinks, the repo's pattern (``lifecycle.remove_account``): the full
+        # text to the stdlib logger so the failure is diagnosable beyond its class
+        # name, and the TYPE only to the structured feed. Shutdown is not reachable
+        # by an outsider — contrast ``services.health`` — so the text is safe to keep
+        # here, and it is the only place it exists.
+        logger.exception("shutdown step %s failed", name)
+        await log_event(
+            "ERROR",
+            "app_shutdown_step_failed",
+            extra={"step": name, "error_type": type(exc).__name__},
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Start/stop the in-process runtimes around the server's lifetime.
@@ -95,15 +128,15 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        await shutdown_warming_runtime()
-        await shutdown_neurocomment_on_shutdown()
-        await shutdown_telegram_pool()
+        await _shutdown_step("warming", shutdown_warming_runtime)
+        await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
+        await _shutdown_step("telegram_pool", shutdown_telegram_pool)
         maintenance_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await maintenance_task
-        await close_gemini_client()
-        await close_openai_client()
-        await close_telemetr_client()
+        await _shutdown_step("gemini", close_gemini_client)
+        await _shutdown_step("openai", close_openai_client)
+        await _shutdown_step("telemetr", close_telemetr_client)
 
 
 def _safe_spa_file(path: str) -> Path | None:
