@@ -89,6 +89,32 @@ def test_every_action_failure_code_has_ru_and_en_copy() -> None:
         assert not missing, f"{locale}.json has no copy for: {missing}"
 
 
+def test_the_log_reason_ladder_walks_every_code_namespace() -> None:
+    """The failure LOG must reach the same namespaces the toast does.
+
+    ``core.telegram_client._action_results._generic_error`` writes a gateway stable
+    code into the failure row's ``extra.error_type``, so every namespace above is
+    log-visible too — and ``frontend/src/shared/lib/log/eventReason.ts`` walks its
+    own ladder to translate it. That ladder shipped without ``addStory``: ten
+    labels, ``story_image_invalid`` among them, were translated for the toast and
+    rendered raw in the log, and the test above passed the whole time because it
+    only asks whether copy EXISTS.
+
+    A text scan is the honest limit here. It proves the three namespace strings are
+    present in the module; it cannot prove they are in the ladder array rather than
+    a comment, that i18next is handed them in that order, or that the lookup
+    succeeds. ``eventReason.test.ts`` resolves real codes through the real i18n
+    instance and is what proves those. This guards the one failure mode a
+    TypeScript-side test cannot: a namespace added to ``_CODE_NAMESPACES`` here and
+    silently never wired into the SPA.
+    """
+    source = (_ROOT / "frontend" / "src" / "shared" / "lib" / "log" / "eventReason.ts").read_text(
+        encoding="utf-8",
+    )
+    missing = [ns for ns in _CODE_NAMESPACES if f"accounts.{ns}.code" not in source]
+    assert not missing, f"eventReason.ts never looks up: {missing}"
+
+
 def test_the_rate_limit_family_that_carries_seconds_interpolates_them() -> None:
     """``{{s}}`` is fed from ``retry_after_seconds``; a wait code without it reads oddly.
 
