@@ -25,6 +25,7 @@ from core.logging import log_event
 from core.telegram_client import (
     stop_post_listener,
     subscribe_posts,  # noqa: F401 - re-exported: read by _watch + patched by tests via _runtime.
+    take_lost_access_channels,  # noqa: F401 - re-exported: read by _join + patched via _runtime.
 )
 from services.neurocomment import _signals
 from services.neurocomment.engine import handle_new_post
@@ -82,8 +83,9 @@ _JOIN_RERUN = False
 # (listener, channel) pairs successfully joined this process, so reconcile does not
 # re-join every channel on every call (10 rapid channel links = dozens of join RPCs
 # before this guard — a real Telegram flood risk). Joins are idempotent, so this is
-# a flood guard, not a correctness cache. ponytail: process-lifetime, never
-# invalidated — a failed join simply retries on the next reconcile.
+# a flood guard, not a correctness cache. ponytail: process-lifetime; a failed join
+# simply retries on the next reconcile, and only a PROVEN access loss evicts an entry
+# (see ``_join._mark_lost_channels``), and only while re-join attempts remain.
 _JOINED_CHANNELS: set[tuple[str, str]] = set()
 
 # Watch channels the listener could not resolve to a peer id: absent from the NewMessage

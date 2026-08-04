@@ -24,10 +24,12 @@ from core.db import (
     deactivate_channel,
     insert_challenge,
     link_channel_to_campaign,
+    mark_comment_failed,
     mark_comment_posted,
     mark_comments_deleted,
     mark_human_skipped,
     mark_pair_banned,
+    record_comment_msg_id,
     save_neurocomment_settings,
     stamp_rejoin_attempt,
     upsert_linked_group,
@@ -536,3 +538,27 @@ async def test_card_quota_denominator_is_the_saved_override() -> None:
     assert board.accounts[0].max_comments_per_hour == (
         settings.neurocomment.max_comments_per_hour + 10
     )
+
+
+@pytest.mark.asyncio
+async def test_channel_row_counts_a_deleted_comment_recorded_as_failed() -> None:
+    """What trips the back-off and what explains it must be the same set of comments.
+
+    A comment whose claim was reclaimed mid-send reads ``failed`` while being live under the
+    post. The sweep sees it — its scan set is "carries a message id" — and stamps it, so it
+    drives the channel back-off. Counted off ``posted`` alone it contributed nothing, and the
+    operator was shown a back-off with no deletions behind it.
+    """
+    campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    assert await claim_comment("@chan", 1, campaign.campaign_id, "acc-1") is True
+    await record_comment_msg_id("@chan", 1, 1)
+    await mark_comment_failed("@chan", 1)
+    await mark_comments_deleted("@chan", [1])
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].deleted_recent == 1

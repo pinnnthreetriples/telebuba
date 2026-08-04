@@ -620,12 +620,13 @@ async def test_startup_reclaims_stale_claims_even_when_not_running() -> None:
     await link_channel_to_campaign(campaign.campaign_id, "@a")
     await create_account(AccountCreate(account_id="acc-1", label="acc-1", session_name="acc-1"))
     assert await claim_comment("@a", 1, campaign.campaign_id, "acc-1") is True
-    # Stuck since well before the reclaim cutoff.
+    # Stuck since well before the reclaim cutoff, and not beaten since (the reclaim ages
+    # ``updated_at``, so a heartbeat is exactly what an orphan of a crash does not have).
     stale = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
     with _get_engine().begin() as connection:
         connection.exec_driver_sql(
-            "UPDATE neurocomment_comments SET created_at = ? WHERE post_id = 1",
-            (stale,),
+            "UPDATE neurocomment_comments SET created_at = ?, updated_at = ? WHERE post_id = 1",
+            (stale, stale),
         )
     assert await get_listener_running() is False  # runtime is not running
 

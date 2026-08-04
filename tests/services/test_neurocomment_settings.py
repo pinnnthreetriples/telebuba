@@ -85,6 +85,23 @@ def test_settings_update_rejects_inverted_reply_delay_range() -> None:
         )
 
 
+def test_settings_update_accepts_a_reply_delay_longer_than_a_claim_cutoff() -> None:
+    """No upper cap here on purpose — the claim is heartbeaten THROUGH the delay instead.
+
+    A cap would lock the whole Settings form: it seeds from the unbounded read model and
+    resends every field, so one already-stored value above the cap would 422 every
+    unrelated edit, with no field marked and the warming half possibly already saved.
+    """
+    update = NeurocommentSettingsUpdate(
+        max_comments_per_hour=1,
+        max_comments_per_channel_per_day=0,
+        reply_delay_min_seconds=0.0,
+        reply_delay_max_seconds=1000.0,
+        min_trust_score=0,
+    )
+    assert update.reply_delay_max_seconds == 1000.0
+
+
 def test_campaign_create_rejects_over_long_name_and_prompt() -> None:
     with pytest.raises(ValidationError):
         CampaignCreate(name="x" * 129, prompt="p")

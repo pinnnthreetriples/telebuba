@@ -45,6 +45,7 @@ from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
 )
+from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
     _add_campaign_account_channels_table,
@@ -135,6 +136,11 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (42, "add_campaign_channel_pause", _add_campaign_channel_pause),
     (43, "add_readiness_rejoin", _add_readiness_rejoin),
     (44, "add_readiness_access_lost_reason", _add_readiness_access_lost_reason),
+    (
+        45,
+        "add_neurocomment_join_log_lost_at",
+        _add_neurocomment_join_log_lost_at,
+    ),
 )
 
 

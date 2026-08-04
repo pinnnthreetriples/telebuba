@@ -22,8 +22,8 @@ from core.db import (
     list_active_watch_channels,
     list_campaign_accounts,
     list_channel_readiness,
+    list_delivered_comments_since,
     list_pending_join_readiness,
-    list_posted_comments_since,
     mark_comments_deleted,
     purge_neurocomment_history_older_than,
     reclaim_stale_claims,
@@ -291,6 +291,18 @@ async def _reclaim_stale_claims(now: datetime) -> None:
     ``download_post_image`` precisely so this sum stays finite — unbounded it ran to ~34
     minutes on a slow proxy and outlived the cutoff), then the send (pool + RPC, ~50s) — so
     15 minutes still clears it three times over.
+
+    Those are the DEFAULTS, though, and the cutoff is not what makes this safe: operator
+    values inside the allowed ranges (the shared Gemini throttle, the reply delay) push a
+    perfectly live attempt past 15 minutes, and age alone cannot tell it from a dead one.
+    So the worker beats (``touch_comment_claim``) and this ages ``updated_at`` — a claim
+    nobody is holding still ages exactly as it did. The beats bracket every long stretch:
+    one per generation round, one per 60-second slice of the reply delay, and one last one
+    gating the send, so the widest gap between two of them is a single ``generate_text``
+    (~245s at the operator-settable ``le`` bounds) rather than the whole pipeline. What the
+    beat cannot cover is a flood-wait Telethon sleeps off INSIDE the send RPC
+    (``TELEGRAM__FLOOD_SLEEP_THRESHOLD``); a threshold above this cutoff still ends with a
+    live send under a reclaimed row, which is why the send asks the beat first and abandons.
     """
     cutoff = (
         now - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)
@@ -320,7 +332,11 @@ async def _sweep_once() -> None:
         if campaign is not None:
             by_campaign[campaign.campaign_id].append(channel)
     for campaign_id, channels in by_campaign.items():
-        comments = (await list_posted_comments_since(campaign_id, since_iso)).comments
+        # Every comment that reached Telegram, not only the ones recorded as ``posted``:
+        # a row mis-classified ``failed`` (its claim reclaimed mid-send, or a crash between
+        # the send and the commit) is still a live comment under a post, and this scan is
+        # the only thing that can notice it being deleted.
+        comments = (await list_delivered_comments_since(campaign_id, since_iso)).comments
         buckets: dict[str, list[CommentRecord]] = defaultdict(list)
         for comment in comments:
             buckets[comment.channel].append(comment)

@@ -317,6 +317,13 @@ export function NeurocommentPage() {
     // instead (the number the per-channel badge shows) would drift both ways: an
     // unlinked channel takes its deletions off the board while its comments stay on
     // the account, and an unlinked account does the reverse.
+    // It also now counts a different SET: this tile and the cards count deletions among
+    // `posted` comments, while the per-channel badge counts them among DELIVERED ones (any
+    // row carrying a message id), so a comment mis-classified `failed` mid-send shows in the
+    // badge only. That is deliberate on the badge's side — it is the number that has to
+    // explain a channel back-off — and it means a channel row may legitimately read
+    // `deleted_recent` higher than its own `posted` count. Do not "reconcile" them by
+    // narrowing the badge; the back-off reads its own scan set either way.
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
+from telethon import errors
 from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
 from core.config import settings
@@ -21,6 +22,7 @@ from core.telegram_client import _listener as listener_mod
 from core.telegram_client import (
     stop_post_listener,
     subscribe_posts,
+    take_lost_access_channels,
     update_post_subscription,
 )
 from schemas.telegram_actions import NewPostEvent
@@ -510,6 +512,73 @@ async def test_failed_resolution_is_not_cached(monkeypatch: pytest.MonkeyPatch) 
     # Second reconcile must re-attempt the unresolved channel (no poisoned cache).
     await subscribe_posts("listener-retry", ["@gone"], on_post)
     assert client.peer_id_calls == ["@gone", "@gone"]
+
+
+@pytest.mark.asyncio
+async def test_only_a_proven_kick_is_reported_as_lost_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A kick must be told apart from any other resolution failure — and drained once.
+
+    The join log is the listener's restart-safe join cache, so its owner re-joins on this
+    report alone; a transient failure leaking into it would re-send ``JoinChannel`` for a
+    channel the account is still in, every reconcile.
+    """
+
+    class KickedClient(FakeClient):
+        async def get_peer_id(self, channel: str) -> int:
+            self.peer_id_calls.append(channel)
+            if channel == "@kicked":
+                raise errors.ChannelPrivateError(request=None)
+            return await super().get_peer_id(channel)  # "@gone" raises KeyError
+
+    client = KickedClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-kick", ["@kicked", "@gone"], on_post)
+
+    assert take_lost_access_channels("listener-kick") == {"@kicked"}
+    # Draining IS the report: the caller acts on each loss once.
+    assert take_lost_access_channels("listener-kick") == set()
+
+
+@pytest.mark.asyncio
+async def test_stopping_a_listener_drops_only_its_own_undrained_losses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A loss belongs to the subscription that witnessed it, so stopping must discard it.
+
+    This is the account-switch and shutdown path: handing a previous listener's undrained
+    losses to whatever runs next would charge a re-join attempt against an account that
+    never saw the channel. The other account's report must survive untouched, and the drop
+    has to happen even when there is no cached handler to detach.
+    """
+
+    class KickedClient(FakeClient):
+        async def get_peer_id(self, channel: str) -> int:
+            self.peer_id_calls.append(channel)
+            raise errors.ChannelPrivateError(request=None)
+
+    client = KickedClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-a", ["@kicked"], on_post)
+    await subscribe_posts("listener-b", ["@kicked"], on_post)
+    # A third account with a witnessed loss but no handler — the early-return path.
+    listener_mod._LOST_ACCESS["listener-c"] = {"@kicked"}
+
+    await stop_post_listener("listener-a")
+    await stop_post_listener("listener-c")
+
+    assert take_lost_access_channels("listener-a") == set()
+    assert take_lost_access_channels("listener-c") == set()
+    assert take_lost_access_channels("listener-b") == {"@kicked"}
 
 
 @pytest.mark.asyncio

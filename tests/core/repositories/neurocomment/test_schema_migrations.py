@@ -18,14 +18,17 @@ from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     create_account,
     create_campaign,
+    list_joined_watch_channels,
+    record_join,
     upsert_readiness,
 )
+from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_neurocomment import _add_neurocomment_channel_case_fold_index
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 
 if TYPE_CHECKING:
-    from sqlalchemy.engine import Engine
+    from sqlalchemy.engine import Connection, Engine
 
     from tests.core.conftest import _EngineFactory
 
@@ -374,3 +377,70 @@ def test_channel_fold_index_skips_a_db_without_the_link_table(
     engine = legacy_engine("empty-fold.db")
     with engine.begin() as connection:
         _add_neurocomment_channel_case_fold_index(connection)  # no table → returns, no raise.
+
+
+@pytest.mark.asyncio
+async def test_migration_45_adds_join_log_lost_at() -> None:
+    """The stamp that replaced deleting a disproven join, so the join cap keeps counting."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            row["name"]: row
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_join_log)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    # Nullable: an existing row means "this join still stands", which is what it meant.
+    assert columns["lost_at"]["notnull"] == 0
+    assert 45 in versions
+
+    await record_join("acc-1", watch_channel="@chan")
+    assert await list_joined_watch_channels("acc-1") == {"@chan"}
+
+
+def test_migration_45_alters_a_join_log_that_predates_the_column(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """The only path that ever RUNS on the operator's database, exercised against a real one.
+
+    The test above cannot reach it: ``core.db`` runs ``create_all`` before
+    ``apply_migrations``, so on a test DB ``lost_at`` is already there and the body's PRAGMA
+    guard returns before the ALTER. Built here the way #39's cases are — a hand-made table
+    at the OLD shape, so the ALTER is what has to put the column on it.
+    """
+    engine = legacy_engine("join-log-pre-45.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_join_log ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, account_id VARCHAR NOT NULL, "
+            "joined_at VARCHAR NOT NULL, watch_channel VARCHAR)",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_join_log (account_id, joined_at, watch_channel) "
+            "VALUES ('acc-1', 'then', '@chan'), ('acc-1', 'then', NULL)",
+        )
+        assert "lost_at" not in _join_log_columns(connection)
+
+        _add_neurocomment_join_log_lost_at(connection)
+        assert "lost_at" in _join_log_columns(connection)
+        _add_neurocomment_join_log_lost_at(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        stamps = connection.exec_driver_sql(
+            "SELECT lost_at FROM neurocomment_join_log ORDER BY id",
+        ).all()
+    # Every pre-existing row reads NULL = "this join still stands", which is what a row
+    # meant before the column existed — the watch-channel one and the group one alike.
+    assert stamps == [(None,), (None,)]
+
+
+def _join_log_columns(connection: Connection) -> set[str]:
+    return {
+        str(row["name"])
+        for row in connection.exec_driver_sql(
+            "PRAGMA table_info(neurocomment_join_log)",
+        ).mappings()
+    }

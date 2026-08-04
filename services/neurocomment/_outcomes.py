@@ -21,6 +21,7 @@ from core.config import settings
 from core.db import (
     mark_comment_failed,
     mark_comment_posted,
+    record_comment_msg_id,
     release_claim,
     resolve_pending_outcome,
     upsert_readiness,
@@ -120,39 +121,7 @@ async def _classify_post(
     result: ActionResult,
 ) -> None:
     if result.status == "ok":
-        # Telegram accepted the comment — this is the commit point. From here the
-        # comment IS delivered, so a failure in any of the follow-up DB writes must be
-        # logged, never flip the row to failed (that would mis-report a live comment
-        # and free its dedup hash for a duplicate). CancelledError still propagates.
-        # No cooldown clearing here: ``in_cooldown`` lazily evicts expired keys, so the
-        # clear was redundant in the calm case and destructive under concurrency — a task
-        # already past the selection gate and sleeping in its reply delay would erase a
-        # *fresh* flood cooldown another task had just parked the account with.
-        try:
-            await mark_comment_posted(
-                event.channel,
-                event.post_id,
-                comment_text=text,
-                comment_msg_id=result.message_id,
-            )
-            # First comment confirms a solver click worked (no-op if no pending row).
-            await resolve_pending_outcome(account_id, event.channel, "solved")
-            # A delivered comment proves the channel is writable, so it clears both the
-            # failure window and the persisted round counter (#147).
-            await _channel_pause.clear_write_failures(event.channel)
-            await log_event(
-                "INFO",
-                "neurocomment_posted",
-                account_id=account_id,
-                extra={"channel": event.channel, "post_id": event.post_id},
-            )
-        except Exception:  # noqa: BLE001 - a delivered comment must not be flipped to failed
-            await log_event(
-                "ERROR",
-                "neurocomment_post_commit_failed",
-                account_id=account_id,
-                extra={"channel": event.channel, "post_id": event.post_id},
-            )
+        await _commit_delivered(event, account_id, text, result)
         return
 
     # Every non-ok path frees the claim's reserved text (and its in-flight entry); every
@@ -252,6 +221,90 @@ async def _classify_post(
         await _apply_cooldown(account_id, None, event.channel)
         event_name = "neurocomment_post_failed"
     await _log_outcome(event, account_id, result, event_name)
+
+
+async def _commit_delivered(
+    event: NewPostEvent,
+    account_id: str,
+    text: str,
+    result: ActionResult,
+) -> None:
+    """Record a comment Telegram accepted — the commit point of the whole pipeline.
+
+    From here the comment IS delivered, so a failure in any of these DB writes must be
+    logged, never flip the row to failed (that would mis-report a live comment and free
+    its dedup hash for a duplicate). CancelledError still propagates.
+
+    Ends in exactly one line, chosen by the row the delivery landed on: the clean post, the
+    reclaim warning INSTEAD of it when the row went terminal underneath us, or an error when
+    there is no row left at all.
+
+    No cooldown clearing here: ``in_cooldown`` lazily evicts expired keys, so the clear
+    was redundant in the calm case and destructive under concurrency — a task already past
+    the selection gate and sleeping in its reply delay would erase a *fresh* flood cooldown
+    another task had just parked the account with.
+    """
+    try:
+        if result.message_id is not None:
+            # FIRST, and on its own: ``mark_comment_posted`` refuses to re-transition a
+            # terminal row, so on a claim the sweep reclaimed to ``failed`` underneath us it
+            # wrote NOTHING — id included — and the comment stayed live under the post while
+            # invisible to the deletion sweep, which can only see rows carrying an id. The
+            # id is a fact, so it lands whatever the status ended up saying.
+            await record_comment_msg_id(event.channel, event.post_id, result.message_id)
+        record = await mark_comment_posted(
+            event.channel,
+            event.post_id,
+            comment_text=text,
+            comment_msg_id=result.message_id,
+        )
+        # First comment confirms a solver click worked (no-op if no pending row).
+        await resolve_pending_outcome(account_id, event.channel, "solved")
+        # A delivered comment proves the channel is writable, so it clears both the
+        # failure window and the persisted round counter (#147).
+        await _channel_pause.clear_write_failures(event.channel)
+        # Exactly ONE line per delivery, describing the row this delivery actually landed
+        # on. The clean line used to fire in addition to the warning, so the feed announced
+        # "Comment posted" over a row reading ``failed`` — the very contradiction the
+        # warning exists to report.
+        if record is None:
+            # No row at all: the id write above went nowhere either, so a live comment is
+            # under the post with nothing recording it — invisible to the deletion sweep and
+            # to every counter. Only ``release_claim`` can delete a row, and only this worker
+            # calls it, so this should be unreachable; ERROR because nothing else can see it.
+            await log_event(
+                "ERROR",
+                "neurocomment_posted_row_missing",
+                account_id=account_id,
+                extra={"channel": event.channel, "post_id": event.post_id},
+            )
+        elif record.status != "posted":
+            # The row was already terminal, and this is the only honest place to say so:
+            # the campaign's counters quietly under-count a comment that did land.
+            await log_event(
+                "WARNING",
+                "neurocomment_posted_after_reclaim",
+                account_id=account_id,
+                extra={
+                    "channel": event.channel,
+                    "post_id": event.post_id,
+                    "status": record.status,
+                },
+            )
+        else:
+            await log_event(
+                "INFO",
+                "neurocomment_posted",
+                account_id=account_id,
+                extra={"channel": event.channel, "post_id": event.post_id},
+            )
+    except Exception:  # noqa: BLE001 - a delivered comment must not be flipped to failed
+        await log_event(
+            "ERROR",
+            "neurocomment_post_commit_failed",
+            account_id=account_id,
+            extra={"channel": event.channel, "post_id": event.post_id},
+        )
 
 
 async def _resolve_unavailable_claim(event: NewPostEvent, result: ActionResult) -> None:

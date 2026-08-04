@@ -427,6 +427,7 @@ class NeurocommentSettingsUpdate(BaseModel):
     max_comments_per_hour: int = Field(ge=1)
     max_comments_per_channel_per_day: int = Field(ge=0)
     reply_delay_min_seconds: float = Field(ge=0)
+    # No upper bound, deliberately — ``_generate._sleep_beating``'s docstring says why.
     reply_delay_max_seconds: float = Field(ge=0)
     min_trust_score: int = Field(ge=0, le=100)
 

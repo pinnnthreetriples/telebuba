@@ -316,4 +316,9 @@ _neurocomment_join_log = Table(
     # cache survives a restart; NULL for a discussion-group join, which is keyed by
     # readiness instead and must never make the listener skip the channel itself.
     Column("watch_channel", String, nullable=True),
+    # When Telegram proved this join no longer stands (kicked / banned / gone private),
+    # migration #45. The row is never deleted: it is the only record that the join RPC was
+    # spent, so the cap above must go on counting it, and the number of lost rows for a
+    # pair IS the re-join attempt counter. NULL = the membership still stands.
+    Column("lost_at", String, nullable=True),
 )
