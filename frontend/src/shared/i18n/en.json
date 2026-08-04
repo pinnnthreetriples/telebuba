@@ -433,7 +433,7 @@
         "chat_admin_required": "Channel admin rights are required",
         "channel_read_failed": "Couldn't read the channel data from Telegram",
         "channel_create_failed": "Couldn't create the channel",
-        "channel_username_assign_failed": "Channel was created as private — the username could not be assigned",
+        "channel_username_assign_failed": "The username could not be assigned — the channel was created as private",
         "failed": "Telegram refused the action — try again",
         "unavailable": "Telegram is temporarily unavailable — try again"
       }
@@ -602,7 +602,8 @@
       "level": "Level",
       "account": "Account",
       "channel": "Channel",
-      "event": "Event"
+      "event": "Event",
+      "reason": "Reason"
     },
     "pagination": {
       "prev": "Prev",
@@ -768,6 +769,8 @@
     "neurocomment_channel_comments_off": "Channel comments are disabled",
     "neurocomment_onboard_join_by_request": "Join request sent",
     "neurocomment_onboard_join_request_pending": "Join request still awaiting approval",
+    "neurocomment_onboard_join_request_approved": "Join request approved",
+    "neurocomment_onboard_pair_ready": "Account is ready to comment on the channel",
     "neurocomment_join_request_expired": "Channel dropped: join request never approved",
     "neurocomment_join_request_review_failed": "Join-request review failed",
     "neurocomment_channel_rejoin_exhausted": "Channel dropped: could not get back into the chat",
@@ -886,6 +889,20 @@
       "peer_flood": "spam limit",
       "already_participant": "already a member",
       "by_request": "join request sent, awaiting approval"
+    },
+    "error": {
+      "ChannelPrivateError": "chat is closed — not admitted, or removed",
+      "ChannelInvalidError": "Telegram did not recognise this channel",
+      "UserBannedInChannelError": "Telegram blocked this account from writing",
+      "ChatWriteForbiddenError": "writing is not allowed in this chat",
+      "ChatGuestSendForbiddenError": "only members may write here",
+      "UserNotParticipantError": "the account is not in the chat",
+      "UsernameNotOccupiedError": "no such address",
+      "UsernameInvalidError": "the address is malformed",
+      "InviteHashExpiredError": "the invite link has expired",
+      "InviteHashInvalidError": "the invite link is not valid",
+      "InviteHashEmptyError": "the link carries no invite",
+      "UnconfirmedRequest": "connection dropped, the reply never arrived"
     }
   },
   "neurocomment": {

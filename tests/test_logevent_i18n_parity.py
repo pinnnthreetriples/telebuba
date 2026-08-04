@@ -405,16 +405,19 @@ def _family_keys(locale: str, family: str) -> set[str]:
 
 
 def test_channel_status_and_hint_keys_match_across_locales() -> None:
-    """Neither operator-facing key family may ship in one locale only.
+    """No operator-facing key family may ship in one locale only.
 
-    Both are frontend-only, so nothing else guards them: ``neurocomment.channelStatus``
+    All three are frontend-only, so nothing else guards them: ``neurocomment.channelStatus``
     is keyed by the backend ``ChannelStatus`` literal (tsc enforces that the badge's
-    colour map is total, not that both locales carry the label), and ``logEventHint`` is
-    optional by construction — ``ActivityLogCard`` falls back to an empty string. A key
-    added to one locale therefore renders as the raw key in the other with nothing
-    failing anywhere. Symmetric difference: a key missing on EITHER side is a gap.
+    colour map is total, not that both locales carry the label), ``logEventHint`` is
+    optional by construction — ``ActivityLogCard`` falls back to an empty string — and
+    ``logEventTelegram.error`` is keyed by Telethon exception CLASS names, which no
+    backend scan can enumerate (they arrive as ``type(exc).__name__``, never as a
+    literal) and which fall back to the raw class name. A key added to one locale
+    therefore renders as the raw key in the other with nothing failing anywhere.
+    Symmetric difference: a key missing on EITHER side is a gap.
     """
-    for family in ("neurocomment.channelStatus", "logEventHint"):
+    for family in ("neurocomment.channelStatus", "logEventHint", "logEventTelegram.error"):
         ru = _family_keys("ru", family)
         en = _family_keys("en", family)
         assert ru, f"{family} resolved to an empty map — the key path is broken"
