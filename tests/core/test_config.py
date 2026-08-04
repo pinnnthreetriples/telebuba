@@ -111,8 +111,11 @@ def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:
 #                on ``.session`` files), but 5 false positives is too high a price.
 #   ``_url``     5 (all five ``*_base_url`` fields) — so ``sentry_url``, a Sentry DSN
 #                under another name, slips even though ``dsn`` is a pattern.
-#   ``iv``       9, ``sk`` 2, ``tdata`` 1 — bare crypto abbreviations and
-#                ``tdata_bundle`` slip.
+#   ``iv``       8, ``sk`` 2, ``tdata`` 1 — bare crypto abbreviations and
+#                ``tdata_bundle`` slip. ``iv`` matches NINE field names but costs
+#                eight: ``warming.active_hours_enabled`` is a ``bool``, so the rule
+#                below drops it before its name is ever tested. Every cost here is a
+#                predicate outcome, not a name-match count.
 # ``pk``, ``nonce`` and ``kdf`` would cost nothing but are not patterns either: no
 # field here is named that way and this codebase spells things out
 # (``admin_password``, not ``pw``). Add them the day a field needs them.
