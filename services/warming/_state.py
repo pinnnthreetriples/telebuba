@@ -47,6 +47,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     quarantine_count: int | _Sentinel = _SENTINEL,
     run_id: str | None | _Sentinel = _SENTINEL,
     expected_run_id: str | None = None,
+    reservation_token: str | None = None,
     current_phase: WarmingPhase | None | _Sentinel = _SENTINEL,
     phase_entered_at: str | None | _Sentinel = _SENTINEL,
     target_days: int | None | _Sentinel = _SENTINEL,
@@ -96,6 +97,10 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             quarantine_count=cast("int", _resolve(quarantine_count, "quarantine_count") or 0),
             run_id=cast("str | None", _resolve(run_id, "run_id")),
             expected_run_id=expected_run_id,
+            # NOT resolved against the current row: no reader loads this column, and
+            # ``None`` means "leave it" rather than "write NULL" (#10) — see
+            # ``WarmingStateWrite.reservation_token``.
+            reservation_token=reservation_token,
             current_phase=cast(
                 "WarmingPhase | None",
                 _resolve(current_phase, "current_phase"),

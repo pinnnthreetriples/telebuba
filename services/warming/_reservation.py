@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from typing import NamedTuple
 
 from core.db import fetch_warming_state, hand_back_warming_reservation
@@ -21,16 +22,27 @@ logger = logging.getLogger(__name__)
 
 
 class _Reservation(NamedTuple):
-    """Today's ``(count, date)`` plus the budget the pre-cycle write booked on top.
+    """One pre-cycle daily-budget booking, from the booking write to its hand-back.
 
-    The three travel together from the ``cycle_started`` write to the hand-back
-    because the hand-back's guard is the booked value itself — carrying them apart
-    is how the release ends up unable to name the booking it is releasing.
+    Today's ``(count, date)``, the budget booked on top of it, and the token that
+    identifies this booking on the row. They travel together because the hand-back's
+    guard is all four — carrying them apart is how the release ends up unable to name
+    the booking it is releasing.
     """
 
     daily_count: int
     daily_date: str
     remaining: int | None
+    token: str
+
+    @classmethod
+    def book(cls, daily: tuple[int, str], remaining: int | None) -> _Reservation:
+        """Mint a booking for today's count, unique to this cycle.
+
+        A fresh token per booking, NOT per run: two bookings of the same generation
+        must be distinguishable too, or a stale hand-back could release the second.
+        """
+        return cls(*daily, remaining, uuid.uuid4().hex)
 
     @property
     def booked(self) -> int:
@@ -59,16 +71,22 @@ async def _reconcile_reservation(
     account on a phantom "daily limit" until the next UTC midnight, forfeiting the
     rest of the day's warming.
 
-    Guarded by the booking's own value, NOT by the generation marker (#10). Both
+    Guarded by the booking's own token, NOT by the generation marker (#10). Both
     predicates the state CAS applies — ``run_id`` matches and the row is not
     ``idle`` — are false for the routine case this hand-back exists to serve: the
     stop path clears ``run_id`` and writes ``idle`` as soon as its ~5s cancel wait
     is up, and a cycle stuck on a slow proxy unwinds after that, so the write was
     refused and the day stayed booked. An operator's Stop then Start reached the
-    same dead end from the other side, because Start always mints a fresh
-    generation. ``daily_actions`` still being exactly what we booked is the precise
-    statement of "nobody else has touched today's count", and it also makes the
-    write idempotent — see ``hand_back_warming_reservation``.
+    same dead end from the other side, because Start mints the next generation
+    eagerly, before the dying cycle has unwound.
+
+    The booked NUMBER cannot stand in for the token: ``booked`` saturates to the
+    phase cap on every generation (the daily gate only admits a count at least two
+    below it), so a value guard alone matched a newer generation's re-booking of the
+    same size and released it — leaving that live cycle spending against a budget
+    nobody had reserved. The token is minted per booking and cleared when it is
+    handed back, which is also what makes the write idempotent — see
+    ``hand_back_warming_reservation``.
 
     ``Exception`` failures are swallowed — never propagated — because this runs on
     the way out of another exception and must never mask it, but they are always
@@ -86,27 +104,30 @@ async def _reconcile_reservation(
         # ``to_thread``. An abandoned write leaves the full reservation booked and
         # replaces whatever exception was propagating — a genuine crash would then
         # look like a cancellation to ``_runner`` and never park the account.
-        applied = await asyncio.shield(
+        outcome = await asyncio.shield(
             hand_back_warming_reservation(
                 account_id,
+                token=reservation.token,
                 booked=reservation.booked,
                 reconciled=daily_count + spent,
                 daily_date=reservation.daily_date,
             ),
         )
-        if not applied:
-            # The booking is no longer on the row (a newer generation already booked
-            # its own, or today's count moved on some other way): whatever is booked
-            # there is not ours to release, and nothing else will clear it before the
-            # next UTC midnight, so this is the case the operator actually has to
-            # see — not a successful hand-back.
+        if outcome == "stranded":
+            # Our token is still on the row but the count moved under it, so nothing
+            # will clear the booking before the next UTC midnight: the case the
+            # operator actually has to see. A ``superseded`` refusal is deliberately
+            # silent — the booking was already settled, by our own shielded write or
+            # by a newer one — because logging that taught the operator to ignore this
+            # code (it fired on roughly a quarter of stops, saying a day was lost that
+            # was not).
             await log_event(
                 "WARNING",
                 "warming_reservation_stranded",
                 account_id=account_id,
                 extra={"spent": spent, "daily_actions": daily_count + spent},
             )
-        elif spent:
+        elif outcome == "applied" and spent:
             # A forfeited day is otherwise indistinguishable from a legitimate park:
             # ``_gate_daily_limit`` writes the same ``last_event="daily_limit"`` either
             # way, so without this the fleet can lose a day of warming per deploy in

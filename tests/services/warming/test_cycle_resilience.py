@@ -22,13 +22,14 @@ from schemas.warming import (
     ActivityPersona,
     WarmingCycleRequest,
     WarmingCycleResult,
+    WarmingHandBack,
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
     WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _reservation, _seams, _state
+from services.warming import _loop, _reservation, _seams
 from services.warming._reservation import _Reservation
 from services.warming._state import _set_state
 from tests.services.warming._support import (
@@ -264,7 +265,7 @@ async def test_warming_phase_advanced_not_logged_when_finalize_cas_rejected(
         WarmingCycleResult(account_id="acc-1", status="ok"),
         365 * 24.0,  # huge age → phase would jump from the stale "intro"
         # Nothing reserved, so the hand-back branch is inert here.
-        _Reservation(0, today, 0),
+        _Reservation.book((0, today), 0),
         (0, datetime.now(UTC), "sleeping"),
         run_id="run-a",
     )
@@ -299,7 +300,7 @@ async def test_warming_phase_advanced_logged_when_finalize_applies(
         WarmingCycleResult(account_id="acc-1", status="ok"),
         365 * 24.0,
         # Nothing reserved, so the hand-back branch is inert here.
-        _Reservation(0, today, 0),
+        _Reservation.book((0, today), 0),
         (0, datetime.now(UTC), "sleeping"),
         run_id="run-a",
     )
@@ -386,8 +387,8 @@ async def test_a_cancel_on_the_finalize_paths_reconcile_still_propagates(
     task: asyncio.Task[None]
 
     async def cancel_the_reconciling_write(
-        account_id: str, *, booked: int, reconciled: int, daily_date: str
-    ) -> bool:
+        account_id: str, *, token: str, booked: int, reconciled: int, daily_date: str
+    ) -> WarmingHandBack:
         nonlocal cancelled_once
         # Once only — the handler retries the same write on the way out, and a second
         # cancel would prove nothing.
@@ -396,11 +397,11 @@ async def test_a_cancel_on_the_finalize_paths_reconcile_still_propagates(
             booked_guard.append(booked)
             task.cancel()
             await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
-        applied = await real_hand_back(
-            account_id, booked=booked, reconciled=reconciled, daily_date=daily_date
+        outcome = await real_hand_back(
+            account_id, token=token, booked=booked, reconciled=reconciled, daily_date=daily_date
         )
         written.set()
-        return applied
+        return outcome
 
     monkeypatch.setattr(_reservation, "hand_back_warming_reservation", cancel_the_reconciling_write)
     await _seed_warming_account(run_id="run-1")
@@ -430,28 +431,29 @@ async def test_the_handler_leaves_a_live_generations_own_reservation_alone(
 ) -> None:
     """The abnormal-exit hand-back releases ITS booking, never today's count (#208 inverted).
 
-    The guard is the booked value, so a hand-back that arrives after a fresh
-    generation has booked its own budget finds a number it never wrote and declines.
-    An unconditional write would replace that live reservation with the dead cycle's
-    spend, and the new run would then spend a second full budget on top.
+    ``run-2`` books the SAME number, because ``booked`` saturates to the phase cap for
+    every generation — the daily gate never admits a count within two of it. So the
+    booked value cannot identify a booking, and a hand-back guarded on the value alone
+    released a live reservation of the same size: ``run-2`` would then spend a full
+    budget against a row that reserved nothing for it. Only the per-booking token
+    tells the two apart.
     """
     _no_quiet_days(monkeypatch)
     crash = _CrashAfter(2)
     monkeypatch.setattr(_seams, "execute", crash.execute)
     real_fetch = _reservation.fetch_warming_state
-    # A degraded trust band would hand ``run-2`` a smaller cap, so its own pre-cycle
-    # booking is a different number from the one the dying cycle reserved.
-    rebooked = settings.warming.phase_daily_cap["intro"] - 2
+    rebooked = settings.warming.phase_daily_cap["intro"]
 
     async def rebook_under_a_new_generation(account_id: str) -> WarmingStateRecord | None:
         # A restart's cancel-and-replace minted ``run-2`` behind the dying cycle, and
-        # its own pre-cycle write booked the remaining budget it computed.
+        # its own pre-cycle write booked the remaining budget under its own token.
         await _set_state(
             account_id,
             "active",
             run_id="run-2",
             daily_actions=rebooked,
             expected_run_id="run-1",
+            reservation_token="token-2",
         )
         return await real_fetch(account_id)
 
@@ -495,15 +497,21 @@ async def test_a_row_purged_mid_handler_is_not_reconciled(
         return await real_fetch(account_id)
 
     monkeypatch.setattr(_reservation, "fetch_warming_state", purge_then_read)
-    writes_after_purge: list[int | None] = []
-    real_upsert = _state.upsert_warming_state
+    # Watch the hand-back itself, not ``upsert_warming_state``: since #10 the write
+    # goes straight to ``hand_back_warming_reservation``, so the old seam saw nothing
+    # either way and the skip below was no longer covered by anything.
+    hand_backs: list[str] = []
+    real_hand_back = _reservation.hand_back_warming_reservation
 
-    async def record_write(write: WarmingStateWrite) -> WarmingStateWriteResult:
-        if purged:
-            writes_after_purge.append(write.daily_actions)
-        return await real_upsert(write)
+    async def record_hand_back(
+        account_id: str, *, token: str, booked: int, reconciled: int, daily_date: str
+    ) -> WarmingHandBack:
+        hand_backs.append(account_id)
+        return await real_hand_back(
+            account_id, token=token, booked=booked, reconciled=reconciled, daily_date=daily_date
+        )
 
-    monkeypatch.setattr(_state, "upsert_warming_state", record_write)
+    monkeypatch.setattr(_reservation, "hand_back_warming_reservation", record_hand_back)
     await _seed_warming_account()
 
     with (
@@ -512,9 +520,9 @@ async def test_a_row_purged_mid_handler_is_not_reconciled(
     ):
         await warming.run_loop_iteration("acc-1")
 
-    # The reconcile was not merely quiet, it was never attempted: no state write
-    # follows the purge, so the FK-rejecting insert never happened.
-    assert writes_after_purge == []
+    # The reconcile was not merely quiet, it was never attempted: the purged row is
+    # skipped before the write, so nothing tried to reconcile an account that is gone.
+    assert hand_backs == []
     assert [
         r.getMessage() for r in caplog.records if r.name == "services.warming._reservation"
     ] == []

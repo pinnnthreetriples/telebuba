@@ -119,8 +119,60 @@ async def test_a_stop_that_outran_its_cancel_wait_still_gives_the_day_back(
     assert survivor.types()[0] == "set_online"
 
 
+@pytest.mark.asyncio
+async def test_a_start_before_the_dying_cycle_unwinds_still_gets_the_day_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reported click order: Stop, then Start, while the old cycle is still unwinding.
+
+    ``start_warming`` mints the next generation EAGERLY — it stamps ``run_id`` on the
+    row before the dying cycle has finished — so by the time the hand-back runs the row
+    belongs to run-2 and no generation-based guard can accept it. The booking's own
+    token can: run-2 has not booked yet (its first cycle is up to
+    ``cold_start_spread_hours`` away), so the token on the row is still ours.
+    """
+    _no_quiet_days(monkeypatch)
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    monkeypatch.setattr(settings.warming, "stop_cancel_timeout_seconds", 0.05)
+    stalled = _StallOnTheWayOut(2)
+    monkeypatch.setattr(_seams, "execute", stalled.execute)
+    await _seed_warming_account(run_id="run-1")
+    task = asyncio.create_task(_iteration("run-1"))
+    warming._RUNTIME["acc-1"] = task
+    await asyncio.wait_for(stalled.reached.wait(), timeout=5)
+
+    await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    restarted = await fetch_warming_state("acc-1")
+    assert restarted is not None
+    assert restarted.run_id not in (None, "run-1")
+    assert restarted.daily_actions == settings.warming.phase_daily_cap["intro"]
+
+    # Only now does the stalled cleanup finish and the hand-back run.
+    await asyncio.wait_for(stalled.unwinding.wait(), timeout=5)
+    stalled.release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.daily_actions == 2
+
+    survivor = _Recorder()
+    monkeypatch.setattr(_seams, "execute", survivor.execute)
+
+    result = await warming.run_loop_iteration("acc-1", run_id=restarted.run_id)
+
+    assert result.detail != "daily limit"
+    assert survivor.types()[0] == "set_online"
+
+
+_TOKEN = "booking-1"
+
+
 async def _seed_booked_row(booked: int) -> str:
-    """One account whose row carries ``booked`` against today, and today's date."""
+    """One account whose row carries our booking of ``booked`` against today."""
     await create_account(AccountCreate(account_id="acc-1"))
     today = datetime.now(UTC).date().isoformat()
     await upsert_warming_state(
@@ -130,34 +182,40 @@ async def _seed_booked_row(booked: int) -> str:
             run_id="run-1",
             daily_actions=booked,
             daily_count_date=today,
+            reservation_token=_TOKEN,
         ),
     )
     return today
 
 
 @pytest.mark.parametrize(
-    ("spent", "remaining", "event", "daily_actions"),
+    ("spent", "remaining", "token", "expected"),
     [
         # Applied, real spend: the only signal a forfeited day ever produces, since
         # ``_gate_daily_limit`` writes the same ``last_event`` for a legitimate park.
-        (2, 15, "warming_reservation_reconciled", 2),
+        (2, 15, _TOKEN, ("warming_reservation_reconciled", 2)),
         # Applied, nothing spent (cancelled while queued on the semaphore):
         # deliberately silent, or every deploy logs one WARNING per account.
-        (0, 15, None, 0),
-        # The booking on the row is not the one this cycle made, so it stays booked
-        # past the next UTC midnight — the case the operator actually has to see.
-        (2, 13, "warming_reservation_stranded", 15),
+        (0, 15, _TOKEN, (None, 0)),
+        # Our booking is still on the row but today's count moved under it, so nothing
+        # will release it before the next UTC midnight: the operator's case.
+        (2, 13, _TOKEN, ("warming_reservation_stranded", 15)),
+        # Superseded: the token is gone or belongs to a newer booking, so this
+        # reservation is already settled. Silent on purpose — reported, it fired on
+        # roughly a quarter of stops and taught the operator to ignore the code.
+        (2, 15, "booking-2", (None, 15)),
     ],
 )
 @pytest.mark.asyncio
-async def test_the_reconcile_reports_each_of_its_three_outcomes(
+async def test_the_reconcile_reports_each_of_its_outcomes(
     monkeypatch: pytest.MonkeyPatch,
     spent: int,
     remaining: int,
-    event: str | None,
-    daily_actions: int,
+    token: str,
+    expected: tuple[str | None, int],
 ) -> None:
-    """#208's two log codes, and the deliberate silence in between."""
+    """#208's two log codes, and the two deliberate silences."""
+    event, daily_actions = expected
     logged: list[tuple[str, str, object]] = []
 
     async def capture(level: str, code: str, **kwargs: object) -> None:
@@ -166,30 +224,43 @@ async def test_the_reconcile_reports_each_of_its_three_outcomes(
     monkeypatch.setattr(_reservation, "log_event", capture)
     today = await _seed_booked_row(15)
 
-    await _reservation._reconcile_reservation("acc-1", _Reservation(0, today, remaining), spent)
+    await _reservation._reconcile_reservation(
+        "acc-1", _Reservation(0, today, remaining, token), spent
+    )
 
-    expected = [("WARNING", event, {"spent": spent, "daily_actions": spent})] if event else []
-    assert logged == expected
+    assert logged == (
+        [("WARNING", event, {"spent": spent, "daily_actions": spent})] if event else []
+    )
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_actions == daily_actions
 
 
 @pytest.mark.asyncio
-async def test_a_repeated_hand_back_cannot_lower_the_count_twice() -> None:
-    """The hand-back stays an absolute write, so repeating it changes nothing (#10).
+async def test_a_repeated_hand_back_neither_lowers_the_count_nor_cries_stranded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Applying clears the token, so the retry is a silent no-op (#10).
 
     ``asyncio.shield`` leaves a cancelled hand-back landing as a detached task, and
-    the loop's exit handler then reconciles the same cycle again. A relative
-    give-back would subtract the unspent budget twice and let the day overspend its
-    cap. Repeating the absolute write is a no-op twice over: it declines (its booked
-    value is no longer the count) and it would write the same number anyway.
+    the loop's exit handler then reconciles the same cycle again. A relative give-back
+    would subtract the unspent budget twice and overspend the cap; an absolute write
+    guarded by a token that is now gone does nothing at all — and must not report the
+    day as forfeited on the way, which is what made this WARNING noise.
     """
+    logged: list[str] = []
+
+    async def capture(_level: str, code: str, **_kwargs: object) -> None:
+        logged.append(code)
+
+    monkeypatch.setattr(_reservation, "log_event", capture)
     today = await _seed_booked_row(15)
+    booking = _Reservation(0, today, 15, _TOKEN)
 
-    await _reservation._reconcile_reservation("acc-1", _Reservation(0, today, 15), 2)
-    await _reservation._reconcile_reservation("acc-1", _Reservation(0, today, 15), 2)
+    await _reservation._reconcile_reservation("acc-1", booking, 2)
+    await _reservation._reconcile_reservation("acc-1", booking, 2)
 
+    assert logged == ["warming_reservation_reconciled"]
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_actions == 2
@@ -202,7 +273,7 @@ async def test_a_hand_back_from_yesterday_leaves_todays_count_alone() -> None:
     yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
     assert yesterday != today
 
-    await _reservation._reconcile_reservation("acc-1", _Reservation(0, yesterday, 4), 1)
+    await _reservation._reconcile_reservation("acc-1", _Reservation(0, yesterday, 4, _TOKEN), 1)
 
     record = await fetch_warming_state("acc-1")
     assert record is not None

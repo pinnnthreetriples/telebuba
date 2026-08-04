@@ -29,9 +29,13 @@ from core.db import (
     _warming_joined_channels,
 )
 
-# The singleton ``warming_settings`` persistence lives in a sibling module for
-# the file-size budget; re-exported here (and thence by ``core.db``) so existing
-# call sites keep importing it from ``core.repositories.warming``.
+# The singleton ``warming_settings`` persistence and the reservation hand-back write
+# live in sibling modules for the file-size budget; re-exported here (and thence by
+# ``core.db``) so existing call sites keep importing them from
+# ``core.repositories.warming``.
+from core.repositories._warming_reservation import (  # noqa: F401
+    hand_back_warming_reservation,
+)
 from core.repositories._warming_settings import (  # noqa: F401
     load_warming_settings,
     save_warming_settings,
@@ -324,6 +328,12 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # persona so an explicit NULL write can never violate the constraint.
         "activity_persona": data.activity_persona or "normal",
     }
+    if data.reservation_token is not None:
+        # #10: the only writer is the ``cycle_started`` booking. Absent means "leave
+        # the column alone" — see WarmingStateWrite.reservation_token — so listing it
+        # unconditionally would have every unrelated write NULL out the token the
+        # hand-back guards on, which is the stranded day all over again.
+        insert_values["reservation_token"] = data.reservation_token
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1
@@ -371,43 +381,3 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
 
 async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
     return await asyncio.to_thread(_upsert_warming_state, data)
-
-
-def _hand_back_reservation(account_id: str, booked: int, reconciled: int, daily_date: str) -> bool:
-    """Swap the pre-cycle daily reservation down to the real spend (#208, #10).
-
-    Deliberately NOT an ``_upsert_warming_state`` call: this write owns ONE column,
-    and the generation CAS there cannot express its guard. The reservation is
-    identified by its own value — ``daily_actions`` is still, exactly, the number the
-    ``cycle_started`` write booked for ``daily_date`` — so the hand-back lands on a row
-    the operator has already stopped (``run_id`` cleared, ``state`` idle) or that a
-    fresh ``start_warming`` generation has taken over but not yet booked against, while
-    still refusing a row whose count has moved on for any reason. That makes it
-    idempotent: the first apply changes the value the predicate matches, so a repeat
-    (the finalize hand-back cancelled mid-write, then retried by the loop's exit
-    handler) is a no-op. Update-only, so a purged row simply matches nothing.
-    """
-    statement = (
-        update(_warming_account_state)
-        .where(
-            (_warming_account_state.c.account_id == account_id)
-            & (_warming_account_state.c.daily_count_date == daily_date)
-            & (_warming_account_state.c.daily_actions == booked),
-        )
-        .values(daily_actions=reconciled, updated_at=_now_iso())
-    )
-    with _get_engine().begin() as connection:
-        return connection.execute(statement).rowcount > 0
-
-
-async def hand_back_warming_reservation(
-    account_id: str,
-    *,
-    booked: int,
-    reconciled: int,
-    daily_date: str,
-) -> bool:
-    """Apply the reservation hand-back; ``False`` when the booking is no longer there."""
-    return await asyncio.to_thread(
-        _hand_back_reservation, account_id, booked, reconciled, daily_date
-    )

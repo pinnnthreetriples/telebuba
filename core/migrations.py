@@ -33,6 +33,7 @@ from core.migration_steps import (
     _add_warming_settings_llm_columns,
     _add_warming_state_nc_handed_off,
     _add_warming_state_promoted_to_nc,
+    _add_warming_state_reservation_token,
     _add_warming_state_run_id,
     _add_warming_state_runtime_columns,
     _add_warming_state_target_days,
@@ -140,6 +141,11 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         45,
         "add_neurocomment_join_log_lost_at",
         _add_neurocomment_join_log_lost_at,
+    ),
+    (
+        46,
+        "add_warming_state_reservation_token",
+        _add_warming_state_reservation_token,
     ),
 )
 

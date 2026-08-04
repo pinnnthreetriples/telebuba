@@ -177,7 +177,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     The CAS clause on the final write provides the same guarantee even when the
     run_id flips between this read and the write (Round-2 P1 + Round-4 P1.1).
     """
-    daily_count, daily_date, _remaining = reservation
+    daily_count, daily_date = reservation.daily_count, reservation.daily_date
     actions_done, next_run_dt, next_state = schedule
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()
@@ -286,7 +286,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         return gated
 
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
-    reservation = _Reservation(*daily, remaining)
+    reservation = _Reservation.book(daily, remaining)
     # #208: reserve the whole remaining budget on the row BEFORE the cycle spends
     # any of it. Only ``_finalize_after_cycle`` ever incremented ``daily_actions``,
     # so a crash between here and there left today's count untouched — and because
@@ -308,6 +308,10 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         daily_actions=reservation.booked,
         daily_count_date=daily_date,
         expected_run_id=run_id,
+        # Stamps this booking's identity on the row so the hand-back can tell it from
+        # a newer generation's — the operator's Start mints its run_id eagerly, so the
+        # generation marker cannot serve (#10).
+        reservation_token=reservation.token,
     )
     if run_id is not None and not started.applied:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")

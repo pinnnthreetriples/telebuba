@@ -200,11 +200,12 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if await get_listener_running() and await get_listener_account_id() == data.account_id:
             raise AccountIsListenerError(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
-        # Cancel the previous generation BEFORE the new run_id is stamped: the dying
-        # cycle reconciles its daily-budget reservation on the way out, and that
-        # write is CAS-guarded on the OLD run_id (#208). Cancelling after the write
-        # below would have the CAS refuse it, so the fresh stint would inherit the
-        # whole reserved budget and park itself on a phantom "daily limit".
+        # Cancel the previous generation BEFORE the new run_id is stamped, so the fresh
+        # stint is not published on top of a cycle that is still spending Telegram
+        # actions under the old one. The daily-budget reservation is no longer part of
+        # this rationale: since #10 the hand-back carries its own per-booking token, so
+        # it lands whether or not a new generation has taken the row — it has to, since
+        # this mint is eager and a stuck cycle unwinds long after the 5s wait below.
         await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.

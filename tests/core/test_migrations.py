@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core._schema_tables import _warming_account_state  # type: ignore[attr-defined]
 from core.db import _get_engine, configure_database  # type: ignore[attr-defined]
 from core.migration_steps import _add_users_token_version
 from core.migration_steps_discovery import (
@@ -629,3 +630,67 @@ def test_discovery_candidates_migration_creates_table_and_index(
         "created_at",
     } == columns
     assert "ix_nc_discovery_campaign_qualified" in indexes
+
+
+def test_reservation_token_upgrade_matches_a_fresh_database(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#46: an upgraded ``warming_account_state`` ends in the same shape as a fresh one.
+
+    The reservation hand-back's guard is this column (#10), so a row that predates the
+    migration must gain it — NULL, which matches no token, i.e. fail-closed — rather
+    than leave the guard comparing against a column that is not there.
+    """
+    engine = legacy_engine("legacy.db")
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE accounts ("
+            "account_id VARCHAR PRIMARY KEY, session_name VARCHAR, status VARCHAR NOT NULL, "
+            "created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE warming_account_state ("
+            "account_id VARCHAR PRIMARY KEY, state VARCHAR NOT NULL, "
+            "cycles_completed INTEGER NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE warming_settings ("
+            "id INTEGER PRIMARY KEY, inter_account_chat INTEGER NOT NULL, "
+            "reactions_enabled INTEGER NOT NULL, gemini_api_key VARCHAR NOT NULL, "
+            "gemini_model VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO warming_account_state VALUES ('acc-1', 'sleeping', 3, ?)",
+            (now,),
+        )
+
+    apply_migrations(engine)
+    apply_migrations(engine)  # idempotent: the ADD COLUMN guard must hold on a rerun
+
+    with engine.connect() as connection:
+        upgraded = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(warming_account_state)",
+            ).mappings()
+        }
+        carried = connection.exec_driver_sql(
+            "SELECT reservation_token FROM warming_account_state WHERE account_id = 'acc-1'",
+        ).scalar_one()
+    # The fresh path: ``_isolate_db`` already built one from ``create_all`` + the whole
+    # registry. Both routes must land on the same column, or the guard is comparing
+    # against something only one kind of database has.
+    with _get_engine().connect() as connection:
+        built = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(warming_account_state)",
+            ).mappings()
+        }
+
+    assert "reservation_token" in upgraded
+    assert "reservation_token" in built
+    assert {column.name for column in _warming_account_state.columns} <= built
+    # NULL matches no token, so a booking in flight across the upgrade fails closed.
+    assert carried is None

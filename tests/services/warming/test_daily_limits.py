@@ -24,6 +24,7 @@ from schemas.warming import (
     StopWarmingRequest,
     WarmingCycleRequest,
     WarmingCycleResult,
+    WarmingHandBack,
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
@@ -537,17 +538,17 @@ async def test_a_second_cancel_during_the_reconcile_keeps_the_original_exception
     task: asyncio.Task[None]
 
     async def cancel_then_write(
-        account_id: str, *, booked: int, reconciled: int, daily_date: str
-    ) -> bool:
+        account_id: str, *, token: str, booked: int, reconciled: int, daily_date: str
+    ) -> WarmingHandBack:
         # The reconcile is this write's only caller, so every call is the one under
         # test — no need to fingerprint it by its values.
         task.cancel()
         await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
-        applied = await real_hand_back(
-            account_id, booked=booked, reconciled=reconciled, daily_date=daily_date
+        outcome = await real_hand_back(
+            account_id, token=token, booked=booked, reconciled=reconciled, daily_date=daily_date
         )
         written.set()
-        return applied
+        return outcome
 
     monkeypatch.setattr(_reservation, "hand_back_warming_reservation", cancel_then_write)
     await _seed_warming_account()
