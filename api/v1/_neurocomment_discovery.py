@@ -14,6 +14,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
+from api.errors import error_responses
 from schemas.neurocomment_discovery import (
     DiscoveryAdoptRequest,
     DiscoveryAdoptResult,
@@ -24,7 +25,9 @@ from schemas.neurocomment_discovery import (
 from services import neurocomment as nc_service
 
 # No tags: mounted onto the neurocomment router (already tagged "neurocomment").
-discovery_router = APIRouter()
+# Every route here is campaign-scoped and answers 404 for an unknown campaign, so
+# the fragment is declared once for the router.
+discovery_router = APIRouter(responses=error_responses(404))
 
 
 @discovery_router.post(

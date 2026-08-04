@@ -9,14 +9,23 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi import status as http_status
 
 from api.deps import clear_session_cookie, get_current_user, set_session_cookie
+from api.errors import PROTECTED_ERRORS, error_responses
 from core.config import settings
 from schemas.auth import LoginRequest, UserRead
 from services import auth as auth_service
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+# Not mounted on the guarded router list (login is the way in), but every route
+# here answers 401 anyway: logout/me through the gate dependency, login on bad
+# credentials. So the same base contract applies.
+router = APIRouter(prefix="/auth", tags=["auth"], responses=PROTECTED_ERRORS)
 
 
-@router.post("/login", response_model=UserRead, operation_id="login")
+@router.post(
+    "/login",
+    response_model=UserRead,
+    operation_id="login",
+    responses=error_responses(429, 503),
+)
 async def login(body: LoginRequest, request: Request, response: Response) -> UserRead:
     if not settings.auth.secret:
         raise HTTPException(

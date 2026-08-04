@@ -37,32 +37,45 @@ _HTTP_ERROR_CODES: dict[int, str] = {
     503: "unavailable",
 }
 
-# The envelope, declared for OpenAPI so the generated TypeScript client TYPES the
-# error body instead of the SPA hand-casting it. Without this a route documents
-# only FastAPI's auto 422 ``HTTPValidationError`` with its ``detail`` key — a body
-# ``_handle_validation_error`` below replaces, so ``detail`` never reaches the wire
-# and the CI drift gate could not see a change to the real shape. Declaring 422
-# here also suppresses that auto-generated response.
-#
-# The statuses are the ones the accounts routers genuinely produce, collectively:
-# 400 (``HTTPException``/refused action), 401 (the session gate in ``api.deps``),
-# 404 (``AccountNotFoundError``), 422 (request validation), 500
-# (``_handle_unexpected``) and 503 (a gateway outage). 409 is NOT here — only the
-# two session-creating routes can conflict, so they declare it themselves.
-ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
-    status: {"model": ErrorEnvelope, "description": description}
-    for status, description in (
-        (400, "Bad request, or Telegram refused the action"),
-        (401, "Not authenticated"),
-        (404, "Account not found"),
-        (422, "Request validation failed"),
-        (500, "Internal server error"),
-        (503, "Telegram gateway unavailable"),
-    )
+# One description per status, so a route declares the statuses it can answer and
+# nothing else. Declaring a status at all is what makes the generated TypeScript
+# client TYPE the error body instead of the SPA hand-casting it; declaring 422 in
+# particular replaces FastAPI's auto ``HTTPValidationError`` — whose ``detail`` key
+# ``_handle_validation_error`` below overwrites, so it never reaches the wire.
+_ERROR_DESCRIPTIONS: dict[int, str] = {
+    400: "Bad request, or Telegram refused the action",
+    401: "Not authenticated",
+    404: "Not found",
+    409: "Conflict with the current state",
+    422: "Request validation failed",
+    429: "Too many requests",
+    500: "Internal server error",
+    503: "Upstream gateway unavailable",
 }
-CONFLICT_RESPONSE: dict[int | str, dict[str, Any]] = {
-    409: {"model": ErrorEnvelope, "description": "That session already exists"},
-}
+
+
+def error_responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
+    """OpenAPI ``responses`` fragment declaring ``ErrorEnvelope`` for each status.
+
+    Routes compose these fragments so the schema lists exactly the statuses their
+    code can answer. ``tests/test_api_error_contract.py`` recomputes that reachable
+    set from the routes, dependencies and registered handlers and fails on any
+    difference, so an under- or over-declared operation cannot ship.
+    """
+    return {
+        status: {"model": ErrorEnvelope, "description": _ERROR_DESCRIPTIONS[status]}
+        for status in statuses
+    }
+
+
+# Every operation behind the session gate: 401 (``api.deps.get_current_user``),
+# 422 (request validation) and 500 (``_handle_unexpected``). Attached once, where
+# the guarded routers are mounted (``api.v1.__init__``).
+PROTECTED_ERRORS = error_responses(401, 422, 500)
+# Every route wrapped in ``api.v1._errors.service_errors_to_http``: 404
+# (``AccountNotFoundError``), 400 (a service ``ValueError``) and 400/503 from
+# ``AccountActionError`` via ``_handle_account_action_error`` below.
+SERVICE_ERRORS = error_responses(400, 404, 503)
 
 
 def _envelope(
