@@ -207,7 +207,7 @@ class WarmingSettings(BaseSettings):
     # channel affinity, quiet-day). Two operators warming the same account pool
     # with different salts derive independent schedules/interests, so one
     # deployment's leaked pattern doesn't fingerprint another. Empty = unsalted.
-    fleet_hash_salt: str = ""
+    fleet_hash_salt: str = Field(default="", repr=False)
     # Quiet days: chance an account rests for a whole calendar day, decided *once*
     # per day from a stable account+date hash (weekend-biased). 0 disables. The
     # per-session version was removed in #202 for compounding into too much idle

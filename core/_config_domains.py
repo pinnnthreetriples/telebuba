@@ -21,7 +21,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class GeminiSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GEMINI__", extra="ignore")
 
-    api_key: str = ""
+    api_key: str = Field(default="", repr=False)
     model: str = Field(default="gemini-2.5-flash")
     base_url: str = Field(default="https://generativelanguage.googleapis.com/v1beta")
     timeout_seconds: float = Field(default=30.0, ge=1.0)
@@ -55,7 +55,7 @@ class OpenAISettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="OPENAI__", extra="ignore")
 
-    api_key: str = ""
+    api_key: str = Field(default="", repr=False)
     model: str = Field(default="gpt-4o")
     base_url: str = Field(default="https://api.openai.com/v1")
     timeout_seconds: float = Field(default=30.0, ge=1.0)
@@ -76,7 +76,7 @@ class TelemetrSettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="TELEMETR__", extra="ignore")
 
-    api_key: str = ""
+    api_key: str = Field(default="", repr=False)
     base_url: str = Field(default="https://api.telemetr.io/v1")
     timeout_seconds: float = Field(default=20.0, ge=1.0)
     # Rows requested per keyword (server max is 100).
