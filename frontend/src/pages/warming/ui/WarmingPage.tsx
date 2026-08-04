@@ -64,7 +64,12 @@ function Counter({ value, label, cls }: { value: number; label: string; cls: str
 export function WarmingPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // A Set, not one id: five mutations (start / stop / promote / unpromote /
+  // handoff) act per account across three surfaces, the bulk pool button fires N
+  // of them at once, and any two can be in flight together. With a single string
+  // the last click owned the spinner while every other card re-enabled mid-request,
+  // and the first response to land cleared the whole board's busy state.
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   // Guards the bulk pool button for the WHOLE batch: useMutation.isPending tracks
   // only the last-fired call, so it can re-enable mid-batch and re-fire on a
   // second click. bulkBusy stays true until every batched call settles.
@@ -99,13 +104,21 @@ export function WarmingPage() {
   const unpromote = useMutation(unpromoteFromNeurocommentMutation());
   const handoff = useMutation(handoffToNeurocommentMutation());
 
+  const markBusy = (accountId: string, busy: boolean) => {
+    setBusyIds((ids) => {
+      const next = new Set(ids);
+      if (busy) next.add(accountId);
+      else next.delete(accountId);
+      return next;
+    });
+  };
   // promote (graduate) / unpromote (return to warming) share the {account_id} body.
-  // mutateAsync for the same reason as runOnAccount below: busyId is a single id,
-  // so it only disables the card that was clicked — graduating a second account
-  // fires the same mutation again, and mutate's callbacks live in ONE slot per
-  // hook, so the first account's feedback mark and invalidate were dropped.
+  // mutateAsync for the same reason as runOnAccount below: mutate's callbacks live
+  // in ONE slot per hook, so graduating a second account dropped the first
+  // account's feedback mark and invalidate. A promise per call also captures its
+  // own accountId, not the hook's latest variables.
   const runGraduation = (mutation: typeof promote, accountId: string) => {
-    setBusyId(accountId);
+    markBusy(accountId, true);
     return mutation
       .mutateAsync({ body: { account_id: accountId } })
       .then(
@@ -117,7 +130,7 @@ export function WarmingPage() {
         },
       )
       .finally(() => {
-        setBusyId(null);
+        markBusy(accountId, false);
         invalidate();
       });
   };
@@ -126,39 +139,42 @@ export function WarmingPage() {
     setAddingChannel(false);
     setChannelInput('');
   };
+  // The channel pills are a list too, so both handlers use mutateAsync for the
+  // same reason as the account runners: one useMutation is ONE callback slot, and
+  // a second add (the input stays open until its own settle) or a second removal
+  // confirmed while the first was in flight dropped the first channel's feedback
+  // mark and its invalidate — the pill sat there unmarked and the list stale.
   const addChannel = () => {
     if (!channelInput.trim()) return;
     const raw = channelInput.trim();
-    addChannels.mutate(
-      { body: { raw } },
-      {
-        onSettled: (_data, error) => {
-          cancelAddChannel();
-          channelFeedback.mark(raw, !error);
-          invalidate();
-        },
-      },
-    );
+    void addChannels
+      .mutateAsync({ body: { raw } })
+      .then(
+        () => channelFeedback.mark(raw, true),
+        () => channelFeedback.mark(raw, false),
+      )
+      .finally(() => {
+        cancelAddChannel();
+        invalidate();
+      });
   };
   const confirmRemoveChannel = () => {
     if (!channelToRemove) return;
     const channel = channelToRemove;
     setChannelToRemove(null);
-    removeChannel.mutate(
-      { body: { channel } },
-      {
-        onSettled: (_data, error) => {
-          channelFeedback.mark(channel, !error);
-          invalidate();
-        },
-      },
-    );
+    void removeChannel
+      .mutateAsync({ body: { channel } })
+      .then(
+        () => channelFeedback.mark(channel, true),
+        () => channelFeedback.mark(channel, false),
+      )
+      .finally(invalidate);
   };
 
   // Returns a never-rejecting promise so the bulk path can await the whole batch
   // (single-account callers ignore it). mutateAsync (not mutate) makes it awaitable.
   const runOnAccount = (mutation: typeof start | typeof stop, accountId: string) => {
-    setBusyId(accountId);
+    markBusy(accountId, true);
     return mutation
       .mutateAsync({ body: { account_id: accountId } })
       .then(
@@ -170,7 +186,7 @@ export function WarmingPage() {
         },
       )
       .finally(() => {
-        setBusyId(null);
+        markBusy(accountId, false);
         invalidate();
       });
   };
@@ -338,7 +354,7 @@ export function WarmingPage() {
                       </div>
                       <button
                         type="button"
-                        disabled={!ready || busyId === account.account_id}
+                        disabled={!ready || busyIds.has(account.account_id)}
                         title={ready ? undefined : blockers}
                         onClick={() => {
                           setWarmDaysFor(account);
@@ -561,7 +577,7 @@ export function WarmingPage() {
                     <div className="mt-[13px] flex items-center gap-[9px]">
                       <button
                         type="button"
-                        disabled={busyId === acc.account_id}
+                        disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
@@ -584,7 +600,7 @@ export function WarmingPage() {
                         type="button"
                         title={t('warming.warmed.backToWarm')}
                         aria-label={t('warming.warmed.backToWarm')}
-                        disabled={busyId === acc.account_id}
+                        disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
@@ -641,7 +657,7 @@ export function WarmingPage() {
             onPromote={(id) => {
               runGraduation(promote, id);
             }}
-            busyId={busyId}
+            busyIds={busyIds}
             feedback={accountFeedback.feedback}
             logLimit={data.card_log_limit}
             channelLabels={channelLabels}
@@ -659,23 +675,28 @@ export function WarmingPage() {
           }}
           onConfirm={(days, persona) => {
             const accountId = warmDaysFor.account_id;
-            setBusyId(accountId);
-            start.mutate(
-              {
+            markBusy(accountId, true);
+            // mutateAsync: this shares the `start` hook with the bulk pool button,
+            // which fires start.mutateAsync for every idle account. With
+            // mutate+onSettled a pool start took this call's ONE callback slot
+            // over, so busyId was never cleared — the account's Прогреть button
+            // stayed disabled for good — and its feedback mark never appeared.
+            void start
+              .mutateAsync({
                 body: {
                   account_id: accountId,
                   target_days: days,
                   activity_persona: persona,
                 },
-              },
-              {
-                onSettled: (_data, error) => {
-                  setBusyId(null);
-                  accountFeedback.mark(accountId, !error);
-                  invalidate();
-                },
-              },
-            );
+              })
+              .then(
+                () => accountFeedback.mark(accountId, true),
+                () => accountFeedback.mark(accountId, false),
+              )
+              .finally(() => {
+                markBusy(accountId, false);
+                invalidate();
+              });
           }}
         />
       ) : null}

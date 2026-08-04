@@ -513,6 +513,162 @@ test('keeps the bulk button disabled until the whole batch settles, even if the 
   });
 });
 
+function boardFetches(): number {
+  return vi
+    .mocked(fetch)
+    .mock.calls.filter(
+      ([input]) => new URL((input as Request).url).pathname === '/api/v1/warming/board',
+    ).length;
+}
+
+// Settles the second-fired call, then the first, asserting that BOTH refresh the
+// board: one useMutation is ONE callback slot, so whichever handler got taken
+// over never ran and its list refresh was silently dropped.
+async function expectBothRefresh(second: () => void, first: () => void): Promise<void> {
+  act(second);
+  await waitFor(() => {
+    expect(boardFetches()).toBeGreaterThan(1);
+  });
+  const afterSecond = boardFetches();
+  act(first);
+  await waitFor(() => {
+    expect(boardFetches()).toBeGreaterThan(afterSecond);
+  });
+}
+
+// Parks every call to `pathname`, keyed by the account_id in its body, so a test
+// can settle the accounts in any order.
+function parkPerAccount(board: WarmingBoardState, pathname: string): Record<string, () => void> {
+  const resolvers: Record<string, () => void> = {};
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    if (url.pathname === pathname) {
+      return request
+        .clone()
+        .json()
+        .then(
+          (body: { account_id: string }) =>
+            new Promise<Response>((resolve) => {
+              resolvers[body.account_id] = () => {
+                resolve(jsonResponse({}));
+              };
+            }),
+        );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  return resolvers;
+}
+
+test('a bulk stop disables every card, and the first response clears only its own', async () => {
+  // busyId was ONE string, so a batch of N left only the LAST account's card
+  // disabled: every other card stayed clickable while its own stop was in flight,
+  // and the first response to land cleared the whole board's busy state.
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warming: [account('warm-1', 'active'), account('warm-2', 'active')],
+  };
+  const resolvers = parkPerAccount(board, '/api/v1/warming/stop');
+  renderWithClient(<WarmingPage />);
+  await userEvent.click(await screen.findByText('Остановить пул'));
+  await waitFor(() => {
+    expect(Object.keys(resolvers)).toHaveLength(2);
+  });
+  const stops = () => screen.getAllByText('Стоп');
+  expect(stops()[0]).toBeDisabled();
+  expect(stops()[1]).toBeDisabled();
+
+  act(() => {
+    resolvers['warm-1']?.();
+  });
+  await waitFor(() => {
+    expect(stops()[0]).toBeEnabled();
+  });
+  expect(stops()[1]).toBeDisabled();
+  act(() => {
+    resolvers['warm-2']?.();
+  });
+});
+
+test('warming a second account keeps the first card busy and still refreshes for it', async () => {
+  // The ready card is a list too. A single busyId moved the spinner to the second
+  // card and re-enabled the first mid-request; and WarmDaysModal fired
+  // start.mutate(vars, {onSettled}) into the hook's ONE callback slot, so the
+  // second confirm took it over and the first account's board refresh was lost.
+  const board: WarmingBoardState = {
+    ...BOARD,
+    idle: [account('idle-1', 'idle'), account('idle-2', 'idle')],
+    warming: [],
+  };
+  const resolvers = parkPerAccount(board, '/api/v1/warming/start');
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-2')).toBeInTheDocument();
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByText('Прогреть')[index]!);
+    await userEvent.click(screen.getByText('Запустить прогрев'));
+  }
+  await waitFor(() => {
+    expect(Object.keys(resolvers)).toHaveLength(2);
+  });
+  expect(screen.getAllByText('Прогреть')[0]).toBeDisabled();
+  expect(screen.getAllByText('Прогреть')[1]).toBeDisabled();
+
+  // idle-2 settles first; idle-1 landing later must still refresh the board.
+  await expectBothRefresh(
+    () => resolvers['idle-2']?.(),
+    () => resolvers['idle-1']?.(),
+  );
+});
+
+test('removing a second channel does not swallow the first one s refresh', async () => {
+  // Same ONE-callback-slot trap on the channel pills: a second removal confirmed
+  // while the first was in flight dropped the first channel's feedback mark and
+  // its invalidate, so the pill sat there unmarked over a stale list.
+  const board: WarmingBoardState = {
+    ...BOARD,
+    channels: {
+      channels: [
+        { channel: '@news', created_at: 'now' },
+        { channel: '@more', created_at: 'now' },
+      ],
+    },
+  };
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    if (url.pathname === '/api/v1/warming/channels/remove') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('@more')).toBeInTheDocument();
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByLabelText('Удалить')[index]!);
+    await userEvent.click(await screen.findByText('Удалить', { selector: 'button' }));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+
+  // @more settles first; @news landing later must still refresh the list.
+  await expectBothRefresh(
+    () => releases[1]!(jsonResponse({})),
+    () => releases[0]!(jsonResponse({})),
+  );
+});
+
 test('adds a channel', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);

@@ -22,6 +22,8 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
+const NONE_BUSY = new Set<string>();
+
 function account(id: string, state: WarmingAccountState['state']): WarmingAccountState {
   return { account_id: id, label: id, state, health: 'ok', cycles_completed: 2, trust_score: 70 };
 }
@@ -40,9 +42,37 @@ function warmed(id: string, days: number, target: number): WarmingAccountState {
 
 const WARMING = [account('79051184490', 'active'), account('79161234567', 'sleeping')];
 
+test('busy state is per card, and more than one card can be busy', () => {
+  // A single busy id could not say "card 2 is busy, card 1 is not" once a second
+  // card had been acted on: the pool button alone starts one call per account.
+  const { unmount } = renderWithClient(
+    <WarmingBoard
+      warming={WARMING}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyIds={new Set(['79161234567'])}
+    />,
+  );
+  expect(screen.getAllByText('Стоп')[0]).toBeEnabled();
+  expect(screen.getAllByText('Стоп')[1]).toBeDisabled();
+  unmount();
+
+  renderWithClient(
+    <WarmingBoard
+      warming={WARMING}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyIds={new Set(['79051184490', '79161234567'])}
+    />,
+  );
+  for (const button of screen.getAllByText('Стоп')) {
+    expect(button).toBeDisabled();
+  }
+});
+
 test('renders an in-progress card per warming account with the stage labels', () => {
   renderWithClient(
-    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('79051184490')).toBeInTheDocument();
   expect(screen.getByText('79161234567')).toBeInTheDocument();
@@ -64,7 +94,7 @@ test('shows a pre-start hold with a countdown, not a fake subscribe step', () =>
     next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
   };
   renderWithClient(
-    <WarmingBoard warming={[held]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[held]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Выдержка перед стартом')).toBeInTheDocument();
   // The misleading "actively subscribing" activity text is gone during the hold…
@@ -76,7 +106,7 @@ test('shows a pre-start hold with a countdown, not a fake subscribe step', () =>
 test('stops the clicked account', async () => {
   const onStop = vi.fn();
   renderWithClient(
-    <WarmingBoard warming={WARMING} onStop={onStop} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={WARMING} onStop={onStop} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   await userEvent.click(screen.getAllByText('Стоп')[0]!);
   await userEvent.click(screen.getByText('Остановить'));
@@ -89,7 +119,7 @@ test('auto-completes at the per-account target and promotes via the finish butto
   // even though cycles_completed is well under the old hardcoded 14.
   const done = warmed('79051184490', 3, 3);
   renderWithClient(
-    <WarmingBoard warming={[done]} onStop={vi.fn()} onPromote={onPromote} busyId={null} />,
+    <WarmingBoard warming={[done]} onStop={vi.fn()} onPromote={onPromote} busyIds={NONE_BUSY} />,
   );
   await userEvent.click(screen.getByText('Отправить в прогретые'));
   expect(onPromote).toHaveBeenCalledWith('79051184490');
@@ -101,7 +131,7 @@ test('shows the per-account target as the day-progress denominator, not a hardco
       warming={[warmed('79051184490', 6, 7)]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   expect(screen.getByText('6 / 7 дней')).toBeInTheDocument();
@@ -114,7 +144,7 @@ test('pluralizes the Russian day noun by the target (день / дня / дне�
       warming={[warmed('a', 0, 1)]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   expect(screen.getByText('0 / 1 день')).toBeInTheDocument();
@@ -125,7 +155,7 @@ test('pluralizes the Russian day noun by the target (день / дня / дне�
         warming={[warmed('a', 1, 3)]}
         onStop={vi.fn()}
         onPromote={vi.fn()}
-        busyId={null}
+        busyIds={NONE_BUSY}
       />
     </QueryClientProvider>,
   );
@@ -138,7 +168,7 @@ test('keeps an account in progress below its target', () => {
       warming={[warmed('79051184490', 2, 7)]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   // Below target: still shows the stop control and stage rail, not the finish button.
@@ -152,7 +182,7 @@ test('shows a success or error mark from the feedback map', () => {
       warming={WARMING}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
       feedback={{ '79051184490': 'ok' }}
     />,
   );
@@ -164,7 +194,7 @@ test('shows a success or error mark from the feedback map', () => {
         warming={WARMING}
         onStop={vi.fn()}
         onPromote={vi.fn()}
-        busyId={null}
+        busyIds={NONE_BUSY}
         feedback={{ '79051184490': 'err' }}
       />
     </QueryClientProvider>,
@@ -180,7 +210,7 @@ test('renders the Telegram display name when first/last name are present', () =>
     phone: '+79215532011',
   };
   renderWithClient(
-    <WarmingBoard warming={[named]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[named]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   // The name wins over the phone/id, matching the Accounts table.
   expect(screen.getByText('Vika Ix')).toBeInTheDocument();
@@ -194,7 +224,7 @@ test('falls back to the phone as the card id when there is no name', () => {
     phone: '+79215532011',
   };
   renderWithClient(
-    <WarmingBoard warming={[withPhone]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[withPhone]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('+79215532011')).toBeInTheDocument();
   expect(screen.queryByText('Label A')).not.toBeInTheDocument();
@@ -204,7 +234,12 @@ test('the "?" tooltip shows the ЛС (DM) line from dm_allowed', () => {
   const allowed: WarmingAccountState = { ...account('a1', 'active'), dm_allowed: true };
   const closed: WarmingAccountState = { ...account('a2', 'active'), dm_allowed: false };
   renderWithClient(
-    <WarmingBoard warming={[allowed, closed]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard
+      warming={[allowed, closed]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyIds={NONE_BUSY}
+    />,
   );
   expect(screen.getByText('ЛС: разрешены')).toBeInTheDocument();
   expect(screen.getByText('ЛС: закрыты')).toBeInTheDocument();
@@ -217,7 +252,7 @@ test('the actions counter reflects daily_actions / daily_cap', () => {
     daily_cap: 18,
   };
   renderWithClient(
-    <WarmingBoard warming={[acc]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[acc]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   // Uses the served cap, not the old hardcoded /10.
   expect(screen.getByText('6/18')).toBeInTheDocument();
@@ -232,7 +267,7 @@ test('the per-card log request uses the served card_log_limit', async () => {
       warming={[account('79051184490', 'active')]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
       logLimit={7}
     />,
   );
@@ -254,7 +289,7 @@ test('the per-card log request scopes itself to warming and spam-status events',
       warming={[account('79051184490', 'active')]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   await userEvent.click(screen.getByText('Лог активности'));
@@ -296,7 +331,7 @@ test('expanding a card fetches that account real activity log', async () => {
   });
 
   renderWithClient(
-    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   await userEvent.click(screen.getAllByText('Лог активности')[0]!);
   await waitFor(() => {
@@ -347,7 +382,7 @@ test('names which channel and which reaction each log action touched', async () 
       warming={[account('79051184490', 'active')]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
       channelLabels={{ '@durov': 'Дуров' }}
     />,
   );
@@ -408,7 +443,7 @@ test('shows reaction-skip reasons and stories-seen detail in the log', async () 
       warming={[account('79051184490', 'active')]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   await userEvent.click(screen.getByText('Лог активности'));
@@ -459,7 +494,7 @@ test('says what Telegram refused on a failed warming action', async () => {
       warming={[account('79051184490', 'error')]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   await userEvent.click(screen.getByText('Лог активности'));
@@ -510,7 +545,7 @@ test('explains a cycle that ended badly, and stays quiet about a healthy one', a
       warming={[account('79051184490', 'active')]}
       onStop={vi.fn()}
       onPromote={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   await userEvent.click(screen.getByText('Лог активности'));
@@ -547,7 +582,7 @@ test('clear button hides the existing log lines', async () => {
   });
 
   renderWithClient(
-    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   await userEvent.click(screen.getAllByText('Лог активности')[0]!);
   await waitFor(() => {
@@ -562,7 +597,7 @@ test('clear button hides the existing log lines', async () => {
 test('an active account shows the real in-cycle step from last_action, not a cycle-count guess', () => {
   const reading: WarmingAccountState = { ...account('a1', 'active'), last_action: 'read' };
   renderWithClient(
-    <WarmingBoard warming={[reading]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[reading]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Чтение ленты постов')).toBeInTheDocument();
 });
@@ -576,7 +611,7 @@ test('shows the reaction step and never the removed "report" activity', () => {
     last_action: 'react',
   };
   renderWithClient(
-    <WarmingBoard warming={[running]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[running]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Поставлены реакции')).toBeInTheDocument();
   expect(screen.queryByText('Формирование отчёта')).not.toBeInTheDocument();
@@ -585,7 +620,7 @@ test('shows the reaction step and never the removed "report" activity', () => {
 test('maps the join action to the subscribe step', () => {
   const joining: WarmingAccountState = { ...account('a1', 'active'), last_action: 'join' };
   renderWithClient(
-    <WarmingBoard warming={[joining]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[joining]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Подписка на каналы')).toBeInTheDocument();
 });
@@ -593,7 +628,7 @@ test('maps the join action to the subscribe step', () => {
 test('shows the real stories step while the engine is watching stories', () => {
   const watching: WarmingAccountState = { ...account('a1', 'active'), last_action: 'stories' };
   renderWithClient(
-    <WarmingBoard warming={[watching]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[watching]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Просмотр сторис')).toBeInTheDocument();
 });
@@ -603,7 +638,7 @@ test('folds the DM-send action onto its neighbour step (no DM label on the rail)
   // rather than bouncing the rail backward or adding a mostly-dark DM label.
   const dm: WarmingAccountState = { ...account('a1', 'active'), last_action: 'send_dm' };
   renderWithClient(
-    <WarmingBoard warming={[dm]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[dm]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Просмотр сторис')).toBeInTheDocument();
 });
@@ -615,7 +650,7 @@ test('an errored account shows where the engine last was, not a cycle-count gues
     last_action: 'read',
   };
   renderWithClient(
-    <WarmingBoard warming={[failed]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[failed]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Чтение ленты постов')).toBeInTheDocument();
 });
@@ -627,7 +662,7 @@ test('shows a live pause countdown for a sleeping account', () => {
     next_run_at: nextRunAt,
   };
   renderWithClient(
-    <WarmingBoard warming={[paused]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+    <WarmingBoard warming={[paused]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Пауза для естественности')).toBeInTheDocument();
   // The remaining time to next_run_at is shown as mm:ss (RU "ещё M:SS").
