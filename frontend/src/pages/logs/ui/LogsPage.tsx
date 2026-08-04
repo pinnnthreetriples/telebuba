@@ -7,7 +7,7 @@ import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account'
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
 import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
-import { eventLabel, formatLocalTime, useLogEventStream } from '@/shared/lib';
+import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
@@ -135,6 +135,20 @@ export function LogsPage() {
           </span>
         ),
         meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
+      },
+      {
+        id: 'reason',
+        header: () => t('logs.col.reason'),
+        // WHY the row turned out that way. Without it a failure here read "Вступление в
+        // чат канала — ошибка" and stopped: the label names the attempt, never the
+        // refusal, even though `extra` carried it all along. No `truncate` and no fixed
+        // width, unlike `channel`: a handle is still recognisable clipped, a refusal is
+        // prose and clipping it hides the answer — the column is last, so it takes the
+        // remaining width and the table already scrolls horizontally.
+        cell: ({ row }) => eventReason(t, row.original) || '—',
+        meta: {
+          cellClassName: 'text-[12.5px] text-[#3a3a3a]',
+        } satisfies DataTableColumnMeta,
       },
     ],
     // resolveAccount closes over accountLabels; re-derive columns when labels change.
