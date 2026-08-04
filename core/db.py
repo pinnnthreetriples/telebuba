@@ -13,6 +13,7 @@ keep working.
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import threading
 from datetime import UTC, datetime
@@ -153,6 +154,22 @@ def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerpri
 
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _run_liveness_query() -> None:
+    with _get_engine().connect() as connection:
+        connection.exec_driver_sql("SELECT 1")
+
+
+async def check_database_reachable() -> None:
+    """Round-trip a trivial query, raising if the datastore cannot serve it.
+
+    Backs the readiness probe (``services.health``). Deliberately a real
+    checkout + query rather than an ``_state.engine is not None`` test: the
+    failures worth reporting — a missing, locked, or corrupt SQLite file, an
+    exhausted pool — all leave a configured engine looking perfectly healthy.
+    """
+    await asyncio.to_thread(_run_liveness_query)
 
 
 def _optional_str(value: object) -> str | None:

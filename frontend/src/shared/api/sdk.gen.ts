@@ -102,6 +102,9 @@ import type {
   GetNeurocommentSettingsData,
   GetNeurocommentSettingsErrors,
   GetNeurocommentSettingsResponses,
+  GetReadinessData,
+  GetReadinessErrors,
+  GetReadinessResponses,
   GetWarmingBoardData,
   GetWarmingBoardErrors,
   GetWarmingBoardResponses,
@@ -347,6 +350,25 @@ export const getHealth = <ThrowOnError extends boolean = false>(
 ): RequestResult<GetHealthResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<GetHealthResponses, unknown, ThrowOnError>({
     url: '/api/v1/health',
+    ...options,
+  });
+
+/**
+ * Ready
+ *
+ * Answer 503 while a dependency is down, so a supervisor can hold traffic back.
+ *
+ * The one route that answers a non-2xx with something other than the
+ * ``ErrorEnvelope``, deliberately: this is consumed by an orchestrator's probe,
+ * not the SPA, and the per-dependency verdict is the whole point of the body.
+ * The status CODE has to carry the signal — a 200 saying "unavailable" is
+ * invisible to every probe implementation.
+ */
+export const getReadiness = <ThrowOnError extends boolean = false>(
+  options?: Options<GetReadinessData, ThrowOnError>,
+): RequestResult<GetReadinessResponses, GetReadinessErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetReadinessResponses, GetReadinessErrors, ThrowOnError>({
+    url: '/api/v1/ready',
     ...options,
   });
 

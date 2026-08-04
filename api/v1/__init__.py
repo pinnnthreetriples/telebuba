@@ -18,7 +18,8 @@ from api.v1 import (
 )
 
 router = APIRouter()
-# Unprotected: auth (login/logout; /me self-guards) and the liveness probe.
+# Unprotected: auth (login/logout; /me self-guards) and the health probes —
+# liveness and readiness both answer a supervisor that holds no session.
 router.include_router(auth.router)
 router.include_router(health.router)
 # Everything else requires a valid session.
