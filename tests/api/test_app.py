@@ -106,13 +106,17 @@ async def test_unexpected_error_returns_generic_envelope(
 # the CI drift gate could not see a change to the real shape.
 # --------------------------------------------------------------------------- #
 _DECLARED_ERROR_STATUSES = ("400", "401", "404", "422", "500", "503")
+# ``GET /accounts`` declares fewer: it answers 400 on a bad cursor but never 404 or
+# 503, which the router used to advertise for it. Exhaustiveness per operation is
+# ``tests/test_api_error_contract.py``'s job; this file keeps the envelope checks.
+_ACCOUNTS_LIST_ERROR_STATUSES = ("400", "401", "422", "500")
 
 
 def test_error_envelope_is_declared_in_the_openapi_document(app: FastAPI) -> None:
     schema = app.openapi()
     assert "ErrorEnvelope" in schema["components"]["schemas"]
     responses = schema["paths"]["/api/v1/accounts"]["get"]["responses"]
-    for status in _DECLARED_ERROR_STATUSES:
+    for status in _ACCOUNTS_LIST_ERROR_STATUSES:
         ref = responses[status]["content"]["application/json"]["schema"]["$ref"]
         assert ref.endswith("/ErrorEnvelope"), f"{status} does not document the envelope"
 

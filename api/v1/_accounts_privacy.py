@@ -11,12 +11,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
 from schemas.privacy import AccountPrivacyUpdateRequest, AccountPrivacyView, BulkPrivacyResult
 from services import accounts
 
-# No tags: mounted onto the accounts router (already tagged "accounts").
-privacy_router = APIRouter()
+# No tags: mounted onto the accounts router (already tagged "accounts"). Every
+# route here runs inside ``service_errors_to_http``, so the fragment is declared
+# once for the router.
+privacy_router = APIRouter(responses=SERVICE_ERRORS)
 
 
 @privacy_router.get(

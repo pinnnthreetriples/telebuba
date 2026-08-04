@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from api.errors import error_responses
 from schemas.api import Page
 from schemas.logs import LogEntry, LogFilter, LogPurgeResult, LogStatusFilter
 from services import logs as logs_service
@@ -14,7 +15,12 @@ from services import logs as logs_service
 router = APIRouter(tags=["logs"])
 
 
-@router.get("/logs", response_model=Page[LogEntry], operation_id="listLogs")
+@router.get(
+    "/logs",
+    response_model=Page[LogEntry],
+    operation_id="listLogs",
+    responses=error_responses(400),
+)
 async def list_logs(
     status: LogStatusFilter = "all",
     account_id: str = "",

@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from api.errors import error_responses
 from api.v1._neurocomment_discovery import discovery_router
 from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
@@ -53,6 +54,7 @@ async def create_campaign(body: CampaignCreate) -> NeurocommentCampaign:
     "/campaigns/{campaign_id}/board",
     response_model=NeurocommentBoard,
     operation_id="getNeurocommentBoard",
+    responses=error_responses(404),
 )
 async def get_board(campaign_id: str) -> NeurocommentBoard:
     board = await nc_service.load_neurocomment_board(campaign_id)
@@ -65,6 +67,7 @@ async def get_board(campaign_id: str) -> NeurocommentBoard:
     "/campaigns/{campaign_id}/channel-bans",
     response_model=ChannelBanCheckList,
     operation_id="checkCampaignChannelBans",
+    responses=error_responses(404),
 )
 async def check_channel_bans(campaign_id: str) -> ChannelBanCheckList:
     """Live-probe each campaign channel for account bans (the "Проверить каналы" button)."""
@@ -78,6 +81,7 @@ async def check_channel_bans(campaign_id: str) -> ChannelBanCheckList:
     "/campaigns/{campaign_id}/comments",
     response_model=Page[CommentRecord],
     operation_id="listNeurocommentComments",
+    responses=error_responses(400),
 )
 async def list_comments(
     campaign_id: str,
@@ -125,6 +129,7 @@ async def remove_account(campaign_id: str, body: AssignAccountRequest) -> None:
     "/campaigns/{campaign_id}/accounts/{account_id}/channel",
     response_model=NeurocommentBoard,
     operation_id="setCampaignAccountChannel",
+    responses=error_responses(400, 404),
 )
 async def set_account_channel(
     campaign_id: str,
@@ -271,7 +276,12 @@ async def get_runtime() -> NeurocommentRuntimeStatus:
     return await nc_service.neurocomment_runtime_status()
 
 
-@router.post("/start", response_model=NeurocommentRuntimeStatus, operation_id="startNeurocomment")
+@router.post(
+    "/start",
+    response_model=NeurocommentRuntimeStatus,
+    operation_id="startNeurocomment",
+    responses=error_responses(409),
+)
 async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
     try:
         await nc_service.start_neurocomment(body.listener_account_id)
