@@ -122,11 +122,17 @@ async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
     on_step: _OnStep | None = None,
+    tally: _ChannelTally | None = None,
 ) -> WarmingCycleResult:
     """Perform exactly one warming pass for an account. The testable core.
 
     ``on_step`` (optional) is fired with the canonical step name after each
     successful action so the loop can persist live mid-cycle progress.
+
+    ``tally`` (optional) lets the caller own the running counters instead of this
+    function allocating them, so a cycle that is cancelled or raises mid-flight
+    still leaves behind the attempts it really spent — the loop reconciles its
+    daily-budget reservation from that (#208).
     """
     account_id = data.account_id
     secret = await load_warming_settings()
@@ -146,7 +152,7 @@ async def run_one_cycle(
     # read in this cycle. Pass it in if channel/reaction/DM intensity ever
     # becomes trust-dependent (#100).
     intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
-    tally = _ChannelTally()
+    tally = tally if tally is not None else _ChannelTally()
     messages_sent = 0
     online_set = False
 
@@ -185,16 +191,14 @@ async def run_one_cycle(
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
         chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
-        channel_tally = await _run_channel_loop(
+        await _run_channel_loop(
             data,
+            tally,
             chosen,
             secret,
             persona_reaction_probability(data.activity_persona),
-            tally.attempts,
             on_step,
         )
-
-        tally.merge_channel_pass(channel_tally)
 
         # One low-risk "glanced at stories" signal per session (every persona).
         await _watch_stories_step(account_id, chosen, tally, on_step, can_attempt=_can_attempt())

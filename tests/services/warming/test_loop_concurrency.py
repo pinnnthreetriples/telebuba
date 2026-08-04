@@ -18,6 +18,7 @@ from tests.services.warming._support import _Recorder, _seed_channel
 if TYPE_CHECKING:
     from schemas.warming import WarmingCycleRequest, WarmingSettingsSecret
     from services.warming._cycle import _OnStep
+    from services.warming._steps import _ChannelTally
 
 
 class _ConcurrencyProbe:
@@ -37,6 +38,7 @@ class _ConcurrencyProbe:
         *,
         secret: WarmingSettingsSecret | None = None,  # noqa: ARG002 - signature parity
         on_step: _OnStep | None = None,  # noqa: ARG002 - signature parity
+        tally: _ChannelTally | None = None,  # noqa: ARG002 - signature parity
     ) -> WarmingCycleResult:
         self.current += 1
         self.peak = max(self.peak, self.current)

@@ -756,6 +756,8 @@
     "warming_progress_write_failed": "Не удалось сохранить прогресс прогрева",
     "warming_quarantine_extended": "Карантин продлён",
     "warming_reconcile_not_ready": "Прогрев ещё не готов к синхронизации",
+    "warming_reservation_reconciled": "Неизрасходованный дневной лимит возвращён",
+    "warming_reservation_stranded": "Не удалось вернуть неизрасходованный дневной лимит",
     "warming_set_offline_failed": "Не удалось выйти из сети",
     "warming_shutdown_timeout": "Таймаут остановки прогрева",
     "warming_stop_task_error": "Ошибка остановки задачи прогрева",

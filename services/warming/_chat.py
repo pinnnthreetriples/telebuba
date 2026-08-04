@@ -132,8 +132,17 @@ async def _run_chat_step(
     """
     if not _should_chat(data, secret, tally, dm_allowed=dm_allowed, can_attempt=can_attempt):
         return 0
+    # A turn bills at most one action (one dialogue turn per cycle, one send in
+    # it), so book that action BEFORE the turn runs and give it back if the turn
+    # sent nothing. Folding only on return would leave the loop's #208 reconcile
+    # blind to a DM that really left the process: between the send RPC returning
+    # and this line sit the dialogue bookkeeping writes and the event log, and a
+    # cancellation at any of them must not under-count the spend. Erring one
+    # action high for the length of a turn fails closed, which is the direction
+    # the daily cap needs.
+    tally.attempts += 1
     chat_result = await _maybe_inter_account_chat(data.account_id, secret)
-    tally.attempts += chat_result.attempted_actions
+    tally.attempts += chat_result.attempted_actions - 1
     tally.failures += chat_result.failures
     if chat_result.last_failed_action:
         tally.last_failed_action = chat_result.last_failed_action

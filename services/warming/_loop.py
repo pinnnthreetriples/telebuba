@@ -21,7 +21,12 @@ from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._fleet import _is_quiet_day
 from services.warming._quarantine import _recover_from_quarantine
+from services.warming._reservation import (
+    _reconcile_reservation,
+    _release_reservation_on_exit,
+)
 from services.warming._state import _set_state
+from services.warming._steps import _ChannelTally
 from services.warming._transitions import (
     _calculate_next_run,
     _gate_readiness,
@@ -178,6 +183,15 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
 
     latest = await fetch_warming_state(account_id)
     if not _matches_active_run(latest, run_id):
+        # The row moved on (a stop wrote ``idle``, a restart minted a new run_id,
+        # or a readiness park wrote ``error``) so the transition below must not
+        # land — but the reservation is still ours to release. The CAS declines
+        # this write for a row that is already ``idle`` or owned by a newer
+        # generation, which is exactly the intended split of authority.
+        if latest is not None:
+            await _reconcile_reservation(
+                account_id, latest.state, daily, actions_done, run_id=run_id
+            )
         return result
     if latest is not None and latest.state == "idle":
         return result
@@ -223,7 +237,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     return result
 
 
-async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gates, each early-exits.
+async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each early-exits.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -273,6 +287,17 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
     if gated is not None:
         return gated
 
+    remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
+    # #208: reserve the whole remaining budget on the row BEFORE the cycle spends
+    # any of it. Only ``_finalize_after_cycle`` ever incremented ``daily_actions``,
+    # so a crash between here and there left today's count untouched — and because
+    # the stale ``next_run_at`` is already past due, the restarted loop re-read a
+    # full budget and spent it again on top of the actions this cycle had already
+    # performed. The finalize write reconciles the reservation back down to the
+    # real ``daily_count + actions_done``, so the crash path now fails closed: the
+    # worst case is losing the rest of today's budget, never exceeding it. The
+    # ``_on_step`` hook below cannot carry this — it is gated to the monotonic step
+    # rail, so it fires once per step name and never sees the per-action tally.
     started = await _set_state(
         account_id,
         "active",
@@ -281,7 +306,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
         last_error=None,
         last_action="set_online",
         last_channel=None,
-        daily_actions=daily_count,
+        daily_actions=daily_count if remaining is None else daily_count + remaining,
         daily_count_date=daily_date,
         expected_run_id=run_id,
     )
@@ -321,23 +346,42 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
             )
 
     persona = record.activity_persona if record is not None else "normal"
-    remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
-    # The semaphore caps fleet-wide concurrent cycles; hold it only for the
-    # Telegram-heavy cycle, not the surrounding state writes or inter-cycle sleep.
-    async with _cycle_semaphore:
-        result = await run_one_cycle(
-            WarmingCycleRequest(
-                account_id=account_id,
-                remaining_actions=remaining,
-                # П11: trust+age-aware DM permission (readiness already enforced by
-                # the gate above when enabled). The cycle's own intensity is
-                # trust-blind, so pass the loop's trust-aware value instead.
-                dm_allowed=intensity.dm_allowed,
-                activity_persona=persona,
-            ),
-            on_step=_on_step,
+    # The cycle counts its attempts on a tally we own, so an exit that never
+    # reaches the finalize write below can still hand back what it did not spend.
+    # In-process abnormal exits are the routine case, not the exotic one:
+    # ``CancelledError`` arrives at the innermost await on every lifespan
+    # shutdown, ``stop_warming`` and ``start_warming`` cancel-and-replace.
+    tally = _ChannelTally()
+    try:
+        # The semaphore caps fleet-wide concurrent cycles; hold it only for the
+        # Telegram-heavy cycle, not the surrounding state writes or inter-cycle sleep.
+        async with _cycle_semaphore:
+            result = await run_one_cycle(
+                WarmingCycleRequest(
+                    account_id=account_id,
+                    remaining_actions=remaining,
+                    # П11: trust+age-aware DM permission (readiness already enforced by
+                    # the gate above when enabled). The cycle's own intensity is
+                    # trust-blind, so pass the loop's trust-aware value instead.
+                    dm_allowed=intensity.dm_allowed,
+                    activity_persona=persona,
+                ),
+                on_step=_on_step,
+                tally=tally,
+            )
+        schedule = await _calculate_next_run(account_id, result, persona, effective_cap)
+        # Inside the ``try`` as well: the finalize is three DB round-trips, and the
+        # transient SQLite lock this module already anticipates would otherwise
+        # escape with the whole reservation still booked — costing the rest of the
+        # day on top of parking the account in ``error``.
+        return await _finalize_after_cycle(
+            account_id, result, age_hours, daily, schedule, run_id=run_id
         )
-    schedule = await _calculate_next_run(account_id, result, persona, effective_cap)
-    return await _finalize_after_cycle(
-        account_id, result, age_hours, daily, schedule, run_id=run_id
-    )
+    except BaseException:
+        # ``BaseException`` on purpose: ``CancelledError`` does not inherit from
+        # ``Exception``, and cancellation is the leak path that costs a whole day of
+        # warming per restart. Re-raised unchanged so cancellation keeps propagating
+        # to the task that asked for it, and so a genuine crash still reaches
+        # ``_runner``'s ``except Exception``.
+        await _release_reservation_on_exit(account_id, daily, tally.attempts, run_id=run_id)
+        raise
