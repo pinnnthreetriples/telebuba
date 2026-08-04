@@ -25,6 +25,7 @@ from schemas.accounts import (
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from schemas.telegram_session import TelegramSessionCheckRequest
 from services.accounts._import_locks import import_lock
+from services.accounts._import_rollback import discard_imported_session
 from services.accounts._tdata import (
     SessionAlreadyExistsError,
 )
@@ -88,25 +89,32 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
 
 
 async def _discard_orphaned_session(path: Path, session_name: str, cause: Exception) -> None:
-    """Remove a ``.session`` written for an import that then failed to add its row.
+    """Roll back an import whose ``add_account`` refused, row and file together.
 
-    ``add_account`` can still refuse after the write — the ``session_name`` may be
-    taken by a DIFFERENT ``account_id`` whose own file is gone, so neither check
-    above sees it — and the bytes then have no row to own them. Left behind, the
-    ``session_path.exists()`` check turns that retryable failure into a permanent
-    one: every retry is refused and there is no account for the operator to delete.
+    ``add_account`` can refuse either side of its commit. Before it: the
+    ``session_name`` may be taken by a DIFFERENT ``account_id`` whose own file is
+    gone, so neither check above sees the conflict. After it: the row is already
+    committed and the fingerprint / readback / ``log_event`` steps that follow can
+    still fail. Removing only the file on that second path would delete a live
+    account's sole credential, so ``discard_imported_session`` removes both — see
+    that module for the ordering and why a row present here is ours to delete.
 
-    Only ever removes a file THIS call created, while still holding that session's
-    import lock, so a working account's credential can never be the target. Same
-    reasoning as ``_tdata._rollback_tdata_import``.
+    Either way the file must not simply be left: the ``session_path.exists()``
+    check above turns a retryable failure into a permanent one, with no account
+    row for the operator to delete from the UI.
     """
-    try:
-        await asyncio.to_thread(path.unlink)
-    except OSError as exc:
+    outcome = await discard_imported_session(session_name, path)
+    if outcome != "clean":
+        # Retry is still blocked, by whichever half survived. Named, so the
+        # operator knows which one to clear rather than guessing.
         await log_event(
             "ERROR",
             "account_session_import_rollback_failed",
-            extra={"session_name": session_name, "error_type": type(exc).__name__},
+            extra={
+                "session_name": session_name,
+                "kept": outcome,
+                "error_type": type(cause).__name__,
+            },
         )
         return
     await log_event(

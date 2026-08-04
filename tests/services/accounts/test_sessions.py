@@ -173,7 +173,7 @@ async def test_a_failed_cleanup_is_reported_and_leaves_the_original_error(
     """An unlink that itself fails must not mask why the import failed."""
     await add_account(AccountCreate(account_id="other", label="Other", session_name="123"))
 
-    def _unlink(_self: Path) -> None:
+    def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
         raise PermissionError(32, "file in use")
 
     monkeypatch.setattr("pathlib.Path.unlink", _unlink)
