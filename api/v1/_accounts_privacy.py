@@ -18,8 +18,10 @@ from services import accounts
 
 # No tags: mounted onto the accounts router (already tagged "accounts"). No
 # router-wide ``responses`` either: the two per-account routes below answer the
-# ``SERVICE_ERRORS`` set, but the fleet-wide one cannot (see its docstring), and
-# ``include_router`` merges responses down without letting a route subtract.
+# ``SERVICE_ERRORS`` set, but the fleet-wide one cannot — see the comment in
+# ``set_all_accounts_privacy``'s body, not its docstring, which is deliberately
+# short — and ``include_router`` merges responses down without letting a route
+# subtract.
 privacy_router = APIRouter()
 
 
@@ -57,11 +59,23 @@ async def set_account_privacy(
 )
 async def set_all_accounts_privacy(body: AccountPrivacyUpdateRequest) -> BulkPrivacyResult:
     """Apply the same keys to every account; unusable sessions come back skipped."""
-    # No ``service_errors_to_http``, and so no ``SERVICE_ERRORS`` declared: the sweep
-    # catches ``AccountActionError`` and then bare ``Exception`` per account and
-    # reports the reason inside ``outcomes``, so none of 400/404/503 can reach the
-    # client — it answers 200 even when every account failed. The mapper this used to
-    # run inside could never fire, and declaring what it maps described a response
-    # this route does not produce. Kept out of the docstring: that text becomes the
-    # OpenAPI ``description`` and ships in the generated client.
+    # No ``service_errors_to_http``, and so no ``SERVICE_ERRORS`` declared: no
+    # PER-ACCOUNT failure can produce 400/404/503. The sweep catches
+    # ``AccountActionError`` and then bare ``Exception`` for each account and reports
+    # the reason inside ``outcomes``, so the route answers 200 even when every account
+    # failed, and the three statuses described a response it does not produce.
+    #
+    # The mapper was NOT dead, though: ``apply_privacy_to_all_accounts`` opens with
+    # ``fleet = (await list_accounts()).accounts`` outside every ``try``, and that read
+    # can raise — the ``status`` column is a plain ``String`` with no CHECK constraint
+    # and the repository casts it to ``AccountStatus`` without a runtime check, so a
+    # corrupt row surfaces as a Pydantic ``ValidationError`` (and ``_optional_int``
+    # coerces ``user_id``/``proxy_port`` with a bare ``int()``). Inside the mapper that
+    # answered 422 with ``fields={"body.status": ...}`` — naming a request field that
+    # does not exist — or 400 carrying raw ``int()`` prose. Without it the same fault
+    # is a 500, which is the honest status for a data-integrity problem the client
+    # cannot fix. That is a deliberate status change on this one seam.
+    #
+    # Kept out of the docstring: that text becomes the OpenAPI ``description`` and
+    # ships in the generated client.
     return await accounts.apply_privacy_to_all_accounts(body)

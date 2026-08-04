@@ -25,8 +25,10 @@ documents its auto validation response. That last carve-out is deliberate and do
 over-declare: thirteen parameterless authenticated operations inherit a 422 they
 cannot answer, because the session cookie is a route parameter. Mirroring FastAPI
 beats fighting it — suppressing the auto-422 needs a `4XX`/`default` catch-all that
-would blur every other status. The test's own two blind spots are documented in its
-header. Declare with `api.errors.error_responses(*statuses)` or the named
+would blur every other status. The test's own three blind spots are documented in its
+header (import style, the `services/` boundary, and treating entry into
+`service_errors_to_http` as proof of the statuses it maps). Declare with
+`api.errors.error_responses(*statuses)` or the named
 compositions (`PROTECTED_ERRORS`, `SERVICE_ERRORS`) — never a hand-rolled
 `{status: {...}}` dict, and put a fragment on a router only when *every* route under
 it answers that set (`include_router` merges responses down and a route cannot

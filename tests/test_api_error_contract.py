@@ -39,9 +39,11 @@ Three limits, deliberate, so nobody mistakes green here for a proof:
    cannot happen; that is the contract the deriver actually checks.
 3. **Entering the mapper is taken as proof of its statuses.** A route inside
    ``service_errors_to_http`` is credited 400/404/503 whether or not the service it
-   wraps can raise them. So a mapper that can never fire makes the route
-   over-declare, and this test will insist on it — the fix is to drop the dead
-   mapper, as ``set_all_accounts_privacy`` did, not to widen the deriver.
+   wraps can raise them. So a mapper whose statuses the service cannot raise makes
+   the route over-declare, and this test will insist on it — the fix is to drop the
+   mapper, as ``set_all_accounts_privacy`` did (see the comment in its body: all that
+   could still reach the mapper there was a corrupt-row read, which 500 answers more
+   honestly than the 422 the mapper gave it), not to widen the deriver.
 """
 
 from __future__ import annotations
