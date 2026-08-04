@@ -82,6 +82,38 @@ async def test_the_unavailable_body_leaks_nothing_about_the_failure(
 
 
 @pytest.mark.asyncio
+async def test_the_failure_log_carries_no_traceback_and_no_sql(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No ``exc_info`` on this path, deliberately — the trigger is unauthenticated.
+
+    ``logger.exception`` would attach the exception, and SQLAlchemy renders the
+    failing SQL and the datastore path into it. Nothing rate-limits ``/ready`` (the
+    repo's only limiter is on login), so a stranger polling it during an outage would
+    otherwise drive unbounded ``debug.log`` growth and burn Sentry quota through the
+    default ``LoggingIntegration`` — on records carrying that path.
+    """
+
+    async def _boom() -> None:
+        msg = f"unable to open database file [SQL: SELECT 1] /srv/{_DB_PATH_MARKER}"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("services.health.check_database_reachable", _boom)
+    with caplog.at_level("ERROR", logger="services.health"):
+        async with _client(app) as client:
+            await client.get("/api/v1/ready")
+
+    records = [r for r in caplog.records if r.name == "services.health"]
+    assert len(records) == 1
+    assert records[0].exc_info is None
+    assert records[0].getMessage() == "readiness: database unreachable (RuntimeError)"
+    assert _DB_PATH_MARKER not in caplog.text
+    assert "SELECT 1" not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_readiness_needs_no_session() -> None:
     """A supervisor holds no cookie, so the probe must answer the raw app."""
     async with _client(create_app()) as client:

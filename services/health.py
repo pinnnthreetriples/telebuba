@@ -7,8 +7,16 @@ locked, or corrupt, so it cannot be used to decide whether to send traffic here.
 Failures go to the STDLIB logger, not ``log_event``: ``log_event`` persists into
 the very SQLite file this check just found unreachable, and the probe is
 unauthenticated and polled on an interval, so routing it through the ``logs``
-table would make an outage a write amplifier. Same stdlib-sink pattern as
-``api.errors`` and ``core.proxy_check``.
+table would make an outage a write amplifier.
+
+For the same reason this is the one stdlib sink in the repo that logs the type
+INSTEAD of the full text, where ``api.errors`` and ``core.proxy_check`` log the
+text. Those are reached through an authenticated route or an operator action;
+this one an outsider can call in a loop, and the repo's only rate limiter is on
+login. ``logger.exception`` would attach ``exc_info``, and SQLAlchemy renders the
+failing SQL and the datastore path into it — so during any outage a stranger
+could drive both unbounded growth of ``debug.log`` and, through Sentry's default
+``LoggingIntegration``, quota burn on records carrying that path.
 """
 
 from __future__ import annotations
@@ -27,11 +35,11 @@ async def check_readiness() -> ReadinessStatus:
     """Report per-dependency reachability, leaking nothing about the failure."""
     try:
         await check_database_reachable()
-    except Exception as exc:
-        # Type name only. SQLAlchemy's ``StatementError.__str__`` appends the SQL
-        # and its bound parameters — for this datastore that includes its path —
-        # so the full text stays with ``logger.exception`` below and never becomes
-        # part of a message an unauthenticated caller could provoke.
-        logger.exception("readiness: database unreachable (%s)", type(exc).__name__)
+    except Exception as exc:  # noqa: BLE001 — a probe reports, it never propagates.
+        # Type name only, and NO ``exc_info`` — see the module docstring. SQLAlchemy's
+        # ``StatementError`` renders the SQL and its bound parameters, which for this
+        # datastore includes its path, and an unauthenticated caller decides how often
+        # this line is written.
+        logger.error("readiness: database unreachable (%s)", type(exc).__name__)  # noqa: TRY400
         return ReadinessStatus(status="unavailable", database=False)
     return ReadinessStatus(status="ok", database=True)

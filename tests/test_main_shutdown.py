@@ -105,6 +105,30 @@ async def test_one_failing_step_never_skips_the_others(
 
 
 @pytest.mark.asyncio
+async def test_the_full_text_reaches_the_stdlib_sink(
+    harness: dict[str, Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Swallowing with no sink at all makes a shutdown failure undiagnosable.
+
+    The repo's pattern (``lifecycle.remove_account``) is BOTH: the full text to the
+    stdlib logger, the type only to the structured feed. Shutdown is not reachable
+    by an outsider — contrast ``services.health``, where the text is dropped for
+    exactly that reason — so here it is safe to keep, and this is the only place it
+    exists at all.
+    """
+    harness["fail"]("close_openai_client", RuntimeError("connector still draining"))
+    with caplog.at_level("ERROR", logger="main"):
+        async with main.lifespan(main.app):
+            pass
+
+    records = [r for r in caplog.records if r.name == "main"]
+    assert len(records) == 1
+    assert records[0].exc_info is not None
+    assert "connector still draining" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_the_failure_is_reported_by_type_and_never_by_text(
     harness: dict[str, Any],
 ) -> None:

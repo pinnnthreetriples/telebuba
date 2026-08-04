@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import subprocess  # nosec B404 — read-only git rev-parse, no user input.
 from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
@@ -39,6 +40,9 @@ from services.neurocomment import (
     shutdown_neurocomment_on_shutdown,
 )
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
+
+# Stdlib sink for full text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 _GIT_SHA_TIMEOUT_SECONDS = 2
 _ROOT = Path(__file__).resolve().parent
@@ -89,7 +93,13 @@ async def _shutdown_step(name: str, close: Callable[[], Awaitable[None]]) -> Non
     """
     try:
         await close()
-    except Exception as exc:  # noqa: BLE001 — one step must never abort the rest.
+    except Exception as exc:  # one step must never abort the rest
+        # Both sinks, the repo's pattern (``lifecycle.remove_account``): the full
+        # text to the stdlib logger so the failure is diagnosable beyond its class
+        # name, and the TYPE only to the structured feed. Shutdown is not reachable
+        # by an outsider — contrast ``services.health`` — so the text is safe to keep
+        # here, and it is the only place it exists.
+        logger.exception("shutdown step %s failed", name)
         await log_event(
             "ERROR",
             "app_shutdown_step_failed",
