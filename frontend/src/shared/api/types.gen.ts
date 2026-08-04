@@ -3062,6 +3062,10 @@ export type GetReadinessData = {
 
 export type GetReadinessErrors = {
   /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
    * A dependency is unreachable
    */
   503: ReadinessStatus;
