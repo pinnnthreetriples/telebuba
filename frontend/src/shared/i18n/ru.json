@@ -776,7 +776,8 @@
     "neurocomment_join_request_review_failed": "Не удалось проверить заявки на вступление",
     "neurocomment_channel_rejoin_exhausted": "Канал отключён: не удалось вернуться в чат",
     "neurocomment_channel_join_impossible": "Канал отключён: Telegram не знает такой адрес",
-    "neurocomment_rejoin_review_failed": "Не удалось проверить повторные вступления"
+    "neurocomment_rejoin_review_failed": "Не удалось проверить повторные вступления",
+    "db_maintenance_failed": "Сбой обслуживания базы данных"
   },
   "logEventReason": {
     "chance": "не выпал шанс",

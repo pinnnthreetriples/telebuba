@@ -9,6 +9,7 @@ sized from config so the ``asyncio.to_thread`` executor cannot oversubscribe it.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,9 @@ from core.config import settings
 from core.db import (
     _get_engine,  # type: ignore[attr-defined]
     configure_database,
+)
+from core.db_maintenance import (
+    _vacuum_into,  # type: ignore[attr-defined]
     run_db_maintenance,
     run_db_maintenance_loop,
 )
@@ -73,17 +77,157 @@ def test_maintenance_prunes_to_backup_keep(
     backup_dir = tmp_path / "backups"
     monkeypatch.setattr(settings.db, "backup_enabled", True)
     monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
-    monkeypatch.setattr(settings.db, "backup_keep", 2)
+    # keep > 2 on purpose: with keep=2 the buggy `excess = len - keep` (no
+    # max(0, ...)) happens to prune correctly, so that value proves nothing.
+    monkeypatch.setattr(settings.db, "backup_keep", 4)
 
-    for index in range(4):
+    for index in range(6):
         run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
 
     remaining = sorted(backup_dir.glob("telebuba-*.db"))
-    assert len(remaining) == 2  # oldest two pruned
-    # The kept ones are the two most recent (lexicographic == chronological):
-    # the clock advanced the seconds field, so 000002/000003 survive over 0/1.
-    assert "T000003" in remaining[-1].name
+    assert len(remaining) == 4  # oldest two pruned, never more
+    # The kept ones are the four most recent (lexicographic == chronological):
+    # the clock advanced the seconds field, so 000002..000005 survive over 0/1.
+    assert "T000005" in remaining[-1].name
     assert "T000002" in remaining[0].name
+
+
+def test_partial_backup_never_takes_a_keep_slot_from_a_good_one(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A half-written backup must not be counted, let alone preferred.
+
+    ``VACUUM INTO`` raises before the pruner runs, so a chronic failure (disk full)
+    piles up partial outputs un-pruned. The first later success then keeps the
+    newest N — the partials, since their timestamps are newest — and deletes the
+    last good backup. With the loop now retrying forever this can run for months,
+    ending with a backup directory of nothing restorable.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+    monkeypatch.setattr(settings.db, "backup_keep", 2)
+
+    for index in range(3):
+        run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
+    good = sorted(backup_dir.glob("telebuba-*.db"))
+    assert len(good) == 2
+
+    def _partial_then_enospc(_connection: object, path: Path) -> None:
+        # What sqlite leaves behind when the device fills mid-copy.
+        path.write_bytes(b"")
+        msg = "no space left on device"
+        raise OSError(msg)
+
+    monkeypatch.setattr("core.db_maintenance._vacuum_into", _partial_then_enospc)
+    with pytest.raises(OSError, match="no space left"):
+        run_db_maintenance(clock=lambda: _fixed_clock(9))
+    # The failed run left nothing the pruner will rank as a backup.
+    assert sorted(backup_dir.glob("telebuba-*.db")) == good
+
+    monkeypatch.setattr("core.db_maintenance._vacuum_into", _vacuum_into)
+    run_db_maintenance(clock=lambda: _fixed_clock(10))
+
+    remaining = sorted(backup_dir.glob("telebuba-*.db"))
+    assert len(remaining) == 2
+    assert good[-1] in remaining  # the newest good backup was not pruned for a partial
+    assert all(path.stat().st_size > 0 for path in remaining)
+    assert list(backup_dir.glob("*.part")) == []  # and the leftover was swept
+
+
+def test_chronic_failure_leaves_at_most_one_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated failures must not pile up one partial per interval.
+
+    The sweep has to run on ENTRY: a raising run never reaches the pruner, and every
+    run stamps a fresh filename, so sweeping only on success leaves one file per
+    interval — each up to the full size of the database — on the volume holding the
+    sole datastore, for as long as the failure lasts. The loop retries forever.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+
+    def _partial_then_enospc(_connection: object, path: Path) -> None:
+        path.write_bytes(b"x" * 1024)  # sqlite had already written part of the copy
+        msg = "no space left on device"
+        raise OSError(msg)
+
+    monkeypatch.setattr("core.db_maintenance._vacuum_into", _partial_then_enospc)
+    for index in range(5):
+        with pytest.raises(OSError, match="no space left"):
+            run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
+
+    # At most one, not one per interval. `<= 1` and not `== 1`: staging is an
+    # implementation detail and leaving none would be strictly better, while `5 <= 1`
+    # still fails if the sweep moves back off the entry path. Which leftover survives
+    # is not asserted, only that they do not accumulate.
+    assert len(list(backup_dir.glob("*.part"))) <= 1
+
+
+def test_unremovable_leftover_partial_does_not_block_the_backup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Best-effort hygiene must never cost us the backup itself.
+
+    Sweeping other runs' leftovers is hygiene; the entry sweep runs BEFORE the
+    vacuum, so unguarded, one leftover that cannot be unlinked (a live handle on
+    Windows, the path turned into a directory, EPERM/EBUSY) raises first and no
+    backup is ever taken again while it persists.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+
+    # A non-empty directory is un-unlinkable on both platforms (IsADirectoryError /
+    # PermissionError) without needing a real foreign open handle.
+    stuck = backup_dir / "telebuba-19990101T000000000000Z.db.part"
+    stuck.mkdir(parents=True)
+    (stuck / "wedged").write_bytes(b"")
+
+    written = run_db_maintenance(clock=lambda: _fixed_clock(1))
+
+    assert written is not None
+    assert written.exists()
+    assert stuck.is_dir()  # left alone, and it did not stop the run
+
+
+def test_unremovable_old_backup_does_not_block_the_run_or_retention(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retention is hygiene too, and it runs AFTER the backup published.
+
+    Unguarded, one old backup that cannot be unlinked (the operator inspecting it in
+    a SQLite browser, a backup agent, Defender mid-scan) raises on every run from
+    then on: the loop reports ``db_maintenance_failed`` although the backup DID
+    publish, and retention stops entirely, so the directory grows by one full-DB
+    -sized file per interval.
+    """
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setattr(settings.db, "backup_enabled", True)
+    monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
+    monkeypatch.setattr(settings.db, "backup_keep", 1)
+
+    # A non-empty directory is un-unlinkable on both platforms (IsADirectoryError /
+    # PermissionError) without needing a real foreign open handle. It sorts oldest, so
+    # unguarded it raises before the second stale file is reached.
+    stuck = backup_dir / "telebuba-19990101T000000000000Z.db"
+    stuck.mkdir(parents=True)
+    (stuck / "wedged").write_bytes(b"")
+    stale = backup_dir / "telebuba-19990102T000000000000Z.db"
+    stale.write_bytes(b"")
+
+    written = run_db_maintenance(clock=lambda: _fixed_clock(1))
+
+    assert written is not None
+    assert written.exists()  # the backup published despite the failing prune
+    assert stuck.is_dir()  # left alone
+    assert not stale.exists()  # and the other stale file still got pruned
 
 
 @pytest.mark.asyncio
@@ -96,6 +240,78 @@ async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(asyncio.CancelledError):
         await task
     assert task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_maintenance_loop_survives_a_failed_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A raising run must not end maintenance for the rest of the process."""
+    # 1e-9h, not 0.0: `backup_interval_hours` is Field(gt=0), so 0.0 is a value
+    # monkeypatch can reach but Pydantic forbids — assert on a legal config. It has
+    # to be this small, not merely small: 0.001h is 3.6s, and this test waits out
+    # two intervals.
+    monkeypatch.setattr(settings.db, "backup_interval_hours", 1e-9)
+    calls = 0
+    ran_again = asyncio.Event()
+
+    def _flaky() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            msg = "no space left on device"
+            raise OSError(msg)
+        ran_again.set()
+
+    monkeypatch.setattr("core.db_maintenance.run_db_maintenance", _flaky)
+    task = asyncio.create_task(run_db_maintenance_loop())
+    try:
+        # Only the second call sets the event, so reaching it IS the assertion.
+        await asyncio.wait_for(ran_again.wait(), timeout=5)
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_maintenance_loop_reports_failure_to_the_operator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed run must reach ``log_event`` — ``logger.exception`` is file-only.
+
+    Without this the loop retries forever with nothing on the Logs page, nothing in
+    Sentry and no UI signal, for the sole datastore holding users and auth.
+    """
+    monkeypatch.setattr(settings.db, "backup_interval_hours", 1e-9)  # legal (gt=0), instant
+    events: list[tuple[str, str, dict[str, object] | None]] = []
+    reported = asyncio.Event()
+
+    async def _capture(  # signature mirrors log_event; the handler passes no account_id.
+        level: str,
+        event: str,
+        _account_id: str | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        events.append((level, event, extra))
+        reported.set()
+
+    def _always_fails() -> None:
+        msg = "no space left on device"
+        raise OSError(msg)
+
+    # core.db_maintenance imports log_event inside the handler (import cycle), so patching the
+    # owning module is what the call site actually resolves.
+    monkeypatch.setattr("core.logging.log_event", _capture)
+    monkeypatch.setattr("core.db_maintenance.run_db_maintenance", _always_fails)
+    task = asyncio.create_task(run_db_maintenance_loop())
+    try:
+        await asyncio.wait_for(reported.wait(), timeout=5)
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+    # Exception type only: no path, no credentials, nothing the log must not carry.
+    assert events[0] == ("ERROR", "db_maintenance_failed", {"error": "OSError"})
 
 
 def test_engine_uses_configured_pool_sizing(monkeypatch: pytest.MonkeyPatch) -> None:

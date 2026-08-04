@@ -42,8 +42,66 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # gitleaks needs history to scan the full diff on push
+          # Full history for the gitleaks step below: `detect` scans every commit,
+          # not a diff. The pre-commit gitleaks hook does NOT use it (see below).
           fetch-depth: 0
+
+      # The pre-commit gitleaks hook cannot do this in CI: upstream pins
+      # `gitleaks protect --staged` with pass_filenames: false, and after
+      # actions/checkout the index is empty — it reports "0 commits scanned" and
+      # always passes. So secrets are gated here instead, with `detect` over the
+      # full history fetched above, pinned to the same version as the hook rev.
+      #
+      # --verbose is what makes a red gate actionable: without it the entire output
+      # of a firing scan is "leaks found: N" — no rule, file, line or commit. With
+      # it each finding prints RuleID/File/Line/Commit while --redact replaces the
+      # matched value with "REDACTED", so the location is public-log safe and the
+      # secret is not. The safe.directory env is required because the container
+      # user does not own the mounted repo.
+      #
+      # --exit-code 1 governs "leaks found", NOT "the scan failed". A git-level
+      # breakage inside the container (safe.directory env drift, an unreadable or
+      # partial .git) makes gitleaks print `ERR failed to scan Git repository` and
+      # still exit 0 — the identical green no-op as the `protect --staged` bug
+      # above. So the run must also prove it scanned a non-zero number of commits
+      # (the "0 commits scanned" the hook prints must not satisfy it, hence
+      # `[1-9][0-9]*`). The match is anchored to gitleaks' own `INF ... commits
+      # scanned.` line so verbatim git stderr in the same log cannot satisfy it —
+      # `.*` and not `[^0-9]*`, because the image colours its output even into a
+      # pipe and the ANSI reset between `INF` and the count is literally `\e[0m`.
+      # `shell: bash` is required, not cosmetic: the default `bash -e {0}` has no
+      # pipefail, so the pipe to tee would swallow docker's exit code and a real
+      # leak would pass. The log goes to RUNNER_TEMP so it cannot be left behind in
+      # the workspace.
+      #
+      # The tripwire is not paranoia: `detect` auto-loads `.gitleaks.toml` from the
+      # scanned directory — the bind-mounted repo — and a repo-local config REPLACES
+      # the default ruleset instead of extending it. `.gitleaksignore` works by a
+      # different mechanism — it suppresses findings by fingerprint and leaves the
+      # ruleset alone — but reaches the same place: either file can leave this step
+      # scanning every commit, printing the count checked for, reporting nothing, and
+      # going green with secrets in history. The repo has neither. What the tripwire
+      # covers is exactly that, disabling via a config file; an inline
+      # `#gitleaks:allow` comment needs no file at all and is invisible here. That
+      # residual is caught the same way editing this workflow is — by reading the diff.
+      #
+      # The image is v8.21.2 (same as the hook rev) pinned BY DIGEST, not by tag:
+      # this step bind-mounts the whole repo including full git history into it, and
+      # a tag can be re-pushed to different bytes. Every `uses:` here is SHA-pinned
+      # for that reason and the semgrep job below dropped its mutable-tag advisory
+      # mute; a mutable `:v8.21.2` here would put the class straight back.
+      - name: Scan git history for secrets (gitleaks detect)
+        shell: bash
+        run: |
+          [ ! -e .gitleaks.toml ] && [ ! -e .gitleaksignore ] \
+            || { echo "::error::repo-local gitleaks config would defeat this scan"; exit 1; }
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo \
+            zricethezav/gitleaks@sha256:0e99e8821643ea5b235718642b93bb32486af9c8162c8b8731f7cbdc951a7f46 \
+            detect --redact --verbose --no-banner --exit-code 1 \
+            2>&1 | tee "$RUNNER_TEMP/gitleaks.log"
+          grep -qE 'INF.*[1-9][0-9]* commits scanned\.' "$RUNNER_TEMP/gitleaks.log" \
+            || { echo "::error::gitleaks exited 0 without scanning any commits"; exit 1; }
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
@@ -62,6 +120,13 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pre-commit (all hooks)
+        # SKIP=gitleaks: in CI the hook is the zero-commit `protect --staged` no-op
+        # described above, and it prints "Detect hardcoded secrets....Passed" while
+        # having checked nothing. Skipping it leaves the step above as the only
+        # secret signal in this job. The hook stays in .pre-commit-config.yaml —
+        # `protect --staged` is the right thing for a local staged diff.
+        env:
+          SKIP: gitleaks
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
   # ---------------------------------------------------------------------------

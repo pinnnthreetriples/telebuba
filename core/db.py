@@ -13,7 +13,6 @@ keep working.
 
 from __future__ import annotations
 
-import asyncio
 import atexit
 import threading
 from datetime import UTC, datetime
@@ -22,7 +21,6 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import (
     create_engine,
     event,
-    text,
 )
 
 # Schema (MetaData + every table) lives in a sibling module for the file-size
@@ -46,7 +44,7 @@ from core.migrations import apply_migrations
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
@@ -85,59 +83,6 @@ def dispose_engine() -> None:
 
 
 atexit.register(dispose_engine)
-
-
-# --------------------------------------------------------------------------- #
-# Periodic SQLite maintenance — WAL checkpoint + optional online backup.
-# WAL never truncates on its own under a long-lived pool, and telebuba.db is the
-# sole datastore (incl. users/auth), so nothing otherwise guards against loss.
-# The clock is injectable so the backup filename is deterministic under test.
-# --------------------------------------------------------------------------- #
-_BACKUP_STEM = "telebuba"
-_BACKUP_SUFFIX = ".db"
-_BACKUP_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
-
-
-def _default_backup_clock() -> datetime:
-    return datetime.now(UTC)
-
-
-def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock) -> Path | None:
-    """Checkpoint the WAL and, when enabled, write + prune a timestamped backup.
-
-    Returns the backup file path when one was written, else ``None``. The
-    ``PRAGMA wal_checkpoint(TRUNCATE)`` always runs; the ``VACUUM INTO`` backup
-    is gated on ``settings.db.backup_enabled``.
-    """
-    engine = _get_engine()
-    with engine.connect() as connection:
-        connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
-        if not settings.db.backup_enabled:
-            return None
-        backup_dir = settings.db.backup_dir
-        backup_dir.mkdir(parents=True, exist_ok=True)
-        stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
-        target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
-        # VACUUM INTO copies a consistent snapshot without holding a long lock;
-        # the path is a bound parameter, never interpolated SQL.
-        connection.execute(text("VACUUM INTO :path"), {"path": str(target)})
-    _prune_backups(backup_dir)
-    return target
-
-
-def _prune_backups(backup_dir: Path) -> None:
-    backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
-    excess = len(backups) - settings.db.backup_keep
-    for stale in backups[:excess]:
-        stale.unlink(missing_ok=True)
-
-
-async def run_db_maintenance_loop() -> None:
-    """Run :func:`run_db_maintenance` on the configured interval until cancelled."""
-    interval_seconds = settings.db.backup_interval_hours * 3600.0
-    while True:
-        await asyncio.sleep(interval_seconds)
-        await asyncio.to_thread(run_db_maintenance)
 
 
 # Guards the lazy build below. Every DB call runs in its own ``asyncio.to_thread``
@@ -230,6 +175,17 @@ def _optional_int(value: object) -> int | None:
         return None
     return int(cast("int | str", value))
 
+
+# --------------------------------------------------------------------------- #
+# Periodic SQLite maintenance — split into a sibling module for the file-size
+# budget and re-exported here so ``from core.db import run_db_maintenance_loop``
+# (main.py) keeps working. Imported at the bottom because that module reads
+# ``_get_engine`` above.
+# --------------------------------------------------------------------------- #
+from core.db_maintenance import (  # noqa: E402, F401
+    run_db_maintenance,
+    run_db_maintenance_loop,
+)
 
 # --------------------------------------------------------------------------- #
 # Domain repositories (#38) — split out of this module and re-exported so that
