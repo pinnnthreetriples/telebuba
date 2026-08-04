@@ -16,13 +16,22 @@ last_updated: 2026-08-04
 10. Frontend rules live in `frontend.md`.
 
 `tests/test_api_error_contract.py` is the executable form of the error half of rule 1:
-every documented operation must declare exactly the non-2xx statuses its code can
-answer, each typed as `ErrorEnvelope`. It recomputes that set from the routes
-(`raise HTTPException` sites reached through `api/` helpers and the `Depends` chain),
-the handlers registered in `api/errors.py`, and FastAPI's own auto-422 rule. Declare
-with `api.errors.error_responses(*statuses)` or the two named compositions
-(`PROTECTED_ERRORS`, `SERVICE_ERRORS`) — never a hand-rolled `{status: {...}}` dict,
-and never a router-wide blanket over routes with different surfaces.
+every documented operation declares exactly the non-2xx statuses the test *derives*
+for it, each typed as `ErrorEnvelope`. The derived set is not "what the route can
+answer" in the abstract — it is what is visible from `api/`: `raise HTTPException`
+sites reached through `api/` helpers and the `Depends` chain, the statuses of the
+handlers registered in `api/errors.py`, plus 422 wherever FastAPI's own rule
+documents its auto validation response. That last carve-out is deliberate and does
+over-declare: thirteen parameterless authenticated operations inherit a 422 they
+cannot answer, because the session cookie is a route parameter. Mirroring FastAPI
+beats fighting it — suppressing the auto-422 needs a `4XX`/`default` catch-all that
+would blur every other status. The test's own two blind spots are documented in its
+header. Declare with `api.errors.error_responses(*statuses)` or the named
+compositions (`PROTECTED_ERRORS`, `SERVICE_ERRORS`) — never a hand-rolled
+`{status: {...}}` dict, and put a fragment on a router only when *every* route under
+it answers that set (`include_router` merges responses down and a route cannot
+subtract; that is how the pre-#323 blanket came to advertise 404/503 on
+`GET /accounts/stats`).
 
 `tests/test_architecture.py` is the executable form of rules 1–5 and 8, and outranks this prose. It `rglob`s each layer (submodules included) and asserts: `api/` imports only `services`, `schemas`, `fastapi`, stdlib and `core.config` / `core.logging` — nothing else from `core/`; `services/` imports no `sqlalchemy`, `telethon`, `fastapi`, `api` (no `httpx` either, but that one is convention, not asserted); `schemas/` imports no project layer and no SDK; `core/` imports neither layer above it; `.env.example` mirrors `core/config.py` key-for-key *and* value-for-value; no test source exceeds 700 lines.
 

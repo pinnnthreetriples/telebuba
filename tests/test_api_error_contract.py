@@ -23,6 +23,25 @@ asserts the schema declares exactly that, with the envelope as the body:
 * 422 whenever FastAPI itself would document the auto validation response.
 
 A new route with a wrong ``responses=`` goes red here.
+
+Three limits, deliberate, so nobody mistakes green here for a proof:
+
+1. **Import style matters.** ``_called_name`` records the bare attribute and
+   ``_resolve`` only follows ``from api... import name``, so a *module-attribute*
+   call — ``from api.v1 import _uploads`` then ``_uploads.reject_oversized_upload()``
+   — is invisible and its raises go uncounted. No module under ``api/`` calls that
+   way today, which is the only reason the scan is complete; keep importing the
+   function, not the module.
+2. **The scan stops at the layer edge.** It never reads ``services/``, yet
+   ``AccountActionError`` has an app-wide handler. A future route that calls a
+   service which raises it *without* going through ``service_errors_to_http`` would
+   under-declare 400/503 and stay green. Wrap service calls in the mapper and this
+   cannot happen; that is the contract the deriver actually checks.
+3. **Entering the mapper is taken as proof of its statuses.** A route inside
+   ``service_errors_to_http`` is credited 400/404/503 whether or not the service it
+   wraps can raise them. So a mapper that can never fire makes the route
+   over-declare, and this test will insist on it — the fix is to drop the dead
+   mapper, as ``set_all_accounts_privacy`` did, not to widen the deriver.
 """
 
 from __future__ import annotations
