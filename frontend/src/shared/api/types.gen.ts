@@ -4849,17 +4849,9 @@ export type SetAllAccountsPrivacyData = {
 
 export type SetAllAccountsPrivacyErrors = {
   /**
-   * Bad request, or Telegram refused the action
-   */
-  400: ErrorEnvelope;
-  /**
    * Not authenticated
    */
   401: ErrorEnvelope;
-  /**
-   * Not found
-   */
-  404: ErrorEnvelope;
   /**
    * Request validation failed
    */
@@ -4868,10 +4860,6 @@ export type SetAllAccountsPrivacyErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Upstream gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type SetAllAccountsPrivacyError =
