@@ -161,30 +161,28 @@ def _module_name(path: Path) -> str:
 @cache
 def _api_functions() -> dict[str, dict[str, _Facts]]:
     """``{module: {function: facts}}`` for every top-level function under ``api/``."""
-    index: dict[str, dict[str, _Facts]] = {}
-    for path in sorted((_ROOT / "api").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        index[_module_name(path)] = {
+    return {
+        _module_name(path): {
             node.name: _collect_facts(node)
-            for node in tree.body
+            for node in ast.parse(path.read_text(encoding="utf-8")).body
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         }
-    return index
+        for path in sorted((_ROOT / "api").rglob("*.py"))
+    }
 
 
 @cache
 def _api_imports() -> dict[str, dict[str, str]]:
     """``{module: {imported_name: defining_module}}`` for ``api``-internal imports."""
-    index: dict[str, dict[str, str]] = {}
-    for path in sorted((_ROOT / "api").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        index[_module_name(path)] = {
+    return {
+        _module_name(path): {
             alias.asname or alias.name: node.module
-            for node in tree.body
+            for node in ast.parse(path.read_text(encoding="utf-8")).body
             if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("api")
             for alias in node.names
         }
-    return index
+        for path in sorted((_ROOT / "api").rglob("*.py"))
+    }
 
 
 def _resolve(module: str, name: str) -> tuple[str, str] | None:
