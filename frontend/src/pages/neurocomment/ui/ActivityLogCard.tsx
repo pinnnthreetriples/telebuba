@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
-import { eventLabel, formatLocalTime, logSeverity } from '@/shared/lib';
+import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
 import { CollapsibleCard } from '@/shared/ui';
 
 // Activity-feed line colour by the event's display severity (see `logSeverity`).
@@ -35,14 +35,7 @@ function LogLine({
   // with no account_id (listener / sweep) leave the column empty, like `channel`.
   const accountId = line.account_id;
   const account = accountId ? (accountName?.(accountId) ?? accountId) : undefined;
-  // Most negative outcomes carry a `reason`; a failed post carries the Telegram `status`.
-  const reasonCode = extraStr(line.extra, 'reason') ?? extraStr(line.extra, 'status');
-  const reason = reasonCode ? t(`logEventReason.${reasonCode}`, { defaultValue: '' }) : '';
-  // The Telegram exception class, shown NEXT TO the reason rather than as a fallback
-  // behind it: `status: "failed"` always translates, so a fallback would never fire and
-  // the line would keep saying a post failed without saying why. Deliberately raw — a
-  // technical code, like eventLabel's raw-event-code fallback.
-  const detail = [reason, extraStr(line.extra, 'error_type')].filter(Boolean).join(' · ');
+  const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
     <div className="flex gap-[10px]" title={hint || undefined}>

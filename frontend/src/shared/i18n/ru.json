@@ -434,7 +434,7 @@
         "chat_admin_required": "Нужны права администратора канала",
         "channel_read_failed": "Не удалось получить данные канала из Telegram",
         "channel_create_failed": "Не удалось создать канал",
-        "channel_username_assign_failed": "Канал создан как приватный — не удалось присвоить имя пользователя",
+        "channel_username_assign_failed": "Не удалось присвоить имя пользователя — канал создан как приватный",
         "failed": "Telegram отклонил действие — попробуйте ещё раз",
         "unavailable": "Telegram временно недоступен — попробуйте ещё раз"
       }
@@ -603,7 +603,8 @@
       "level": "Уровень",
       "account": "Аккаунт",
       "channel": "Канал",
-      "event": "Событие"
+      "event": "Событие",
+      "reason": "Причина"
     },
     "pagination": {
       "prev": "Назад",
@@ -771,6 +772,8 @@
     "neurocomment_channel_comments_off": "Комментарии в канале отключены",
     "neurocomment_onboard_join_by_request": "Заявка на вступление отправлена",
     "neurocomment_onboard_join_request_pending": "Заявка на вступление ещё ждёт одобрения",
+    "neurocomment_onboard_join_request_approved": "Заявку на вступление одобрили",
+    "neurocomment_onboard_pair_ready": "Аккаунт готов комментировать канал",
     "neurocomment_join_request_expired": "Канал отключён: заявку так и не одобрили",
     "neurocomment_join_request_review_failed": "Не удалось проверить заявки на вступление",
     "neurocomment_channel_rejoin_exhausted": "Канал отключён: не удалось вернуться в чат",
@@ -888,6 +891,20 @@
       "peer_flood": "ограничение по спаму",
       "already_participant": "уже участник",
       "by_request": "заявка отправлена, ждём одобрения"
+    },
+    "error": {
+      "ChannelPrivateError": "чат закрыт: не пускают или выгнали",
+      "ChannelInvalidError": "Telegram не узнал этот канал",
+      "UserBannedInChannelError": "Telegram запретил аккаунту писать",
+      "ChatWriteForbiddenError": "в чате запрещено писать",
+      "ChatGuestSendForbiddenError": "писать могут только участники чата",
+      "UserNotParticipantError": "аккаунт не состоит в чате",
+      "UsernameNotOccupiedError": "такого адреса не существует",
+      "UsernameInvalidError": "адрес написан неверно",
+      "InviteHashExpiredError": "ссылка-приглашение устарела",
+      "InviteHashInvalidError": "ссылка-приглашение неверная",
+      "InviteHashEmptyError": "в ссылке нет приглашения",
+      "UnconfirmedRequest": "связь оборвалась, ответ не дошёл"
     }
   },
   "neurocomment": {
