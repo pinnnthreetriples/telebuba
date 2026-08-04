@@ -635,11 +635,13 @@ def test_discovery_candidates_migration_creates_table_and_index(
 def test_reservation_token_upgrade_matches_a_fresh_database(
     legacy_engine: _EngineFactory,
 ) -> None:
-    """#46: an upgraded ``warming_account_state`` ends in the same shape as a fresh one.
+    """#46: both routes to a database carry ``reservation_token``.
 
-    The reservation hand-back's guard is this column (#10), so a row that predates the
-    migration must gain it — NULL, which matches no token, i.e. fail-closed — rather
-    than leave the guard comparing against a column that is not there.
+    The hand-back's guard is this column (#10), so a row that predates the migration must
+    gain it — NULL, which matches no token, i.e. fail-closed. Scoped to that column plus
+    the ORM's shape on the built database: the legacy fixture is deliberately minimal, so
+    the upgraded table also lacks three pre-#3 runtime columns no migration backfills, and
+    asserting the two tables EQUAL would assert that unrelated gap away.
     """
     engine = legacy_engine("legacy.db")
     now = "2026-01-01T00:00:00+00:00"

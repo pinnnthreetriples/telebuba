@@ -9,11 +9,15 @@ Russian or English translation, so the gap is caught in CI rather than by an
 operator.
 
 The same applies to the second vocabulary the SPA owns: the ``extra["reason"]`` codes
-rendered through ``logEventReason``. Those fail SILENTLY rather than loudly — the card
-falls back to an empty string, so a missing reason is a blank next to the event, not a
-raw code — which is how ``too_short`` came to explain nothing at all. What each scan can
-and cannot see is stated on :func:`_module_event_codes` and :func:`_module_reason_codes`;
-read those before trusting this file to have caught something.
+rendered through ``logEventReason``. Those fail QUIETLY rather than loudly — the log
+prefixes resolve with an empty default and only the toast ladder after them falls back to
+the raw code (``eventReason.ts``'s ``label``), so a missing reason shows the operator a
+snake_case token where prose belongs, and once did explain nothing at all (``too_short``).
+What each scan can and cannot see is stated on :func:`_module_event_codes` and
+:func:`_module_reason_codes`; read those before trusting this file to have caught
+something. In particular ``_module_reason_codes`` sees literals and ``reason``-named
+locals — NOT a name bound to a call result, which is why ``services.warming._reservation``
+reports its two reservation losses as two event CODES instead.
 """
 
 from __future__ import annotations

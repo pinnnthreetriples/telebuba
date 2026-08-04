@@ -757,6 +757,7 @@
     "warming_reconcile_not_ready": "Warming not ready to sync",
     "warming_reservation_reconciled": "Unused daily budget returned",
     "warming_reservation_stranded": "Unused daily budget could not be returned",
+    "warming_reservation_absorbed": "Could not return the unused daily budget: a newer booking holds the row",
     "warming_set_offline_failed": "Failed to go offline",
     "warming_shutdown_timeout": "Warming shutdown timed out",
     "warming_stop_task_error": "Failed to stop warming task",
@@ -793,8 +794,6 @@
     "db_maintenance_failed": "Database maintenance failed"
   },
   "logEventReason": {
-    "absorbed": "the next cycle counted it as spent",
-    "stranded": "still booked, with nobody to release it",
     "chance": "chance didn't hit",
     "no_posts": "no recent posts",
     "no_emoji": "channel rejects our emoji",

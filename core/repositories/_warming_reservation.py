@@ -1,6 +1,7 @@
 """The daily-budget reservation hand-back write — a sibling of ``core.repositories.warming``.
 
-Its own module for the file-size budget (that one is at the cap), like
+Its own module for the file-size budget — that one was at the cap when this write was
+written, and splitting it was cheaper than trimming prose — like
 ``core.repositories._warming_settings``; re-exported there, and thence by ``core.db``,
 so call sites keep importing it from either. Owns ONE statement: the guarded swap of a
 pre-cycle daily reservation down to what the cycle really spent (#208, #10).
@@ -83,19 +84,30 @@ def _classify_refusal(
     The row's three facts — whose booking is on it, for which date, and how big the
     count is — partition the refusals exhaustively, and only two leaves are losses:
 
-    * ``settled``, token NULL. Only a hand-back writes NULL here (``_set_state`` leaves
-      the column alone), and only one carrying OUR token can match, so this is our own
-      earlier write landing — the shielded one whose result the cancel swallowed.
+    * ``settled``, token NULL. Three writers put NULL in this column, by enumeration:
+      this hand-back, the INSERT branch of ``_upsert_warming_state`` (which omits the
+      column, so a brand-new row starts NULL), and migration #46 backfilling every row
+      that predates it. Only the first can co-occur with a live booking — a row created
+      or migrated without one cannot carry the uuid4 we minted — so on a booking's own
+      hand-back, NULL means OUR earlier write landed: the shielded one whose result the
+      cancel swallowed. (A never-booked NULL row also lands here, which is correct: it
+      owes nobody anything.)
     * ``absorbed``, someone else's token. A newer booking replaced ours, and it read its
       baseline off a row that still carried our booking, so our unspent remainder is
       now inside its count and no longer available to anyone. A phase advance raising
       the cap is the reachable way in: the daily gate parks a generation that finds a
       saturated count under the SAME cap, but admits it under a higher one.
-    * ``settled``, our token but the date has rolled, or the count has moved at or below
-      our booking. Both mean the budget is already free: a fresh day resets the counter,
-      and our own ``_finalize_after_cycle`` transition writes exactly the reconciled
-      count without clearing the token, so a cancel landing after it arrives here.
-    * ``stranded``, our token, our date, and a count that has grown past our booking.
+    * ``settled``, our token but the date has rolled — checked BEFORE the count, because
+      a rolled date makes the count a different day's and comparing it would be
+      meaningless — or, on our own date, a count strictly below what we booked. Both
+      mean the budget is already free: a fresh day resets the counter, and our own
+      ``_finalize_after_cycle`` transition writes exactly the reconciled count without
+      clearing the token, so a cancel landing after it arrives here.
+    * ``stranded``, our token, our date, and a count at or above our booking. ``>=``,
+      not ``>``: equality cannot actually arrive here (the UPDATE's own predicate would
+      have matched it and returned ``applied``, and SQLite's single writer means nothing
+      slips in between the two statements of this transaction), so the boundary is
+      defensive and points at fail-loud.
       Our reservation is still being counted with nobody left to release it. No code
       path is known to produce it — a newer generation either parks (writing the count
       we booked, which the guard above then matches) or books (taking the token, i.e.

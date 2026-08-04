@@ -106,6 +106,11 @@ async def _reconcile_reservation(
     no other backstop.
     """
     daily_count = reservation.daily_count
+    # What this booking reserved and did not spend. A fact about the booking, not a
+    # claim about the row — which is why the two loss reports carry it and not the count
+    # they tried to write: whichever ordering produced the refusal, the row's count may
+    # be a newer booking's, and quoting it as ``daily_actions`` read as the row's own.
+    unreleased = reservation.booked - (daily_count + spent)
     try:
         # ``shield``: ``shutdown_warming_runtime`` cancels a second time when its
         # 5s ``gather`` times out, and that second cancel lands on this write's
@@ -121,32 +126,40 @@ async def _reconcile_reservation(
                 daily_date=reservation.daily_date,
             ),
         )
-        if outcome in ("absorbed", "stranded"):
-            # Both leaves cost the account the rest of today's budget: a newer booking
-            # folded our unspent remainder into its own count (``absorbed``), or our
-            # booking is still counted with nobody left to release it (``stranded``).
-            # One event code, because the operator's question is the same either way —
-            # this account lost its day — and the ``reason`` says which. Only
-            # ``settled`` is silent, and only because the budget really is free there;
-            # reporting every refusal fired on roughly a quarter of stops, claiming a
-            # day was lost that was not, which is how an alarm gets ignored.
+        # Two codes, not one code with a ``reason``: the two losses are not the same
+        # alarm. ``stranded`` has no known producer, so any occurrence is an accounting
+        # movement nobody can explain and worth waking someone for, while ``absorbed``
+        # is the expected consequence of a phase advance and is the one that can be
+        # wrong (see the docstring's ordering note). Sharing a code would let a mode
+        # with a known false positive dilute one that should never fire at all. It is
+        # also the vocabulary the i18n drift guard actually reads: it resolves the code
+        # argument of every ``log_event`` call, including through a local variable,
+        # while ``extra["reason"]`` is only scanned for literals and reason-named names —
+        # so a reason bound to this call's result was covered by nothing.
+        if outcome == "absorbed":
+            await log_event(
+                "WARNING",
+                "warming_reservation_absorbed",
+                account_id=account_id,
+                extra={"spent": spent, "booked": reservation.booked, "unreleased": unreleased},
+            )
+        elif outcome == "stranded":
             await log_event(
                 "WARNING",
                 "warming_reservation_stranded",
                 account_id=account_id,
-                extra={
-                    "spent": spent,
-                    "daily_actions": daily_count + spent,
-                    "unreleased": reservation.booked - (daily_count + spent),
-                    "reason": outcome,
-                },
+                extra={"spent": spent, "booked": reservation.booked, "unreleased": unreleased},
             )
-        elif outcome == "applied" and spent:
+        elif outcome == "applied" and spent and unreleased > 0:
             # A forfeited day is otherwise indistinguishable from a legitimate park:
             # ``_gate_daily_limit`` writes the same ``last_event="daily_limit"`` either
             # way, so without this the fleet can lose a day of warming per deploy in
             # total silence. Silent when nothing was spent (cancelled while queued on
-            # the semaphore), or every deploy would log one WARNING per account.
+            # the semaphore), or every deploy would log one WARNING per account — and
+            # silent when there was nothing left to give back, which is a cycle that
+            # spent its whole remaining budget and then got cancelled: this code says a
+            # day was rescued, and saying it to an account that simply reached its cap
+            # is how the operator learns to ignore it.
             await log_event(
                 "WARNING",
                 "warming_reservation_reconciled",

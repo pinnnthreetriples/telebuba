@@ -208,28 +208,34 @@ async def _seed_row(count: int, token: str | None) -> str:
 @pytest.mark.parametrize(
     ("row", "spent", "expected"),
     [
-        # Applied, real spend: the only signal a forfeited day ever produces, since
-        # ``_gate_daily_limit`` writes the same ``last_event`` for a legitimate park.
-        ((_CAP, _TOKEN), 2, ("warming_reservation_reconciled", None, 2)),
+        # Applied with budget handed back: the only signal a forfeited day ever
+        # produces, since ``_gate_daily_limit`` writes the same ``last_event`` for a
+        # legitimate park.
+        ((_CAP, _TOKEN), 2, ("warming_reservation_reconciled", 2)),
         # Applied, nothing spent (cancelled while queued on the semaphore):
         # deliberately silent, or every deploy logs one WARNING per account.
-        ((_CAP, _TOKEN), 0, (None, None, 0)),
+        ((_CAP, _TOKEN), 0, (None, 0)),
+        # Applied with nothing left over — the cycle spent its whole remaining budget
+        # and was then cancelled. Silent: this code says a day was rescued, and an
+        # account that simply reached its cap forfeited nothing.
+        ((_CAP, _TOKEN), _CAP, (None, _CAP)),
         # Our own applying write cleared the token and the cancel swallowed its result,
         # so the retry finds NULL. Nothing is owed: silent.
-        ((2, None), 2, (None, None, 2)),
+        ((2, None), 2, (None, 2)),
         # A newer booking replaced ours, and read its baseline off a row that still
         # carried our booking — our unspent remainder is inside its count now. The
         # reachable route is a phase advance raising the cap: the daily gate parks a
         # generation that finds a saturated count under the same cap, but admits it
         # under a higher one, so it books instead of parking.
-        ((_HIGHER_CAP, "booking-2"), 2, ("warming_reservation_stranded", "absorbed", _HIGHER_CAP)),
+        ((_HIGHER_CAP, "booking-2"), 2, ("warming_reservation_absorbed", _HIGHER_CAP)),
         # Our booking, our date, and a count that has GROWN past it: the reservation is
         # still being counted with nobody to release it. No code path is known to
         # produce this — a newer generation either parks (writing the count we booked,
         # which the guard matches) or books (taking the token, i.e. ``absorbed``) — so
         # the fixture is deliberately synthetic and the branch stays fail-loud rather
-        # than being assumed away.
-        ((_HIGHER_CAP, _TOKEN), 2, ("warming_reservation_stranded", "stranded", _HIGHER_CAP)),
+        # than being assumed away. Its own code, too: ``absorbed`` has a known false
+        # positive and this one should never fire, so they must not dilute each other.
+        ((_HIGHER_CAP, _TOKEN), 2, ("warming_reservation_stranded", _HIGHER_CAP)),
     ],
 )
 @pytest.mark.asyncio
@@ -237,11 +243,11 @@ async def test_the_reconcile_reports_each_of_its_outcomes(
     monkeypatch: pytest.MonkeyPatch,
     row: tuple[int, str | None],
     spent: int,
-    expected: tuple[str | None, str | None, int],
+    expected: tuple[str | None, int],
 ) -> None:
     """Every refusal that costs the day is reported, and only those."""
     count, row_token = row
-    event, reason, daily_actions = expected
+    event, daily_actions = expected
     logged: list[tuple[str, str, object]] = []
 
     async def capture(level: str, code: str, **kwargs: object) -> None:
@@ -252,9 +258,14 @@ async def test_the_reconcile_reports_each_of_its_outcomes(
 
     await _reservation._reconcile_reservation("acc-1", _Reservation(0, today, _CAP, _TOKEN), spent)
 
-    extra: dict[str, object] = {"spent": spent, "daily_actions": spent}
-    if reason is not None:
-        extra |= {"unreleased": _CAP - spent, "reason": reason}
+    # The hand-back reports its own booking, never the row's count: after a refusal that
+    # count can belong to a newer booking, and ``daily_actions`` reads as the row's own.
+    losses = {"warming_reservation_absorbed", "warming_reservation_stranded"}
+    extra: dict[str, object] = (
+        {"spent": spent, "booked": _CAP, "unreleased": _CAP - spent}
+        if event in losses
+        else {"spent": spent, "daily_actions": spent}
+    )
     assert logged == ([("WARNING", event, extra)] if event else [])
     record = await fetch_warming_state("acc-1")
     assert record is not None
@@ -326,6 +337,55 @@ async def test_a_hand_back_whose_row_rolled_past_midnight_is_silent(
     assert record is not None
     assert record.daily_actions == 0
     assert record.daily_count_date == today
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_after_a_cycle_spent_its_whole_budget_reports_no_rescue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An account that reached its cap normally must not be told it lost a day (#10).
+
+    Seeded four short of the cap, so a four-action cycle exhausts ``remaining`` exactly
+    and the finalize writes the cap. The hand-back that follows a cancel then finds the
+    count it was going to write already there and APPLIES — the same value, harmlessly —
+    but there was nothing left over, so announcing a rescued day is a false alarm on the
+    routine path of an account reaching its cap.
+    """
+    _no_quiet_days(monkeypatch)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    logged: list[str] = []
+
+    async def capture(_level: str, code: str, **_kwargs: object) -> None:
+        logged.append(code)
+
+    monkeypatch.setattr(_reservation, "log_event", capture)
+    real_finalize = _loop._finalize_after_cycle
+
+    async def finalize_then_cancel(  # noqa: PLR0913 - mirrors the real signature exactly
+        account_id: str,
+        result: WarmingCycleResult,
+        age_hours: float,
+        reservation: _Reservation,
+        schedule: tuple[int, datetime, WarmingState],
+        *,
+        run_id: str | None,
+    ) -> WarmingCycleResult:
+        await real_finalize(account_id, result, age_hours, reservation, schedule, run_id=run_id)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(_loop, "_finalize_after_cycle", finalize_then_cancel)
+    await _seed_warming_account()
+    await _seed_row(_CAP - 4, None)
+
+    with pytest.raises(asyncio.CancelledError):
+        await warming.run_loop_iteration("acc-1")
+
+    assert logged == []
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # Four short of the cap plus the cycle's four actions: at the cap, legitimately.
+    assert record.daily_actions == _CAP
 
 
 @pytest.mark.asyncio

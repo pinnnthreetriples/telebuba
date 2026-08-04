@@ -758,6 +758,7 @@
     "warming_reconcile_not_ready": "Прогрев ещё не готов к синхронизации",
     "warming_reservation_reconciled": "Неизрасходованный дневной лимит возвращён",
     "warming_reservation_stranded": "Не удалось вернуть неизрасходованный дневной лимит",
+    "warming_reservation_absorbed": "Не удалось вернуть неизрасходованный дневной лимит: строку заняла новая бронь",
     "warming_set_offline_failed": "Не удалось выйти из сети",
     "warming_shutdown_timeout": "Таймаут остановки прогрева",
     "warming_stop_task_error": "Ошибка остановки задачи прогрева",
@@ -794,8 +795,6 @@
     "db_maintenance_failed": "Сбой обслуживания базы данных"
   },
   "logEventReason": {
-    "absorbed": "следующий цикл посчитал его израсходованным",
-    "stranded": "остался забронированным, освободить его некому",
     "chance": "не выпал шанс",
     "no_posts": "нет свежих постов",
     "no_emoji": "канал не принимает наши эмодзи",

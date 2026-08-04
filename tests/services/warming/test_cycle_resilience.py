@@ -479,10 +479,12 @@ async def test_the_handler_leaves_a_live_generations_own_reservation_alone(
     # ``run-2``'s reservation, not the dead cycle's two spent actions.
     assert record.daily_actions == rebooked
     # The 13 actions this cycle booked and never spent are inside ``run-2``'s count now.
+    # Reported under its own code: the payload describes OUR booking (reserved, spent,
+    # unreleased) and never quotes a count, which by now belongs to ``run-2``.
     assert logged == [
         (
-            "warming_reservation_stranded",
-            {"spent": 2, "daily_actions": 2, "unreleased": rebooked - 2, "reason": "absorbed"},
+            "warming_reservation_absorbed",
+            {"spent": 2, "booked": rebooked, "unreleased": rebooked - 2},
         ),
     ]
 
