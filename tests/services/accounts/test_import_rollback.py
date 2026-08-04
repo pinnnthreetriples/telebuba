@@ -169,6 +169,50 @@ async def test_the_tdata_rollback_also_removes_a_post_commit_row(
 
 
 @pytest.mark.asyncio
+async def test_an_already_absent_file_is_not_reported_as_a_failed_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``missing_ok=True``, and this is what it buys.
+
+    The rollback's job is to reach "neither the row nor the file exists". If the
+    file is already gone when it runs, that job is done — but a bare ``unlink``
+    raises ``FileNotFoundError``, which is an ``OSError``, so the outcome would come
+    back ``file_kept`` and the operator would be told
+    ``account_session_import_rollback_failed`` about a file that is not there. The
+    precedent this rollback follows, ``_tdata._rollback_tdata_import``, already
+    passed ``missing_ok=True`` for exactly this reason.
+    """
+    events: list[str] = []
+
+    async def fake_log(
+        _level: str,
+        event: str,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,  # noqa: ARG001
+    ) -> None:
+        events.append(event)
+
+    session_file = settings.telegram.session_dir / "live.session"
+
+    async def _boom_after_losing_the_file(_account_id: str) -> None:
+        session_file.unlink()  # something else got there first
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_FINGERPRINT_SEAM, _boom_after_losing_the_file)
+    monkeypatch.setattr("services.accounts.sessions.log_event", fake_log)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(
+            AccountSessionFileImport(filename="live.session", content=_CREDENTIAL),
+        )
+
+    assert "account_session_import_rollback_failed" not in events
+    assert "account_session_import_rolled_back" in events
+    assert await fetch_account("live") is None
+
+
+@pytest.mark.asyncio
 async def test_a_clean_tdata_batch_is_unaffected(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
