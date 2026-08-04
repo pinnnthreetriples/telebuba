@@ -13,6 +13,7 @@ from pathlib import Path
 
 from core.config import settings
 from core.db import fetch_account, update_account_from_session_check
+from core.logging import log_event
 from core.tdata_import import convert_tdata_zip
 from core.telegram_client import check_telegram_session
 from schemas.accounts import (
@@ -79,7 +80,40 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
             session_name=session_name,
         )
         await asyncio.to_thread(_write_session_file, session_path, data.content)
-        return await add_account(create)
+        try:
+            return await add_account(create)
+        except Exception as exc:
+            await _discard_orphaned_session(session_path, session_name, exc)
+            raise
+
+
+async def _discard_orphaned_session(path: Path, session_name: str, cause: Exception) -> None:
+    """Remove a ``.session`` written for an import that then failed to add its row.
+
+    ``add_account`` can still refuse after the write — the ``session_name`` may be
+    taken by a DIFFERENT ``account_id`` whose own file is gone, so neither check
+    above sees it — and the bytes then have no row to own them. Left behind, the
+    ``session_path.exists()`` check turns that retryable failure into a permanent
+    one: every retry is refused and there is no account for the operator to delete.
+
+    Only ever removes a file THIS call created, while still holding that session's
+    import lock, so a working account's credential can never be the target. Same
+    reasoning as ``_tdata._rollback_tdata_import``.
+    """
+    try:
+        await asyncio.to_thread(path.unlink)
+    except OSError as exc:
+        await log_event(
+            "ERROR",
+            "account_session_import_rollback_failed",
+            extra={"session_name": session_name, "error_type": type(exc).__name__},
+        )
+        return
+    await log_event(
+        "WARNING",
+        "account_session_import_rolled_back",
+        extra={"session_name": session_name, "error_type": type(cause).__name__},
+    )
 
 
 async def check_account_session(data: AccountCheckRequest) -> AccountRead:

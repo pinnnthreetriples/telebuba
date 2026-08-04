@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core import secure_paths
 from core.config import settings
 from schemas.accounts import (
     AccountCheckRequest,
@@ -27,6 +28,7 @@ from services.accounts import (
     import_account_tdata,
     list_accounts,
     list_accounts_page,
+    remove_account,
 )
 
 if TYPE_CHECKING:
@@ -113,6 +115,72 @@ async def test_import_account_session_rejected_id_leaves_no_file() -> None:
 
     assert not (settings.telegram.session_dir / "..session").exists()
     assert list((settings.telegram.session_dir).glob("*")) == []
+
+
+@pytest.mark.asyncio
+async def test_session_import_locks_down_the_directory_and_the_credential(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The dir must end up 0700 and the ``.session`` 0600.
+
+    A 0600 file inside a 0755 directory still lists its name and size to every local
+    account, and ``sessions/`` was being created at the default umask. Asserted by
+    the modes REQUESTED so it holds on a Windows checkout too, where ``os.chmod``
+    only toggles the read-only bit — see ``core.secure_paths``.
+    """
+    modes: dict[str, int] = {}
+    monkeypatch.setattr(secure_paths, "_IS_POSIX", True)
+    monkeypatch.setattr(
+        "pathlib.Path.chmod",
+        lambda self, mode: modes.__setitem__(self.name, mode),
+    )
+    await import_account_session(
+        AccountSessionFileImport(filename="perm.session", content=b"credential-bytes"),
+    )
+    assert modes[settings.telegram.session_dir.name] == 0o700
+    assert modes["perm.session"] == 0o600
+
+
+@pytest.mark.asyncio
+async def test_failed_import_cleans_up_so_the_retry_can_succeed() -> None:
+    """An import that fails AFTER the write must not block every later attempt.
+
+    ``session_name`` can be taken by a different ``account_id`` whose own file is
+    gone from disk, so neither the DB check nor the file check sees the conflict and
+    ``add_account`` refuses only after the credential has landed. The orphan then
+    made ``session_path.exists()`` refuse every retry forever, with no account row
+    for the operator to delete — a retryable failure turned permanent.
+    """
+    await add_account(AccountCreate(account_id="other", label="Other", session_name="123"))
+    data = AccountSessionFileImport(filename="123.session", content=b"credential-bytes")
+    orphan = settings.telegram.session_dir / "123.session"
+
+    with pytest.raises(ValueError, match="already used by account"):
+        await import_account_session(data)
+    assert not orphan.exists()
+
+    # With the conflicting row gone the very same import must now go through.
+    await remove_account("other")
+    account = await import_account_session(data)
+    assert account.account_id == "123"
+    assert orphan.read_bytes() == b"credential-bytes"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_cleanup_is_reported_and_leaves_the_original_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unlink that itself fails must not mask why the import failed."""
+    await add_account(AccountCreate(account_id="other", label="Other", session_name="123"))
+
+    def _unlink(_self: Path) -> None:
+        raise PermissionError(32, "file in use")
+
+    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+    with pytest.raises(ValueError, match="already used by account"):
+        await import_account_session(
+            AccountSessionFileImport(filename="123.session", content=b"credential-bytes"),
+        )
 
 
 @pytest.mark.asyncio
