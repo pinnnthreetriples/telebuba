@@ -231,6 +231,7 @@
       }
     },
     "profile": {
+      "dialog": "Account profile",
       "close": "Close",
       "tab": {
         "text": "Text",
@@ -361,6 +362,7 @@
     "channel": {
       "hint": "Channels this account owns",
       "loading": "Loading…",
+      "dialog": "Channel editor",
       "empty": "This account has no channels yet",
       "loadError": "Couldn't load the channels",
       "retry": "Retry",
@@ -504,7 +506,11 @@
     "logout": "Log out",
     "avatarFallback": "OP",
     "fatalError": "Something went wrong.",
-    "mutationError": "Something went wrong. Please try again."
+    "mutationError": "Something went wrong. Please try again.",
+    "sessionError": "Could not verify your session. Check the connection and try again.",
+    "sessionRetry": "Try again",
+    "sessionLogin": "Go to sign-in",
+    "pageError": "Something went wrong on this page. Use the menu to go elsewhere."
   },
   "settings": {
     "title": "Settings",
@@ -1060,6 +1066,7 @@
       },
       "campaignPrompt": {
         "title": "Campaign prompt",
+        "promptLabel": "Prompt text",
         "sub": "{{name}} · instruction for the LLM when generating comments",
         "placeholder": "E.g.: write friendly on-topic comments, no links or ads, 1–2 sentences…",
         "accounts": "Accounts in the campaign",

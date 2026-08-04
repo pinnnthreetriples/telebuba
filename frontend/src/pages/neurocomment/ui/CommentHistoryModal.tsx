@@ -91,7 +91,7 @@ export function CommentHistoryModal({
   );
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[760px]">
+    <Modal onClose={onClose} z={72} className="w-[760px]" label={t('neurocomment.history.title')}>
       <div className="border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <div className="text-[16px] font-bold text-ink">{t('neurocomment.history.title')}</div>
       </div>

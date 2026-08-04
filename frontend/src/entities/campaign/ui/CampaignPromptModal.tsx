@@ -40,7 +40,11 @@ export function CampaignPromptModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-[480px]">
+    <Modal
+      onClose={onClose}
+      className="w-[480px]"
+      label={t('neurocomment.modal.campaignPrompt.title')}
+    >
       <div className="p-6">
         <div className="mb-[6px] flex items-center justify-between">
           <span className="text-[16px] font-bold">
@@ -65,7 +69,10 @@ export function CampaignPromptModal({
           }}
           rows={5}
           placeholder={t('neurocomment.modal.campaignPrompt.placeholder')}
-          aria-label={t('neurocomment.modal.campaignPrompt.title')}
+          // Its own name, not the dialog's: two elements sharing one accessible
+          // name is what made getByLabelText ambiguous, and "Campaign prompt"
+          // announced twice tells a screen-reader user nothing about the field.
+          aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
           className="w-full resize-none rounded-[12px] border border-line-input bg-white px-[13px] py-[11px] font-[inherit] text-[13px] leading-[1.5] outline-none"
         />
 
@@ -166,6 +173,7 @@ export function CampaignPromptModal({
           }}
           z={80}
           className="w-[380px]"
+          label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
           <div className="p-6">
             <div className="mb-2 text-[16px] font-bold">

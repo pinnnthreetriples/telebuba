@@ -95,6 +95,17 @@ async def test_gemini_tuning_defaults_and_roundtrip() -> None:
     assert reloaded.gemini_max_retries == 3
     assert reloaded.gemini_min_interval_seconds == 4.5
 
+    # And they KEEP on omission, like every other tuned column: a save that leaves
+    # them out (the warming board's config modal, a partial PUT) used to write them
+    # unconditionally and reset the settings page's knobs to 1 and 0.0.
+    kept = await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=True,
+        gemini_api_key=None,
+    )
+    assert kept.gemini_max_retries == 3
+    assert kept.gemini_min_interval_seconds == 4.5
+
 
 @pytest.mark.asyncio
 async def test_gemini_tuning_null_column_falls_back_to_config(

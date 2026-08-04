@@ -42,7 +42,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal onClose={onClose} z={70} className="w-[460px]">
+    <Modal onClose={onClose} z={70} className="w-[460px]" label={t('accounts.proxyAdd.title')}>
       <div className="p-6">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[16px] font-bold">{t('accounts.proxyAdd.title')}</span>

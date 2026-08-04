@@ -15,8 +15,10 @@ function asEnvelope(error: unknown): ErrorEnvelope['error'] | null {
   return detail as ErrorEnvelope['error'];
 }
 
-// "unauthorized" means the session is gone, so send the user to /login.
-function isUnauthorized(error: unknown): boolean {
+// "unauthorized" means the session is gone, so send the user to /login. Anything
+// else (500, a dropped connection, a timeout) is NOT a logout — exported so the
+// route guard can tell the two apart instead of bouncing every failure to /login.
+export function isUnauthorized(error: unknown): boolean {
   return asEnvelope(error)?.code === 'unauthorized';
 }
 
@@ -39,7 +41,9 @@ function redirectToLogin(): void {
 // `addStory` is in the chain because this toast fires for EVERY mutation,
 // including a story publish: without it a story code the AddStoryModal renders
 // correctly inline showed up raw in the toast beside it.
-function mutationErrorText(error: unknown): string {
+// Exported so a modal that keeps itself open over a failed write can show the
+// SAME specific text inline as the toast, instead of the generic fallback.
+export function mutationErrorText(error: unknown): string {
   const detail = asEnvelope(error);
   const message = detail?.message;
   if (typeof message !== 'string' || !message.trim()) return i18n.t('shell.mutationError');

@@ -508,3 +508,26 @@ test('a successful save clears the dirty state so closing does not prompt', asyn
   expect(screen.queryByText('Отменить изменения?')).not.toBeInTheDocument();
   expect(onClose).toHaveBeenCalled();
 });
+
+// Same rule for this dialog, and the same fix as ChannelEditModal: an ARIA name change
+// while the dialog is open is never re-announced, so the name is fixed. Deriving it
+// moved it under the operator — the stored row here has no Telegram name, so the
+// heading flips to the snapshot's — and latching the row's name only traded that for a
+// container announced by phone while the heading reads something else.
+test('the dialog keeps one accessible name across the snapshot read', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, first_name: 'Алиса' }));
+    }
+    return Promise.resolve(jsonResponse({ ...ACCOUNT }));
+  });
+  renderWithClient(<ProfileModal account={{ ...ACCOUNT, first_name: null }} onClose={vi.fn()} />);
+
+  expect(screen.getByRole('dialog', { name: 'Профиль аккаунта' })).toBeInTheDocument();
+  // The heading moves on to the snapshot's name; the container's name does not. It is a
+  // real heading because the fixed dialog name never carries the identity, so heading
+  // navigation is the only way to it.
+  expect(await screen.findByRole('heading', { level: 2, name: 'Алиса' })).toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Профиль аккаунта' })).toBeInTheDocument();
+});

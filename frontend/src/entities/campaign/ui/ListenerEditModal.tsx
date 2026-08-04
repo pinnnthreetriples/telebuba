@@ -32,7 +32,7 @@ export function ListenerEditModal({
   };
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[440px]">
+    <Modal onClose={onClose} z={72} className="w-[440px]" label={t('neurocomment.listener.title')}>
       <div className="p-6">
         <div className="mb-[6px] flex items-center gap-[11px]">
           <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
@@ -97,6 +97,9 @@ export function ListenerEditModal({
             </span>
           </div>
           <div
+            // .tb-dd collapses visually only, so these role="button" options kept
+            // their tab stop while the list was closed. See the note in LogsPage.
+            inert={!open}
             className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
           >
             {options.map((o) => (

@@ -255,6 +255,11 @@ export function LogsPage() {
             </span>
           </button>
           <div
+            // .tb-dd only collapses VISUALLY (max-height:0 + opacity:0), so every
+            // option below stayed focusable and in the a11y tree while closed.
+            // `inert` is the real thing and, unlike `hidden`, keeps the open/close
+            // transition (a not-yet-rendered element has no before-change style).
+            inert={!accountOpen}
             className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-[5] max-h-[280px] overflow-y-auto rounded-[11px] border border-line bg-white shadow-[0_10px_28px_rgba(0,0,0,0.13)]${accountOpen ? ' open' : ''}`}
           >
             <div className="p-1">

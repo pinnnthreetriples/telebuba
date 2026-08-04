@@ -11,6 +11,6 @@ export { eventReason } from './log/eventReason';
 export { logSeverity } from './log/eventSeverity';
 export { useLogEventStream } from './log/useLogEventStream';
 export type { SseStatus } from './log/useLogEventStream';
-export { queryClient } from './query-client';
+export { isUnauthorized, mutationErrorText, queryClient } from './query-client';
 export { useClearedTimeouts, useTransientFeedback } from './useTransientFeedback';
 export type { FeedbackResult } from './useTransientFeedback';

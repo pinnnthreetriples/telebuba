@@ -88,6 +88,30 @@ test('an empty subset shows and selects "all channels"', async () => {
   expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Все каналы');
 });
 
+// The channel list of every linked row is rendered whether it is open or not (the
+// .tb-dd class only collapses it visually), so `inert` is what keeps a keyboard
+// operator from tabbing through the options of every collapsed row on the page.
+test('a collapsed channel list takes no focus, an expanded one does', async () => {
+  render(
+    <NeuroAccountsModal
+      accounts={ACCOUNTS}
+      channels={CHANNELS}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+      onChannelChange={vi.fn()}
+    />,
+  );
+  const collapsed = screen.getByRole('option', { name: '@news' });
+  collapsed.focus();
+  expect(collapsed).not.toHaveFocus();
+
+  await userEvent.click(screen.getByLabelText('Каналы аккаунта'));
+  const expanded = screen.getByRole('option', { name: '@news' });
+  expanded.focus();
+  expect(expanded).toHaveFocus();
+});
+
 test('a multi-channel subset shows a count in the trigger', () => {
   render(
     <NeuroAccountsModal

@@ -66,9 +66,10 @@ export function Modal({
   children: ReactNode;
   className?: string;
   variant?: keyof typeof SHELL;
-  // Accessible name for the dialog. Without it a screen reader announces only
-  // "dialog"; pass one wherever the surrounding heading isn't the whole story.
-  label?: string;
+  // Accessible name for the dialog — REQUIRED, not optional: while it was
+  // optional 20 of the 21 call sites left it out and a screen reader announced a
+  // nameless "dialog". Every one of them already renders a title; pass that.
+  label: string;
   z?: number;
   backdrop?: number;
 }) {
@@ -119,7 +120,13 @@ export function Modal({
     if (event.key !== 'Tab') return;
     const node = dialogRef.current;
     if (!node) return;
-    const focusables = node.querySelectorAll<HTMLElement>(FOCUSABLE);
+    // An inert element still MATCHES the selector but cannot take focus. The
+    // .tb-dd dropdowns are inert while closed, so one sitting at either END of
+    // this list would make the wrap's .focus() a silent browser no-op — with
+    // preventDefault already called, that freezes Tab inside the dialog.
+    const focusables = [...node.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+      (element) => element.closest('[inert]') === null,
+    );
     const first = focusables[0];
     const last = focusables[focusables.length - 1];
     if (!first || !last) return;

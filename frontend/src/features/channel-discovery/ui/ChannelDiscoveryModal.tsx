@@ -178,7 +178,12 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // OVERLAY, because overflow-y on the card computes overflow-x to auto and clips the
   // HelpHint tooltips — including the only place the filter scope is documented.
   return (
-    <Modal onClose={onClose} z={72} className="w-[920px]">
+    <Modal
+      onClose={onClose}
+      z={72}
+      className="w-[920px]"
+      label={t('neurocomment.modal.discovery.title')}
+    >
       <div className="p-[18px]">
         <h2 className="text-[15px] font-semibold">{t('neurocomment.modal.discovery.title')}</h2>
         <p className="mt-[3px] text-[12px] text-ink-subtle">

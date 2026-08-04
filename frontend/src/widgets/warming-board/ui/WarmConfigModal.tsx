@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -8,6 +8,7 @@ import {
   warmingSettingsQueryOptions,
 } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
+import { mutationErrorText } from '@/shared/lib';
 
 import { Modal } from '@/shared/ui';
 
@@ -95,6 +96,22 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
   const [from, setFrom] = useState('23:00');
   const [to, setTo] = useState('08:00');
 
+  // On a cold cache the first render has no settings, so the lazy initial state is
+  // the hardcoded fallback above — and a Save from that state writes those
+  // fallbacks over the stored row. Seed ONCE, when the real row lands.
+  //
+  // Once, not on every `settings` identity change: a refetch (the invalidation a
+  // failed save still fires, or a reconnect) returns a row with a fresh
+  // `updated_at`, which defeats React Query's structural sharing, so re-seeding
+  // reverted the operator's unsaved edits — while the failure was still on screen.
+  // `local_time` is UI-only and never in the row, so it survives the seed too.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (!settings || seeded.current) return;
+    seeded.current = true;
+    setToggles((prev) => ({ ...initialToggles(settings), local_time: prev.local_time }));
+  }, [settings]);
+
   const flip = (key: keyof Toggles) => {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -107,12 +124,19 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
-          gemini_model: settings?.gemini_model,
+          // The Gemini model and the two rate-limit knobs are deliberately ABSENT,
+          // not echoed: the write path keeps every one of them on an omitted field,
+          // and echoing read a cache this modal never refetches on focus, so a Save
+          // from a tab left open wrote a stale row over whatever the settings page
+          // had persisted since.
           gemini_api_key: null,
           clear_gemini_key: false,
         },
       },
       {
+        // Close on success ONLY: onSettled fires on failure too, which closed the
+        // dialog over a rejected PUT and lost the operator's input.
+        onSuccess: onClose,
         onSettled: () => {
           // What this write actually touches: the settings row, and the warming
           // board — whose read model embeds those same settings
@@ -123,14 +147,13 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             queryKey: warmingSettingsQueryOptions().queryKey,
           });
           void queryClient.invalidateQueries({ queryKey: warmingBoardQueryOptions().queryKey });
-          onClose();
         },
       },
     );
   };
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[540px]">
+    <Modal onClose={onClose} z={72} className="w-[540px]" label={t('warming.cfg.title')}>
       <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[#eef4ff] text-primary">
           <svg
@@ -255,10 +278,18 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}
+        {save.isError ? (
+          // The same text the global mutation toast shows, not the generic copy:
+          // this alert is the in-context report and must not be the less
+          // informative of the two. Falls back to shell.mutationError itself.
+          <div role="alert" className="mb-[12px] text-[11.5px] leading-[1.45] text-danger">
+            {mutationErrorText(save.error)}
+          </div>
+        ) : null}
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={save.isPending || scope === 'one'}
+            disabled={save.isPending || scope === 'one' || !settings}
             onClick={onSave}
             className="flex-1 rounded-full bg-primary px-[14px] py-[10px] text-[13px] font-semibold text-white transition-colors hover:bg-[#0057db] disabled:opacity-50"
           >

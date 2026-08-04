@@ -16,6 +16,7 @@ from schemas.warming import (
     WarmingBoardState,
     WarmingChannelList,
     WarmingSettings,
+    WarmingSettingsUpdate,
 )
 from services import warming as warming_service
 
@@ -156,7 +157,10 @@ async def test_add_channels(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> No
 
 @pytest.mark.asyncio
 async def test_update_settings(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _fake(body: object) -> WarmingSettings:  # noqa: ARG001
+    seen: list[WarmingSettingsUpdate] = []
+
+    async def _fake(body: WarmingSettingsUpdate) -> WarmingSettings:
+        seen.append(body)
         return _settings()
 
     monkeypatch.setattr("services.warming.save_settings", _fake)
@@ -164,6 +168,12 @@ async def test_update_settings(app: FastAPI, monkeypatch: pytest.MonkeyPatch) ->
         resp = await client.put("/api/v1/warming/settings", json={"reactions_enabled": False})
     assert resp.status_code == 200
     assert resp.json()["gemini_model"] == "gemini-2.5-flash"
+    # A partial PUT must not carry values for the fields it left out. These two used to
+    # default to 1 and 0.0 here, and the write path applied them unconditionally, so
+    # this very request reset the settings page's Gemini rate-limit knobs. ``None`` is
+    # what the repository reads as "keep the stored value".
+    assert seen[0].gemini_max_retries is None
+    assert seen[0].gemini_min_interval_seconds is None
 
 
 @pytest.mark.asyncio

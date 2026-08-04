@@ -11,7 +11,7 @@ afterEach(() => {
 test('backdrop click closes, card click does not, Escape closes', async () => {
   const onClose = vi.fn();
   render(
-    <Modal onClose={onClose}>
+    <Modal onClose={onClose} label="диалог">
       <div>содержимое</div>
     </Modal>,
   );
@@ -34,10 +34,10 @@ test('Escape only closes the topmost modal, not the parent underneath it', async
   const onCloseChild = vi.fn();
   render(
     <>
-      <Modal onClose={onCloseParent} z={70}>
+      <Modal onClose={onCloseParent} z={70} label="родитель">
         <div>родитель</div>
       </Modal>
-      <Modal onClose={onCloseChild} z={80}>
+      <Modal onClose={onCloseChild} z={80} label="потомок">
         <div>потомок</div>
       </Modal>
     </>,
@@ -54,7 +54,7 @@ test('Escape only closes the topmost modal, not the parent underneath it', async
 // not the card, or the card clips absolutely-positioned children meant to escape it.
 test('a too-tall dialog scrolls via the overlay, and the card does not clip', () => {
   render(
-    <Modal onClose={vi.fn()}>
+    <Modal onClose={vi.fn()} label="диалог">
       <div>высокое содержимое</div>
     </Modal>,
   );
@@ -71,7 +71,7 @@ test('a too-tall dialog scrolls via the overlay, and the card does not clip', ()
 
 test('locks page scroll while any dialog is open and restores it when the last one closes', () => {
   const { unmount } = render(
-    <Modal onClose={vi.fn()}>
+    <Modal onClose={vi.fn()} label="диалог">
       <div>один</div>
     </Modal>,
   );
@@ -91,10 +91,10 @@ test('a second dialog closing with the first still unlocks page scroll', () => {
     if (!open) return null;
     return (
       <>
-        <Modal onClose={vi.fn()} z={70}>
+        <Modal onClose={vi.fn()} z={70} label="родитель">
           <div>родитель</div>
         </Modal>
-        <Modal onClose={vi.fn()} z={80}>
+        <Modal onClose={vi.fn()} z={80} label="потомок">
           <div>потомок</div>
         </Modal>
       </>
@@ -112,7 +112,7 @@ test('focuses the dialog on open and restores focus to the opener on close', () 
   document.body.appendChild(opener);
   opener.focus();
   const { unmount } = render(
-    <Modal onClose={vi.fn()}>
+    <Modal onClose={vi.fn()} label="диалог">
       <button type="button">внутри</button>
     </Modal>,
   );
@@ -122,9 +122,23 @@ test('focuses the dialog on open and restores focus to the opener on close', () 
   opener.remove();
 });
 
+// `label` is required, not optional: while it was optional 20 of the 21 call sites
+// left it out and a screen reader announced a nameless "dialog". This is the whole
+// contract — getByRole('dialog', { name }) resolves only through the aria-label.
+test('the dialog carries its accessible name', () => {
+  render(
+    <Modal onClose={vi.fn()} label="Настройки прогрева">
+      <div>содержимое</div>
+    </Modal>,
+  );
+
+  expect(screen.getByRole('dialog', { name: 'Настройки прогрева' })).toBeInTheDocument();
+  expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+});
+
 test('Tab is trapped inside the dialog and wraps around', async () => {
   render(
-    <Modal onClose={vi.fn()}>
+    <Modal onClose={vi.fn()} label="диалог">
       <button type="button">один</button>
       <button type="button">два</button>
     </Modal>,
@@ -134,6 +148,26 @@ test('Tab is trapped inside the dialog and wraps around', async () => {
   await userEvent.tab();
   expect(screen.getByText('один')).toHaveFocus();
   // Shift+Tab from the first wraps back to the last.
+  await userEvent.tab({ shift: true });
+  expect(screen.getByText('два')).toHaveFocus();
+});
+
+// A closed .tb-dd dropdown is inert, and its options still match the focusable
+// selector. One at the END of a dialog's focusable list made the wrap target an
+// element whose .focus() the browser ignores — and since the trap has already
+// called preventDefault, Shift+Tab would then go nowhere at all.
+test('the Tab trap wraps past an inert element instead of freezing on it', async () => {
+  render(
+    <Modal onClose={vi.fn()} label="диалог">
+      <button type="button">один</button>
+      <button type="button">два</button>
+      <div inert>
+        <button type="button">закрытый</button>
+      </div>
+    </Modal>,
+  );
+
+  screen.getByText('один').focus();
   await userEvent.tab({ shift: true });
   expect(screen.getByText('два')).toHaveFocus();
 });

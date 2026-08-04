@@ -627,7 +627,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
   return (
     <>
-      <Modal onClose={requestClose} z={70} className="w-[580px]">
+      <Modal
+        onClose={requestClose}
+        z={70}
+        className="w-[580px]"
+        // A fixed name, unlike the visible heading below it — the same choice as
+        // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
+        // after a rename saves, and an ARIA name change while a dialog is open is
+        // never re-announced. Latching the row's name instead only moved the problem:
+        // the container was then announced by phone while the heading read a
+        // different name, and it went stale on a renamed row's new `account` prop.
+        label={t('accounts.profile.dialog')}
+      >
         <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">
@@ -646,7 +657,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {avatarUri ? '' : initial}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[16px] font-bold">{fullName}</div>
+              {/* A heading, not a div: the dialog's own name is fixed (see above), so
+                  this is the only place the account's identity is exposed, and heading
+                  navigation is how a screen-reader user reaches it. */}
+              <h2 className="truncate text-[16px] font-bold">{fullName}</h2>
               <div className="truncate text-[12px] text-ink-subtle">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}

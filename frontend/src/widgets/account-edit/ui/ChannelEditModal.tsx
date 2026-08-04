@@ -134,13 +134,27 @@ export function ChannelEditModal({
 
   return (
     <>
-      <Modal onClose={requestClose} z={75} backdrop={0.45} className="w-[560px]">
+      <Modal
+        onClose={requestClose}
+        z={75}
+        backdrop={0.45}
+        className="w-[560px]"
+        // A fixed name, unlike the visible heading below it: this dialog opens
+        // while the detail is still loading, and an ARIA name that changes after
+        // the announcement is never re-announced — so the operator would only ever
+        // hear "Загрузка…". `??` did not guard '' either, and a blank channel title
+        // is a real (if rare) read result, which left the dialog nameless.
+        label={t('accounts.channel.dialog')}
+      >
         <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="truncate text-[16px] font-bold">
+              {/* A heading, not a div: the dialog's own name is fixed (see above), so
+                  this is the only place the channel's title is exposed, and heading
+                  navigation is how a screen-reader user reaches it. */}
+              <h2 className="truncate text-[16px] font-bold">
                 {detail.data?.title ?? t('accounts.channel.loading')}
-              </div>
+              </h2>
               {!detailBlank && (
                 <div className="truncate text-[12px] text-ink-subtle">
                   {detail.data?.username != null

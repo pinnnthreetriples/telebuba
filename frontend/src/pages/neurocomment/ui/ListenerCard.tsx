@@ -208,6 +208,9 @@ export function ListenerCard({
             </span>
           </button>
           <div
+            // .tb-dd collapses visually only; without this the account buttons kept
+            // their tab stops while the list was closed. See the note in LogsPage.
+            inert={!listenerOpen}
             className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${listenerOpen ? 'open' : ''}`}
           >
             {accountOptions.length === 0 ? (

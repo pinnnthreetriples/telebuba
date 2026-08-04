@@ -206,6 +206,27 @@ test('the account filter lists all accounts, independent of the current log page
   expect(screen.getByRole('button', { name: '+79995554433' })).toBeInTheDocument();
 });
 
+// .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so every option below
+// is rendered and kept its tab stop while the list was closed — a keyboard operator
+// tabbed straight into an invisible filter list. `inert` is what keeps them out;
+// happy-dom honours it for focus, which is exactly the property under test.
+test('a closed account filter takes no focus, an open one does', async () => {
+  routeLogs({ items: [logRow(1, 'warming_started')], next_cursor: null });
+  renderWithClient(<LogsPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('+79990001122').length).toBeGreaterThan(0);
+  });
+
+  const closed = screen.getByRole('button', { name: '+79995554433' });
+  closed.focus();
+  expect(closed).not.toHaveFocus();
+
+  await userEvent.click(screen.getByLabelText('Аккаунт'));
+  const open = screen.getByRole('button', { name: '+79995554433' });
+  open.focus();
+  expect(open).toHaveFocus();
+});
+
 test('prepends a live SSE event to the newest page (key-scoped, no blanket invalidate)', async () => {
   routeLogs({ items: [logRow(1, 'first_event')], next_cursor: null });
   const view = renderWithClient(<LogsPage />);

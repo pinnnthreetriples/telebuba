@@ -26,7 +26,10 @@ test('edits the textarea, saves with swap, then closes after the delay', async (
   expect(screen.getByText('Промт кампании')).toBeInTheDocument();
   expect(screen.getByText('+79990000001')).toBeInTheDocument();
 
-  const textarea = screen.getByLabelText('Промт кампании');
+  // Role-scoped, and the field has a name of its OWN: sharing the dialog's name
+  // is what made getByLabelText ambiguous here in the first place.
+  const textarea = screen.getByRole('textbox', { name: 'Текст промта' });
+  expect(screen.getByRole('dialog', { name: 'Промт кампании' })).toBeInTheDocument();
   await userEvent.clear(textarea);
   await userEvent.type(textarea, 'новый промт');
 

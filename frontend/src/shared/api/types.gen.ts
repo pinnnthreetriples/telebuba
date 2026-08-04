@@ -2838,19 +2838,19 @@ export type WarmingSettingsUpdate = {
   /**
    * Inter Account Chat
    */
-  inter_account_chat?: boolean;
+  inter_account_chat?: boolean | null;
   /**
    * Reactions Enabled
    */
-  reactions_enabled?: boolean;
+  reactions_enabled?: boolean | null;
   /**
    * Join Enabled
    */
-  join_enabled?: boolean;
+  join_enabled?: boolean | null;
   /**
    * Enforce Readiness
    */
-  enforce_readiness?: boolean;
+  enforce_readiness?: boolean | null;
   /**
    * Gemini Api Key
    */
@@ -2862,11 +2862,11 @@ export type WarmingSettingsUpdate = {
   /**
    * Gemini Max Retries
    */
-  gemini_max_retries?: number;
+  gemini_max_retries?: number | null;
   /**
    * Gemini Min Interval Seconds
    */
-  gemini_min_interval_seconds?: number;
+  gemini_min_interval_seconds?: number | null;
   /**
    * Clear Gemini Key
    */
