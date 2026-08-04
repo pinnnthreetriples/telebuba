@@ -106,6 +106,72 @@ test('a channel mutation invalidates this page only, not the whole cache', async
   }
 });
 
+test('removing a second channel does not swallow the first one s refresh', async () => {
+  // removeChannel.mutate(vars, {onSettled}) is per pill on ONE shared hook, and
+  // setChannelToRemove(null) closes the modal on the same tick — so a second
+  // removal is one click away while the first is in flight. It took the slot, and
+  // the first channel's feedback mark and invalidateNeuro() were dropped, leaving
+  // the pill on screen unmarked. useLogEventStream masks this on a BUSY campaign
+  // (a runtime event refreshes anyway) but not on an idle one.
+  const board = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+      { channel: '@promo', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+    ],
+  };
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/channels/remove')) {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(board));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  const boardGets = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => new URL((input as Request).url).pathname.endsWith('/board'))
+      .length;
+
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByLabelText('Убрать канал')).toHaveLength(2);
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByLabelText('Убрать канал')[index]!);
+    await userEvent.click(await screen.findByText('Убрать'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+
+  // @promo settles first; @news landing later must still refresh the board.
+  const before = boardGets();
+  releases[1]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(boardGets()).toBeGreaterThan(before);
+  });
+  const afterSecond = boardGets();
+  releases[0]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(boardGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
 test('the add-channel pill reveals an input and adds the channel', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
