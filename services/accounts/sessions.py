@@ -117,17 +117,19 @@ async def _discard_orphaned_session(path: Path, session_name: str, cause: Except
     """
     result = await discard_imported_session(session_name, path)
     if result.outcome != "clean":
-        # Retry is still blocked, by whichever half survived. Named, so the operator
-        # knows which one to clear. ``error_type`` is the ROLLBACK's own failure —
-        # the actionable one — and ``cause_type`` why the import failed at all.
+        # ``error_type`` is the class of the failure THIS event is named after — the
+        # rollback's own — matching ``tdata_rollback_unlink_failed``. The residual
+        # rides ``reason``, which the SPA renders beside it
+        # (``shared/lib/log/eventReason.ts``), so the operator reads "file kept ·
+        # PermissionError" and knows what to clear. It replaced a ``kept`` key the UI
+        # showed nowhere, next to a ``cause_type`` it showed nowhere either.
         await log_event(
             "ERROR",
             "account_session_import_rollback_failed",
             extra={
                 "session_name": session_name,
-                "kept": result.outcome,
+                "reason": result.outcome,
                 "error_type": result.error_type,
-                "cause_type": type(cause).__name__,
             },
         )
         return

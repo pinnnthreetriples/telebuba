@@ -779,7 +779,7 @@
     "tdata_import_completed": "Импорт завершён",
     "tdata_import_failed": "Ошибка импорта",
     "tdata_import_rolled_back": "Импорт отменён",
-    "tdata_rollback_unlink_failed": "Не удалось удалить файл сессии при отмене импорта",
+    "tdata_rollback_unlink_failed": "Откат импорта не завершён",
     "neurocomment_discovery_started": "Поиск каналов запущен",
     "neurocomment_discovery_finished": "Поиск каналов завершён",
     "neurocomment_discovery_failed": "Поиск каналов не удался",
@@ -797,6 +797,8 @@
     "db_maintenance_failed": "Сбой обслуживания базы данных"
   },
   "logEventReason": {
+    "row_kept": "запись аккаунта сохранена, файл сессии оставлен",
+    "file_kept": "файл сессии остался на диске без аккаунта",
     "chance": "не выпал шанс",
     "no_posts": "нет свежих постов",
     "no_emoji": "канал не принимает наши эмодзи",

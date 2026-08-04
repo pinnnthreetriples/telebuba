@@ -778,7 +778,7 @@
     "tdata_import_completed": "Import completed",
     "tdata_import_failed": "Import failed",
     "tdata_import_rolled_back": "Import rolled back",
-    "tdata_rollback_unlink_failed": "Could not remove the session file during rollback",
+    "tdata_rollback_unlink_failed": "Import rollback did not finish",
     "neurocomment_discovery_started": "Channel search started",
     "neurocomment_discovery_finished": "Channel search finished",
     "neurocomment_discovery_failed": "Channel search failed",
@@ -796,6 +796,8 @@
     "db_maintenance_failed": "Database maintenance failed"
   },
   "logEventReason": {
+    "row_kept": "account row kept, session file left in place",
+    "file_kept": "session file left on disk with no account",
     "chance": "chance didn't hit",
     "no_posts": "no recent posts",
     "no_emoji": "channel rejects our emoji",

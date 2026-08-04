@@ -87,10 +87,11 @@ async def _rollback_tdata_import(
                 account_id=plan.account_id,
                 extra={
                     "file": plan.final_path.name,
-                    "kept": result.outcome,
-                    # ``error_type`` as ``origin/main`` logged it: PermissionError (a
-                    # live handle) needs a different remedy from a full disk, and the
-                    # first rework dropped that distinction.
+                    # Same vocabulary as the single-session rollback: the residual in
+                    # ``reason``, and in ``error_type`` the class of the failure that
+                    # caused it — as ``origin/main`` logged it, because PermissionError
+                    # (a live handle) needs a different remedy from a full disk.
+                    "reason": result.outcome,
                     "error_type": result.error_type,
                 },
             )

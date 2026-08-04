@@ -14,6 +14,7 @@ post-commit path.
 from __future__ import annotations
 
 import asyncio
+import pathlib
 from typing import TYPE_CHECKING
 
 import pytest
@@ -190,6 +191,7 @@ async def test_a_concurrent_phone_login_row_is_not_deleted_by_a_rollback(
 @pytest.mark.asyncio
 async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """``file_kept`` leaves no account, so the refusal must blame the FILE.
 
@@ -198,6 +200,7 @@ async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     no remedy. The residual is the file, so the message names the file.
     """
     _break_after_commit(monkeypatch)
+    original_unlink = pathlib.Path.unlink
 
     def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
         raise PermissionError(32, "file in use")
@@ -211,8 +214,14 @@ async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     assert await fetch_account("live") is None
     assert (settings.telegram.session_dir / "live.session").exists()
 
-    monkeypatch.undo()
-    _break_after_commit(monkeypatch)  # keep the import failing; only the unlink is fixed
+    # Restore ONLY the unlink seam. ``monkeypatch.undo()`` would also revert the
+    # autouse ``_isolate_runtime`` fixture's ``session_dir`` redirect — it requests
+    # this same function-scoped instance — pointing the second import at the REAL
+    # sessions directory, where it passes both pre-checks and writes a credential
+    # into the working tree. Same reason ``_repair`` exists; it happened.
+    monkeypatch.setattr("pathlib.Path.unlink", original_unlink)
+    assert settings.telegram.session_dir.is_relative_to(tmp_path), "sandbox escaped"
+
     with pytest.raises(SessionAlreadyExistsError) as caught:
         await import_account_session(data)
     message = str(caught.value)
@@ -344,7 +353,106 @@ async def test_a_failed_tdata_unlink_still_reports_the_error_class(
     failures = [e for e in events if e["event"] == "tdata_rollback_unlink_failed"]
     assert failures, events
     assert failures[0]["error_type"] == "PermissionError"
-    assert failures[0]["kept"] == "file_kept"
+    # The residual rides ``reason``, which the SPA's reason column renders beside
+    # ``error_type`` — a ``kept`` key was persisted and shown nowhere.
+    assert failures[0]["reason"] == "file_kept"
+
+
+@pytest.mark.asyncio
+async def test_the_rollback_failure_event_carries_only_rendered_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One meaning per key, and nothing persisted that the UI cannot show.
+
+    ``error_type`` is the class of the failure the event is NAMED after — the
+    rollback's own — the same meaning ``tdata_rollback_unlink_failed`` carries, so two
+    adjacent rows no longer put two different things under the reason column. The
+    residual moved to ``reason``, which ``shared/lib/log/eventReason.ts`` renders
+    beside it. ``kept`` and ``cause_type`` are gone: both were written to the ``logs``
+    table, served by ``GET /logs``, and displayed nowhere.
+    """
+    payloads: list[dict[str, object]] = []
+
+    async def fake_log(
+        _level: str,
+        event: str,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        if event == "account_session_import_rollback_failed":
+            payloads.append(extra or {})
+
+    def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
+        raise PermissionError(32, "file in use")
+
+    _break_after_commit(monkeypatch)
+    monkeypatch.setattr("services.accounts.sessions.log_event", fake_log)
+    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(
+            AccountSessionFileImport(filename="live.session", content=_CREDENTIAL),
+        )
+
+    assert payloads, "the failed rollback reported nothing"
+    assert payloads[0] == {
+        "session_name": "live",
+        "reason": "file_kept",
+        "error_type": "PermissionError",
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_kept_row_also_reports_through_the_same_event(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``tdata_rollback_unlink_failed`` fires for a kept ROW too, not just a kept file.
+
+    That is why its label could no longer say "could not remove the session file":
+    on this branch the file was deliberately kept and the row delete is what failed.
+    The trigger is deliberately wide — both residuals need reporting — so the wording
+    is what had to change.
+    """
+    payloads: list[dict[str, object]] = []
+
+    async def fake_log(
+        _level: str,
+        event: str,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        if event == "tdata_rollback_unlink_failed":
+            payloads.append(extra or {})
+
+    async def _undeletable(_account_id: str) -> None:
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "111.session").write_bytes(b"sess-111")
+
+    async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
+        return TdataConvertResult(
+            status="ok",
+            accounts=[TdataAccountSummary(user_id=111, session_path=str(staging / "111.session"))],
+        )
+
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts._tdata.log_event", fake_log)
+    _break_after_commit(monkeypatch)
+    monkeypatch.setattr("services.accounts._import_rollback.delete_account", _undeletable)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_tdata(TdataConvertRequest(filename="tdata.zip", content=b"x"))
+
+    assert payloads, "a kept row reported nothing"
+    assert payloads[0]["reason"] == "row_kept"
+    assert payloads[0]["error_type"] == "RuntimeError"
+    # The row survived, so its credential had to survive with it.
+    assert await fetch_account("111") is not None
+    assert (settings.telegram.session_dir / "111.session").exists()
 
 
 @pytest.mark.asyncio
