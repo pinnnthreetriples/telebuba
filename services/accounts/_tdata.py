@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 from core.config import settings
 from core.db import delete_account, fetch_account
 from core.logging import log_event
+from core.secure_paths import make_private_dir
 from core.telegram_client import removing_client
 from schemas.accounts import AccountCheckRequest, AccountCreate
 from services.accounts._import_locks import import_lock
@@ -121,7 +122,7 @@ async def import_account_tdata(
     the post-preflight move is a rename) and is wiped on both success and failure.
     """
     session_dir = settings.telegram.session_dir
-    session_dir.mkdir(parents=True, exist_ok=True)
+    make_private_dir(session_dir)
     staging_dir = Path(tempfile.mkdtemp(prefix="tdata_staging_", dir=str(session_dir.parent)))
     try:
         return await _run_tdata_import(
@@ -190,7 +191,7 @@ async def _run_tdata_import(
         try:
             for plan in plans:
                 if plan.staging_path.resolve() != plan.final_path.resolve():
-                    plan.final_path.parent.mkdir(parents=True, exist_ok=True)
+                    make_private_dir(plan.final_path.parent)
                     shutil.move(str(plan.staging_path), str(plan.final_path))
                 placed.append(plan)
                 await add_account(

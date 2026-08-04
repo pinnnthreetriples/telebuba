@@ -5,12 +5,13 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-from anyio import Path
+from anyio import to_thread
 from telethon import TelegramClient
 
 from core.config import settings
 from core.db import fetch_account, fetch_account_proxy_settings
 from core.device_fingerprint import get_or_create_device_fingerprint
+from core.secure_paths import make_private_dir
 from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
 
 if TYPE_CHECKING:
@@ -134,7 +135,9 @@ async def prepare_session_check_profile(
 
 
 async def _ensure_session_dir() -> None:
-    await Path(settings.telegram.session_dir).mkdir(parents=True, exist_ok=True)
+    # Owner-only (0700): this is the dir a Telethon client will create the account's
+    # ``.session`` credential in, and it is often the first site to create it.
+    await to_thread.run_sync(make_private_dir, settings.telegram.session_dir)
 
 
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
