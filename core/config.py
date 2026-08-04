@@ -42,8 +42,9 @@ class TelegramSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TELEGRAM__", extra="ignore")
 
     # repr=False on every credential below: pytest's assertion rewriting dumps a
-    # model repr whenever an assertion touches a ``settings`` attribute chain, and
-    # CI logs are public. The values keep working — repr is the only thing hidden.
+    # model repr whenever an assertion touches a ``settings`` attribute chain, so a
+    # failing test printed live values from the developer's own .env. The values
+    # keep working — repr is the only thing hidden, and model_dump() is unaffected.
     api_id: int = Field(default=0, ge=0, repr=False)
     api_hash: str = Field(default="", repr=False)
     session_dir: Path = Path("sessions")

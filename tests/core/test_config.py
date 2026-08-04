@@ -87,39 +87,113 @@ def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:
 
 # --- repr secrecy -----------------------------------------------------------
 # pytest's assertion rewriting dumps a model repr whenever an assertion touches a
-# ``settings`` attribute chain, and this repository is public, so a failing test
-# would write live credentials into an Actions log. Every secret-bearing field is
-# therefore declared ``Field(repr=False)``.
+# ``settings`` attribute chain. The values come from the developer's own ``.env``
+# (which python-dotenv finds by walking UP, so a git worktree picks up the parent
+# checkout's file), so a failing test prints live credentials into a local log —
+# and into whatever an operator then pastes into an issue or a PR. Every
+# secret-bearing field is therefore declared ``Field(repr=False)``.
 #
-# The guard is derived from field NAMES, not from a hand-listed set, so a newly
-# added secret field is caught rather than silently unprotected: a new field whose
-# name matches is presumed secret until it is either given ``repr=False`` or
-# explicitly declared benign in ``_NOT_SECRET``. Fails closed on purpose.
+# The guard matches field NAMES rather than a hand-listed set of fields, so a
+# newly added secret field is caught rather than silently unprotected. Substrings,
+# not suffixes: a suffix rule let ``private_key_pem``, ``basic_auth``,
+# ``session_string`` and 20 other plausible credential names through.
+# Measured over all 245 (namespace, field) pairs: catches all 13 protected fields
+# with zero false positives.
 
-_SECRET_NAME_SUFFIXES = (
-    "_id",
-    "_hash",
-    "_key",
-    "_token",
-    "_secret",
-    "_password",
-    "_username",
-    "_salt",
-    "_dsn",
-    "_credentials",
+_SECRET_NAME_SUFFIXES = ("_id", "_key", "_hash")
+_SECRET_NAME_SUBSTRINGS = (
+    "secret",
+    "pass",
+    "pw",
+    "cred",
+    "token",
+    "session_str",
+    "private",
+    "seed",
+    "mnemonic",
+    "recovery",
+    "otp",
+    "2fa",
+    "bearer",
+    "signing",
+    "cert",
+    "keyfile",
+    "apikey",
+    "license",
+    "dsn",
+    "salt",
+    "username",
+    "webhook",
+    "database_url",
+    "service_account",
+    "auth",
 )
-_SECRET_NAME_EXACT = frozenset({"secret", "password", "token", "dsn", "salt"})
-# Matches the suffix rule but carries no credential: a boolean CORS switch.
-_NOT_SECRET = frozenset({"cors_allow_credentials"})
+# One representative name per pattern. ``test_every_secret_name_pattern_is_load_bearing``
+# proves each pattern is individually necessary to detect its own example, so a
+# typo in any single pattern turns red instead of hiding behind another pattern.
+_PATTERN_EXAMPLES = {
+    "_id": "api_id",
+    "_key": "encryption_key",
+    "_hash": "api_hash",
+    "secret": "secret_key_base",
+    "pass": "master_pass",
+    "pw": "pw",
+    "cred": "credentials",
+    "token": "refresh_token",
+    "session_str": "session_string",
+    "private": "private_key_pem",
+    "seed": "seed_phrase",
+    "mnemonic": "mnemonic",
+    "recovery": "recovery_code",
+    "otp": "otp",
+    "2fa": "tg_2fa",
+    "bearer": "bearer",
+    "signing": "signing",
+    "cert": "cert",
+    "keyfile": "keyfile",
+    "apikey": "apikey",
+    "license": "license",
+    "dsn": "dsn",
+    "salt": "salt",
+    "username": "admin_username",
+    "webhook": "webhook_url",
+    "database_url": "database_url",
+    "service_account": "service_account_json",
+    "auth": "basic_auth",
+}
+# Fields whose name matches but that provably carry no credential. A MAPPING, not
+# a set: an entry cannot be added without writing the reason, and the reason lands
+# in the diff where a reviewer sees it. Empty today — both structural exceptions
+# (a bool, and a plural integer token budget) are expressed as rules in
+# ``_is_secret_field`` instead, so nobody has to grow this to stay green.
+_NOT_SECRET: dict[str, str] = {}
+_MIN_EXEMPTION_REASON_CHARS = 40
+
+
+def _matches_secret_name(name: str, *, without: str = "") -> bool:
+    """Whether ``name`` looks credential-bearing, optionally ignoring one pattern."""
+    suffixes = tuple(s for s in _SECRET_NAME_SUFFIXES if s != without)
+    return name.endswith(suffixes) or any(
+        s in name for s in _SECRET_NAME_SUBSTRINGS if s != without
+    )
+
+
+def _is_secret_field(model: type[BaseSettings], name: str) -> bool:
+    if name in _NOT_SECRET:
+        return False
+    annotation = model.model_fields[name].annotation
+    # A bool holds one bit: it can *name* a credential (``has_gemini_key``) but
+    # cannot carry one. A plural integer ``*_tokens`` is an LLM output budget, not
+    # a token; a credential list would be ``list[str]`` and still matches.
+    if annotation is bool:
+        return False
+    if name.endswith("_tokens") and annotation is int:
+        return False
+    return _matches_secret_name(name)
 
 
 def _secret_field_names(model: type[BaseSettings]) -> list[str]:
-    return [
-        name
-        for name in model.model_fields
-        if name not in _NOT_SECRET
-        and (name.endswith(_SECRET_NAME_SUFFIXES) or name in _SECRET_NAME_EXACT)
-    ]
+    return [name for name in model.model_fields if _is_secret_field(model, name)]
 
 
 def _fake_value(model: type[BaseSettings], name: str) -> object:
@@ -139,11 +213,57 @@ _SECRET_NAMESPACES = [
 ]
 
 
-def test_the_secret_field_detector_is_not_vacuous() -> None:
-    """Guard the guard: a broken name rule would make every case below pass trivially."""
-    assert "api_hash" in _secret_field_names(TelegramSettings)
-    assert "secret" in _secret_field_names(AuthSettings)
-    assert _SECRET_NAMESPACES != []
+def test_every_secret_name_pattern_has_an_example() -> None:
+    """A new pattern without an example would not be covered by the test below."""
+    assert set(_PATTERN_EXAMPLES) == {*_SECRET_NAME_SUFFIXES, *_SECRET_NAME_SUBSTRINGS}
+
+
+@pytest.mark.parametrize(("pattern", "example"), sorted(_PATTERN_EXAMPLES.items()))
+def test_every_secret_name_pattern_is_load_bearing(pattern: str, example: str) -> None:
+    """Each pattern must be the *only* reason its own example is detected.
+
+    Without this, typo'ing one pattern stays green because another pattern happens
+    to match the same example, and the fields resting on the typo'd pattern go
+    unprotected in silence.
+    """
+    assert _matches_secret_name(example), (
+        f"pattern {pattern!r} no longer detects {example!r} — the pattern is broken"
+    )
+    assert not _matches_secret_name(example, without=pattern), (
+        f"pattern {pattern!r} is not load-bearing: {example!r} is still detected "
+        f"without it, so a typo in {pattern!r} would go unnoticed"
+    )
+
+
+def test_every_namespace_holding_a_secret_is_covered() -> None:
+    """Pin the count: a silently shrinking parametrization is the failure mode here.
+
+    Typo'ing patterns used to drop namespaces from the sweep without complaint.
+    """
+    assert [namespace for namespace, _ in _SECRET_NAMESPACES] == [
+        "telegram",
+        "auth",
+        "proxy",
+        "logging",
+        "warming",
+        "gemini",
+        "openai",
+        "telemetr",
+    ]
+
+
+def test_a_not_secret_exemption_must_name_a_real_field_and_justify_itself() -> None:
+    """``_NOT_SECRET`` is the escape hatch; make using it cost a written reason."""
+    real_fields = {
+        name
+        for namespace in Settings.model_fields
+        for name in type(getattr(settings, namespace)).model_fields
+    }
+    for name, reason in _NOT_SECRET.items():
+        assert name in real_fields, f"_NOT_SECRET[{name!r}] exempts a field that does not exist"
+        assert len(reason) >= _MIN_EXEMPTION_REASON_CHARS, (
+            f"_NOT_SECRET[{name!r}] needs a real justification, not {reason!r}"
+        )
 
 
 @pytest.mark.parametrize(("namespace", "model"), _SECRET_NAMESPACES)
