@@ -17,6 +17,10 @@ asserts the schema declares exactly that, with the envelope as the body:
   transitively through the helpers it calls inside ``api/`` (``_decode_channel_id``,
   ``reject_oversized_upload``, ``service_errors_to_http``, ...) and through its
   ``Depends`` chain (``api.deps.get_current_user`` is where 401 lives);
+* every literal ``response.status_code = <int>`` assignment in a reachable ``api/``
+  function. FastAPI lets a route answer a status by setting it on the injected
+  ``Response`` instead of raising, and ``getReadiness`` does exactly that, so
+  without this case its declared 503 read as unreachable;
 * the statuses of the exception handlers registered in ``api/errors.py``, for the
   domain exceptions a reachable function re-raises (``AccountActionError``) and for
   the catch-all (500);
@@ -24,7 +28,13 @@ asserts the schema declares exactly that, with the envelope as the body:
 
 A new route with a wrong ``responses=`` goes red here.
 
-Three limits, deliberate, so nobody mistakes green here for a proof:
+One operation is exempt from the envelope half of the contract, listed in
+``_ENVELOPE_EXEMPT`` with its reason. The exemption is a pair — operation id AND
+status — so it cannot spread to another status on the same operation or the same
+status elsewhere; ``test_the_envelope_exemption_does_not_cover_any_other_operation``
+pins that.
+
+Four limits, deliberate, so nobody mistakes green here for a proof:
 
 1. **Import style matters.** ``_called_name`` records the bare attribute and
    ``_resolve`` only follows ``from api... import name``, so a *module-attribute*
@@ -44,6 +54,11 @@ Three limits, deliberate, so nobody mistakes green here for a proof:
    mapper, as ``set_all_accounts_privacy`` did (see the comment in its body: all that
    could still reach the mapper there was a corrupt-row read, which 500 answers more
    honestly than the 422 the mapper gave it), not to widen the deriver.
+4. **The status-assignment case reads a LITERAL, in ``api/`` only.** It matches
+   ``<anything>.status_code = <int constant or HTTP_nnn_ name>``. A status computed
+   into a variable first, or set by something outside ``api/``, is invisible — the
+   same blind spot the ``raise`` scan has, and for the same reason. Assign the
+   literal at the route, as ``ready`` does.
 """
 
 from __future__ import annotations
@@ -55,6 +70,7 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import pytest
 from fastapi import HTTPException
 from fastapi.dependencies.utils import get_flat_params
 from fastapi.exceptions import RequestValidationError
@@ -68,6 +84,21 @@ if TYPE_CHECKING:
 
 _ROOT = Path(__file__).resolve().parent.parent
 _ENVELOPE_REF = "#/components/schemas/ErrorEnvelope"
+# Only 4xx/5xx participate in the error contract.
+_MIN_ERROR_STATUS = 400
+
+# The one declared non-2xx that is deliberately NOT an ``ErrorEnvelope``.
+#
+# ``GET /api/v1/ready`` is an orchestrator's readiness probe. The SPA never calls it,
+# so it gains nothing from uniform narrowing — and its body IS the answer:
+# ``{"status": "unavailable", "database": false}`` names which dependency is down.
+# Wrapping that in the envelope would replace a per-dependency verdict with a
+# generic code, i.e. delete the only thing the response says beyond its status.
+#
+# An allowlist of explicit (operation_id, status) pairs, because the alternative —
+# relaxing the rule for every route — would let a real regression through silently.
+# Adding a pair is a visible decision that has to be argued for here.
+_ENVELOPE_EXEMPT: frozenset[tuple[str, str]] = frozenset({("getReadiness", "503")})
 
 # Statuses each handler registered by ``api.errors.register_error_handlers`` can
 # answer. ``HTTPException`` carries its own status, so it contributes nothing here —
@@ -132,6 +163,21 @@ def _http_exception_status(call: ast.Call) -> int | None:
     return None
 
 
+def _assigned_status(node: ast.AST) -> int | None:
+    """A literal ``<something>.status_code = <int>`` — the non-raising way to answer.
+
+    FastAPI routes may take a ``Response`` parameter and set the status on it instead
+    of raising, which no ``raise`` scan can see. ``api.v1.health.ready`` answers 503
+    that way, on purpose: it returns a typed per-dependency body, not an envelope.
+    """
+    if not isinstance(node, ast.Assign):
+        return None
+    for target in node.targets:
+        if isinstance(target, ast.Attribute) and target.attr == "status_code":
+            return _literal_status(node.value)
+    return None
+
+
 def _called_name(call: ast.Call) -> str | None:
     if isinstance(call.func, ast.Name):
         return call.func.id
@@ -168,6 +214,11 @@ def _collect_facts(function: ast.FunctionDef | ast.AsyncFunctionDef) -> _Facts:
             status = _http_exception_status(node)
             if status is not None:
                 statuses.add(status)
+        assigned = _assigned_status(node)
+        # Error statuses only: a route setting 200/201 this way is not part of the
+        # error contract, and ``_declared_statuses`` would never list it.
+        if assigned is not None and assigned >= _MIN_ERROR_STATUS:
+            statuses.add(assigned)
         statuses |= _reraised_handler_statuses(node)
     return _Facts(statuses=frozenset(statuses), calls=frozenset(calls))
 
@@ -261,8 +312,27 @@ def _declared_statuses(operation: dict) -> frozenset[int]:
     return frozenset(
         int(status)
         for status in operation.get("responses", {})
-        if status.isdigit() and int(status) >= 400
+        if status.isdigit() and int(status) >= _MIN_ERROR_STATUS
     )
+
+
+def _non_envelope_responses(operation_id: str | None, responses: dict) -> dict[str, dict]:
+    """Declared error responses whose body is not the envelope, exemptions removed.
+
+    Split out from the test so the exemption's tightness can be asserted directly
+    against synthetic operations, instead of only over whatever the app happens to
+    declare today.
+    """
+    wrong: dict[str, dict] = {}
+    for status, response in responses.items():
+        if not status.isdigit() or int(status) < _MIN_ERROR_STATUS:
+            continue
+        if (operation_id, status) in _ENVELOPE_EXEMPT:
+            continue
+        schema = response.get("content", {}).get("application/json", {}).get("schema", {})
+        if schema.get("$ref") != _ENVELOPE_REF:
+            wrong[f"{operation_id} {status}"] = schema
+    return wrong
 
 
 def _documented_operations() -> list[tuple[APIRoute, dict]]:
@@ -297,13 +367,71 @@ def test_every_declared_error_response_is_the_error_envelope() -> None:
     """One error shape on the wire means one error schema in the document."""
     wrong = {}
     for route, operation in _documented_operations():
-        for status, response in operation.get("responses", {}).items():
-            if not status.isdigit() or int(status) < 400:
-                continue
-            schema = response.get("content", {}).get("application/json", {}).get("schema", {})
-            if schema.get("$ref") != _ENVELOPE_REF:
-                wrong[f"{route.operation_id} {status}"] = schema
+        wrong |= _non_envelope_responses(route.operation_id, operation.get("responses", {}))
     assert wrong == {}, f"error responses must be typed as ErrorEnvelope: {wrong}"
+
+
+_NOT_THE_ENVELOPE = {
+    "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReadinessStatus"}}},
+}
+
+
+def test_the_envelope_exemption_does_not_cover_any_other_operation() -> None:
+    """The carve-out is one operation and one status, not a hole in the rule.
+
+    Asserted from both sides, because an exemption that leaked would make the
+    envelope test go quiet rather than red — the failure mode that matters.
+    """
+    # The exempt pair is allowed through.
+    assert _non_envelope_responses("getReadiness", {"503": _NOT_THE_ENVELOPE}) == {}
+    # Nothing else is: not another status on the same operation, not the same status
+    # on a different operation, not an ordinary route's ordinary error.
+    assert _non_envelope_responses("getReadiness", {"500": _NOT_THE_ENVELOPE}) != {}
+    assert _non_envelope_responses("getHealth", {"503": _NOT_THE_ENVELOPE}) != {}
+    assert _non_envelope_responses("importAccountSession", {"400": _NOT_THE_ENVELOPE}) != {}
+    # And the exemption never excuses a status the contract does not police anyway.
+    assert _non_envelope_responses("getReadiness", {"200": _NOT_THE_ENVELOPE}) == {}
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "response.status_code = 503",
+        "response.status_code = http_status.HTTP_503_SERVICE_UNAVAILABLE",
+    ],
+)
+def test_a_literal_status_assignment_counts_as_reachable(assignment: str) -> None:
+    """Both spellings of the non-raising answer, so neither reads as unreachable."""
+    source = (
+        f"async def probe(response):\n    if broken():\n        {assignment}\n    return None\n"
+    )
+    function = ast.parse(source).body[0]
+    assert isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
+    assert 503 in _collect_facts(function).statuses
+
+
+def test_a_non_error_status_assignment_is_not_counted() -> None:
+    """``response.status_code = 201`` is not an error declaration."""
+    function = ast.parse("async def probe(response):\n    response.status_code = 201\n").body[0]
+    assert isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
+    assert _collect_facts(function).statuses == frozenset()
+
+
+def test_a_forgotten_status_assignment_declaration_goes_red() -> None:
+    """The new case has teeth: drop ``getReadiness``'s 503 and the contract disagrees.
+
+    Without the ``response.status_code`` case the deriver saw no 503 at all and the
+    contract test called the declaration *unreachable*; with it, the omission is what
+    fails instead. This asserts the second direction directly.
+    """
+    route, operation = next(
+        (r, o) for r, o in _documented_operations() if r.operation_id == "getReadiness"
+    )
+    reachable = _reachable_statuses(route)
+    assert 503 in reachable
+    assert _declared_statuses(operation) == reachable
+    # The comparison the contract test makes would fail if the declaration were gone.
+    assert _declared_statuses(operation) - {503} != reachable
 
 
 def test_registered_exception_handlers_are_all_mapped() -> None:
