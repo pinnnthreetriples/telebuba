@@ -145,6 +145,140 @@ test('delete asks for confirmation, then fires the DELETE on confirm', async () 
   });
 });
 
+// Two cards, and every per-proxy check parked until the test releases it.
+function routeTwoCardsWithParkedChecks(): ((response: Response) => void)[] {
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/check')) {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(
+      jsonResponse({
+        proxies: [proxy(), { ...proxy(), id: 'p2', host: 'de.example' }],
+      }),
+    );
+  });
+  return releases;
+}
+
+test('checking a second card leaves the first card busy, and settling clears only its own', async () => {
+  // busyId was ONE string: the second card's click moved it, so the first card's
+  // spinner vanished and BOTH its buttons re-enabled while its check was still in
+  // flight — and the first response to land cleared the other card's spinner too.
+  const releases = routeTwoCardsWithParkedChecks();
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('de.example:1080')).toBeInTheDocument();
+  });
+  const checks = () => screen.getAllByLabelText('Определить');
+
+  await userEvent.click(checks()[0]!);
+  await userEvent.click(checks()[1]!);
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+  expect(checks()[0]).toBeDisabled();
+  expect(checks()[1]).toBeDisabled();
+  // A busy card's × is disabled too, so it cannot be deleted mid-check.
+  expect(screen.getAllByLabelText('Удалить')[0]).toBeDisabled();
+
+  releases[0]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(checks()[0]).toBeEnabled();
+  });
+  expect(checks()[1]).toBeDisabled();
+});
+
+test("a second check does not swallow the first card's pool refresh", async () => {
+  // check.mutate(vars, {onSettled}) put the handler in the hook's ONE observer
+  // slot; the second card's click took it over, so when the first card settled
+  // last its invalidate() never ran and the card kept its pre-check status.
+  const releases = routeTwoCardsWithParkedChecks();
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('de.example:1080')).toBeInTheDocument();
+  });
+  const poolGets = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([input]) => new URL((input as Request).url).pathname === '/api/v1/proxies',
+      ).length;
+
+  await userEvent.click(screen.getAllByLabelText('Определить')[0]!);
+  await userEvent.click(screen.getAllByLabelText('Определить')[1]!);
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+
+  // Card 2 settles first, then card 1 — the late one must still refresh the pool.
+  releases[1]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(poolGets()).toBeGreaterThan(1);
+  });
+  const afterSecond = poolGets();
+  releases[0]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(poolGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
+test("a second delete does not swallow the first card's pool refresh", async () => {
+  // remove.mutate(vars, {onSettled}) put the handler in the hook's ONE observer
+  // slot, and the confirm dialog closes on the same tick — so a second card's
+  // delete took the slot over and the first card's invalidate() never ran, leaving
+  // the deleted proxy on screen.
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (request.method === 'DELETE') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(
+      jsonResponse({ proxies: [proxy(), { ...proxy(), id: 'p2', host: 'de.example' }] }),
+    );
+  });
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('de.example:1080')).toBeInTheDocument();
+  });
+  const poolGets = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([input]) => new URL((input as Request).url).pathname === '/api/v1/proxies',
+      ).length;
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByLabelText('Удалить')[index]!);
+    // The dialog's confirm is the only element whose TEXT is "Удалить" (the card
+    // buttons carry it as an aria-label on an icon).
+    await userEvent.click(screen.getByText('Удалить'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+  expect(screen.getAllByLabelText('Удалить')[0]).toBeDisabled();
+  expect(screen.getAllByLabelText('Удалить')[1]).toBeDisabled();
+
+  // Card 2 settles first, then card 1 — the late one must still refresh the pool.
+  releases[1]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(poolGets()).toBeGreaterThan(1);
+  });
+  const afterSecond = poolGets();
+  releases[0]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(poolGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
 test('cancelling the confirm dialog does not delete', async () => {
   routeWithDelete();
   renderWithClient(<ProxyPool onAdd={vi.fn()} />);
