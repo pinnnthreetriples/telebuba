@@ -10,26 +10,43 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
 import '@/shared/i18n';
+import { AppShell } from '@/widgets/nav';
 
 import { PageErrorPanel } from './PageErrorPanel';
 import { router } from './router';
+import { SessionErrorPanel } from './SessionErrorPanel';
 
-// The panel's copy sends the operator to the nav, so it belongs on the routes that have
-// one: every child of the protected layout, which renders AppShell around them.
+// Every position in the tree gets the boundary it is supposed to have, and no other:
+// pages inside the nav shell get the page panel, the shell itself owns the SESSION
+// panel, and everything with no nav around it — /login, the root — gets none, because a
+// login crash dressed as a failed session check is the exact confusion these panels
+// exist to keep apart. Read off the real route tree, not a list of ids: a frozen list
+// keeps passing while a page added next to them ships with no boundary at all, and it
+// fails on a rename that moved nothing.
 test('every page inside the nav shell carries the page-error boundary', () => {
-  const pages = [
-    '/protected/',
-    '/protected/warming',
-    '/protected/neurocomment',
-    '/protected/logs',
-    '/protected/settings',
-  ] as const;
-  for (const id of pages) {
-    expect(router.routesById[id].options.errorComponent).toBe(PageErrorPanel);
+  const routes = Object.values(router.routesById);
+  const shell = routes.filter((route) => route.options.component === AppShell);
+  // By id prefix, so a page nested deeper than a direct child is covered too.
+  const inShell = routes.filter((route) =>
+    shell.some((layout) => route.id.startsWith(`${layout.id}/`)),
+  );
+
+  // Guard the derivation itself: an empty match would make the loops below vacuous.
+  expect(shell).toHaveLength(1);
+  expect(inShell.length).toBeGreaterThan(1);
+  for (const layout of shell) {
+    expect(layout.options.errorComponent, `${layout.id} is the session boundary`).toBe(
+      SessionErrorPanel,
+    );
   }
-  // And on no route that has no nav around it, however it gets there.
-  expect(router.routesById['/login'].options.errorComponent).toBeUndefined();
-  expect(router.routesById.__root__.options.errorComponent).toBeUndefined();
+  for (const page of inShell) {
+    expect(page.options.errorComponent, `${page.id} has no page boundary`).toBe(PageErrorPanel);
+  }
+  for (const outside of routes.filter(
+    (route) => !inShell.includes(route) && !shell.includes(route),
+  )) {
+    expect(outside.options.errorComponent, `${outside.id} has no nav around it`).toBeUndefined();
+  }
 });
 
 test('a crash outside the nav shell is not dressed up as a page error', async () => {

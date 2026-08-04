@@ -29,9 +29,13 @@ from core.db import (
     _warming_joined_channels,
 )
 
-# The singleton ``warming_settings`` persistence lives in a sibling module for
-# the file-size budget; re-exported here (and thence by ``core.db``) so existing
-# call sites keep importing it from ``core.repositories.warming``.
+# The singleton ``warming_settings`` persistence and the reservation hand-back write
+# live in sibling modules for the file-size budget; re-exported here (and thence by
+# ``core.db``) so existing call sites keep importing them from
+# ``core.repositories.warming``.
+from core.repositories._warming_reservation import (  # noqa: F401
+    hand_back_warming_reservation,
+)
 from core.repositories._warming_settings import (  # noqa: F401
     load_warming_settings,
     save_warming_settings,
@@ -324,6 +328,12 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         # persona so an explicit NULL write can never violate the constraint.
         "activity_persona": data.activity_persona or "normal",
     }
+    if data.reservation_token is not None:
+        # #10: the only writer is the ``cycle_started`` booking. Absent means "leave
+        # the column alone" — see WarmingStateWrite.reservation_token — so listing it
+        # unconditionally would have every unrelated write NULL out the token the
+        # hand-back guards on, which is the stranded day all over again.
+        insert_values["reservation_token"] = data.reservation_token
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1

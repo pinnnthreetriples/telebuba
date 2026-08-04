@@ -169,6 +169,14 @@ class WarmingStateRecord(BaseModel):
     activity_persona: ActivityPersona = "normal"
 
 
+# #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
+# only silent refusal — the budget was already free. ``absorbed`` (a newer booking
+# folded our unspent remainder into its own count) and ``stranded`` (our booking is
+# still counted with nobody to release it) both cost the account the rest of its day
+# and are reported; see ``core.repositories._warming_reservation._classify_refusal``.
+WarmingHandBack = Literal["applied", "settled", "absorbed", "stranded"]
+
+
 class WarmingStateWrite(BaseModel):
     """Caller-supplied warming-state change; ``core.db`` stamps ``updated_at``."""
 
@@ -211,6 +219,14 @@ class WarmingStateWrite(BaseModel):
     target_days: int | None = None
     # See WarmingStateRecord.activity_persona. ``None`` = carry current.
     activity_persona: ActivityPersona | None = None
+    # #10: identifies ONE pre-cycle daily-budget booking. Written only by the
+    # ``cycle_started`` write and read only by the hand-back's SQL guard, never by
+    # a reader — so unlike every other field here, ``None`` means "leave the column
+    # as it is" rather than "write NULL". That is what lets the fifteen unrelated
+    # writes between a booking and its hand-back (progress, park, stop, start)
+    # carry the token without every caller knowing it exists; the hand-back clears
+    # it in its own statement.
+    reservation_token: str | None = None
 
 
 class WarmingStateWriteResult(BaseModel):

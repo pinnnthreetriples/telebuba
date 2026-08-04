@@ -339,6 +339,7 @@ from core.repositories.spam_status import (  # noqa: E402, F401
 from core.repositories.warming import (  # noqa: E402, F401
     add_warming_channel,
     fetch_warming_state,
+    hand_back_warming_reservation,
     list_warming_account_ids,
     list_warming_channels,
     list_warming_states,

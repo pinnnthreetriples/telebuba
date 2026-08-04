@@ -198,6 +198,22 @@ def _add_warming_state_run_id(connection: Connection) -> None:
         )
 
 
+def _add_warming_state_reservation_token(connection: Connection) -> None:
+    # #46 (#10): identifies ONE pre-cycle daily-budget booking, so the hand-back can
+    # tell its own reservation from a newer generation's. The booked NUMBER cannot:
+    # it saturates to the phase cap on every generation, so a stale retry matched a
+    # live re-booking of the same size and released it. Legacy rows are NULL, which
+    # matches no token — a booking in flight across the upgrade is handed back only
+    # if this migration lands before its hand-back, and losing that one day is the
+    # same fail-closed outcome as a restart mid-cycle.
+    if not _sqlite_table_exists(connection, "warming_account_state"):
+        return
+    if "reservation_token" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN reservation_token VARCHAR",
+        )
+
+
 def _rename_proxy_type_http_to_https(connection: Connection) -> None:
     if "proxy_type" not in _sqlite_columns(connection, "account_proxies"):
         return

@@ -169,6 +169,10 @@ _warming_account_state = Table(
     Column("quarantine_count", Integer, nullable=True),
     # P1.2: see schemas.warming.WarmingStateRecord.run_id.
     Column("run_id", String, nullable=True),
+    # #10: see schemas.warming.WarmingStateWrite.reservation_token — the identity of
+    # the daily-budget booking currently on this row, cleared when it is handed back.
+    # Deliberately absent from WarmingStateRecord: nothing reads it in Python.
+    Column("reservation_token", String, nullable=True),
     # Lifecycle phase persisted between cycles — the previous-phase snapshot
     # the loop diffs against to detect transitions and fire ``warming_phase_advanced``.
     Column("current_phase", String, nullable=True),

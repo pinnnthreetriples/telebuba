@@ -15,6 +15,7 @@ from core.db import (
     configure_database,
     create_account,
     fetch_warming_state,
+    hand_back_warming_reservation,
     list_warming_channels,
     list_warming_states,
     list_warming_states_by_ids,
@@ -24,6 +25,7 @@ from core.db import (
     save_warming_settings,
     upsert_warming_state,
 )
+from core.repositories._warming_reservation import _classify_refusal
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
 
@@ -295,3 +297,61 @@ async def test_mark_promoted_to_nc_rejects_unknown_account() -> None:
 
     # And no warming-state ghost row was left behind.
     assert await fetch_warming_state("does-not-exist") is None
+
+
+# #10: the hand-back's refusal ladder, stated as a table so the ORDER of its checks and
+# the boundary of its comparison are pinned, not just their presence. Rows are
+# ``(row_token, row_count, row_date_is_ours)`` against a booking of ``_BOOKED`` on
+# ``_DATE``; both were mutations that survived the behavioural tests.
+_TOKEN = "booking-1"
+_BOOKED = 15
+_DATE = "2026-08-04"
+_OTHER_DATE = "2026-08-05"
+
+
+@pytest.mark.parametrize(
+    ("row_token", "row_count", "row_date", "expected"),
+    [
+        # Our own applying write cleared it, or the row never had a booking at all.
+        (None, _BOOKED, _DATE, "settled"),
+        # A newer booking holds the row: our remainder is inside its baseline.
+        ("booking-2", _BOOKED, _DATE, "absorbed"),
+        # A rolled date is answered BEFORE the count is looked at: the count belongs to
+        # another day, so "grown past our booking" says nothing about our budget. Both
+        # sides of the boundary, so swapping the two checks fails here.
+        (_TOKEN, _BOOKED + 5, _OTHER_DATE, "settled"),
+        (_TOKEN, 0, _OTHER_DATE, "settled"),
+        # Our date: strictly below what we booked is already released.
+        (_TOKEN, _BOOKED - 1, _DATE, "settled"),
+        # At or above it, the reservation is still counted with nobody to release it.
+        # Equality is unreachable in production (the UPDATE would have matched), so it is
+        # pinned here instead — relaxing ``>=`` to ``>`` fails on this row alone.
+        (_TOKEN, _BOOKED, _DATE, "stranded"),
+        (_TOKEN, _BOOKED + 5, _DATE, "stranded"),
+    ],
+)
+def test_the_refusal_ladder_answers_every_row_state(
+    row_token: str | None,
+    row_count: int,
+    row_date: str,
+    expected: str,
+) -> None:
+    row = {
+        "reservation_token": row_token,
+        "daily_actions": row_count,
+        "daily_count_date": row_date,
+    }
+
+    verdict = _classify_refusal(row, token=_TOKEN, booked=_BOOKED, daily_date=_DATE)
+
+    assert verdict == expected
+
+
+@pytest.mark.asyncio
+async def test_a_hand_back_for_a_purged_row_owes_nobody_anything() -> None:
+    """``remove_account`` can delete the row before the hand-back reaches it (#10)."""
+    outcome = await hand_back_warming_reservation(
+        "does-not-exist", token=_TOKEN, booked=_BOOKED, reconciled=2, daily_date=_DATE
+    )
+
+    assert outcome == "settled"
