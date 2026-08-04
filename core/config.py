@@ -90,6 +90,11 @@ class ApiSettings(BaseSettings):
     # (a slow client's queue fills → its live frames drop; the FE poll backstops).
     sse_keepalive_seconds: float = Field(default=15.0, gt=0)
     sse_max_queue: int = Field(default=1000, ge=1)
+    # Hard ceiling on a request body, counted as it arrives (so chunked transfer
+    # encoding cannot walk past it) BEFORE routing resolves the auth dependency.
+    # The largest legitimate body is a tdata.zip at ``tdata_max_bytes``
+    # (200,000,000); the headroom covers multipart boundaries and form fields.
+    max_request_bytes: int = Field(default=210_000_000, ge=1)
 
     @model_validator(mode="after")
     def _reject_credentialed_cors_wildcard(self) -> ApiSettings:
