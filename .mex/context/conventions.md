@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-27
+last_updated: 2026-08-04
 ---
 
 # Backend Rules
@@ -14,6 +14,15 @@ last_updated: 2026-07-27
 8. Package roots stay thin; split by responsibility; test files stay at or below 700 lines — backend `tests/**` *and* frontend `*.test.*` / test-helper sources alike.
 9. Behavior changes include tests. Backend branch coverage is at least 90%; warnings, unknown markers and unexpected xpass fail.
 10. Frontend rules live in `frontend.md`.
+
+`tests/test_api_error_contract.py` is the executable form of the error half of rule 1:
+every documented operation must declare exactly the non-2xx statuses its code can
+answer, each typed as `ErrorEnvelope`. It recomputes that set from the routes
+(`raise HTTPException` sites reached through `api/` helpers and the `Depends` chain),
+the handlers registered in `api/errors.py`, and FastAPI's own auto-422 rule. Declare
+with `api.errors.error_responses(*statuses)` or the two named compositions
+(`PROTECTED_ERRORS`, `SERVICE_ERRORS`) — never a hand-rolled `{status: {...}}` dict,
+and never a router-wide blanket over routes with different surfaces.
 
 `tests/test_architecture.py` is the executable form of rules 1–5 and 8, and outranks this prose. It `rglob`s each layer (submodules included) and asserts: `api/` imports only `services`, `schemas`, `fastapi`, stdlib and `core.config` / `core.logging` — nothing else from `core/`; `services/` imports no `sqlalchemy`, `telethon`, `fastapi`, `api` (no `httpx` either, but that one is convention, not asserted); `schemas/` imports no project layer and no SDK; `core/` imports neither layer above it; `.env.example` mirrors `core/config.py` key-for-key *and* value-for-value; no test source exceeds 700 lines.
 
