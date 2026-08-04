@@ -1335,16 +1335,6 @@ export type ErrorEnvelope = {
 };
 
 /**
- * HTTPValidationError
- */
-export type HttpValidationError = {
-  /**
-   * Detail
-   */
-  detail?: Array<ValidationError>;
-};
-
-/**
  * HealthStatus
  */
 export type HealthStatus = {
@@ -2417,34 +2407,6 @@ export type UserRead = {
 };
 
 /**
- * ValidationError
- */
-export type ValidationError = {
-  /**
-   * Location
-   */
-  loc: Array<string | number>;
-  /**
-   * Message
-   */
-  msg: string;
-  /**
-   * Error Type
-   */
-  type: string;
-  /**
-   * Input
-   */
-  input?: unknown;
-  /**
-   * Context
-   */
-  ctx?: {
-    [key: string]: unknown;
-  };
-};
-
-/**
  * WarmedAccount
  *
  * A graduated (operator-promoted) account, for the warming page's warmed card.
@@ -2968,9 +2930,25 @@ export type LoginData = {
 
 export type LoginErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Too many requests
+   */
+  429: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type LoginError = LoginErrors[keyof LoginErrors];
@@ -2993,9 +2971,17 @@ export type LogoutData = {
 
 export type LogoutErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type LogoutError = LogoutErrors[keyof LogoutErrors];
@@ -3018,9 +3004,17 @@ export type GetMeData = {
 
 export type GetMeErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetMeError = GetMeErrors[keyof GetMeErrors];
@@ -3040,6 +3034,15 @@ export type GetHealthData = {
   query?: never;
   url: '/api/v1/health';
 };
+
+export type GetHealthErrors = {
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetHealthError = GetHealthErrors[keyof GetHealthErrors];
 
 export type GetHealthResponses = {
   /**
@@ -3109,10 +3112,6 @@ export type ListAccountsErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
-  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -3120,10 +3119,6 @@ export type ListAccountsErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type ListAccountsError = ListAccountsErrors[keyof ListAccountsErrors];
@@ -3146,17 +3141,9 @@ export type AccountStatsData = {
 
 export type AccountStatsErrors = {
   /**
-   * Bad request, or Telegram refused the action
-   */
-  400: ErrorEnvelope;
-  /**
    * Not authenticated
    */
   401: ErrorEnvelope;
-  /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
   /**
    * Request validation failed
    */
@@ -3165,10 +3152,6 @@ export type AccountStatsErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type AccountStatsError = AccountStatsErrors[keyof AccountStatsErrors];
@@ -3199,7 +3182,7 @@ export type CheckAccountErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3211,7 +3194,7 @@ export type CheckAccountErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3249,7 +3232,7 @@ export type SpamCheckAccountErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3261,7 +3244,7 @@ export type SpamCheckAccountErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3294,11 +3277,7 @@ export type StartPhoneLoginErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
-  /**
-   * That session already exists
+   * Conflict with the current state
    */
   409: ErrorEnvelope;
   /**
@@ -3309,10 +3288,6 @@ export type StartPhoneLoginErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type StartPhoneLoginError = StartPhoneLoginErrors[keyof StartPhoneLoginErrors];
@@ -3348,10 +3323,6 @@ export type RequestLoginCodeErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
-  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -3359,10 +3330,6 @@ export type RequestLoginCodeErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type RequestLoginCodeError = RequestLoginCodeErrors[keyof RequestLoginCodeErrors];
@@ -3398,10 +3365,6 @@ export type SubmitLoginCodeErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
-  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -3409,10 +3372,6 @@ export type SubmitLoginCodeErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type SubmitLoginCodeError = SubmitLoginCodeErrors[keyof SubmitLoginCodeErrors];
@@ -3448,10 +3407,6 @@ export type LogoutAccountErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
-  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -3459,10 +3414,6 @@ export type LogoutAccountErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type LogoutAccountError = LogoutAccountErrors[keyof LogoutAccountErrors];
@@ -3498,10 +3449,6 @@ export type ResetAccountSessionErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
-  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -3509,10 +3456,6 @@ export type ResetAccountSessionErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type ResetAccountSessionError = ResetAccountSessionErrors[keyof ResetAccountSessionErrors];
@@ -3544,7 +3487,7 @@ export type UpdateAccountProfileErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3556,7 +3499,7 @@ export type UpdateAccountProfileErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3596,7 +3539,7 @@ export type DeleteAccountErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3608,7 +3551,7 @@ export type DeleteAccountErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3641,7 +3584,7 @@ export type ImportAccountTdataErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3653,7 +3596,7 @@ export type ImportAccountTdataErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3687,11 +3630,11 @@ export type ImportAccountSessionErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
-   * That session already exists
+   * Conflict with the current state
    */
   409: ErrorEnvelope;
   /**
@@ -3703,7 +3646,7 @@ export type ImportAccountSessionErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3738,7 +3681,7 @@ export type SetAccountPhotoErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3750,7 +3693,7 @@ export type SetAccountPhotoErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3788,7 +3731,7 @@ export type ResyncAccountAvatarErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3800,7 +3743,7 @@ export type ResyncAccountAvatarErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3836,17 +3779,9 @@ export type GetAccountProfileSnapshotData = {
 
 export type GetAccountProfileSnapshotErrors = {
   /**
-   * Bad request, or Telegram refused the action
-   */
-  400: ErrorEnvelope;
-  /**
    * Not authenticated
    */
   401: ErrorEnvelope;
-  /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
   /**
    * Request validation failed
    */
@@ -3855,10 +3790,6 @@ export type GetAccountProfileSnapshotErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type GetAccountProfileSnapshotError =
@@ -3896,7 +3827,7 @@ export type PostAccountStoryErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3908,7 +3839,7 @@ export type PostAccountStoryErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3946,7 +3877,7 @@ export type AddAccountMusicErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -3958,7 +3889,7 @@ export type AddAccountMusicErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -3996,7 +3927,7 @@ export type RemoveAccountStoryErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4008,7 +3939,7 @@ export type RemoveAccountStoryErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4047,7 +3978,7 @@ export type SetAccountStoryPinnedErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4059,7 +3990,7 @@ export type SetAccountStoryPinnedErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4099,7 +4030,7 @@ export type RemoveAccountMusicErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4111,7 +4042,7 @@ export type RemoveAccountMusicErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4150,7 +4081,7 @@ export type RemoveAccountPhotoErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4162,7 +4093,7 @@ export type RemoveAccountPhotoErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4201,7 +4132,7 @@ export type SetAccountPhotoMainErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4213,7 +4144,7 @@ export type SetAccountPhotoMainErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4252,7 +4183,7 @@ export type ListAccountChannelsErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4264,7 +4195,7 @@ export type ListAccountChannelsErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4303,7 +4234,7 @@ export type CreateAccountChannelErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4315,7 +4246,7 @@ export type CreateAccountChannelErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4360,7 +4291,7 @@ export type CheckAccountChannelUsernameErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4372,7 +4303,7 @@ export type CheckAccountChannelUsernameErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4416,7 +4347,7 @@ export type GetAccountChannelErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4428,7 +4359,7 @@ export type GetAccountChannelErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4471,7 +4402,7 @@ export type UpdateAccountChannelErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4483,7 +4414,7 @@ export type UpdateAccountChannelErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4527,7 +4458,7 @@ export type SetAccountChannelPhotoErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4539,7 +4470,7 @@ export type SetAccountChannelPhotoErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4583,7 +4514,7 @@ export type DeleteAccountChannelErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4595,7 +4526,7 @@ export type DeleteAccountChannelErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4648,7 +4579,7 @@ export type ListAccountChannelPostsErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4660,7 +4591,7 @@ export type ListAccountChannelPostsErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4704,7 +4635,7 @@ export type PublishAccountChannelPostErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4716,7 +4647,7 @@ export type PublishAccountChannelPostErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4764,7 +4695,7 @@ export type EditAccountChannelPostErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4776,7 +4707,7 @@ export type EditAccountChannelPostErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4824,7 +4755,7 @@ export type DeleteAccountChannelPostErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4836,7 +4767,7 @@ export type DeleteAccountChannelPostErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4876,7 +4807,7 @@ export type GetAccountPrivacyErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4888,7 +4819,7 @@ export type GetAccountPrivacyErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4927,7 +4858,7 @@ export type SetAccountPrivacyErrors = {
    */
   401: ErrorEnvelope;
   /**
-   * Account not found
+   * Not found
    */
   404: ErrorEnvelope;
   /**
@@ -4939,7 +4870,7 @@ export type SetAccountPrivacyErrors = {
    */
   500: ErrorEnvelope;
   /**
-   * Telegram gateway unavailable
+   * Upstream gateway unavailable
    */
   503: ErrorEnvelope;
 };
@@ -4965,17 +4896,9 @@ export type SetAllAccountsPrivacyData = {
 
 export type SetAllAccountsPrivacyErrors = {
   /**
-   * Bad request, or Telegram refused the action
-   */
-  400: ErrorEnvelope;
-  /**
    * Not authenticated
    */
   401: ErrorEnvelope;
-  /**
-   * Account not found
-   */
-  404: ErrorEnvelope;
   /**
    * Request validation failed
    */
@@ -4984,10 +4907,6 @@ export type SetAllAccountsPrivacyErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
-  /**
-   * Telegram gateway unavailable
-   */
-  503: ErrorEnvelope;
 };
 
 export type SetAllAccountsPrivacyError =
@@ -5012,9 +4931,17 @@ export type ListProxiesData = {
 
 export type ListProxiesErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListProxiesError = ListProxiesErrors[keyof ListProxiesErrors];
@@ -5037,9 +4964,17 @@ export type CreateProxyData = {
 
 export type CreateProxyErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type CreateProxyError = CreateProxyErrors[keyof CreateProxyErrors];
@@ -5062,9 +4997,17 @@ export type ProbeProxyData = {
 
 export type ProbeProxyErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ProbeProxyError = ProbeProxyErrors[keyof ProbeProxyErrors];
@@ -5092,9 +5035,21 @@ export type CheckProxyData = {
 
 export type CheckProxyErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type CheckProxyError = CheckProxyErrors[keyof CheckProxyErrors];
@@ -5122,9 +5077,25 @@ export type AssignProxyData = {
 
 export type AssignProxyErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type AssignProxyError = AssignProxyErrors[keyof AssignProxyErrors];
@@ -5147,9 +5118,17 @@ export type UnassignProxyData = {
 
 export type UnassignProxyErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type UnassignProxyError = UnassignProxyErrors[keyof UnassignProxyErrors];
@@ -5177,9 +5156,17 @@ export type DeleteProxyData = {
 
 export type DeleteProxyErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type DeleteProxyError = DeleteProxyErrors[keyof DeleteProxyErrors];
@@ -5202,9 +5189,17 @@ export type GetWarmingBoardData = {
 
 export type GetWarmingBoardErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetWarmingBoardError = GetWarmingBoardErrors[keyof GetWarmingBoardErrors];
@@ -5227,9 +5222,17 @@ export type ListWarmedAccountsData = {
 
 export type ListWarmedAccountsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListWarmedAccountsError = ListWarmedAccountsErrors[keyof ListWarmedAccountsErrors];
@@ -5253,9 +5256,17 @@ export type PromoteToNeurocommentData = {
 
 export type PromoteToNeurocommentErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type PromoteToNeurocommentError =
@@ -5280,9 +5291,21 @@ export type HandoffToNeurocommentData = {
 
 export type HandoffToNeurocommentErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type HandoffToNeurocommentError =
@@ -5307,9 +5330,17 @@ export type UnpromoteFromNeurocommentData = {
 
 export type UnpromoteFromNeurocommentErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type UnpromoteFromNeurocommentError =
@@ -5334,9 +5365,29 @@ export type StartWarmingData = {
 
 export type StartWarmingErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type StartWarmingError = StartWarmingErrors[keyof StartWarmingErrors];
@@ -5359,9 +5410,21 @@ export type StopWarmingData = {
 
 export type StopWarmingErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type StopWarmingError = StopWarmingErrors[keyof StopWarmingErrors];
@@ -5384,9 +5447,17 @@ export type ListWarmingChannelsData = {
 
 export type ListWarmingChannelsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListWarmingChannelsError = ListWarmingChannelsErrors[keyof ListWarmingChannelsErrors];
@@ -5410,9 +5481,21 @@ export type AddWarmingChannelsData = {
 
 export type AddWarmingChannelsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type AddWarmingChannelsError = AddWarmingChannelsErrors[keyof AddWarmingChannelsErrors];
@@ -5436,9 +5519,17 @@ export type RemoveWarmingChannelData = {
 
 export type RemoveWarmingChannelErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type RemoveWarmingChannelError =
@@ -5463,9 +5554,17 @@ export type GetWarmingSettingsData = {
 
 export type GetWarmingSettingsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetWarmingSettingsError = GetWarmingSettingsErrors[keyof GetWarmingSettingsErrors];
@@ -5489,9 +5588,17 @@ export type UpdateWarmingSettingsData = {
 
 export type UpdateWarmingSettingsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type UpdateWarmingSettingsError =
@@ -5521,9 +5628,17 @@ export type ListWarmingDialoguesData = {
 
 export type ListWarmingDialoguesErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListWarmingDialoguesError =
@@ -5553,9 +5668,21 @@ export type StartCampaignDiscoveryData = {
 
 export type StartCampaignDiscoveryErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type StartCampaignDiscoveryError =
@@ -5585,9 +5712,21 @@ export type GetCampaignDiscoveryData = {
 
 export type GetCampaignDiscoveryErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetCampaignDiscoveryError =
@@ -5617,9 +5756,21 @@ export type AdoptCampaignDiscoveryData = {
 
 export type AdoptCampaignDiscoveryErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type AdoptCampaignDiscoveryError =
@@ -5644,9 +5795,17 @@ export type ListCampaignsData = {
 
 export type ListCampaignsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListCampaignsError = ListCampaignsErrors[keyof ListCampaignsErrors];
@@ -5669,9 +5828,17 @@ export type CreateCampaignData = {
 
 export type CreateCampaignErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type CreateCampaignError = CreateCampaignErrors[keyof CreateCampaignErrors];
@@ -5699,9 +5866,21 @@ export type GetNeurocommentBoardData = {
 
 export type GetNeurocommentBoardErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetNeurocommentBoardError =
@@ -5731,9 +5910,21 @@ export type CheckCampaignChannelBansData = {
 
 export type CheckCampaignChannelBansErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type CheckCampaignChannelBansError =
@@ -5772,9 +5963,21 @@ export type ListNeurocommentCommentsData = {
 
 export type ListNeurocommentCommentsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListNeurocommentCommentsError =
@@ -5804,9 +6007,17 @@ export type LinkCampaignChannelData = {
 
 export type LinkCampaignChannelErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type LinkCampaignChannelError = LinkCampaignChannelErrors[keyof LinkCampaignChannelErrors];
@@ -5835,9 +6046,17 @@ export type AssignCampaignAccountData = {
 
 export type AssignCampaignAccountErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type AssignCampaignAccountError =
@@ -5867,9 +6086,17 @@ export type RemoveCampaignAccountData = {
 
 export type RemoveCampaignAccountErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type RemoveCampaignAccountError =
@@ -5903,9 +6130,25 @@ export type SetCampaignAccountChannelData = {
 
 export type SetCampaignAccountChannelErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type SetCampaignAccountChannelError =
@@ -5935,9 +6178,17 @@ export type DeleteCampaignData = {
 
 export type DeleteCampaignErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type DeleteCampaignError = DeleteCampaignErrors[keyof DeleteCampaignErrors];
@@ -5965,9 +6216,17 @@ export type RemoveCampaignChannelData = {
 
 export type RemoveCampaignChannelErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type RemoveCampaignChannelError =
@@ -5997,9 +6256,17 @@ export type UpdateCampaignPromptData = {
 
 export type UpdateCampaignPromptErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type UpdateCampaignPromptError =
@@ -6029,9 +6296,17 @@ export type SetCampaignSolverData = {
 
 export type SetCampaignSolverErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type SetCampaignSolverError = SetCampaignSolverErrors[keyof SetCampaignSolverErrors];
@@ -6055,9 +6330,17 @@ export type RetryChallengeData = {
 
 export type RetryChallengeErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type RetryChallengeError = RetryChallengeErrors[keyof RetryChallengeErrors];
@@ -6090,9 +6373,17 @@ export type ListCampaignChallengesData = {
 
 export type ListCampaignChallengesErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListCampaignChallengesError =
@@ -6127,9 +6418,17 @@ export type CountCampaignChallengeOutcomesData = {
 
 export type CountCampaignChallengeOutcomesErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type CountCampaignChallengeOutcomesError =
@@ -6163,9 +6462,17 @@ export type ListChannelChallengesData = {
 
 export type ListChannelChallengesErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListChannelChallengesError =
@@ -6190,9 +6497,17 @@ export type SkipNeurocommentPairData = {
 
 export type SkipNeurocommentPairErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type SkipNeurocommentPairError =
@@ -6222,9 +6537,17 @@ export type SetCampaignStatusData = {
 
 export type SetCampaignStatusErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type SetCampaignStatusError = SetCampaignStatusErrors[keyof SetCampaignStatusErrors];
@@ -6248,9 +6571,17 @@ export type GetNeurocommentRuntimeData = {
 
 export type GetNeurocommentRuntimeErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetNeurocommentRuntimeError =
@@ -6275,9 +6606,21 @@ export type StartNeurocommentData = {
 
 export type StartNeurocommentErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type StartNeurocommentError = StartNeurocommentErrors[keyof StartNeurocommentErrors];
@@ -6301,9 +6644,17 @@ export type StopNeurocommentData = {
 
 export type StopNeurocommentErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type StopNeurocommentError = StopNeurocommentErrors[keyof StopNeurocommentErrors];
@@ -6326,9 +6677,17 @@ export type ClearNeurocommentListenerData = {
 
 export type ClearNeurocommentListenerErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ClearNeurocommentListenerError =
@@ -6353,9 +6712,17 @@ export type GetNeurocommentSettingsData = {
 
 export type GetNeurocommentSettingsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type GetNeurocommentSettingsError =
@@ -6380,9 +6747,17 @@ export type UpdateNeurocommentSettingsData = {
 
 export type UpdateNeurocommentSettingsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type UpdateNeurocommentSettingsError =
@@ -6412,9 +6787,17 @@ export type ClearLogsData = {
 
 export type ClearLogsErrors = {
   /**
-   * Validation Error
+   * Not authenticated
    */
-  422: HttpValidationError;
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ClearLogsError = ClearLogsErrors[keyof ClearLogsErrors];
@@ -6458,9 +6841,21 @@ export type ListLogsData = {
 
 export type ListLogsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
 };
 
 export type ListLogsError = ListLogsErrors[keyof ListLogsErrors];

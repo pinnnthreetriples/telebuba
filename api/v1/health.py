@@ -5,10 +5,12 @@ from __future__ import annotations
 from fastapi import APIRouter, Response
 from fastapi import status as http_status
 
+from api.errors import error_responses
 from schemas.api import HealthStatus, ReadinessStatus
 from services import health as health_service
 
-router = APIRouter(tags=["health"])
+# Unauthenticated and parameterless, so 500 is the only error it can answer.
+router = APIRouter(tags=["health"], responses=error_responses(500))
 
 
 @router.get("/health", response_model=HealthStatus, operation_id="getHealth")

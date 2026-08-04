@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
+from api.errors import error_responses
 from schemas.proxy import ProxyAssignRequest, ProxyCheckResult, ProxyCreate, ProxyList, ProxyRead
 from services import proxies
 
@@ -30,7 +31,12 @@ async def probe_proxy(body: ProxyCreate) -> ProxyCheckResult:
     return await proxies.probe_proxy(body)
 
 
-@router.post("/proxies/{proxy_id}/check", response_model=ProxyRead, operation_id="checkProxy")
+@router.post(
+    "/proxies/{proxy_id}/check",
+    response_model=ProxyRead,
+    operation_id="checkProxy",
+    responses=error_responses(404),
+)
 async def check_proxy(proxy_id: str) -> ProxyRead:
     try:
         return await proxies.check_proxy(proxy_id)
@@ -41,7 +47,12 @@ async def check_proxy(proxy_id: str) -> ProxyRead:
         ) from exc
 
 
-@router.post("/proxies/{proxy_id}/assign", response_model=ProxyRead, operation_id="assignProxy")
+@router.post(
+    "/proxies/{proxy_id}/assign",
+    response_model=ProxyRead,
+    operation_id="assignProxy",
+    responses=error_responses(404, 409),
+)
 async def assign_proxy(proxy_id: str, body: ProxyAssignRequest) -> ProxyRead:
     try:
         return await proxies.assign_proxy(proxy_id, body.account_id)

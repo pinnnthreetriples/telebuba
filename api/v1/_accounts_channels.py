@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
 from core.config import settings
 from schemas.api import Page
@@ -26,8 +27,10 @@ from schemas.channels import (
 from schemas.telegram_actions import ActionResult
 from services import accounts
 
-# No tags: mounted onto the accounts router (already tagged "accounts").
-channels_router = APIRouter()
+# No tags: mounted onto the accounts router (already tagged "accounts"). Every
+# route here runs inside ``service_errors_to_http``, so the fragment is declared
+# once for the router.
+channels_router = APIRouter(responses=SERVICE_ERRORS)
 
 
 def _decode_channel_id(value: str) -> int:

@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from api.errors import error_responses
 from core.config import settings
 from schemas.dialogues import DialogueFeed
 from schemas.warming import (
@@ -49,6 +50,7 @@ async def promote_account(body: PromoteRequest) -> WarmingAccountState:
     "/handoff",
     response_model=WarmingAccountState,
     operation_id="handoffToNeurocomment",
+    responses=error_responses(400),
 )
 async def handoff_account(body: PromoteRequest) -> WarmingAccountState:
     """Second stage: move a warmed-card account into the neurocomment idle pool."""
@@ -69,7 +71,12 @@ async def unpromote_account(body: PromoteRequest) -> WarmingAccountState:
     return await warming_service.unmark_neurocomment(body.account_id)
 
 
-@router.post("/start", response_model=WarmingAccountState, operation_id="startWarming")
+@router.post(
+    "/start",
+    response_model=WarmingAccountState,
+    operation_id="startWarming",
+    responses=error_responses(400, 404, 409),
+)
 async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
     try:
         return await warming_service.start_warming(body)
@@ -84,7 +91,12 @@ async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
         ) from exc
 
 
-@router.post("/stop", response_model=WarmingAccountState, operation_id="stopWarming")
+@router.post(
+    "/stop",
+    response_model=WarmingAccountState,
+    operation_id="stopWarming",
+    responses=error_responses(404),
+)
 async def stop_warming(body: StopWarmingRequest) -> WarmingAccountState:
     try:
         return await warming_service.stop_warming(body)
@@ -97,7 +109,12 @@ async def list_warming_channels() -> WarmingChannelList:
     return await warming_service.list_channels()
 
 
-@router.post("/channels", response_model=WarmingChannelList, operation_id="addWarmingChannels")
+@router.post(
+    "/channels",
+    response_model=WarmingChannelList,
+    operation_id="addWarmingChannels",
+    responses=error_responses(400),
+)
 async def add_warming_channels(body: AddChannelsRequest) -> WarmingChannelList:
     try:
         return await warming_service.add_channels(body)
