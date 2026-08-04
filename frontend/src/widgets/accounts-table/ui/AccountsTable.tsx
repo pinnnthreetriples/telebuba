@@ -18,7 +18,8 @@ interface AccountsTableProps {
   onDelete: (accountId: string) => void;
   onOpen?: (account: AccountRead) => void;
   onProfile?: (account: AccountRead) => void;
-  busyId: string | null;
+  // A set, not one id: two rows can have a check or a delete in flight at once.
+  busyIds: ReadonlySet<string>;
 }
 
 const ACTION_BTN =
@@ -84,13 +85,15 @@ export function AccountsTable({
   onDelete,
   onOpen,
   onProfile,
-  busyId,
+  busyIds,
 }: AccountsTableProps) {
   const { t } = useTranslation();
 
-  // Not memoized: every dependency (`t`, `busyId` and all four callbacks — the
-  // page passes two as inline arrows) is a fresh identity per parent render, so
-  // a useMemo here could never hit and only claimed otherwise.
+  // Not memoized: the page passes two of the four callbacks as inline arrows, so
+  // those alone are a fresh identity on every parent render and a useMemo here
+  // could never hit — it would only claim otherwise. (`busyIds` is useState, so
+  // its identity IS stable between the renders that do not touch the set; the
+  // inline arrows are what settles this.)
   const columns: ColumnDef<AccountRead>[] = [
     {
       id: 'phone',
@@ -182,7 +185,7 @@ export function AccountsTable({
       meta: { ...RIGHT_META, cardSlot: 'control' } satisfies DataTableColumnMeta,
       cell: ({ row }) => {
         const account = row.original;
-        const busy = busyId === account.account_id;
+        const busy = busyIds.has(account.account_id);
         return (
           <div className="flex items-center justify-end gap-[6px]">
             <button
