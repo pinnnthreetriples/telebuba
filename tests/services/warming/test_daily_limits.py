@@ -27,10 +27,9 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
-    WarmingStateWriteResult,
 )
 from services import warming
-from services.warming import _loop, _reservation, _runtime, _seams, _state, _steps
+from services.warming import _loop, _reservation, _runtime, _seams, _steps
 from services.warming._state import _set_state
 from tests.services.warming._support import (
     _BlockOnce,
@@ -533,23 +532,24 @@ async def test_a_second_cancel_during_the_reconcile_keeps_the_original_exception
     _no_quiet_days(monkeypatch)
     crash = _CrashAfter(2)
     monkeypatch.setattr(_seams, "execute", crash.execute)
-    real_upsert = _state.upsert_warming_state
+    real_hand_back = _reservation.hand_back_warming_reservation
     written = asyncio.Event()
     task: asyncio.Task[None]
 
-    async def cancel_then_write(write: WarmingStateWrite) -> WarmingStateWriteResult:
-        # ``daily_actions == 2`` identifies the reconcile's hand-back: the
-        # cycle_started reservation and the progress writes all carry 15.
-        reconciling = write.daily_actions == 2
-        if reconciling:
-            task.cancel()
-            await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
-        result = await real_upsert(write)
-        if reconciling:
-            written.set()
-        return result
+    async def cancel_then_write(
+        account_id: str, *, booked: int, reconciled: int, daily_date: str
+    ) -> bool:
+        # The reconcile is this write's only caller, so every call is the one under
+        # test — no need to fingerprint it by its values.
+        task.cancel()
+        await asyncio.sleep(0)  # delivered mid-write, exactly as to_thread would
+        applied = await real_hand_back(
+            account_id, booked=booked, reconciled=reconciled, daily_date=daily_date
+        )
+        written.set()
+        return applied
 
-    monkeypatch.setattr(_state, "upsert_warming_state", cancel_then_write)
+    monkeypatch.setattr(_reservation, "hand_back_warming_reservation", cancel_then_write)
     await _seed_warming_account()
     task = asyncio.create_task(_iteration())
 
@@ -603,50 +603,6 @@ async def test_a_raising_finalize_still_hands_back_the_reservation(
     assert record.state == "error"
     # set_online + join + read + the story glance, not the 15-action reservation.
     assert record.daily_actions == 4
-
-
-@pytest.mark.parametrize(
-    ("spent", "run_id", "event", "daily_actions"),
-    [
-        # Applied, real spend: the only signal a forfeited day ever produces, since
-        # ``_gate_daily_limit`` writes the same ``last_event`` for a legitimate park.
-        (2, None, "warming_reservation_reconciled", 2),
-        # Applied, nothing spent (cancelled while queued on the semaphore):
-        # deliberately silent, or every deploy logs one WARNING per account.
-        (0, None, None, 0),
-        # CAS refused: the reservation stays booked past the next UTC midnight, so
-        # this is the case the operator actually has to see.
-        (2, "stale-run", "warming_reservation_stranded", 0),
-    ],
-)
-@pytest.mark.asyncio
-async def test_the_reconcile_reports_each_of_its_three_outcomes(
-    monkeypatch: pytest.MonkeyPatch,
-    spent: int,
-    run_id: str | None,
-    event: str | None,
-    daily_actions: int,
-) -> None:
-    """#208's two log codes, and the deliberate silence in between."""
-    logged: list[tuple[str, str, object]] = []
-
-    async def capture(level: str, code: str, **kwargs: object) -> None:
-        logged.append((level, code, kwargs["extra"]))
-
-    monkeypatch.setattr(_reservation, "log_event", capture)
-    await create_account(AccountCreate(account_id="acc-1"))
-    await upsert_warming_state(
-        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-1", daily_actions=0),
-    )
-    today = datetime.now(UTC).date().isoformat()
-
-    await _reservation._reconcile_reservation("acc-1", "active", (0, today), spent, run_id=run_id)
-
-    expected = [("WARNING", event, {"spent": spent, "daily_actions": spent})] if event else []
-    assert logged == expected
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.daily_actions == daily_actions
 
 
 @pytest.mark.parametrize("boom", [RuntimeError("handler blew up"), asyncio.CancelledError()])

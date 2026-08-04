@@ -1,35 +1,52 @@
 """Daily-budget reservation hand-back — split from ``services.warming._loop``.
 
-Owns the two functions that give back the unspent part of the pre-cycle daily
-reservation (#208): the CAS-guarded write itself and the never-raising wrapper the
-loop's abnormal-exit handler uses. Split out for the file-size budget; both are
-imported by :mod:`services.warming._loop` so the call sites are unaffected.
+Owns the functions that give back the unspent part of the pre-cycle daily
+reservation (#208): the booking arithmetic, the guarded write itself, and the
+never-raising wrapper the loop's abnormal-exit handler uses. Split out for the
+file-size budget; all three are imported by :mod:`services.warming._loop` so the
+call sites are unaffected.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from typing import NamedTuple
 
-from core.db import fetch_warming_state
+from core.db import fetch_warming_state, hand_back_warming_reservation
 from core.logging import log_event
-from services.warming._state import _set_state
-
-if TYPE_CHECKING:
-    from schemas.warming import WarmingState
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
 
 
+class _Reservation(NamedTuple):
+    """Today's ``(count, date)`` plus the budget the pre-cycle write booked on top.
+
+    The three travel together from the ``cycle_started`` write to the hand-back
+    because the hand-back's guard is the booked value itself — carrying them apart
+    is how the release ends up unable to name the booking it is releasing.
+    """
+
+    daily_count: int
+    daily_date: str
+    remaining: int | None
+
+    @property
+    def booked(self) -> int:
+        """What the row carries while the cycle runs: the whole remaining budget.
+
+        Just today's count when there is no cap (``remaining is None``), where
+        nothing is reserved. One spelling for the booking write and the hand-back's
+        guard — a second one would silently strand the reservation it cannot match.
+        """
+        return self.daily_count if self.remaining is None else self.daily_count + self.remaining
+
+
 async def _reconcile_reservation(
     account_id: str,
-    state: WarmingState,
-    daily: tuple[int, str],
+    reservation: _Reservation,
     spent: int,
-    *,
-    run_id: str | None,
 ) -> None:
     """Hand back the unspent part of the pre-cycle reservation (#208).
 
@@ -42,39 +59,47 @@ async def _reconcile_reservation(
     account on a phantom "daily limit" until the next UTC midnight, forfeiting the
     rest of the day's warming.
 
-    Writes ``daily_actions`` only (``state`` is the row's current state, echoed
-    back so an ``error``/``sleeping`` row is not resurrected as ``active``), and
-    stays CAS-guarded: a newer generation's row, or one the operator already
-    stopped, is left alone. ``Exception`` failures are swallowed — never
-    propagated — because this runs on the way out of another exception and must
-    never mask it, but they are always logged: a silent reconcile failure is the
-    forfeited day this function exists to prevent. A ``CancelledError`` is
-    deliberately NOT swallowed (``except Exception``, not ``BaseException``):
-    every caller sits inside the loop's own abnormal-exit handler, which logs it
-    and re-raises the original exception, so eating it here would only break
-    asyncio's contract — the finalize call site has no other backstop.
+    Guarded by the booking's own value, NOT by the generation marker (#10). Both
+    predicates the state CAS applies — ``run_id`` matches and the row is not
+    ``idle`` — are false for the routine case this hand-back exists to serve: the
+    stop path clears ``run_id`` and writes ``idle`` as soon as its ~5s cancel wait
+    is up, and a cycle stuck on a slow proxy unwinds after that, so the write was
+    refused and the day stayed booked. An operator's Stop then Start reached the
+    same dead end from the other side, because Start always mints a fresh
+    generation. ``daily_actions`` still being exactly what we booked is the precise
+    statement of "nobody else has touched today's count", and it also makes the
+    write idempotent — see ``hand_back_warming_reservation``.
+
+    ``Exception`` failures are swallowed — never propagated — because this runs on
+    the way out of another exception and must never mask it, but they are always
+    logged: a silent reconcile failure is the forfeited day this function exists to
+    prevent. A ``CancelledError`` is deliberately NOT swallowed (``except
+    Exception``, not ``BaseException``): every caller sits inside the loop's own
+    abnormal-exit handler, which logs it and re-raises the original exception, so
+    eating it here would only break asyncio's contract — the finalize call site has
+    no other backstop.
     """
-    daily_count, daily_date = daily
+    daily_count = reservation.daily_count
     try:
         # ``shield``: ``shutdown_warming_runtime`` cancels a second time when its
         # 5s ``gather`` times out, and that second cancel lands on this write's
         # ``to_thread``. An abandoned write leaves the full reservation booked and
         # replaces whatever exception was propagating — a genuine crash would then
         # look like a cancellation to ``_runner`` and never park the account.
-        write = await asyncio.shield(
-            _set_state(
+        applied = await asyncio.shield(
+            hand_back_warming_reservation(
                 account_id,
-                state,
-                daily_actions=daily_count + spent,
-                daily_count_date=daily_date,
-                expected_run_id=run_id,
+                booked=reservation.booked,
+                reconciled=daily_count + spent,
+                daily_date=reservation.daily_date,
             ),
         )
-        if not write.applied:
-            # The CAS refused (a newer generation owns the row, or a stop already
-            # wrote ``idle``): the reservation stays booked and nothing else will
-            # clear it before the next UTC midnight, so this is the case the
-            # operator actually has to see — not a successful hand-back.
+        if not applied:
+            # The booking is no longer on the row (a newer generation already booked
+            # its own, or today's count moved on some other way): whatever is booked
+            # there is not ours to release, and nothing else will clear it before the
+            # next UTC midnight, so this is the case the operator actually has to
+            # see — not a successful hand-back.
             await log_event(
                 "WARNING",
                 "warming_reservation_stranded",
@@ -101,10 +126,8 @@ async def _reconcile_reservation(
 
 async def _release_reservation_on_exit(
     account_id: str,
-    daily: tuple[int, str],
+    reservation: _Reservation,
     spent: int,
-    *,
-    run_id: str | None,
 ) -> None:
     """Hand the reservation back while an exception unwinds ``run_loop_iteration``.
 
@@ -112,16 +135,15 @@ async def _release_reservation_on_exit(
     failure here must not replace it.
     """
     try:
-        # Echo the row's own state back rather than a literal ``active``: a
-        # readiness park or a stop may have moved it while the cycle ran. A row
-        # that is gone entirely (``remove_account`` proceeds after its 5s cancel
-        # wait, so ``delete_account`` can purge it while we are still here) holds
-        # no reservation to hand back, and the FK would reject the insert anyway
-        # — same skip as ``_finalize_after_cycle``'s call site.
+        # A row that is gone entirely (``remove_account`` proceeds after its 5s
+        # cancel wait, so ``delete_account`` can purge it while we are still here)
+        # holds no reservation to hand back, and reporting one as stranded would
+        # hand the operator an alert about an account that no longer exists — same
+        # skip as ``_finalize_after_cycle``'s call site.
         latest = await fetch_warming_state(account_id)
         if latest is not None:
             try:
-                await _reconcile_reservation(account_id, latest.state, daily, spent, run_id=run_id)
+                await _reconcile_reservation(account_id, reservation, spent)
             except asyncio.CancelledError:
                 # Scoped to the reconcile call alone: its write is shielded, so one
                 # already in flight still lands — hence WARNING without a traceback.

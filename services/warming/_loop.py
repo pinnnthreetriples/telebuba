@@ -24,6 +24,7 @@ from services.warming._quarantine import _recover_from_quarantine
 from services.warming._reservation import (
     _reconcile_reservation,
     _release_reservation_on_exit,
+    _Reservation,
 )
 from services.warming._state import _set_state
 from services.warming._steps import _ChannelTally
@@ -161,7 +162,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     account_id: str,
     result: WarmingCycleResult,
     age_hours: float,
-    daily: tuple[int, str],
+    reservation: _Reservation,
     schedule: _Schedule,
     *,
     run_id: str | None,
@@ -176,7 +177,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     The CAS clause on the final write provides the same guarantee even when the
     run_id flips between this read and the write (Round-2 P1 + Round-4 P1.1).
     """
-    daily_count, daily_date = daily
+    daily_count, daily_date, _remaining = reservation
     actions_done, next_run_dt, next_state = schedule
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()
@@ -185,13 +186,10 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     if not _matches_active_run(latest, run_id):
         # The row moved on (a stop wrote ``idle``, a restart minted a new run_id,
         # or a readiness park wrote ``error``) so the transition below must not
-        # land — but the reservation is still ours to release. The CAS declines
-        # this write for a row that is already ``idle`` or owned by a newer
-        # generation, which is exactly the intended split of authority.
+        # land — but the reservation is still ours to release, and only its own
+        # booked value decides that, not the generation that now owns the row.
         if latest is not None:
-            await _reconcile_reservation(
-                account_id, latest.state, daily, actions_done, run_id=run_id
-            )
+            await _reconcile_reservation(account_id, reservation, actions_done)
         return result
     if latest is not None and latest.state == "idle":
         return result
@@ -288,6 +286,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         return gated
 
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
+    reservation = _Reservation(*daily, remaining)
     # #208: reserve the whole remaining budget on the row BEFORE the cycle spends
     # any of it. Only ``_finalize_after_cycle`` ever incremented ``daily_actions``,
     # so a crash between here and there left today's count untouched — and because
@@ -306,7 +305,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         last_error=None,
         last_action="set_online",
         last_channel=None,
-        daily_actions=daily_count if remaining is None else daily_count + remaining,
+        daily_actions=reservation.booked,
         daily_count_date=daily_date,
         expected_run_id=run_id,
     )
@@ -375,7 +374,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         # escape with the whole reservation still booked — costing the rest of the
         # day on top of parking the account in ``error``.
         return await _finalize_after_cycle(
-            account_id, result, age_hours, daily, schedule, run_id=run_id
+            account_id, result, age_hours, reservation, schedule, run_id=run_id
         )
     except BaseException:
         # ``BaseException`` on purpose: ``CancelledError`` does not inherit from
@@ -383,5 +382,5 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         # warming per restart. Re-raised unchanged so cancellation keeps propagating
         # to the task that asked for it, and so a genuine crash still reaches
         # ``_runner``'s ``except Exception``.
-        await _release_reservation_on_exit(account_id, daily, tally.attempts, run_id=run_id)
+        await _release_reservation_on_exit(account_id, reservation, tally.attempts)
         raise
