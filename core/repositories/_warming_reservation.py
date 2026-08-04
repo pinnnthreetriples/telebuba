@@ -1,11 +1,13 @@
 """The daily-budget reservation hand-back write — a sibling of ``core.repositories.warming``.
 
-Its own module for the file-size budget, like ``core.repositories._warming_settings``:
-that one is 383 lines against a cap of 440, and inlining this write with its refusal
-ladder would take it to about 500 — adding it there did cross the cap (441) while it was
-being built, which is what prompted the split. Re-exported there, and thence by ``core.db``,
-so call sites keep importing it from either. Owns ONE statement: the guarded swap of a
-pre-cycle daily reservation down to what the cycle really spent (#208, #10).
+Its own module for the file-size budget, on the precedent of
+``core.repositories._warming_settings``: ``core.repositories.warming`` is 383 lines
+against a cap of 440, and inlining this write with its refusal ladder would take it to
+about 500 — adding it there did cross the cap (441) while it was being built, which is
+what prompted the split. ``core.repositories.warming`` re-exports
+``hand_back_warming_reservation`` and ``core.db`` re-exports it in turn, so call sites
+keep importing it from either. Owns ONE statement: the guarded swap of a pre-cycle daily
+reservation down to what the cycle really spent (#208, #10).
 """
 
 from __future__ import annotations
