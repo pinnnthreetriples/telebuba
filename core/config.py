@@ -41,8 +41,12 @@ _MIN_AUTH_SECRET_BYTES = 32
 class TelegramSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TELEGRAM__", extra="ignore")
 
-    api_id: int = Field(default=0, ge=0)
-    api_hash: str = ""
+    # repr=False on every credential below: pytest's assertion rewriting dumps a
+    # model repr whenever an assertion touches a ``settings`` attribute chain, so a
+    # failing test printed live values from the developer's own .env. The values
+    # keep working — repr is the only thing hidden, and model_dump() is unaffected.
+    api_id: int = Field(default=0, ge=0, repr=False)
+    api_hash: str = Field(default="", repr=False)
     session_dir: Path = Path("sessions")
     timeout_seconds: int = Field(default=20, ge=1)
     connection_retries: int = Field(default=3, ge=0)
@@ -118,7 +122,7 @@ class AuthSettings(BaseSettings):
 
     # JWT signing secret — MUST be set to a long random value before enabling
     # login. Empty disables auth issuance (login returns 503-class refusal).
-    secret: str = ""
+    secret: str = Field(default="", repr=False)
     algorithm: str = Field(default="HS256", min_length=1)
     # Session cookie: HttpOnly is always on; Secure/SameSite are configurable so
     # local http dev can relax Secure. Sliding TTL re-issued on each request.
@@ -128,8 +132,8 @@ class AuthSettings(BaseSettings):
     session_ttl_minutes: int = Field(default=720, ge=1)
     # First-admin seeding (no public signup): when no users exist and both are
     # set, an admin is created at startup.
-    admin_username: str = ""
-    admin_password: str = ""
+    admin_username: str = Field(default="", repr=False)
+    admin_password: str = Field(default="", repr=False)
     # Login brute-force guard (in-memory, per-process).
     login_rate_limit_max_attempts: int = Field(default=5, ge=1)
     login_rate_limit_window_seconds: float = Field(default=60.0, gt=0)
@@ -179,10 +183,10 @@ class ProxySettings(BaseSettings):
     # Free country providers. IPinfo Lite has no query quota; GeoLite Country
     # allows 1,000 lookups/day. Empty credentials disable that provider without
     # turning a reachable proxy into a failed proxy.
-    ipinfo_token: str = ""
+    ipinfo_token: str = Field(default="", repr=False)
     ipinfo_base_url: str = Field(default="https://api.ipinfo.io/lite", min_length=1)
-    maxmind_account_id: str = ""
-    maxmind_license_key: str = ""
+    maxmind_account_id: str = Field(default="", repr=False)
+    maxmind_license_key: str = Field(default="", repr=False)
     maxmind_base_url: str = Field(
         default="https://geolite.info/geoip/v2.1/country",
         min_length=1,
@@ -287,7 +291,7 @@ class LoggingSettings(BaseSettings):
     level: str = Field(default="INFO")
     rotation: str = Field(default="10 MB")
     retention: int = Field(default=10, ge=1)
-    sentry_dsn: str = ""
+    sentry_dsn: str = Field(default="", repr=False)
 
 
 class Settings(BaseSettings):
