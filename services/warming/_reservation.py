@@ -85,8 +85,16 @@ async def _reconcile_reservation(
     below it), so a value guard alone matched a newer generation's re-booking of the
     same size and released it — leaving that live cycle spending against a budget
     nobody had reserved. The token is minted per booking and cleared when it is
-    handed back, which is also what makes the write idempotent — see
-    ``hand_back_warming_reservation``.
+    handed back, which is also what makes the write idempotent.
+
+    A refused hand-back is NOT automatically a lost day, and not automatically a
+    settled one either: the token surviving on the row does not mean the booking did.
+    Our own ``_finalize_after_cycle`` transition writes the reconciled count without
+    touching the token, and a park after UTC midnight writes a fresh date the same way,
+    so both leave our token above a row that owes us nothing. ``_classify_refusal``
+    reads the row's token, date and count to tell those from the two refusals that do
+    cost the day (``absorbed`` / ``stranded``); it owns the reasoning, this function
+    only decides what to log.
 
     ``Exception`` failures are swallowed — never propagated — because this runs on
     the way out of another exception and must never mask it, but they are always
@@ -113,19 +121,25 @@ async def _reconcile_reservation(
                 daily_date=reservation.daily_date,
             ),
         )
-        if outcome == "stranded":
-            # Our token is still on the row but the count moved under it, so nothing
-            # will clear the booking before the next UTC midnight: the case the
-            # operator actually has to see. A ``superseded`` refusal is deliberately
-            # silent — the booking was already settled, by our own shielded write or
-            # by a newer one — because logging that taught the operator to ignore this
-            # code (it fired on roughly a quarter of stops, saying a day was lost that
-            # was not).
+        if outcome in ("absorbed", "stranded"):
+            # Both leaves cost the account the rest of today's budget: a newer booking
+            # folded our unspent remainder into its own count (``absorbed``), or our
+            # booking is still counted with nobody left to release it (``stranded``).
+            # One event code, because the operator's question is the same either way —
+            # this account lost its day — and the ``reason`` says which. Only
+            # ``settled`` is silent, and only because the budget really is free there;
+            # reporting every refusal fired on roughly a quarter of stops, claiming a
+            # day was lost that was not, which is how an alarm gets ignored.
             await log_event(
                 "WARNING",
                 "warming_reservation_stranded",
                 account_id=account_id,
-                extra={"spent": spent, "daily_actions": daily_count + spent},
+                extra={
+                    "spent": spent,
+                    "daily_actions": daily_count + spent,
+                    "unreleased": reservation.booked - (daily_count + spent),
+                    "reason": outcome,
+                },
             )
         elif outcome == "applied" and spent:
             # A forfeited day is otherwise indistinguishable from a legitimate park:

@@ -169,11 +169,12 @@ class WarmingStateRecord(BaseModel):
     activity_persona: ActivityPersona = "normal"
 
 
-# #10: the three outcomes of a daily-budget reservation hand-back. ``superseded``
-# means the booking was already settled (our own write landed, or a newer booking
-# replaced it), so it is not an alarm; ``stranded`` means the booking is still on the
-# row with nobody left to release it, which costs the rest of the day.
-WarmingHandBack = Literal["applied", "superseded", "stranded"]
+# #10: the four outcomes of a daily-budget reservation hand-back. ``settled`` is the
+# only silent refusal — the budget was already free. ``absorbed`` (a newer booking
+# folded our unspent remainder into its own count) and ``stranded`` (our booking is
+# still counted with nobody to release it) both cost the account the rest of its day
+# and are reported; see ``core.repositories._warming_reservation._classify_refusal``.
+WarmingHandBack = Literal["applied", "settled", "absorbed", "stranded"]
 
 
 class WarmingStateWrite(BaseModel):

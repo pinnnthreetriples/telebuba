@@ -200,12 +200,12 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if await get_listener_running() and await get_listener_account_id() == data.account_id:
             raise AccountIsListenerError(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
-        # Cancel the previous generation BEFORE the new run_id is stamped, so the fresh
-        # stint is not published on top of a cycle that is still spending Telegram
-        # actions under the old one. The daily-budget reservation is no longer part of
-        # this rationale: since #10 the hand-back carries its own per-booking token, so
-        # it lands whether or not a new generation has taken the row — it has to, since
-        # this mint is eager and a stuck cycle unwinds long after the 5s wait below.
+        # Cancel first so a cycle that stops promptly is gone before the fresh stint is
+        # published. That is ALL this ordering buys: the wait below gives up after ~5s,
+        # so a cycle stuck on a slow proxy is still spending when the mint lands.
+        # The daily-budget reservation no longer depends on the order at all — since #10
+        # the hand-back carries a per-booking token, so it lands whether or not a new
+        # generation holds the row, which it must: this mint is eager (#10).
         await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.

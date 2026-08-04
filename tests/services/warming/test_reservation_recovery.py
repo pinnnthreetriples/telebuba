@@ -15,11 +15,22 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.db import create_account, fetch_warming_state, upsert_warming_state
+from core.db import (
+    create_account,
+    fetch_warming_state,
+    hand_back_warming_reservation,
+    upsert_warming_state,
+)
 from schemas.accounts import AccountCreate
-from schemas.warming import StartWarmingRequest, StopWarmingRequest, WarmingStateWrite
+from schemas.warming import (
+    StartWarmingRequest,
+    StopWarmingRequest,
+    WarmingCycleResult,
+    WarmingState,
+    WarmingStateWrite,
+)
 from services import warming
-from services.warming import _reservation, _runtime, _seams
+from services.warming import _loop, _reservation, _runtime, _seams
 from services.warming._reservation import _Reservation
 from tests.services.warming._support import (
     _fake_loop,
@@ -171,8 +182,14 @@ async def test_a_start_before_the_dying_cycle_unwinds_still_gets_the_day_back(
 _TOKEN = "booking-1"
 
 
-async def _seed_booked_row(booked: int) -> str:
-    """One account whose row carries our booking of ``booked`` against today."""
+_CAP = settings.warming.phase_daily_cap["intro"]
+# The next phase up. A real cap value, which is the point: the count a hand-back can
+# find on the row is always some generation's saturated booking.
+_HIGHER_CAP = settings.warming.phase_daily_cap["warming"]
+
+
+async def _seed_row(count: int, token: str | None) -> str:
+    """One account whose row carries ``count`` against today under ``token``."""
     await create_account(AccountCreate(account_id="acc-1"))
     today = datetime.now(UTC).date().isoformat()
     await upsert_warming_state(
@@ -180,57 +197,65 @@ async def _seed_booked_row(booked: int) -> str:
             account_id="acc-1",
             state="active",
             run_id="run-1",
-            daily_actions=booked,
+            daily_actions=count,
             daily_count_date=today,
-            reservation_token=_TOKEN,
+            reservation_token=token,
         ),
     )
     return today
 
 
 @pytest.mark.parametrize(
-    ("spent", "remaining", "token", "expected"),
+    ("row", "spent", "expected"),
     [
         # Applied, real spend: the only signal a forfeited day ever produces, since
         # ``_gate_daily_limit`` writes the same ``last_event`` for a legitimate park.
-        (2, 15, _TOKEN, ("warming_reservation_reconciled", 2)),
+        ((_CAP, _TOKEN), 2, ("warming_reservation_reconciled", None, 2)),
         # Applied, nothing spent (cancelled while queued on the semaphore):
         # deliberately silent, or every deploy logs one WARNING per account.
-        (0, 15, _TOKEN, (None, 0)),
-        # Our booking is still on the row but today's count moved under it, so nothing
-        # will release it before the next UTC midnight: the operator's case.
-        (2, 13, _TOKEN, ("warming_reservation_stranded", 15)),
-        # Superseded: the token is gone or belongs to a newer booking, so this
-        # reservation is already settled. Silent on purpose — reported, it fired on
-        # roughly a quarter of stops and taught the operator to ignore the code.
-        (2, 15, "booking-2", (None, 15)),
+        ((_CAP, _TOKEN), 0, (None, None, 0)),
+        # Our own applying write cleared the token and the cancel swallowed its result,
+        # so the retry finds NULL. Nothing is owed: silent.
+        ((2, None), 2, (None, None, 2)),
+        # A newer booking replaced ours, and read its baseline off a row that still
+        # carried our booking — our unspent remainder is inside its count now. The
+        # reachable route is a phase advance raising the cap: the daily gate parks a
+        # generation that finds a saturated count under the same cap, but admits it
+        # under a higher one, so it books instead of parking.
+        ((_HIGHER_CAP, "booking-2"), 2, ("warming_reservation_stranded", "absorbed", _HIGHER_CAP)),
+        # Our booking, our date, and a count that has GROWN past it: the reservation is
+        # still being counted with nobody to release it. No code path is known to
+        # produce this — a newer generation either parks (writing the count we booked,
+        # which the guard matches) or books (taking the token, i.e. ``absorbed``) — so
+        # the fixture is deliberately synthetic and the branch stays fail-loud rather
+        # than being assumed away.
+        ((_HIGHER_CAP, _TOKEN), 2, ("warming_reservation_stranded", "stranded", _HIGHER_CAP)),
     ],
 )
 @pytest.mark.asyncio
 async def test_the_reconcile_reports_each_of_its_outcomes(
     monkeypatch: pytest.MonkeyPatch,
+    row: tuple[int, str | None],
     spent: int,
-    remaining: int,
-    token: str,
-    expected: tuple[str | None, int],
+    expected: tuple[str | None, str | None, int],
 ) -> None:
-    """#208's two log codes, and the two deliberate silences."""
-    event, daily_actions = expected
+    """Every refusal that costs the day is reported, and only those."""
+    count, row_token = row
+    event, reason, daily_actions = expected
     logged: list[tuple[str, str, object]] = []
 
     async def capture(level: str, code: str, **kwargs: object) -> None:
         logged.append((level, code, kwargs["extra"]))
 
     monkeypatch.setattr(_reservation, "log_event", capture)
-    today = await _seed_booked_row(15)
+    today = await _seed_row(count, row_token)
 
-    await _reservation._reconcile_reservation(
-        "acc-1", _Reservation(0, today, remaining, token), spent
-    )
+    await _reservation._reconcile_reservation("acc-1", _Reservation(0, today, _CAP, _TOKEN), spent)
 
-    assert logged == (
-        [("WARNING", event, {"spent": spent, "daily_actions": spent})] if event else []
-    )
+    extra: dict[str, object] = {"spent": spent, "daily_actions": spent}
+    if reason is not None:
+        extra |= {"unreleased": _CAP - spent, "reason": reason}
+    assert logged == ([("WARNING", event, extra)] if event else [])
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_actions == daily_actions
@@ -254,8 +279,8 @@ async def test_a_repeated_hand_back_neither_lowers_the_count_nor_cries_stranded(
         logged.append(code)
 
     monkeypatch.setattr(_reservation, "log_event", capture)
-    today = await _seed_booked_row(15)
-    booking = _Reservation(0, today, 15, _TOKEN)
+    today = await _seed_row(_CAP, _TOKEN)
+    booking = _Reservation(0, today, _CAP, _TOKEN)
 
     await _reservation._reconcile_reservation("acc-1", booking, 2)
     await _reservation._reconcile_reservation("acc-1", booking, 2)
@@ -264,17 +289,90 @@ async def test_a_repeated_hand_back_neither_lowers_the_count_nor_cries_stranded(
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_actions == 2
+    # Applying retired the token, so a hand-back still naming it cannot match even when
+    # its numbers line up with the row exactly — that is the DB-level exactly-once, on
+    # top of the count no longer matching what this booking reserved.
+    settled = await hand_back_warming_reservation(
+        "acc-1", token=_TOKEN, booked=2, reconciled=1, daily_date=today
+    )
+    assert settled == "settled"
 
 
 @pytest.mark.asyncio
-async def test_a_hand_back_from_yesterday_leaves_todays_count_alone() -> None:
-    """A cycle that booked before midnight must not rewrite the fresh day's counter."""
-    today = await _seed_booked_row(4)
+async def test_a_hand_back_whose_row_rolled_past_midnight_is_silent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A booking from yesterday must not rewrite — or complain about — a fresh day.
+
+    The row's date rolls forward under our token, because the write that rolls it (a
+    park, a gate) does not touch the token. Today's counter starts at zero, so there is
+    no budget left to hand back and nothing has been lost: the old predicate called that
+    a stranded reservation and warned about a day that had just begun.
+    """
+    logged: list[str] = []
+
+    async def capture(_level: str, code: str, **_kwargs: object) -> None:
+        logged.append(code)
+
+    monkeypatch.setattr(_reservation, "log_event", capture)
+    today = await _seed_row(0, _TOKEN)
     yesterday = (datetime.now(UTC).date() - timedelta(days=1)).isoformat()
     assert yesterday != today
 
-    await _reservation._reconcile_reservation("acc-1", _Reservation(0, yesterday, 4, _TOKEN), 1)
+    await _reservation._reconcile_reservation("acc-1", _Reservation(0, yesterday, _CAP, _TOKEN), 2)
 
+    assert logged == []
     record = await fetch_warming_state("acc-1")
     assert record is not None
+    assert record.daily_actions == 0
+    assert record.daily_count_date == today
+
+
+@pytest.mark.asyncio
+async def test_a_cancel_after_the_finalize_write_reports_no_loss(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The transition already reconciled the count, so the hand-back owes nothing (#10).
+
+    ``_finalize_after_cycle`` writes ``daily_count + actions_done`` and leaves the token
+    alone, so a cancel landing after it sends the exit handler's hand-back at a row that
+    is already correct. Our token is on it, which the old predicate read as "still
+    booked" — it warned that the day was forfeited while quoting the very count that
+    proves it was not.
+    """
+    _no_quiet_days(monkeypatch)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    logged: list[tuple[str, object]] = []
+
+    async def capture(_level: str, code: str, **kwargs: object) -> None:
+        logged.append((code, kwargs.get("extra")))
+
+    monkeypatch.setattr(_reservation, "log_event", capture)
+    real_finalize = _loop._finalize_after_cycle
+
+    async def finalize_then_cancel(  # noqa: PLR0913 - mirrors the real signature exactly
+        account_id: str,
+        result: WarmingCycleResult,
+        age_hours: float,
+        reservation: _Reservation,
+        schedule: tuple[int, datetime, WarmingState],
+        *,
+        run_id: str | None,
+    ) -> WarmingCycleResult:
+        # The transition lands, then the cancel arrives — a deploy or a stop whose
+        # timing puts it between the finalize write and the loop's next await.
+        await real_finalize(account_id, result, age_hours, reservation, schedule, run_id=run_id)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(_loop, "_finalize_after_cycle", finalize_then_cancel)
+    await _seed_warming_account()
+
+    with pytest.raises(asyncio.CancelledError):
+        await warming.run_loop_iteration("acc-1")
+
+    assert [code for code, _extra in logged] == []
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    # set_online + join + read + the story glance, written by the finalize itself.
     assert record.daily_actions == 4

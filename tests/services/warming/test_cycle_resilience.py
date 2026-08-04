@@ -437,12 +437,22 @@ async def test_the_handler_leaves_a_live_generations_own_reservation_alone(
     released a live reservation of the same size: ``run-2`` would then spend a full
     budget against a row that reserved nothing for it. Only the per-booking token
     tells the two apart.
+
+    Refusing is the safe direction but not a free one — ``run-2`` booked from a baseline
+    that still held our unspent remainder, so the rest of the day is gone. That is a
+    real forfeit and it has to be said out loud, or the fleet loses days in silence.
     """
     _no_quiet_days(monkeypatch)
     crash = _CrashAfter(2)
     monkeypatch.setattr(_seams, "execute", crash.execute)
     real_fetch = _reservation.fetch_warming_state
     rebooked = settings.warming.phase_daily_cap["intro"]
+    logged: list[tuple[str, object]] = []
+
+    async def capture(_level: str, code: str, **kwargs: object) -> None:
+        logged.append((code, kwargs.get("extra")))
+
+    monkeypatch.setattr(_reservation, "log_event", capture)
 
     async def rebook_under_a_new_generation(account_id: str) -> WarmingStateRecord | None:
         # A restart's cancel-and-replace minted ``run-2`` behind the dying cycle, and
@@ -468,6 +478,13 @@ async def test_the_handler_leaves_a_live_generations_own_reservation_alone(
     assert record.run_id == "run-2"
     # ``run-2``'s reservation, not the dead cycle's two spent actions.
     assert record.daily_actions == rebooked
+    # The 13 actions this cycle booked and never spent are inside ``run-2``'s count now.
+    assert logged == [
+        (
+            "warming_reservation_stranded",
+            {"spent": 2, "daily_actions": 2, "unreleased": rebooked - 2, "reason": "absorbed"},
+        ),
+    ]
 
 
 @pytest.mark.asyncio
