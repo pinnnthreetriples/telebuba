@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Always-loaded project anchor with identity, hard rules, commands, and navigation.
-last_updated: 2026-07-26
+last_updated: 2026-08-04
 ---
 
 # Telebuba
@@ -20,6 +20,7 @@ Telegram operations dashboard for accounts, proxies, warming, neurocomment, prof
 - Dev: `uv run uvicorn main:app --reload`; frontend: `cd frontend && npm run dev`
 - Backend: `uv run pytest`
 - Quality: `uv run pre-commit run --all-files`
+- Pre-push gates, which no `pre-commit run --all-files` or `--files` invokes: `uv run pre-commit run --hook-stage pre-push aislop --all-files`, same for `arch-guard`. Required CI enforces both (`aislop` job, `test` job), so a green `--all-files` proves nothing about them.
 - Frontend: `cd frontend && npm run gates && npm run build`
 - Memory: `npx mex-agent check --quiet`
 
