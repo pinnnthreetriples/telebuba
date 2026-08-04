@@ -13,6 +13,7 @@ post-commit path.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -23,7 +24,13 @@ from core.device_fingerprint import get_or_create_device_fingerprint
 from schemas.accounts import AccountCreate, AccountSessionFileImport
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
 from schemas.telegram_session import TelegramSessionCheckResult
-from services.accounts import add_account, import_account_session, import_account_tdata
+from services.accounts import (
+    SessionAlreadyExistsError,
+    add_account,
+    import_account_session,
+    import_account_tdata,
+    start_phone_login,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -137,6 +144,84 @@ async def test_the_rollback_leaves_every_other_account_alone(
 
 
 @pytest.mark.asyncio
+async def test_a_concurrent_phone_login_row_is_not_deleted_by_a_rollback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rollback must not delete a row some OTHER writer created.
+
+    ``start_phone_login`` also inserts account rows, and it did not take
+    ``import_lock`` — so a phone whose digits equal an uploaded session's stem could
+    land inside a failed import's window, and the import's rollback then deleted the
+    operator's account. The lock is what makes "a row here is one this import
+    created" true, so the login path takes it too.
+
+    The import here fails BEFORE committing a row of its own, so the only row that
+    can exist when the rollback looks is the login's. Under the lock the login cannot
+    get past `import_lock` while the import holds it, so the rollback sees nothing and
+    the login's row lands afterwards, intact. Without the lock the login completes
+    inside the window and the rollback deletes it.
+    """
+    session_name = "79001234567"
+    logins: list[asyncio.Task[object]] = []
+
+    async def _let_a_login_in_then_fail(_create: object) -> None:
+        # A pre-commit refusal: this import never gets a row of its own.
+        logins.append(asyncio.create_task(start_phone_login(f"+{session_name}")))
+        # Long enough for an UNLOCKED login to finish its insert. A locked one cannot
+        # progress past the lock no matter how long this waits, so the passing
+        # direction does not depend on the duration.
+        await asyncio.sleep(0.25)
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("services.accounts.sessions.add_account", _let_a_login_in_then_fail)
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(
+            AccountSessionFileImport(
+                filename=f"{session_name}.session",
+                content=_CREDENTIAL,
+            ),
+        )
+
+    await asyncio.gather(*logins)
+    assert await fetch_account(session_name) is not None
+
+
+@pytest.mark.asyncio
+async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``file_kept`` leaves no account, so the refusal must blame the FILE.
+
+    The single message told the operator to "delete the account first" when the
+    rollback had already removed the row — naming something absent from the UI, with
+    no remedy. The residual is the file, so the message names the file.
+    """
+    _break_after_commit(monkeypatch)
+
+    def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
+        raise PermissionError(32, "file in use")
+
+    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+    data = AccountSessionFileImport(filename="live.session", content=_CREDENTIAL)
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(data)
+
+    # Row gone, file stranded — the state the old message described wrongly.
+    assert await fetch_account("live") is None
+    assert (settings.telegram.session_dir / "live.session").exists()
+
+    monkeypatch.undo()
+    _break_after_commit(monkeypatch)  # keep the import failing; only the unlink is fixed
+    with pytest.raises(SessionAlreadyExistsError) as caught:
+        await import_account_session(data)
+    message = str(caught.value)
+    assert "live.session" in message
+    assert "Remove that file" in message
+    assert "already exists" not in message
+
+
+@pytest.mark.asyncio
 async def test_the_tdata_rollback_also_removes_a_post_commit_row(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -210,6 +295,56 @@ async def test_an_already_absent_file_is_not_reported_as_a_failed_rollback(
     assert "account_session_import_rollback_failed" not in events
     assert "account_session_import_rolled_back" in events
     assert await fetch_account("live") is None
+
+
+@pytest.mark.asyncio
+async def test_a_failed_tdata_unlink_still_reports_the_error_class(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """``error_type`` distinguishes a live handle from a full disk.
+
+    ``origin/main`` logged it and the first rework dropped it, so the operator could
+    no longer tell ``PermissionError`` from ``OSError`` on ``ENOSPC`` — two different
+    remedies behind one message. A bounded class name, never ``str(exc)``: this rides
+    an ``extra`` payload that ``GET /logs`` serves back, and a ``PermissionError``'s
+    text carries the absolute session path.
+    """
+    events: list[dict[str, object]] = []
+
+    async def _capture(
+        _level: str,
+        event: str,
+        account_id: str | None = None,  # noqa: ARG001 - mirrors log_event
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        events.append({"event": event, **(extra or {})})
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "111.session").write_bytes(b"sess-111")
+
+    async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
+        return TdataConvertResult(
+            status="ok",
+            accounts=[TdataAccountSummary(user_id=111, session_path=str(staging / "111.session"))],
+        )
+
+    def _unlink(_self: Path, *, missing_ok: bool = False) -> None:  # noqa: ARG001 - mirrors Path.unlink
+        raise PermissionError(32, "file in use")
+
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts._tdata.log_event", _capture)
+    _break_after_commit(monkeypatch)
+    monkeypatch.setattr("pathlib.Path.unlink", _unlink)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_tdata(TdataConvertRequest(filename="tdata.zip", content=b"x"))
+
+    failures = [e for e in events if e["event"] == "tdata_rollback_unlink_failed"]
+    assert failures, events
+    assert failures[0]["error_type"] == "PermissionError"
+    assert failures[0]["kept"] == "file_kept"
 
 
 @pytest.mark.asyncio

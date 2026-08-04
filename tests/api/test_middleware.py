@@ -71,6 +71,17 @@ class _StreamedUpload:
         self.finished = True
 
 
+def _multipart_of_exactly(total: int) -> bytes:
+    """One multipart body whose WHOLE length is ``total`` — what the counter tallies."""
+    head = (
+        f"--{_BOUNDARY}\r\n"
+        'Content-Disposition: form-data; name="file"; filename="a.session"\r\n'
+        "Content-Type: application/octet-stream\r\n\r\n"
+    ).encode()
+    tail = f"\r\n--{_BOUNDARY}--\r\n".encode()
+    return head + b"p" * (total - len(head) - len(tail)) + tail
+
+
 def _client(app: FastAPI) -> httpx.AsyncClient:
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
     return httpx.AsyncClient(transport=transport, base_url="http://test")
@@ -235,6 +246,36 @@ async def test_a_streamed_body_under_the_cap_still_reaches_the_route(app: FastAP
     assert resp.json()["account_id"] == "a"
     assert body.finished
     assert (settings.telegram.session_dir / "a.session").read_bytes() == _CHUNK
+
+
+@pytest.mark.parametrize(("body_bytes", "status"), [(_CAP, 401), (_CAP + 1, 413)])
+@pytest.mark.asyncio
+async def test_the_limit_itself_is_allowed_and_one_byte_over_is_not(
+    monkeypatch: pytest.MonkeyPatch,
+    body_bytes: int,
+    status: int,
+) -> None:
+    """``max_bytes`` is inclusive: exactly the limit passes, one more does not.
+
+    Nothing pinned this, so `>` and `>=` in ``_BodyCounter.receive`` were
+    indistinguishable — the whole of tests/api passed either way. Swapping the
+    comparison would start refusing a body of exactly the configured size, which is
+    the one value an operator sizing a limit will actually send. The 401 is the
+    budget being GRANTED and the forged cookie then failing auth on its merits;
+    a 413 there would mean the counter had refused the limit itself.
+    """
+    monkeypatch.setattr(settings.api, "max_request_bytes", _CAP)
+    monkeypatch.setattr(settings.api, "max_anonymous_request_bytes", _CAP)
+    body = _multipart_of_exactly(body_bytes)
+    assert len(body) == body_bytes
+
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={"Content-Type": _CONTENT_TYPE, "Cookie": "tb_session=forged"},
+        )
+    assert resp.status_code == status
 
 
 @pytest.mark.asyncio

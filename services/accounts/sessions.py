@@ -64,10 +64,22 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
         # Refuse to overwrite credentials. Check by account_id (DB) AND by file
         # presence on disk — either being present means there is already an
         # account whose session we would clobber.
-        if await fetch_account(session_name) is not None or session_path.exists():
+        #
+        # Two blockers, two messages, because the remedies are different and the
+        # single message named the wrong one. A rollback that removed the row but
+        # could not unlink the file (``file_kept``) left NO account in the UI, and
+        # the operator was still told to "delete the account first" — pointing at
+        # something that does not exist, with no way forward.
+        if await fetch_account(session_name) is not None:
             msg = (
                 f"An account with session {session_name!r} already exists. "
                 "Delete it first if you want to replace the credentials."
+            )
+            raise SessionAlreadyExistsError(msg)
+        if session_path.exists():
+            msg = (
+                f"A session file named {session_path.name!r} is already on disk with no "
+                "account using it. Remove that file from the sessions directory to import."
             )
             raise SessionAlreadyExistsError(msg)
         # Validate the id BEFORE the credential lands on disk. ``_session_filename``
@@ -103,17 +115,19 @@ async def _discard_orphaned_session(path: Path, session_name: str, cause: Except
     check above turns a retryable failure into a permanent one, with no account
     row for the operator to delete from the UI.
     """
-    outcome = await discard_imported_session(session_name, path)
-    if outcome != "clean":
-        # Retry is still blocked, by whichever half survived. Named, so the
-        # operator knows which one to clear rather than guessing.
+    result = await discard_imported_session(session_name, path)
+    if result.outcome != "clean":
+        # Retry is still blocked, by whichever half survived. Named, so the operator
+        # knows which one to clear. ``error_type`` is the ROLLBACK's own failure —
+        # the actionable one — and ``cause_type`` why the import failed at all.
         await log_event(
             "ERROR",
             "account_session_import_rollback_failed",
             extra={
                 "session_name": session_name,
-                "kept": outcome,
-                "error_type": type(cause).__name__,
+                "kept": result.outcome,
+                "error_type": result.error_type,
+                "cause_type": type(cause).__name__,
             },
         )
         return

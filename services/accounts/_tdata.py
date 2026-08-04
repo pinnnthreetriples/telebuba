@@ -79,13 +79,20 @@ async def _rollback_tdata_import(
     must not be turned into a silent permanent block.
     """
     for plan in placed:
-        outcome = await discard_imported_session(plan.account_id, plan.final_path)
-        if outcome != "clean":
+        result = await discard_imported_session(plan.account_id, plan.final_path)
+        if result.outcome != "clean":
             await log_event(
                 "ERROR",
                 "tdata_rollback_unlink_failed",
                 account_id=plan.account_id,
-                extra={"file": plan.final_path.name, "kept": outcome},
+                extra={
+                    "file": plan.final_path.name,
+                    "kept": result.outcome,
+                    # ``error_type`` as ``origin/main`` logged it: PermissionError (a
+                    # live handle) needs a different remedy from a full disk, and the
+                    # first rework dropped that distinction.
+                    "error_type": result.error_type,
+                },
             )
     await log_event(
         "WARNING",

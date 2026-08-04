@@ -16,12 +16,14 @@ One ceiling is not enough either, and this is what the first attempt got wrong.
 The upload routes genuinely need ~200 MB for a ``tdata.zip``, so a single limit is
 necessarily the largest budget any route needs — and 3.1 MB is 1.5% of it, so that
 very probe still drained in full at the shipped default. The budget is therefore
-split on whether the request carries a session cookie at all: no cookie, no
-upload budget. Header inspection only — no DB, no signature check — because a
-forged cookie merely buys back the 210 MB an attacker already has today, while a
-caller who sends none is held to ``max_anonymous_request_bytes``. Route-based
-scoping cannot help here: the defective route IS the upload route, and FastAPI
-reads the body before ``solve_dependencies`` runs.
+split on whether the request carries the session cookie NAME: no cookie name, no
+upload budget. Name only, and worth being exact about — ``tb_session=`` with an
+empty value is a 12-byte header that buys the full budget. There is no DB lookup
+and no signature check, because a forged cookie merely buys back the 210 MB an
+attacker already has today, while a caller who sends none is held to
+``max_anonymous_request_bytes``. Route-based scoping cannot help here: the
+defective route IS the upload route, and FastAPI reads the body before
+``solve_dependencies`` runs.
 
 Written against the bare ASGI signature: ``api/`` may import ``fastapi`` but not
 ``starlette`` (``tests/test_architecture.py::test_api_imports_only_allowlisted``),
