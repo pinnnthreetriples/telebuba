@@ -89,6 +89,7 @@ import type {
   GetCampaignDiscoveryErrors,
   GetCampaignDiscoveryResponses,
   GetHealthData,
+  GetHealthErrors,
   GetHealthResponses,
   GetMeData,
   GetMeErrors,
@@ -344,8 +345,8 @@ export const getMe = <ThrowOnError extends boolean = false>(
  */
 export const getHealth = <ThrowOnError extends boolean = false>(
   options?: Options<GetHealthData, ThrowOnError>,
-): RequestResult<GetHealthResponses, unknown, ThrowOnError> =>
-  (options?.client ?? client).get<GetHealthResponses, unknown, ThrowOnError>({
+): RequestResult<GetHealthResponses, GetHealthErrors, ThrowOnError> =>
+  (options?.client ?? client).get<GetHealthResponses, GetHealthErrors, ThrowOnError>({
     url: '/api/v1/health',
     ...options,
   });
