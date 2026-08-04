@@ -8,6 +8,8 @@ import type { AccountRead } from '@/shared/api';
 
 import { AccountsTable } from './AccountsTable';
 
+const NONE_BUSY = new Set<string>();
+
 const ACCOUNTS: AccountRead[] = [
   {
     account_id: 'acc-1',
@@ -30,7 +32,7 @@ const ACCOUNTS: AccountRead[] = [
 
 test('renders a row per account with handle and country flag', () => {
   const { container } = render(
-    <AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />,
+    <AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('acc-1')).toBeInTheDocument();
   expect(screen.getByText('@mainuser')).toBeInTheDocument();
@@ -52,7 +54,7 @@ test('shows the telegram name on top, username below, and the captured photo', (
     },
   ];
   const { container } = render(
-    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />,
+    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
   );
   expect(screen.getByText('Vika M')).toBeInTheDocument();
   expect(screen.getByText('@vikamn')).toBeInTheDocument();
@@ -73,7 +75,7 @@ test('falls back to name initials when no photo is captured, and on a broken ima
     },
   ];
   const { container } = render(
-    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />,
+    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
   );
   // A failed image load swaps the <img> for the mono initials avatar.
   fireEvent.error(container.querySelector('img')!);
@@ -82,7 +84,9 @@ test('falls back to name initials when no photo is captured, and on a broken ima
 });
 
 test('renders the real trust score and device, dashes when absent', () => {
-  render(<AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />);
+  render(
+    <AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
+  );
   // acc-1 carries a backend trust score + device fingerprint
   expect(screen.getByText('82')).toBeInTheDocument();
   expect(screen.getByText('iPhone 13 · iOS 17.2')).toBeInTheDocument();
@@ -93,11 +97,40 @@ test('renders the real trust score and device, dashes when absent', () => {
 test('fires the row actions for the clicked account', async () => {
   const onCheck = vi.fn();
   const onDelete = vi.fn();
-  render(<AccountsTable data={ACCOUNTS} onCheck={onCheck} onDelete={onDelete} busyId={null} />);
+  render(
+    <AccountsTable data={ACCOUNTS} onCheck={onCheck} onDelete={onDelete} busyIds={NONE_BUSY} />,
+  );
   await userEvent.click(screen.getAllByTitle('Проверить')[0]!);
   await userEvent.click(screen.getAllByTitle('Удалить')[0]!);
   expect(onCheck).toHaveBeenCalledWith('acc-1');
   expect(onDelete).toHaveBeenCalledWith('acc-1');
+});
+
+test('busy state is per row, and more than one row can be busy', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={new Set(['acc-2'])}
+    />,
+  );
+  // Only the row in the set is disabled — a single busy id could not say "row 2
+  // is busy, row 1 is not" once a second row had been acted on.
+  expect(screen.getAllByTitle('Проверить')[0]).toBeEnabled();
+  expect(screen.getAllByTitle('Проверить')[1]).toBeDisabled();
+
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={new Set(['acc-1', 'acc-2'])}
+    />,
+  );
+  for (const button of screen.getAllByTitle('Проверить').slice(2)) {
+    expect(button).toBeDisabled();
+  }
 });
 
 test('a row opens from the keyboard', async () => {
@@ -109,7 +142,7 @@ test('a row opens from the keyboard', async () => {
       onDelete={vi.fn()}
       onOpen={onOpen}
       onProfile={vi.fn()}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   // The row is the ONLY entry point to the account-edit view (the pencil opens
@@ -140,7 +173,7 @@ test('opens the clicked row and does not bubble action clicks to the row', async
       onCheck={vi.fn()}
       onDelete={vi.fn()}
       onOpen={onOpen}
-      busyId={null}
+      busyIds={NONE_BUSY}
     />,
   );
   await userEvent.click(screen.getByText('@mainuser'));

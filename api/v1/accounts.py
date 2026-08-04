@@ -13,7 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile
 from fastapi import status as http_status
 
-from api.errors import CONFLICT_RESPONSE, ERROR_RESPONSES
+from api.errors import SERVICE_ERRORS, error_responses
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
@@ -35,11 +35,11 @@ from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from services import accounts, spam_status
 
-# ``responses`` declares the error envelope on every route of this router AND on
-# the four sub-routers mounted at the bottom (``include_router`` merges the
-# including router's responses into each child route), which is the whole
-# account-editing surface. See api.errors.ERROR_RESPONSES for the status set.
-router = APIRouter(tags=["accounts"], responses=ERROR_RESPONSES)
+# No router-wide ``responses``: the routes here do NOT share one error surface (a
+# blanket declaration advertised 404/503 on ``/accounts/stats``, which answers
+# neither). 401/422/500 arrive from the guarded mount in ``api.v1.__init__``; each
+# route below adds only what its own code can raise.
+router = APIRouter(tags=["accounts"])
 
 # Path params default to an unconstrained ``str``, so a percent-encoded separator
 # (``..%5C..%5Cevil``) survives routing and reaches the service layer — on the
@@ -49,7 +49,12 @@ router = APIRouter(tags=["accounts"], responses=ERROR_RESPONSES)
 AccountIdPath = Annotated[str, Path(min_length=1, pattern=_ACCOUNT_ID_PATTERN)]
 
 
-@router.get("/accounts", response_model=Page[AccountRead], operation_id="listAccounts")
+@router.get(
+    "/accounts",
+    response_model=Page[AccountRead],
+    operation_id="listAccounts",
+    responses=error_responses(400),
+)
 async def list_accounts(
     query: str = "",
     status: str = "all",
@@ -76,7 +81,12 @@ async def account_stats() -> AccountStats:
     return await accounts.account_stats()
 
 
-@router.post("/accounts/check", response_model=AccountRead, operation_id="checkAccount")
+@router.post(
+    "/accounts/check",
+    response_model=AccountRead,
+    operation_id="checkAccount",
+    responses=SERVICE_ERRORS,
+)
 async def check_account(body: AccountCheckRequest) -> AccountRead:
     # 404 on a missing row like every sibling route — the service's own guard for
     # that case is a ``ValueError``, which the mapper below would bill as a 400
@@ -91,6 +101,7 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
     "/accounts/{account_id}/spam-check",
     response_model=SpamStatusVerdict,
     operation_id="spamCheckAccount",
+    responses=SERVICE_ERRORS,
 )
 async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
@@ -108,7 +119,7 @@ async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     "/accounts/start-login",
     response_model=AccountRead,
     operation_id="startPhoneLogin",
-    responses=CONFLICT_RESPONSE,
+    responses=error_responses(400, 409),
 )
 async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     """Create a new account from a bare phone number, ready for request-code."""
@@ -124,6 +135,7 @@ async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     "/accounts/{account_id}/request-code",
     response_model=PhoneCodeRequestResult,
     operation_id="requestLoginCode",
+    responses=error_responses(400),
 )
 async def request_login_code(account_id: AccountIdPath) -> PhoneCodeRequestResult:
     """Send a Telegram login code to the account's phone (re-auth by code)."""
@@ -137,6 +149,7 @@ async def request_login_code(account_id: AccountIdPath) -> PhoneCodeRequestResul
     "/accounts/{account_id}/submit-code",
     response_model=AccountRead,
     operation_id="submitLoginCode",
+    responses=error_responses(400),
 )
 async def submit_login_code(account_id: AccountIdPath, body: SubmitCodeRequest) -> AccountRead:
     """Complete sign-in with the SMS code (+ optional 2FA password)."""
@@ -150,6 +163,7 @@ async def submit_login_code(account_id: AccountIdPath, body: SubmitCodeRequest) 
     "/accounts/{account_id}/logout",
     response_model=AccountRead,
     operation_id="logoutAccount",
+    responses=error_responses(400),
 )
 async def logout_account(account_id: AccountIdPath) -> AccountRead:
     """Log the account out server-side and mark it unauthorized."""
@@ -163,6 +177,7 @@ async def logout_account(account_id: AccountIdPath) -> AccountRead:
     "/accounts/{account_id}/reset-session",
     response_model=AccountRead,
     operation_id="resetAccountSession",
+    responses=error_responses(400),
 )
 async def reset_account_session(account_id: AccountIdPath) -> AccountRead:
     """Log out and wipe the local session token so the next login is clean."""
@@ -172,7 +187,12 @@ async def reset_account_session(account_id: AccountIdPath) -> AccountRead:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
-@router.post("/accounts/profile", response_model=AccountRead, operation_id="updateAccountProfile")
+@router.post(
+    "/accounts/profile",
+    response_model=AccountRead,
+    operation_id="updateAccountProfile",
+    responses=SERVICE_ERRORS,
+)
 async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRead:
     with service_errors_to_http():
         return await accounts.update_account_profile(body)
@@ -182,6 +202,7 @@ async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRe
     "/accounts/{account_id}",
     status_code=http_status.HTTP_204_NO_CONTENT,
     operation_id="deleteAccount",
+    responses=SERVICE_ERRORS,
 )
 async def delete_account(account_id: AccountIdPath) -> None:
     # 404 on a missing row instead of a 204 that deleted nothing (or, before the
@@ -194,6 +215,7 @@ async def delete_account(account_id: AccountIdPath) -> None:
     "/accounts/import-tdata",
     response_model=TdataImportResult,
     operation_id="importAccountTdata",
+    responses=SERVICE_ERRORS,
 )
 async def import_account_tdata(
     file: Annotated[UploadFile, File()],
@@ -226,7 +248,7 @@ async def import_account_tdata(
     "/accounts/import-session",
     response_model=AccountRead,
     operation_id="importAccountSession",
-    responses=CONFLICT_RESPONSE,
+    responses=SERVICE_ERRORS | error_responses(409),
 )
 async def import_account_session(
     file: Annotated[UploadFile, File()],

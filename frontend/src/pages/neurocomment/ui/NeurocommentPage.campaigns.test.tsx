@@ -181,6 +181,119 @@ test('creating a campaign with channels refreshes the board only after every lin
   });
 });
 
+// Two campaign rows, with every call to `pathname` (matched as a suffix per
+// campaign id) parked until the test releases it.
+function routeTwoCampaigns(park: (url: URL, method: string) => boolean): {
+  releases: ((response: Response) => void)[];
+  campaignGets: () => number;
+} {
+  const second = { ...CAMPAIGN, campaign_id: 'c2', name: 'Втора' };
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (park(url, request.method)) {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN, second] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  const campaignGets = () =>
+    vi.mocked(fetch).mock.calls.filter(([input]) => {
+      const request = input as Request;
+      return (
+        new URL(request.url).pathname === '/api/v1/neurocomment/campaigns' &&
+        request.method === 'GET'
+      );
+    }).length;
+  return { releases, campaignGets };
+}
+
+// The late-settling call must refresh the list too: one useMutation is ONE
+// callback slot, so whichever handler got taken over never ran.
+async function expectBothRefresh(
+  campaignGets: () => number,
+  second: () => void,
+  first: () => void,
+): Promise<void> {
+  const before = campaignGets();
+  second();
+  await waitFor(() => {
+    expect(campaignGets()).toBeGreaterThan(before);
+  });
+  const afterSecond = campaignGets();
+  first();
+  await waitFor(() => {
+    expect(campaignGets()).toBeGreaterThan(afterSecond);
+  });
+}
+
+test('deleting a second campaign does not swallow the first one s list refresh', async () => {
+  // deleteCampaign.mutate(vars, {onSettled}) is per row on ONE shared hook and the
+  // modal closes on the same tick, with no isPending guard on the row button — so
+  // deleting a second campaign before the first DELETE landed took the slot and
+  // the first campaign's refresh was dropped, leaving it on screen.
+  const { releases, campaignGets } = routeTwoCampaigns(
+    (url, method) =>
+      url.pathname.startsWith('/api/v1/neurocomment/campaigns/c') && method === 'DELETE',
+  );
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByTitle('Удалить кампанию')).toHaveLength(2);
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByTitle('Удалить кампанию')[index]!);
+    await userEvent.click(await screen.findByText('Удалить'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+
+  await expectBothRefresh(
+    campaignGets,
+    () => releases[1]!(new Response(null, { status: 204 })),
+    () => releases[0]!(new Response(null, { status: 204 })),
+  );
+});
+
+test('saving a second campaign prompt does not swallow the first one s refresh', async () => {
+  // Same per-row shared hook, and the prompt modal also closes on the same tick,
+  // so a second campaign's save is immediately reachable while the first PUT is
+  // still in flight.
+  const { releases, campaignGets } = routeTwoCampaigns(
+    (url, method) => url.pathname.endsWith('/prompt') && method === 'PUT',
+  );
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByTitle('Редактировать промт')).toHaveLength(2);
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByTitle('Редактировать промт')[index]!);
+    await userEvent.click(await screen.findByText('Сохранить'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+
+  await expectBothRefresh(
+    campaignGets,
+    () => releases[1]!(jsonResponse({})),
+    () => releases[0]!(jsonResponse({})),
+  );
+});
+
 test('the campaign gear toggles the slide-out actions', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);

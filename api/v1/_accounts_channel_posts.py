@@ -11,6 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, Query, UploadFile
 
+from api.errors import SERVICE_ERRORS
 from api.v1._accounts_channels import _decode_channel_id, _reject_oversize
 from api.v1._errors import service_errors_to_http
 from core.config import settings
@@ -19,8 +20,10 @@ from schemas.channels import ChannelPostEditRequest, ChannelPostView
 from schemas.telegram_actions import ActionResult
 from services import accounts
 
-# No tags: mounted onto the accounts router (already tagged "accounts").
-channel_posts_router = APIRouter()
+# No tags: mounted onto the accounts router (already tagged "accounts"). Every
+# route here runs inside ``service_errors_to_http``, so the fragment is declared
+# once for the router.
+channel_posts_router = APIRouter(responses=SERVICE_ERRORS)
 
 
 @channel_posts_router.post(

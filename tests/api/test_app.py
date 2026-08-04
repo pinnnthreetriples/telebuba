@@ -106,13 +106,17 @@ async def test_unexpected_error_returns_generic_envelope(
 # the CI drift gate could not see a change to the real shape.
 # --------------------------------------------------------------------------- #
 _DECLARED_ERROR_STATUSES = ("400", "401", "404", "422", "500", "503")
+# ``GET /accounts`` declares fewer: it answers 400 on a bad cursor but never 404 or
+# 503, which the router used to advertise for it. Exhaustiveness per operation is
+# ``tests/test_api_error_contract.py``'s job; this file keeps the envelope checks.
+_ACCOUNTS_LIST_ERROR_STATUSES = ("400", "401", "422", "500")
 
 
 def test_error_envelope_is_declared_in_the_openapi_document(app: FastAPI) -> None:
     schema = app.openapi()
     assert "ErrorEnvelope" in schema["components"]["schemas"]
     responses = schema["paths"]["/api/v1/accounts"]["get"]["responses"]
-    for status in _DECLARED_ERROR_STATUSES:
+    for status in _ACCOUNTS_LIST_ERROR_STATUSES:
         ref = responses[status]["content"]["application/json"]["schema"]["$ref"]
         assert ref.endswith("/ErrorEnvelope"), f"{status} does not document the envelope"
 
@@ -128,9 +132,12 @@ def test_error_envelope_is_declared_in_the_openapi_document(app: FastAPI) -> Non
 def test_the_envelope_reaches_the_mounted_sub_routers(app: FastAPI, path: str) -> None:
     """Media / channels / privacy are mounted onto the accounts router.
 
-    ``include_router`` merges the including router's ``responses`` into each child
-    route, so declaring them once covers the whole account-editing surface. If that
-    ever stops holding, the generated client silently loses its error types again.
+    ``accounts.router`` carries no router-wide ``responses``: these three routes get
+    401/422/500 from the guarded mount in ``api.v1.__init__`` and 400/404/503 from
+    ``SERVICE_ERRORS``, declared on their own sub-router or route. Two hops, so if
+    either stops reaching them the generated client silently loses its error types
+    again — which is what this checks. Whether each is declared on the *right*
+    statuses is ``tests/test_api_error_contract.py``'s job.
     """
     operation = next(iter(app.openapi()["paths"][path].values()))
     for status in _DECLARED_ERROR_STATUSES:
@@ -140,8 +147,16 @@ def test_the_envelope_reaches_the_mounted_sub_routers(app: FastAPI, path: str) -
     assert "HTTPValidationError" not in str(operation["responses"]["422"])
 
 
-def test_only_the_session_creating_routes_declare_a_conflict(app: FastAPI) -> None:
-    """409 is real on exactly two routes, so it is not declared router-wide."""
+def test_conflict_is_declared_only_on_the_accounts_routes_that_can_raise_it(
+    app: FastAPI,
+) -> None:
+    """409 is never declared router-wide — only per route, where a handler raises it.
+
+    Five operations declare it across the whole API (``assignProxy``,
+    ``importAccountSession``, ``startNeurocomment``, ``startPhoneLogin``,
+    ``startWarming``). On the accounts surface that is the two session-creating
+    routes below, and their siblings must not inherit it.
+    """
     paths = app.openapi()["paths"]
     assert "409" in paths["/api/v1/accounts/import-session"]["post"]["responses"]
     assert "409" in paths["/api/v1/accounts/start-login"]["post"]["responses"]

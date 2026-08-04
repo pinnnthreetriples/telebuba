@@ -398,14 +398,14 @@ export function NeurocommentPage() {
   const confirmRemoveChannel = () => {
     if (!channelToRemove || campaignId === null) return;
     const channel = channelToRemove;
+    // The modal closes on this tick, so a second pill's removal is one click away
+    // while this one is still in flight — and it would take this call's ONE
+    // callback slot, dropping this channel's mark and refresh.
     setChannelToRemove(null);
-    removeChannel.mutate(
-      { path: { campaign_id: campaignId }, body: { channel } },
-      {
-        onSettled: (_data, error) => {
-          channelFeedback.mark(channel, !error);
-          invalidateNeuro();
-        },
+    afterSettle(
+      removeChannel.mutateAsync({ path: { campaign_id: campaignId }, body: { channel } }),
+      (ok) => {
+        channelFeedback.mark(channel, ok);
       },
     );
   };
@@ -779,9 +779,14 @@ export function NeurocommentPage() {
             setPromptFor(null);
           }}
           onSave={(prompt) => {
-            updatePrompt.mutate(
-              { path: { campaign_id: promptFor.campaign_id }, body: { prompt } },
-              { onSettled: invalidateNeuro },
+            // Per campaign row, and the modal closes on this tick: saving a second
+            // campaign's prompt before this one lands took the hook's ONE callback
+            // slot and dropped this campaign's refresh.
+            afterSettle(
+              updatePrompt.mutateAsync({
+                path: { campaign_id: promptFor.campaign_id },
+                body: { prompt },
+              }),
             );
             setPromptFor(null);
           }}
@@ -803,9 +808,12 @@ export function NeurocommentPage() {
             setDeleteFor(null);
           }}
           onConfirm={() => {
-            deleteCampaign.mutate(
-              { path: { campaign_id: deleteFor.campaign_id } },
-              { onSettled: invalidateNeuro },
+            // Per campaign row with no isPending guard, and the modal closes on
+            // this tick: deleting a second campaign before this DELETE lands took
+            // the hook's ONE callback slot, so this campaign's list refresh was
+            // dropped and the deleted row stayed on screen.
+            afterSettle(
+              deleteCampaign.mutateAsync({ path: { campaign_id: deleteFor.campaign_id } }),
             );
             setDeleteFor(null);
             if (selected === deleteFor.campaign_id) setSelected(null);

@@ -16,7 +16,9 @@ interface WarmingBoardProps {
   warming: WarmingAccountState[];
   onStop: (accountId: string) => void;
   onPromote: (accountId: string) => void;
-  busyId: string | null;
+  // A set, not one id: stop and promote are per card, the bulk pool button fires
+  // one per account, and any two can be in flight at once.
+  busyIds: ReadonlySet<string>;
   feedback?: Record<string, FeedbackResult>;
   logLimit?: number;
   // Maps a configured channel handle → its friendly label, so the activity log
@@ -586,7 +588,7 @@ export function WarmingBoard({
   warming,
   onStop,
   onPromote,
-  busyId,
+  busyIds,
   feedback = {},
   logLimit = DEFAULT_CARD_LOG_LIMIT,
   channelLabels = {},
@@ -626,7 +628,7 @@ export function WarmingBoard({
             account={account}
             onStop={onStop}
             onPromote={onPromote}
-            busy={busyId === account.account_id}
+            busy={busyIds.has(account.account_id)}
             result={feedback[account.account_id]}
             logLimit={logLimit}
             channelLabels={channelLabels}

@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from api.errors import SERVICE_ERRORS
 from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload
 from core.config import settings
@@ -41,11 +42,18 @@ from schemas.telegram_actions import ActionResult
 from services import accounts
 
 # No tags here: this router is mounted onto the accounts ``router`` (which
-# already carries ``tags=["accounts"]``), so tagging here would duplicate it.
+# already carries ``tags=["accounts"]``), so tagging here would duplicate it. No
+# router-wide ``responses`` either: ``profile-snapshot`` reports a read failure in
+# its body instead of raising, so it answers none of the ``SERVICE_ERRORS``.
 media_router = APIRouter()
 
 
-@media_router.post("/accounts/photo", response_model=ActionResult, operation_id="setAccountPhoto")
+@media_router.post(
+    "/accounts/photo",
+    response_model=ActionResult,
+    operation_id="setAccountPhoto",
+    responses=SERVICE_ERRORS,
+)
 async def set_account_photo(
     account_id: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
@@ -73,6 +81,7 @@ async def set_account_photo(
     "/accounts/{account_id}/avatar/resync",
     response_model=AccountRead,
     operation_id="resyncAccountAvatar",
+    responses=SERVICE_ERRORS,
 )
 async def resync_account_avatar(account_id: str) -> AccountRead:
     """Re-pull the accounts-table avatar from Telegram; answers the updated row.
@@ -132,6 +141,7 @@ async def get_account_profile_snapshot(
     "/accounts/{account_id}/story",
     response_model=ActionResult,
     operation_id="postAccountStory",
+    responses=SERVICE_ERRORS,
 )
 async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     account_id: str,
@@ -194,6 +204,7 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     "/accounts/{account_id}/music",
     response_model=ActionResult,
     operation_id="addAccountMusic",
+    responses=SERVICE_ERRORS,
 )
 async def add_account_music(
     account_id: str,
@@ -222,6 +233,7 @@ async def add_account_music(
     "/accounts/{account_id}/story/remove",
     response_model=ActionResult,
     operation_id="removeAccountStory",
+    responses=SERVICE_ERRORS,
 )
 async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> ActionResult:
     with service_errors_to_http():
@@ -234,6 +246,7 @@ async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> Act
     "/accounts/{account_id}/story/pin",
     response_model=ActionResult,
     operation_id="setAccountStoryPinned",
+    responses=SERVICE_ERRORS,
 )
 async def set_account_story_pinned(account_id: str, body: StoryPinRequest) -> ActionResult:
     with service_errors_to_http():
@@ -246,6 +259,7 @@ async def set_account_story_pinned(account_id: str, body: StoryPinRequest) -> Ac
     "/accounts/{account_id}/music/remove",
     response_model=ActionResult,
     operation_id="removeAccountMusic",
+    responses=SERVICE_ERRORS,
 )
 async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> ActionResult:
     with service_errors_to_http():
@@ -262,6 +276,7 @@ async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> Act
     "/accounts/{account_id}/photo/remove",
     response_model=ActionResult,
     operation_id="removeAccountPhoto",
+    responses=SERVICE_ERRORS,
 )
 async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> ActionResult:
     with service_errors_to_http():
@@ -278,6 +293,7 @@ async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> Act
     "/accounts/{account_id}/photo/main",
     response_model=ActionResult,
     operation_id="setAccountPhotoMain",
+    responses=SERVICE_ERRORS,
 )
 async def set_account_photo_main(account_id: str, body: PhotoMainRequest) -> ActionResult:
     with service_errors_to_http():

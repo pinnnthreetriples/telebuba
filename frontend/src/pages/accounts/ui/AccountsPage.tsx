@@ -26,7 +26,11 @@ export function AccountsPage() {
 
   const [search, setSearch] = useState('');
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  // A Set, not one id: check and delete are per row and both can be in flight at
+  // once. With a single string the second click moved the spinner off the first
+  // row and re-enabled its buttons mid-request, and the first response to land
+  // cleared the OTHER row's spinner.
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -64,33 +68,38 @@ export function AccountsPage() {
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
 
+  const markBusy = (accountId: string, busy: boolean) => {
+    setBusyIds((ids) => {
+      const next = new Set(ids);
+      if (busy) next.add(accountId);
+      else next.delete(accountId);
+      return next;
+    });
+  };
+  // mutateAsync, not mutate+onSettled: one useMutation is ONE callback slot, so
+  // acting on a second row took the slot over and the first row's invalidate was
+  // dropped — its refreshed status never reached the table. A promise per call
+  // also captures its own accountId instead of the hook's latest variables.
+  // The global mutationCache still toasts the failure; .catch only keeps the
+  // rejection from escaping as unhandled.
+  const runOnRow = (accountId: string, call: Promise<unknown>) => {
+    markBusy(accountId, true);
+    void call
+      .finally(() => {
+        markBusy(accountId, false);
+        invalidate();
+      })
+      .catch(() => undefined);
+  };
   const onCheck = (accountId: string) => {
-    setBusyId(accountId);
-    check.mutate(
-      { body: { account_id: accountId } },
-      {
-        onSettled: () => {
-          setBusyId(null);
-          invalidate();
-        },
-      },
-    );
+    runOnRow(accountId, check.mutateAsync({ body: { account_id: accountId } }));
   };
   const onDelete = (accountId: string) => {
     setDeletingId(accountId);
   };
   const confirmDelete = () => {
     if (!deletingId) return;
-    setBusyId(deletingId);
-    remove.mutate(
-      { path: { account_id: deletingId } },
-      {
-        onSettled: () => {
-          setBusyId(null);
-          invalidate();
-        },
-      },
-    );
+    runOnRow(deletingId, remove.mutateAsync({ path: { account_id: deletingId } }));
   };
   const items = data?.items ?? [];
   // The design's five stat tiles (accStats): total / active / idle / needs-code /
@@ -210,7 +219,7 @@ export function AccountsPage() {
               onProfile={(account) => {
                 setProfilingRow(account);
               }}
-              busyId={busyId}
+              busyIds={busyIds}
             />
           )}
           {/* The pagination row lives outside the empty branch: deleting the

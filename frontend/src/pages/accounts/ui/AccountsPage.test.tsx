@@ -183,6 +183,202 @@ test('runs the check action on a row', async () => {
   });
 });
 
+// Two rows, and every /accounts/check parked until the test releases it.
+function routeTwoRowsWithParkedChecks(): ((response: Response) => void)[] {
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 2, active: 2, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse({ items: [account('acc-1'), account('acc-2')], next_cursor: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts/check') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  return releases;
+}
+
+test('checking a second row leaves the first row busy, and settling clears only its own', async () => {
+  // busyId was ONE string: the second click moved it to row 2, so row 1's spinner
+  // vanished and its buttons re-enabled while its check was still in flight — and
+  // the first response to land then cleared row 2's spinner as well.
+  const releases = routeTwoRowsWithParkedChecks();
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-2')).toBeInTheDocument();
+  });
+  const checks = () => screen.getAllByTitle('Проверить');
+
+  await userEvent.click(checks()[0]!);
+  await userEvent.click(checks()[1]!);
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+  expect(checks()[0]).toBeDisabled();
+  expect(checks()[1]).toBeDisabled();
+  // The delete button of an in-flight row is disabled too, so the row cannot be
+  // deleted from under its own check.
+  expect(screen.getAllByTitle('Удалить')[0]).toBeDisabled();
+
+  releases[0]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(checks()[0]).toBeEnabled();
+  });
+  expect(checks()[1]).toBeDisabled();
+});
+
+test("a second check does not swallow the first row's list refresh", async () => {
+  // check.mutate(vars, {onSettled}) put the handler in the hook's ONE observer
+  // slot; the second row's click took it over, so when row 1 settled last its
+  // invalidate() never ran and the table kept showing its pre-check status.
+  const releases = routeTwoRowsWithParkedChecks();
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-2')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getAllByTitle('Проверить')[0]!);
+  await userEvent.click(screen.getAllByTitle('Проверить')[1]!);
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+
+  // Row 2 settles first, then row 1 — the late one must still refresh the list.
+  releases[1]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(listGets()).toBeGreaterThan(1);
+  });
+  const afterSecond = listGets();
+  releases[0]!(jsonResponse({}));
+  await waitFor(() => {
+    expect(listGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
+test('deleting one row does not re-enable another row mid-check', async () => {
+  // check and delete shared the single busyId, so confirming a delete on row 2
+  // re-enabled row 1 while its check was in flight, and the delete's own settle
+  // then cleared row 1's spinner instead of row 2's.
+  const releases: ((response: Response) => void)[] = [];
+  let deleteRelease!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 2, active: 2, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse({ items: [account('acc-1'), account('acc-2')], next_cursor: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts/check') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    if (request.method === 'DELETE') {
+      return new Promise((resolve) => {
+        deleteRelease = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-2')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getAllByTitle('Проверить')[0]!);
+  await waitFor(() => {
+    expect(releases).toHaveLength(1);
+  });
+  // Confirm a delete on the OTHER row while row 1's check is still running.
+  await userEvent.click(screen.getAllByTitle('Удалить')[1]!);
+  // The only element whose TEXT is "Удалить" is the modal's confirm button (the
+  // row buttons carry it as a title on an icon).
+  await userEvent.click(screen.getByText('Удалить'));
+  await waitFor(() => {
+    expect(deleteRelease).toBeDefined();
+  });
+
+  expect(screen.getAllByTitle('Проверить')[0]).toBeDisabled();
+  expect(screen.getAllByTitle('Проверить')[1]).toBeDisabled();
+  // The delete finishing must not re-enable the row that is still checking.
+  deleteRelease(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(screen.getAllByTitle('Проверить')[1]).toBeEnabled();
+  });
+  expect(screen.getAllByTitle('Проверить')[0]).toBeDisabled();
+});
+
+test("a second delete does not swallow the first row's list refresh", async () => {
+  // remove.mutate(vars, {onSettled}) put the handler in the hook's ONE observer
+  // slot. The delete modal closes on the same tick, so a second row's delete is
+  // immediately reachable: it took the slot over and the first row's invalidate()
+  // never ran, leaving the deleted account on screen.
+  const releases: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 2, active: 2, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse({ items: [account('acc-1'), account('acc-2')], next_cursor: null }),
+      );
+    }
+    if (request.method === 'DELETE') {
+      return new Promise((resolve) => {
+        releases.push(resolve);
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-2')).toBeInTheDocument();
+  });
+
+  for (const index of [0, 1]) {
+    await userEvent.click(screen.getAllByTitle('Удалить')[index]!);
+    await userEvent.click(screen.getByText('Удалить'));
+  }
+  await waitFor(() => {
+    expect(releases).toHaveLength(2);
+  });
+  // Both rows are being deleted, so neither can be acted on again.
+  expect(screen.getAllByTitle('Удалить')[0]).toBeDisabled();
+  expect(screen.getAllByTitle('Удалить')[1]).toBeDisabled();
+
+  // Row 2 settles first, then row 1 — the late one must still refresh the list.
+  releases[1]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(listGets()).toBeGreaterThan(1);
+  });
+  const afterSecond = listGets();
+  releases[0]!(new Response(null, { status: 204 }));
+  await waitFor(() => {
+    expect(listGets()).toBeGreaterThan(afterSecond);
+  });
+});
+
 test('the add button opens the add-account wizard', async () => {
   routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
   renderWithClient(<AccountsPage />);
