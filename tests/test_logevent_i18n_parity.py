@@ -22,6 +22,9 @@ import ast
 import json
 import re
 from pathlib import Path
+from typing import get_args
+
+from services.accounts._import_rollback import RollbackOutcome
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CODE_ROOTS = ("api", "services", "core")
@@ -297,11 +300,27 @@ def _module_reason_codes(source: str, path: Path) -> set[str]:
     return reasons
 
 
+def _rollback_residual_codes() -> set[str]:
+    """The import-rollback residuals, read off ``RollbackOutcome`` itself.
+
+    Both call sites write ``extra={"reason": result.outcome}`` — an ATTRIBUTE read, and
+    :func:`_module_reason_codes`'s ``_literals`` handles ``Constant``/``Name``/``IfExp``
+    but not ``Attribute``, so the literal scan cannot see these two codes at all. They
+    shipped untranslated-and-unnoticed exactly once, which is what this closes.
+
+    Derived from the ``Literal`` rather than hardcoded, so a fourth outcome is caught
+    the moment it is declared. ``clean`` is excluded because it is the success path:
+    both callers log only when ``outcome != "clean"``, so it never reaches ``reason``
+    — and :func:`test_the_clean_outcome_is_never_a_reason_code` pins that.
+    """
+    return set(get_args(RollbackOutcome)) - {"clean"}
+
+
 def _backend_reason_codes() -> set[str]:
     reasons: set[str] = set()
     for path in _backend_files():
         reasons.update(_module_reason_codes(path.read_text(encoding="utf-8"), path))
-    return reasons
+    return reasons | _rollback_residual_codes()
 
 
 def _i18n(locale: str) -> dict:
@@ -328,6 +347,18 @@ def test_every_backend_reason_has_ru_and_en_translation() -> None:
     for locale in ("ru", "en"):
         keys = set(_i18n(locale)["logEventReason"])
         assert sorted(reasons - keys) == [], f"reasons missing a {locale} logEventReason label"
+
+
+def test_the_clean_outcome_is_never_a_reason_code() -> None:
+    """``clean`` is excluded from the residuals above only because nothing logs it.
+
+    Both rollback callers guard with ``if result.outcome != "clean"``. If either ever
+    logged unconditionally, ``clean`` would ride ``reason`` with no label and render
+    raw, and the exclusion here would be the reason nothing caught it.
+    """
+    for module in ("services/accounts/sessions.py", "services/accounts/_tdata.py"):
+        source = (_ROOT / module).read_text(encoding="utf-8")
+        assert '!= "clean"' in source, f"{module} no longer gates its rollback logging"
 
 
 def test_reason_enumeration_reaches_a_ladder_variable_and_a_reason_function() -> None:

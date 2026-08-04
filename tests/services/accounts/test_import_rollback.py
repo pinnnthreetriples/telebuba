@@ -191,7 +191,6 @@ async def test_a_concurrent_phone_login_row_is_not_deleted_by_a_rollback(
 @pytest.mark.asyncio
 async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
     """``file_kept`` leaves no account, so the refusal must blame the FILE.
 
@@ -219,8 +218,10 @@ async def test_a_leftover_file_says_so_instead_of_naming_a_missing_account(
     # this same function-scoped instance — pointing the second import at the REAL
     # sessions directory, where it passes both pre-checks and writes a credential
     # into the working tree. Same reason ``_repair`` exists; it happened.
+    # The isolation check itself lives in the autouse ``_isolate_runtime`` fixture, so
+    # it covers every test in this package and removes the leak instead of only
+    # reporting it after the credential has landed.
     monkeypatch.setattr("pathlib.Path.unlink", original_unlink)
-    assert settings.telegram.session_dir.is_relative_to(tmp_path), "sandbox escaped"
 
     with pytest.raises(SessionAlreadyExistsError) as caught:
         await import_account_session(data)
@@ -400,6 +401,41 @@ async def test_the_rollback_failure_event_carries_only_rendered_fields(
         "reason": "file_kept",
         "error_type": "PermissionError",
     }
+
+
+@pytest.mark.asyncio
+async def test_a_clean_rollback_reports_the_import_cause_not_the_outcome(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The OTHER half of "one meaning per key", which nothing was pinning.
+
+    ``account_session_import_rolled_back`` fires when the rollback SUCCEEDED, so it has
+    no failure of its own and ``error_type`` must carry the import's cause. Only the
+    failure event was covered, which left this one free to drift back to
+    ``result.outcome`` — reporting the literal string ``"clean"`` as an exception class.
+    That has no ``logEventReason`` entry either, so it would render raw in the
+    operator's reason column and the drift would be invisible.
+    """
+    payloads: list[dict[str, object]] = []
+
+    async def fake_log(
+        _level: str,
+        event: str,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        if event == "account_session_import_rolled_back":
+            payloads.append(extra or {})
+
+    _break_after_commit(monkeypatch)
+    monkeypatch.setattr("services.accounts.sessions.log_event", fake_log)
+
+    with pytest.raises(RuntimeError, match="database is locked"):
+        await import_account_session(
+            AccountSessionFileImport(filename="live.session", content=_CREDENTIAL),
+        )
+
+    assert payloads == [{"session_name": "live", "error_type": "RuntimeError"}]
 
 
 @pytest.mark.asyncio

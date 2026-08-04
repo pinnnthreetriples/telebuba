@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -13,7 +14,17 @@ from services.accounts._import_locks import _IMPORT_LOCKS
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from pathlib import Path
+
+# The real sessions directory, relative to the repo root. Tests in this package
+# import ``.session`` credentials, so an isolation failure writes one HERE.
+_REPO_SESSIONS = Path(__file__).resolve().parents[3] / "sessions"
+
+
+def _repo_session_files() -> set[str]:
+    """Names of ``*.session`` files sitting in the REAL sessions dir right now."""
+    if not _REPO_SESSIONS.is_dir():
+        return set()
+    return {path.name for path in _REPO_SESSIONS.glob("*.session")}
 
 
 @pytest.fixture(autouse=True)
@@ -31,9 +42,39 @@ def _isolate_runtime(
     _IMPORT_LOCKS.clear()
     reset_logging_for_tests()
     setup_logging()
+    before = _repo_session_files()
     yield
     _IMPORT_LOCKS.clear()
     reset_logging_for_tests()
+    # Isolation is not self-evident: ``monkeypatch`` is function-scoped and SHARED with
+    # every test that requests it, so one ``monkeypatch.undo()`` reverts the redirect
+    # above and sends an import at the real sessions dir. That happened — a test wrote a
+    # credential into the working tree, and because ``*.session`` is gitignored neither
+    # ``git status`` nor the suite noticed. Worse, the leftover then satisfied a later
+    # run's "does this file already exist?" pre-check, so the suite went GREEN on the
+    # artefact instead of on the behaviour.
+    #
+    # Compared by DIFF, not by emptiness: a developer's checkout legitimately holds real
+    # sessions, and failing their test run over those would be its own bug. Leaked files
+    # are removed as well as reported, so a single escape cannot poison every later run.
+    leaked = sorted(_repo_session_files() - before)
+    for name in leaked:
+        (_REPO_SESSIONS / name).unlink(missing_ok=True)
+    # Both values are copied into plain locals first. Asserting on
+    # ``settings.telegram.session_dir`` directly makes pytest's assertion rewriting walk
+    # the attribute chain and print the whole ``Settings`` repr on failure — which
+    # includes ``telegram.api_hash`` and ``auth.secret`` from the developer's own
+    # environment. A guard against leaking credentials must not leak credentials.
+    final_dir = Path(settings.telegram.session_dir)
+    escaped = not final_dir.is_relative_to(tmp_path)
+    assert leaked == [], (
+        f"this test wrote {leaked} into the real sessions dir — session_dir isolation "
+        f"was lost (a blanket monkeypatch.undo()?); restore only the seam you patched"
+    )
+    assert not escaped, (
+        f"session_dir points outside tmp_path at teardown ({final_dir}) — isolation was "
+        f"lost mid-test, so anything written after that went into the working tree"
+    )
 
 
 @pytest.fixture(autouse=True)

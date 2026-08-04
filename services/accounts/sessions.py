@@ -120,9 +120,10 @@ async def _discard_orphaned_session(path: Path, session_name: str, cause: Except
         # ``error_type`` is the class of the failure THIS event is named after — the
         # rollback's own — matching ``tdata_rollback_unlink_failed``. The residual
         # rides ``reason``, which the SPA renders beside it
-        # (``shared/lib/log/eventReason.ts``), so the operator reads "file kept ·
-        # PermissionError" and knows what to clear. It replaced a ``kept`` key the UI
-        # showed nowhere, next to a ``cause_type`` it showed nowhere either.
+        # (``shared/lib/log/eventReason.ts``), so the operator reads "session file
+        # left on disk with no account · PermissionError" and knows what to clear. It
+        # replaced a ``kept`` key the UI showed nowhere, next to a ``cause_type`` it
+        # showed nowhere either.
         await log_event(
             "ERROR",
             "account_session_import_rollback_failed",
@@ -133,6 +134,10 @@ async def _discard_orphaned_session(path: Path, session_name: str, cause: Except
             },
         )
         return
+    # Same key, same rule: the class of the failure THIS event is named after. Here
+    # that is the IMPORT's cause — the rollback itself succeeded, so it has no error
+    # of its own to report. Putting ``result.outcome`` here instead would render a raw
+    # ``"clean"`` in the operator's reason column, which is why it must stay pinned.
     await log_event(
         "WARNING",
         "account_session_import_rolled_back",

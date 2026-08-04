@@ -89,8 +89,10 @@ async def _rollback_tdata_import(
                     "file": plan.final_path.name,
                     # Same vocabulary as the single-session rollback: the residual in
                     # ``reason``, and in ``error_type`` the class of the failure that
-                    # caused it — as ``origin/main`` logged it, because PermissionError
-                    # (a live handle) needs a different remedy from a full disk.
+                    # caused it — PermissionError (a live handle) needs a different
+                    # remedy from a full disk. ``origin/main`` logged that class for the
+                    # unlink branch only; it suppressed the row-delete failure outright,
+                    # so ``row_kept`` and its class are reported here for the first time.
                     "reason": result.outcome,
                     "error_type": result.error_type,
                 },
