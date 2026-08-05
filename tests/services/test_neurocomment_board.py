@@ -337,6 +337,41 @@ async def test_channel_status_bot_challenge_when_challenge_row_exists() -> None:
 
 
 @pytest.mark.asyncio
+async def test_channel_status_ignores_a_resolved_challenge_row() -> None:
+    """A solved captcha leaves its old ``give_up`` behind — it must not name the wall.
+
+    The badge picks between "a guardian bot is the wall" and ``chat_restricted`` on this one
+    signal, and the table is append-only, so the stale row made a channel blocked by
+    Telegram report a bot gate and sent the operator after the wrong fix. ``pass-er`` got
+    through its captcha; ``blocked`` is joined and write-blocked with no challenge of its
+    own, which is ``chat_restricted``.
+    """
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    for account_id in ("passer", "blocked"):
+        await create_account(AccountCreate(account_id=account_id))
+        await assign_account_to_campaign(campaign.campaign_id, account_id)
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h1",
+            account_id="passer",
+            channel="@chan",
+            raw_text="prove you are human",
+            button_labels=["Я человек"],
+            outcome="give_up",
+        ),
+    )
+    # The later solve: in the chat and past the bot check, so nothing is captcha-blocked.
+    await upsert_readiness("passer", "@chan", joined=True, captcha_passed=True, ready=False)
+    await upsert_readiness("blocked", "@chan", joined=True, captcha_passed=False, ready=False)
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "chat_restricted"
+
+
+@pytest.mark.asyncio
 async def test_channel_status_channel_paused() -> None:
     # Ф2 #147: a channel serving out a "will not let us write" round shows channel_paused,
     # taking precedence over readiness. The board reads the deadline off the channel link

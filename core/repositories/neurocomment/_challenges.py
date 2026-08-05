@@ -250,7 +250,8 @@ def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
         select(_neurocomment_challenges.c.channel)
         .where(
             _neurocomment_challenges.c.channel.in_(channels)
-            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES),
+            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
+            & _still_blocked(),
         )
         .distinct()
     )
@@ -260,7 +261,22 @@ def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
 
 
 async def list_challenged_channels(channels: list[str]) -> ChallengedChannels:
-    """Which of ``channels`` carry a non-solved challenge (bulk board signal)."""
+    """Which of ``channels`` still carry an UNRESOLVED challenge (bulk board signal).
+
+    ``_still_blocked`` for the reason it exists on the queue, which this read wants just as
+    much and was the only one of the three not to have: the table is append-only, so a pair
+    that later solved its captcha leaves its old ``give_up`` behind forever. Without the
+    exclusion one long-resolved row made ``board._channel_status`` answer ``bot_challenge``
+    for a channel blocked by something else entirely — the badge picks between "a guardian
+    bot is the wall" and ``chat_restricted`` on exactly this signal, so a stale row did not
+    merely age, it named the wrong wall and sent the operator after the wrong fix.
+
+    Deliberately NOT the queue's other filters. The badge answers "why is this channel
+    stuck", the queue answers "what can a human press today", and the two are allowed to
+    differ: dropping rows past ``challenge_queue_max_age_days`` here would report
+    ``chat_restricted`` for a channel a bot gate really is holding, and dropping a skipped
+    pair's row would do the same. Both trade a true diagnosis for a false one.
+    """
     return await asyncio.to_thread(_list_challenged_channels, channels)
 
 
