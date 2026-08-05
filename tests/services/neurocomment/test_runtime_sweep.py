@@ -34,7 +34,7 @@ from schemas.telegram_actions import (
     CheckMessagesAlive,
     CheckMessagesAliveResult,
 )
-from services.neurocomment import _rejoin, _runtime, _state, _sweep
+from services.neurocomment import _rejoin, _runtime, _sweep
 from tests.services.neurocomment.runtime_support import (
     _ExecuteSpy,
     _ListenerSpy,
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.usefixtures("isolate_runtime")
 
 # --------------------------------------------------------------------------- #
-# Deletion sweep (#131): periodic re-read → escalating channel back-off.
+# Deletion sweep (#131): periodic re-read that RECORDS the vanished comments.
 # --------------------------------------------------------------------------- #
 
 
@@ -94,7 +94,7 @@ async def test_sweep_one_channel_fault_does_not_abort_the_pass(
 
     attempts: list[str] = []
 
-    async def flaky(channel: str, _comments: object, _now: object) -> None:
+    async def flaky(channel: str, _comments: object) -> None:
         attempts.append(channel)
         if len(attempts) == 1:
             msg = "bookkeeping boom"
@@ -118,28 +118,12 @@ async def _campaign_with_posted_comments(channel: str, msg_ids: list[int]) -> No
 
 
 @pytest.mark.asyncio
-async def test_sweep_trips_backoff_when_deletions_reach_threshold(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 2)
-    await _campaign_with_posted_comments("@a", [101, 102, 103])
-
-    async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
-        # Two of the three comments have vanished — at the threshold.
-        gone = [mid for mid in action.message_ids if mid in (101, 102)]
-        return CheckMessagesAliveResult(missing_ids=gone)
-
-    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
-
-    await _runtime._sweep_once()
-
-    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is True
-
-
-@pytest.mark.asyncio
 async def test_sweep_marks_deleted_comments_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Even below the back-off threshold, vanished comments are stamped + logged once."""
-    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 5)
+    """Stamping the vanished comments and logging once is ALL the sweep does with them.
+
+    However many go, the channel is never parked: the escalating back-off deletions used
+    to trip was removed by operator decision, so the next post is commented as usual.
+    """
     await _campaign_with_posted_comments("@a", [101, 102, 103])
 
     async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
@@ -171,25 +155,9 @@ async def test_sweep_marks_deleted_comments_and_logs(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_sweep_below_threshold_does_not_trip(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 3)
-    await _campaign_with_posted_comments("@a", [101, 102, 103])
-
-    async def fake_read(_account_id: str, _action: CheckMessagesAlive) -> CheckMessagesAliveResult:
-        return CheckMessagesAliveResult(missing_ids=[101])  # one gone, below threshold 3
-
-    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
-
-    await _runtime._sweep_once()
-
-    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is False
-
-
-@pytest.mark.asyncio
-async def test_sweep_read_failure_does_not_trip_or_crash(
+async def test_sweep_read_failure_does_not_crash(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 1)
     await _campaign_with_posted_comments("@a", [101, 102])
 
     async def boom(_account_id: str, _action: CheckMessagesAlive) -> CheckMessagesAliveResult:
@@ -200,7 +168,7 @@ async def test_sweep_read_failure_does_not_trip_or_crash(
 
     await _runtime._sweep_once()  # one channel's read failure must not abort the sweep
 
-    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is False
+    assert await fetch_comment("@a", 1) is not None  # the tick completed, rows intact
 
 
 @pytest.mark.asyncio
@@ -240,28 +208,6 @@ async def test_sweep_disabled_when_interval_zero(monkeypatch: pytest.MonkeyPatch
         assert _runtime._SWEEP_TASK is None  # sweep disabled by config
     finally:
         await _runtime.shutdown_neurocomment_runtime("listener-1")
-
-
-@pytest.mark.asyncio
-async def test_sweep_does_not_re_escalate_while_cooled(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 2)
-    await _campaign_with_posted_comments("@a", [101, 102, 103])
-
-    reads = 0
-
-    async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
-        nonlocal reads
-        reads += 1
-        return CheckMessagesAliveResult(missing_ids=list(action.message_ids))  # all gone
-
-    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
-
-    await _runtime._sweep_once()  # trips once
-    await _runtime._sweep_once()  # already cooled → skipped: no re-read, no re-escalation
-
-    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is True
-    assert _state._CHANNEL_TRIPS["@a"] == 1  # escalated exactly once, not per sweep
-    assert reads == 1  # the second sweep skipped the gateway read entirely
 
 
 # --------------------------------------------------------------------------- #

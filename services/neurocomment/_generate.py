@@ -121,7 +121,7 @@ async def _generate_and_post(
             return
         image_b64 = image.image_b64
 
-    outcome = await _generate_acceptable(campaign, event, image_b64=image_b64)
+    outcome = await _generate_acceptable(campaign, event, account_id, image_b64=image_b64)
     text = outcome.text
     if text is None:
         # An exhaustion caused by a 429 is the Gemini gateway's state, not this post's, so
@@ -207,9 +207,38 @@ def _gemini_reason(result: GeminiResult) -> str:
     return "gemini_error"
 
 
+async def _log_regeneration(account_id: str, event: NewPostEvent, attempt: int) -> None:
+    """Say that this post is being written again, and which retry of the budget that is.
+
+    Only a REPEAT round earns a line, which is why round zero is filtered HERE rather than
+    at the call site: this is the rule, and the ladder above it is already at its branch
+    budget. A first-try comment is the normal case on every post, so logging that too
+    would double the feed's volume and say nothing. Reaching a round with ``attempt`` set
+    means the previous one failed a check — a usable candidate returns, and a lost claim
+    returns before this — so the counter can never claim a round that was not paid for.
+    The failing check's own code is NOT put in ``reason``: that field carries the position
+    in the budget (``eventReason`` renders the bare ratio beside the label untranslated),
+    and the reason a generation gave up in the end already travels on
+    ``neurocomment_generation_exhausted``, where it matters more than a count.
+    """
+    if not attempt:
+        return
+    await log_event(
+        "INFO",
+        "neurocomment_generation_retry",
+        account_id=account_id,
+        extra={
+            "channel": event.channel,
+            "post_id": event.post_id,
+            "reason": f"{attempt}/{settings.neurocomment.max_retries}",
+        },
+    )
+
+
 async def _generate_acceptable(
     campaign: NeurocommentCampaign,
     event: NewPostEvent,
+    account_id: str,
     *,
     image_b64: str | None = None,
 ) -> _GenOutcome:
@@ -219,11 +248,13 @@ async def _generate_acceptable(
     request — the image is downloaded once by the caller and reused across regenerations,
     so a retry costs the same tokens as the first try, not a second download.
 
-    Tries once plus ``max_retries`` regenerations. The exact-hash reservation is the
-    atomic claim; the semantic check (token-set Jaccard vs the channel's recent posted
-    comments) is layered after it as a cross-account near-duplicate guard. A
-    reserved-but-rejected text is released so a later attempt isn't filtered as its own
-    duplicate. On exhaustion the last attempt's failure reason travels back for the log.
+    Tries once plus ``max_retries`` regenerations, each REPEAT of which is announced by
+    :func:`_log_regeneration` — hence ``account_id``, which nothing else here needs. The
+    exact-hash reservation is the atomic claim; the semantic check (token-set Jaccard vs
+    the channel's recent posted comments) is layered after it as a cross-account
+    near-duplicate guard. A reserved-but-rejected text is released so a later attempt isn't
+    filtered as its own duplicate. On exhaustion the last attempt's failure reason travels
+    back for the log.
 
     Takes the whole ``event`` because this loop is the longest stretch of the pipeline and
     has to beat the claim while it runs: at the operator-settable ``le`` bounds one round is
@@ -238,7 +269,7 @@ async def _generate_acceptable(
     # (falls back to .env) so a UI-set key takes effect without a restart.
     secret = await load_warming_settings()
     reason: str | None = None
-    for _ in range(nc.max_retries + 1):
+    for attempt in range(nc.max_retries + 1):
         # One beat per round, so the gap between beats is a single ``generate_text`` — the
         # only await here that cannot be sliced, since it waits inside ``core.gemini``.
         # Acted on, because the pre-send gate WILL abandon once the claim is gone: every
@@ -247,6 +278,7 @@ async def _generate_acceptable(
         # is for; the send's own abandon line stays for the claims lost after this point.
         if not await touch_comment_claim(channel, event.post_id):
             return _GenOutcome(None, _CLAIM_LOST_REASON)
+        await _log_regeneration(account_id, event, attempt)
         request = _build_request(campaign.prompt, event.text, secret=secret, image_b64=image_b64)
         generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:

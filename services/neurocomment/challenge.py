@@ -37,6 +37,15 @@ from schemas.telegram_actions import (
 )
 from services.content import has_link, is_acceptable, normalize_text
 from services.neurocomment import _seams
+from services.neurocomment._challenge_log import (
+    NOT_SENT_REASON,
+    PASSED_REASON,
+    RATE_LIMITED_REASON,
+    WRONG_ANSWER_REASON,
+    log_attempt,
+    log_result,
+    refusal,
+)
 
 if TYPE_CHECKING:
     from schemas.neurocomment import AccountChannelOnboarding
@@ -347,7 +356,8 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
     comment-able (``solved`` is optimistic — the audit row stays ``pending`` until
     the engine confirms on the first comment), ``give_up`` / ``failed`` →
     ``bot_challenge``, ``rate_limited`` → the LLM gateway 429'd, so defer and retry
-    later without recording a failure (no audit row, no channel back-off).
+    later without recording a failure (no audit row, no channel back-off). Every path
+    also says so in the operator's feed — ``_challenge_log`` owns those two lines.
     """
     nc = settings.neurocomment
     message = await _wait_for_challenge(account_id, group_id, nc.challenge_wait_timeout_seconds)
@@ -361,19 +371,24 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
         candidate, from_cache = await _decide(message, use_cache=attempt == 0)
         if isinstance(candidate, _RateLimited):
             # 429 from the LLM: defer without recording a failure (no audit row, no
-            # #147 channel back-off) so the pair is retried later un-penalized.
+            # #147 channel back-off) so the pair is retried later un-penalized. Nothing
+            # was answered, so the journal gets the outcome and no attempt counter.
+            await log_result(account_id, channel, RATE_LIMITED_REASON)
             return "rate_limited"
         decision = candidate
-        if (
-            decision is None
-            or decision.action == "give_up"
-            or not _action_allowed(decision, message)
-        ):
+        # Bound rather than inlined into the condition below, so WHICH of the three
+        # give-up shapes this is can be told to the operator: the audit row keeps calling
+        # all three ``give_up``, because the board reads that as one state.
+        unsafe = decision is not None and not _action_allowed(decision, message)
+        if decision is None or decision.action == "give_up" or unsafe:
             await _record(account_id, channel, message, outcome="give_up", decision=decision)
+            await log_result(account_id, channel, refusal(decision, unsafe=unsafe))
             return "give_up"
+        await log_attempt(account_id, channel, attempt + 1)
         await asyncio.sleep(_human_delay_seconds())
         if not await _dispatch(account_id, group_id, message, decision):
             await _record(account_id, channel, message, outcome="failed", decision=decision)
+            await log_result(account_id, channel, NOT_SENT_REASON)
             return "failed"
         # A fresh challenge means the answer was wrong → retry with it; silence = passed.
         retry = await _wait_for_challenge(
@@ -383,6 +398,7 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
             # ponytail: a re-onboard before the first comment can orphan the prior
             # pending row; harmless — pending rows feed neither board status nor cache.
             await _record(account_id, channel, message, outcome="pending", decision=decision)
+            await log_result(account_id, channel, PASSED_REASON)
             return "solved"
         if from_cache:
             # The cached decision was just re-challenged → it is wrong. Evict it so it
@@ -391,6 +407,7 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
         message = retry
     # Out of attempts and still being re-challenged → give up (do not keep clicking).
     await _record(account_id, channel, message, outcome="failed", decision=decision)
+    await log_result(account_id, channel, WRONG_ANSWER_REASON)
     return "failed"
 
 

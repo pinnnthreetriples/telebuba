@@ -19,7 +19,9 @@ test('resolves an exact logEvent entry to its translation', () => {
 test('composes dynamic telegram action codes from action + status', () => {
   expect(eventLabel(t, 'telegram_set_online')).toBe('Заход в сеть');
   expect(eventLabel(t, 'telegram_set_online_failed')).toBe('Заход в сеть — ошибка');
-  expect(eventLabel(t, 'telegram_read_channel_flood_wait')).toBe('Чтение канала — флуд-контроль');
+  expect(eventLabel(t, 'telegram_read_channel_flood_wait')).toBe(
+    'Чтение канала — Telegram просит подождать',
+  );
   expect(eventLabel(t, 'telegram_join_channel_already_participant')).toBe(
     'Подписка на канал — уже участник',
   );
@@ -29,7 +31,7 @@ test('a gateway domain prefix resolves to the same label as the bare form', () =
   expect(eventLabel(t, 'warming_telegram_set_online')).toBe('Заход в сеть');
   expect(eventLabel(t, 'neurocomment_telegram_set_online_failed')).toBe('Заход в сеть — ошибка');
   expect(eventLabel(t, 'warming_telegram_read_channel_flood_wait')).toBe(
-    'Чтение канала — флуд-контроль',
+    'Чтение канала — Telegram просит подождать',
   );
   // The one fixed gateway name is prefixed too, and still hits its exact entry.
   expect(eventLabel(t, 'neurocomment_telegram_action_unavailable')).toBe(

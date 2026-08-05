@@ -110,10 +110,10 @@ test('the short log wording wins over the toast wording, from either field', () 
   // operator saw used to depend on which `extra` field the gateway happened to fill.
   const shared = {
     failed: 'Telegram отклонил',
-    flood_wait: 'флуд-контроль',
+    flood_wait: 'Telegram просит подождать',
     slow_mode_wait: 'медленный режим',
     premium_wait: 'нужен Premium',
-    peer_flood: 'флуд-ограничение',
+    peer_flood: 'ограничение по спаму',
   };
   for (const [code, expected] of Object.entries(shared)) {
     expect(eventReason(t, entry({ reason: code }))).toBe(expected);

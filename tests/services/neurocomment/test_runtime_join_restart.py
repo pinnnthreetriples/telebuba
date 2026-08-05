@@ -247,8 +247,15 @@ async def test_a_loss_with_no_join_row_to_charge_is_reported_not_swallowed(
     await _drain_joins()
 
     assert exec_spy.joined == [("listener-1", "@a")]  # not re-joined, and not re-charged
-    events = [e.event for e in await list_recent_logs(limit=100)]
-    assert "neurocomment_listener_access_lost_untracked" in events
+    untracked = [
+        entry
+        for entry in await list_recent_logs(limit=100)
+        if entry.event == "neurocomment_listener_access_lost_untracked"
+    ]
+    assert len(untracked) == 1
+    # And no position in the re-join budget, because nothing was charged to it: the
+    # sibling lines' "1/2" beside this one would say a countdown had started.
+    assert "reason" not in untracked[0].extra
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 
@@ -273,4 +280,38 @@ async def test_discussion_group_joins_never_seed_the_listener_cache(
     await _drain_joins()
 
     assert exec_spy.joined == [("listener-1", "@a")]
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_each_lost_access_line_says_which_rejoin_it_is_out_of_the_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The feed counts the re-joins out — "1/2", then "2/2" — as the budget is spent.
+
+    ``attempts`` was already in ``extra``, where only a developer looks, so in the feed a
+    channel on its last re-join read exactly like one on its first and the give-up arrived
+    without warning. The give-up line closes the run at the budget rather than reporting a
+    count of its own: only losses inside the rolling window count, so a window that rolls
+    under a channel losing access over and over can hand back more of them than the budget
+    has room for, and "3/2" would read as arithmetic gone wrong.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    _patch_execute(monkeypatch, _ExecuteSpy())
+    # Lost on every pass — the channel whose handle stops resolving.
+    monkeypatch.setattr(_runtime, "take_lost_access_channels", lambda _account_id: {"@a"})
+
+    for _ in range(4):  # join, lose it twice, then the budget is gone
+        await _runtime.reconcile_neurocomment_runtime("listener-1")
+        await _drain_joins()
+
+    entries = list(reversed(await list_recent_logs(limit=100)))
+    counters = {
+        event: [e.extra.get("reason") for e in entries if e.event == event]
+        for event in ("neurocomment_listener_access_lost", "neurocomment_listener_rejoin_exhausted")
+    }
+    assert counters["neurocomment_listener_access_lost"] == ["1/2"]
+    assert counters["neurocomment_listener_rejoin_exhausted"] == ["2/2"]
     await _runtime.shutdown_neurocomment_runtime("listener-1")

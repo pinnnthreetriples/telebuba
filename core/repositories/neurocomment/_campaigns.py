@@ -210,6 +210,14 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
                     # out-lives the counters, and the sweep would unlink the re-linked
                     # channel again within five minutes on evidence about the old handle.
                     access_lost_reason=None,
+                    # The unconfirmed-refusal budget (#47) is a per-pair counter like the
+                    # two above, so "counters included" has to cover it: a re-linked
+                    # channel whose pairs kept half a budget would ban the first of them on
+                    # its very first refusal. ``banned`` deliberately does NOT reset — that
+                    # verdict is sticky by design (#30) and the hint tells the operator to
+                    # add another account, not to re-link.
+                    unconfirmed_bans=0,
+                    unconfirmed_ban_at=None,
                 ),
             )
             link = _active_channel_link(connection, channel)

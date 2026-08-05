@@ -18,7 +18,12 @@ from core.repositories.neurocomment._accounts import (
     remove_account_from_campaign,
     set_campaign_account_channels,
 )
-from core.repositories.neurocomment._bans import mark_pair_banned
+from core.repositories.neurocomment._bans import (
+    clear_unconfirmed_bans,
+    mark_pair_banned,
+    stamp_unconfirmed_ban,
+    unconfirmed_ban_is_countable,
+)
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
     create_campaign,
@@ -83,6 +88,8 @@ from core.repositories.neurocomment._pauses import (
     bump_channel_pause,
     clear_channel_pause,
     fetch_channel_paused_until,
+    list_expired_channel_pauses,
+    release_channel_pause,
 )
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
@@ -125,6 +132,7 @@ __all__ = [
     "clear_channel_pause",
     "clear_join_request",
     "clear_rejoin_attempts",
+    "clear_unconfirmed_bans",
     "count_account_channel_comments_since",
     "count_account_comments_since",
     "count_account_joins_since",
@@ -158,6 +166,7 @@ __all__ = [
     "list_delivered_comments_since",
     "list_discovery_candidates",
     "list_exhausted_watch_channels",
+    "list_expired_channel_pauses",
     "list_failed_for_channel",
     "list_failed_for_channels",
     "list_joined_watch_channels",
@@ -182,6 +191,7 @@ __all__ = [
     "reclaim_stale_claims",
     "record_comment_msg_id",
     "record_join",
+    "release_channel_pause",
     "release_claim",
     "remove_account_from_campaign",
     "replace_discovery_candidates",
@@ -193,7 +203,9 @@ __all__ = [
     "set_listener_running",
     "stamp_join_request",
     "stamp_rejoin_attempt",
+    "stamp_unconfirmed_ban",
     "touch_comment_claim",
+    "unconfirmed_ban_is_countable",
     "update_campaign_prompt",
     "update_solver_enabled",
     "upsert_linked_group",

@@ -12,9 +12,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.db import (
     clear_join_request,
     clear_rejoin_attempts,
+    fetch_readiness,
     stamp_join_request,
     upsert_readiness,
 )
@@ -48,8 +50,15 @@ async def _classify_join(
     if result.status in {"ok", "already_participant"}:
         # Joined (or already a member) → run the proactive challenge solver before
         # declaring the pair comment-able (Ф2 #145), unless the solver is disabled
-        # for this campaign.
-        return await _solve_and_record(account_id, channel, group_id, solver_enabled=solver_enabled)
+        # for this campaign. ``rejoined`` tells the two apart, and only for the re-join
+        # counter — see ``_solve_and_record``.
+        return await _solve_and_record(
+            account_id,
+            channel,
+            group_id,
+            solver_enabled=solver_enabled,
+            rejoined=result.status == "ok",
+        )
     if result.status in _RETRY_STATUSES:
         # Non-terminal: do not write ready; surface the wait so the account is
         # retried later instead of getting stuck. Return promptly (no sleep).
@@ -75,11 +84,25 @@ async def _classify_join(
         # The state itself was invisible in the log: only the gateway's join line was
         # written, so an operator could not tell "waiting for admin approval" from a
         # broken join, and the channel just silently produced no comments.
+        #
+        # "1/2" rides along as the reason, the same ratio the pending line carries, so
+        # the operator reads one running count instead of a first request that says
+        # nothing and a follow-up that suddenly knows its budget. The count comes off a
+        # re-read because ``stamp_join_request`` returns nothing and the row is the only
+        # thing that knows how many requests this pair has actually sent; a point read is
+        # affordable here where it would not be on the post path — this branch runs at
+        # most ``join_request_max_attempts`` times in a pair's life.
+        stamped = await fetch_readiness(account_id, channel)
+        attempts = stamped.join_request_attempts if stamped is not None else 1
         await log_event(
             "INFO",
             "neurocomment_onboard_join_by_request",
             account_id=account_id,
-            extra={"channel": channel},
+            extra={
+                "channel": channel,
+                "attempts": attempts,
+                "reason": f"{attempts}/{settings.neurocomment.join_request_max_attempts}",
+            },
         )
         return AccountChannelOnboarding(
             account_id=account_id,
@@ -116,7 +139,8 @@ async def _classify_join(
     # produces that combination). ready stays False so the pair is never selected.
     # The verdict rides along (#44) so the re-join rule can tell a chat that might let us
     # in later from an address that will never resolve. The error CLASS only: the message
-    # is free-form text no rule can key on, and a wrong reading here costs four days.
+    # is free-form text no rule can key on, and a wrong reading here costs the channel its
+    # whole 48h re-join budget.
     await upsert_readiness(
         account_id,
         channel,
@@ -139,6 +163,7 @@ async def _solve_and_record(
     group_id: int,
     *,
     solver_enabled: bool,
+    rejoined: bool = True,
 ) -> AccountChannelOnboarding:
     """Run the challenge solver on a freshly-joined group; persist the readiness.
 
@@ -159,7 +184,18 @@ async def _solve_and_record(
     # out is over and the next access loss must start from attempt one. Cleared here
     # rather than in the ready branch alone — a joined-but-challenged pair is back in too,
     # and leaving it at its cap would make the sweep drop a channel we just re-entered.
-    await clear_rejoin_attempts(account_id, channel)
+    #
+    # Only a join that ACTUALLY happened resets it. ``already_participant`` means Telegram
+    # never let us out in the first place, i.e. the parking that spent the attempt was
+    # wrong — a stale group entity in the session cache, or a channel-level refusal read as
+    # an account-level one. Resetting on that closed a loop with no bound: the sweep parks
+    # the pair, the re-join review spends an attempt and pokes onboarding, the join answers
+    # ``already_participant``, the counter goes back to zero, and five minutes later the
+    # same tick does it again — up to 288 join RPCs a day for one pair, invisible to the
+    # rolling-24h join cap because ``record_join`` only counts a real join. Keeping the
+    # count makes the budget bound it: two such rounds and the review leaves the pair alone.
+    if rejoined:
+        await clear_rejoin_attempts(account_id, channel)
     if solver_enabled:
         outcome = await challenge.solve_if_present(account_id, channel, group_id)
         if outcome == "rate_limited":

@@ -174,12 +174,28 @@ async def _mark_lost_channels(
                 "WARNING",
                 "neurocomment_listener_rejoin_exhausted",
                 account_id=listener_account_id,
-                extra={"channel": channel, "attempts": attempts},
+                # The budget, not ``attempts``: this branch is "at or over it", and a
+                # window that rolled under a long-lost channel can hand back more losses
+                # than the budget has room for — "3/2" would read as a bug where "2/2"
+                # closes the run of positions the access-lost lines printed.
+                extra={
+                    "channel": channel,
+                    "attempts": attempts,
+                    "reason": f"{max_attempts}/{max_attempts}",
+                },
             )
             continue
         await log_event(
             "WARNING",
             "neurocomment_listener_access_lost",
             account_id=listener_account_id,
-            extra={"channel": channel, "attempts": attempts},
+            # Which re-join this loss buys, out of how many: ``attempts`` alone said
+            # nothing about the budget it was spending, so a channel on its last try read
+            # exactly like one on its first. Rendered raw beside the label by
+            # ``eventReason`` — no translation, no new event code.
+            extra={
+                "channel": channel,
+                "attempts": attempts,
+                "reason": f"{attempts}/{max_attempts}",
+            },
         )

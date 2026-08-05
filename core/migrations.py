@@ -41,6 +41,7 @@ from core.migration_steps import (
     _rename_proxy_type_http_to_https,
 )
 from core.migration_steps_access_reason import _add_readiness_access_lost_reason
+from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
@@ -65,6 +66,7 @@ from core.migration_steps_pool import (
     _add_warming_state_activity_persona,
 )
 from core.migration_steps_rejoin import _add_readiness_rejoin
+from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -147,6 +149,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         "add_warming_state_reservation_token",
         _add_warming_state_reservation_token,
     ),
+    (47, "add_readiness_unconfirmed_ban", _add_readiness_unconfirmed_ban),
+    (48, "reset_overshot_retry_budgets", _reset_overshot_retry_budgets),
 )
 
 

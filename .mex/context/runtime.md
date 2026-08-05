@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-04
+last_updated: 2026-08-05
 ---
 
 # Telegram Runtimes
@@ -36,7 +36,7 @@ last_updated: 2026-08-04
 ## Neurocomment
 - A persisted listener watches active campaign channels; each post runs in a tracked task.
 - Pipeline: map campaign → filter → choose healthy under-quota account → atomic post claim → generate/deduplicate → delay → comment → persist.
-- Challenge handling distinguishes Telegram restrictions from bot challenges and supports configured OpenAI/Gemini text/vision solving, retries, caching, operator actions, and channel backoff.
+- Challenge handling distinguishes Telegram restrictions from bot challenges and supports configured OpenAI/Gemini text/vision solving, retries, caching, and operator actions. The only channel-level pause left is `_channel_pause` (#147, K consecutive write failures); the deleted-comment back-off is gone — the sweep records deletions and nothing more.
 - Atomic claims prevent duplicate comments; warming and listener roles are mutually exclusive; listener-safe handlers do not leak exceptions.
 - Post-outcome families each own a state write: cooldown statuses park the account (channel-scoped for slow mode), `UserBannedInChannelError` sticks a pair ban, `ChannelPrivateError` (`_LOST_ACCESS_ERRORS`) parks the pair with onboarding's `join_failed` sentinel so a later pass re-joins, gate errors flip readiness off and count a solver failure. The named families can never be a complete enumeration — `core/telegram_client/_actions.py` collapses every unmapped Telethon exception into one generic `status="failed"` — so the *default* branch also parks (channel-scoped, duration-less cooldown fallback). Without that a terminal error outside the families re-picked the pair on the channel's next post forever; naming more errors only moves the hole.
 - `ChannelPrivateError` recovery is NOT automatic: `_ensure_onboarding_running` has no timer (only operator Start, boot with `listener_running=1`, and the campaign link/deactivate/assign/set-status reconciles). Telethon also raises it on a stale cached entity, so a *transient* access loss parks the pair until an operator action or restart — a deliberate trade against the pre-#279 behaviour, which recovered on its own but retried on every post.
