@@ -221,6 +221,14 @@ _neurocomment_readiness = Table(
     # above): it describes the very write that parks the pair, so any other readiness
     # write means the loss it described is over and the column goes back to NULL.
     Column("access_lost_reason", String, nullable=True),
+    # Refusals to write here that the per-group ban ladder could NOT confirm (#47), and
+    # when the last one landed. Two inside the rule's window end the pair's stay in this
+    # chat; a delivered comment clears both. Like the two counter pairs above, and unlike
+    # ``access_lost_reason``, ``upsert_readiness`` never touches these: the pair stays a
+    # member and keeps being re-onboarded, so a reset carried by that write would hand the
+    # budget back on every pass. Migration #47 backfills 0 / NULL.
+    Column("unconfirmed_bans", Integer, nullable=False, server_default="0"),
+    Column("unconfirmed_ban_at", String, nullable=True),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

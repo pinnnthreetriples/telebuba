@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
+    clear_unconfirmed_bans,
     mark_comment_failed,
     mark_comment_posted,
     record_comment_msg_id,
@@ -140,6 +141,10 @@ async def _classify_post(
         return
     await mark_comment_failed(event.channel, event.post_id)
 
+    # Set by the one branch that spends a bounded budget, so the line says which refusal
+    # this was out of how many (see the ban branch); absent everywhere else, because a
+    # counter next to an outcome nothing is counting would be an invention.
+    budget: str | None = None
     if result.status in _COOLDOWN_STATUSES:
         # ponytail: MVP drops the lost post — it is NOT requeued for another
         # account. Post volume is low; a requeue is a follow-up if it bites.
@@ -150,13 +155,30 @@ async def _classify_post(
         event_name = "neurocomment_post_cooldown"
     elif result.error_type == _BAN_ERROR:
         # Confirm THIS group banned us before parking the pair (see _BAN_ERROR). Only a
-        # restricted participant record plus a clean @SpamBot reading marks + leaves;
-        # otherwise the block is account-wide and the group is innocent, so the pair only
-        # gets the duration-less cooldown — bounded and self-expiring, and enough to stop
-        # it re-selecting and looping on the same error until the account recovers.
-        if await bans.confirm_group_ban_and_leave(account_id, event.channel):
+        # restricted participant record plus a clean @SpamBot reading marks + leaves.
+        # Otherwise the block is account-wide as far as anyone can prove — but a group that
+        # refuses an account its own record calls ``can_send`` is not harmless either, so
+        # THAT reading is counted (#47): the cooldown alone let the same pair come back to
+        # the same channel on its next post and be refused again, ten times over three days
+        # for zero comments, because a cooldown expires and nothing else remembered. Two of
+        # those a day apart inside 48h and ``register_unconfirmed_ban`` takes the confirmed
+        # ban's exit — and logs it there, which is why this branch names the POST outcome
+        # instead: the pair used to get two identical ``neurocomment_account_banned`` rows.
+        # One probe, both verdicts (see ``bans.probe_group_state``). Below the budget the
+        # cooldown still stands, bounded and self-expiring, and stops the pair re-selecting
+        # until the account recovers.
+        state = await bans.probe_group_state(account_id, event.channel)
+        if await bans.confirm_group_ban_and_leave(account_id, event.channel, known_state=state):
             event_name = "neurocomment_account_banned"
         else:
+            # The position in that budget, and ONLY when the refusal was actually charged
+            # to it: this same line is written for a refusal an account-wide limit explains
+            # and for one that arrived inside the pair's own cooldown, and neither spends
+            # anything. ``None`` there leaves the line exactly as it was, reading its
+            # Telegram status; a counted one trades that status for "1/2".
+            budget = await bans.register_unconfirmed_ban(
+                account_id, event.channel, known_state=state
+            )
             await _apply_cooldown(account_id, None, event.channel)
             event_name = "neurocomment_post_ban_unconfirmed"
     elif result.error_type in _LOST_ACCESS_ERRORS:
@@ -220,7 +242,7 @@ async def _classify_post(
         # retry, and no readiness write — an unknown error is not evidence of lost access.
         await _apply_cooldown(account_id, None, event.channel)
         event_name = "neurocomment_post_failed"
-    await _log_outcome(event, account_id, result, event_name)
+    await _log_outcome(event, account_id, result, event_name, budget=budget)
 
 
 async def _commit_delivered(
@@ -263,6 +285,10 @@ async def _commit_delivered(
         # A delivered comment proves the channel is writable, so it clears both the
         # failure window and the persisted round counter (#147).
         await _channel_pause.clear_write_failures(event.channel)
+        # And this PAIR's own unconfirmed-refusal budget (#47), which the channel-wide
+        # reset above cannot speak for: the count that bans a pair is per (account,
+        # channel), so another account's success must not spend or refund it.
+        await clear_unconfirmed_bans(account_id, event.channel)
         # Exactly ONE line per delivery, describing the row this delivery actually landed
         # on. The clean line used to fire in addition to the warning, so the feed announced
         # "Comment posted" over a row reading ``failed`` — the very contradiction the
@@ -336,18 +362,30 @@ async def _log_outcome(
     account_id: str,
     result: ActionResult,
     event_name: str,
+    *,
+    budget: str | None = None,
 ) -> None:
     """Report one non-delivered post outcome (shared by the ladder and its early exit).
 
     ``error_type`` is the Telegram exception class behind ``status``: the feed reported a
     failed post without ever saying why, and the reason was already in hand at the call
     site. Absent rather than null when the gateway set none (the flood family never does).
+
+    ``budget`` is the outcome's position in a bounded rule ("1/2"), written as ``reason``
+    — the field the SPA already renders next to the event label, so a ratio needs neither
+    a translation nor a new event code. It DISPLACES the Telegram status in that slot
+    (``eventReason`` reads ``status`` only when there is no ``reason``), which is the
+    trade the one caller that sets it makes on purpose: on that line the status is the
+    invariant ``failed`` and ``error_type`` still names the refusal, while how far the
+    rule has got is the part the operator cannot deduce.
     """
     extra: dict[str, object] = {
         "channel": event.channel,
         "post_id": event.post_id,
         "status": result.status,
     }
+    if budget is not None:
+        extra["reason"] = budget
     if result.error_type:
         extra["error_type"] = result.error_type
     await log_event("WARNING", event_name, account_id=account_id, extra=extra)

@@ -22,8 +22,10 @@ from core.db import (  # type: ignore[attr-defined]
     record_join,
     upsert_readiness,
 )
+from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_neurocomment import _add_neurocomment_channel_case_fold_index
+from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 
@@ -444,3 +446,167 @@ def _join_log_columns(connection: Connection) -> set[str]:
             "PRAGMA table_info(neurocomment_join_log)",
         ).mappings()
     }
+
+
+def _readiness_columns(connection: Connection) -> dict[str, dict[str, object]]:
+    return {
+        str(row["name"]): dict(row)
+        for row in connection.exec_driver_sql(
+            "PRAGMA table_info(neurocomment_readiness)",
+        ).mappings()
+    }
+
+
+def test_migration_47_adds_unconfirmed_ban_columns() -> None:
+    """The budget that ends a pair re-refused by the same channel over and over."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = _readiness_columns(connection)
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    # NOT NULL counter, nullable stamp — the #41 and #43 shape. An existing row has to read
+    # as "nothing collected here yet": nobody may be banned on evidence gathered before the
+    # column existed.
+    assert columns["unconfirmed_bans"]["notnull"] == 1
+    # ``create_all`` quotes the server default and the ALTER does not, so compare the value.
+    assert str(columns["unconfirmed_bans"]["dflt_value"]).strip("'") == "0"
+    assert columns["unconfirmed_ban_at"]["notnull"] == 0
+    assert 47 in versions
+
+
+def _legacy_readiness(legacy_engine: _EngineFactory, name: str, columns: str = "") -> Engine:
+    """A readiness table at the pre-#47 shape, so an ALTER is what has to add the columns."""
+    engine = legacy_engine(name)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_readiness ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, account_id VARCHAR NOT NULL, "
+            f"channel VARCHAR NOT NULL, checked_at VARCHAR NOT NULL{columns})",
+        )
+    return engine
+
+
+def test_migration_47_alters_a_readiness_table_that_predates_the_columns(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """The only path that ever RUNS on the operator's database, exercised against a real one.
+
+    The test above cannot reach it: ``core.db`` runs ``create_all`` before
+    ``apply_migrations``, so on a test DB both columns are already there and the body's
+    PRAGMA guard returns before either ALTER. Built here the way #45's case is.
+    """
+    engine = _legacy_readiness(legacy_engine, "readiness-pre-47.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness (account_id, channel, checked_at) "
+            "VALUES ('acc-1', '@chan', 'then'), ('acc-2', '@chan', 'then')",
+        )
+        assert "unconfirmed_bans" not in _readiness_columns(connection)
+
+        _add_readiness_unconfirmed_ban(connection)
+        _add_readiness_unconfirmed_ban(connection)  # the "column already there" branch.
+
+        columns = _readiness_columns(connection)
+        assert columns["unconfirmed_bans"]["notnull"] == 1
+        assert columns["unconfirmed_ban_at"]["notnull"] == 0
+
+    with engine.connect() as connection:
+        rows = connection.exec_driver_sql(
+            "SELECT unconfirmed_bans, unconfirmed_ban_at FROM neurocomment_readiness ORDER BY id",
+        ).all()
+    # Every pre-existing row: no refusals collected, no stamp. A pair carrying a count it
+    # never earned would be banned on the first refusal after the upgrade.
+    assert rows == [(0, None), (0, None)]
+
+
+def test_migration_48_is_stamped() -> None:
+    engine = _get_engine()
+    with engine.connect() as connection:
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert 48 in versions
+
+
+def _legacy_overshot_budgets(legacy_engine: _EngineFactory, name: str) -> Engine:
+    """Both counters as the 4 → 2 change left them: rows above, at, and below the new cap."""
+    engine = _legacy_readiness(
+        legacy_engine,
+        name,
+        ", rejoin_attempts INTEGER NOT NULL DEFAULT 0, rejoin_attempted_at VARCHAR",
+    )
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness "
+            "(account_id, channel, checked_at, rejoin_attempts, rejoin_attempted_at) VALUES "
+            "('acc-1', '@chan', 'then', 4, 'last-week'),"  # spent the whole OLD budget
+            "('acc-2', '@chan', 'then', 2, 'last-week'),"  # exactly at the new cap
+            "('acc-3', '@chan', 'then', 1, 'yesterday'),"  # still inside the new budget
+            "('acc-4', '@chan', 'then', 0, NULL)",  # never parked
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_channels ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id VARCHAR NOT NULL, "
+            "channel VARCHAR NOT NULL, active INTEGER NOT NULL, created_at VARCHAR NOT NULL, "
+            "pause_rounds INTEGER NOT NULL DEFAULT 0, paused_until VARCHAR)",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at, pause_rounds, paused_until) VALUES "
+            "('c', '@over', 1, 'then', 3, 'last-week'),"
+            "('c', '@at', 1, 'then', 2, 'last-week'),"
+            "('c', '@under', 1, 'then', 1, 'last-week'),"
+            "('c', '@clean', 1, 'then', 0, NULL)",
+        )
+    return engine
+
+
+def test_migration_48_resets_the_budgets_that_overshot_the_new_cap(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#48 gives back the full budget to every row the 4 → 2 change had already spent.
+
+    Without it the first sweep after the upgrade unlinks six live channels: a row at 2 is
+    instantly "exhausted" under the new cap, and its stamp is a week old, so the deferred
+    verdict comes due in the same tick — no re-join under the new rule, and none of the 48h
+    the rule promises.
+    """
+    engine = _legacy_overshot_budgets(legacy_engine, "budgets-pre-48.db")
+    with engine.begin() as connection:
+        _reset_overshot_retry_budgets(connection)
+        _reset_overshot_retry_budgets(connection)  # idempotent — must not raise or re-fire.
+
+    with engine.connect() as connection:
+        readiness = connection.exec_driver_sql(
+            "SELECT account_id, rejoin_attempts, rejoin_attempted_at "
+            "FROM neurocomment_readiness ORDER BY id",
+        ).all()
+        links = connection.exec_driver_sql(
+            "SELECT channel, pause_rounds, paused_until "
+            "FROM neurocomment_campaign_channels ORDER BY id",
+        ).all()
+    # Counter AND stamp go together: a zeroed counter beside a week-old deadline would
+    # still read as "this window already ran out". Rows below the new cap are untouched —
+    # they have attempts left and their timeline is honest under the new rule.
+    assert readiness == [
+        ("acc-1", 0, None),
+        ("acc-2", 0, None),
+        ("acc-3", 1, "yesterday"),
+        ("acc-4", 0, None),
+    ]
+    assert links == [
+        ("@over", 0, None),
+        ("@at", 0, None),
+        ("@under", 1, "last-week"),
+        ("@clean", 0, None),
+    ]
+
+
+def test_migration_48_skips_a_database_without_the_columns(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """Inert rather than raising mid-upgrade on a DB that somehow never got #42/#43."""
+    engine = _legacy_readiness(legacy_engine, "budgets-no-columns.db")
+    with engine.begin() as connection:
+        _reset_overshot_retry_budgets(connection)  # no columns, no link table → no raise.

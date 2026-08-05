@@ -2,7 +2,7 @@
 
 Its own module because ``_campaigns`` is at the file-size cap, and because this is a
 distinct concern: ``_campaigns`` owns which channel belongs to which campaign, while
-these three functions own how long a channel stays parked and how many rounds it has
+these functions own how long a channel stays parked and how many rounds it has
 left. Both operate on ``neurocomment_campaign_channels``, always through the migration
 #39 case fold and always on the ACTIVE link — an inactive one is invisible to every
 reader, so writing to it would be a silent no-op.
@@ -20,7 +20,7 @@ from core.repositories.neurocomment._tables import (
     _campaign_channel_matches,
     _neurocomment_campaign_channels,
 )
-from schemas.neurocomment import ChannelPauseState
+from schemas.neurocomment import CampaignChannelLink, CampaignChannelList, ChannelPauseState
 
 if TYPE_CHECKING:
     from sqlalchemy import ColumnElement
@@ -47,6 +47,30 @@ async def fetch_channel_paused_until(channel: str) -> str | None:
     not-paused — nothing posts there anyway.
     """
     return await asyncio.to_thread(_fetch_channel_paused_until, channel)
+
+
+def _list_expired_channel_pauses(now: str) -> CampaignChannelList:
+    statement = select(_neurocomment_campaign_channels).where(
+        (_neurocomment_campaign_channels.c.active == 1)
+        & (_neurocomment_campaign_channels.c.paused_until <= now),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return CampaignChannelList(
+        links=[CampaignChannelLink.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_expired_channel_pauses(now: str) -> CampaignChannelList:
+    """Every active link whose pause window has run out, rounds included.
+
+    The one read behind the sweep pass that delivers the verdict a channel's last round
+    deferred to the end of its window: a paused channel takes no posts, so nothing on the
+    post path can fire at t=48h. Rows carry ``pause_rounds``, so the pass needs no second
+    read to tell a last window from an earlier one. NULL never compares true, so an
+    unpaused link is absent; so is a link whose deadline is still ahead.
+    """
+    return await asyncio.to_thread(_list_expired_channel_pauses, now)
 
 
 def _bump_channel_pause(channel: str, until: str) -> ChannelPauseState | None:
@@ -101,3 +125,27 @@ async def clear_channel_pause(channel: str) -> None:
     predicate: in the common case it matches no row and SQLite writes nothing.
     """
     await asyncio.to_thread(_clear_channel_pause, channel)
+
+
+def _release_channel_pause(channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_campaign_channels)
+            .where(
+                _active_link(channel) & _neurocomment_campaign_channels.c.paused_until.is_not(None),
+            )
+            .values(paused_until=None),
+        )
+
+
+async def release_channel_pause(channel: str) -> None:
+    """Drop ``channel``'s spent window and KEEP its rounds — the opposite of clearing.
+
+    A window that ended without a verdict (the round budget is spent, but an account
+    serving the channel has never been tried there) has to stop being an expired deadline,
+    or the sweep pass would re-judge the same window every five minutes. Only the deadline
+    goes: the counter is what makes the hold a delay rather than immortality, and the next
+    round re-arms the deadline anyway. Every reader already treats an elapsed deadline and
+    ``None`` alike, so this changes no other behaviour.
+    """
+    await asyncio.to_thread(_release_channel_pause, channel)

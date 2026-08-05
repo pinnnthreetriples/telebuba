@@ -12,19 +12,19 @@ human — and a channel whose every account was kicked produced nothing at all, 
 The rule, deliberately shaped like the two already here (``_sweep._review_join_requests``
 for approval-gated joins, ``_channel_pause`` for write-blocked channels): one re-join per
 ``channel_pause_hours``, at most ``channel_max_rounds`` of them, and once the last of
-those windows has run out too, the channel leaves its campaign — four attempts spread
-over four days, the fourth one included. It rides the 5-minute deletion sweep — the only
-periodic neurocomment task — and pokes onboarding rather than joining itself: the sweep
-must spend no join RPCs, and onboarding already owns the join cap and the jitter. The
-attempt is spent HERE, as the poke goes out: a counter only the pass could move never
-moved for a pair the pass cannot reach (pinned elsewhere, account at its join cap), so
-the nag had no bound at all. One case is exempt, and only one — a channel serving out a
-``_channel_pause`` window refuses EVERY join, so the review sits the window out rather
-than burning three of the four attempts on a channel nobody could try to re-enter.
+those windows has run out too, the channel leaves its campaign — as shipped, two attempts
+a day apart and the channel gone 48h after the first. It rides the 5-minute deletion
+sweep — the only periodic neurocomment task — and pokes onboarding rather than joining
+itself: the sweep must spend no join RPCs, and onboarding already owns the join cap and
+the jitter. The attempt is spent HERE, as the poke goes out: a counter only the pass could
+move never moved for a pair the pass cannot reach (pinned elsewhere, account at its join
+cap), so the nag had no bound at all. One case is exempt, and only one — a channel serving
+out a ``_channel_pause`` window refuses EVERY join, so the review sits the window out
+rather than burning the whole budget on a channel nobody could try to re-enter.
 
 Counter and deadline are persisted per pair (migration #43) rather than kept in memory,
-for the reason ``_channel_pause`` documents: the live app restarts, and a four-day rule
-built on module dicts never reaches day four.
+for the reason ``_channel_pause`` documents: the live app restarts, and a multi-day rule
+built on module dicts never reaches its last day.
 """
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def retry_due(readiness: NeurocommentReadiness, now: datetime) -> bool:
     Never stamped = due immediately: the first retry happens on the sweep tick after the
     kick (~5 minutes), which is what makes a transient access loss — Telethon also raises
     ``ChannelPrivateError`` on a stale cached entity — cost minutes instead of a day. Each
-    later attempt waits the full window, and the fourth one is the last.
+    later attempt waits the full window, and the ``channel_max_rounds``-th is the last.
     """
     if exhausted(readiness):
         return False
@@ -220,14 +220,14 @@ async def _review_channel(
     # pair" (pinned elsewhere, account at its join cap) still costs an attempt, or a
     # permanently unreachable pair would never terminate — but "no pair on this channel can
     # be tried at all" is a different claim, and a #147 pause is exactly that:
-    # ``_onboard_pair`` returns ``channel_paused`` before any join RPC, so three pause
-    # rounds (72h) burned three of the four attempts against a channel nobody could even
-    # try to re-enter, and the give-up log then said they had used them up. Read off the
-    # same column onboarding refuses on, so the two cannot disagree. The drop waits too:
-    # while the pause holds, the channel's fate belongs to the pause rule's round counter,
-    # and a budget spent against refused joins is no evidence. Deferred, never waived — a
-    # pause window is a flat ``channel_pause_hours``, so the timeline picks up where it
-    # left off on the first tick after it lapses.
+    # ``_onboard_pair`` returns ``channel_paused`` before any join RPC, so every pause round
+    # burned an attempt against a channel nobody could even try to re-enter — the whole
+    # budget, at the shipped two — and the give-up log then said they had used them up.
+    # Read off the same column onboarding refuses on, so the two cannot disagree. The drop
+    # waits too: while the pause holds, the channel's fate belongs to the pause rule's round
+    # counter, and a budget spent against refused joins is no evidence. Deferred, never
+    # waived — a pause window is a flat ``channel_pause_hours``, so the timeline picks up
+    # where it left off on the first tick after it lapses.
     if _state.channel_paused(await fetch_channel_paused_until(channel), now):
         return False
     due = [row for row in parked if retry_due(row, now)]
@@ -239,6 +239,24 @@ async def _review_channel(
         # — the guard above sat the window out.
         for row in due:
             await stamp_rejoin_attempt(row.account_id, channel)
+            # The operator's only sight of this rule while it runs: spending an attempt was
+            # silent, so between the access loss and the WARNING that unlinks the channel
+            # two days later a channel on its way out read as an idle one. One row per
+            # stamp, so a pair whose window is still running writes nothing. ``reason``
+            # carries the position in the budget rather than a code — nothing in
+            # ``logEventReason`` matches it and ``eventReason`` renders an unmapped code
+            # raw, which is what puts "· 1/2" and then "· 2/2" beside the label.
+            spent = row.rejoin_attempts + 1
+            await log_event(
+                "INFO",
+                "neurocomment_rejoin_attempt",
+                account_id=row.account_id,
+                extra={
+                    "channel": channel,
+                    "attempts": spent,
+                    "reason": f"{spent}/{settings.neurocomment.channel_max_rounds}",
+                },
+            )
         return True
     # Unlike the join-request review, the retry above is NOT gated on the channel being
     # otherwise dead: a kicked account must get back into a chat the other five comment in
@@ -246,15 +264,17 @@ async def _review_channel(
     # decides whether anything still works here.
     # A terminal pair has no window to wait out — it never spent an attempt, so there is
     # no re-join in flight to give a day to. Written as the exception it is, so the
-    # four-attempts-over-four-DAYS promise below keeps reading off one condition.
+    # attempts-over-DAYS promise below keeps reading off one condition.
     if not all(exhausted(row) and (terminal(row) or _window_elapsed(row, now)) for row in parked):
         # Nothing due, but somebody is still mid-timeline — either they have attempts left,
         # or they have just spent the last one. That second half is why the window check is
-        # here and not folded into ``exhausted``: the fourth attempt is stamped at t=72h
-        # and the pass it pokes joins *after* that, so dropping the moment nothing is
-        # ``retry_due`` any more gave attempt four about five minutes and unlinked the
-        # channel with a re-join still in flight. The budget is four attempts over four
-        # DAYS: the last window counts like the other three.
+        # here and not folded into ``exhausted``: the last attempt is stamped one window
+        # short of the deadline (t=24h at the shipped two) and the pass it pokes joins
+        # *after* that, so dropping the moment nothing is ``retry_due`` any more gave the
+        # last attempt about five minutes and unlinked the channel with a re-join still in
+        # flight. The budget is ``channel_max_rounds`` attempts over as many DAYS: the last
+        # window counts like every earlier one, which is what puts the drop at t=48h rather
+        # than t=24h.
         return False
     await _drop_channel_if_nothing_works(campaign_id, channel, serving, parked)
     return False
@@ -281,7 +301,7 @@ async def _drop_channel_if_nothing_works(
     from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
 
     await campaigns_service.deactivate_channel(campaign_id, channel)
-    # Two verdicts, two lines: "every account spent its four re-joins here" is a claim
+    # Two verdicts, two lines: "every account spent its re-joins here" is a claim
     # about the chat, and reporting it for a channel whose address Telegram says does not
     # exist told the operator to wait for a recovery nobody was working on. Two calls rather
     # than one picking its code from a variable: the i18n drift guard does now follow a name

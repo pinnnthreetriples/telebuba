@@ -320,13 +320,19 @@ class NeurocommentSettings(BaseSettings):
     # channel — a captcha the solver lost or a write gate — end a round, and the channel
     # is paused for a flat window in which nothing posts there and no account is
     # onboarded to it. The escalating 1h→24h doubling it replaced only delayed the
-    # verdict; four flat days do decide one. Round counter and deadline are PERSISTED on
+    # verdict; flat days do decide one. Round counter and deadline are PERSISTED on
     # the campaign link (migration #42), because the process restarted 7 times in three
-    # days and an in-memory counter never reached round 4.
+    # days and an in-memory counter never reached its last round.
     channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)
     channel_pause_hours: float = Field(default=24.0, gt=0.0)
     # Rounds a channel gets before it leaves its campaign instead of pausing again.
-    channel_max_rounds: int = Field(default=4, ge=1)
+    # ONE rule for both readers of this budget — ``_channel_pause`` (the channel refuses
+    # writes) and ``_rejoin`` (an account was kicked out of the discussion group): two
+    # attempts a day apart, and 48h after the first the channel is off the campaign.
+    # Deliberately the same shape as the approval-gated budget above
+    # (join_request_retry_hours x join_request_max_attempts), so an operator has one
+    # number to remember rather than one per failure mode.
+    channel_max_rounds: int = Field(default=2, ge=1)
     # Minimum warming age (whole days) for an account to count as "warmed" in the
     # neurocomment page's top overview field.
     warmed_min_days: int = Field(default=14, ge=1)

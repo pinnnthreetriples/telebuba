@@ -552,7 +552,7 @@ test('explains a cycle that ended badly, and stays quiet about a healthy one', a
   // The engine writes a cycle's outcome as extra.status; only the bad ones have a
   // label, so a normal cycle keeps its one-line "завершён" instead of gaining a tail.
   await waitFor(() => {
-    expect(screen.getByText('· флуд-ограничение')).toBeInTheDocument();
+    expect(screen.getByText('· ограничение по спаму')).toBeInTheDocument();
   });
   expect(screen.getAllByText('Цикл прогрева завершён')).toHaveLength(2);
   expect(screen.queryByText(/· ok/)).not.toBeInTheDocument();

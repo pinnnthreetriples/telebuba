@@ -236,8 +236,8 @@ def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
     used to give both the terminal one. It is written by a hard join failure AND by an
     account kicked out of the chat (``_rejoin``'s module docstring: both mean "this pair
     needs a fresh join"), and since the re-join rule shipped it does self-resolve — one
-    attempt within minutes, then one a day, four in all. So a pair with attempts left is
-    ``rejoining`` (the re-join timeline is running), and only a pair that has spent them
+    attempt within minutes, then one a day, ``channel_max_rounds`` in all. So a pair with
+    attempts left is ``rejoining`` (the timeline is running), and only one that has spent them
     — or one ``_rejoin`` refuses to retry at all, i.e. skipped (#148) — is the terminal
     ``join_failed``. Since #44 the row also says WHY the pair is out, and ``exhausted``
     folds that in: a verdict a re-join can never beat (a handle nobody owns, a revoked

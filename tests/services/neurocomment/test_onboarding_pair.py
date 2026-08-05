@@ -109,6 +109,11 @@ async def test_join_by_request_does_not_get_stuck(monkeypatch: pytest.MonkeyPatc
     ]
     assert [e.extra.get("channel") for e in logged] == ["@gated"]
     assert [e.level for e in logged] == ["INFO"]
+    # ...and WHICH request this is. The SPA renders an unmapped ``reason`` verbatim after
+    # the caption, so the ratio needs no translation — and it is read off the row the
+    # stamp above just bumped, not off a count the log line guesses at.
+    max_attempts = settings.neurocomment.join_request_max_attempts
+    assert [e.extra.get("reason") for e in logged] == [f"1/{max_attempts}"]
 
 
 @pytest.mark.asyncio
@@ -383,6 +388,10 @@ async def test_pending_join_request_is_not_re_sent_inside_the_window(
         if e.event == "neurocomment_onboard_join_request_pending"
     ]
     assert [(e.level, e.extra.get("channel")) for e in held] == [("INFO", "@gated")]
+    # The same running count the request line carries, so the operator reads "1/2" here
+    # and "2/2" once the retry goes out instead of a bare "still waiting".
+    max_attempts = settings.neurocomment.join_request_max_attempts
+    assert [e.extra.get("reason") for e in held] == [f"1/{max_attempts}"]
 
 
 @pytest.mark.asyncio
@@ -398,6 +407,14 @@ async def test_join_request_is_re_sent_once_after_the_retry_window(
     readiness = await fetch_readiness("acc-1", "@gated")
     assert readiness is not None
     assert readiness.join_request_attempts == 2
+    # The counter in the log moves with it: "1/2" on the first request, "2/2" on the last.
+    requested = [
+        e.extra.get("reason")
+        for e in await list_recent_logs(limit=50)
+        if e.event == "neurocomment_onboard_join_by_request"
+    ]
+    max_attempts = settings.neurocomment.join_request_max_attempts
+    assert sorted(requested) == [f"1/{max_attempts}", f"2/{max_attempts}"]
 
 
 @pytest.mark.asyncio

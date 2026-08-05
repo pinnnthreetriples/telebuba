@@ -11,7 +11,7 @@ it can wipe a rival task's still-live cooldown. The deletion back-off stays in-m
 only — it is recomputed each sweep and self-heals. The "channel will not let us write"
 rule keeps only its failure *window* here; its rounds and pause deadline live on the
 campaign link (``core.repositories.neurocomment._pauses``), because the rule
-spans four days and this process does not.
+spans days and this process does not.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ _CHANNEL_COUNTED_DELETED: dict[str, set[int]] = {}
 # the *window* lives here: losing it on a restart costs at most one round boundary, so it
 # is not worth a DB write per failure. The verdict it feeds — how many rounds the channel
 # has burned and until when it is paused — is persisted on the campaign link, because a
-# four-day rule cannot be built on state a restart clears.
+# multi-day rule cannot be built on state a restart clears.
 _WRITE_FAILED: dict[str, int] = {}
 
 

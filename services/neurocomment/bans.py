@@ -7,14 +7,19 @@ aggregate a per-channel verdict. Pin-aware account resolution mirrors
 ``GetParticipant`` reads can't trip flood limits. A probe fault degrades to
 ``unknown`` — the check never crashes.
 
-Also home to :func:`confirm_group_ban_and_leave`, the single gate in front of the
-sticky auto-ban (#30) and the group leave — see its docstring for why
-``UserBannedInChannelError`` is not itself evidence of a per-group ban.
+Also home to the two verdicts that can park a pair for good:
+:func:`confirm_group_ban_and_leave`, the gate in front of the sticky auto-ban (#30) and
+the group leave — see its docstring for why ``UserBannedInChannelError`` is not itself
+evidence of a per-group ban — and :func:`register_unconfirmed_ban` (#47), which bounds
+how many times a group may refuse a HEALTHY account before the pair gives the chat up
+anyway. Both read the same probe (:func:`probe_group_state`, taken once per refusal) and
+both end in the same exit, ``_mark_banned_and_leave``.
 """
 
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from core.config import settings
@@ -25,12 +30,13 @@ from core.db import (
     list_campaign_channels,
     list_channel_readiness,
     mark_pair_banned,
+    stamp_unconfirmed_ban,
     upsert_readiness,
 )
 from core.logging import log_event
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel, LeaveDiscussionGroup
-from services.neurocomment import _seams
+from services.neurocomment import _seams, _state
 from services.neurocomment._pins import serving_accounts
 
 _ChannelStatus = Literal["ok", "banned", "unknown"]
@@ -85,6 +91,20 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
     return ChannelBanCheckList(items=list(items))
 
 
+async def probe_group_state(account_id: str, channel: str) -> str:
+    """Read the group's OWN participant record for this pair; ``probe_error`` on a fault.
+
+    One refusal, one ``GetParticipant``. Both verdicts below ask the same question of the
+    same record — did THIS group ban us — so the post path takes the answer once here and
+    hands it to each as ``known_state`` instead of probing twice for one failed send.
+    """
+    try:
+        probe = await _seams.execute_read(account_id, CheckBannedInChannel(channel=channel))
+    except Exception:  # noqa: BLE001 - a probe fault is not evidence of a ban.
+        return "probe_error"
+    return probe.state if isinstance(probe, BanCheckResult) else "probe_error"
+
+
 async def confirm_group_ban_and_leave(
     account_id: str,
     channel: str,
@@ -115,16 +135,16 @@ async def confirm_group_ban_and_leave(
     ``known_state`` feeds in an already-known probe result so the "Проверить
     каналы" button does not pay a second ``GetParticipant`` per pair.
 
+    ONE negative answer is not the end of the story on the post path: the ``can_send``
+    one — the group's own record says this account may write and @SpamBot says it is
+    clean, yet the send was refused anyway — is counted by
+    :func:`register_unconfirmed_ban`, and a pair that collects two of those a day apart
+    inside 48h leaves the chat on the budget instead of on proof. The other negatives are
+    counted by nobody, for the reason this function refuses to act on them.
+
     Returns True only when the pair was marked banned; a failed leave never raises.
     """
-    state = known_state
-    if state is None:
-        try:
-            probe = await _seams.execute_read(account_id, CheckBannedInChannel(channel=channel))
-        except Exception:  # noqa: BLE001 - a probe fault is not evidence of a ban.
-            state = "probe_error"
-        else:
-            state = probe.state if isinstance(probe, BanCheckResult) else "probe_error"
+    state = known_state if known_state is not None else await probe_group_state(account_id, channel)
     if state != "restricted":
         # INFO, not WARNING: this is the NEGATIVE answer to a question we asked, and it is
         # the common one — every gated post runs the ladder, so a closed channel produced
@@ -147,6 +167,122 @@ async def confirm_group_ban_and_leave(
             extra={"channel": channel, "state": state, "spam_status": verdict.status},
         )
         return False
+    await _mark_banned_and_leave(account_id, channel, "neurocomment_group_ban_confirmed")
+    return True
+
+
+async def register_unconfirmed_ban(
+    account_id: str,
+    channel: str,
+    *,
+    known_state: str | None = None,
+) -> str | None:
+    """Count a refusal by a group that has no excuse for it; park the pair on the second.
+
+    The gap :func:`confirm_group_ban_and_leave` deliberately leaves open, closed with a
+    budget instead of a weaker proof. That function is right that one
+    ``UserBannedInChannelError`` proves nothing about THIS group — but a pair the group
+    refuses over and over, while the group's own participant record says ``can_send`` and
+    @SpamBot calls the account clean, is not producing comments here either way. Live DB:
+    one account met the same channel four times running and the pair was never marked, so
+    selection kept handing it the same post — three days, ten refusals, zero comments.
+
+    That ``can_send`` + ``clean`` reading is the ONLY one counted. Every other answer
+    points away from this group and must not spend the budget: ``restricted`` with a
+    limited account, or any reading at all with a limited account, is the account-wide
+    block — and that error then lands in EVERY channel it posts to, so counting it would
+    walk one limited account into a sticky ban on the whole fleet's channels, one at a
+    time, with no way back for either the code or the operator. ``probe_error`` proves
+    nothing whatsoever, and ``not_member`` has no chat left to leave. The spam reading is
+    the CACHED one: this is the post hot path, and probing @SpamBot per refusal is itself
+    an anti-ban risk.
+
+    The budget is the one the sibling rules already spend, read off ``channel_max_rounds``
+    and ``channel_pause_hours`` rather than added as knobs of its own — but never fewer
+    than two rounds, because a single refusal must not be enough to close a channel for
+    good; an operator who tunes the setting down to 1 is shortening the sibling rules'
+    patience, not handing this one a sticky ban on the first failure.
+
+    Two counted refusals then need two things: they must be at least
+    ``channel_pause_hours`` apart, and both must fall inside
+    ``channel_pause_hours * rounds`` — a day and 48h at the shipped settings. The interval
+    is what makes "two in 48h" true rather than "two in an hour": a counted refusal parks
+    the pair on this channel for the pause, and while that cooldown stands another refusal
+    is not counted and does not move the stamp. Above the window the count starts over
+    (``stamp_unconfirmed_ban``), and a delivered comment clears it outright
+    (``clear_unconfirmed_bans``) — both say the same thing, that this pair is not stuck.
+
+    Only the unconfirmed ban error reaches here. An admin mute (``ChatWriteForbiddenError``)
+    and a kick (``ChannelPrivateError`` / ``UserNotParticipantError``) mean something else
+    and have their own branches; counting them here would turn a channel-wide gate into a
+    per-pair ban.
+
+    On the last refusal the pair takes exactly the confirmed ban's exit — marked, out of
+    the chat, and the channel unlinked only once every serving account has gone the same
+    way. That exit logs the ban itself, so the caller reports the POST outcome and no
+    second copy of the same line.
+
+    Returns the refusal's position in the budget (``"1/2"``, then ``"2/2"`` — the one that
+    parked the pair) so the caller's own line can carry it, or ``None`` when the refusal
+    was NOT counted. That distinction is the whole point of reporting a position at all:
+    every early return below is a refusal this rule charges nobody for, and a counter
+    printed next to one would tell the operator a budget is running down when it is not.
+    """
+    if known_state != "can_send":
+        return None
+    verdict = await _seams.refresh_spam_status(account_id)
+    if verdict.status != "clean":
+        return None
+    nc = settings.neurocomment
+    now = datetime.now(UTC)
+    # The pause a counted refusal parked this pair with IS the minimum interval, so a
+    # refusal arriving while it stands is the same episode, not a second attempt. Reading
+    # it here rather than a stamp of its own keeps the rule on the columns it already has;
+    # the deadline is persisted and rehydrated, so a restart does not refill the budget.
+    if _state.in_cooldown(account_id, now, channel):
+        return None
+    rounds = max(2, nc.channel_max_rounds)
+    # One window per round, as many rounds as the budget: the same 48h the re-join and
+    # join-request rules count out, derived so the operator tunes all of them in one place.
+    window = timedelta(hours=nc.channel_pause_hours * rounds)
+    failures = await stamp_unconfirmed_ban(account_id, channel, (now - window).isoformat())
+    await _state.set_cooldown(account_id, now + timedelta(hours=nc.channel_pause_hours), channel)
+    if failures < rounds:
+        # ``stamp_unconfirmed_ban`` answers 0 when the pair has no readiness row at all:
+        # nothing was counted, so there is no position in the budget to report — and
+        # "0/2" would be a counter that never moves.
+        return f"{failures}/{rounds}" if failures else None
+    # The existing code, not a new one: for the pair the outcome IS a ban in this channel,
+    # and the operator's feed should not have to learn a second word for it. The count
+    # rides along so the line says which rule spent it — ``neurocomment_group_ban_confirmed``
+    # would have claimed a confirmation that never happened. ``reason`` closes the run of
+    # positions the earlier refusals printed: the feed reads "1/2" and then "2/2" rather
+    # than "1/2" and then silence. Literally the budget, not ``failures``, because this
+    # branch is "at or over it" and an over-run must not render as "3/2".
+    spent = f"{rounds}/{rounds}"
+    await _mark_banned_and_leave(
+        account_id,
+        channel,
+        "neurocomment_account_banned",
+        unconfirmed_bans=failures,
+        reason=spent,
+    )
+    return spent
+
+
+async def _mark_banned_and_leave(
+    account_id: str,
+    channel: str,
+    event: str,
+    **extra: object,
+) -> None:
+    """Park the pair here for good and walk out of the chat — the ban's one exit.
+
+    Shared by the two verdicts that reach it (Telegram confirmed the group banned us, or
+    the group refused us until the budget ran out) so they cannot drift: the same writes in
+    the same order, the same best-effort leave, the same unlink check. Only the event code
+    and any extra fields differ, because only the REASON differs.
+    """
     # The row must exist first — ``mark_pair_banned`` is a plain UPDATE, not an upsert.
     # The field values mirror ``_classify``'s ban branch: we are a participant of the
     # group (that is what the restricted record means) but cannot write there.
@@ -172,12 +308,11 @@ async def confirm_group_ban_and_leave(
         outcome = type(exc).__name__
     await log_event(
         "WARNING",
-        "neurocomment_group_ban_confirmed",
+        event,
         account_id=account_id,
-        extra={"channel": channel, "leave": outcome},
+        extra={"channel": channel, "leave": outcome, **extra},
     )
     await _unlink_channel_if_no_account_left(account_id, channel)
-    return True
 
 
 async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> None:
@@ -202,7 +337,7 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
     ban has no un-ban path, so nothing would ever revisit it. The three sibling rules
     phrase the same clause as "no serving row is ``ready``", which would also fix this —
     but this rule is the one with no clock of its own. ``_sweep`` and ``_rejoin`` overrule
-    the other accounts only after their own 48h / four days have run out, whereas one ban
+    the other accounts only after their own 48h have run out, whereas one ban
     lands here mid-post; a pair still inside its approval window is not ready either, and
     dropping on that would cancel patience those two rules are still counting out.
     """

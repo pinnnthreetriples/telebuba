@@ -119,7 +119,18 @@ async def _join_and_classify(
             "INFO",
             "neurocomment_onboard_join_request_pending",
             account_id=account_id,
-            extra={"channel": channel, "attempts": existing.join_request_attempts},
+            extra={
+                "channel": channel,
+                "attempts": existing.join_request_attempts,
+                # "2/2" next to the event label: ``eventReason`` joins ``extra.reason``
+                # onto the caption with ' · ' and prints an unmapped code verbatim, so a
+                # bare ratio needs no translation. ``attempts`` alone told the operator
+                # nothing — the budget it is spending lives in settings, not on screen.
+                "reason": (
+                    f"{existing.join_request_attempts}"
+                    f"/{settings.neurocomment.join_request_max_attempts}"
+                ),
+            },
         )
         return AccountChannelOnboarding(
             account_id=account_id,
@@ -141,7 +152,7 @@ async def _join_and_classify(
         and _rejoin.access_lost(existing)
         and not _rejoin.attempt_owed(existing)
     ):
-        # A pair that lost chat access gets one re-join a day, four in total (#43), and
+        # A pair that lost chat access gets one re-join a day, two in total (#43), and
         # the sweep review is what stamps them. Held back here because every operator
         # Start, every campaign reconcile and every other channel's poke starts a pass
         # too: without this guard each of them would re-join every parked pair in the

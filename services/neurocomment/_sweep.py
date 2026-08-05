@@ -29,9 +29,7 @@ from core.db import (
     reclaim_stale_claims,
 )
 from core.logging import log_event
-from core.telegram_client import TelegramReadError
-from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult
-from services.neurocomment import _rejoin, _seams, _state
+from services.neurocomment import _channel_pause, _rejoin, _state, _sweep_read
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -58,15 +56,16 @@ async def _sweep_loop() -> None:
 
     The lone non-event loop in the runtime, and it must never die (mirrors the
     listener-safe on-post pipeline). The retention prune, the join-request review, the
-    access-loss review and the stale-claim reclaim piggyback on the same tick, and every
-    pass is awaited behind the ONE guard below rather than behind the ones inside it: each
-    of those covers only its own first bulk read, so everything after it — a locked SQLite,
-    a malformed timestamp, the live Telegram RPC ``deactivate_channel`` reaches through the
-    listener reconcile — unwound into this loop body and ended the task for the rest of the
-    process lifetime. Silently, too: the handle in ``_runtime`` carries no done-callback, so
-    every lifecycle rule simply stopped until an operator hit Start again. Guarding here is
-    what makes the promise true — no pass can abort the loop or its siblings, and every
-    fault leaves a ``neurocomment_sweep_failed`` line naming the pass that raised.
+    access-loss review, the write-blocked-channel review and the stale-claim reclaim
+    piggyback on the same tick, and every pass is awaited behind the ONE guard below rather
+    than behind the ones inside it: each of those covers only its own first bulk read, so
+    everything after it — a locked SQLite, a malformed timestamp, the live Telegram RPC
+    ``deactivate_channel`` reaches through the listener reconcile — unwound into this loop
+    body and ended the task for the rest of the process lifetime. Silently, too: the handle
+    in ``_runtime`` carries no done-callback, so every lifecycle rule simply stopped until
+    an operator hit Start again. Guarding here is what makes the promise true — no pass can
+    abort the loop or its siblings, and every fault leaves a ``neurocomment_sweep_failed``
+    line naming the pass that raised.
 
     The one way a pass ends this loop is by stopping it on purpose: a drop rule that unlinks
     the LAST watch channel reconciles the listener, which unsubscribes and stops the sweep.
@@ -87,6 +86,7 @@ async def _sweep_loop() -> None:
             ("retention", partial(_prune_history_if_due, now)),
             ("join_requests", partial(_review_join_requests, now)),
             ("rejoin", partial(_rejoin.review_access_lost, now)),
+            ("channel_pause", partial(_channel_pause.review_expired_pauses, now)),
             ("stale_claims", partial(_reclaim_stale_claims, now)),
         ):
             try:
@@ -363,25 +363,12 @@ async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datet
     if not msg_ids:
         return
     nc = settings.neurocomment
-    # ponytail: reads as one comment-author (a group member). If that account was
-    # later kicked, get_messages may report all ids gone (false trip) or raise (handled
-    # below); add a reader quorum / membership check only if the canary shows false trips.
-    reader = comments[0].account_id
-    try:
-        result = await _seams.execute_read(
-            reader,
-            CheckMessagesAlive(channel=channel, message_ids=msg_ids),
-        )
-    except Exception as exc:  # noqa: BLE001 - one channel's read must not abort the sweep.
-        # The gateway wraps every Telethon failure as TelegramReadError, so the class
-        # name alone said nothing: 544 identical lines in three days and no way to tell
-        # a flood-wait from a lost peer. ``reason`` carries the wrapped cause.
-        extra: dict[str, object] = {"channel": channel, "error_type": type(exc).__name__}
-        if isinstance(exc, TelegramReadError):
-            extra |= {"reason": exc.reason, "kind": exc.kind}
-        await log_event("WARNING", "neurocomment_sweep_read_failed", account_id=reader, extra=extra)
-        return
-    if not isinstance(result, CheckMessagesAliveResult):  # pragma: no cover - typed gateway
+    # Every comment author in turn, not ``comments[0]``: one kicked account used to fail
+    # this read forever and only ever produce a warning. ``_sweep_read`` owns the walk, the
+    # access-loss bookkeeping it hands to the re-join rule, and the one log line a channel
+    # nobody could read is worth — so ``None`` here is already reported.
+    result = await _sweep_read.read_alive(channel, comments, msg_ids)
+    if result is None:
         return
     # Stamp the vanished comments so the feed/history can show which were removed;
     # log only the freshly-marked ones (idempotent across the overlapping window).

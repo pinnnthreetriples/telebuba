@@ -166,9 +166,9 @@ test('during onboarding, a not-yet-armed account animates progress instead of "n
     />,
   );
   // header carries the live onboarding indicator (was a static "updated" label)
-  expect(screen.getByText('Онбординг идёт')).toBeInTheDocument();
+  expect(screen.getByText('Подключаем аккаунты')).toBeInTheDocument();
   // acc-2 has 0 of 1 channels ready → animated progress, not the misleading no-data
-  expect(screen.getByText('Онбординг 0/1')).toBeInTheDocument();
+  expect(screen.getByText('Подключаем аккаунты 0/1')).toBeInTheDocument();
   expect(screen.queryByText('Нет данных')).not.toBeInTheDocument();
   // acc-1 is fully armed (1/1) → keeps its real status even mid-onboarding
   expect(screen.getByText('Готов')).toBeInTheDocument();
@@ -183,8 +183,8 @@ test('with onboarding off, the static status shows (no progress badge)', () => {
       displayName={LABEL}
     />,
   );
-  expect(screen.queryByText('Онбординг идёт')).not.toBeInTheDocument();
-  expect(screen.queryByText('Онбординг 0/1')).not.toBeInTheDocument();
+  expect(screen.queryByText('Подключаем аккаунты')).not.toBeInTheDocument();
+  expect(screen.queryByText('Подключаем аккаунты 0/1')).not.toBeInTheDocument();
   expect(screen.getByText('Нет данных')).toBeInTheDocument();
 });
 
