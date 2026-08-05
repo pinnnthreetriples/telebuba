@@ -13,17 +13,23 @@ The cooldown is deliberately NOT zeroed here. It is the rule's clock — a count
 parks the pair for ``channel_pause_hours`` and nothing counts again until that expires —
 so a fixture that flattened it would let these tests observe a tempo production never has.
 Where a test needs the next day, it says so through ``_the_pause_expires``.
+
+Two of these run the posts CONCURRENTLY, which is the tempo a channel with a queue of posts
+actually has and the one the rule was blind to: the interval used to be a Python check an
+``await`` away from the write it guarded, so refusals that interleaved all passed it, all
+counted, and ran the ban's exit once each.
 """
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
 from core.config import settings
-from core.db import fetch_readiness, list_recent_logs
+from core.db import _get_engine, fetch_readiness, list_recent_logs  # type: ignore[attr-defined]
 from schemas.telegram_actions import BanCheckResult, NewPostEvent
 from services.neurocomment import _seams, _state, bans, engine
 from tests.services.neurocomment.engine_support import (
@@ -35,11 +41,21 @@ from tests.services.neurocomment.engine_support import (
 )
 
 if TYPE_CHECKING:
-    from schemas.spam_status import SpamStatusKind
+    from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
+    from schemas.telegram_actions import TelegramAction
 
 _CHANNEL = "@chan"
 _ACCOUNT = "acc-1"
 _BAN_ERROR = "UserBannedInChannelError"
+
+
+def _leaves(calls: list[tuple[str, TelegramAction]]) -> int:
+    """Every ``LeaveDiscussionGroup`` a stub saw — the ban's one irreversible move.
+
+    Counted, not merely spotted: the fault these tests were written for ran the whole exit
+    once per counted refusal, so "did we leave" cannot tell a correct ban from a doubled one.
+    """
+    return sum(1 for _, action in calls if action.action_type == "leave_discussion_group")
 
 
 @pytest.fixture
@@ -66,31 +82,67 @@ class _Posts:
         self.gen = _GenStub("alpha text", "beta text", "gamma text", "delta text")
         self.post_id = 0
         self.stub = _CommentStub()
+        # Every RPC of every post, not just the last one's: the ban's exit is what has to
+        # happen at most once per pair, and a per-post view cannot see it happen twice.
+        self.calls: list[tuple[str, TelegramAction]] = []
 
     async def send(self, *, error_type: str | None = None) -> None:
         self.post_id += 1
+        self._arm(error_type)
+        await engine.handle_new_post(
+            NewPostEvent(channel=_CHANNEL, post_id=self.post_id, text="hi"),
+        )
+        self.calls.extend(self.stub.calls)
+
+    async def send_together(self, count: int, *, error_type: str) -> None:
+        """``count`` posts on this channel in flight at once — the listener's real tempo.
+
+        Every DB call in the pipeline is an await, so the tasks genuinely interleave: each
+        reaches the refusal branch before any of them has parked the pair, which is exactly
+        the burst that walked a pair from its first refusal to a permanent ban in seconds.
+        """
+        self._arm(error_type)
+        events = [
+            NewPostEvent(channel=_CHANNEL, post_id=self.post_id + n + 1, text="hi")
+            for n in range(count)
+        ]
+        self.post_id += count
+        await asyncio.gather(*(engine.handle_new_post(event) for event in events))
+        self.calls.extend(self.stub.calls)
+
+    def _arm(self, error_type: str | None) -> None:
         self.stub = _CommentStub(
             status="ok" if error_type is None else "failed",
             error_type=error_type,
         )
         _patch_io(self.monkeypatch, comment=self.stub, gen=self.gen)
-        await engine.handle_new_post(
-            NewPostEvent(channel=_CHANNEL, post_id=self.post_id, text="hi"),
-        )
+
+    @property
+    def leaves(self) -> int:
+        return _leaves(self.calls)
 
     @property
     def left_the_chat(self) -> bool:
-        return any(action.action_type == "leave_discussion_group" for _, action in self.stub.calls)
+        return self.leaves > 0
 
 
 def _the_pause_expires() -> None:
-    """The next day: every live cooldown deadline is behind us.
+    """The next day: every deadline and every stamp this rule reads is behind us.
 
-    ``_state`` reads deadlines from memory (the DB copy only survives restarts), so
-    dropping them is exactly what the clock reaching them looks like to every caller —
-    the engine's selection gate and the rule's own minimum-interval check alike.
+    Two clocks, because the minimum interval moved out of memory and into the counting
+    UPDATE: the cooldown deadlines the engine's selection gate reads (in memory — the DB
+    copy only survives restarts), and the pair's own ``unconfirmed_ban_at``, which is what
+    the SQL clause compares against. Backdating that stamp past a day is what the interval
+    running out looks like to it, without a test sleeping through one.
     """
     _state.reset_for_tests()
+    yesterday = (datetime.now(UTC) - timedelta(hours=25)).isoformat()
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_readiness SET unconfirmed_ban_at = ? "
+            "WHERE unconfirmed_ban_at IS NOT NULL",
+            (yesterday,),
+        )
 
 
 def _spy_on_the_counter(monkeypatch: pytest.MonkeyPatch) -> list[str]:
@@ -102,9 +154,9 @@ def _spy_on_the_counter(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     real = bans.stamp_unconfirmed_ban
     windows: list[str] = []
 
-    async def _stamp(account_id: str, channel: str, window_start: str) -> int:
+    async def _stamp(account_id: str, channel: str, window_start: str, interval_start: str) -> int:
         windows.append(window_start)
-        return await real(account_id, channel, window_start)
+        return await real(account_id, channel, window_start, interval_start)
 
     monkeypatch.setattr(bans, "stamp_unconfirmed_ban", _stamp)
     return windows
@@ -180,9 +232,161 @@ async def test_the_second_refusal_a_pause_later_parks_the_pair_and_leaves(
     await posts.send(error_type=_BAN_ERROR)
 
     assert await _banned() is True
-    assert posts.left_the_chat is True
+    assert posts.leaves == 1
     assert await _times_logged("neurocomment_account_banned") == 1
     assert await _times_logged("neurocomment_group_ban_confirmed") == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine", "_budget_of_two")
+async def test_two_refusals_racing_on_one_pair_are_charged_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The tempo the rule was blind to: both refusals in flight, one charged.
+
+    The interval used to be checked in Python, an ``await`` before the write it guarded, so
+    two refusals whose coroutines interleaved both passed it: this ``gather`` answered "2/2"
+    and "1/2" and left the pair permanently banned seconds after its FIRST refusal. Now the
+    counting UPDATE decides, and the loser is charged nothing at all.
+    """
+    await _make_campaign(_CHANNEL, _ACCOUNT)
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+    leave = _CommentStub()  # the ban's exit rides this seam, and must not reach it
+    _patch_io(monkeypatch, comment=leave)
+
+    charged = await asyncio.gather(
+        bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send"),
+        bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send"),
+    )
+
+    assert len(charged) == 2  # whichever of them won the interval
+    assert set(charged) == {"1/2", None}
+    assert await _banned() is False
+    assert _leaves(leave.calls) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine", "_budget_of_two")
+async def test_racing_refusals_on_the_last_of_the_budget_leave_the_chat_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ban's exit is irreversible, so a burst must not run it once per refusal.
+
+    It did: refusals that raced past the interval each reached the budget, and each marked
+    the pair, left the discussion group and ran the unlink check — two
+    ``neurocomment_account_banned`` rows, two ``LeaveDiscussionGroup`` RPCs, for one ban.
+    """
+    await _make_campaign(_CHANNEL, _ACCOUNT)
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+    leave = _CommentStub()
+    _patch_io(monkeypatch, comment=leave)
+    assert await bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send") == "1/2"
+    _the_pause_expires()
+
+    charged = await asyncio.gather(
+        bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send"),
+        bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send"),
+    )
+
+    assert set(charged) == {"2/2", None}
+    assert await _banned() is True
+    assert _leaves(leave.calls) == 1
+    assert await _times_logged("neurocomment_account_banned") == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine", "_budget_of_two")
+async def test_two_posts_in_flight_on_one_channel_never_spend_more_than_one_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same claim end to end, and independent of how the two tasks interleave.
+
+    Whether the second post is turned away at selection by the first one's pause or reaches
+    the refusal branch beside it, exactly one position in the budget may be reported and the
+    pair must still be in the chat.
+    """
+    await _make_campaign(_CHANNEL, _ACCOUNT)
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+    posts = _Posts(monkeypatch)
+
+    await posts.send_together(2, error_type=_BAN_ERROR)
+
+    counters = await _counters("neurocomment_post_ban_unconfirmed")
+    assert [counter for counter in counters if counter is not None] == ["1/2"]
+    assert await _banned() is False
+    assert posts.leaves == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine", "_budget_of_two")
+async def test_three_posts_in_a_row_spend_the_budget_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel that posts three times in a day still costs the pair one refusal.
+
+    The counted refusal parks the pair on this channel for the pause, so posts two and
+    three never reach an account at all — the budget is a clock, not a per-post tally.
+    """
+    await _make_campaign(_CHANNEL, _ACCOUNT)
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+    posts = _Posts(monkeypatch)
+
+    for _ in range(3):
+        await posts.send(error_type=_BAN_ERROR)
+
+    assert await _counters("neurocomment_post_ban_unconfirmed") == ["1/2"]
+    assert await _times_logged("neurocomment_no_account_available") == 2
+    assert await _banned() is False
+    assert posts.leaves == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine", "_budget_of_two")
+async def test_a_pair_with_no_readiness_row_is_charged_nothing_at_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing counted must also mean nothing parked.
+
+    The cooldown used to be written before the count was known, so a refusal on a pair with
+    no row to count against — charged to nobody, reported to nobody — still took the pair
+    off this channel for a whole ``channel_pause_hours``.
+    """
+    await _make_campaign(_CHANNEL, _ACCOUNT)
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+
+    assert await bans.register_unconfirmed_ban(_ACCOUNT, "@untried", known_state="can_send") is None
+
+    assert _state.in_cooldown(_ACCOUNT, datetime.now(UTC), "@untried") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine", "_budget_of_two")
+async def test_spambot_is_not_asked_while_the_interval_still_stands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The verdict is cached only inside its TTL, so asking is a real @SpamBot dialogue.
+
+    On the post hot path, per refusal, and a probe that fails is not cached at all — so a
+    refusal this rule can turn away on its own must be turned away first.
+    """
+    await _make_campaign(_CHANNEL, _ACCOUNT)
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+    cached = _seams.refresh_spam_status
+    asked = 0
+
+    async def _spam(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
+        nonlocal asked
+        asked += 1
+        return await cached(account_id, force=force)
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", _spam)
+
+    assert await bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send") == "1/2"
+    assert asked == 1
+
+    assert await bans.register_unconfirmed_ban(_ACCOUNT, _CHANNEL, known_state="can_send") is None
+
+    assert asked == 1
 
 
 @pytest.mark.asyncio

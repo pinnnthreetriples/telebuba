@@ -31,6 +31,7 @@ from core.db import (
     list_channel_readiness,
     mark_pair_banned,
     stamp_unconfirmed_ban,
+    unconfirmed_ban_is_countable,
     upsert_readiness,
 )
 from core.logging import log_event
@@ -138,9 +139,10 @@ async def confirm_group_ban_and_leave(
     ONE negative answer is not the end of the story on the post path: the ``can_send``
     one — the group's own record says this account may write and @SpamBot says it is
     clean, yet the send was refused anyway — is counted by
-    :func:`register_unconfirmed_ban`, and a pair that collects two of those a day apart
-    inside 48h leaves the chat on the budget instead of on proof. The other negatives are
-    counted by nobody, for the reason this function refuses to act on them.
+    :func:`register_unconfirmed_ban`, and the SECOND such refusal, at least a day after
+    the first and inside the same 48h, takes the pair out of the chat on the budget
+    instead of on proof. The other negatives are counted by nobody, for the reason this
+    function refuses to act on them.
 
     Returns True only when the pair was marked banned; a failed leave never raises.
     """
@@ -179,6 +181,11 @@ async def register_unconfirmed_ban(
 ) -> str | None:
     """Count a refusal by a group that has no excuse for it; park the pair on the second.
 
+    The verdict lands ON that second counted refusal — a day after the first, not at the
+    end of the 48h window the three sibling rules sit out in full. Deliberate: by then the
+    pair has been refused twice, a day apart, by a group whose own record says it may
+    write, and waiting out the rest of the window only buys more of the same.
+
     The gap :func:`confirm_group_ban_and_leave` deliberately leaves open, closed with a
     budget instead of a weaker proof. That function is right that one
     ``UserBannedInChannelError`` proves nothing about THIS group — but a pair the group
@@ -193,9 +200,14 @@ async def register_unconfirmed_ban(
     block — and that error then lands in EVERY channel it posts to, so counting it would
     walk one limited account into a sticky ban on the whole fleet's channels, one at a
     time, with no way back for either the code or the operator. ``probe_error`` proves
-    nothing whatsoever, and ``not_member`` has no chat left to leave. The spam reading is
-    the CACHED one: this is the post hot path, and probing @SpamBot per refusal is itself
-    an anti-ban risk.
+    nothing whatsoever, and ``not_member`` has no chat left to leave.
+
+    @SpamBot is asked only once every cheap refusal has had its chance, and that order is
+    load-bearing: the reading is served from cache only inside ``spam_status_ttl_hours``, so
+    past that it opens a REAL dialogue with @SpamBot — on the post hot path, per refusal,
+    and a failed probe is not cached at all, so a struggling account would repeat it every
+    time. Anything this rule can decide on its own (the wrong participant state, an interval
+    that has not run out) therefore decides before that call is made.
 
     The budget is the one the sibling rules already spend, read off ``channel_max_rounds``
     and ``channel_pause_hours`` rather than added as knobs of its own — but never fewer
@@ -206,11 +218,15 @@ async def register_unconfirmed_ban(
     Two counted refusals then need two things: they must be at least
     ``channel_pause_hours`` apart, and both must fall inside
     ``channel_pause_hours * rounds`` — a day and 48h at the shipped settings. The interval
-    is what makes "two in 48h" true rather than "two in an hour": a counted refusal parks
-    the pair on this channel for the pause, and while that cooldown stands another refusal
-    is not counted and does not move the stamp. Above the window the count starts over
-    (``stamp_unconfirmed_ban``), and a delivered comment clears it outright
-    (``clear_unconfirmed_bans``) — both say the same thing, that this pair is not stuck.
+    is what makes "two in 48h" true rather than "two in an hour", and BOTH conditions are
+    resolved inside ``stamp_unconfirmed_ban``'s single UPDATE. That is the whole reason
+    they are there and not here: as a Python check the interval sat an ``await`` away from
+    the write, so two refusals whose coroutines interleaved both passed it and both counted
+    — and a channel with a queue of posts took a pair from its first refusal to a permanent
+    ban in seconds, running the leave once per count. A refusal inside the interval now
+    writes nothing at all, so it does not move the stamp either. Above the window the count
+    starts over, and a delivered comment clears it outright (``clear_unconfirmed_bans``) —
+    both say the same thing, that this pair is not stuck.
 
     Only the unconfirmed ban error reaches here. An admin mute (``ChatWriteForbiddenError``)
     and a kick (``ChannelPrivateError`` / ``UserNotParticipantError``) mean something else
@@ -230,35 +246,80 @@ async def register_unconfirmed_ban(
     """
     if known_state != "can_send":
         return None
-    verdict = await _seams.refresh_spam_status(account_id)
-    if verdict.status != "clean":
-        return None
     nc = settings.neurocomment
     now = datetime.now(UTC)
-    # The pause a counted refusal parked this pair with IS the minimum interval, so a
-    # refusal arriving while it stands is the same episode, not a second attempt. Reading
-    # it here rather than a stamp of its own keeps the rule on the columns it already has;
-    # the deadline is persisted and rehydrated, so a restart does not refill the budget.
-    if _state.in_cooldown(account_id, now, channel):
+    pause = timedelta(hours=nc.channel_pause_hours)
+    # The pause a counted refusal parks this pair with IS the minimum interval, so a
+    # refusal arriving while it stands is the same episode, not a second attempt. The
+    # pair's own stamp is what that is read off — not the in-memory cooldown, which a
+    # concurrent refusal reaches before the first one has set it.
+    interval_start = (now - pause).isoformat()
+    # Cheap, and NOT the guard (the stamp's own UPDATE is — see its docstring): it is here
+    # so a refusal the interval already rules out never reaches @SpamBot below.
+    if not await unconfirmed_ban_is_countable(account_id, channel, interval_start):
+        return None
+    verdict = await _seams.refresh_spam_status(account_id)
+    if verdict.status != "clean":
         return None
     rounds = max(2, nc.channel_max_rounds)
     # One window per round, as many rounds as the budget: the same 48h the re-join and
     # join-request rules count out, derived so the operator tunes all of them in one place.
     window = timedelta(hours=nc.channel_pause_hours * rounds)
-    failures = await stamp_unconfirmed_ban(account_id, channel, (now - window).isoformat())
-    await _state.set_cooldown(account_id, now + timedelta(hours=nc.channel_pause_hours), channel)
+    failures = await stamp_unconfirmed_ban(
+        account_id, channel, (now - window).isoformat(), interval_start
+    )
+    if not failures:
+        # Nothing was counted: the pair has no readiness row, or a rival refusal took the
+        # interval between the read above and this write. There is no position in a budget
+        # to report ("0/2" would be a counter that never moves) — and, just as important,
+        # no cooldown to park the pair with. An unconditional one parked it for a whole
+        # ``channel_pause_hours`` over a refusal this rule had charged to nobody.
+        return None
+    # After the count, never before it: this deadline is what stops the pair being selected
+    # again until the interval it shares with the stamp has run out.
+    await _state.set_cooldown(account_id, now + pause, channel)
     if failures < rounds:
-        # ``stamp_unconfirmed_ban`` answers 0 when the pair has no readiness row at all:
-        # nothing was counted, so there is no position in the budget to report — and
-        # "0/2" would be a counter that never moves.
-        return f"{failures}/{rounds}" if failures else None
-    # The existing code, not a new one: for the pair the outcome IS a ban in this channel,
-    # and the operator's feed should not have to learn a second word for it. The count
-    # rides along so the line says which rule spent it — ``neurocomment_group_ban_confirmed``
-    # would have claimed a confirmation that never happened. ``reason`` closes the run of
-    # positions the earlier refusals printed: the feed reads "1/2" and then "2/2" rather
-    # than "1/2" and then silence. Literally the budget, not ``failures``, because this
-    # branch is "at or over it" and an over-run must not render as "3/2".
+        return f"{failures}/{rounds}"
+    return await _ban_on_a_spent_budget(
+        account_id, channel, known_state=known_state, failures=failures, rounds=rounds
+    )
+
+
+async def _ban_on_a_spent_budget(
+    account_id: str,
+    channel: str,
+    *,
+    known_state: str | None,
+    failures: int,
+    rounds: int,
+) -> str | None:
+    """Take the confirmed ban's exit on the last counted refusal, once @SpamBot re-confirms.
+
+    The one place this rule pays for a FRESH reading, and it pays because this is the
+    irreversible step. Every reading before it is cached, which is right for a count a
+    delivered comment can undo — but the cache lives ``spam_status_ttl_hours`` (36h) while
+    two counted refusals are only ``channel_pause_hours`` (24h) apart, so a verdict stamped
+    less than 12h before the first refusal is still served, unrefreshed, to the second. An
+    account Telegram limited in between would read as clean and lose this chat for good —
+    and, since the count runs per channel, every other chat it posts to that day. One probe
+    per pair per budget closes that window; a limited account keeps its position (nothing is
+    spent back) and is re-judged on its next refusal.
+
+    ``neurocomment_account_banned``, not ``neurocomment_group_ban_confirmed``: for the pair
+    the outcome IS a ban in this channel, and the feed should not need a second word for it,
+    but nothing confirmed this group did it. ``reason`` closes the run of positions the
+    earlier refusals printed — the feed reads "1/2" then "2/2" rather than "1/2" then
+    silence — and it is literally the budget, because this branch is "at or over it" and an
+    over-run must not render as "3/2".
+    """
+    if (await _seams.refresh_spam_status(account_id, force=True)).status != "clean":
+        await log_event(
+            "WARNING",
+            "neurocomment_group_ban_account_limited",
+            account_id=account_id,
+            extra={"channel": channel, "state": known_state, "unconfirmed_bans": failures},
+        )
+        return None
     spent = f"{rounds}/{rounds}"
     await _mark_banned_and_leave(
         account_id,

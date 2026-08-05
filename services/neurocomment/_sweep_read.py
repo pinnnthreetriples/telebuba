@@ -10,9 +10,12 @@ another, all from that one account, while whatever those channels deleted went u
 So the authors are walked instead, and the two verdicts that mean "this account is not in
 that chat any more" park the pair with the same sentinel ``_classify`` and ``_outcomes``
 write, which hands it to ``_rejoin.review_access_lost`` — a rule that already exists and
-already knows how to spend a re-join. Own module because ``_sweep`` sits near the aislop
-file-size cap; the gateway is still reached through ``_seams.execute_read``, so every
-patch seam is unchanged.
+already knows how to spend a re-join. Unless EVERY author says it, which is the channel
+talking rather than the accounts: parking on that turns one channel gone private into a
+whole channel's worth of parked pairs, and 48 hours later into an unlinked channel (see
+:func:`_park_kicked_readers`). Own module because ``_sweep`` sits near the aislop file-size
+cap; the gateway is still reached through ``_seams.execute_read``, so every patch seam is
+unchanged.
 """
 
 from __future__ import annotations
@@ -93,6 +96,53 @@ def _reader_candidates(comments: list[CommentRecord]) -> list[str]:
     return list(dict.fromkeys(comment.account_id for comment in freshest_first))
 
 
+async def _park_kicked_readers(
+    channel: str,
+    kicked: list[tuple[str, str]],
+    tried: int,
+) -> int:
+    """Park the readers Telegram said are out of the chat; answer how many were parked.
+
+    Called once the walk is over, never from inside it, because one reader's verdict only
+    means what it says after the others have had their turn: ``CheckMessagesAlive`` resolves
+    the BROADCAST channel before it ever reaches the discussion group
+    (``_read._resolve_linked_group_entity`` → ``GetFullChannelRequest``), so a channel that
+    has gone private answers ``ChannelPrivateError`` to every account in turn. Every author
+    failing the same way is therefore a fact about the CHANNEL, and parking on it would read
+    that fact as a per-account one — leaving the channel with no ready pair, which is
+    precisely what ``_rejoin._drop_channel_if_nothing_works`` unlinks a channel for 48 hours
+    later. So that case parks nobody and only leaves the log line below — one line per tick
+    for as long as it lasts, which is exactly what this failure cost before the rotation
+    existed, and the trade is not close: a WARNING an operator can act on is cheaper than a
+    live campaign's channel unlinked out from under it. One reader out of several is the real
+    kick this walk was written for, and it still parks.
+
+    ``tried == 1`` needs no clause of its own: a lone author IS every author, and it is the
+    same call for the same reason. It cannot tell "I was kicked" from "the channel is gone",
+    and the two mistakes cost nothing like each other. A false park takes a working pair out
+    of service and starts that 48-hour countdown on a channel that may be perfectly fine,
+    while a missed one costs one read per tick — and is not missed for long: the pair keeps
+    ``ready``, so the channel's next post is attempted with it, and ``_outcomes`` parks it on
+    these same two verdicts with proof that it tried to WRITE. That is where every access
+    loss came from before this walk existed, so declining here gives up nothing we had.
+    """
+    if len(kicked) == tried:
+        return 0
+    for reader, error_type in kicked:
+        # Onboarding's hard-join-failure sentinel, field for field the set
+        # ``_rejoin.access_lost`` reads: unjoined + captcha_passed is the combination no
+        # other path writes, and ready=False stops the pair being selected meanwhile.
+        await upsert_readiness(
+            reader,
+            channel,
+            joined=False,
+            captcha_passed=True,
+            ready=False,
+            access_lost_reason=error_type,
+        )
+    return len(kicked)
+
+
 async def read_alive(
     channel: str,
     comments: list[CommentRecord],
@@ -111,26 +161,31 @@ async def read_alive(
     the group banned is the anti-ban risk this whole domain is built to avoid.
 
     Two verdicts and only two — ``ChannelPrivateError`` and ``UserNotParticipantError`` —
-    park the pair that produced them, because they are Telegram saying that account is not
-    in the chat; the walk then moves on. So does a missing account row, which is our
-    bookkeeping rather than a Telegram verdict. Every other failure (flood wait, pool
-    fault, timeout) is about the moment rather than the membership, so it parks nobody AND
-    ends the walk for this channel on this tick: those faults are usually ours, not this
-    account's, and spending the channel's remaining accounts on them would multiply one
-    flood wait into several.
+    are Telegram saying that the account which produced them is not in the chat, so the walk
+    notes it down and moves on; :func:`_park_kicked_readers` then decides, once the whole
+    outcome is in, which of those notes are about accounts and which are about the channel.
+    A missing account row moves the walk on too, being our bookkeeping rather than a
+    Telegram verdict. Every other failure (flood wait, pool fault, timeout) is about the
+    moment rather than the membership, so it parks nobody AND ends the walk for this channel
+    on this tick: those faults are usually ours, not this account's, and spending the
+    channel's remaining accounts on them would multiply one flood wait into several.
 
     Nothing here propagates a read failure: the caller is a sweep pass that must survive
     every tick. A repository fault still can, and is caught by the per-channel guard in
     ``_sweep._sweep_once`` — the sweep loop cannot die either way.
 
     ponytail: a reader Telegram answers with all-ids-gone instead of an error (a public
-    group it can still see, having been kicked) would still trip a false back-off. The
-    rotation cannot see that; add a reader quorum only if the canary ever shows it.
+    group it can still see, having been kicked) would still have its comments stamped
+    deleted. The rotation cannot see that; add a reader quorum over the ANSWERS only if the
+    canary ever shows it.
     """
     tried = 0
-    parked = 0
+    # (reader, verdict) per author Telegram said is out, decided on after the walk: a
+    # verdict is only about the account once the other authors have answered.
+    kicked: list[tuple[str, str]] = []
     last_reader: str | None = None
     failure: dict[str, object] = {}
+    alive: CheckMessagesAliveResult | None = None
     for reader in _reader_candidates(comments):
         if not _may_be_in_chat(await fetch_readiness(reader, channel)):
             # Nobody we could still read with: banned, skipped, or already parked. For the
@@ -163,21 +218,14 @@ async def read_alive(
             error_type = _lost_access_error(exc)
             if error_type is None:
                 break
-            parked += 1
-            # Onboarding's hard-join-failure sentinel, field for field the set
-            # ``_rejoin.access_lost`` reads: unjoined + captcha_passed is the combination no
-            # other path writes, and ready=False stops the pair being selected meanwhile.
-            await upsert_readiness(
-                reader,
-                channel,
-                joined=False,
-                captcha_passed=True,
-                ready=False,
-                access_lost_reason=error_type,
-            )
+            kicked.append((reader, error_type))
         else:
             if isinstance(result, CheckMessagesAliveResult):
-                return result
+                # ``break``, not ``return``: an author kicked EARLIER in this walk is parked
+                # by the decision below, and returning from here would skip it — the very
+                # case (one account out, the next one reads fine) the rotation exists for.
+                alive = result
+                break
             # Anything else is the typed gateway breaking its contract; the next account
             # would not answer differently, so the walk ends here — but it must not end
             # SILENTLY, which is what returning ``None`` from inside the loop did: the
@@ -185,22 +233,29 @@ async def read_alive(
             # ``error_type`` carries the class we got instead, which is the whole diagnosis.
             failure = {"error_type": type(result).__name__, "reason": "unexpected_result"}
             break
-    if tried:
-        # Silent when the walk tried nobody — every author banned, skipped or already
-        # parked. That state IS those rows, which the board badges and the re-join review
-        # acts on every tick, and a channel can sit in it for as long as an operator leaves
-        # it there: a line per tick would be the five-minute drip this module removed.
+    parked = await _park_kicked_readers(channel, kicked, tried)
+    if alive is None and tried:
+        # Silent when somebody read (nothing failed that the caller cannot see) and silent
+        # when the walk tried nobody — every author banned, skipped or already parked. That
+        # state IS those rows, which the board badges and the re-join review acts on every
+        # tick, and a channel can sit in it for as long as an operator leaves it there: a
+        # line per tick would be the five-minute drip this module removed.
         await log_event(
             "WARNING",
             "neurocomment_sweep_read_failed",
             account_id=last_reader,
-            # ``readers_parked`` is what keeps the line from blaming the accounts for a
-            # dead channel. ``CheckMessagesAlive`` starts at the BROADCAST channel
-            # (``_read._resolve_linked_group_entity`` → ``GetFullChannelRequest``), so a
-            # ``ChannelPrivateError`` can be the channel going invisible to everyone
-            # rather than this account losing the discussion group — and when that
-            # happens every author parks on the same tick. ``readers_parked ==
-            # readers_tried`` is that signature; one parked out of several is a real kick.
-            extra={"channel": channel, "readers_tried": tried, "readers_parked": parked} | failure,
+            # Three counts because the rule above turns on the gap between them:
+            # ``readers_kicked == readers_tried`` with ``readers_parked`` at 0 is the
+            # channel having gone invisible to everyone, which is why nothing was touched;
+            # a smaller ``readers_kicked`` is the accounts, and every one of those was
+            # parked. Without the middle number the line could not tell an all-kicked
+            # channel from a walk that ended on a flood wait.
+            extra={
+                "channel": channel,
+                "readers_tried": tried,
+                "readers_kicked": len(kicked),
+                "readers_parked": parked,
+            }
+            | failure,
         )
-    return None
+    return alive

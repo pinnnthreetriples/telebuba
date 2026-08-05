@@ -280,11 +280,15 @@ async def _commit_delivered(
             comment_text=text,
             comment_msg_id=result.message_id,
         )
+        # A delivered comment proves the channel is writable, so it clears both the
+        # failure window and the persisted round counter (#147). BEFORE the bookkeeping
+        # below, and that order is load-bearing: everything in this block shares one
+        # swallowing ``except``, so a fault in an optional write used to leave a delivered
+        # comment beside an uncleared pause — and the sweep pass that judges an expired
+        # deadline then unlinked a channel that had just proved it works.
+        await _channel_pause.clear_write_failures(event.channel)
         # First comment confirms a solver click worked (no-op if no pending row).
         await resolve_pending_outcome(account_id, event.channel, "solved")
-        # A delivered comment proves the channel is writable, so it clears both the
-        # failure window and the persisted round counter (#147).
-        await _channel_pause.clear_write_failures(event.channel)
         # And this PAIR's own unconfirmed-refusal budget (#47), which the channel-wide
         # reset above cannot speak for: the count that bans a pair is per (account,
         # channel), so another account's success must not spend or refund it.
@@ -307,6 +311,11 @@ async def _commit_delivered(
         elif record.status != "posted":
             # The row was already terminal, and this is the only honest place to say so:
             # the campaign's counters quietly under-count a comment that did land.
+            # ``row_status``, NOT ``status``: the SPA reads ``extra.status`` as the reason
+            # code whenever there is no ``reason`` (see ``_log_outcome``), and in this
+            # branch the value is invariably ``failed`` — which it renders as "Telegram
+            # отклонил", printed beside a comment Telegram had in fact ACCEPTED. The row's
+            # verdict is still worth recording; it just is not this line's reason.
             await log_event(
                 "WARNING",
                 "neurocomment_posted_after_reclaim",
@@ -314,7 +323,7 @@ async def _commit_delivered(
                 extra={
                     "channel": event.channel,
                     "post_id": event.post_id,
-                    "status": record.status,
+                    "row_status": record.status,
                 },
             )
         else:
@@ -324,12 +333,19 @@ async def _commit_delivered(
                 account_id=account_id,
                 extra={"channel": event.channel, "post_id": event.post_id},
             )
-    except Exception:  # noqa: BLE001 - a delivered comment must not be flipped to failed
+    except Exception as exc:  # noqa: BLE001 - a delivered comment must not be flipped to failed
+        # ``error_type`` because this is the one event that reports a half-written commit,
+        # and without it the line said only that something broke — which is why a channel
+        # dropped by an uncleared pause could only ever be guessed at.
         await log_event(
             "ERROR",
             "neurocomment_post_commit_failed",
             account_id=account_id,
-            extra={"channel": event.channel, "post_id": event.post_id},
+            extra={
+                "channel": event.channel,
+                "post_id": event.post_id,
+                "error_type": type(exc).__name__,
+            },
         )
 
 

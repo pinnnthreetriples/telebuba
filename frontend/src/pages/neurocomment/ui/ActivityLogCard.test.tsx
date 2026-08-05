@@ -169,5 +169,5 @@ test('attaches a what-to-do hint as a hover tooltip', () => {
     />,
   );
   const row = screen.getByText('Нет доступного аккаунта').closest('div');
-  expect(row?.getAttribute('title')).toMatch(/Добавьте аккаунтов/);
+  expect(row?.getAttribute('title')).toMatch(/Ни один аккаунт кампании/);
 });

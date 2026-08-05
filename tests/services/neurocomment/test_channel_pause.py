@@ -32,9 +32,11 @@ from core.db import (
     fetch_active_campaign_for_channel,
     fetch_channel_paused_until,
     fetch_comment,
+    fetch_readiness,
     link_channel_to_campaign,
     list_campaign_channels,
     list_recent_logs,
+    stamp_join_request,
     stamp_rejoin_attempt,
     upsert_readiness,
 )
@@ -42,7 +44,7 @@ from core.repositories.neurocomment import set_campaign_account_channels, set_ca
 from core.repositories.neurocomment._tables import _neurocomment_campaign_channels
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import NewPostEvent
-from services.neurocomment import _channel_pause, _state, engine
+from services.neurocomment import _channel_pause, _rejoin, _runtime, _state, engine
 from tests.services.neurocomment.engine_support import (
     _CommentStub,
     _make_campaign,
@@ -78,6 +80,24 @@ async def _rewind_the_pause(age: timedelta = timedelta(seconds=1)) -> None:
                 update(_neurocomment_campaign_channels).values(
                     paused_until=(datetime.now(UTC) - age).isoformat(),
                 ),
+            )
+
+    await asyncio.to_thread(_write)
+
+
+async def _rewind_the_rejoin_stamp(account_id: str, *, hours: float) -> None:
+    """Age a pair's re-join stamp, standing in for that attempt's window elapsing.
+
+    ``stamp_rejoin_attempt`` writes the wall clock, so walking the sibling rule's timeline
+    means moving the row, not only the ``now`` the sweep is called with.
+    """
+    stamp = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+
+    def _write() -> None:
+        with _get_engine().begin() as connection:
+            connection.exec_driver_sql(
+                "UPDATE neurocomment_readiness SET rejoin_attempted_at = ? WHERE account_id = ?",
+                (stamp, account_id),
             )
 
     await asyncio.to_thread(_write)
@@ -435,6 +455,12 @@ async def test_a_comment_delivered_during_the_tick_saves_the_channel(
         await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
         _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
         await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=3, text="hello world"))
+        # The precondition, asserted where it is established rather than inferred from the
+        # verdict below: ``_outcomes._commit_delivered`` catches everything between marking the
+        # row posted and clearing the rounds and logs no error type, so a fault in that window
+        # left a delivered comment beside an uncleared pause — and surfaced here as an
+        # unexplained drop rather than as the missing clear it actually is.
+        assert await fetch_channel_paused_until("@chan") is None
         return await snapshot(channels)
 
     monkeypatch.setattr(_channel_pause, "fetch_active_campaigns_for_channels", _deliver_then_read)
@@ -509,12 +535,17 @@ async def test_the_verdict_waits_for_a_pair_still_inside_its_rejoin_budget(
 
 
 @pytest.mark.asyncio
-async def test_the_verdict_lands_once_the_rejoin_budget_is_spent_too(
+async def test_the_verdict_waits_out_the_last_rejoin_and_lands_when_its_window_does(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The re-join hold is a delay, not immortality — the same shape as the coverage hold."""
+    """The re-join hold is a delay, not immortality — but the LAST attempt keeps its window.
+
+    A spent budget is not a finished timeline: ``_rejoin`` drops a channel only once the last
+    attempt has had the same day every earlier one got, and this verdict has to wait for the
+    same instant. Reading the budget alone unlinked the channel with that re-join in flight.
+    """
     _one_failure_per_round(monkeypatch)
-    await _make_campaign("@chan", "acc-1", "acc-2")
+    campaign_id = await _make_campaign("@chan", "acc-1", "acc-2")
     await upsert_readiness("acc-2", "@chan", joined=False, captcha_passed=True, ready=False)
     for _ in range(settings.neurocomment.channel_max_rounds):
         await stamp_rejoin_attempt("acc-2", "@chan")
@@ -523,13 +554,86 @@ async def test_the_verdict_lands_once_the_rejoin_budget_is_spent_too(
 
     await _sweep_the_expired_windows()
 
+    # The last re-join was authorized minutes ago: its window is the channel's reprieve.
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_dropped") is False
+    assert await _rounds(campaign_id) == 2
+    assert await fetch_channel_paused_until("@chan") is None
+
+    # A day on, that window is out too, and the next round's deadline carries the verdict.
+    await _rewind_the_rejoin_stamp("acc-2", hours=25)
+    await _end_a_round(monkeypatch, post_id=3)
+    await _rewind_the_pause()
+    await _sweep_the_expired_windows()
+
     assert await fetch_active_campaign_for_channel("@chan") is None
     dropped = next(
         entry
         for entry in await list_recent_logs(limit=100)
         if entry.event == "neurocomment_channel_dropped"
     )
-    assert (dropped.extra["channel"], dropped.extra["rounds"]) == ("@chan", 2)
+    assert (dropped.extra["channel"], dropped.extra["rounds"]) == ("@chan", 3)
+
+
+@pytest.mark.asyncio
+async def test_a_rejoin_spent_in_this_very_tick_is_not_annulled_by_the_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both rules ride one sweep tick, re-join first — its stamp must survive this pass.
+
+    The pair had one attempt of two left and its window was up, so the re-join pass spends the
+    last one and logs "2/2". That made ``exhausted`` true, and reading only that half of the
+    sibling rule turned a re-join authorized milliseconds earlier into a dropped channel, with
+    the join still in flight and the onboarding pass not yet run.
+    """
+    _one_failure_per_round(monkeypatch)
+    # The poke, not a real onboarding pass: this test is about the two sweep passes.
+    monkeypatch.setattr(_runtime, "_ensure_onboarding_running", lambda *_args: None)
+    campaign_id = await _make_campaign("@chan", "acc-1", "acc-2")
+    await upsert_readiness("acc-2", "@chan", joined=False, captcha_passed=True, ready=False)
+    await stamp_rejoin_attempt("acc-2", "@chan")  # attempt 1 of 2...
+    await _rewind_the_rejoin_stamp("acc-2", hours=25)  # ...a day ago, so attempt 2 is due
+    await _gate_a_post(monkeypatch, post_id=1)
+    await _gate_a_post(monkeypatch, post_id=2)  # the budget is spent and the window is out
+
+    now = datetime.now(UTC)  # ONE clock for the tick, exactly as the sweep loop reads it
+    await _rejoin.review_access_lost(now)
+    await _channel_pause.review_expired_pauses(now)
+
+    parked = await fetch_readiness("acc-2", "@chan")
+    assert parked is not None
+    assert parked.rejoin_attempts == 2  # the last attempt went out in this tick
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_dropped") is False
+    assert await _rounds(campaign_id) == 2
+
+
+@pytest.mark.asyncio
+async def test_the_verdict_waits_for_a_pair_whose_join_request_is_still_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pair waiting for an admin to press Approve has not failed on this channel yet.
+
+    The untried-account hold exists so a pair that reaches the channel late gets its own
+    attempt at it; asking for approval IS that attempt. But the request leaves a readiness
+    row, so coverage counts the pair as tried, and nothing held this deadline — the 48h of
+    patience ``_sweep._review_join_requests`` had just started was annulled by it.
+    """
+    _one_failure_per_round(monkeypatch)
+    campaign_id = await _make_campaign("@chan", "acc-1", "acc-2")
+    # acc-2's join needs an admin: the row ``_classify`` writes on InviteRequestSentError.
+    await upsert_readiness("acc-2", "@chan", joined=False, captcha_passed=False, ready=False)
+    await stamp_join_request("acc-2", "@chan")
+    await _gate_a_post(monkeypatch, post_id=1)
+    await _gate_a_post(monkeypatch, post_id=2)  # the budget is spent and the window is out
+
+    await _sweep_the_expired_windows()
+
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_dropped") is False
+    # Held like an incomplete fleet is: the deadline goes, the rounds stay.
+    assert await _rounds(campaign_id) == 2
+    assert await fetch_channel_paused_until("@chan") is None
 
 
 @pytest.mark.asyncio

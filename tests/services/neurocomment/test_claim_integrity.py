@@ -153,7 +153,13 @@ async def test_a_reclaimed_claim_still_records_the_delivered_message_id(
     assert [c.comment_msg_id for c in delivered] == [555]
     logs = await list_recent_logs(limit=50)
     # The log used to claim ``neurocomment_posted`` over a row reading ``failed``.
-    assert [e for e in logs if e.event == "neurocomment_posted_after_reclaim"]
+    reclaimed = [e for e in logs if e.event == "neurocomment_posted_after_reclaim"]
+    assert [e.extra.get("row_status") for e in reclaimed] == ["failed"]
+    # ... and the row's verdict must NOT ride in ``status``, which is the field the SPA
+    # falls back to for the reason column when a row carries no ``reason``. Under this key
+    # the invariant ``failed`` rendered as "Telegram отклонил" — printed beside a line whose
+    # whole point is that Telegram ACCEPTED the comment.
+    assert all("status" not in e.extra for e in reclaimed)
 
 
 @pytest.mark.asyncio

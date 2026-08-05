@@ -341,6 +341,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     stamp_rejoin_attempt,
     stamp_unconfirmed_ban,
     touch_comment_claim,
+    unconfirmed_ban_is_countable,
     update_campaign_prompt,
     update_solver_enabled,
     upsert_linked_group,

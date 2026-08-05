@@ -24,13 +24,15 @@ rather than burning the whole budget on a channel nobody could try to re-enter.
 
 Counter and deadline are persisted per pair (migration #43) rather than kept in memory,
 for the reason ``_channel_pause`` documents: the live app restarts, and a multi-day rule
-built on module dicts never reaches its last day.
+built on module dicts never reaches its last day. A stamp nobody was running to answer goes
+STALE, and a stale one is no longer a spent budget (``_stamp_stale``) — the freshness rule
+its sibling reads off ``paused_until``, on this rule's own deadline.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -97,7 +99,7 @@ def terminal(readiness: NeurocommentReadiness) -> bool:
     return readiness.access_lost_reason in _TERMINAL_REASONS
 
 
-def exhausted(readiness: NeurocommentReadiness) -> bool:
+def exhausted(readiness: NeurocommentReadiness, now: datetime | None = None) -> bool:
     """True once this pair has used every re-join it will ever get.
 
     A terminal verdict is exhausted from the first tick: the budget buys evidence, and
@@ -105,14 +107,22 @@ def exhausted(readiness: NeurocommentReadiness) -> bool:
     reads the budget wants the same answer — the board badges ``join_failed`` instead of
     promising a return that cannot happen, and the sweep spends no attempt on it.
 
+    A spent counter is a spent budget only while the stamp beside it is FRESH (see
+    :func:`_stamp_stale`): a row that sat unanswered for a whole extra window proves nothing
+    about the pair, whoever shrank the budget under it. ``now`` is the sweep's own tick clock,
+    and the wall clock for the callers that just ask what the pair is right now (the board
+    badge), which is the same instant for them.
+
     Public alongside :func:`access_lost` because ``board`` badges the two together — a
     parked pair still inside its budget is ``rejoining``, one past it is ``join_failed``
     — and reading the budget off this rule is what keeps the badge from claiming a pair
     is finished while the sweep is still retrying it.
     """
-    return terminal(readiness) or (
-        readiness.rejoin_attempts >= settings.neurocomment.channel_max_rounds
-    )
+    if terminal(readiness):
+        return True
+    if readiness.rejoin_attempts < settings.neurocomment.channel_max_rounds:
+        return False
+    return not _stamp_stale(readiness, now or datetime.now(UTC))
 
 
 def _window_elapsed(readiness: NeurocommentReadiness, now: datetime) -> bool:
@@ -126,6 +136,29 @@ def _window_elapsed(readiness: NeurocommentReadiness, now: datetime) -> bool:
     return now - attempted >= timedelta(hours=settings.neurocomment.channel_pause_hours)
 
 
+def _stamp_stale(readiness: NeurocommentReadiness, now: datetime) -> bool:
+    """True when the window this pair's last attempt bought ran out more than a window ago.
+
+    ``_channel_pause._window_stale`` for this rule's own deadline, and it draws the same line:
+    "the window this pair was waiting out has just ended" is evidence a verdict may be read
+    off, "this row has been lying here" is not. The deadline is the stamp plus one
+    ``channel_pause_hours``, so one full window of slack past it is two from the stamp — an
+    ordinary tick (the sweep runs every 5 minutes, and the deadline it judges is at most that
+    old) is never mistaken for a stale row, and the shipped 48h drop lands where it always did.
+
+    What sits there going stale: an app left down for days, a campaign stopped for a week, and
+    a ``channel_max_rounds`` lowered under a row that had already spent the old budget — which
+    migration #48 had to repair by hand, and which its docstring calls a freshness check's job
+    from then on. Nobody was re-joining while the row waited, so the counter beside the stamp
+    is not evidence: the pair gets an attempt on the CURRENT budget instead of a verdict from
+    the retired one, exactly as a released pause deadline hands a channel another round.
+    """
+    if readiness.rejoin_attempted_at is None:  # never stamped: no window has run out yet.
+        return False
+    attempted = datetime.fromisoformat(readiness.rejoin_attempted_at)
+    return now - attempted > 2 * timedelta(hours=settings.neurocomment.channel_pause_hours)
+
+
 def retry_due(readiness: NeurocommentReadiness, now: datetime) -> bool:
     """True when this pair may spend a re-join right now.
 
@@ -134,9 +167,29 @@ def retry_due(readiness: NeurocommentReadiness, now: datetime) -> bool:
     ``ChannelPrivateError`` on a stale cached entity — cost minutes instead of a day. Each
     later attempt waits the full window, and the ``channel_max_rounds``-th is the last.
     """
-    if exhausted(readiness):
+    if exhausted(readiness, now):
         return False
     return readiness.rejoin_attempted_at is None or _window_elapsed(readiness, now)
+
+
+def still_retrying(readiness: NeurocommentReadiness, now: datetime) -> bool:
+    """True while this rule has not finished with the pair — its give-up test, negated.
+
+    Either the pair has attempts left, or it has just spent the last one and that attempt's
+    own window is still running: the budget is ``channel_max_rounds`` attempts over as many
+    DAYS, which is what puts the shipped drop at t=48h rather than t=24h. A terminal pair is
+    finished on arrival — it never spent an attempt, so there is no re-join in flight to give
+    a day to.
+
+    Public because ``_channel_pause`` holds its own verdict on this same question, and the
+    HALF of it that rule used to ask (parked and not ``exhausted``) called this rule finished
+    the moment the last attempt was stamped: both passes ride one sweep tick, re-join first,
+    so the attempt it spent and logged as "2/2" was annulled by a pause deadline milliseconds
+    later, with the join still in flight.
+    """
+    return not (
+        exhausted(readiness, now) and (terminal(readiness) or _window_elapsed(readiness, now))
+    )
 
 
 def attempt_owed(readiness: NeurocommentReadiness) -> bool:
@@ -247,6 +300,7 @@ async def _review_channel(
             # ``logEventReason`` matches it and ``eventReason`` renders an unmapped code
             # raw, which is what puts "· 1/2" and then "· 2/2" beside the label.
             spent = row.rejoin_attempts + 1
+            budget = settings.neurocomment.channel_max_rounds
             await log_event(
                 "INFO",
                 "neurocomment_rejoin_attempt",
@@ -254,7 +308,12 @@ async def _review_channel(
                 extra={
                     "channel": channel,
                     "attempts": spent,
-                    "reason": f"{spent}/{settings.neurocomment.channel_max_rounds}",
+                    # CLAMPED, the way the sibling rule clamps its round label: a stamp gone
+                    # stale buys an attempt on the CURRENT budget, so this counter can outrun
+                    # it, and "3/2" would read as arithmetic gone wrong where "2/2" says the
+                    # true thing — the budget is spent and the timeline started over. The raw
+                    # count stays in ``attempts`` above.
+                    "reason": f"{min(spent, budget)}/{budget}",
                 },
             )
         return True
@@ -262,19 +321,12 @@ async def _review_channel(
     # otherwise dead: a kicked account must get back into a chat the other five comment in
     # fine. Only the DROP is, and that check lives one call down — the single place that
     # decides whether anything still works here.
-    # A terminal pair has no window to wait out — it never spent an attempt, so there is
-    # no re-join in flight to give a day to. Written as the exception it is, so the
-    # attempts-over-DAYS promise below keeps reading off one condition.
-    if not all(exhausted(row) and (terminal(row) or _window_elapsed(row, now)) for row in parked):
-        # Nothing due, but somebody is still mid-timeline — either they have attempts left,
-        # or they have just spent the last one. That second half is why the window check is
-        # here and not folded into ``exhausted``: the last attempt is stamped one window
-        # short of the deadline (t=24h at the shipped two) and the pass it pokes joins
-        # *after* that, so dropping the moment nothing is ``retry_due`` any more gave the
-        # last attempt about five minutes and unlinked the channel with a re-join still in
-        # flight. The budget is ``channel_max_rounds`` attempts over as many DAYS: the last
-        # window counts like every earlier one, which is what puts the drop at t=48h rather
-        # than t=24h.
+    if any(still_retrying(row, now) for row in parked):
+        # Nothing due, but somebody is still mid-timeline. The last attempt is stamped one
+        # window short of the deadline and the pass it pokes joins AFTER that, so dropping the
+        # moment nothing is ``retry_due`` any more gave it about five minutes and unlinked the
+        # channel with a re-join in flight. ``still_retrying`` carries the condition, and says
+        # who else reads it.
         return False
     await _drop_channel_if_nothing_works(campaign_id, channel, serving, parked)
     return False

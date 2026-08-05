@@ -52,7 +52,7 @@ def reset_prune_clock() -> None:
 
 
 async def _sweep_loop() -> None:
-    """Re-read recent comments on an interval; back off channels with mass deletions.
+    """Re-read recent comments on an interval and record the ones that have vanished.
 
     The lone non-event loop in the runtime, and it must never die (mirrors the
     listener-safe on-post pipeline). The retention prune, the join-request review, the
@@ -315,7 +315,7 @@ async def _reclaim_stale_claims(now: datetime) -> None:
 
 
 async def _sweep_once() -> None:
-    """One deletion pass: per active channel, count vanished comments → back off."""
+    """One deletion pass: per active channel, stamp the comments that have vanished."""
     now = datetime.now(UTC)
     since_iso = (
         now - timedelta(hours=settings.neurocomment.deletion_sweep_lookback_hours)

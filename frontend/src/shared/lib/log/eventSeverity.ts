@@ -14,7 +14,7 @@ type LogSeverity = 'success' | 'warning' | 'error';
 
 const FAILURE = /(_failed|_exhausted|_crashed|_dropped|_overloaded|_deleted|_banned)$/;
 const SOFT =
-  /(_skipped|_gated|_cooled|_cooldown|_backoff|_reclaimed|no_account_available|no_campaign|retry_later)$/;
+  /(_skipped|_gated|_cooled|_cooldown|_reclaimed|no_account_available|no_campaign|retry_later)$/;
 
 export function logSeverity(line: Pick<LogEntry, 'event' | 'status'>): LogSeverity {
   if (FAILURE.test(line.event)) return 'error';

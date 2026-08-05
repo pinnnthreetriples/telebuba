@@ -18,7 +18,12 @@ from core.repositories.neurocomment._accounts import (
     remove_account_from_campaign,
     set_campaign_account_channels,
 )
-from core.repositories.neurocomment._bans import mark_pair_banned
+from core.repositories.neurocomment._bans import (
+    clear_unconfirmed_bans,
+    mark_pair_banned,
+    stamp_unconfirmed_ban,
+    unconfirmed_ban_is_countable,
+)
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
     create_campaign,
@@ -95,7 +100,6 @@ from core.repositories.neurocomment._quota import (
 from core.repositories.neurocomment._readiness import (
     clear_join_request,
     clear_rejoin_attempts,
-    clear_unconfirmed_bans,
     delete_readiness,
     fetch_readiness,
     list_access_lost_readiness,
@@ -105,7 +109,6 @@ from core.repositories.neurocomment._readiness import (
     mark_human_skipped,
     stamp_join_request,
     stamp_rejoin_attempt,
-    stamp_unconfirmed_ban,
     upsert_readiness,
 )
 from core.repositories.neurocomment._retention import purge_neurocomment_history_older_than
@@ -202,6 +205,7 @@ __all__ = [
     "stamp_rejoin_attempt",
     "stamp_unconfirmed_ban",
     "touch_comment_claim",
+    "unconfirmed_ban_is_countable",
     "update_campaign_prompt",
     "update_solver_enabled",
     "upsert_linked_group",

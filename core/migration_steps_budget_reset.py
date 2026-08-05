@@ -11,9 +11,14 @@ that reads those counters has a migration path for a budget that shrinks under t
 hard-codes the new budget rather than reading ``settings``: a migration must mean the same
 thing on every future run, and a step that re-reads live configuration would re-fire —
 and wrongly zero legitimately earned counters — the next time an operator retunes the
-setting. The general answer to a stale deadline is the freshness check in
-``services.neurocomment._channel_pause.review_expired_pauses``, which is what protects any
-LATER change to these settings. This step only cleans up the one that already happened.
+setting. The general answer to a stale deadline is the freshness check each rule carries on
+its own: ``_channel_pause._window_stale`` for the pause window,
+``services.neurocomment._rejoin._stamp_stale`` for the per-pair stamp. Both refuse a verdict
+read off a row that has been lying around for a whole extra window, which is what covers a
+LATER change to these settings — for a row nobody was posting or re-joining against. Neither
+covers the knife-edge: a budget shrunk while a window had only just run out is still judged
+on the spot, so a change like this one still needs its own step. This step cleans up the one
+that already happened.
 """
 
 from __future__ import annotations

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -227,72 +227,6 @@ def _clear_rejoin_attempts(account_id: str, channel: str) -> None:
 async def clear_rejoin_attempts(account_id: str, channel: str) -> None:
     """Forget a pair's re-join attempts once it is back in the group."""
     await asyncio.to_thread(_clear_rejoin_attempts, account_id, channel)
-
-
-def _stamp_unconfirmed_ban(account_id: str, channel: str, window_start: str) -> int:
-    with _get_engine().begin() as connection:
-        row = connection.execute(
-            update(_neurocomment_readiness)
-            .where(
-                (_neurocomment_readiness.c.account_id == account_id)
-                & (_neurocomment_readiness.c.channel == channel),
-            )
-            .values(
-                # Rolling window, resolved in the same statement as the increment: a stamp
-                # still inside it continues the count, anything older (or NULL, which
-                # compares as NULL and falls to the ELSE) starts a fresh one at 1. Doing it
-                # as read-then-write would let two refusals racing on the same pair both
-                # read the old value and land as one.
-                unconfirmed_bans=case(
-                    (
-                        _neurocomment_readiness.c.unconfirmed_ban_at >= window_start,
-                        _neurocomment_readiness.c.unconfirmed_bans + 1,
-                    ),
-                    else_=1,
-                ),
-                unconfirmed_ban_at=_now_iso(),
-            )
-            # RETURNING rather than a read-back SELECT: the new count is what the caller
-            # spends its budget against, and no row matched means nothing was counted.
-            .returning(_neurocomment_readiness.c.unconfirmed_bans),
-        ).scalar()
-    return 0 if row is None else int(row)
-
-
-async def stamp_unconfirmed_ban(account_id: str, channel: str, window_start: str) -> int:
-    """Count one unconfirmed write refusal for this pair; return the running total.
-
-    ``window_start`` is an ISO-8601 UTC instant the CALLER computes from its own rule —
-    the window is policy and stays in ``services.neurocomment.bans``; this only applies
-    it. A stamp at or after it continues the count, an older one restarts it.
-
-    Deliberately NOT part of ``upsert_readiness``, for the reason ``stamp_join_request``
-    and ``stamp_rejoin_attempt`` are not: onboarding re-writes the readiness row of a pair
-    that is still a group member, and a reset riding along would refill the budget on
-    every pass. Returns 0 when the pair has no readiness row — nothing was counted, so
-    nothing can be spent.
-    """
-    return await asyncio.to_thread(_stamp_unconfirmed_ban, account_id, channel, window_start)
-
-
-def _clear_unconfirmed_bans(account_id: str, channel: str) -> None:
-    with _get_engine().begin() as connection:
-        connection.execute(
-            update(_neurocomment_readiness)
-            .where(
-                # Only rows actually carrying a count — this runs on every delivered
-                # comment, and the overwhelming majority have nothing to clear.
-                (_neurocomment_readiness.c.account_id == account_id)
-                & (_neurocomment_readiness.c.channel == channel)
-                & (_neurocomment_readiness.c.unconfirmed_bans != 0),
-            )
-            .values(unconfirmed_bans=0, unconfirmed_ban_at=None),
-        )
-
-
-async def clear_unconfirmed_bans(account_id: str, channel: str) -> None:
-    """A comment landed: this pair can write here after all, so the count goes back to 0."""
-    await asyncio.to_thread(_clear_unconfirmed_bans, account_id, channel)
 
 
 # The hard-join-failure sentinel: an unjoined row with captcha_passed set, which no other

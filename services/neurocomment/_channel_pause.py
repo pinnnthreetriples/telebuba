@@ -46,7 +46,7 @@ from core.db import (
     release_channel_pause,
 )
 from core.logging import log_event
-from services.neurocomment import _rejoin, _state
+from services.neurocomment import _onboard_pair, _rejoin, _state
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -129,7 +129,8 @@ async def review_expired_pauses(now: datetime) -> None:
     2. the pause is still exactly the one we read a moment ago (a delivery in flight may
        have cleared it mid-tick);
     3. the window is FRESH — a long-expired deadline is a lying row, not a verdict;
-    4. the fleet is complete here and no pair is mid-re-join.
+    4. the fleet is complete here, and no pair is one the re-join rule or the join-request
+       rule is still working on.
 
     Anything short of a drop that leaves a spent deadline behind releases it, so the
     channel is judged on its NEXT window rather than re-judged on this one every five
@@ -180,7 +181,7 @@ async def review_expired_pauses(now: datetime) -> None:
             await release_channel_pause(link.channel)
             continue
         untried, rows = await _channel_coverage(link.campaign_id, link.channel)
-        if untried or _rejoining(rows):
+        if untried or _rejoining(rows, now) or _awaiting_approval(rows, now):
             # The budget is spent but the verdict is not earned, so the counter keeps
             # climbing and the channel gets another round: the first window that ends with
             # the fleet complete drops it. Releasing the spent deadline is what makes that
@@ -189,13 +190,14 @@ async def review_expired_pauses(now: datetime) -> None:
             # turns ``_onboard_pair`` away), and they must get their gated post before the
             # next verdict, exactly as every account tried before them did.
             #
-            # A pair still inside its re-join budget holds the drop for the same reason and
+            # A pair either rule is still working on holds the drop for the same reason and
             # gets the same release. ``_rejoin`` already sits out a pause window rather than
             # burn its budget on a channel nobody can even enter; until now nothing paid
             # that back, so a re-join this very tick logged as "1/2" could be annulled
-            # milliseconds later by a pause deadline. The coverage check cannot catch it —
-            # a parked pair HAS a readiness row, so it counts as tried. The concession is
-            # symmetric now: neither rule executes a channel the other is still working on.
+            # milliseconds later by a pause deadline — and a pair whose approval request had
+            # gone out seconds ago lost its 48h the same way. The coverage check catches
+            # neither: both HAVE a readiness row, so both count as tried. The concession is
+            # symmetric now — no rule executes a channel another is still working on.
             await release_channel_pause(link.channel)
             continue
         # Late import: ``campaigns`` reaches back here through _runtime -> engine.
@@ -236,14 +238,38 @@ def _window_stale(paused_until: str | None, now: datetime) -> bool:
     )
 
 
-def _rejoining(rows: list[NeurocommentReadiness]) -> bool:
-    """True while any pair on this channel still has re-joins left to spend.
+def _rejoining(rows: list[NeurocommentReadiness], now: datetime) -> bool:
+    """True while the re-join rule has not finished with some pair on this channel.
 
-    Read off ``_rejoin``'s own predicates rather than re-deriving the budget here, so the
-    two rules cannot come to different answers about the same row — the same reason
-    ``_rejoin`` reads this rule's pause off the column ``_onboard_pair`` refuses on.
+    ``_rejoin.still_retrying`` — that rule's whole give-up test — rather than the half of it
+    this used to read (parked and not ``exhausted``), which called the rule finished the
+    instant its LAST attempt was stamped. Both passes ride one sweep tick and re-join runs
+    first, so a pair with one attempt left and its window up had that attempt spent and logged
+    as "2/2" here, ``exhausted`` went true, and this verdict unlinked the channel milliseconds
+    later with the join still in flight.
+
+    Read off the predicates of the rule that does the retrying, never a second copy of its
+    budget, for the reason ``_rejoin`` reads this rule's pause off the column
+    ``_onboard_pair`` refuses on.
     """
-    return any(_rejoin.access_lost(row) and not _rejoin.exhausted(row) for row in rows)
+    return any(_rejoin.access_lost(row) and _rejoin.still_retrying(row, now) for row in rows)
+
+
+def _awaiting_approval(rows: list[NeurocommentReadiness], now: datetime) -> bool:
+    """True while some pair's join request is still waiting for an admin to press Approve.
+
+    The third rule that owns a pair on this channel, and the hold this verdict was missing.
+    The coverage count cannot see it — a pair that has asked HAS a readiness row, so it reads
+    as tried — and yet the whole point of holding for an untried account is that a pair
+    reaching the channel late gets its own attempt at it. Going "waiting for approval" is that
+    attempt, not its failure, and this deadline annulled the 48h of patience
+    ``_sweep._review_join_requests`` had just started on the same budget.
+
+    ``_onboard_pair``'s own predicate, the one the onboarding pass refuses to re-request on,
+    so the two cannot disagree about a row. It ends its own hold: the request review drops the
+    channel when the patience runs out, exactly as this rule ends the one ``_rejoin`` waits on.
+    """
+    return any(_onboard_pair._join_request_in_flight(row, now) for row in rows)  # noqa: SLF001
 
 
 async def _channel_coverage(

@@ -158,12 +158,16 @@ async def test_a_spent_attempt_is_not_retried_before_the_window_and_is_after(
 
 @pytest.mark.asyncio
 async def test_attempts_stop_at_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The whole budget spent: no extra attempt, however long the pair sits there."""
+    """The whole budget spent: the window running out buys no extra attempt.
+
+    A day, not thirty: past two windows the stamp is STALE, and a stale stamp is a row nobody
+    was re-joining against rather than a spent budget (see the freshness test below).
+    """
     await _campaign("acc-1", "acc-2")  # a second serving account, so nothing is unlinked
     await _park("acc-1", attempts=settings.neurocomment.channel_max_rounds)
     triggered = _pokes(monkeypatch)
 
-    await _rejoin.review_access_lost(datetime.now(UTC) + timedelta(days=30))
+    await _rejoin.review_access_lost(datetime.now(UTC) + timedelta(hours=25))
 
     assert triggered == []
 
@@ -283,7 +287,10 @@ async def test_a_poke_costs_an_attempt_even_when_the_pass_never_joins(
         assert row.rejoin_attempts == spent
 
     assert join.calls == []  # the account never left its cap, so nothing was ever joined
-    await _rejoin.review_access_lost(now + timedelta(days=30))
+    # The last attempt's own window, walked on the row rather than on a synthetic ``now``: a
+    # stamp left two windows behind reads as stale and would buy a fresh attempt instead.
+    _backdate_rejoin_attempt("acc-1", hours=25)
+    await _rejoin.review_access_lost(datetime.now(UTC))
     assert len(triggered) == settings.neurocomment.channel_max_rounds
     assert await _channel_is_active(campaign_id) is False
 
@@ -457,12 +464,13 @@ async def test_a_paused_channel_is_not_dropped_by_the_re_join_rule(
     now = datetime.now(UTC)
     await _park("acc-1", attempts=settings.neurocomment.channel_max_rounds)
     _pokes(monkeypatch)
-    await bump_channel_pause(_CHANNEL, (now + timedelta(hours=48)).isoformat())
+    # One flat ``channel_pause_hours``, the window the pause rule actually buys.
+    await bump_channel_pause(_CHANNEL, (now + timedelta(hours=24)).isoformat())
 
-    await _rejoin.review_access_lost(now + timedelta(hours=25))
+    await _rejoin.review_access_lost(now + timedelta(hours=23))
     assert await _channel_is_active(campaign_id) is True
 
-    await _rejoin.review_access_lost(now + timedelta(hours=49))
+    await _rejoin.review_access_lost(now + timedelta(hours=25))
     assert await _channel_is_active(campaign_id) is False
 
 
@@ -654,15 +662,19 @@ async def test_a_row_inherited_from_the_old_budget_gets_the_full_new_one(
     """The 4 → 2 change must not execute the channels it caught mid-timeline (#48).
 
     A pair that spent 2 of the OLD budget's 4 attempts is instantly ``exhausted`` under the
-    new one, and its stamp is days old, so ``_review_channel``'s "all exhausted and the last
-    window is out" is true on the very first tick after the deploy: the channel is unlinked
-    without one re-join under the new rule and without any of the 48h it promises. On the
-    live database that was 23 rows across six channels. The migration gives the budget back
-    — the rule changed, so everyone it had already spent starts over.
+    new one, and its last window has run out, so ``_review_channel``'s give-up test is true on
+    the very first tick after the deploy: the channel is unlinked without one re-join under
+    the new rule and without any of the 48h it promises. On the live database that was 23 rows
+    across six channels. The migration gives the budget back — the rule changed, so everyone
+    it had already spent starts over.
+
+    A stamp one tick past its window, not one left for days: the freshness check now hands a
+    row THAT stale an attempt on the new budget by itself, and this knife-edge — a window that
+    only just ran out when the setting changed — is the case only a migration can repair.
     """
     campaign_id = await _campaign("acc-1")
     await _park("acc-1", attempts=2)
-    _backdate_rejoin_attempt("acc-1", hours=24 * 7)
+    _backdate_rejoin_attempt("acc-1", hours=25)
     inherited = await fetch_readiness("acc-1", _CHANNEL)
     assert inherited is not None
     assert _rejoin.exhausted(inherited) is True  # what the first tick would have judged

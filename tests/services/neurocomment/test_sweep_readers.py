@@ -156,10 +156,18 @@ async def test_a_kicked_reader_is_parked_for_the_rejoin_rule(
 
 
 @pytest.mark.asyncio
-async def test_every_author_kicked_costs_exactly_one_log_line(
+async def test_every_author_kicked_blames_the_channel_and_parks_nobody(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One line per channel per tick, naming the last failure and what the walk cost."""
+    """Every reader out on the same tick is the CHANNEL, and parking them all would cost it.
+
+    ``CheckMessagesAlive`` resolves the BROADCAST channel before it reaches the discussion
+    group (``GetFullChannelRequest``), so a channel that went private answers
+    ``ChannelPrivateError`` to every account in turn. Parking on that read a channel-wide
+    fact as a per-account one: no pair left ready, the re-join review spending an attempt on
+    each, and ``_rejoin._drop_channel_if_nothing_works`` unlinking the channel 48h later —
+    where the same failure on ``main`` cost one log line. It costs one log line again.
+    """
     await _campaign_with_authors("acc-1", "acc-2")
     _patch_reader(
         monkeypatch,
@@ -170,39 +178,101 @@ async def test_every_author_kicked_costs_exactly_one_log_line(
 
     await _sweep._sweep_once()
 
+    assert await fetch_readiness("acc-2", _CHANNEL) is None  # no pair pulled out of service
+    assert await fetch_readiness("acc-1", _CHANNEL) is None
     failures = await _read_failures()
-    assert len(failures) == 1
+    assert len(failures) == 1  # and one line for the channel on this tick, as before
+    # The signature the line has to carry: everybody tried said the same thing, and that is
+    # why nothing was parked. A smaller ``readers_kicked`` would have been the accounts.
     assert failures[0].extra["readers_tried"] == 2
-    # Every reader parked on the same tick: the signature of a channel that went dark for
-    # everyone (``CheckMessagesAlive`` resolves the BROADCAST channel first), not of two
-    # accounts kicked out of the discussion group one at a time.
-    assert failures[0].extra["readers_parked"] == 2
+    assert failures[0].extra["readers_kicked"] == 2
+    assert failures[0].extra["readers_parked"] == 0
     assert failures[0].extra["channel"] == _CHANNEL
     assert failures[0].extra["reason"] == "RPC: UserNotParticipantError"  # the last failure
     assert failures[0].account_id == "acc-1"
-    for account_id, error_type in (("acc-2", "ChannelPrivateError"), ("acc-1", "UserNot")):
-        row = await fetch_readiness(account_id, _CHANNEL)
-        assert row is not None
-        assert row.access_lost_reason is not None
-        assert row.access_lost_reason.startswith(error_type)
 
 
 @pytest.mark.asyncio
-async def test_the_next_tick_stays_silent_once_every_author_is_parked(
+async def test_one_kicked_author_out_of_three_is_parked_alone(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A parked pair is the re-join rule's; re-reading with it is the old five-minute drip."""
-    await _campaign_with_authors("acc-1", "acc-2")
+    """The rotation's whole point, and the all-kicked guard must not swallow it.
+
+    The denominator is the readers actually TRIED, not the channel's authors: ``acc-1`` never
+    gets a turn (``acc-2`` answered), so the walk ends 1-kicked-of-2-tried — accounts, not
+    channel — and the one Telegram named is parked.
+    """
+    await _campaign_with_authors("acc-1", "acc-2", "acc-3")
     reader = _patch_reader(
         monkeypatch,
-        _Reader({"acc-1": _kicked(), "acc-2": _kicked()}),
+        _Reader({"acc-3": _kicked(), "acc-2": CheckMessagesAliveResult(missing_ids=[101])}),
     )
 
     await _sweep._sweep_once()
+
+    assert reader.calls == ["acc-3", "acc-2"]  # freshest first, then the one that answered
+    parked = await fetch_readiness("acc-3", _CHANNEL)
+    assert parked is not None
+    assert _rejoin.access_lost(parked) is True
+    assert parked.access_lost_reason == "ChannelPrivateError"
+    for account_id in ("acc-1", "acc-2"):  # the untried and the working one are untouched
+        assert await fetch_readiness(account_id, _CHANNEL) is None
+    gone = await fetch_comment(_CHANNEL, 1)
+    assert gone is not None
+    assert gone.deleted_at is not None  # and the deletion check still ran on the answer
+    assert await _read_failures() == []
+
+
+@pytest.mark.asyncio
+async def test_a_lone_author_is_not_parked_on_its_own_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One account cannot prove which of the two things happened, so it proves neither.
+
+    A lone author IS every author, so it takes the same branch and for the same reason: a
+    false park costs a working pair and starts the 48h countdown to unlinking a channel that
+    may be fine, while a missed one costs one read per tick — and the pair stays ``ready``,
+    so the channel's next post is attempted with it and ``_outcomes`` parks it on these same
+    verdicts with proof that it tried to WRITE.
+    """
+    await _campaign_with_authors("acc-1")
+    _patch_reader(monkeypatch, _Reader({"acc-1": _kicked()}))
+
     await _sweep._sweep_once()
 
-    assert reader.calls == ["acc-2", "acc-1"]  # tick two asked nobody
-    assert len(await _read_failures()) == 1
+    assert await fetch_readiness("acc-1", _CHANNEL) is None  # still selectable for posting
+    failures = await _read_failures()
+    assert len(failures) == 1
+    assert (failures[0].extra["readers_tried"], failures[0].extra["readers_kicked"]) == (1, 1)
+    assert failures[0].extra["readers_parked"] == 0
+
+
+@pytest.mark.asyncio
+async def test_the_tick_stays_silent_once_every_author_is_parked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A parked pair is the re-join rule's; re-reading with it is the old five-minute drip.
+
+    Seeded by hand rather than by a previous tick, because the sweep no longer parks a whole
+    channel's authors itself (that is the channel talking) — the rows still arrive here from
+    ``_outcomes`` and ``_classify``, and the sweep must stay off them.
+    """
+    await _campaign_with_authors("acc-1", "acc-2")
+    for account_id in ("acc-1", "acc-2"):
+        await upsert_readiness(
+            account_id,
+            _CHANNEL,
+            joined=False,
+            captcha_passed=True,
+            ready=False,
+            access_lost_reason="ChannelPrivateError",
+        )
+    reader = _patch_reader(monkeypatch, _Reader({"acc-1": _kicked(), "acc-2": _kicked()}))
+
+    await _sweep._sweep_once()
+
+    assert reader.calls == []  # the tick asked nobody
+    assert await _read_failures() == []  # and reported nothing, tick after tick
 
 
 @pytest.mark.asyncio
