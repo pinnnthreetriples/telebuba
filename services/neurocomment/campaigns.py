@@ -18,13 +18,13 @@ from core.repositories.neurocomment import (
     set_campaign_account_channels,
     set_campaign_status,
 )
-from schemas.challenge import ChallengeRowList
+from schemas.challenge import AccountChannel
 from schemas.neurocomment import ChannelLinkOutcome
-from services.neurocomment import _discovery_state, _rejoin, _runtime
+from services.neurocomment import _discovery_state, _rejoin, _runtime, _state
 from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
-    from schemas.challenge import ChallengeOutcomeCounts
+    from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
     from schemas.neurocomment import (
         CampaignAccountList,
         CampaignChannelList,
@@ -96,20 +96,26 @@ async def list_channel_challenges(channel: str, limit: int) -> ChallengeRowList:
     return await db.list_failed_for_channel(channel, limit)
 
 
-async def _rejoin_exhausted_pairs() -> set[tuple[str, str]]:
-    """Pairs that are out of their chat and have no re-join left to spend.
+async def _rejoin_exhausted_pairs() -> list[AccountChannel]:
+    """Pairs out of their chat whose re-join budget is spent — the live report's six.
 
     Read off ``_rejoin``'s own two predicates rather than re-derived here, so the queue and
     the re-join rule cannot disagree about who is finished — the same pairing ``board``
     badges ``join_failed`` with. A pair still inside its budget is NOT here: the sweep is
     working on it, a retry may well land it back in the chat, and its captcha then matters
     again.
+
+    Unlike the other exclusions the retry here is not merely useless, it is harmful: the
+    join RPC is what Telegram already refused four times, and it still counts against the
+    account's rolling-24h join cap. Worse, ``retry_pair`` deletes the readiness row, which
+    resets ``rejoin_attempts`` — so the click silently hands a pair a fresh four-attempt
+    budget the rule spent four days deciding to end.
     """
-    return {
-        (row.account_id, row.channel)
+    return [
+        AccountChannel(account_id=row.account_id, channel=row.channel)
         for row in (await db.list_access_lost_readiness()).readiness
         if _rejoin.access_lost(row) and _rejoin.exhausted(row)
-    }
+    ]
 
 
 async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRowList:
@@ -120,27 +126,40 @@ async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRow
 
     Actionable is the whole point of the view: every row carries a «Повторить» button, and
     an operator looking at six rows for one channel from a week ago has no way to tell that
-    all six accounts lost access to that chat months of retries ago and the button will
-    stop at the join. So a pair the retry cannot get to a captcha for is not listed at all
-    — hidden, not greyed out, because a row nobody can clear is the thing being fixed. The
-    repository drops the two states it can read (banned, operator-skipped) plus everything
-    past ``challenge_queue_max_age_days``; the re-join budget needs
-    ``settings.neurocomment`` and the terminal-verdict set, which core cannot see, so it is
-    subtracted here.
+    all six accounts lost access to that chat months of retries ago and the button will stop
+    at the join. So a row nobody can clear is not listed at all — hidden, not greyed out,
+    since a badged-and-dead row is a second list needing its own triage. Four states go,
+    each for its own reason, and none of them is "onboarding would refuse it" —
+    ``retry_pair`` erases readiness FIRST, so the readiness-keyed guards never run:
+
+    * banned, operator-skipped — the retry works and must not (``_retry_can_reach``);
+    * the re-join budget is spent — the retry costs a join RPC Telegram refuses and quietly
+      restores the budget (:func:`_rejoin_exhausted_pairs`);
+    * the channel is serving out a #147 pause — the one state where the click provably does
+      nothing at all: ``_join_and_classify`` returns ``channel_paused`` before the join RPC,
+      reading the very column carried on the link below. Dropped for the window's duration
+      only, exactly as ``_rejoin._review_channel`` sits a pause out, and the rows come back
+      when it lapses because a pause is shorter than the age window.
+
+    A paused channel drops out of the channel list and the budget goes in as an exclusion
+    list, so every rule is inside the one statement the database applies ``limit`` to. That
+    matters more than it looks: the queue lists challenge ROWS, and one pair collects a new
+    one on every pass that meets the guardian bot, so six finished pairs are easily 24 rows.
+    Filtered after the fact they would fill a 20-row queue and hide the one pair a human
+    could still act on — the same blindness in a new place.
     """
+    now = datetime.now(UTC)
     channels = [
-        link.channel for link in (await db.list_campaign_channels(campaign_id)).links if link.active
+        link.channel
+        for link in (await db.list_campaign_channels(campaign_id)).links
+        if link.active and not _state.channel_paused(link.paused_until, now)
     ]
-    since = (
-        datetime.now(UTC) - timedelta(days=settings.neurocomment.challenge_queue_max_age_days)
-    ).isoformat()
-    rows = (await db.list_failed_for_channels(channels, limit, since)).rows
-    # ponytail: filtered after the limit, so a queue full of finished pairs can come back
-    # short of ``limit`` rows. Push the exclusion into the SQL if that ever hides real work
-    # — with the age cutoff above, the pool it draws from is days deep, not months.
-    exhausted = await _rejoin_exhausted_pairs()
-    return ChallengeRowList(
-        rows=[row for row in rows if (row.account_id, row.channel) not in exhausted],
+    since = (now - timedelta(days=settings.neurocomment.challenge_queue_max_age_days)).isoformat()
+    return await db.list_failed_for_channels(
+        channels,
+        limit,
+        since,
+        await _rejoin_exhausted_pairs() if channels else [],
     )
 
 

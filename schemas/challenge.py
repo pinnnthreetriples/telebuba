@@ -43,6 +43,13 @@ class ChallengeRowList(BaseModel):
     rows: list[ChallengeRow] = Field(default_factory=list)
 
 
+class AccountChannel(BaseModel):
+    """One (account, channel) pair, so a pair list crosses a boundary as a model."""
+
+    account_id: str = Field(min_length=1)
+    channel: str = Field(min_length=1)
+
+
 class ChallengeOutcomeCounts(BaseModel):
     """The four header counters over the challenge audit table for a time window (#148)."""
 

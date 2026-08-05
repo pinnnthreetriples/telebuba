@@ -286,7 +286,10 @@ class NeurocommentSettings(BaseSettings):
     # list every captcha ever lost — six rows from a week ago read exactly like today's.
     # A captcha the solver lost days ago is not work an operator can still pick up: the
     # bot has moved on, and the pair either recovered on its own or is parked for good.
-    challenge_queue_max_age_days: float = Field(default=3.0, gt=0.0)
+    # Upper bound so an absurd value cannot overflow the `timedelta` that builds the cutoff
+    # (an unhandled OverflowError, i.e. a 500 on the queue route); a year already outlives
+    # `retention_days`, which prunes the rows this window selects from.
+    challenge_queue_max_age_days: float = Field(default=3.0, gt=0.0, le=365.0)
     # C1: case-insensitive REGEX fragments; the solver refuses to click a button whose label
     # matches any.
     challenge_button_denylist_patterns: list[str] = Field(
