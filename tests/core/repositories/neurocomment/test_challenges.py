@@ -15,6 +15,8 @@ from core.db import (  # type: ignore[attr-defined]
     list_failed_for_channel,
     list_failed_for_channels,
     lookup_cached_decision,
+    mark_human_skipped,
+    mark_pair_banned,
     resolve_pending_outcome,
     upsert_readiness,
 )
@@ -105,17 +107,17 @@ async def test_list_failed_for_channels_filters_orders_and_limits() -> None:
             ),
         )
 
-    result = await list_failed_for_channels(["@a", "@b"], limit=10)
+    result = await list_failed_for_channels(["@a", "@b"], limit=10, since="", exclude_pairs=[])
 
     # Only unsolved rows on the queried channels, newest first.
     assert [r.raw_text for r in result.rows] == ["h4", "h1", "h0"]
 
     # The global limit caps the merged result, keeping the newest.
-    limited = await list_failed_for_channels(["@a", "@b"], limit=2)
+    limited = await list_failed_for_channels(["@a", "@b"], limit=2, since="", exclude_pairs=[])
     assert [r.raw_text for r in limited.rows] == ["h4", "h1"]
 
     # No channels → empty, no query.
-    assert (await list_failed_for_channels([], limit=10)).rows == []
+    assert (await list_failed_for_channels([], limit=10, since="", exclude_pairs=[])).rows == []
 
 
 def _solved_insert(
@@ -318,7 +320,7 @@ async def test_queue_drops_a_failure_whose_pair_has_since_passed() -> None:
     await upsert_readiness("stuck", "@chan", joined=True, captcha_passed=False, ready=False)
 
     per_channel = await list_failed_for_channel("@chan", limit=10)
-    campaign = await list_failed_for_channels(["@chan"], limit=10)
+    campaign = await list_failed_for_channels(["@chan"], limit=10, since="", exclude_pairs=[])
 
     assert [r.account_id for r in per_channel.rows] == ["stuck"]
     assert [r.account_id for r in campaign.rows] == ["stuck"]
@@ -349,7 +351,7 @@ async def test_queue_keeps_a_failure_whose_pair_was_kicked_after_it() -> None:
     await upsert_readiness("kicked", "@chan", joined=False, captcha_passed=True, ready=False)
 
     per_channel = await list_failed_for_channel("@chan", limit=10)
-    campaign = await list_failed_for_channels(["@chan"], limit=10)
+    campaign = await list_failed_for_channels(["@chan"], limit=10, since="", exclude_pairs=[])
 
     assert [r.account_id for r in per_channel.rows] == ["kicked"]
     assert [r.account_id for r in campaign.rows] == ["kicked"]
@@ -370,6 +372,67 @@ async def test_queue_keeps_a_failure_with_no_readiness_row() -> None:
         ),
     )
 
-    result = await list_failed_for_channels(["@chan"], limit=10)
+    result = await list_failed_for_channels(["@chan"], limit=10, since="", exclude_pairs=[])
 
     assert [r.account_id for r in result.rows] == ["reset"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("unreachable", ["banned", "skipped"])
+async def test_queue_hides_a_pair_that_must_not_be_retried(unreachable: str) -> None:
+    """A banned (#30) or operator-skipped (#148) pair carries no «Повторить» button.
+
+    NOT because onboarding refuses it — ``retry_pair`` deletes the readiness row first, so
+    the guards keyed on that row never run and the retry really would re-join and re-solve.
+    That is why the row has to go: it would lift a ban ``bans`` calls permanent, or undo the
+    operator's own skip, from a list that reads like pending work.
+    """
+    for account_id in ("stuck", unreachable):
+        await create_account(
+            AccountCreate(account_id=account_id, label=account_id, session_name=account_id),
+        )
+        await insert_challenge(
+            ChallengeInsert(
+                challenge_hash=f"h-{account_id}",
+                account_id=account_id,
+                channel="@chan",
+                raw_text="press the button",
+                button_labels=["ok"],
+                outcome="give_up",
+            ),
+        )
+        await upsert_readiness(account_id, "@chan", joined=True, captcha_passed=False, ready=False)
+    if unreachable == "banned":
+        await mark_pair_banned(unreachable, "@chan")
+    else:
+        await mark_human_skipped(unreachable, "@chan")
+
+    result = await list_failed_for_channels(["@chan"], limit=10, since="", exclude_pairs=[])
+
+    assert [r.account_id for r in result.rows] == ["stuck"]
+
+
+@pytest.mark.asyncio
+async def test_queue_hides_challenges_decided_before_since() -> None:
+    """A captcha lost days ago is not work an operator can still pick up.
+
+    The audit table keeps failures for the whole retention window, so without the lower
+    bound the queue listed every captcha ever lost, indistinguishable from today's.
+    """
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h-old",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="stale",
+            button_labels=["ok"],
+            outcome="give_up",
+        ),
+    )
+
+    fresh = await list_failed_for_channels(["@chan"], limit=10, since="", exclude_pairs=[])
+    cutoff = (datetime.now(UTC) + timedelta(seconds=1)).isoformat()
+    aged_out = await list_failed_for_channels(["@chan"], limit=10, since=cutoff, exclude_pairs=[])
+
+    assert [r.raw_text for r in fresh.rows] == ["stale"]
+    assert aged_out.rows == []

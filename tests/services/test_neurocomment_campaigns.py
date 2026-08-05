@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import insert, select
 
+from core.config import settings
 from core.db import (
     _get_engine,
+    bump_channel_pause,
     configure_database,
     create_account,
     fetch_account,
     insert_challenge,
     list_campaign_readiness,
+    stamp_rejoin_attempt,
     upsert_readiness,
 )
 from core.repositories.neurocomment._tables import (
@@ -255,6 +259,138 @@ async def test_list_campaign_challenges_merges_failed_across_channels() -> None:
     assert {row.channel for row in queue.rows} == {"@a", "@b"}
     assert {row.outcome for row in queue.rows} <= {"failed", "give_up"}
     assert len(queue.rows) == 2
+
+
+async def _challenged_pair(campaign_id: str, account_id: str, channel: str) -> None:
+    await create_account(
+        AccountCreate(account_id=account_id, label=account_id, session_name=account_id)
+    )
+    await campaigns.assign_account_to_campaign(campaign_id, account_id)
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash=f"h-{account_id}",
+            account_id=account_id,
+            channel=channel,
+            raw_text="captcha",
+            outcome="give_up",
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_campaign_challenges_hides_pairs_with_no_rejoin_left() -> None:
+    """The live report: six rows for one channel, every account long out of its chat.
+
+    Both pairs lost access the same way (``ChannelPrivateError``); only "spent" has used up
+    its re-join budget. «Повторить» erases readiness and re-onboards, so for "spent" the
+    join RPC is the one Telegram has already refused four times — it burns a slot of the
+    account's daily join cap and restores a budget the rule spent four days ending. "trying"
+    may still get back in, which is why the budget and not the access loss decides.
+    """
+    campaign = await campaigns.create_campaign(CampaignCreate(name="C", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@chan")
+    for account_id in ("trying", "spent"):
+        await _challenged_pair(campaign.campaign_id, account_id, "@chan")
+        await upsert_readiness(
+            account_id,
+            "@chan",
+            joined=False,
+            captcha_passed=True,
+            ready=False,
+            access_lost_reason="ChannelPrivateError",
+        )
+    for _ in range(settings.neurocomment.channel_max_rounds):
+        await stamp_rejoin_attempt("spent", "@chan")
+
+    queue = await campaigns.list_campaign_challenges(campaign.campaign_id, 10)
+
+    assert [row.account_id for row in queue.rows] == ["trying"]
+
+
+@pytest.mark.asyncio
+async def test_hidden_rows_do_not_consume_the_limit() -> None:
+    """Every exclusion must be inside the statement the database applies ``limit`` to.
+
+    The queue lists challenge ROWS and a pair collects a new one on every pass that meets
+    the guardian bot, so a handful of finished pairs is easily more rows than the whole
+    limit. Filtered after the query they fill the page and hide the one pair a human can
+    still act on — which is the very blindness this view exists to remove.
+    """
+    campaign = await campaigns.create_campaign(CampaignCreate(name="C", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@chan")
+    # Inserted FIRST, so this actionable pair is the oldest row and all 12 hidden rows sort
+    # ahead of it: with limit=10 a post-query filter returns an empty queue.
+    await _challenged_pair(campaign.campaign_id, "live", "@chan")
+    for index in range(3):
+        account_id = f"spent-{index}"
+        await _challenged_pair(campaign.campaign_id, account_id, "@chan")
+        # Four give_up rows for the same pair, as four onboarding passes would leave.
+        for _ in range(3):
+            await insert_challenge(
+                ChallengeInsert(
+                    challenge_hash=f"h-{account_id}-again",
+                    account_id=account_id,
+                    channel="@chan",
+                    raw_text="captcha",
+                    outcome="give_up",
+                ),
+            )
+        await upsert_readiness(
+            account_id,
+            "@chan",
+            joined=False,
+            captcha_passed=True,
+            ready=False,
+            access_lost_reason="ChannelPrivateError",
+        )
+        for _ in range(settings.neurocomment.channel_max_rounds):
+            await stamp_rejoin_attempt(account_id, "@chan")
+
+    queue = await campaigns.list_campaign_challenges(campaign.campaign_id, 10)
+
+    assert [row.account_id for row in queue.rows] == ["live"]
+
+
+@pytest.mark.asyncio
+async def test_list_campaign_challenges_hides_a_paused_channel() -> None:
+    """A #147 pause is the one state where «Повторить» provably does nothing at all.
+
+    ``_join_and_classify`` returns ``channel_paused`` before the join RPC, so no join, no
+    solver, no readiness write — the click is a no-op. Hidden for the window only: the rows
+    return once it lapses, which is why this is not folded into the age cutoff.
+    """
+    campaign = await campaigns.create_campaign(CampaignCreate(name="C", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@paused")
+    await campaigns.link_channel(campaign.campaign_id, "@live")
+    await _challenged_pair(campaign.campaign_id, "acc-paused", "@paused")
+    await _challenged_pair(campaign.campaign_id, "acc-live", "@live")
+
+    await bump_channel_pause("@paused", (datetime.now(UTC) + timedelta(hours=5)).isoformat())
+
+    queue = await campaigns.list_campaign_challenges(campaign.campaign_id, 10)
+
+    assert [row.account_id for row in queue.rows] == ["acc-live"]
+
+    # A lapsed deadline is not a pause: the rows come back on their own.
+    await bump_channel_pause("@paused", (datetime.now(UTC) - timedelta(hours=1)).isoformat())
+    reopened = await campaigns.list_campaign_challenges(campaign.campaign_id, 10)
+    assert {row.account_id for row in reopened.rows} == {"acc-live", "acc-paused"}
+
+
+@pytest.mark.asyncio
+async def test_list_campaign_challenges_drops_rows_past_the_age_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The window is a setting, and the queue honours it (0 days = nothing qualifies)."""
+    campaign = await campaigns.create_campaign(CampaignCreate(name="C", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@chan")
+    await _challenged_pair(campaign.campaign_id, "fresh", "@chan")
+
+    assert len((await campaigns.list_campaign_challenges(campaign.campaign_id, 10)).rows) == 1
+
+    monkeypatch.setattr(settings.neurocomment, "challenge_queue_max_age_days", 1e-9)
+
+    assert (await campaigns.list_campaign_challenges(campaign.campaign_id, 10)).rows == []
 
 
 @pytest.mark.asyncio

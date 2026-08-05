@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, true, tuple_, update
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
@@ -20,6 +20,7 @@ from core.repositories.neurocomment._tables import (
     _neurocomment_readiness,
 )
 from schemas.challenge import (
+    AccountChannel,
     ChallengedChannels,
     ChallengeDecision,
     ChallengeInsert,
@@ -71,6 +72,41 @@ def _still_blocked() -> ColumnElement[bool]:
         .exists()
     )
     return ~passed
+
+
+def _retry_can_reach() -> ColumnElement[bool]:
+    """Exclude a failure whose pair must not be offered the «Повторить» button.
+
+    NOT "onboarding would refuse it". ``challenge.retry_pair`` DELETES the readiness row
+    and only then onboards, so every guard in ``_join_and_classify`` that reads that row —
+    the skip/ban refusal, the re-join back-off — is skipped by construction, and the retry
+    really does re-join and re-run the solver. That is the problem, not the reason: for
+    these two states the button works and must not.
+
+    A ban (#30) is permanent by design and the ONE path that quietly lifted it was removed
+    rather than documented away (see ``services.neurocomment.bans``, which defends itself
+    with "a banned pair has no challenge row, so no button in the UI points here" — an
+    invariant nothing enforced until this predicate). An operator skip (#148) is the
+    operator's own decision to take this pair off this channel; ``retry_pair`` clears it
+    deliberately, so listing the pair as pending work invites undoing that skip by
+    accident, one click away from a queue that reads like a to-do list.
+
+    The other two unreachable states are the caller's: a paused channel and a spent
+    re-join budget both need reads core has no business making here.
+    """
+    refused = (
+        select(_neurocomment_readiness.c.account_id)
+        .where(
+            (_neurocomment_readiness.c.account_id == _neurocomment_challenges.c.account_id)
+            & (_neurocomment_readiness.c.channel == _neurocomment_challenges.c.channel)
+            & (
+                (_neurocomment_readiness.c.banned == 1)
+                | (_neurocomment_readiness.c.human_skipped == 1)
+            ),
+        )
+        .exists()
+    )
+    return ~refused
 
 
 def _insert_challenge(row: ChallengeInsert) -> None:
@@ -143,7 +179,20 @@ async def list_failed_for_channel(channel: str, limit: int) -> ChallengeRowList:
     return await asyncio.to_thread(_list_failed_for_channel, channel, limit)
 
 
-def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowList:
+def _not_one_of(pairs: list[AccountChannel]) -> ColumnElement[bool]:
+    """``(account_id, channel)`` is none of ``pairs`` — the caller's own exclusion list."""
+    return ~tuple_(
+        _neurocomment_challenges.c.account_id,
+        _neurocomment_challenges.c.channel,
+    ).in_([(pair.account_id, pair.channel) for pair in pairs])
+
+
+def _list_failed_for_channels(
+    channels: list[str],
+    limit: int,
+    since: str,
+    exclude_pairs: list[AccountChannel],
+) -> ChallengeRowList:
     if not channels:
         return ChallengeRowList()
     statement = (
@@ -151,7 +200,10 @@ def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowLi
         .where(
             _neurocomment_challenges.c.channel.in_(channels)
             & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
-            & _still_blocked(),
+            & (_neurocomment_challenges.c.decided_at >= since)
+            & _still_blocked()
+            & _retry_can_reach()
+            & (_not_one_of(exclude_pairs) if exclude_pairs else true()),
         )
         .order_by(
             _neurocomment_challenges.c.decided_at.desc(),
@@ -164,9 +216,31 @@ def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowLi
     return ChallengeRowList(rows=[_row_to_challenge(row) for row in rows])
 
 
-async def list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowList:
-    """Most-recent non-solved challenges across ``channels`` (the campaign captcha queue)."""
-    return await asyncio.to_thread(_list_failed_for_channels, channels, limit)
+async def list_failed_for_channels(
+    channels: list[str],
+    limit: int,
+    since: str,
+    exclude_pairs: list[AccountChannel],
+) -> ChallengeRowList:
+    """Actionable non-solved challenges across ``channels``, newest first (the captcha queue).
+
+    ``since`` is an ISO-8601 lower bound on ``decided_at`` — required, not defaulted,
+    because an empty bound is exactly the unbounded queue this argument exists to end.
+
+    ``exclude_pairs`` carries the one rule this layer cannot spell (the re-join budget: it
+    needs ``settings`` and a verdict set that live in services), as a pair list rather than
+    as re-implemented SQL, so there is still exactly one definition of "finished". EVERY
+    exclusion has to be inside this statement, because ``limit`` is applied by the database:
+    filtering afterwards let 24 hidden rows — six pairs, four challenge rows each, all
+    inside the age window — fill a 20-row queue and hide the one pair a human could act on.
+    """
+    return await asyncio.to_thread(
+        _list_failed_for_channels,
+        channels,
+        limit,
+        since,
+        exclude_pairs,
+    )
 
 
 def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
@@ -176,7 +250,8 @@ def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
         select(_neurocomment_challenges.c.channel)
         .where(
             _neurocomment_challenges.c.channel.in_(channels)
-            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES),
+            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
+            & _still_blocked(),
         )
         .distinct()
     )
@@ -186,7 +261,22 @@ def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
 
 
 async def list_challenged_channels(channels: list[str]) -> ChallengedChannels:
-    """Which of ``channels`` carry a non-solved challenge (bulk board signal)."""
+    """Which of ``channels`` still carry an UNRESOLVED challenge (bulk board signal).
+
+    ``_still_blocked`` for the reason it exists on the queue, which this read wants just as
+    much and was the only one of the three not to have: the table is append-only, so a pair
+    that later solved its captcha leaves its old ``give_up`` behind forever. Without the
+    exclusion one long-resolved row made ``board._channel_status`` answer ``bot_challenge``
+    for a channel blocked by something else entirely — the badge picks between "a guardian
+    bot is the wall" and ``chat_restricted`` on exactly this signal, so a stale row did not
+    merely age, it named the wrong wall and sent the operator after the wrong fix.
+
+    Deliberately NOT the queue's other filters. The badge answers "why is this channel
+    stuck", the queue answers "what can a human press today", and the two are allowed to
+    differ: dropping rows past ``challenge_queue_max_age_days`` here would report
+    ``chat_restricted`` for a channel a bot gate really is holding, and dropping a skipped
+    pair's row would do the same. Both trade a true diagnosis for a false one.
+    """
     return await asyncio.to_thread(_list_challenged_channels, channels)
 
 
