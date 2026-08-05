@@ -73,6 +73,33 @@ def _still_blocked() -> ColumnElement[bool]:
     return ~passed
 
 
+def _retry_can_reach() -> ColumnElement[bool]:
+    """Exclude a failure whose pair the «Повторить» button cannot get to a captcha for.
+
+    The button erases readiness and re-runs onboarding, so it only means something while
+    onboarding is still willing to join this pair. It is not, for a pair the operator
+    skipped (#148) or one Telegram banned in the chat (#30) — ``_onboard_pair`` refuses
+    both before any join RPC, so the retry spends the readiness row and stops short of the
+    captcha. The same two exclusions ``_readiness._ACCESS_LOST`` carries, for the same
+    reason, and the third case (the pair is out of the chat with no re-join left) needs
+    the re-join budget, which lives in ``services.neurocomment._rejoin`` — the queue
+    service drops those.
+    """
+    refused = (
+        select(_neurocomment_readiness.c.account_id)
+        .where(
+            (_neurocomment_readiness.c.account_id == _neurocomment_challenges.c.account_id)
+            & (_neurocomment_readiness.c.channel == _neurocomment_challenges.c.channel)
+            & (
+                (_neurocomment_readiness.c.banned == 1)
+                | (_neurocomment_readiness.c.human_skipped == 1)
+            ),
+        )
+        .exists()
+    )
+    return ~refused
+
+
 def _insert_challenge(row: ChallengeInsert) -> None:
     with _get_engine().begin() as connection:
         connection.execute(
@@ -143,7 +170,7 @@ async def list_failed_for_channel(channel: str, limit: int) -> ChallengeRowList:
     return await asyncio.to_thread(_list_failed_for_channel, channel, limit)
 
 
-def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowList:
+def _list_failed_for_channels(channels: list[str], limit: int, since: str) -> ChallengeRowList:
     if not channels:
         return ChallengeRowList()
     statement = (
@@ -151,7 +178,9 @@ def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowLi
         .where(
             _neurocomment_challenges.c.channel.in_(channels)
             & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
-            & _still_blocked(),
+            & (_neurocomment_challenges.c.decided_at >= since)
+            & _still_blocked()
+            & _retry_can_reach(),
         )
         .order_by(
             _neurocomment_challenges.c.decided_at.desc(),
@@ -164,9 +193,15 @@ def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowLi
     return ChallengeRowList(rows=[_row_to_challenge(row) for row in rows])
 
 
-async def list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowList:
-    """Most-recent non-solved challenges across ``channels`` (the campaign captcha queue)."""
-    return await asyncio.to_thread(_list_failed_for_channels, channels, limit)
+async def list_failed_for_channels(channels: list[str], limit: int, since: str) -> ChallengeRowList:
+    """Actionable non-solved challenges across ``channels``, newest first (the captcha queue).
+
+    ``since`` is an ISO-8601 lower bound on ``decided_at`` — required, not defaulted,
+    because an empty bound is exactly the unbounded queue this argument exists to end.
+    Both cutoffs are applied in SQL so ``limit`` counts rows the operator will see; the
+    one filter that cannot be (the re-join budget) is applied by the caller.
+    """
+    return await asyncio.to_thread(_list_failed_for_channels, channels, limit, since)
 
 
 def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:

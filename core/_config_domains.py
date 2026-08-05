@@ -281,6 +281,12 @@ class NeurocommentSettings(BaseSettings):
     # mid-string and fails validation — which is exactly how a solvable one-button captcha
     # used to come back as give_up.
     challenge_max_output_tokens: int = Field(default=1024, ge=1, le=2048)
+    # How long an unsolved challenge stays in the operator's "требуют проверки" queue.
+    # The audit table keeps failures for the whole retention window, so the queue used to
+    # list every captcha ever lost — six rows from a week ago read exactly like today's.
+    # A captcha the solver lost days ago is not work an operator can still pick up: the
+    # bot has moved on, and the pair either recovered on its own or is parked for good.
+    challenge_queue_max_age_days: float = Field(default=3.0, gt=0.0)
     # C1: case-insensitive REGEX fragments; the solver refuses to click a button whose label
     # matches any.
     challenge_button_denylist_patterns: list[str] = Field(

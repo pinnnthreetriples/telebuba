@@ -9,19 +9,22 @@ exception never crosses into the UI layer (#2 — boundaries return models, not 
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core import db
+from core.config import settings
 from core.repositories.neurocomment import (
     set_campaign_account_channels,
     set_campaign_status,
 )
+from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import ChannelLinkOutcome
-from services.neurocomment import _discovery_state, _runtime
+from services.neurocomment import _discovery_state, _rejoin, _runtime
 from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
-    from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
+    from schemas.challenge import ChallengeOutcomeCounts
     from schemas.neurocomment import (
         CampaignAccountList,
         CampaignChannelList,
@@ -93,16 +96,52 @@ async def list_channel_challenges(channel: str, limit: int) -> ChallengeRowList:
     return await db.list_failed_for_channel(channel, limit)
 
 
+async def _rejoin_exhausted_pairs() -> set[tuple[str, str]]:
+    """Pairs that are out of their chat and have no re-join left to spend.
+
+    Read off ``_rejoin``'s own two predicates rather than re-derived here, so the queue and
+    the re-join rule cannot disagree about who is finished — the same pairing ``board``
+    badges ``join_failed`` with. A pair still inside its budget is NOT here: the sweep is
+    working on it, a retry may well land it back in the chat, and its captcha then matters
+    again.
+    """
+    return {
+        (row.account_id, row.channel)
+        for row in (await db.list_access_lost_readiness()).readiness
+        if _rejoin.access_lost(row) and _rejoin.exhausted(row)
+    }
+
+
 async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRowList:
-    """Recent non-solved challenges across a campaign's active channels (the captcha queue).
+    """Actionable non-solved challenges across a campaign's active channels (the captcha queue).
 
     One repository query over the campaign's active channels, newest first, capped at
     ``limit`` — replaces the former per-channel fan-out (one query per channel).
+
+    Actionable is the whole point of the view: every row carries a «Повторить» button, and
+    an operator looking at six rows for one channel from a week ago has no way to tell that
+    all six accounts lost access to that chat months of retries ago and the button will
+    stop at the join. So a pair the retry cannot get to a captcha for is not listed at all
+    — hidden, not greyed out, because a row nobody can clear is the thing being fixed. The
+    repository drops the two states it can read (banned, operator-skipped) plus everything
+    past ``challenge_queue_max_age_days``; the re-join budget needs
+    ``settings.neurocomment`` and the terminal-verdict set, which core cannot see, so it is
+    subtracted here.
     """
     channels = [
         link.channel for link in (await db.list_campaign_channels(campaign_id)).links if link.active
     ]
-    return await db.list_failed_for_channels(channels, limit)
+    since = (
+        datetime.now(UTC) - timedelta(days=settings.neurocomment.challenge_queue_max_age_days)
+    ).isoformat()
+    rows = (await db.list_failed_for_channels(channels, limit, since)).rows
+    # ponytail: filtered after the limit, so a queue full of finished pairs can come back
+    # short of ``limit`` rows. Push the exclusion into the SQL if that ever hides real work
+    # — with the age cutoff above, the pool it draws from is days deep, not months.
+    exhausted = await _rejoin_exhausted_pairs()
+    return ChallengeRowList(
+        rows=[row for row in rows if (row.account_id, row.channel) not in exhausted],
+    )
 
 
 async def count_campaign_challenge_outcomes(
