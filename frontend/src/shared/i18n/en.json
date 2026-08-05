@@ -639,7 +639,6 @@
     "neurocomment_no_account_available": "No account available",
     "neurocomment_no_campaign": "No matching campaign",
     "neurocomment_channel_cooled": "Post skipped: the channel is paused",
-    "neurocomment_channel_backoff": "Channel paused: our comments are being deleted",
     "neurocomment_channel_paused": "Channel paused: it will not let us write",
     "neurocomment_channel_dropped": "Channel dropped: it never let us write",
     "neurocomment_pipeline_failed": "Post not processed: internal error",
@@ -873,8 +872,7 @@
     "neurocomment_channel_paused": "The channel refused our comments three times in a row, so it is paused for a day: nothing posts there and no account is connected to it. There are two rounds, and the last one still serves its full day: the channel leaves the campaign not when the second round ends, but when that day runs out — no sooner than 48 hours after the first round. One delivered comment clears the count. The pause can run longer than that: the channel is not dropped until every account has tried it.",
     "neurocomment_channel_dropped": "The channel refused our comments through every pause round (one a day, two in total) and then sat out the last window too — no sooner than 48 hours after the first round, not the moment that round ended. It was unlinked from the campaign and the listener stopped watching it. Nobody left its chat — the block is the channel's, not a ban on an account. Link it again if it starts accepting comments.",
     "neurocomment_join_request_expired": "Nobody approved our join requests to this channel's chat (two requests, a day apart), so the channel was unlinked from the campaign and the listener stopped watching it. Link it again once an admin is ready to approve the accounts.",
-    "neurocomment_channel_backoff": "Several of our comments vanished from this channel within a day — moderation is clearing them out. The channel is paused: an hour at first, then the pause doubles, up to a day at most. No action needed: if the comments stop vanishing after the pause, the count clears itself.",
-    "neurocomment_channel_cooled": "The post was skipped because the channel is paused right now — after write errors, or after a batch of our comments was deleted. This is the only line about this post: nobody wrote a comment. The pause ends on its own — the channel goes back to work, or, on its last round, leaves the campaign instead.",
+    "neurocomment_channel_cooled": "The post was skipped because the channel is paused right now after write errors. This is the only line about this post: nobody wrote a comment. The pause ends on its own — the channel goes back to work, or, on its last round, leaves the campaign instead. Deleted comments never cause a pause: the channel clears them out and we still comment on its next post.",
     "neurocomment_no_campaign": "No active campaign for this channel."
   },
   "logEventTelegram": {

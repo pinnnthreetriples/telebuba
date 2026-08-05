@@ -22,6 +22,7 @@ from core.config import settings
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     claim_comment,
+    fetch_channel_paused_until,
     fetch_comment,
     list_delivered_comments_since,
     list_recent_logs,
@@ -32,7 +33,7 @@ from core.db import (  # type: ignore[attr-defined]
     touch_comment_claim,
 )
 from schemas.telegram_actions import CheckMessagesAliveResult, NewPostEvent
-from services.neurocomment import _seams, _state, _sweep, engine
+from services.neurocomment import _seams, _sweep, engine
 from tests.services.neurocomment.engine_support import (
     _CommentStub,
     _GenStub,
@@ -164,7 +165,6 @@ async def test_sweep_watches_a_delivered_comment_recorded_as_failed(
     assert await claim_comment("@a", 10, campaign_id, "acc-1") is True
     await record_comment_msg_id("@a", 10, 555)
     await mark_comment_failed("@a", 10)
-    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 1)
     checked: list[int] = []
 
     async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
@@ -179,7 +179,9 @@ async def test_sweep_watches_a_delivered_comment_recorded_as_failed(
     row = await fetch_comment("@a", 10)
     assert row is not None
     assert row.deleted_at is not None  # and can stamp it, so the feed can show it went
-    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is True
+    # Recorded, and that is ALL a deletion does: the escalating back-off it used to trip
+    # was removed by operator decision, so the channel's next post is commented as usual.
+    assert await fetch_channel_paused_until("@a") is None
 
 
 class _RegeneratingSlowGen(_GenStub):

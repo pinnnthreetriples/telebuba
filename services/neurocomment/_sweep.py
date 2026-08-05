@@ -29,7 +29,7 @@ from core.db import (
     reclaim_stale_claims,
 )
 from core.logging import log_event
-from services.neurocomment import _channel_pause, _rejoin, _state, _sweep_read
+from services.neurocomment import _channel_pause, _rejoin, _sweep_read
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -342,7 +342,7 @@ async def _sweep_once() -> None:
             buckets[comment.channel].append(comment)
         for channel in channels:
             try:
-                await _sweep_channel(channel, buckets.get(channel, []), now)
+                await _sweep_channel(channel, buckets.get(channel, []))
             except Exception as exc:  # noqa: BLE001 - one channel must not abort the pass.
                 await log_event(
                     "WARNING",
@@ -351,18 +351,17 @@ async def _sweep_once() -> None:
                 )
 
 
-async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datetime) -> None:
-    """Re-read one channel's recent comments; trip its back-off if too many are gone."""
-    if _state.channel_in_backoff(channel, now):
-        # Already cooled — skip the read and don't re-escalate. The same vanished
-        # comments stay in the lookback window for hours, so re-counting them every
-        # sweep would walk the back-off to its cap from a single deletion episode;
-        # escalation must advance only after a cooldown lapses and deletions persist.
-        return
+async def _sweep_channel(channel: str, comments: list[CommentRecord]) -> None:
+    """Re-read one channel's recent comments and record the ones that are gone.
+
+    Recording is all it does. A channel whose moderators delete our comments is still
+    commented on when its next post lands — deletions used to park it for an escalating
+    1h→24h back-off, and that rule was removed by operator decision: the point of the
+    fleet is to comment, and a lost comment costs nothing a pause would recover.
+    """
     msg_ids = [c.comment_msg_id for c in comments if c.comment_msg_id is not None]
     if not msg_ids:
         return
-    nc = settings.neurocomment
     # Every comment author in turn, not ``comments[0]``: one kicked account used to fail
     # this read forever and only ever produce a warning. ``_sweep_read`` owns the walk, the
     # access-loss bookkeeping it hands to the re-join rule, and the one log line a channel
@@ -378,22 +377,4 @@ async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datet
             "WARNING",
             "neurocomment_comment_deleted",
             extra={"channel": channel, "count": len(newly_deleted)},
-        )
-    seconds = _state.register_channel_deletions(
-        channel,
-        now,
-        _state.ChannelDeletionScan(set(msg_ids), set(result.missing_ids)),
-        min_deletions=nc.channel_backoff_min_deletions,
-        base_seconds=nc.channel_backoff_base_seconds,
-        max_seconds=nc.channel_backoff_max_seconds,
-    )
-    if seconds is not None:
-        await log_event(
-            "WARNING",
-            "neurocomment_channel_backoff",
-            extra={
-                "channel": channel,
-                "missing": len(result.missing_ids),
-                "cooldown_seconds": seconds,
-            },
         )

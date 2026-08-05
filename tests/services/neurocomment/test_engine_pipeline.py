@@ -17,6 +17,7 @@ from core.db import (
     link_channel_to_campaign,
     list_recent_logs,
     mark_comment_posted,
+    mark_comments_deleted,
     upsert_readiness,
 )
 from core.repositories.neurocomment import (
@@ -633,41 +634,6 @@ async def test_expired_cooldown_is_not_rehydrated() -> None:
     assert ("acc-e", None) not in _state._COOLDOWN_UNTIL
 
 
-def test_channel_backoff_escalates_and_caps() -> None:
-    now = datetime.now(UTC)
-    durations = [
-        _state.trip_channel_backoff("@a", now, base_seconds=100.0, max_seconds=1000.0)
-        for _ in range(6)
-    ]
-    # base, then doubling each consecutive trip, capped at max and pinned there after.
-    assert durations == [100.0, 200.0, 400.0, 800.0, 1000.0, 1000.0]
-    assert _state.channel_in_backoff("@a", now) is True
-
-
-def test_channel_backoff_first_trip_respects_cap() -> None:
-    now = datetime.now(UTC)
-    # A misconfigured base > max must still be capped on the very first trip.
-    seconds = _state.trip_channel_backoff("@a", now, base_seconds=5000.0, max_seconds=1000.0)
-    assert seconds == 1000.0
-
-
-def test_channel_backoff_is_per_channel() -> None:
-    now = datetime.now(UTC)
-    _state.trip_channel_backoff("@a", now, base_seconds=3600.0, max_seconds=7200.0)
-    assert _state.channel_in_backoff("@a", now) is True
-    assert _state.channel_in_backoff("@b", now) is False
-
-
-def test_channel_backoff_evicts_expired() -> None:
-    now = datetime.now(UTC)
-    _state.trip_channel_backoff(
-        "@a", now - timedelta(hours=2), base_seconds=3600.0, max_seconds=7200.0
-    )
-    # The 1h cooldown set 2h ago has expired → not cooled, key evicted.
-    assert _state.channel_in_backoff("@a", now) is False
-    assert "@a" not in _state._CHANNEL_COOLDOWN_UNTIL
-
-
 @pytest.mark.asyncio
 async def test_account_in_cooldown_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
@@ -681,20 +647,24 @@ async def test_account_in_cooldown_is_skipped(monkeypatch: pytest.MonkeyPatch) -
 
 
 @pytest.mark.asyncio
-async def test_channel_in_backoff_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_a_channel_whose_comments_get_deleted_is_still_commented_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deletions never park a channel: only the write-block rule (#147) can.
+
+    The escalating 1h→24h deletion back-off that used to skip the post here was removed by
+    operator decision — a comment somebody deletes still cost nothing, and the next post
+    is worth commenting on regardless.
+    """
     await _make_campaign("@chan", "acc-1")
-    nc = settings.neurocomment
-    _state.trip_channel_backoff(
-        "@chan",
-        datetime.now(UTC),
-        base_seconds=nc.channel_backoff_base_seconds,
-        max_seconds=nc.channel_backoff_max_seconds,
-    )
-    comment = _CommentStub()
+    comment = _CommentStub(status="ok", message_id=999)
     _patch_io(monkeypatch, comment=comment)
+    # Three of this channel's comments already gone — under the old rule that was a trip.
+    await mark_comments_deleted("@chan", [901, 902, 903])
 
-    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
 
-    # Skipped before account selection/claim: no comment sent, no claim row created.
-    assert comment.calls == []
-    assert await fetch_comment("@chan", 10) is None
+    assert [a.action_type for _, a in comment.calls] == ["comment_on_post"]
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "posted"

@@ -405,20 +405,6 @@ async def test_an_expired_pause_lets_the_next_post_through(
     assert len(comment.posts) == 1
 
 
-@pytest.mark.asyncio
-async def test_the_deletion_sweep_backoff_is_untouched() -> None:
-    """Only the challenge/gate mechanism changed; the deletion back-off still escalates."""
-    now = datetime.now(UTC)
-    await _make_campaign("@chan", "acc-1")
-
-    first = _state.trip_channel_backoff("@chan", now, base_seconds=100.0, max_seconds=400.0)
-    second = _state.trip_channel_backoff("@chan", now, base_seconds=100.0, max_seconds=400.0)
-
-    assert (first, second) == (100.0, 200.0)  # still doubling, still in memory
-    assert _state.channel_in_backoff("@chan", now) is True
-    assert await fetch_channel_paused_until("@chan") is None  # a different park entirely
-
-
 # --------------------------------------------------------------------------- #
 # What the verdict may NOT be read off: a stale snapshot, a stale window, or a
 # channel the sibling re-join rule is still working on.

@@ -111,11 +111,11 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         return
 
     now = datetime.now(UTC)
-    if _state.channel_in_backoff(event.channel, now) or _state.channel_paused(
-        await fetch_channel_paused_until(event.channel), now
-    ):
-        # Parked — by the deletion sweep (mass deletions, in-memory) or by a round of the
-        # "this channel will not let us write" rule (#147, persisted on the campaign link).
+    if _state.channel_paused(await fetch_channel_paused_until(event.channel), now):
+        # Parked by a round of the "this channel will not let us write" rule (#147,
+        # persisted on the campaign link). Deleted comments are NOT a reason to park:
+        # a channel that removes one comment still gets the next post commented, by
+        # operator decision — the sweep records the deletions and nothing more.
         # Skip before selection so we leave the channel alone until the pause expires.
         # One extra point read per post, on the same partial index the campaign fetch above
         # just used; the pause has to be persisted, so it cannot be answered from memory.

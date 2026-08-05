@@ -214,17 +214,15 @@ class NeurocommentSettings(BaseSettings):
     max_concurrent_post_tasks: int = Field(default=50, ge=1)
     # L3: startup reclaim of claims stuck 'claimed' older than this.
     stale_claim_reclaim_seconds: float = Field(default=900.0, gt=0.0)
-    # Ф2 deletion-sweep → escalating channel back-off.
+    # Ф2 deletion sweep. It RECORDS deletions and nothing else: a channel whose
+    # moderators remove our comments is still commented on when its next post lands.
+    # The escalating 1h→24h back-off this used to feed was removed by operator decision —
+    # the fleet exists to comment, and a deleted comment is not worth a pause.
     # How often the periodic sweep re-reads recent comments (0 disables the sweep).
     # 5 min → near-real-time deletion detection without hammering the read path.
     deletion_sweep_interval_seconds: float = Field(default=300.0, ge=0.0)
     # How far back the sweep re-checks posted comments for deletion.
     deletion_sweep_lookback_hours: float = Field(default=24.0, ge=0.0)
-    # Vanished comments within the window needed to trip a channel's back-off.
-    channel_backoff_min_deletions: int = Field(default=3, ge=1)
-    # First back-off duration; doubles per consecutive trip, capped at the max.
-    channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
-    channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
     # Retention for the append-only neurocomment tables (comments / challenges / join
     # log), which otherwise grow forever and slowly degrade the per-post quota reads.
     # 0 = keep forever (escape hatch), mirroring the warming retention windows. 90 days
