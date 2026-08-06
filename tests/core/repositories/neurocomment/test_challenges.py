@@ -380,12 +380,11 @@ async def test_queue_keeps_a_failure_with_no_readiness_row() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("unreachable", ["banned", "skipped"])
 async def test_queue_hides_a_pair_that_must_not_be_retried(unreachable: str) -> None:
-    """A banned (#30) or operator-skipped (#148) pair carries no «Повторить» button.
+    """A banned (#30) or operator-skipped (#148) pair is not listed as live work.
 
-    NOT because onboarding refuses it — ``retry_pair`` deletes the readiness row first, so
-    the guards keyed on that row never run and the retry really would re-join and re-solve.
-    That is why the row has to go: it would lift a ban ``bans`` calls permanent, or undo the
-    operator's own skip, from a list that reads like pending work.
+    The queue holds no control since #49 — it reports what the captcha rule is working on
+    right now — and both states mean the rules are finished with the pair. Listing one says
+    the opposite of the truth on a panel whose only job is to be believed.
     """
     for account_id in ("stuck", unreachable):
         await create_account(

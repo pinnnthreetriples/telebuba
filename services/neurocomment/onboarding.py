@@ -83,8 +83,9 @@ async def onboard_campaign(
     # re-run onboarding cheaply: a fully-prepared campaign costs one read, not minutes.
     # ponytail: a campaign solver_enabled toggle does NOT re-onboard already-ready
     # pairs — captcha_passed was recorded when the previous setting was applied.
-    # Operators must use services.neurocomment.retry_pair to invalidate per-pair
-    # readiness after flipping the toggle.
+    # Since #49 nothing invalidates per-pair readiness by hand — ``retry_pair`` and its
+    # route went with the captcha queue's button — so a toggle reaches a ready pair only
+    # when some rule writes that row again.
     already_ready = {
         (r.account_id, r.channel)
         for r in (await list_campaign_readiness(campaign_id)).readiness

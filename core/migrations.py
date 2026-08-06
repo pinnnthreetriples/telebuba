@@ -42,6 +42,7 @@ from core.migration_steps import (
 )
 from core.migration_steps_access_reason import _add_readiness_access_lost_reason
 from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
+from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
@@ -151,6 +152,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     ),
     (47, "add_readiness_unconfirmed_ban", _add_readiness_unconfirmed_ban),
     (48, "reset_overshot_retry_budgets", _reset_overshot_retry_budgets),
+    (49, "add_readiness_captcha_giveup", _add_readiness_captcha_giveup),
 )
 
 

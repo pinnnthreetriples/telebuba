@@ -74,25 +74,57 @@ def _still_blocked() -> ColumnElement[bool]:
     return ~passed
 
 
+def _captcha_failed_since(since: str) -> ColumnElement[bool]:
+    """The pair of THIS readiness row has a failed challenge no older than ``since``.
+
+    The mirror image of the two predicates around it: they are challenges-rooted
+    subqueries reaching into readiness, and this one is readiness-rooted and reaches into
+    challenges. It is the discriminator the captcha give-up rule keys on — the readiness
+    triple ``(joined=1, captcha_passed=0, ready=0)`` is written both by a bot gate the
+    solver lost to and by ``_classify``'s ``_GATE_ERRORS`` branch (an admin mute), and
+    only the first is a captcha anyone could retry. A challenge row is what tells them
+    apart; ``since`` bounds it so a failure from a retired episode cannot revive a pair.
+
+    Deliberately NOT wrapped in :func:`_still_blocked`, and the omission is the one thing
+    worth stating here because the two otherwise look like they disagree: that helper
+    exists to prove, from the challenges side, that the pair has not since passed its
+    captcha *from inside the chat*. Here the readiness half of the caller's query already
+    asserts ``captcha_passed == 0`` for the very same pair, which is the same fact read
+    off the live row rather than inferred around the append-only table. Applying it too
+    would be a second copy of one claim, and a copy is what drifts.
+    """
+    return (
+        select(_neurocomment_challenges.c.id)
+        .where(
+            (_neurocomment_challenges.c.account_id == _neurocomment_readiness.c.account_id)
+            & (_neurocomment_challenges.c.channel == _neurocomment_readiness.c.channel)
+            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
+            & (_neurocomment_challenges.c.decided_at >= since),
+        )
+        .exists()
+    )
+
+
 def _retry_can_reach() -> ColumnElement[bool]:
-    """Exclude a failure whose pair must not be offered the «Повторить» button.
+    """Exclude a failure whose pair the captcha rule has already finished with.
 
-    NOT "onboarding would refuse it". ``challenge.retry_pair`` DELETES the readiness row
-    and only then onboards, so every guard in ``_join_and_classify`` that reads that row —
-    the skip/ban refusal, the re-join back-off — is skipped by construction, and the retry
-    really does re-join and re-run the solver. That is the problem, not the reason: for
-    these two states the button works and must not.
+    Since #49 the queue answers one question — which pairs is the automatic rule working
+    on right now — and it holds no control of any kind, so a listed row is a claim that
+    something is still in progress. These three states are each a way of being done, and
+    listing one states the opposite of the truth on a panel whose whole job is to be
+    believed. (Before #49 the same three were excluded for the opposite reason: each row
+    carried a «Повторить» button that DELETED the readiness row, so the button worked on
+    exactly the pairs it must not work on. The button is gone; the exclusions are not.)
 
-    A ban (#30) is permanent by design and the ONE path that quietly lifted it was removed
-    rather than documented away (see ``services.neurocomment.bans``, which defends itself
-    with "a banned pair has no challenge row, so no button in the UI points here" — an
-    invariant nothing enforced until this predicate). An operator skip (#148) is the
-    operator's own decision to take this pair off this channel; ``retry_pair`` clears it
-    deliberately, so listing the pair as pending work invites undoing that skip by
-    accident, one click away from a queue that reads like a to-do list.
+    A ban (#30) is permanent by design, and ``services.neurocomment.bans`` defends itself
+    with the invariant "a banned pair has no challenge row" — an invariant nothing enforced
+    until this predicate. An operator skip (#148) is a decision to take the pair off this
+    channel; a queue that reads like live work must not show it as pending. And a pair that
+    gave up on the captcha (#49) has spent its one retry and walked out of the discussion
+    chat — nothing is being solved there, now or later.
 
-    The other two unreachable states are the caller's: a paused channel and a spent
-    re-join budget both need reads core has no business making here.
+    The other two states the queue drops are the caller's, because both need reads core has
+    no business making: a paused channel and a spent re-join budget.
     """
     refused = (
         select(_neurocomment_readiness.c.account_id)
@@ -102,6 +134,7 @@ def _retry_can_reach() -> ColumnElement[bool]:
             & (
                 (_neurocomment_readiness.c.banned == 1)
                 | (_neurocomment_readiness.c.human_skipped == 1)
+                | (_neurocomment_readiness.c.captcha_gave_up == 1)
             ),
         )
         .exists()

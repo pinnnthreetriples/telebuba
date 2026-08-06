@@ -64,10 +64,9 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
             channel=channel,
             state="comments_off",
         )
-    # Rolling-24h join cap (anti-freeze): both operator single-pair paths
-    # (direct call + retry_pair) funnel through here, so the gate lives here to
-    # cover them — the campaign loop gates in _onboard_pair before its jitter
-    # sleep. At cap: skip the join RPC (no record), retry once the window rolls.
+    # Rolling-24h join cap (anti-freeze): the single-pair path funnels through here, so
+    # the gate lives here to cover it — the campaign loop gates in _onboard_pair before
+    # its jitter sleep. At cap: skip the join RPC (no record), retry once the window rolls.
     # Non-terminal "joining" so the pair is reconsidered, not stuck.
     if await _at_join_cap(account_id):
         await log_event(
@@ -100,17 +99,34 @@ async def _join_and_classify(
     off the same persisted column. One point read per pair, which this loop (jittered
     sleeps between joins) can afford where the engine's per-post path could not.
 
-    An operator-skipped pair (#148) or an auto-banned pair (#30) is left alone:
-    re-joining would run the solver and flip readiness back to ready, undoing the
-    skip / reviving the ban. Cleared via ``retry_pair`` (skip) or a can_send probe (ban).
+    An operator-skipped pair (#148), an auto-banned pair (#30) or one that gave up on the
+    chat's captcha (#49) is left alone: re-joining would run the solver and flip readiness
+    back to ready, undoing the skip / reviving the ban / re-entering a group the captcha
+    rule just walked out of. The third is what makes that rule's verdict terminal at all —
+    without this guard the next pass re-joins and re-solves, which is the exact loop it
+    exists to end — so it reports ``bot_challenge``, the wall that is really still there.
+    All three are one-way since #49: the «Повторить» button and the ``retry_pair`` behind it
+    were the only thing that ever deleted a readiness row, and they are gone. A ban can
+    still be lifted by a can_send probe; the skip and the give-up cannot, by design.
 
     A pair with an approval request still in flight is left alone the same way, and sits
     next to those guards for the same reason: both must cost zero join RPCs. An admin
     reads a re-request as spam, and every pass used to send one.
     """
     existing = await fetch_readiness(account_id, channel)
-    if existing is not None and (existing.human_skipped or existing.banned):
-        state = "human_skipped" if existing.human_skipped else "banned"
+    if existing is not None and (
+        existing.human_skipped or existing.banned or existing.captcha_gave_up
+    ):
+        # ``bot_challenge`` for the give-up, not a state of its own: the wall really is
+        # still the guardian bot, which is also what the board reads off the untouched
+        # ``joined and not captcha_passed`` triple — so the two cannot disagree.
+        state = (
+            "human_skipped"
+            if existing.human_skipped
+            else "banned"
+            if existing.banned
+            else "bot_challenge"
+        )
         return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
     if existing is not None and _join_request_in_flight(existing, datetime.now(UTC)):
         # One line per pair per pass, and only for pairs actually held back — the old
@@ -156,8 +172,8 @@ async def _join_and_classify(
         # the sweep review is what stamps them. Held back here because every operator
         # Start, every campaign reconcile and every other channel's poke starts a pass
         # too: without this guard each of them would re-join every parked pair in the
-        # fleet and pin accounts at their 20/day join cap. ``retry_pair`` (which deletes
-        # the row) is the way past it, exactly as for a pending join request.
+        # fleet and pin accounts at their 20/day join cap. Nothing gets past it any more:
+        # since #49 no path deletes a readiness row, so only the sweep's own stamp does.
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,

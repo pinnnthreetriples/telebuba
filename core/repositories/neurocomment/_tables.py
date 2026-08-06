@@ -229,6 +229,17 @@ _neurocomment_readiness = Table(
     # budget back on every pass. Migration #47 backfills 0 / NULL.
     Column("unconfirmed_bans", Integer, nullable=False, server_default="0"),
     Column("unconfirmed_ban_at", String, nullable=True),
+    # The guardian bot would not let this pair speak (#49). ``captcha_retry_at`` is when
+    # the sweep authorised the ONE re-solve the rule grants (NULL = not asked yet), and
+    # ``captcha_gave_up`` is terminal: the pair stopped trying and left the chat, so
+    # onboarding refuses it from then on. Like the two counter pairs above, and unlike
+    # ``access_lost_reason``, ``upsert_readiness`` never writes EITHER — and for the same
+    # reason: the give-up branch re-writes the readiness row on every failed pass, so a
+    # reset carried by that write would hand the budget back on every tick and the pair
+    # would re-solve forever, which is the exact loop this rule exists to end. Migration
+    # #49 backfills NULL / 0.
+    Column("captcha_retry_at", String, nullable=True),
+    Column("captcha_gave_up", Integer, nullable=False, server_default="0"),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

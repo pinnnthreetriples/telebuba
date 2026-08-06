@@ -5,43 +5,6 @@ export type ClientOptions = {
 };
 
 /**
- * AccountChannelOnboarding
- *
- * Outcome of preparing one account to comment on one channel.
- *
- * ``reason`` carries a short human note for the non-``ready`` states (the
- * flood-wait detail, the failing error type, etc.).
- */
-export type AccountChannelOnboarding = {
-  /**
-   * Account Id
-   */
-  account_id: string;
-  /**
-   * Channel
-   */
-  channel: string;
-  /**
-   * State
-   */
-  state:
-    | 'ready'
-    | 'comments_off'
-    | 'join_by_request'
-    | 'chat_restricted'
-    | 'bot_challenge'
-    | 'channel_paused'
-    | 'joining'
-    | 'human_skipped'
-    | 'banned'
-    | 'failed';
-  /**
-   * Reason
-   */
-  reason?: string | null;
-};
-
-/**
  * AccountChannelReadiness
  *
  * One channel's readiness summary on an account card.
@@ -1354,6 +1317,21 @@ export type LinkChannelRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * LogCountResult
+ *
+ * How many log rows a clear operation *would* remove, asked before confirming.
+ *
+ * The Logs views hold only one page of rows, so the count on screen is no guide to
+ * the size of the purge; this is the whole-table answer.
+ */
+export type LogCountResult = {
+  /**
+   * Matching
+   */
+  matching: number;
 };
 
 /**
@@ -6325,39 +6303,6 @@ export type SetCampaignSolverResponses = {
 export type SetCampaignSolverResponse =
   SetCampaignSolverResponses[keyof SetCampaignSolverResponses];
 
-export type RetryChallengeData = {
-  body: RetryPairRequest;
-  path?: never;
-  query?: never;
-  url: '/api/v1/neurocomment/retry';
-};
-
-export type RetryChallengeErrors = {
-  /**
-   * Not authenticated
-   */
-  401: ErrorEnvelope;
-  /**
-   * Request validation failed
-   */
-  422: ErrorEnvelope;
-  /**
-   * Internal server error
-   */
-  500: ErrorEnvelope;
-};
-
-export type RetryChallengeError = RetryChallengeErrors[keyof RetryChallengeErrors];
-
-export type RetryChallengeResponses = {
-  /**
-   * Successful Response
-   */
-  200: AccountChannelOnboarding;
-};
-
-export type RetryChallengeResponse = RetryChallengeResponses[keyof RetryChallengeResponses];
-
 export type ListCampaignChallengesData = {
   body?: never;
   path: {
@@ -6872,3 +6817,41 @@ export type ListLogsResponses = {
 };
 
 export type ListLogsResponse = ListLogsResponses[keyof ListLogsResponses];
+
+export type CountLogsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Event Prefix
+     */
+    event_prefix?: string;
+  };
+  url: '/api/v1/logs/count';
+};
+
+export type CountLogsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CountLogsError = CountLogsErrors[keyof CountLogsErrors];
+
+export type CountLogsResponses = {
+  /**
+   * Successful Response
+   */
+  200: LogCountResult;
+};
+
+export type CountLogsResponse = CountLogsResponses[keyof CountLogsResponses];

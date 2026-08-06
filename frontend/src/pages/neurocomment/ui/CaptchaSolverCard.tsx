@@ -13,14 +13,12 @@ export function CaptchaSolverCard({
   onToggleSolver,
   captchaQueue,
   accountLabel,
-  onSolve,
 }: {
   solverEnabled: boolean;
   campaignId: string | null;
   onToggleSolver: () => void;
   captchaQueue: ChallengeRow[];
   accountLabel: (accountId: string) => string;
-  onSolve: (item: ChallengeRow) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -98,7 +96,7 @@ export function CaptchaSolverCard({
               {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
             </span>
           </div>
-          <CaptchaQueue rows={captchaQueue} accountLabel={accountLabel} onSolve={onSolve} />
+          <CaptchaQueue rows={captchaQueue} accountLabel={accountLabel} />
         </div>
       ) : null}
     </div>

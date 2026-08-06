@@ -80,3 +80,13 @@ class LogPurgeResult(BaseModel):
     """How many log rows a clear operation removed."""
 
     deleted: int = Field(ge=0)
+
+
+class LogCountResult(BaseModel):
+    """How many log rows a clear operation *would* remove, asked before confirming.
+
+    The Logs views hold only one page of rows, so the count on screen is no guide to
+    the size of the purge; this is the whole-table answer.
+    """
+
+    matching: int = Field(ge=0)

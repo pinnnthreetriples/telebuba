@@ -10,9 +10,17 @@ otherwise written solely by ``core.logging.log_event``.
 
 from __future__ import annotations
 
-from core.db import list_filtered_logs, purge_logs
+from core.db import count_logs, list_filtered_logs, purge_logs
+from core.logging import log_event
 from schemas.api import Page
-from schemas.logs import LogEntry, LogFilter, LogPurgeResult, LogsPageState, LogsSummary
+from schemas.logs import (
+    LogCountResult,
+    LogEntry,
+    LogFilter,
+    LogPurgeResult,
+    LogsPageState,
+    LogsSummary,
+)
 
 
 class InvalidCursorError(ValueError):
@@ -48,9 +56,33 @@ async def list_logs_page(log_filter: LogFilter, cursor: str | None = None) -> Pa
     return Page(items=items, next_cursor=next_cursor)
 
 
+async def count_matching_logs(event_prefix: str = "") -> LogCountResult:
+    """How many rows :func:`clear_logs` would delete for the same ``event_prefix``."""
+    return LogCountResult(matching=await count_logs(event_prefix))
+
+
 async def clear_logs(event_prefix: str = "") -> LogPurgeResult:
-    """Delete the rows matching ``event_prefix``; return how many went."""
+    """Delete the rows matching ``event_prefix``; return how many went.
+
+    The purge leaves an audit row behind. One press of "clear logs" once erased a
+    month of neurocomment history with nothing recording that it had happened, and
+    the silence read as a broken system for days. Two properties make the row
+    survive: it is written AFTER the delete, and its code carries no domain prefix
+    any feed purges — a ``neurocomment_*`` code would be wiped by the next press of
+    the very button it documents.
+    """
     deleted = await purge_logs(event_prefix)
+    if deleted:
+        # No row for a no-op press, as the retention sweeps do (``services.warming
+        # ._purge``, ``services.neurocomment._sweep``): an operator clicking an
+        # already-empty feed would otherwise fill it with its own clear events.
+        await log_event(
+            "INFO",
+            "logs_cleared",
+            # ``*`` rather than "" so the whole-table case is legible in the row the
+            # operator reads, instead of an absent value they have to interpret.
+            extra={"deleted": deleted, "event_prefix": event_prefix or "*"},
+        )
     return LogPurgeResult(deleted=deleted)
 
 

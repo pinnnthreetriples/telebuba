@@ -11,7 +11,7 @@ import asyncio
 import json
 from typing import cast
 
-from sqlalchemy import ColumnElement, delete, false, insert, or_, select
+from sqlalchemy import ColumnElement, delete, false, func, insert, or_, select
 
 from core.db import _get_engine, _logs, _now_iso, _optional_str
 from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
@@ -140,6 +140,24 @@ def _list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[LogEntry
 async def list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[LogEntry]:
     """Return the latest log entries that match the filter (newest first)."""
     return await asyncio.to_thread(_list_filtered_logs, log_filter, offset)
+
+
+def _count_logs(event_prefix: str) -> int:
+    statement = select(func.count()).select_from(_logs)
+    prefix_clause = _event_prefix_clause(event_prefix)
+    if prefix_clause is not None:
+        statement = statement.where(prefix_clause)
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_logs(event_prefix: str = "") -> int:
+    """Count the rows ``event_prefix`` matches, without touching them.
+
+    Deliberately the SAME clause as :func:`purge_logs`, so the number the operator
+    is asked to confirm cannot disagree with the number the purge then removes.
+    """
+    return await asyncio.to_thread(_count_logs, event_prefix)
 
 
 def _purge_logs(event_prefix: str) -> int:

@@ -156,7 +156,7 @@ async def test_already_participant_join_is_ready_but_not_recorded(
 
 @pytest.mark.asyncio
 async def test_operator_single_pair_respects_join_cap(monkeypatch: pytest.MonkeyPatch) -> None:
-    """onboard_account_channel (the operator / retry_pair path) gates on the cap too."""
+    """onboard_account_channel (the single-pair path) gates on the cap too."""
     monkeypatch.setattr(settings.neurocomment, "max_joins_per_account_per_day", 1)
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     await record_join("acc-1")  # already at cap

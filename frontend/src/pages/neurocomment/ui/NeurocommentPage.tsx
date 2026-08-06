@@ -21,7 +21,6 @@ import {
   neurocommentRuntimeQueryOptions,
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
-  retryChallengeMutation,
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
@@ -29,7 +28,7 @@ import {
   stopNeurocommentMutation,
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
-import { clearLogsMutation, logsQueryOptions } from '@/entities/log';
+import { clearLogsMutation, logCountQueryOptions, logsQueryOptions } from '@/entities/log';
 import { ChannelDiscoveryButton } from '@/features/channel-discovery';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
@@ -183,6 +182,14 @@ export function NeurocommentPage() {
     ...logsQueryOptions({ query: { event_prefix: 'neurocomment', limit: NEURO_LOG_LIMIT } }),
     refetchInterval: FALLBACK_POLL_MS,
   });
+  // How many rows the clear button would actually delete. Asked only while the
+  // confirmation is open: the log panel shows one page, so its length is no guide to the
+  // size of a purge that spans the whole retention window, and an operator who cleared on
+  // that impression once lost a month of history without noticing.
+  const logCount = useQuery({
+    ...logCountQueryOptions({ query: { event_prefix: 'neurocomment' } }),
+    enabled: confirmClearLogs,
+  });
   // Real captcha queue — unsolved bot-challenges across the campaign's channels.
   const challenges = useQuery({
     ...campaignChallengesQueryOptions({
@@ -206,7 +213,6 @@ export function NeurocommentPage() {
   const setSolver = useMutation(setCampaignSolverMutation());
   const setStatus = useMutation(setCampaignStatusMutation());
   const clearListener = useMutation(clearNeurocommentListenerMutation());
-  const retry = useMutation(retryChallengeMutation());
   const deleteCampaign = useMutation(deleteCampaignMutation());
   const removeChannel = useMutation(removeCampaignChannelMutation());
   const removeAccount = useMutation(removeCampaignAccountMutation());
@@ -542,11 +548,6 @@ export function NeurocommentPage() {
             }}
             captchaQueue={captchaQueue}
             accountLabel={accountLabel}
-            onSolve={(item) => {
-              afterSettle(
-                retry.mutateAsync({ body: { account_id: item.account_id, channel: item.channel } }),
-              );
-            }}
           />
 
           <CampaignsCard
@@ -674,7 +675,7 @@ export function NeurocommentPage() {
       {confirmClearLogs ? (
         <ConfirmModal
           title={t('neurocomment.modal.clearLogs.title')}
-          body={t('neurocomment.modal.clearLogs.body')}
+          body={t('neurocomment.modal.clearLogs.body', { count: logCount.data?.matching ?? 0 })}
           confirmLabel={t('neurocomment.modal.clearLogs.confirm')}
           cancelLabel={t('neurocomment.modal.cancel')}
           onClose={() => {

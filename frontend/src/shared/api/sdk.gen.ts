@@ -49,6 +49,9 @@ import type {
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesErrors,
   CountCampaignChallengeOutcomesResponses,
+  CountLogsData,
+  CountLogsErrors,
+  CountLogsResponses,
   CreateAccountChannelData,
   CreateAccountChannelErrors,
   CreateAccountChannelResponses,
@@ -208,9 +211,6 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
-  RetryChallengeData,
-  RetryChallengeErrors,
-  RetryChallengeResponses,
   SetAccountChannelPhotoData,
   SetAccountChannelPhotoErrors,
   SetAccountChannelPhotoResponses,
@@ -1570,26 +1570,6 @@ export const setCampaignSolver = <ThrowOnError extends boolean = false>(
   });
 
 /**
- * Retry Challenge
- *
- * Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
- *
- * Re-onboards the pair (re-running the solver) — account+channel scoped, so it
- * is campaign-agnostic.
- */
-export const retryChallenge = <ThrowOnError extends boolean = false>(
-  options: Options<RetryChallengeData, ThrowOnError>,
-): RequestResult<RetryChallengeResponses, RetryChallengeErrors, ThrowOnError> =>
-  (options.client ?? client).post<RetryChallengeResponses, RetryChallengeErrors, ThrowOnError>({
-    url: '/api/v1/neurocomment/retry',
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
-
-/**
  * List Campaign Challenges
  *
  * Recent unsolved bot-challenges across the campaign's channels (captcha queue).
@@ -1804,5 +1784,21 @@ export const listLogs = <ThrowOnError extends boolean = false>(
 ): RequestResult<ListLogsResponses, ListLogsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListLogsResponses, ListLogsErrors, ThrowOnError>({
     url: '/api/v1/logs',
+    ...options,
+  });
+
+/**
+ * Count Logs
+ *
+ * Count the rows ``DELETE /logs`` would remove for the same ``event_prefix``.
+ *
+ * Read before the confirmation prompt: a page of rows is no guide to the size of
+ * the purge. Matching is the delete's own clause, so the two cannot disagree.
+ */
+export const countLogs = <ThrowOnError extends boolean = false>(
+  options?: Options<CountLogsData, ThrowOnError>,
+): RequestResult<CountLogsResponses, CountLogsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<CountLogsResponses, CountLogsErrors, ThrowOnError>({
+    url: '/api/v1/logs/count',
     ...options,
   });

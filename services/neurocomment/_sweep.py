@@ -29,7 +29,7 @@ from core.db import (
     reclaim_stale_claims,
 )
 from core.logging import log_event
-from services.neurocomment import _channel_pause, _rejoin, _sweep_read
+from services.neurocomment import _captcha_retry, _channel_pause, _rejoin, _sweep_read
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -56,7 +56,8 @@ async def _sweep_loop() -> None:
 
     The lone non-event loop in the runtime, and it must never die (mirrors the
     listener-safe on-post pipeline). The retention prune, the join-request review, the
-    access-loss review, the write-blocked-channel review and the stale-claim reclaim
+    access-loss review, the captcha give-up review, the write-blocked-channel review and
+    the stale-claim reclaim
     piggyback on the same tick, and every pass is awaited behind the ONE guard below rather
     than behind the ones inside it: each of those covers only its own first bulk read, so
     everything after it — a locked SQLite, a malformed timestamp, the live Telegram RPC
@@ -86,6 +87,11 @@ async def _sweep_loop() -> None:
             ("retention", partial(_prune_history_if_due, now)),
             ("join_requests", partial(_review_join_requests, now)),
             ("rejoin", partial(_rejoin.review_access_lost, now)),
+            # Immediately after its sibling: the two pair-level recovery rules read the
+            # same readiness table and both must run BEFORE ``channel_pause`` re-reads its
+            # deadlines, or a pause released later in the same tick would leave them
+            # judging a window that no longer stands.
+            ("captcha_retry", partial(_captcha_retry.review_captcha_blocked, now)),
             ("channel_pause", partial(_channel_pause.review_expired_pauses, now)),
             ("stale_claims", partial(_reclaim_stale_claims, now)),
         ):

@@ -22,6 +22,7 @@ import {
   clearLogs,
   clearNeurocommentListener,
   countCampaignChallengeOutcomes,
+  countLogs,
   createAccountChannel,
   createCampaign,
   createProxy,
@@ -76,7 +77,6 @@ import {
   requestLoginCode,
   resetAccountSession,
   resyncAccountAvatar,
-  retryChallenge,
   setAccountChannelPhoto,
   setAccountPhoto,
   setAccountPhotoMain,
@@ -143,6 +143,9 @@ import type {
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesResponse,
+  CountLogsData,
+  CountLogsError,
+  CountLogsResponse,
   CreateAccountChannelData,
   CreateAccountChannelError,
   CreateAccountChannelResponse,
@@ -302,9 +305,6 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
-  RetryChallengeData,
-  RetryChallengeError,
-  RetryChallengeResponse,
   SetAccountChannelPhotoData,
   SetAccountChannelPhotoError,
   SetAccountChannelPhotoResponse,
@@ -2668,34 +2668,6 @@ export const setCampaignSolverMutation = (
   return mutationOptions;
 };
 
-/**
- * Retry Challenge
- *
- * Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
- *
- * Re-onboards the pair (re-running the solver) — account+channel scoped, so it
- * is campaign-agnostic.
- */
-export const retryChallengeMutation = (
-  options?: Partial<Options<RetryChallengeData>>,
-): UseMutationOptions<RetryChallengeResponse, RetryChallengeError, Options<RetryChallengeData>> => {
-  const mutationOptions: UseMutationOptions<
-    RetryChallengeResponse,
-    RetryChallengeError,
-    Options<RetryChallengeData>
-  > = {
-    mutationFn: async (fnOptions) => {
-      const { data } = await retryChallenge({
-        ...options,
-        ...fnOptions,
-        throwOnError: true,
-      });
-      return data;
-    },
-  };
-  return mutationOptions;
-};
-
 export const listCampaignChallengesQueryKey = (options: Options<ListCampaignChallengesData>) =>
   createQueryKey('listCampaignChallenges', options);
 
@@ -3111,3 +3083,33 @@ export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) => {
   );
   return opts as Omit<typeof opts, 'initialData'>;
 };
+
+export const countLogsQueryKey = (options?: Options<CountLogsData>) =>
+  createQueryKey('countLogs', options);
+
+/**
+ * Count Logs
+ *
+ * Count the rows ``DELETE /logs`` would remove for the same ``event_prefix``.
+ *
+ * Read before the confirmation prompt: a page of rows is no guide to the size of
+ * the purge. Matching is the delete's own clause, so the two cannot disagree.
+ */
+export const countLogsOptions = (options?: Options<CountLogsData>) =>
+  queryOptions<
+    CountLogsResponse,
+    CountLogsError,
+    CountLogsResponse,
+    ReturnType<typeof countLogsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await countLogs({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: countLogsQueryKey(options),
+  });

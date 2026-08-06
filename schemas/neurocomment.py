@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 # The inbound request bodies live in a sibling module for the file-size budget;
 # re-exported here so ``from schemas.neurocomment import LinkChannelRequest`` etc.
@@ -34,6 +34,12 @@ from schemas._neurocomment_requests import (  # noqa: F401 - re-export for exist
     SolverToggleRequest,
     StartNeurocommentRequest,
     UpdatePromptRequest,
+)
+
+# The operator-editable settings pair moved out for the same budget, the same way.
+from schemas._neurocomment_settings import (  # noqa: F401 - re-export for existing call sites
+    NeurocommentSettings,
+    NeurocommentSettingsUpdate,
 )
 
 CampaignStatus = Literal["active", "paused", "archived"]
@@ -197,6 +203,12 @@ class NeurocommentReadiness(BaseModel):
     # so the rule can tell a kick (retryable) from a dead address (not). None = unknown,
     # which every rule reads as retryable.
     access_lost_reason: str | None = None
+    # The guardian-bot captcha the solver could not pass (#49). ``captcha_retry_at`` is
+    # when the sweep authorised this pair's ONE re-solve (None = not asked yet), and
+    # ``captcha_gave_up`` is the terminal verdict: the pair stopped trying and left the
+    # chat, so nothing re-joins or re-solves for it again.
+    captcha_retry_at: str | None = None
+    captcha_gave_up: bool = False
 
 
 class ReadinessList(BaseModel):
@@ -406,34 +418,3 @@ class NeurocommentRuntimeStatus(BaseModel):
     # actively joining channels). The SPA animates the board on this so a slow,
     # jittered onboarding reads as "working", not "no data".
     onboarding: bool = False
-
-
-class NeurocommentSettings(BaseModel):
-    """Operator-editable neurocomment limits — the engine reads these at selection."""
-
-    max_comments_per_hour: int = Field(ge=1)
-    max_comments_per_channel_per_day: int = Field(ge=0)
-    reply_delay_min_seconds: float = Field(ge=0)
-    reply_delay_max_seconds: float = Field(ge=0)
-    min_trust_score: int = Field(ge=0, le=100)
-    updated_at: str = Field(min_length=1)
-
-
-class NeurocommentSettingsUpdate(BaseModel):
-    """Caller-supplied neurocomment-settings change from the Settings screen."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    max_comments_per_hour: int = Field(ge=1)
-    max_comments_per_channel_per_day: int = Field(ge=0)
-    reply_delay_min_seconds: float = Field(ge=0)
-    # No upper bound, deliberately — ``_generate._sleep_beating``'s docstring says why.
-    reply_delay_max_seconds: float = Field(ge=0)
-    min_trust_score: int = Field(ge=0, le=100)
-
-    @model_validator(mode="after")
-    def _check_delay_bounds(self) -> NeurocommentSettingsUpdate:
-        if self.reply_delay_min_seconds > self.reply_delay_max_seconds:
-            msg = "reply_delay_min_seconds must not exceed reply_delay_max_seconds"
-            raise ValueError(msg)
-        return self

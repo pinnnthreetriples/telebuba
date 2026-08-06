@@ -46,7 +46,6 @@ from services.neurocomment.campaigns import (
 from services.neurocomment.campaigns import (
     set_status as set_campaign_status,
 )
-from services.neurocomment.challenge import retry_pair
 from services.neurocomment.comments_page import list_comments_page
 from services.neurocomment.discovery import (
     adopt_candidates,
@@ -92,7 +91,6 @@ __all__ = [
     "reconcile_neurocomment_on_startup",
     "reconcile_neurocomment_runtime",
     "remove_account_from_campaign",
-    "retry_pair",
     "save_neurocomment_settings",
     "set_account_channels",
     "set_campaign_status",

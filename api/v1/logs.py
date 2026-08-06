@@ -9,7 +9,7 @@ from fastapi import status as http_status
 
 from api.errors import error_responses
 from schemas.api import Page
-from schemas.logs import LogEntry, LogFilter, LogPurgeResult, LogStatusFilter
+from schemas.logs import LogCountResult, LogEntry, LogFilter, LogPurgeResult, LogStatusFilter
 from services import logs as logs_service
 
 router = APIRouter(tags=["logs"])
@@ -48,6 +48,16 @@ async def list_logs(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail="invalid pagination cursor",
         ) from exc
+
+
+@router.get("/logs/count", response_model=LogCountResult, operation_id="countLogs")
+async def count_logs(event_prefix: str = "") -> LogCountResult:
+    """Count the rows ``DELETE /logs`` would remove for the same ``event_prefix``.
+
+    Read before the confirmation prompt: a page of rows is no guide to the size of
+    the purge. Matching is the delete's own clause, so the two cannot disagree.
+    """
+    return await logs_service.count_matching_logs(event_prefix)
 
 
 @router.delete("/logs", response_model=LogPurgeResult, operation_id="clearLogs")

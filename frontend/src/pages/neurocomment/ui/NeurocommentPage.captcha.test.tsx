@@ -79,120 +79,6 @@ test('the captcha solver toggle reflects the persisted value after a real round 
   });
 });
 
-test('Повторить retries a challenged pair', async () => {
-  vi.mocked(fetch).mockImplementation((input) => {
-    const request = input as Request;
-    const url = new URL(request.url);
-    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
-      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
-    }
-    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
-    if (url.pathname === '/api/v1/neurocomment/runtime') {
-      return Promise.resolve(
-        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
-      );
-    }
-    if (url.pathname.endsWith('/challenges')) {
-      return Promise.resolve(
-        jsonResponse({
-          rows: [
-            {
-              account_id: 'acc-9',
-              channel: '@x',
-              raw_text: 'cap',
-              outcome: 'failed',
-              decided_at: '2026-06-30T12:00:00+00:00',
-            },
-          ],
-        }),
-      );
-    }
-    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
-  });
-  renderWithClient(<NeurocommentPage />);
-  await waitFor(() => {
-    expect(screen.getByText('Повторить')).toBeInTheDocument();
-  });
-  await userEvent.click(screen.getByText('Повторить'));
-  await waitFor(() => {
-    const retried = vi
-      .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.endsWith('/neurocomment/retry'));
-    expect(retried).toBe(true);
-  });
-});
-
-test('a second row retried mid-flight does not swallow the first row s refresh', async () => {
-  // Every queue row shares ONE retry mutation, and mutate()'s callbacks live in a
-  // single slot on its observer: the second row's click used to take that slot
-  // over, so the first row's onSettled — its whole refresh — never ran.
-  let releaseFirst!: (response: Response) => void;
-  let retries = 0;
-  vi.mocked(fetch).mockImplementation((input) => {
-    const request = input as Request;
-    const url = new URL(request.url);
-    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
-      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
-    }
-    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
-    if (url.pathname === '/api/v1/neurocomment/runtime') {
-      return Promise.resolve(
-        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
-      );
-    }
-    if (url.pathname.endsWith('/neurocomment/retry')) {
-      retries += 1;
-      if (retries === 1) {
-        return new Promise((resolve) => {
-          releaseFirst = resolve;
-        });
-      }
-      return Promise.resolve(jsonResponse({ status: 'ok' }));
-    }
-    if (url.pathname.endsWith('/challenges')) {
-      return Promise.resolve(
-        jsonResponse({
-          rows: [
-            { account_id: 'acc-1', channel: '@x', raw_text: 'a', outcome: 'failed' },
-            { account_id: 'acc-2', channel: '@y', raw_text: 'b', outcome: 'failed' },
-          ],
-        }),
-      );
-    }
-    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
-  });
-  const challengeGets = () =>
-    vi
-      .mocked(fetch)
-      .mock.calls.filter(([input]) =>
-        new URL((input as Request).url).pathname.endsWith('/challenges'),
-      ).length;
-
-  renderWithClient(<NeurocommentPage />);
-  await waitFor(() => {
-    expect(screen.getAllByText('Повторить')).toHaveLength(2);
-  });
-
-  const beforeClicks = challengeGets();
-  await userEvent.click(screen.getAllByText('Повторить')[0] as HTMLElement);
-  // Re-query: the first click re-rendered the card, detaching the old nodes.
-  await userEvent.click(screen.getAllByText('Повторить')[1] as HTMLElement);
-  // The second row settles first and refreshes the queue.
-  await waitFor(() => {
-    expect(retries).toBe(2);
-  });
-  await waitFor(() => {
-    expect(challengeGets()).toBeGreaterThan(beforeClicks);
-  });
-
-  // The first row settling must refresh too, not vanish.
-  const beforeFirstSettles = challengeGets();
-  releaseFirst(jsonResponse({ status: 'ok' }));
-  await waitFor(() => {
-    expect(challengeGets()).toBeGreaterThan(beforeFirstSettles);
-  });
-});
-
 test('the captcha queue shows the account phone, not the raw id', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
@@ -242,7 +128,9 @@ test('the captcha queue shows the account phone, not the raw id', async () => {
   });
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('Повторить')).toBeInTheDocument();
+    // The queue is a status list since #49 — this is the row's own text, and it doubles
+    // as the gate proving the queue has rendered before the identity assertions below.
+    expect(screen.getByText('Вторая попытка · в течение 5 минут')).toBeInTheDocument();
   });
   // Phone from the accounts list, not the raw "acc-1" id.
   expect(screen.getAllByText('+79261112233').length).toBeGreaterThan(0);

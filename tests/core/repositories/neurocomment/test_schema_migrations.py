@@ -23,6 +23,7 @@ from core.db import (  # type: ignore[attr-defined]
     upsert_readiness,
 )
 from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
+from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_neurocomment import _add_neurocomment_channel_case_fold_index
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
@@ -610,3 +611,54 @@ def test_migration_48_skips_a_database_without_the_columns(
     engine = _legacy_readiness(legacy_engine, "budgets-no-columns.db")
     with engine.begin() as connection:
         _reset_overshot_retry_budgets(connection)  # no columns, no link table → no raise.
+
+
+def test_migration_49_adds_captcha_giveup_columns() -> None:
+    """The one-shot captcha retry and the terminal state it ends in (#49)."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = _readiness_columns(connection)
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    # The #43/#47 shape again: a nullable stamp beside a NOT NULL flag. The flag is what
+    # every other reader keys on (onboarding's refusal, both drop rules, the queue), so a
+    # NULL there would make each of them decide for itself what "unknown" means.
+    assert columns["captcha_retry_at"]["notnull"] == 0
+    assert columns["captcha_gave_up"]["notnull"] == 1
+    # ``create_all`` quotes the server default and the ALTER does not, so compare the value.
+    assert str(columns["captcha_gave_up"]["dflt_value"]).strip("'") == "0"
+    assert 49 in versions
+
+
+def test_migration_49_alters_a_readiness_table_that_predates_the_columns(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """The only path that ever runs on the operator's database, on a real legacy one.
+
+    Nobody may come out of the upgrade already terminal: ``captcha_gave_up`` reading 1 on a
+    pre-existing row would take that pair out of its channel for good on evidence gathered
+    before the column existed, and a non-NULL ``captcha_retry_at`` would spend the retry it
+    never got. Same reasoning #43 and #47 are tested for, and the same second call proves
+    the PRAGMA guard, since a re-run ALTER would raise.
+    """
+    engine = _legacy_readiness(legacy_engine, "readiness-pre-49.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness (account_id, channel, checked_at) "
+            "VALUES ('acc-1', '@chan', 'then'), ('acc-2', '@chan', 'then')",
+        )
+        assert "captcha_gave_up" not in _readiness_columns(connection)
+
+        _add_readiness_captcha_giveup(connection)
+        _add_readiness_captcha_giveup(connection)  # the "column already there" branch.
+
+        columns = _readiness_columns(connection)
+        assert columns["captcha_retry_at"]["notnull"] == 0
+        assert columns["captcha_gave_up"]["notnull"] == 1
+
+    with engine.connect() as connection:
+        rows = connection.exec_driver_sql(
+            "SELECT captcha_retry_at, captcha_gave_up FROM neurocomment_readiness ORDER BY id",
+        ).all()
+    assert rows == [(None, 0), (None, 0)]

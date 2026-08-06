@@ -354,10 +354,9 @@ async def _mark_banned_and_leave(
     # left can only probe as not_member — but the leave below is best-effort and has its
     # own failing-leave test, so that verdict WAS reachable and the button quietly undid
     # the ban the hints call permanent. It was removed rather than the hints softened.
-    # The operator has no path either: ``challenge.retry_pair`` would delete the readiness
-    # row and re-onboard, and ``POST /api/v1/neurocomment/retry`` still reaches it, but its
-    # only caller is the captcha-queue button, which is fed by ``list_campaign_challenges``
-    # — and a banned pair has no challenge row, so no button in the UI points here. The
+    # The operator has no path either, and since #49 there is no button left to be one: the
+    # captcha queue lost its «Повторить» control along with ``retry_pair`` and its route, so
+    # nothing in the UI or the API deletes a readiness row any more. The
     # remedy is another account in the campaign; when every serving account is banned the
     # channel is unlinked below. Marked BEFORE the leave — the ban is the truth and must
     # persist even if the leave RPC fails.
@@ -392,8 +391,11 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
     rows that exist would let the first banned account drop a channel the other five
     never touched.
 
-    Every row present must then be in a TERMINAL state — banned (#30) or operator-skipped
-    (#148). Both are permanent verdicts on the pair, and reading a skip as "still usable"
+    Every row present must then be in a TERMINAL state — banned (#30), operator-skipped
+    (#148), or gone from the chat having given up on its captcha (#49; that rule keeps its
+    own drop, on its own clock, because this one has none — and without the third state
+    here five gave-up pairs plus one ban would hold a dead channel forever). All three are
+    permanent verdicts on the pair, and reading a skip as "still usable"
     meant five bans plus one skip held a channel that produces nothing, forever: a per-pair
     ban has no un-ban path, so nothing would ever revisit it. The three sibling rules
     phrase the same clause as "no serving row is ``ready``", which would also fix this —
@@ -408,7 +410,9 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
     links = (await list_campaign_accounts(campaign.campaign_id)).links
     serving = serving_accounts(links, channel)
     rows = (await list_channel_readiness(campaign.campaign_id, channel, serving)).readiness
-    if len(rows) != len(serving) or any(not (row.banned or row.human_skipped) for row in rows):
+    if len(rows) != len(serving) or any(
+        not (row.banned or row.human_skipped or row.captcha_gave_up) for row in rows
+    ):
         return
     # Late import: ``campaigns`` reaches ``_runtime``, which reaches this module — the
     # same cycle ``_sweep._drop_unapproved_channel`` dodges the same way.
