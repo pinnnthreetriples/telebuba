@@ -207,21 +207,30 @@ def _gemini_reason(result: GeminiResult) -> str:
     return "gemini_error"
 
 
-async def _log_regeneration(account_id: str, event: NewPostEvent, attempt: int) -> None:
-    """Say that this post is being written again, and which retry of the budget that is.
+async def _log_regeneration(
+    account_id: str,
+    event: NewPostEvent,
+    attempt: int,
+    reason: str | None,
+) -> None:
+    """Say that this post is being written again, and what was wrong with the last try.
 
     Only a REPEAT round earns a line, which is why round zero is filtered HERE rather than
     at the call site: this is the rule, and the ladder above it is already at its branch
     budget. A first-try comment is the normal case on every post, so logging that too
     would double the feed's volume and say nothing. Reaching a round with ``attempt`` set
     means the previous one failed a check — a usable candidate returns, and a lost claim
-    returns before this — so the counter can never claim a round that was not paid for.
-    The failing check's own code is NOT put in ``reason``: that field carries the position
-    in the budget (``eventReason`` renders the bare ratio beside the label untranslated),
-    and the reason a generation gave up in the end already travels on
-    ``neurocomment_generation_exhausted``, where it matters more than a count.
+    returns before this — so ``reason`` is always set here, and filtering on it as well
+    keeps that invariant honest instead of logging a blank.
+
+    ``reason`` carries that failing check's own code and NOT the position in the budget,
+    which is what it used to carry. A bare "2/2" beside the label is exactly how the three
+    DAILY rules render theirs — re-join, channel pause, join request — so two regenerations
+    of one post, a second apart, read as a channel that had burned two days of its retry
+    budget. The rounds are still countable: they are consecutive lines on the same
+    ``post_id``, and the raw numbers ride along in ``attempt`` / ``max_retries``.
     """
-    if not attempt:
+    if not attempt or reason is None:
         return
     await log_event(
         "INFO",
@@ -230,7 +239,9 @@ async def _log_regeneration(account_id: str, event: NewPostEvent, attempt: int) 
         extra={
             "channel": event.channel,
             "post_id": event.post_id,
-            "reason": f"{attempt}/{settings.neurocomment.max_retries}",
+            "reason": reason,
+            "attempt": attempt,
+            "max_retries": settings.neurocomment.max_retries,
         },
     )
 
@@ -278,7 +289,7 @@ async def _generate_acceptable(
         # is for; the send's own abandon line stays for the claims lost after this point.
         if not await touch_comment_claim(channel, event.post_id):
             return _GenOutcome(None, _CLAIM_LOST_REASON)
-        await _log_regeneration(account_id, event, attempt)
+        await _log_regeneration(account_id, event, attempt, reason)
         request = _build_request(campaign.prompt, event.text, secret=secret, image_b64=image_b64)
         generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:

@@ -18,6 +18,9 @@ const STATUS_COLOR: Record<ChannelStatus, { color: string; bg: string }> = {
   // Amber, not danger: the pair was kicked out and is walking itself back in (one
   // attempt within minutes, then one a day) — nothing for the operator to do yet.
   rejoining: { color: '#9a7b22', bg: '#fbf3e2' },
+  // Danger, unlike 'rejoining': this account has no attempt left to spend here and has
+  // left the chat. Account rows only — a channel never aggregates to it.
+  rejoin_exhausted: { color: '#c0473f', bg: '#fbecec' },
   chat_restricted: { color: '#c0473f', bg: '#fbecec' },
   banned: { color: '#c0473f', bg: '#fbecec' },
   bot_challenge: { color: '#9a7b22', bg: '#fbf3e2' },

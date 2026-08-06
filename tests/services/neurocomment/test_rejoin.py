@@ -212,7 +212,10 @@ async def test_the_shipped_budget_is_two_attempts_over_forty_eight_hours(
     _backdate_rejoin_attempt("acc-1", hours=24)
     await _rejoin.review_access_lost(datetime.now(UTC))
     assert await _channel_is_active(campaign_id) is False
-    assert len(join.calls) == 2  # never a third re-join RPC
+    # Two re-joins and never a third, then the leave the spent pair earns (the drop
+    # itself unlinks the channel and walks no account out of a chat).
+    kinds = [type(action).__name__ for _, action in join.calls]
+    assert (kinds.count("JoinDiscussionGroup"), kinds.count("LeaveDiscussionGroup")) == (2, 1)
 
 
 @pytest.mark.asyncio

@@ -215,6 +215,12 @@ _neurocomment_readiness = Table(
     # re-join re-writes the row, and a reset there would retry forever.
     Column("rejoin_attempted_at", String, nullable=True),
     Column("rejoin_attempts", Integer, nullable=False, server_default="0"),
+    # The re-join budget has been spent AND reported: the pair left the chat, the log
+    # carries its line and the board badges the account. Purely the "already said this"
+    # mark — the rule itself still reads the counter above — because the review that
+    # writes it runs every five minutes and would otherwise repeat both forever. Cleared
+    # exactly where the counter is (``clear_rejoin_attempts``); migration #50 backfills 0.
+    Column("rejoin_gave_up", Integer, nullable=False, server_default="0"),
     # WHY the pair is out of the chat (#44): the Telegram error class that parked it, or
     # NULL when nobody knows — a row from before this column, or a gateway failure that
     # carried no error type. Written BY upsert_readiness (unlike the two counter pairs

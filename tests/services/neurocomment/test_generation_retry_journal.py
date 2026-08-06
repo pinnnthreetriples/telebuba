@@ -61,7 +61,7 @@ async def test_a_comment_that_worked_first_try_writes_no_retry_line(
 
 
 @pytest.mark.asyncio
-async def test_a_rejected_round_says_which_retry_it_bought(
+async def test_a_rejected_round_says_what_was_wrong_with_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """One round failed, the next worked: the retry is the only trace it took two."""
@@ -72,7 +72,31 @@ async def test_a_rejected_round_says_which_retry_it_bought(
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
     assert gen.calls == 2
-    assert await _journal() == [("INFO", "neurocomment_generation_retry", "1/2")]
+    assert await _journal() == [("INFO", "neurocomment_generation_retry", "too_long")]
+
+
+@pytest.mark.asyncio
+async def test_the_retry_line_does_not_read_like_a_daily_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``reason`` used to be "1/2", which is how the three DAILY rules render theirs.
+
+    Two regenerations of one post land a second apart, so that ratio said "this channel
+    has burned two days of its retry budget" to anyone reading the feed. The counter is
+    still there — in fields of its own, which the terminal does not put beside the label.
+    """
+    await _make_campaign("@chan", "acc-1")
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok"), gen=_GenStub(_TOO_LONG, "nice one"))
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    retry = next(
+        entry
+        for entry in await list_recent_logs(limit=50)
+        if entry.event == "neurocomment_generation_retry"
+    )
+    assert retry.extra["reason"] == "too_long"
+    assert (retry.extra["attempt"], retry.extra["max_retries"]) == (1, 2)
 
 
 @pytest.mark.asyncio
@@ -95,13 +119,14 @@ async def test_the_retry_line_carries_the_post_it_belongs_to(
 
 
 @pytest.mark.asyncio
-async def test_every_round_failing_counts_the_budget_out_and_still_ends_with_the_reason(
+async def test_every_round_failing_reads_as_the_same_fault_three_times(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The counter must not push the failure's cause off the last line — it rides there.
+    """Every line names the check that failed, so the ladder reads as one story.
 
     ``neurocomment_generation_exhausted`` keeps spending ``reason`` on WHY the ladder gave
-    up (``too_long`` here); the count lives on the retry lines before it.
+    up (``too_long`` here); the rounds before it now say the same thing about themselves,
+    and the count is the number of consecutive lines on this ``post_id``.
     """
     await _make_campaign("@chan", "acc-1")
     gen = _GenStub(_TOO_LONG)  # cycles: every round is too long
@@ -111,8 +136,8 @@ async def test_every_round_failing_counts_the_budget_out_and_still_ends_with_the
 
     assert gen.calls == 3  # one try plus max_retries (2)
     assert await _journal() == [
-        ("INFO", "neurocomment_generation_retry", "1/2"),
-        ("INFO", "neurocomment_generation_retry", "2/2"),
+        ("INFO", "neurocomment_generation_retry", "too_long"),
+        ("INFO", "neurocomment_generation_retry", "too_long"),
         ("INFO", "neurocomment_generation_exhausted", "too_long"),
     ]
 

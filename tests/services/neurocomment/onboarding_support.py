@@ -44,6 +44,12 @@ def isolate_onboarding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Itera
     setup_logging()
     # onboard_campaign probes each account's spam once; keep it off the network.
     monkeypatch.setattr(_seams, "refresh_spam_status", _clean_spam)
+    # Default the ACTION seam the same way, so a rule that reaches Telegram from a path a
+    # test did not stub cannot open a real client: the re-join give-up leaves the chat, and
+    # a test that only parks a pair and ticks the review used to dial Telegram for real
+    # (and leak the Telethon session's sqlite handle). Tests asserting on actions override
+    # this with their own stub.
+    monkeypatch.setattr(_seams, "execute", _ok_action)
     # The solver calls Gemini on a detected (non-image) challenge — keep it off the
     # network; an error verdict makes the solver give up (→ bot_challenge).
     monkeypatch.setattr(_seams, "generate_text", _gemini_error)
@@ -58,6 +64,11 @@ def isolate_onboarding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Itera
 
 async def _gemini_error(_request: object) -> GeminiResult:
     return GeminiResult(status="error", error="offline in tests")
+
+
+async def _ok_action(account_id: str, action: TelegramAction) -> ActionResult:
+    """The gateway's shape without the gateway — no client, no session, no socket."""
+    return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
 
 
 class _ReadStub:

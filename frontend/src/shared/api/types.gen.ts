@@ -34,6 +34,10 @@ export type AccountChannelReadiness = {
    * Banned
    */
   banned?: boolean;
+  /**
+   * Rejoin Gave Up
+   */
+  rejoin_gave_up?: boolean;
 };
 
 /**
@@ -1570,6 +1574,7 @@ export type NeurocommentChannelRow = {
     | 'join_by_request'
     | 'join_failed'
     | 'rejoining'
+    | 'rejoin_exhausted'
     | 'chat_restricted'
     | 'banned'
     | 'bot_challenge'

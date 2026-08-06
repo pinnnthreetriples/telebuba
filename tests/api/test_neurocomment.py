@@ -13,12 +13,12 @@ from schemas.neurocomment import (
     CampaignList,
     ChannelLinkOutcome,
     CommentRecord,
-    NeurocommentBoard,
     NeurocommentCampaign,
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
 )
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
+from schemas.neurocomment_board import NeurocommentBoard
 from services.neurocomment import (
     ChannelNotInCampaignError,
     InvalidCursorError,

@@ -209,6 +209,38 @@ async def stamp_rejoin_attempt(account_id: str, channel: str) -> None:
     await asyncio.to_thread(_stamp_rejoin_attempt, account_id, channel)
 
 
+def _mark_rejoin_gave_up(account_id: str, channel: str) -> bool:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel)
+                & (_neurocomment_readiness.c.rejoin_gave_up == 0)
+                & _ACCESS_LOST,
+            )
+            .values(rejoin_gave_up=1),
+        )
+    return result.rowcount > 0
+
+
+async def mark_rejoin_gave_up(account_id: str, channel: str) -> bool:
+    """Claim the right to report this pair's spent re-join budget; False if already gone.
+
+    The mark, not the verdict: the rule still reads the counter and the stamp beside it.
+    It exists because the review runs every five minutes, so without it the same pair
+    would be logged and left again on every tick for as long as its channel lives.
+
+    Conditional, and the caller acts on the answer, because the review decides off a
+    snapshot taken before its first await: by the time a later channel in the same tick is
+    reached, a poked onboarding pass may have re-joined this very pair (``clear_rejoin_
+    attempts``). An unconditional write would then mark a row that is ``ready`` again and
+    walk the account back out of the chat it had just re-entered. The row must still carry
+    the access-lost sentinel — the same predicate the rule selected it by.
+    """
+    return await asyncio.to_thread(_mark_rejoin_gave_up, account_id, channel)
+
+
 def _clear_rejoin_attempts(account_id: str, channel: str) -> None:
     with _get_engine().begin() as connection:
         connection.execute(
@@ -220,12 +252,20 @@ def _clear_rejoin_attempts(account_id: str, channel: str) -> None:
                 & (_neurocomment_readiness.c.channel == channel)
                 & _neurocomment_readiness.c.rejoin_attempted_at.is_not(None),
             )
-            .values(rejoin_attempted_at=None, rejoin_attempts=0),
+            .values(rejoin_attempted_at=None, rejoin_attempts=0, rejoin_gave_up=0),
         )
 
 
 async def clear_rejoin_attempts(account_id: str, channel: str) -> None:
-    """Forget a pair's re-join attempts once it is back in the group."""
+    """Forget a pair's re-join attempts once it is back in the group.
+
+    The give-up mark goes with them: it says "this budget was spent and reported", so a
+    pair whose timeline starts over must not keep the board badge it earned on the old
+    one. The row filter stays the stamp alone — a marked pair always carries one, because
+    ``mark_rejoin_gave_up`` only ever writes to a row the budget was spent on. Re-linking
+    the channel clears the same pair of columns from ``_campaigns``, which is the other
+    place a timeline restarts.
+    """
     await asyncio.to_thread(_clear_rejoin_attempts, account_id, channel)
 
 

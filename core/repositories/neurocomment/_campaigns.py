@@ -206,6 +206,11 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
                     join_request_attempts=0,
                     rejoin_attempted_at=None,
                     rejoin_attempts=0,
+                    # The give-up mark rides with the counter it reports, or the pair
+                    # keeps the board's «Попытки входа исчерпаны» through a timeline that
+                    # just restarted — and, worse, is filtered out of the give-up rule
+                    # for good, so a second spent budget would go unreported forever.
+                    rejoin_gave_up=0,
                     # The verdict (#44) too, and for the same reason: a terminal one
                     # out-lives the counters, and the sweep would unlink the re-linked
                     # channel again within five minutes on evidence about the old handle.
