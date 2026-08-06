@@ -16,7 +16,7 @@
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
   },
   "overrides": {
-    "js-yaml": "^4.3.0",
+    "js-yaml": "^4.3.1",
     "eslint-plugin-react-hooks": {
       "zod-validation-error": "^4.0.0"
     }
