@@ -23,4 +23,5 @@ Telegram operations dashboard for accounts, proxies, warming, neurocomment, prof
 ## Memory discipline
 Read `.mex/ROUTER.md`, then only the matching context and at most one relevant pattern.
 At task end, run the MEX check. Update durable current facts only in the matching context, recurring workflows in patterns, and decision rationale with `mex log`; keep bug/PR history, counts, benchmarks and transient state out of routed memory.
-Routed-memory size budgets are enforced by MEX CI: router ≤2500 bytes, each context ≤5000, each pattern ≤3000.
+Memory answers WHY; the code graph answers WHERE (`mex graph scope`, `query where-defined`). Never copy symbol lists, signatures or paths into a note the graph answers live and CI cannot keep true.
+MEX CI budgets prose: router ≤2500B, each context ≤5000, each pattern ≤3000, AGENTS+ROUTER ≤3000, worst route ≤11000, ≤12 contexts / ≤14 patterns.
