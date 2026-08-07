@@ -116,6 +116,17 @@ jobs:
       - name: Build the code graph
         run: npx --yes mex-agent@0.7.1 graph --json
 
+      # A freshly built graph has no grounding baseline, and without one the drift
+      # branch compares against nothing: a grounded body could change under a note
+      # describing the old behaviour and the check would still be green. mex's own
+      # way to populate it is gated behind an interactive TTY prompt, so CI replays
+      # the tracked baseline instead. Also fails when the baseline is stale, which
+      # is what makes "ground a claim but skip the capture" impossible to merge.
+      # Stdlib only (json/re/sqlite3/pathlib), so this job stays free of `uv sync`
+      # and the Python dependency tree it would drag in for one 100-line script.
+      - name: Apply the grounding baseline
+        run: python3 tools/mex_grounding_baseline.py apply
+
       - name: Check MEX memory
         shell: bash
         run: |

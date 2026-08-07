@@ -1,0 +1,62 @@
+[
+  {
+    "body_hash": "b49c7485bedb12b0c84a3d653d8e5d8f7ea8ab5607c2b6b2982ff9841f2c2094",
+    "node_id": "function:ba8f355bd012e2daedeea6b4da65becb",
+    "scaffold_file": ".mex/context/runtime-discovery.md"
+  },
+  {
+    "body_hash": "88d606a4cd238cef25d79e298440044a12f8ada72a4c0e430538e7ceceb8522c",
+    "node_id": "function:a7300fa722411d957b166677e0605ebb",
+    "scaffold_file": ".mex/context/runtime-discovery.md"
+  },
+  {
+    "body_hash": "2940023d20ebf7eda295d0854877b665f78df6a7e965d752358dcbbbff251431",
+    "node_id": "function:be274c62503f66444fbf26238d841404",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "051eee1b07b0b214feb82a064665f8f34fa0d9ccab9d794216159a6bcf774647",
+    "node_id": "function:e7fc1d72a78f4470e41ab1dcfe5c492a",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "25bf5ce9a543ebf5bf7e39e0fcd033c3de14630b5b4741517c642d4e4d13e8c7",
+    "node_id": "function:1531c47754243390a9617c865641d90a",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "c8363f5689854b25db84c7e384cada1c5598ff8ac40776a9ad547477c758332c",
+    "node_id": "function:2b5039ccdb74c6e7f91da398b794bb85",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "f0ab0094d15cba142870a1ecb3c818565d1b32051ab369a5ee55e571ff810e86",
+    "node_id": "function:6af0006fb3e181c9d8ff7fe9239a627e",
+    "scaffold_file": ".mex/context/runtime-telegram.md"
+  },
+  {
+    "body_hash": "66b65fa352fc343a08f3d3c79aaaf315a0968a1ee37206fc01b5826f526d5b18",
+    "node_id": "function:91dce285f0e886a658910765782a314b",
+    "scaffold_file": ".mex/context/runtime-telegram.md"
+  },
+  {
+    "body_hash": "ac7d0870c807658bb624d30abf098f3450e7140c0b56bde22221b58e6430903a",
+    "node_id": "function:a8023da730af66117a937cedcb63a9c5",
+    "scaffold_file": ".mex/context/runtime-warming.md"
+  },
+  {
+    "body_hash": "0fedf9b63c992251a0042678c97916b00a9fd221ef1d089c25e0d56d3d5eec7c",
+    "node_id": "function:e6893fd5c5d3e80d604d857c7752c89e",
+    "scaffold_file": ".mex/context/runtime-warming.md"
+  },
+  {
+    "body_hash": "b59f371f7ff9fc8e178d7e33b812e6a670fe268e21321e3f192afc7dedc7ad28",
+    "node_id": "function:f0223a80acae7301c2406a3ccfcdae65",
+    "scaffold_file": ".mex/patterns/add-log-event.md"
+  },
+  {
+    "body_hash": "85878cfd19b539148345726e0194a3f6de01f8e71f567aba239f63b3f239c971",
+    "node_id": "function:e99e563cd7abe7d204958d5abb056cb1",
+    "scaffold_file": ".mex/patterns/add-log-event.md"
+  }
+]
