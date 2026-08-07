@@ -1,12 +1,20 @@
 ---
-last_updated: 2026-08-04
+last_updated: 2026-08-07
+grounds_to:
+  - node: "function:93b70e5df0925eef7d6baf1d75874155"
+    fingerprint: "mh:64:7b226d696e68617368223a5b32313931393135382c3632333335333237342c373839313932342c33343939333831332c3132343331303137302c31393030333336302c3132333734353631382c32353934303736362c3236363639353035352c35313039363337352c3134313532313138362c31313236353438362c3131363430373839362c3331323834333435332c3232343937393437372c33353131343239332c3131383537303232312c33313536393930312c34383436353534342c33383331363735382c39303539353135302c3134303131353037342c313830393030342c3134333130343834312c3137303139353032342c3135313232353033362c3334383434343538322c31363631333034382c3232373738323331322c34383738363638322c323633383732302c36313130333935382c3134323439373833302c3132373930323337382c3635363933343839332c36333836353632382c3337353531323536342c3232353634383139332c35363936323936392c3232323637313730362c39333035363733382c3133313839343339322c39303031373634392c3230323134303539342c3433393233343938372c3132393138363339382c35383039323536372c3138353239383538312c373832383038302c3133393333383035362c31383535313933372c3332343339383231302c3230383133313932382c3335353633383731312c3237383832313138312c3135323432353531372c35343139343937332c3233353730393531362c3136323132383234332c37333335383338332c31323330333835362c3538313736333130392c32343630393737342c34333836363238385d2c226e65696768626f7273223a5b2266756e6374696f6e3a3266383039646533356332623461663335386261376434626261656336326662225d2c22746f6b656e436f756e74223a34357d"
+edges:
+  - target: context/architecture.md
+    condition: layer boundaries, gateways or system design
+  - target: context/conventions.md
+    condition: backend implementation or review conventions
 ---
 
 # Add Service
 1. Define cross-layer Pydantic contracts.
-2. Add logic to `services/<domain>.py` or a focused package submodule; keep `__init__.py` re-export-only (the package facades under `accounts/`, `warming/`, `neurocomment/` carry a layout docstring plus imports and `__all__`, nothing else).
-3. Delegate DB, Telegram, providers, config and logging to `core/` gateways. In a package, route the injectable collaborators (`execute`, `generate_text`, `rng`, …) through the domain's `_seams.py` so tests patch one place instead of every submodule.
-4. Add tests mocking gateways and covering success/failure branches. Patch a collaborator on the submodule that owns the name (`services.accounts.sessions.convert_tdata_zip`), never on the package facade that re-exported it.
+2. Add logic to the focused `services/` domain module; keep package facades re-export-only.
+3. Delegate DB, Telegram, providers, config and logging to `core/` gateways. Route injectable collaborators through the domain seam when one exists.
+4. Add tests mocking gateways and covering success/failure branches. Patch a collaborator on the module that owns its binding, not a re-exporting facade.
 5. Run relevant pytest, lint, type and quality gates.
 
-Verify: no `fastapi`, `api`, `sqlalchemy`, `telethon` or raw-provider imports (`tests/test_architecture.py` asserts the first four; `httpx` is convention only); public I/O is async and typed; HTTP concerns remain in `api/`.
+Verify against `tests/test_architecture.py`: persistence/SDK access stays in `core/`, and HTTP concerns remain in `api/`. Public I/O being async is a review rule, not a checked one — ruff (`select = ["ALL"]`, so `ANN`) covers the annotations, but nothing mechanical catches a sync public entry point.

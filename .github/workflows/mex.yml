@@ -2,22 +2,9 @@ name: MEX memory
 
 on:
   pull_request:
-    paths:
-      - '.mex/**'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - '.tool-configs/**'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
-      - '.github/workflows/mex.yml'
+    branches: [main]
   push:
     branches: [main]
-    paths:
-      - '.mex/**'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - '.tool-configs/**'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
-      - '.github/workflows/mex.yml'
   schedule:
     - cron: '0 6 * * 1'
   workflow_dispatch:
@@ -27,8 +14,14 @@ permissions:
 
 jobs:
   check:
-    name: MEX drift and diagnostics
+    name: MEX drift, freshness and budgets
     runs-on: ubuntu-latest
+    # mex reports command name, version and OS home on every invocation and does not
+    # detect CI, so this job would phone home four times per pull request. Opting out
+    # here rather than in `.mex/config.json`: the config file is the scaffold's, and a
+    # contributor running `mex check` locally may reasonably choose otherwise.
+    env:
+      MEX_TELEMETRY: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,9 +32,159 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Check memory adapter sync
+        shell: bash
+        run: |
+          cmp -s .mex/AGENTS.md AGENTS.md
+          cmp -s .mex/AGENTS.md CLAUDE.md
+          cmp -s .mex/AGENTS.md .tool-configs/CLAUDE.md
+
+      # Budgets cap PROSE, so the YAML frontmatter is stripped before counting.
+      # One `grounds_to` fingerprint is a serialized minhash of 1.7kB to 16kB
+      # depending on how many neighbours the symbol has, so counting frontmatter
+      # would blow every budget on the first grounded claim and force a choice
+      # between grounding a fact and keeping the note short. Fingerprints are
+      # pointers the drift checker consumes, not words an agent reads — not what
+      # these budgets exist to limit.
+      - name: Check routed memory budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          prose_bytes() {
+            awk 'NR==1 && $0=="---" {fm=1; next} fm && $0=="---" {fm=0; next} !fm' "$1" | wc -c
+          }
+          check_max() {
+            local file="$1"
+            local limit="$2"
+            local bytes
+            bytes=$(prose_bytes "$file")
+            if (( bytes > limit )); then
+              echo "$file is $bytes bytes of prose; limit is $limit"
+              exit 1
+            fi
+          }
+          check_max .mex/AGENTS.md 1500
+          check_max .mex/ROUTER.md 2500
+          for file in .mex/context/*.md; do check_max "$file" 5000; done
+          for file in .mex/patterns/*.md; do check_max "$file" 3000; done
+
+          # Per-file caps alone do not bound what a session reads: routed memory can
+          # grow just as well by ADDING files, each of them comfortably legal. These
+          # three cap the thing that actually costs context.
+          largest() {
+            local max=0 bytes
+            for file in $1; do
+              bytes=$(prose_bytes "$file")
+              (( bytes > max )) && max=$bytes
+            done
+            echo "$max"
+          }
+          check_total() {
+            if (( $2 > $3 )); then
+              echo "$1 is $2; limit is $3"
+              exit 1
+            fi
+            echo "$1: $2 / $3"
+          }
+          always=$(( $(prose_bytes .mex/AGENTS.md) + $(prose_bytes .mex/ROUTER.md) ))
+          worst=$(( always + $(largest ".mex/context/*.md") + $(largest ".mex/patterns/*.md") ))
+          # Every session pays this one, whatever the task.
+          check_total "always-loaded (AGENTS+ROUTER)" "$always" 3000
+          # ROUTER admits one context + one pattern, so this is the ceiling per session.
+          check_total "worst-case route" "$worst" 11000
+          # A count cap, because the two above only see the LARGEST file of each kind:
+          # twenty small contexts would pass both while making the routing table itself
+          # the thing nobody can hold in their head.
+          check_total "context files" "$(ls .mex/context/*.md | wc -l)" 12
+          check_total "pattern files" "$(ls .mex/patterns/*.md | wc -l)" 14
+
+      # Blocking rule: every issue blocks the merge EXCEPT `STALE_FILE`, which is
+      # reported and left non-blocking on purpose.
+      #
+      # Every other code says the memory is WRONG — a path that no longer exists, a
+      # dead command or edge, an index out of sync, a grounded symbol that moved or
+      # vanished. Those are deterministic, caused by the diff under review, and
+      # fixable by its author, so they must not reach `main`.
+      #
+      # `STALE_FILE` is not that. mex derives it from `commitsSinceLastChange`, which
+      # is this file's position in the WHOLE repository's commit list — plus a
+      # wall-clock age. Both advance on activity elsewhere, so a perfectly accurate
+      # note goes red because other people merged, and the author of the blocked PR
+      # can only clear it by touching a file they had no reason to read. That is a
+      # rubber-stamp generator: it would train every agent to bump `last_updated` to
+      # get green, which is precisely the fake freshness this scaffold is meant to
+      # prevent. Kept strict (25/50 commits, 14/30 days) BECAUSE it only nags.
+      # Cache is a SPEED optimisation only, and safe to miss. The graph takes ~3min
+      # to build and its content is a pure function of the indexed sources, so the
+      # key is their hash: an exact hit restores it and the build below no-ops. The
+      # grounding baseline does NOT ride in here — it is tracked in git precisely so
+      # that an evicted cache cannot quietly disarm the drift check.
+      - name: Restore the code graph
+        id: graph-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .mex/graph.db
+          key: mex-graph-v1-${{ hashFiles('**/*.py', 'frontend/src/**/*.ts', 'frontend/src/**/*.tsx') }}
+
+      # Without a graph the grounding checks silently do not run: mex degrades to
+      # its eleven filesystem checkers and still reports a clean score, which would
+      # leave GROUNDING_* unenforced while looking enforced.
+      - name: Build the code graph
+        if: steps.graph-cache.outputs.cache-hit != 'true'
+        run: npx --yes mex-agent@0.7.1 graph --json
+
+      # A freshly built graph has no grounding baseline, and without one the drift
+      # branch compares against nothing: a grounded body could change under a note
+      # describing the old behaviour and the check would still be green. mex's own
+      # way to populate it is gated behind an interactive TTY prompt, so CI replays
+      # the tracked baseline instead. Also fails when the baseline is stale, which
+      # is what makes "ground a claim but skip the capture" impossible to merge.
+      # Stdlib only (json/re/sqlite3/pathlib), so this job stays free of `uv sync`
+      # and the Python dependency tree it would drag in for one 100-line script.
+      - name: Apply the grounding baseline
+        run: python3 tools/mex_grounding_baseline.py apply
+
+      # `apply` proves the baseline covers every grounded claim; it cannot tell
+      # whether the note is still true. Re-running `capture` turns the drift check
+      # green again whatever the prose says, so without this the gate would reward
+      # exactly the move it exists to stop — refresh the hash, ship the stale
+      # sentence. A changed hash must arrive with a changed memory file.
+      #
+      # `base_ref` goes through the environment, not `${{ }}` interpolation: a branch
+      # name is attacker-supplied text, and expanding it into the script body is a
+      # shell-injection sink (semgrep run-shell-injection).
+      - name: Verify re-captured baselines came with an edited note
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 tools/mex_grounding_baseline.py verify "origin/$BASE_REF"
+
+      # Yearly at most, and the fix is one command. Checking here rather than
+      # committing from CI: rotation rewrites decision history, which is a human's
+      # call, and giving this job write access to `main` costs more than it saves.
+      - name: Check the event log does not need rotating
+        run: python3 tools/mex_events_rotate.py --check
+
       - name: Check MEX memory
-        run: npx --yes mex-agent@0.6.3 check --json
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/mex-check.json"
+          npx --yes mex-agent@0.7.1 check --json > "$report"
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const issues = r.issues ?? [];
+            console.log(`MEX drift score ${r.score}/100 over ${r.filesChecked} files.`);
+            const stale = issues.filter((i) => i.code === "STALE_FILE");
+            const blocking = issues.filter((i) => i.code !== "STALE_FILE");
+            for (const i of stale) console.log(`  note  ${i.code} ${i.file}: ${i.message}`);
+            for (const i of blocking) console.error(`  ${i.severity} ${i.code} ${i.file}: ${i.message}`);
+            if (blocking.length) {
+              console.error(`${blocking.length} blocking MEX issue(s); warnings block too.`);
+              process.exit(1);
+            }
+          ' "$report"
 
       - name: MEX diagnostics
         if: always()
-        run: npx --yes mex-agent@0.6.3 doctor
+        run: npx --yes mex-agent@0.7.1 doctor

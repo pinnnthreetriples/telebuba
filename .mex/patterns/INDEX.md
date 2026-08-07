@@ -1,5 +1,8 @@
 ---
 last_updated: 2026-08-07
+edges:
+  - target: context/architecture.md
+    condition: the task needs system design context first
 ---
 
 # Pattern Index

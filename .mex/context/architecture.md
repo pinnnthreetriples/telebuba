@@ -1,27 +1,29 @@
 ---
-last_updated: 2026-07-27
+last_updated: 2026-08-06
+edges:
+  - target: context/conventions.md
+    condition: backend implementation or review conventions
+  - target: patterns/INDEX.md
+    condition: the change is a repeatable implementation task
 ---
 
 # Architecture
 
-```text
-React SPA → /api/v1 → api/ → services/ → core/ → SQLite, Telegram, OpenAI/Gemini
-                         ↘ schemas/ shared Pydantic contracts
-```
+`React SPA → /api/v1 → api/ → services/ → core/ → SQLite / Telegram / providers`, with `schemas/` as shared Pydantic contracts.
 
-- `main.py`: FastAPI composition root, lifespan runtimes, SSE, routers, static SPA.
-- `api/`: request/dependency/error/serialization only.
-- `services/`: account, auth, proxy, warming, neurocomment, content, dialogue, logs/events, spam/trust policy and orchestration.
-- `core/`: repositories/migrations and all external adapters: Telegram, AI, Telemetr.io channel catalogue, auth, logging/Sentry, SSE, proxy checks; `core/channel_tokens.py` holds the pure channel-handle normalizer shared by warming and neurocomment discovery.
-- `schemas/`: pure contracts; no project-layer imports or I/O.
-- `frontend/`: React 19, strict TypeScript, Vite and FSD; reaches Python only over `/api/v1`.
+- `main.py` is the FastAPI composition root and lifespan owner.
+- `api/` handles HTTP validation/auth/error mapping/serialization only.
+- `services/` owns policy, orchestration and domain state transitions.
+- `core/` owns repositories/migrations and external adapters: Telegram, AI, Telemetr, logging/Sentry, SSE and proxy checks.
+- `schemas/` is pure contracts; no project-layer imports or I/O.
+- `frontend/` is React 19 + strict TypeScript/Vite/FSD and reaches Python only through `/api/v1`.
 
 ## Import law
 | Layer | May import |
 |---|---|
-| `api/` | `services`, `schemas`, `core.config`, `core.logging`, FastAPI |
+| `api/` | `services`, `schemas`, FastAPI, narrow `core.config` / `core.logging` |
 | `services/` | `services`, `core`, `schemas` |
 | `core/` | `schemas`, stdlib, third-party packages |
-| `schemas/` | Pydantic and typing/stdlib only |
+| `schemas/` | Pydantic, typing, stdlib |
 
-Runtime is deliberately single-process: SQLite plus in-process tasks require one uvicorn worker. Cross-layer values are typed; API data is locale-neutral. Business logs go through `core/logging.py`; history is `/api/v1/logs`, live updates are authenticated `/api/v1/events`. `tests/test_architecture.py`, manifests, workflows, and code are the executable source of truth.
+Single-process operation is deliberate while SQLite and in-process runtimes own coordination. `tests/test_architecture.py`, manifests and code are the executable source of truth.

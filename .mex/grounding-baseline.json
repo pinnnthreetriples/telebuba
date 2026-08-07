@@ -1,0 +1,137 @@
+[
+  {
+    "body_hash": "b49c7485bedb12b0c84a3d653d8e5d8f7ea8ab5607c2b6b2982ff9841f2c2094",
+    "node_id": "function:ba8f355bd012e2daedeea6b4da65becb",
+    "scaffold_file": ".mex/context/runtime-discovery.md"
+  },
+  {
+    "body_hash": "88d606a4cd238cef25d79e298440044a12f8ada72a4c0e430538e7ceceb8522c",
+    "node_id": "function:a7300fa722411d957b166677e0605ebb",
+    "scaffold_file": ".mex/context/runtime-discovery.md"
+  },
+  {
+    "body_hash": "2940023d20ebf7eda295d0854877b665f78df6a7e965d752358dcbbbff251431",
+    "node_id": "function:be274c62503f66444fbf26238d841404",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "051eee1b07b0b214feb82a064665f8f34fa0d9ccab9d794216159a6bcf774647",
+    "node_id": "function:e7fc1d72a78f4470e41ab1dcfe5c492a",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "25bf5ce9a543ebf5bf7e39e0fcd033c3de14630b5b4741517c642d4e4d13e8c7",
+    "node_id": "function:1531c47754243390a9617c865641d90a",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "c8363f5689854b25db84c7e384cada1c5598ff8ac40776a9ad547477c758332c",
+    "node_id": "function:2b5039ccdb74c6e7f91da398b794bb85",
+    "scaffold_file": ".mex/context/runtime-neurocomment.md"
+  },
+  {
+    "body_hash": "f0ab0094d15cba142870a1ecb3c818565d1b32051ab369a5ee55e571ff810e86",
+    "node_id": "function:6af0006fb3e181c9d8ff7fe9239a627e",
+    "scaffold_file": ".mex/context/runtime-telegram.md"
+  },
+  {
+    "body_hash": "66b65fa352fc343a08f3d3c79aaaf315a0968a1ee37206fc01b5826f526d5b18",
+    "node_id": "function:91dce285f0e886a658910765782a314b",
+    "scaffold_file": ".mex/context/runtime-telegram.md"
+  },
+  {
+    "body_hash": "ac7d0870c807658bb624d30abf098f3450e7140c0b56bde22221b58e6430903a",
+    "node_id": "function:a8023da730af66117a937cedcb63a9c5",
+    "scaffold_file": ".mex/context/runtime-warming.md"
+  },
+  {
+    "body_hash": "0fedf9b63c992251a0042678c97916b00a9fd221ef1d089c25e0d56d3d5eec7c",
+    "node_id": "function:e6893fd5c5d3e80d604d857c7752c89e",
+    "scaffold_file": ".mex/context/runtime-warming.md"
+  },
+  {
+    "body_hash": "990dd8d322c0e0d5e261936f6b4372ab97bf81388ae74586bce58d854e2954fe",
+    "node_id": "function:bad8e00aa6ca4667b5132e4fa9dac582",
+    "scaffold_file": ".mex/patterns/add-api-endpoint.md"
+  },
+  {
+    "body_hash": "73f034a467ef34565dbdac522a9211b9a157b3140ae37001f09152c25d6fe092",
+    "node_id": "function:590865ce857c0ceca3af2805b8292dfc",
+    "scaffold_file": ".mex/patterns/add-api-endpoint.md"
+  },
+  {
+    "body_hash": "f95225533324c3a492710f6ff50adbc6251f3203fa0626cc261fab74f18e31b2",
+    "node_id": "function:6190d2bd5cb3c1a54e7601d531529a82",
+    "scaffold_file": ".mex/patterns/add-auth.md"
+  },
+  {
+    "body_hash": "990dd8d322c0e0d5e261936f6b4372ab97bf81388ae74586bce58d854e2954fe",
+    "node_id": "function:bad8e00aa6ca4667b5132e4fa9dac582",
+    "scaffold_file": ".mex/patterns/add-auth.md"
+  },
+  {
+    "body_hash": "1b0d63c432e2d50358edaa4db6a838e6722bc3edbc9cea1ad948c02574c0747d",
+    "node_id": "function:50e008c7469124b387d176c343aa29eb",
+    "scaffold_file": ".mex/patterns/add-auth.md"
+  },
+  {
+    "body_hash": "66bf72981985a3e3d8b827039e0efd8854eba9f240a1b5a96f08656f5a2516cb",
+    "node_id": "function:fd7aebfa2186e8d7f0da28e661677d85",
+    "scaffold_file": ".mex/patterns/add-discovery-source.md"
+  },
+  {
+    "body_hash": "c35e9b119f865b327921959062b49726fbd554d14a53228858b7173526c9ed23",
+    "node_id": "function:330ee165c2e8ae67482c0bffa6a1ca52",
+    "scaffold_file": ".mex/patterns/add-discovery-source.md"
+  },
+  {
+    "body_hash": "c02996a8c355d39555d99f2a7485daeafa12b723b704a5a18b55dfa32c71f68f",
+    "node_id": "method:312a578607220cf0c909540b3589f078",
+    "scaffold_file": ".mex/patterns/add-discovery-source.md"
+  },
+  {
+    "body_hash": "b59f371f7ff9fc8e178d7e33b812e6a670fe268e21321e3f192afc7dedc7ad28",
+    "node_id": "function:f0223a80acae7301c2406a3ccfcdae65",
+    "scaffold_file": ".mex/patterns/add-log-event.md"
+  },
+  {
+    "body_hash": "85878cfd19b539148345726e0194a3f6de01f8e71f567aba239f63b3f239c971",
+    "node_id": "function:e99e563cd7abe7d204958d5abb056cb1",
+    "scaffold_file": ".mex/patterns/add-log-event.md"
+  },
+  {
+    "body_hash": "ab0daf6b359405f2eb799edd9c1d3deebfe76ca537c2fe9d34b86e15744cf818",
+    "node_id": "function:93b70e5df0925eef7d6baf1d75874155",
+    "scaffold_file": ".mex/patterns/add-service.md"
+  },
+  {
+    "body_hash": "bbb5cb688a20e257c0d1225edd7b36d48f1de99973f0fbef2c0b0e6a42c8986c",
+    "node_id": "function:c7b49927e6426ff0746a253f426555c3",
+    "scaffold_file": ".mex/patterns/add-telegram-task.md"
+  },
+  {
+    "body_hash": "77c702696b08dc4adb1920f3f90a95abbcdbe7db8230519f57fee27fd954219b",
+    "node_id": "function:cc4a14399d709104c7b6f0e3856e631f",
+    "scaffold_file": ".mex/patterns/add-telegram-task.md"
+  },
+  {
+    "body_hash": "ccf98e327f557a1e796ef9fb19b583f2dda3b6dab17bbe5426f03f135369f8f8",
+    "node_id": "function:ada37d98a8b0c85378384369ca93c641",
+    "scaffold_file": ".mex/patterns/add-telegram-task.md"
+  },
+  {
+    "body_hash": "9fe5b003c6cec4f11fb5f32d86aef04c019a6268ed4b62d6ecc1dd6098c414b9",
+    "node_id": "function:8b8474ae113110444a266c58ce43a25d",
+    "scaffold_file": ".mex/patterns/add-warming-job.md"
+  },
+  {
+    "body_hash": "21708052f875c565089cb604bdd843381ddfb8145bdf7f962552d66c727a83de",
+    "node_id": "function:4d552bd3102e39ba3fbed9126fb2b80a",
+    "scaffold_file": ".mex/patterns/add-warming-job.md"
+  },
+  {
+    "body_hash": "4e8ecef4333b0cfb9c050d81d2572e4134f33da7436c2bf7745ce9539c302a1d",
+    "node_id": "function:ad4b927ef1ae75f43bd513d0acbee172",
+    "scaffold_file": ".mex/patterns/add-warming-job.md"
+  }
+]
