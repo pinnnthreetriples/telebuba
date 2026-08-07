@@ -52,13 +52,41 @@ jobs:
           for file in .mex/context/*.md; do check_max "$file" 5000; done
           for file in .mex/patterns/*.md; do check_max "$file" 3000; done
 
+      # Blocking rule: every issue blocks the merge EXCEPT `STALE_FILE`, which is
+      # reported and left non-blocking on purpose.
+      #
+      # Every other code says the memory is WRONG — a path that no longer exists, a
+      # dead command or edge, an index out of sync, a grounded symbol that moved or
+      # vanished. Those are deterministic, caused by the diff under review, and
+      # fixable by its author, so they must not reach `main`.
+      #
+      # `STALE_FILE` is not that. mex derives it from `commitsSinceLastChange`, which
+      # is this file's position in the WHOLE repository's commit list — plus a
+      # wall-clock age. Both advance on activity elsewhere, so a perfectly accurate
+      # note goes red because other people merged, and the author of the blocked PR
+      # can only clear it by touching a file they had no reason to read. That is a
+      # rubber-stamp generator: it would train every agent to bump `last_updated` to
+      # get green, which is precisely the fake freshness this scaffold is meant to
+      # prevent. Kept strict (25/50 commits, 14/30 days) BECAUSE it only nags.
       - name: Check MEX memory
         shell: bash
         run: |
           set -euo pipefail
           report="$RUNNER_TEMP/mex-check.json"
           npx --yes mex-agent@0.7.1 check --json > "$report"
-          node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(JSON.stringify(r, null, 2)); if ((r.issues ?? []).length) { console.error(`MEX reported ${r.issues.length} issue(s); warnings are blocking.`); process.exit(1); }' "$report"
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            const issues = r.issues ?? [];
+            console.log(`MEX drift score ${r.score}/100 over ${r.filesChecked} files.`);
+            const stale = issues.filter((i) => i.code === "STALE_FILE");
+            const blocking = issues.filter((i) => i.code !== "STALE_FILE");
+            for (const i of stale) console.log(`  note  ${i.code} ${i.file}: ${i.message}`);
+            for (const i of blocking) console.error(`  ${i.severity} ${i.code} ${i.file}: ${i.message}`);
+            if (blocking.length) {
+              console.error(`${blocking.length} blocking MEX issue(s); warnings block too.`);
+              process.exit(1);
+            }
+          ' "$report"
 
       - name: MEX diagnostics
         if: always()

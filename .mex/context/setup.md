@@ -29,8 +29,8 @@ npx --yes mex-agent@0.7.1 check && npx --yes mex-agent@0.7.1 doctor
 cd frontend && npm run gates && npm run build
 ```
 
-Run the relevant subset, not every command blindly. `.github/workflows/*.yml` are the CI source of truth. Code CI and MEX memory CI run on every PR/push to `main`; MEX warnings are blocking. The weekly MEX schedule is a backstop when no PR is open.
+Run the relevant subset, not every command blindly. `.github/workflows/*.yml` are the CI source of truth. Code CI and MEX memory CI run on every PR/push to `main`. MEX blocks on every issue except `STALE_FILE`, which only nags: it counts commits and days across the WHOLE repo, so it reddens on other people's activity and blocking it would just train agents to bump `last_updated`. The weekly MEX schedule is a backstop when no PR is open.
 
-The local pre-commit gitleaks hook scans staged changes; CI performs the full-history secret scan. Do not duplicate its container/digest implementation in memory.
+The secret gate is CI's full-history scan, NOT the pre-commit hook: the hook scans a staged diff, which is 0 commits after a CI checkout, so it would pass unconditionally — CI skips it and runs history detection instead, which needs full fetch depth. Never add `.gitleaks.toml` or `.gitleaksignore` to this repo: `detect` auto-loads both, and either one turns the gate green by its own mechanism (a repo-local config REPLACES the ruleset; the ignore file suppresses by fingerprint). CI asserts a non-zero commits-scanned count for the same reason — a container that scans nothing exits 0. Implementation (image digest, flags) stays in `ci.yml`. Never plant a test secret here to exercise it; use a throwaway repo.
 
 On Windows checkouts with `core.autocrlf=true`, repo-wide format hooks may rewrite pre-existing CRLF files. Format touched files and verify real scope with `git diff HEAD --name-only` rather than relying on `git status` alone.
