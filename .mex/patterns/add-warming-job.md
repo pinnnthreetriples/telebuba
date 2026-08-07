@@ -10,4 +10,4 @@ last_updated: 2026-08-04
 5. Test normal behavior, persistence/restart, failure and cancellation.
 6. Run relevant backend gates.
 
-Verify: no scheduler or API/UI policy — warming is a continuous randomised per-account loop, one `asyncio.Task` per account in `_runtime._RUNTIME`, and `run_one_cycle` is the testable unit; board stays bulk-loaded (all rows fetched once in `board.py`, no per-card N+1); Telegram uses typed actions; stop/reconcile is bounded; consider counter defect `#208`.
+Verify: no API/UI policy in warming; Telegram uses typed actions; task stop/reconcile is bounded; board/read paths stay bulk-loaded. Runtime invariants live in `context/runtime-warming.md`.

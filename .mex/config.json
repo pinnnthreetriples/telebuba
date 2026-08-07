@@ -10,8 +10,8 @@
   "staleness": {
     "warnDays": 14,
     "errorDays": 30,
-    "warnCommits": 25,
-    "errorCommits": 50
+    "warnCommits": 100,
+    "errorCommits": 200
   },
   "heartbeat": {
     "staleDays": 14,

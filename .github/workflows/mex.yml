@@ -2,22 +2,9 @@ name: MEX memory
 
 on:
   pull_request:
-    paths:
-      - '.mex/**'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - '.tool-configs/**'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
-      - '.github/workflows/mex.yml'
+    branches: [main]
   push:
     branches: [main]
-    paths:
-      - '.mex/**'
-      - 'AGENTS.md'
-      - 'CLAUDE.md'
-      - '.tool-configs/**'
-      - '.github/PULL_REQUEST_TEMPLATE.md'
-      - '.github/workflows/mex.yml'
   schedule:
     - cron: '0 6 * * 1'
   workflow_dispatch:
@@ -27,7 +14,7 @@ permissions:
 
 jobs:
   check:
-    name: MEX drift and diagnostics
+    name: MEX drift, freshness and budgets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,9 +26,40 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Check memory adapter sync
+        shell: bash
+        run: |
+          cmp -s .mex/AGENTS.md AGENTS.md
+          cmp -s .mex/AGENTS.md CLAUDE.md
+          cmp -s .mex/AGENTS.md .tool-configs/CLAUDE.md
+
+      - name: Check routed memory budgets
+        shell: bash
+        run: |
+          set -euo pipefail
+          check_max() {
+            local file="$1"
+            local limit="$2"
+            local bytes
+            bytes=$(wc -c < "$file")
+            if (( bytes > limit )); then
+              echo "$file is $bytes bytes; limit is $limit"
+              exit 1
+            fi
+          }
+          check_max .mex/AGENTS.md 1500
+          check_max .mex/ROUTER.md 2500
+          for file in .mex/context/*.md; do check_max "$file" 5000; done
+          for file in .mex/patterns/*.md; do check_max "$file" 3000; done
+
       - name: Check MEX memory
-        run: npx --yes mex-agent@0.6.3 check --json
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/mex-check.json"
+          npx --yes mex-agent@0.7.1 check --json > "$report"
+          node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); console.log(JSON.stringify(r, null, 2)); if ((r.issues ?? []).length) { console.error(`MEX reported ${r.issues.length} issue(s); warnings are blocking.`); process.exit(1); }' "$report"
 
       - name: MEX diagnostics
         if: always()
-        run: npx --yes mex-agent@0.6.3 doctor
+        run: npx --yes mex-agent@0.7.1 doctor
