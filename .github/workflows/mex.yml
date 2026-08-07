@@ -33,17 +33,27 @@ jobs:
           cmp -s .mex/AGENTS.md CLAUDE.md
           cmp -s .mex/AGENTS.md .tool-configs/CLAUDE.md
 
+      # Budgets cap PROSE, so the YAML frontmatter is stripped before counting.
+      # One `grounds_to` fingerprint is a serialized minhash of 1.7kB to 16kB
+      # depending on how many neighbours the symbol has, so counting frontmatter
+      # would blow every budget on the first grounded claim and force a choice
+      # between grounding a fact and keeping the note short. Fingerprints are
+      # pointers the drift checker consumes, not words an agent reads — not what
+      # these budgets exist to limit.
       - name: Check routed memory budgets
         shell: bash
         run: |
           set -euo pipefail
+          prose_bytes() {
+            awk 'NR==1 && $0=="---" {fm=1; next} fm && $0=="---" {fm=0; next} !fm' "$1" | wc -c
+          }
           check_max() {
             local file="$1"
             local limit="$2"
             local bytes
-            bytes=$(wc -c < "$file")
+            bytes=$(prose_bytes "$file")
             if (( bytes > limit )); then
-              echo "$file is $bytes bytes; limit is $limit"
+              echo "$file is $bytes bytes of prose; limit is $limit"
               exit 1
             fi
           }
@@ -68,6 +78,14 @@ jobs:
       # rubber-stamp generator: it would train every agent to bump `last_updated` to
       # get green, which is precisely the fake freshness this scaffold is meant to
       # prevent. Kept strict (25/50 commits, 14/30 days) BECAUSE it only nags.
+      # The grounding checker needs the code graph, and `.mex/graph.db` is ~94MB of
+      # SQLite that `.gitignore` rightly keeps out of the repo — so CI rebuilds it.
+      # Without this step the grounding checks silently do not run: mex degrades
+      # gracefully to the eleven filesystem checkers and still reports a clean
+      # score, which would make GROUNDING_DRIFT unenforced while looking enforced.
+      - name: Build the code graph
+        run: npx --yes mex-agent@0.7.1 graph --json
+
       - name: Check MEX memory
         shell: bash
         run: |
