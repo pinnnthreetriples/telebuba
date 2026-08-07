@@ -108,12 +108,23 @@ jobs:
       # rubber-stamp generator: it would train every agent to bump `last_updated` to
       # get green, which is precisely the fake freshness this scaffold is meant to
       # prevent. Kept strict (25/50 commits, 14/30 days) BECAUSE it only nags.
-      # The grounding checker needs the code graph, and `.mex/graph.db` is ~94MB of
-      # SQLite that `.gitignore` rightly keeps out of the repo — so CI rebuilds it.
-      # Without this step the grounding checks silently do not run: mex degrades
-      # gracefully to the eleven filesystem checkers and still reports a clean
-      # score, which would make GROUNDING_DRIFT unenforced while looking enforced.
+      # Cache is a SPEED optimisation only, and safe to miss. The graph takes ~3min
+      # to build and its content is a pure function of the indexed sources, so the
+      # key is their hash: an exact hit restores it and the build below no-ops. The
+      # grounding baseline does NOT ride in here — it is tracked in git precisely so
+      # that an evicted cache cannot quietly disarm the drift check.
+      - name: Restore the code graph
+        id: graph-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .mex/graph.db
+          key: mex-graph-v1-${{ hashFiles('**/*.py', 'frontend/src/**/*.ts', 'frontend/src/**/*.tsx') }}
+
+      # Without a graph the grounding checks silently do not run: mex degrades to
+      # its eleven filesystem checkers and still reports a clean score, which would
+      # leave GROUNDING_* unenforced while looking enforced.
       - name: Build the code graph
+        if: steps.graph-cache.outputs.cache-hit != 'true'
         run: npx --yes mex-agent@0.7.1 graph --json
 
       # A freshly built graph has no grounding baseline, and without one the drift
@@ -126,6 +137,21 @@ jobs:
       # and the Python dependency tree it would drag in for one 100-line script.
       - name: Apply the grounding baseline
         run: python3 tools/mex_grounding_baseline.py apply
+
+      # `apply` proves the baseline covers every grounded claim; it cannot tell
+      # whether the note is still true. Re-running `capture` turns the drift check
+      # green again whatever the prose says, so without this the gate would reward
+      # exactly the move it exists to stop — refresh the hash, ship the stale
+      # sentence. A changed hash must arrive with a changed memory file.
+      - name: Verify re-captured baselines came with an edited note
+        if: github.event_name == 'pull_request'
+        run: python3 tools/mex_grounding_baseline.py verify origin/${{ github.base_ref }}
+
+      # Yearly at most, and the fix is one command. Checking here rather than
+      # committing from CI: rotation rewrites decision history, which is a human's
+      # call, and giving this job write access to `main` costs more than it saves.
+      - name: Check the event log does not need rotating
+        run: python3 tools/mex_events_rotate.py --check
 
       - name: Check MEX memory
         shell: bash

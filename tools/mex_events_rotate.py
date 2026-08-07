@@ -15,7 +15,8 @@ deleted; the archive stays in git next to the live file.
 The current year always stays live, so a rotation never hides a decision from the
 timeline an agent is reading this session.
 
-    python3 tools/mex_events_rotate.py
+    python3 tools/mex_events_rotate.py            # archive
+    python3 tools/mex_events_rotate.py --check    # CI: is one overdue?
 """
 
 from __future__ import annotations
@@ -46,6 +47,7 @@ def _year(line: str) -> str | None:
 
 
 def main() -> int:
+    check_only = "--check" in sys.argv[1:]
     if not _LIVE.exists():
         _say(f"{_LIVE}: nothing to rotate")
         return 0
@@ -65,6 +67,14 @@ def main() -> int:
     if not archive:
         _say(f"{_LIVE}: {len(keep)} event(s), nothing older than {current}")
         return 0
+
+    if check_only:
+        due = ", ".join(f"{year} ({len(rows)})" for year, rows in sorted(archive.items()))
+        sys.stderr.write(
+            f"{_LIVE} still carries events from {due}.\n"
+            "Run `python3 tools/mex_events_rotate.py` and commit the archive.\n",
+        )
+        return 1
 
     for year, rows in sorted(archive.items()):
         target = _EVENTS / f"decisions-{year}.jsonl"

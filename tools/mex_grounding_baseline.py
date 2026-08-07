@@ -32,12 +32,15 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
 _GRAPH = Path(".mex/graph.db")
 _BASELINE = Path(".mex/grounding-baseline.json")
 _TABLE = "_mex_grounded_source"
+_WITH_ARG = 2  # argv length once a subcommand carries its own argument
 _ENTRY = re.compile(r'-\s+node:\s*"([^"]+)"\s*\r?\n\s+fingerprint:\s*"([^"]+)"')
 _FRONTMATTER = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
 
@@ -84,23 +87,27 @@ def _connect() -> sqlite3.Connection:
     if _TABLE not in tables:
         # Fail loudly: this table is mex's, and a rename upstream must not degrade
         # into a green run with the drift check quietly disabled.
+        connection.close()
         _fail(f"{_GRAPH} has no {_TABLE}; mex's grounding schema changed")
         raise SystemExit(1)
     return connection
 
 
 def capture() -> int:
-    connection = _connect()
     rows = []
-    for scaffold_file, node_id, _fingerprint in _grounded():
-        # The fingerprint is NOT stored here. It already lives in the file's
-        # `grounds_to`, and mex reads that copy first; duplicating ~3kB of minhash per
-        # node would make this file 14x larger and give it a second place to go stale.
-        node = connection.execute("SELECT body_hash FROM nodes WHERE id = ?", (node_id,)).fetchone()
-        if node is None or not node[0]:
-            _fail(f"no node/body_hash for {node_id} ({scaffold_file})")
-            return 1
-        rows.append({"scaffold_file": scaffold_file, "node_id": node_id, "body_hash": node[0]})
+    with closing(_connect()) as connection:
+        for scaffold_file, node_id, _fingerprint in _grounded():
+            # The fingerprint is NOT stored here. It already lives in the file's
+            # `grounds_to`, and mex reads that copy first; duplicating ~3kB of minhash
+            # per node would make this file 14x larger and give it a second place to go stale.
+            node = connection.execute(
+                "SELECT body_hash FROM nodes WHERE id = ?",
+                (node_id,),
+            ).fetchone()
+            if node is None or not node[0]:
+                _fail(f"no node/body_hash for {node_id} ({scaffold_file})")
+                return 1
+            rows.append({"scaffold_file": scaffold_file, "node_id": node_id, "body_hash": node[0]})
     _BASELINE.write_text(json.dumps(rows, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     _say(f"{_BASELINE}: {len(rows)} baseline(s)")
     return 0
@@ -125,8 +132,7 @@ def apply() -> int:
         return 1
 
     fingerprints = {(scaffold, node): fp for scaffold, node, fp in grounded}
-    connection = _connect()
-    with connection:
+    with closing(_connect()) as connection, connection:
         connection.executemany(
             _UPSERT,
             [
@@ -143,13 +149,73 @@ def apply() -> int:
     return 0
 
 
+def _git(*args: str) -> str | None:
+    """Run a read-only git command, or None when it has nothing to say."""
+    result = subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def verify(base: str) -> int:
+    """Refuse a re-capture that did not come with a rethink of the note.
+
+    `apply` proves the baseline covers every grounded claim; it cannot tell whether
+    the note is still TRUE. Re-running `capture` after changing a grounded function
+    makes the drift check green again whatever the prose now says, so on its own the
+    gate rewards the one move it exists to prevent: refresh the hash, ship the stale
+    sentence.
+
+    So a changed hash must arrive with a changed memory file. Not proof the words
+    are right — nothing automated can be — but it puts the note in the diff, in
+    front of the reviewer, which is where that judgement belongs.
+
+    Only CHANGED hashes count. A newly grounded claim has no previous hash to
+    contradict, and its file is under review anyway.
+    """
+    previous = _git("show", f"{base}:{_BASELINE.as_posix()}")
+    if previous is None:
+        _say(f"{_BASELINE} is new in this branch — nothing to compare against {base}")
+        return 0
+    was = {(row["scaffold_file"], row["node_id"]): row["body_hash"] for row in json.loads(previous)}
+    now = {
+        (row["scaffold_file"], row["node_id"]): row["body_hash"]
+        for row in json.loads(_BASELINE.read_text(encoding="utf-8"))
+    }
+    rehashed = {
+        scaffold
+        for (scaffold, node), digest in now.items()
+        if was.get((scaffold, node), digest) != digest
+    }
+    if not rehashed:
+        _say("no grounded body changed in this branch")
+        return 0
+
+    touched = set((_git("diff", "--name-only", f"{base}...HEAD") or "").split())
+    silent = sorted(file for file in rehashed if file not in touched)
+    if silent:
+        _fail("A grounded body changed but its memory file did not:")
+        for file in silent:
+            _fail(f"  {file}")
+        _fail("Re-read the note against the new code and update it, or say why it still holds.")
+        return 1
+    _say(f"{len(rehashed)} re-captured file(s), each edited in this branch")
+    return 0
+
+
 def main() -> int:
     command = sys.argv[1] if len(sys.argv) > 1 else ""
     if command == "capture":
         return capture()
     if command == "apply":
         return apply()
-    _fail("usage: mex_grounding_baseline.py capture|apply")
+    if command == "verify":
+        base = sys.argv[2] if len(sys.argv) > _WITH_ARG else "origin/main"
+        return verify(base)
+    _fail("usage: mex_grounding_baseline.py capture|apply|verify [base-ref]")
     return 2
 
 
