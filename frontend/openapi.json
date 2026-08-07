@@ -8655,6 +8655,11 @@
             "type": "boolean",
             "title": "Banned",
             "default": false
+          },
+          "rejoin_gave_up": {
+            "type": "boolean",
+            "title": "Rejoin Gave Up",
+            "default": false
           }
         },
         "type": "object",
@@ -11301,6 +11306,7 @@
               "join_by_request",
               "join_failed",
               "rejoining",
+              "rejoin_exhausted",
               "chat_restricted",
               "banned",
               "bot_challenge",

@@ -66,7 +66,7 @@ from core.migration_steps_pool import (
     _add_proxy_pool,
     _add_warming_state_activity_persona,
 )
-from core.migration_steps_rejoin import _add_readiness_rejoin
+from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 
 if TYPE_CHECKING:
@@ -153,6 +153,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (47, "add_readiness_unconfirmed_ban", _add_readiness_unconfirmed_ban),
     (48, "reset_overshot_retry_budgets", _reset_overshot_retry_budgets),
     (49, "add_readiness_captcha_giveup", _add_readiness_captcha_giveup),
+    (50, "add_readiness_rejoin_gave_up", _add_readiness_rejoin_gave_up),
 )
 
 

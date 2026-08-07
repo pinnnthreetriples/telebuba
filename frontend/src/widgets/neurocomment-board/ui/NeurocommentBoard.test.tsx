@@ -155,6 +155,81 @@ test('an account banned in its row’s channel does not inherit the channel’s 
   expect(screen.queryByText('Возвращаемся в чат')).not.toBeInTheDocument();
 });
 
+test('an account out of re-join attempts is shown as such, not as the channel’s status', () => {
+  // Same hole as the ban above, and the same fix: the channel keeps working on its other
+  // accounts, so its aggregate stays 'ready' while THIS account has left the chat for
+  // good. The row is also picked for that channel over the one it still works in —
+  // "@working is fine" is already in the N/M badge, "@news is lost" was nowhere.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 5, total_accounts: 6 },
+      { channel: '@working', status: 'ready', ready_accounts: 6, total_accounts: 6 },
+    ],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        readiness: [
+          { channel: '@working', ready: true, joined: true, captcha_passed: true },
+          {
+            channel: '@news',
+            ready: false,
+            joined: false,
+            captcha_passed: true,
+            rejoin_gave_up: true,
+          },
+        ],
+      },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getByText('@news')).toBeInTheDocument();
+  expect(screen.getByText('Попытки входа исчерпаны')).toBeInTheDocument();
+  expect(screen.queryByText('Готов')).not.toBeInTheDocument();
+});
+
+test('a pair back in the chat is not badged as exhausted, whatever its old mark says', () => {
+  // The mark says "this budget was spent and reported", not "this pair is out". A pair
+  // that got back in carries it until the write that clears it lands (a real re-join, a
+  // re-link), and painting a working pair red — or picking its row over the healthy one —
+  // would report a problem the operator cannot act on.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [{ channel: '@news', status: 'ready', ready_accounts: 6, total_accounts: 6 }],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        readiness: [
+          {
+            channel: '@news',
+            ready: true,
+            joined: true,
+            captcha_passed: true,
+            rejoin_gave_up: true,
+          },
+        ],
+      },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getByText('Готов')).toBeInTheDocument();
+  expect(screen.queryByText('Попытки входа исчерпаны')).not.toBeInTheDocument();
+});
+
 test('during onboarding, a not-yet-armed account animates progress instead of "no data"', () => {
   render(
     <NeurocommentBoard

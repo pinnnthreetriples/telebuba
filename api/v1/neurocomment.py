@@ -18,7 +18,6 @@ from schemas.neurocomment import (
     ChannelLinkOutcome,
     CommentRecord,
     LinkChannelRequest,
-    NeurocommentBoard,
     NeurocommentCampaign,
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
@@ -31,6 +30,7 @@ from schemas.neurocomment import (
     UpdatePromptRequest,
 )
 from schemas.neurocomment_bans import ChannelBanCheckList
+from schemas.neurocomment_board import NeurocommentBoard
 from services import neurocomment as nc_service
 
 router = APIRouter(prefix="/neurocomment", tags=["neurocomment"])

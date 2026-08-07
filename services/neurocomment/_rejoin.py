@@ -45,7 +45,7 @@ from core.db import (
     stamp_rejoin_attempt,
 )
 from core.logging import log_event
-from services.neurocomment import _state
+from services.neurocomment import _give_up, _state
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -283,6 +283,25 @@ async def _review_channel(
     # where it left off on the first tick after it lapses.
     if _state.channel_paused(await fetch_channel_paused_until(channel), now):
         return False
+    # Pairs this rule is finished with, reported one by one before the channel's own fate
+    # is decided: a pair whose account is done here while the others still comment fine
+    # never reaches the drop below, and was invisible everywhere. Two exemptions, because
+    # "the budget is spent" is not "we tried and could not get back in":
+    #   * ``attempt_owed`` — the stamp above is spent BEFORE the pass runs and charges
+    #     pairs the pass never reached; the commonest reason it cannot reach one is the
+    #     account's rolling-24h join cap, which is shared across ALL its channels. Leaving
+    #     a chat we never knocked on because another channel used up the day's joins is
+    #     the one mistake this must not make;
+    #   * ``terminal`` — exhausted from the first tick without spending anything, and the
+    #     leave would fail on the same dead address. The channel rule reports those.
+    finished = [
+        row
+        for row in parked
+        if not (
+            row.rejoin_gave_up or terminal(row) or still_retrying(row, now) or attempt_owed(row)
+        )
+    ]
+    await _give_up.report(channel, finished)
     due = [row for row in parked if retry_due(row, now)]
     if due:
         # The attempt is spent HERE, not by the pass we are about to poke: a pair the pass

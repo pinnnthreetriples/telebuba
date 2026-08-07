@@ -37,7 +37,7 @@ from core.db import (
 from core.logging import log_event
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel, LeaveDiscussionGroup
-from services.neurocomment import _seams, _state
+from services.neurocomment import _comments_off, _seams, _state
 from services.neurocomment._pins import serving_accounts
 
 _ChannelStatus = Literal["ok", "banned", "unknown"]
@@ -86,6 +86,9 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
         for account_id, state in zip(serving, states, strict=True):
             if state == "restricted":
                 await confirm_group_ban_and_leave(account_id, channel, known_state=state)
+        if "comments_disabled" in states:
+            # Not a verdict on its own — ``_comments_off`` owns why, and acts if it is one.
+            await _comments_off.recheck(serving[states.index("comments_disabled")], channel)
         return ChannelBanCheck(channel=channel, status=_aggregate(list(states)))
 
     items = await asyncio.gather(*(_check_channel(channel) for channel in channels))

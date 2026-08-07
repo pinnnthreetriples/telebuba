@@ -31,9 +31,9 @@ if TYPE_CHECKING:
         CampaignCreate,
         CampaignList,
         CampaignRunStatus,
-        NeurocommentBoard,
         NeurocommentCampaign,
     )
+    from schemas.neurocomment_board import NeurocommentBoard
 
 
 async def create_campaign(data: CampaignCreate) -> NeurocommentCampaign:

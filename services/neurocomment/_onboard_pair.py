@@ -32,7 +32,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
-from services.neurocomment import _rejoin, _seams, _state
+from services.neurocomment import _comments_off, _rejoin, _seams, _state
 
 # The join ActionResult → OnboardingState mapping + solver recording live in
 # ``_classify`` (file-size cap); ``_join_and_classify`` below delegates to it.
@@ -280,17 +280,12 @@ async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussi
         comments_enabled=linked.comments_enabled,
     )
     if not linked.comments_enabled or linked.linked_chat_id is None:
-        # A channel with no discussion group can never be commented on, and this was
-        # the one dead end with NO log trace at all: the state lands in
-        # ``neurocomment_linked_groups`` and no readiness row is written, so the
-        # channel looked un-onboarded rather than impossible. Logged here (the single
-        # live-resolve site) so both the campaign loop and the single-pair path report it.
-        await log_event(
-            "INFO",
-            "neurocomment_channel_comments_off",
-            account_id=account_id,
-            extra={"channel": channel},
-        )
+        # A channel with no discussion group can never be commented on, and no readiness
+        # row is written for it — so it looked un-onboarded rather than impossible, and
+        # was re-resolved and re-reported on every pass forever. Handled here, the single
+        # live-resolve site, so the campaign loop and the single-pair path both report
+        # AND drop it; ``_comments_off`` owns what that means.
+        await _comments_off.report_and_drop(channel, account_id)
     return linked
 
 

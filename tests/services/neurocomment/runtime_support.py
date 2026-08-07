@@ -16,8 +16,9 @@ from schemas.telegram_actions import (
     ActionStatus,
     JoinChannel,
     NewPostEvent,
+    TelegramAction,
 )
-from services.neurocomment import _runtime, _state
+from services.neurocomment import _runtime, _seams, _state
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -34,11 +35,20 @@ def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     # Collapse the jittered inter-join pause so multi-channel reconciles don't
     # actually wait 30-120s per join in tests.
     monkeypatch.setattr(_runtime, "_join_jitter_seconds", lambda: 0.0)
+    # No test may reach the gateway by accident: the sweep's re-join give-up leaves the
+    # chat, so a test that only ticks the sweep would otherwise open a real client (and
+    # leak its Telethon session handle). Tests asserting on actions override this.
+    monkeypatch.setattr(_seams, "execute", _ok_action)
     _runtime.reset_for_tests()
     _state.reset_for_tests()
     yield
     _runtime.reset_for_tests()
     _state.reset_for_tests()
+
+
+async def _ok_action(account_id: str, action: TelegramAction) -> ActionResult:
+    """The gateway's shape without the gateway — no client, no session, no socket."""
+    return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
 
 
 class _ListenerSpy:

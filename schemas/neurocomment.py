@@ -199,6 +199,10 @@ class NeurocommentReadiness(BaseModel):
     # the channel drop once every account has used its attempts.
     rejoin_attempted_at: str | None = None
     rejoin_attempts: int = 0
+    # The spent budget has already been reported: the pair left the chat, the operator has
+    # its log line and the board its badge. Only a "said it once" mark — the rule reads the
+    # counter above, not this — because the review that writes it runs every five minutes.
+    rejoin_gave_up: bool = False
     # The Telegram verdict that took this pair out of the chat — the error class itself,
     # so the rule can tell a kick (retryable) from a dead address (not). None = unknown,
     # which every rule reads as retryable.
@@ -300,95 +304,10 @@ class CampaignOnboardingResult(BaseModel):
 # live in ``schemas.neurocomment_progress`` (file-size cap); they import ``OnboardingState``
 # from here, so this module must not import them back.
 
-# --------------------------------------------------------------------------- #
-# Board read model (issue #119) — bulk-built UI state, no per-card DB queries.
-# --------------------------------------------------------------------------- #
-
-ChannelStatus = Literal[
-    "ready",
-    "comments_off",
-    "join_by_request",
-    "join_failed",
-    # Kicked out of the chat and walking itself back in (``_rejoin``): the same row
-    # shape as ``join_failed``, but with re-join attempts still to spend.
-    "rejoining",
-    "chat_restricted",
-    "banned",  # no account ready here and at least one auto-banned (#30)
-    "bot_challenge",
-    # Paused: the channel refuses our writes and is serving out one of its rounds (#147).
-    "channel_paused",
-    "throttled",
-    # no readiness rows yet — onboarding hasn't produced data for this channel
-    "no_data",
-]
-
-
-class AccountChannelReadiness(BaseModel):
-    """One channel's readiness summary on an account card."""
-
-    channel: str = Field(min_length=1)
-    ready: bool
-    joined: bool
-    captcha_passed: bool
-    human_skipped: bool = False
-    # Permanent per-pair ban (#30). Carried per (account, channel) because the channel
-    # row hides it: one banned account among five ready ones still reports ``ready``,
-    # and the only remedy — add another account — needs to know WHO is burnt WHERE.
-    banned: bool = False
-
-
-class NeurocommentAccountCard(BaseModel):
-    """Per-account card in the work view: limits and last activity.
-
-    Carries no trust/health/spam: the SPA reads those from ``AccountRead`` on the
-    accounts/warming surfaces, so deriving them per board poll was pure waste.
-    """
-
-    account_id: str = Field(min_length=1)
-    label: str = Field(min_length=1)
-    comments_last_hour: int
-    # The cap the engine enforces (saved ``neurocomment_settings`` row, #19) — not
-    # the config default, or the card would render a denominator nobody honours.
-    max_comments_per_hour: int
-    comments_today: int
-    # How many of those ``comments_today`` the sweep later found gone. Counted off the
-    # same rows, so the board's "deleted" total can never exceed its "comments" total —
-    # a per-channel sum could, because a channel row disappears when the operator
-    # unlinks it while the comments it hosted stay on the account.
-    deleted_today: int = 0
-    last_comment_at: str | None = None
-    # Text of the most recent posted comment (None until the account comments, or
-    # when the stored row has no text). Surfaces the real comment in the board.
-    last_comment_text: str | None = None
-    # Campaign channels this account targets (comments only there); empty = all.
-    pinned_channels: list[str] = Field(default_factory=list)
-    readiness: list[AccountChannelReadiness] = Field(default_factory=list)
-
-
-class NeurocommentChannelRow(BaseModel):
-    """Per-channel row: aggregate status derived from readiness + linked group."""
-
-    channel: str = Field(min_length=1)
-    status: ChannelStatus
-    ready_accounts: int
-    total_accounts: int
-    # Comments of ours removed from this channel within the board's 24h window.
-    deleted_recent: int = 0
-
-
-class NeurocommentBoard(BaseModel):
-    """Bulk read model for the work view of one campaign."""
-
-    campaign_id: str = Field(min_length=1)
-    campaign_name: str = Field(min_length=1)
-    status: CampaignStatus
-    solver_enabled: bool | None = None  # per-campaign solver override (#148)
-    accounts: list[NeurocommentAccountCard] = Field(default_factory=list)
-    channels: list[NeurocommentChannelRow] = Field(default_factory=list)
-    # Published-comments feed: the campaign's recent posted comments, newest first,
-    # capped by ``settings.neurocomment.board_comment_feed_limit``. Lets the UI show
-    # every published comment instead of only each account's last one.
-    comments: list[CommentRecord] = Field(default_factory=list)
+# The board read model (``ChannelStatus`` + the four board classes) lives in
+# ``schemas.neurocomment_board`` (file-size cap), exactly like the onboarding-progress
+# schemas above: it imports ``CampaignStatus`` / ``CommentRecord`` from here, so this
+# module must not import it back — callers import the board names from there.
 
 
 class NeurocommentRuntimeStatus(BaseModel):

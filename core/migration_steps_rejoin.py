@@ -35,3 +35,26 @@ def _add_readiness_rejoin(connection: Connection) -> None:
             "ALTER TABLE neurocomment_readiness "
             "ADD COLUMN rejoin_attempts INTEGER NOT NULL DEFAULT 0",
         )
+
+
+def _add_readiness_rejoin_gave_up(connection: Connection) -> None:
+    # A pair that spent its whole re-join budget was reported nowhere: the WARNING that
+    # unlinks a channel needs EVERY serving account to have given up, so one account
+    # dropping out of a channel the others still work in was silent forever, and the
+    # board kept badging it off the channel's aggregate — green «Готов».
+    #
+    # This flag is the "already reported" mark, not a second copy of the budget: the rule
+    # still reads ``rejoin_attempts`` + the stamp beside it. Without it the review, which
+    # runs every five minutes, would re-log and re-leave the same pair forever. 0 on
+    # existing rows = not reported yet, so a pair that gave up before the upgrade is
+    # reported the first time the rule finds it finished — which for a stamp older than
+    # two windows is one fresh timeline later, because a stale stamp buys a new budget.
+    # INTEGER like every other flag in this table (``human_skipped``, ``banned``, the
+    # counters): the metadata declares ``Integer``, and a ``BOOLEAN`` column would give a
+    # migrated database a different affinity from a freshly created one.
+    columns = _sqlite_columns(connection, "neurocomment_readiness")
+    if "rejoin_gave_up" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_readiness "
+            "ADD COLUMN rejoin_gave_up INTEGER NOT NULL DEFAULT 0",
+        )

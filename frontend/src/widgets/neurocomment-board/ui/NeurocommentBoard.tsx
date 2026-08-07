@@ -47,8 +47,13 @@ function deriveRows(
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
     const pins = account.pinned_channels ?? [];
+    // A pair carrying its own verdict — banned here (#30), or done re-joining here —
+    // outranks a working one: the row shows ONE channel per account, and a working
+    // channel is already reported by the "N/M" progress badge, while a stuck pair had
+    // nowhere else to surface. A pin still wins: that is the operator's own choice.
     const primary =
       readiness.find((r) => pins.includes(r.channel)) ??
+      readiness.find((r) => r.banned || (r.rejoin_gave_up && !r.ready)) ??
       readiness.find((r) => r.joined) ??
       readiness[0];
     const channel = primary?.channel ?? '—';
@@ -69,8 +74,14 @@ function deriveRows(
       // aggregate only turns 'banned' once NO account is ready there, so one burnt
       // account among five working ones kept reading the channel's green «Готов» —
       // while the only remedy, adding another account, was being suggested elsewhere.
-      // Terminal by design: unlike 'rejoining' there is no attempt left to spend.
-      status: primary?.banned ? 'banned' : (channelStatus.get(channel) ?? 'no_data'),
+      // Terminal by design: unlike 'rejoining' there is no attempt left to spend. A
+      // spent re-join budget reads the same way and for the same reason — this account
+      // left that chat, the others carry on there.
+      status: primary?.banned
+        ? 'banned'
+        : primary?.rejoin_gave_up && !primary.ready
+          ? 'rejoin_exhausted'
+          : (channelStatus.get(channel) ?? 'no_data'),
       deletedRecent: channelDeleted.get(channel) ?? 0,
       armedReady,
       armedTarget,

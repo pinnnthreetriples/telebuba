@@ -27,7 +27,7 @@ from core.db import (
     list_linked_groups,
     list_posted_comments_since,
 )
-from schemas.neurocomment import (
+from schemas.neurocomment_board import (
     AccountChannelReadiness,
     ChannelStatus,
     NeurocommentAccountCard,
@@ -168,11 +168,12 @@ def _build_card(
                 joined=r.joined,
                 captcha_passed=r.captcha_passed,
                 human_skipped=r.human_skipped,
-                # Both of the "this pair is out of service" flags travel to the card:
-                # the channel row aggregates them away (a channel with one ready
-                # account reads ``ready``), so the card is the only surface that can
-                # say which account is banned (#30) or skipped (#148) where.
+                # Every "this pair is out of service" flag travels to the card: the
+                # channel row aggregates them away (a channel with one ready account
+                # reads ``ready``), so the card is the only surface that can say which
+                # account is banned (#30), skipped (#148), or done re-joining here.
                 banned=r.banned,
+                rejoin_gave_up=r.rejoin_gave_up,
             )
             for r in readiness
         ],

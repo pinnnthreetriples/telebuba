@@ -37,7 +37,12 @@ from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import LeaveDiscussionGroup, WaitForBotChallenge
 from services.neurocomment import _captcha_retry, _runtime, _seams, bans, onboarding
 from tests.core.telegram_client.helpers import patch_action_client
-from tests.services.neurocomment.onboarding_support import _JoinStub, _no_sleep, _ReadStub
+from tests.services.neurocomment.onboarding_support import (
+    _JoinStub,
+    _no_sleep,
+    _ReadStub,
+    real_execute,
+)
 
 if TYPE_CHECKING:
     from schemas.logs import LogEntry
@@ -378,9 +383,10 @@ async def test_the_leave_reaches_telegram_as_a_real_leave_request(
 ) -> None:
     """End to end with only Telethon stubbed: the account really walks out of the chat.
 
-    Every other test in this file patches ``_seams.execute``, which proves the rule ASKS
-    for a leave and nothing whatever about one happening. Here the gateway is left in
-    place and the Telethon client is stubbed instead, so the entire chain has to hold:
+    Every other test in this file takes ``isolate_onboarding``'s ``_seams.execute`` stub,
+    which proves the rule ASKS for a leave and nothing whatever about one happening. Here
+    that default is put back to the real gateway and the Telethon client is stubbed
+    underneath it instead, so the entire chain has to hold:
     the rule's ``LeaveDiscussionGroup`` → ``core.telegram_client.execute``'s dispatch arm
     → ``GetFullChannelRequest`` to resolve the linked discussion group →
     ``LeaveChannelRequest`` against THAT group rather than the broadcast channel the
@@ -391,6 +397,7 @@ async def test_the_leave_reaches_telegram_as_a_real_leave_request(
     await _retry_answered("acc-1")
     await _working("acc-2")
     monkeypatch.setattr(_runtime, "_ensure_onboarding_running", lambda *_a, **_k: None)
+    monkeypatch.setattr(_seams, "execute", real_execute)
 
     captured: list[object] = []
     linked_entity = MagicMock(id=4423)

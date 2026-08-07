@@ -328,6 +328,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     mark_comments_deleted,
     mark_human_skipped,
     mark_pair_banned,
+    mark_rejoin_gave_up,
     mark_watch_channel_join_lost,
     purge_neurocomment_history_older_than,
     reclaim_stale_claims,
