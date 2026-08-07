@@ -40,6 +40,11 @@ from core.repositories.neurocomment._campaigns import (
     update_campaign_prompt,
     update_solver_enabled,
 )
+from core.repositories.neurocomment._captcha_giveup import (
+    list_captcha_blocked_readiness,
+    mark_captcha_gave_up,
+    stamp_captcha_retry,
+)
 from core.repositories.neurocomment._challenges import (
     count_by_outcome,
     evict_cached_decision,
@@ -161,6 +166,7 @@ __all__ = [
     "list_campaign_channels",
     "list_campaign_readiness",
     "list_campaigns",
+    "list_captcha_blocked_readiness",
     "list_challenged_channels",
     "list_channel_readiness",
     "list_delivered_comments_since",
@@ -179,6 +185,7 @@ __all__ = [
     "load_active_cooldowns",
     "load_neurocomment_settings",
     "lookup_cached_decision",
+    "mark_captcha_gave_up",
     "mark_comment_failed",
     "mark_comment_posted",
     "mark_comments_deleted",
@@ -201,6 +208,7 @@ __all__ = [
     "set_campaign_status",
     "set_listener_account_id",
     "set_listener_running",
+    "stamp_captcha_retry",
     "stamp_join_request",
     "stamp_rejoin_attempt",
     "stamp_unconfirmed_ban",

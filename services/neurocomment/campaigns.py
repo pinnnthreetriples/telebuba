@@ -105,11 +105,12 @@ async def _rejoin_exhausted_pairs() -> list[AccountChannel]:
     working on it, a retry may well land it back in the chat, and its captcha then matters
     again.
 
-    Unlike the other exclusions the retry here is not merely useless, it is harmful: the
-    join RPC is what Telegram already refused four times, and it still counts against the
-    account's rolling-24h join cap. Worse, ``retry_pair`` deletes the readiness row, which
-    resets ``rejoin_attempts`` — so the click silently hands a pair a fresh four-attempt
-    budget the rule spent four days deciding to end.
+    Nothing acts on this list any more — since #49 the queue is a read-only view of what the
+    automatic rules are working on — so the exclusion is now about honesty rather than harm:
+    a pair the re-join rule has finished with is not being worked on, and saying it is makes
+    the panel lie. (It used to be about harm too. Every row carried a «Повторить» button
+    whose join RPC Telegram had already refused four times, and which — by deleting the
+    readiness row — handed the pair a fresh budget the rule had spent four days ending.)
     """
     return [
         AccountChannel(account_id=row.account_id, channel=row.channel)
@@ -124,22 +125,21 @@ async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRow
     One repository query over the campaign's active channels, newest first, capped at
     ``limit`` — replaces the former per-channel fan-out (one query per channel).
 
-    Actionable is the whole point of the view: every row carries a «Повторить» button, and
-    an operator looking at six rows for one channel from a week ago has no way to tell that
-    all six accounts lost access to that chat months of retries ago and the button will stop
-    at the join. So a row nobody can clear is not listed at all — hidden, not greyed out,
-    since a badged-and-dead row is a second list needing its own triage. Four states go,
-    each for its own reason, and none of them is "onboarding would refuse it" —
-    ``retry_pair`` erases readiness FIRST, so the readiness-keyed guards never run:
+    Since #49 the view holds no control at all: the captcha rule retries and gives up on its
+    own, so a listed row is a claim that a pair is being worked on right now, and every
+    exclusion below is that claim being kept true. Four states go, each for its own reason,
+    and a row that qualifies is hidden rather than greyed out — a badged-and-dead row is a
+    second list needing its own triage:
 
-    * banned, operator-skipped — the retry works and must not (``_retry_can_reach``);
-    * the re-join budget is spent — the retry costs a join RPC Telegram refuses and quietly
-      restores the budget (:func:`_rejoin_exhausted_pairs`);
-    * the channel is serving out a #147 pause — the one state where the click provably does
-      nothing at all: ``_join_and_classify`` returns ``channel_paused`` before the join RPC,
-      reading the very column carried on the link below. Dropped for the window's duration
-      only, exactly as ``_rejoin._review_channel`` sits a pause out, and the rows come back
-      when it lapses because a pause is shorter than the age window.
+    * banned, operator-skipped, or given up on the captcha — the rules are finished with the
+      pair (``_retry_can_reach``);
+    * the re-join budget is spent — the pair is out of the chat and no rule will put it back
+      (:func:`_rejoin_exhausted_pairs`);
+    * the channel is serving out a #147 pause — ``_join_and_classify`` returns
+      ``channel_paused`` before any join RPC, reading the very column carried on the link
+      below, so nothing can happen for this pair until the window lapses. Dropped for its
+      duration only, exactly as ``_rejoin._review_channel`` sits a pause out, and the rows
+      come back afterwards because a pause is shorter than the age window.
 
     A paused channel drops out of the channel list and the budget goes in as an exclusion
     list, so every rule is inside the one statement the database applies ``limit`` to. That

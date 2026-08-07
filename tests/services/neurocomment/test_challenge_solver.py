@@ -9,27 +9,15 @@ import pytest
 
 from core.config import settings
 from core.db import (
-    create_account,
-    create_campaign,
-    fetch_readiness,
     insert_challenge,
-    link_channel_to_campaign,
     lookup_cached_decision,
     save_warming_settings,
-    update_solver_enabled,
-    upsert_readiness,
 )
-from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage, ChallengeDecision, ChallengeInsert
 from schemas.gemini import GeminiResult
-from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import (
-    ActionResult,
-    BotChallengeWaitResult,
     ClickButton,
-    LinkedDiscussionGroupResult,
     PostComment,
-    WaitForBotChallenge,
 )
 from services.neurocomment import _seams, challenge
 
@@ -528,39 +516,3 @@ def test_challenge_hash_is_stable_and_label_order_insensitive() -> None:
     first = challenge._challenge_hash("Press to stay", ["Yes", "No"])
     second = challenge._challenge_hash("press   to  stay", ["No", "Yes"])
     assert first == second
-
-
-@pytest.mark.asyncio
-async def test_retry_pair_clears_readiness_and_reruns_solver(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Ф2 #148: retry erases the old (not-ready) readiness and re-onboards, re-running
-    # the solver. With the solver enabled and no challenge this time → ready.
-    await create_account(AccountCreate(account_id="acc-1"))
-    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await update_solver_enabled(campaign.campaign_id, value=True)
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)
-
-    waited: list[object] = []
-
-    async def execute_read(_account_id: str, action: object) -> object:
-        if isinstance(action, WaitForBotChallenge):
-            waited.append(action)
-            return BotChallengeWaitResult(message=None)
-        return LinkedDiscussionGroupResult(linked_chat_id=77, comments_enabled=True)
-
-    async def execute(account_id: str, action: object) -> ActionResult:
-        action_type = str(getattr(action, "action_type", "join_discussion_group"))
-        return ActionResult(status="ok", action_type=action_type, account_id=account_id)
-
-    monkeypatch.setattr(_seams, "execute_read", execute_read)
-    monkeypatch.setattr(_seams, "execute", execute)
-
-    outcome = await challenge.retry_pair("acc-1", "@chan")
-
-    assert waited  # the solver's WaitForBotChallenge ran during the re-onboard
-    assert outcome.state == "ready"
-    readiness = await fetch_readiness("acc-1", "@chan")
-    assert readiness is not None
-    assert readiness.ready is True

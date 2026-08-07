@@ -12,7 +12,6 @@ from api.v1._neurocomment_discovery import discovery_router
 from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
-    AccountChannelOnboarding,
     AssignAccountRequest,
     CampaignCreate,
     CampaignList,
@@ -192,20 +191,6 @@ async def update_prompt(campaign_id: str, body: UpdatePromptRequest) -> None:
 async def set_campaign_solver(campaign_id: str, body: SolverToggleRequest) -> None:
     """Turn the campaign's challenge (captcha) solver on/off."""
     await nc_service.set_solver_enabled(campaign_id, body.enabled)
-
-
-@router.post(
-    "/retry",
-    response_model=AccountChannelOnboarding,
-    operation_id="retryChallenge",
-)
-async def retry_challenge(body: RetryPairRequest) -> AccountChannelOnboarding:
-    """Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
-
-    Re-onboards the pair (re-running the solver) — account+channel scoped, so it
-    is campaign-agnostic.
-    """
-    return await nc_service.retry_pair(body.account_id, body.channel)
 
 
 @router.get(

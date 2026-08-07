@@ -262,6 +262,7 @@ from core.repositories.dialogues import (  # noqa: E402, F401
     try_claim_message_reply,
 )
 from core.repositories.logs import (  # noqa: E402, F401
+    count_logs,
     insert_log_row,
     list_filtered_logs,
     list_recent_logs,
@@ -305,6 +306,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_campaign_channels,
     list_campaign_readiness,
     list_campaigns,
+    list_captcha_blocked_readiness,
     list_challenged_channels,
     list_channel_readiness,
     list_delivered_comments_since,
@@ -320,6 +322,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_posted_comments_since,
     load_neurocomment_settings,
     lookup_cached_decision,
+    mark_captcha_gave_up,
     mark_comment_failed,
     mark_comment_posted,
     mark_comments_deleted,
@@ -337,6 +340,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     save_neurocomment_settings,
     set_listener_account_id,
     set_listener_running,
+    stamp_captcha_retry,
     stamp_join_request,
     stamp_rejoin_attempt,
     stamp_unconfirmed_ban,

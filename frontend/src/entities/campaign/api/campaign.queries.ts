@@ -17,7 +17,6 @@ export {
   listNeurocommentCommentsOptions as neurocommentCommentsQueryOptions,
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
-  retryChallengeMutation,
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,

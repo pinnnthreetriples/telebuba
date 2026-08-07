@@ -15,13 +15,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import re
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from pydantic import ValidationError
 
 from core.config import settings
 from core.db import (
-    delete_readiness,
     evict_cached_decision,
     insert_challenge,
     load_warming_settings,
@@ -46,9 +45,6 @@ from services.neurocomment._challenge_log import (
     log_result,
     refusal,
 )
-
-if TYPE_CHECKING:
-    from schemas.neurocomment import AccountChannelOnboarding
 
 ChallengeOutcome = Literal["no_challenge", "give_up", "solved", "failed", "rate_limited"]
 
@@ -409,17 +405,3 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
     await _record(account_id, channel, message, outcome="failed", decision=decision)
     await log_result(account_id, channel, WRONG_ANSWER_REASON)
     return "failed"
-
-
-async def retry_pair(account_id: str, channel: str) -> AccountChannelOnboarding:
-    """Operator retry (#148): erase the pair's readiness, then re-onboard it.
-
-    Re-running onboarding re-runs the solver (paying Gemini / a fresh cache hit) —
-    useful after a prompt or model tweak. Clearing readiness also drops any
-    human-skip so the pair is reconsidered.
-    """
-    # Lazy import: onboarding imports this module, so a top-level import would cycle.
-    from services.neurocomment.onboarding import onboard_account_channel  # noqa: PLC0415
-
-    await delete_readiness(account_id, channel)
-    return await onboard_account_channel(account_id, channel)

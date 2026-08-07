@@ -8,15 +8,18 @@ import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
 
 // The captcha queue on the shared DataTable (finding #10): one row per unsolved
 // bot-challenge. The account cell resolves the raw account_id to its phone/label
-// (finding #8); the action cell retries the pair.
+// (finding #8); the second cell says what the engine is about to do about it.
+//
+// There is no control here any more (#49). The retry used to be a button an operator
+// pressed; it is now the sweep's own second and last attempt, so a row is a live status
+// and nothing else — the backend drops it from the queue the moment the pair either
+// passes or gives up and leaves the chat.
 export function CaptchaQueue({
   rows,
   accountLabel,
-  onSolve,
 }: {
   rows: ChallengeRow[];
   accountLabel: (accountId: string) => string;
-  onSolve: (item: ChallengeRow) => void;
 }) {
   const { t } = useTranslation();
   const columns = useMemo<ColumnDef<ChallengeRow>[]>(
@@ -41,23 +44,21 @@ export function CaptchaQueue({
         meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
       },
       {
-        id: 'action',
+        id: 'status',
         header: '',
-        cell: ({ row }) => (
-          <button
-            type="button"
-            onClick={() => {
-              onSolve(row.original);
-            }}
-            className="shrink-0 rounded-full bg-ink px-[13px] py-[6px] text-[11.5px] font-medium text-white"
-          >
-            {t('neurocomment.captcha.solve')}
-          </button>
+        // "within five minutes" is the sweep interval, which is the honest ceiling: the
+        // retry fires on the first tick after the failure, so it lands anywhere from
+        // seconds to that. A countdown would have to promise an exact moment the rule
+        // deliberately does not have.
+        cell: () => (
+          <span className="shrink-0 text-[11.5px] text-ink-subtle">
+            {t('neurocomment.captcha.retrying')}
+          </span>
         ),
         meta: { cellClassName: 'text-right', cardSlot: 'control' } satisfies DataTableColumnMeta,
       },
     ],
-    [t, accountLabel, onSolve],
+    [t, accountLabel],
   );
 
   return (

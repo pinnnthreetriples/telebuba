@@ -34,7 +34,7 @@ from schemas.telegram_actions import (
     CheckMessagesAlive,
     CheckMessagesAliveResult,
 )
-from services.neurocomment import _rejoin, _runtime, _sweep
+from services.neurocomment import _captcha_retry, _channel_pause, _rejoin, _runtime, _sweep
 from tests.services.neurocomment.runtime_support import (
     _ExecuteSpy,
     _ListenerSpy,
@@ -643,3 +643,50 @@ async def test_sweep_tick_leaves_a_claim_that_is_still_in_flight(
     assert row is not None
     assert row.status == "claimed"
     assert await _spent_day_slots() == 1
+
+
+@pytest.mark.asyncio
+async def test_the_captcha_pass_runs_on_the_tick_clock_and_names_its_own_fault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The captcha rule rides this loop and nothing else, so the loop has to prove it.
+
+    Two claims in one tick. It is CALLED, with the tick's own ``now`` rather than a clock of
+    its own — the whole point of riding the existing sweep is that the operator got no
+    second periodic task, and a pass wired with the wrong clock would look identical from
+    the outside until a window judged itself late. And when it raises it is named in the
+    log and its siblings still run: the give-up half issues a leave RPC and unlinks
+    channels, so it is exactly the pass most likely to throw something the loop has never
+    seen.
+    """
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", 0.01)
+    seen: list[datetime] = []
+    reached_the_end = asyncio.Event()
+
+    async def failing_captcha_review(now: datetime) -> None:
+        seen.append(now)
+        msg = "captcha boom"
+        raise RuntimeError(msg)
+
+    async def record_pause_review(_now: datetime) -> None:
+        reached_the_end.set()
+
+    monkeypatch.setattr(_captcha_retry, "review_captcha_blocked", failing_captcha_review)
+    monkeypatch.setattr(_channel_pause, "review_expired_pauses", record_pause_review)
+
+    task = asyncio.create_task(_sweep._sweep_loop())
+    try:
+        await asyncio.wait_for(reached_the_end.wait(), timeout=5.0)
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    assert seen
+    assert seen[0].tzinfo is not None
+    failed = {
+        entry.extra.get("pass")
+        for entry in await list_recent_logs(limit=50)
+        if entry.event == "neurocomment_sweep_failed"
+    }
+    assert "captcha_retry" in failed

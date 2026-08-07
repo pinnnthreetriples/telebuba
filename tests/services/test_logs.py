@@ -10,7 +10,7 @@ from core.config import settings
 from core.db import configure_database
 from core.logging import log_event, reset_logging_for_tests, setup_logging
 from schemas.logs import LogFilter
-from services.logs import clear_logs, load_logs_page
+from services.logs import clear_logs, count_matching_logs, load_logs_page
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -171,6 +171,7 @@ async def test_event_prefix_ignores_a_blank_part_among_valid_ones() -> None:
 
 @pytest.mark.asyncio
 async def test_clear_logs_by_prefix_list_deletes_exactly_the_union() -> None:
+    """Only the named prefixes go — plus the purge's own audit row arrives."""
     await log_event("INFO", "warming_cycle_completed")
     await log_event("WARNING", "telegram_action_unavailable")
     await log_event("INFO", "spam_status_refreshed")
@@ -180,7 +181,11 @@ async def test_clear_logs_by_prefix_list_deletes_exactly_the_union() -> None:
 
     assert result.deleted == 2
     remaining = await load_logs_page(LogFilter())
-    assert {e.event for e in remaining.entries} == {"spam_status_refreshed", "neurocomment_posted"}
+    assert {e.event for e in remaining.entries} == {
+        "spam_status_refreshed",
+        "neurocomment_posted",
+        "logs_cleared",
+    }
 
 
 @pytest.mark.asyncio
@@ -245,6 +250,7 @@ async def test_event_prefix_empty_is_no_filter() -> None:
 
 @pytest.mark.asyncio
 async def test_clear_logs_by_prefix_removes_only_matching_rows() -> None:
+    """Rows outside the prefix survive; the audit row of the purge joins them."""
     await log_event("INFO", "neurocomment_posted")
     await log_event("WARNING", "neurocomment_post_failed")
     await log_event("INFO", "warming_cycle_completed")
@@ -253,15 +259,95 @@ async def test_clear_logs_by_prefix_removes_only_matching_rows() -> None:
 
     assert result.deleted == 2
     remaining = await load_logs_page(LogFilter())
-    assert {e.event for e in remaining.entries} == {"warming_cycle_completed"}
+    assert {e.event for e in remaining.entries} == {"warming_cycle_completed", "logs_cleared"}
 
 
 @pytest.mark.asyncio
 async def test_clear_logs_empty_prefix_wipes_everything() -> None:
+    """An empty prefix takes every existing row — and then the purge records itself.
+
+    So "everything deleted" is no longer "table empty": the audit row is written after
+    the delete, precisely so it outlives it. Asserting emptiness here would be asserting
+    that the wipe left no trace, which is the bug this row exists to close. The empty
+    prefix reaches that row as ``*``, legible to the operator reading it.
+    """
     await log_event("INFO", "neurocomment_posted")
     await log_event("INFO", "warming_cycle_completed")
 
     result = await clear_logs("")
 
     assert result.deleted == 2
-    assert (await load_logs_page(LogFilter())).entries == []
+    remaining = (await load_logs_page(LogFilter())).entries
+    assert [e.event for e in remaining] == ["logs_cleared"]
+    assert remaining[0].extra == {"deleted": 2, "event_prefix": "*"}
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_writes_an_audit_row_that_its_own_prefix_cannot_delete() -> None:
+    """A purge must leave a record of itself under a code the same purge cannot reach.
+
+    One press of the neurocomment "clear logs" button erased a month of history and
+    recorded nothing, so the silence read as a broken system for days. Two properties
+    keep the record: it is written AFTER the delete, and its code carries no
+    ``neurocomment`` prefix — otherwise the next press would erase the evidence of the
+    previous one.
+    """
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("WARNING", "neurocomment_post_failed")
+    await log_event("INFO", "warming_cycle_completed")
+
+    await clear_logs("neurocomment")
+
+    entries = (await load_logs_page(LogFilter())).entries
+    audit = next(entry for entry in entries if entry.event == "logs_cleared")
+    assert audit.level == "INFO"
+    assert audit.extra == {"deleted": 2, "event_prefix": "neurocomment"}
+
+    second = await clear_logs("neurocomment")
+
+    assert second.deleted == 0
+    assert "logs_cleared" in {e.event for e in (await load_logs_page(LogFilter())).entries}
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_writes_no_audit_row_when_nothing_was_deleted() -> None:
+    """A press that deleted nothing leaves nothing behind, like the retention sweeps.
+
+    Otherwise an operator poking an already-empty feed fills it with clear events.
+    """
+    await log_event("INFO", "warming_cycle_completed")
+
+    result = await clear_logs("neurocomment")
+
+    assert result.deleted == 0
+    assert {e.event for e in (await load_logs_page(LogFilter())).entries} == {
+        "warming_cycle_completed",
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event_prefix", "expected"),
+    [("", 5), ("warming_,telegram_", 2), (" ", 0), (",", 0), ("_", 1), ("%", 1)],
+)
+async def test_count_matching_logs_agrees_with_what_clear_logs_then_deletes(
+    event_prefix: str,
+    expected: int,
+) -> None:
+    """The number the operator confirms and the number that goes must be one clause.
+
+    Every shape ``_event_prefix_clause`` treats specially is here: "no filter" (empty),
+    a comma-separated union, an all-blank value that is a filter matching nothing, and a
+    prefix of bare SQL wildcards — escaped, so ``_``/``%`` match the two rows literally
+    named that way and not, as they once did, every row in the table.
+    """
+    await log_event("INFO", "warming_cycle_completed")
+    await log_event("WARNING", "telegram_action_unavailable")
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("INFO", "_underscore_prefixed")
+    await log_event("INFO", "%percent_prefixed")
+
+    counted = await count_matching_logs(event_prefix)
+
+    assert counted.matching == expected
+    assert (await clear_logs(event_prefix)).deleted == counted.matching

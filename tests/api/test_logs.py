@@ -86,6 +86,7 @@ async def test_blank_only_event_prefix_purges_nothing_over_http(app: FastAPI, bl
 
 @pytest.mark.asyncio
 async def test_clear_logs_by_comma_separated_prefixes_deletes_the_union(app: FastAPI) -> None:
+    """Both named prefixes go, the rest stay, and the purge's audit row is now among them."""
     await log_event("INFO", "warming_subscribe")
     await log_event("WARNING", "telegram_action_unavailable")
     await log_event("INFO", "spam_status_refreshed")
@@ -97,7 +98,7 @@ async def test_clear_logs_by_comma_separated_prefixes_deletes_the_union(app: Fas
         assert resp.json() == {"deleted": 2}
         left = await client.get("/api/v1/logs")
     events = {row["event"] for row in left.json()["items"]}
-    assert events == {"telegram_action_unavailable", "neurocomment_posted"}
+    assert events == {"telegram_action_unavailable", "neurocomment_posted", "logs_cleared"}
 
 
 @pytest.mark.asyncio
@@ -110,6 +111,7 @@ async def test_logs_invalid_cursor_is_400(app: FastAPI) -> None:
 
 @pytest.mark.asyncio
 async def test_clear_logs_by_prefix_deletes_and_returns_count(app: FastAPI) -> None:
+    """The scoped purge answers its count, and the row recording it lands newest-first."""
     await log_event("INFO", "neurocomment_posted")
     await log_event("WARNING", "neurocomment_post_failed")
     await log_event("INFO", "warming_subscribe")
@@ -121,4 +123,21 @@ async def test_clear_logs_by_prefix_deletes_and_returns_count(app: FastAPI) -> N
         assert resp.json() == {"deleted": 2}
         left = await client.get("/api/v1/logs")
     events = [row["event"] for row in left.json()["items"]]
-    assert events == ["warming_subscribe"]
+    assert events == ["logs_cleared", "warming_subscribe"]
+
+
+@pytest.mark.asyncio
+async def test_count_logs_reports_what_the_delete_would_then_remove(app: FastAPI) -> None:
+    """The confirmation prompt reads this route; a page of rows cannot tell it the scale."""
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("WARNING", "neurocomment_post_failed")
+    await log_event("INFO", "warming_subscribe")
+    async with _client(app) as client:
+        counted = await client.get("/api/v1/logs/count", params={"event_prefix": "neurocomment"})
+        assert counted.status_code == 200
+        assert counted.json() == {"matching": 2}
+        assert (await client.get("/api/v1/logs/count")).json() == {"matching": 3}
+        deleted = await client.request(
+            "DELETE", "/api/v1/logs", params={"event_prefix": "neurocomment"}
+        )
+    assert deleted.json() == {"deleted": counted.json()["matching"]}

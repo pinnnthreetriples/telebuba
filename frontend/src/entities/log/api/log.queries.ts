@@ -2,5 +2,6 @@
 // shared/api). Cursor-paginated read + the operator "clear logs" mutation.
 export {
   clearLogsMutation,
+  countLogsOptions as logCountQueryOptions,
   listLogsOptions as logsQueryOptions,
 } from '@/shared/api/@tanstack/react-query.gen';

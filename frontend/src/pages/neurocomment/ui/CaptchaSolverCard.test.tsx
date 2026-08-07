@@ -13,7 +13,6 @@ test('the help tooltip uses the wide, wrapping popover so its text is not clippe
       onToggleSolver={vi.fn()}
       captchaQueue={[]}
       accountLabel={(id) => id}
-      onSolve={vi.fn()}
     />,
   );
   const tip = screen.getByText(/Движок сам решает бот-чек/);
