@@ -27,6 +27,25 @@ from core.db import fetch_active_campaign_for_channel
 from core.logging import log_event
 
 
+async def recheck(account_id: str, channel: str) -> None:
+    """Turn the ban probe's ``comments_disabled`` guess into an authoritative answer.
+
+    The probe reports that state whenever the linked group cannot be RESOLVED, so it is
+    not a verdict — see the module docstring for the three innocent ways an account lands
+    there. Re-reading through ``_safe_resolve`` is a verdict: it asks
+    ``full_chat.linked_chat_id`` directly and reaches ``report_and_drop`` itself when the
+    comments really are off.
+
+    Returns nothing on purpose. The probe's own status is left exactly as the aggregate
+    made it: that answers "can we write here", not "is this channel still linked".
+    """
+    # Late import for the same cycle ``report_and_drop`` dodges below — ``_onboard_pair``
+    # reaches this module, so the pair cannot import each other at module level.
+    from services.neurocomment._onboard_pair import _safe_resolve  # noqa: PLC0415
+
+    await _safe_resolve(account_id, channel)
+
+
 async def report_and_drop(channel: str, account_id: str) -> None:
     """The whole consequence of a comments-off verdict: say it, then act on it.
 

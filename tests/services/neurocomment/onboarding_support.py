@@ -32,6 +32,13 @@ if TYPE_CHECKING:
 
 _BanState = Literal["can_send", "restricted", "not_member", "comments_disabled"]
 
+# The real gateway seam, captured at import time — i.e. before ``isolate_onboarding``
+# replaces it with ``_ok_action``. A test that has to prove an action reaches Telethon
+# for real (rather than that the rule ASKED for one) restores this and stubs the client
+# underneath it instead; without the capture the default stub silently swallows the very
+# dispatch such a test exists to check.
+real_execute = _seams.execute
+
 
 @pytest.fixture
 def isolate_onboarding(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
