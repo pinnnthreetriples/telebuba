@@ -143,9 +143,15 @@ jobs:
       # green again whatever the prose says, so without this the gate would reward
       # exactly the move it exists to stop — refresh the hash, ship the stale
       # sentence. A changed hash must arrive with a changed memory file.
+      #
+      # `base_ref` goes through the environment, not `${{ }}` interpolation: a branch
+      # name is attacker-supplied text, and expanding it into the script body is a
+      # shell-injection sink (semgrep run-shell-injection).
       - name: Verify re-captured baselines came with an edited note
         if: github.event_name == 'pull_request'
-        run: python3 tools/mex_grounding_baseline.py verify origin/${{ github.base_ref }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: python3 tools/mex_grounding_baseline.py verify "origin/$BASE_REF"
 
       # Yearly at most, and the fix is one command. Checking here rather than
       # committing from CI: rotation rewrites decision history, which is a human's
