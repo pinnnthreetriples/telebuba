@@ -1,5 +1,10 @@
 ---
 last_updated: 2026-08-06
+edges:
+  - target: context/conventions.md
+    condition: shared repository conventions
+  - target: patterns/add-frontend-slice.md
+    condition: adding or changing a React/FSD slice
 ---
 
 # Frontend Rules

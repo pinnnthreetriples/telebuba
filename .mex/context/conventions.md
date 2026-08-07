@@ -1,5 +1,10 @@
 ---
 last_updated: 2026-08-06
+edges:
+  - target: context/architecture.md
+    condition: layer boundaries, gateways or system design
+  - target: patterns/INDEX.md
+    condition: the change is a repeatable implementation task
 ---
 
 # Backend Rules

@@ -16,6 +16,12 @@ jobs:
   check:
     name: MEX drift, freshness and budgets
     runs-on: ubuntu-latest
+    # mex reports command name, version and OS home on every invocation and does not
+    # detect CI, so this job would phone home four times per pull request. Opting out
+    # here rather than in `.mex/config.json`: the config file is the scaffold's, and a
+    # contributor running `mex check` locally may reasonably choose otherwise.
+    env:
+      MEX_TELEMETRY: '0'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

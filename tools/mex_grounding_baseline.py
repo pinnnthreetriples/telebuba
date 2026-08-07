@@ -23,6 +23,7 @@ copying twelve function bodies into the repo would duplicate the code that the
 graph exists to stop us duplicating. `mex sync`'s grounding repair, which does
 use `source`, is an interactive flow that rebuilds its own baseline anyway.
 
+    python3 tools/mex_grounding_baseline.py fingerprint <node-id>   # frontmatter for a new claim
     python3 tools/mex_grounding_baseline.py capture   # after grounding or a reviewed change
     python3 tools/mex_grounding_baseline.py apply     # CI, after `mex graph`
 """
@@ -149,6 +150,33 @@ def apply() -> int:
     return 0
 
 
+def fingerprint(node_id: str) -> int:
+    """Print the `grounds_to` entry for one node, ready to paste into frontmatter.
+
+    mex's own route to a fingerprint is `mex graph scope --fingerprint`, which attaches
+    one to EVERY node it returns. A single fingerprint serializes to 1.7-16kB, so
+    grounding one claim that way costs an agent more context than reading the function
+    it is grounding. The graph already stores the three fields, and the wire format is
+    just their JSON in hex, so this reads the one node asked for.
+    """
+    with closing(_connect()) as connection:
+        row = connection.execute(
+            "SELECT minhash, neighbors, token_count FROM node_fingerprints WHERE node_id = ?",
+            (node_id,),
+        ).fetchone()
+    if row is None:
+        _fail(f"no fingerprint for {node_id} — check the id against `mex graph query`")
+        return 1
+    payload = {
+        "minhash": json.loads(row[0]),
+        "neighbors": json.loads(row[1]),
+        "tokenCount": row[2],
+    }
+    serialized = json.dumps(payload, separators=(",", ":")).encode().hex()
+    _say(f'  - node: "{node_id}"\n    fingerprint: "mh:64:{serialized}"')
+    return 0
+
+
 def _git(*args: str) -> str | None:
     """Run a read-only git command, or None when it has nothing to say."""
     result = subprocess.run(
@@ -215,7 +243,9 @@ def main() -> int:
     if command == "verify":
         base = sys.argv[2] if len(sys.argv) > _WITH_ARG else "origin/main"
         return verify(base)
-    _fail("usage: mex_grounding_baseline.py capture|apply|verify [base-ref]")
+    if command == "fingerprint" and len(sys.argv) > _WITH_ARG:
+        return fingerprint(sys.argv[2])
+    _fail("usage: mex_grounding_baseline.py capture|apply|verify [base-ref]|fingerprint <node-id>")
     return 2
 
 

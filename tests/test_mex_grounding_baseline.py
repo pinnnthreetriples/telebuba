@@ -47,6 +47,11 @@ def _graph(tmp_path: Path, nodes: dict[str, str]) -> None:
             "body_hash TEXT NOT NULL, fingerprint TEXT NOT NULL, "
             "PRIMARY KEY (scaffold_file, node_id))",
         )
+        connection.execute(
+            "CREATE TABLE node_fingerprints ("
+            "node_id TEXT PRIMARY KEY, minhash TEXT NOT NULL, "
+            "neighbors TEXT NOT NULL, token_count INTEGER NOT NULL)",
+        )
         connection.executemany("INSERT INTO nodes VALUES (?, ?)", list(nodes.items()))
     connection.close()
 
@@ -231,6 +236,40 @@ def test_capture_refuses_a_grounding_the_graph_does_not_know(
     _note(tmp_path, _NODE, _OTHER)
 
     assert baseline.capture() == 1
+
+
+def test_fingerprint_serializes_the_way_mex_does(
+    baseline: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The wire format is hex of the fingerprint's JSON, with mex's own key order.
+
+    Get either wrong and the frontmatter looks plausible but never deserializes, so
+    `GROUNDING_GONE` can no longer reconcile a moved symbol and reports it as deleted.
+    """
+    _graph(tmp_path, {_NODE: "hash-one"})
+    connection = sqlite3.connect(tmp_path / ".mex" / "graph.db")
+    with connection:
+        connection.execute(
+            "INSERT INTO node_fingerprints VALUES (?, ?, ?, ?)",
+            (_NODE, "[1,2]", f'["{_OTHER}"]', 7),
+        )
+    connection.close()
+
+    assert baseline.fingerprint(_NODE) == 0
+
+    node_line, fingerprint_line = capsys.readouterr().out.splitlines()
+    assert node_line == f'  - node: "{_NODE}"'
+    payload = bytes.fromhex(fingerprint_line.split("mh:64:")[1].rstrip('"'))
+    assert payload == f'{{"minhash":[1,2],"neighbors":["{_OTHER}"],"tokenCount":7}}'.encode()
+
+
+def test_fingerprint_refuses_a_node_the_graph_does_not_know(
+    baseline: ModuleType, tmp_path: Path
+) -> None:
+    """A wrong id must not yield frontmatter — pasting one grounds a claim to nothing."""
+    _graph(tmp_path, {_NODE: "hash-one"})
+
+    assert baseline.fingerprint(_NODE) == 1
 
 
 def test_main_rejects_an_unknown_subcommand(

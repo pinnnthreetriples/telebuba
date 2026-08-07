@@ -1,5 +1,10 @@
 ---
-last_updated: 2026-08-04
+last_updated: 2026-08-07
+edges:
+  - target: context/frontend.md
+    condition: React, FSD layering, TypeScript, i18n or frontend gates
+  - target: context/conventions.md
+    condition: shared repository conventions
 ---
 
 # Add Frontend Slice
