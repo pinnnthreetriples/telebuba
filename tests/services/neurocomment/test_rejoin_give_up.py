@@ -1,10 +1,10 @@
 """What happens to ONE pair that runs out of re-joins while its channel lives on.
 
 The channel drop needs every serving account to be finished, so an account that gave up
-on a chat the others comment in fine produced no log line at all, left nothing, and kept
-the channel's green «Готов» on its board row. These tests pin the line, the leave, the
-once-only guarantee, and — the point of the whole rule — that the account keeps working
-everywhere else.
+on a chat the others comment in fine produced no log line at all and kept the channel's
+green «Готов» on its board row. These tests pin the line, the once-only guarantee, the
+finality of the verdict and the two ways out of it, and — the point of the whole rule —
+that the account keeps working everywhere else.
 
 Own module: ``test_rejoin`` is at 700-line test cap territory already.
 """
@@ -31,8 +31,16 @@ from core.db import (  # type: ignore[attr-defined]
 )
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
-from schemas.telegram_actions import LeaveDiscussionGroup
-from services.neurocomment import _give_up, _rejoin, _runtime, _seams, engine, onboarding
+from services.neurocomment import (
+    _give_up,
+    _rejoin,
+    _runtime,
+    _seams,
+    board,
+    campaigns,
+    engine,
+    onboarding,
+)
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from tests.services.neurocomment.engine_support import _Readiness
 from tests.services.neurocomment.onboarding_support import _JoinStub, _ReadStub
@@ -115,15 +123,18 @@ async def _give_up_lines() -> list[dict[str, object]]:
     ]
 
 
-def _leaves(join: _JoinStub) -> list[str]:
-    return [account for account, a in join.calls if isinstance(a, LeaveDiscussionGroup)]
-
-
 @pytest.mark.asyncio
-async def test_a_pair_out_of_attempts_leaves_the_chat_and_says_so(
+async def test_a_pair_out_of_attempts_says_so_and_spends_no_rpc(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One line, one leave — the trace this pair never had while its channel lived on."""
+    """One line and nothing else — the trace this pair never had while its channel lived on.
+
+    The report used to leave the discussion group too, and every production row logged
+    ``leave: "failed"``: the state that brings a pair here is Telegram saying the account is
+    not in the chat, so the leave was two RPCs knocking on a group that had already ejected
+    it — and in the one case it could have worked (a stale cached entity) it would have
+    walked a healthy account out of a live chat.
+    """
     campaign_id = await _campaign("acc-1", "acc-2")
     await _spend_the_budget("acc-1")
     # acc-2 comments here fine, so the channel is not going anywhere.
@@ -132,8 +143,9 @@ async def test_a_pair_out_of_attempts_leaves_the_chat_and_says_so(
 
     await _rejoin.review_access_lost(datetime.now(UTC))
 
-    assert _leaves(join) == ["acc-1"]
+    assert join.calls == []
     lines = await _give_up_lines()
+    assert "leave" not in lines[0]
     assert [line["channel"] for line in lines] == [_CHANNEL]
     assert lines[0]["reason"] == "2/2"
     links = (await list_campaign_channels(campaign_id)).links
@@ -153,7 +165,7 @@ async def test_the_next_sweep_tick_repeats_nothing(monkeypatch: pytest.MonkeyPat
     await _rejoin.review_access_lost(datetime.now(UTC))
 
     assert len(await _give_up_lines()) == 1
-    assert len(_leaves(join)) == 1
+    assert join.calls == []
     row = await fetch_readiness("acc-1", _CHANNEL)
     assert row is not None
     assert row.rejoin_gave_up is True
@@ -209,14 +221,14 @@ async def test_a_pair_still_owed_an_attempt_is_left_where_it_is(
     await _rejoin.review_access_lost(datetime.now(UTC))
 
     assert await _give_up_lines() == []
-    assert _leaves(join) == []
+    assert join.calls == []
 
 
 @pytest.mark.asyncio
 async def test_a_dead_address_is_the_channel_rules_business_not_this_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A terminal verdict spends no attempt, and the leave would fail on the same address."""
+    """A terminal verdict spends no attempt, so there is nothing for this rule to report."""
     await _campaign("acc-1")
     await upsert_readiness(
         "acc-1",
@@ -231,51 +243,79 @@ async def test_a_dead_address_is_the_channel_rules_business_not_this_one(
     await _rejoin.review_access_lost(datetime.now(UTC))
 
     assert await _give_up_lines() == []
-    assert _leaves(join) == []
+    assert join.calls == []
 
 
 @pytest.mark.asyncio
-async def test_a_failed_leave_still_leaves_the_verdict_standing(
+async def test_only_a_deliberate_act_gets_a_finished_pair_back_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The account is usually out of the chat already — that is what the budget proved."""
+    """The verdict is final: time hands it nothing, a re-link hands it a whole new timeline.
+
+    The stamp-freshness rule used to unmake it. Two windows after the last attempt the spent
+    budget stopped counting, the review bought the pair a fresh attempt and poked onboarding
+    — for a pair it had already reported as finished, forever, with ``rejoin_attempts``
+    climbing past a budget the clamped line kept printing as "2/2". So the first half here is
+    that NOTHING happens: no new stamp, no join RPC, no second line.
+
+    The second half is the way back, and it is the one the log line tells the operator to
+    use. Re-linking the channel clears the mark with the counter, and only then does the
+    pass that re-joins reach the pair at all — which is what ``clear_rejoin_attempts`` is
+    for, and why this goes through the rule and onboarding rather than the repository calls
+    underneath them.
+    """
     await _campaign("acc-1", "acc-2")
     await _spend_the_budget("acc-1")
     await upsert_readiness("acc-2", _CHANNEL, joined=True, captcha_passed=True, ready=True)
     join = _patch_telegram(monkeypatch)
-    join.set(_CHANNEL, status="failed", error_type="UserNotParticipantError")
+    campaign_id = await fetch_active_campaign_for_channel(_CHANNEL)
+    assert campaign_id is not None
+    await _rejoin.review_access_lost(datetime.now(UTC))
+    _backdate("acc-1", _CHANNEL, hours=49)  # two windows: what used to revive the budget
 
     await _rejoin.review_access_lost(datetime.now(UTC))
+    await onboarding.onboard_account_channel("acc-1", _CHANNEL)
 
-    lines = await _give_up_lines()
-    assert [line["leave"] for line in lines] == ["failed"]
+    stuck = await fetch_readiness("acc-1", _CHANNEL)
+    assert stuck is not None
+    assert (stuck.ready, stuck.rejoin_gave_up, stuck.rejoin_attempts) == (False, True, 2)
+    assert join.calls == []
+    assert len(await _give_up_lines()) == 1
+
+    await deactivate_channel(campaign_id.campaign_id, _CHANNEL)
+    await link_channel_to_campaign(campaign_id.campaign_id, _CHANNEL)
+    await onboarding.onboard_account_channel("acc-1", _CHANNEL)
+
     row = await fetch_readiness("acc-1", _CHANNEL)
     assert row is not None
-    assert row.rejoin_gave_up is True
+    assert (row.ready, row.rejoin_gave_up, row.rejoin_attempts) == (True, False, 0)
 
 
 @pytest.mark.asyncio
-async def test_a_real_re_join_clears_the_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The badge and the budget go together: a pair back in the chat starts over clean.
+async def test_every_reader_of_the_budget_stops_claiming_the_pair_is_worked_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Three consumers read this rule's give-up test, and all three used to be lied to.
 
-    Through the rule and onboarding, not the repository call underneath them — the write
-    is only worth anything if the path that re-joins a pair actually reaches it. The way
-    there for a finished pair is a stamp gone stale: the budget it spent stops counting,
-    the review buys it a fresh attempt, and the pass it pokes is what re-joins.
+    They read it through ``exhausted`` and ``still_retrying``, so the mark reaching those
+    two predicates is what makes the whole app agree. Asserted at the age that used to
+    revive the budget — the board went back to «Возвращаемся в чат», the captcha queue
+    listed the pair as being worked on, and ``_channel_pause`` read it as mid-timeline and
+    held its channel drop open forever.
     """
     await _campaign("acc-1", "acc-2")
     await _spend_the_budget("acc-1")
     await upsert_readiness("acc-2", _CHANNEL, joined=True, captcha_passed=True, ready=True)
     _patch_telegram(monkeypatch)
     await _rejoin.review_access_lost(datetime.now(UTC))
-    _backdate("acc-1", _CHANNEL, hours=49)  # two windows: the spent budget goes stale
+    _backdate("acc-1", _CHANNEL, hours=49)
 
-    await _rejoin.review_access_lost(datetime.now(UTC))
-    await onboarding.onboard_account_channel("acc-1", _CHANNEL)
-
+    now = datetime.now(UTC)
     row = await fetch_readiness("acc-1", _CHANNEL)
     assert row is not None
-    assert (row.ready, row.rejoin_gave_up, row.rejoin_attempts) == (True, False, 0)
+    assert board._not_joined_status([row]) == "join_failed"
+    assert [p.account_id for p in await campaigns._rejoin_exhausted_pairs()] == ["acc-1"]
+    assert _rejoin.still_retrying(row, now) is False
 
 
 @pytest.mark.asyncio
@@ -302,13 +342,13 @@ async def test_re_linking_the_channel_takes_the_badge_off_with_the_counter(
 
 
 @pytest.mark.asyncio
-async def test_a_pair_that_got_back_in_mid_tick_is_neither_marked_nor_walked_out(
+async def test_a_pair_that_got_back_in_mid_tick_is_not_marked(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The review decides off a snapshot; onboarding may re-join a pair while it runs.
 
-    An unconditional mark would badge a working pair and leave the chat it had just
-    re-entered, and nothing would ever clear either.
+    An unconditional mark would badge a working pair — and since the mark became the
+    verdict, it would also be the thing that never lets go of it again.
     """
     await _campaign("acc-1", "acc-2")
     await _spend_the_budget("acc-1")
@@ -321,7 +361,7 @@ async def test_a_pair_that_got_back_in_mid_tick_is_neither_marked_nor_walked_out
     await _give_up.report(_CHANNEL, [row for row in stale if row.account_id == "acc-1"])
 
     assert await _give_up_lines() == []
-    assert _leaves(join) == []
+    assert join.calls == []
     row = await fetch_readiness("acc-1", _CHANNEL)
     assert row is not None
     assert row.rejoin_gave_up is False

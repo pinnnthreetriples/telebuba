@@ -107,6 +107,14 @@ def exhausted(readiness: NeurocommentReadiness, now: datetime | None = None) -> 
     reads the budget wants the same answer — the board badges ``join_failed`` instead of
     promising a return that cannot happen, and the sweep spends no attempt on it.
 
+    So is a pair this rule has already given up on, and that verdict is FINAL. It was
+    reported and marked once (``_give_up.report``), which is a claim to the operator that
+    nothing is working on the pair any more — and the freshness rule below then unmade it
+    every 48h, handing the pair another attempt, and another, with ``rejoin_attempts``
+    climbing past a budget the clamped log kept printing as "2/2". The two ways back are
+    deliberate acts, not the clock: a real re-join (``clear_rejoin_attempts``) and an
+    operator re-linking the channel, and both zero this flag with the counter.
+
     A spent counter is a spent budget only while the stamp beside it is FRESH (see
     :func:`_stamp_stale`): a row that sat unanswered for a whole extra window proves nothing
     about the pair, whoever shrank the budget under it. ``now`` is the sweep's own tick clock,
@@ -118,7 +126,7 @@ def exhausted(readiness: NeurocommentReadiness, now: datetime | None = None) -> 
     — and reading the budget off this rule is what keeps the badge from claiming a pair
     is finished while the sweep is still retrying it.
     """
-    if terminal(readiness):
+    if terminal(readiness) or readiness.rejoin_gave_up:
         return True
     if readiness.rejoin_attempts < settings.neurocomment.channel_max_rounds:
         return False
@@ -347,7 +355,7 @@ async def _review_channel(
         # channel with a re-join in flight. ``still_retrying`` carries the condition, and says
         # who else reads it.
         return False
-    await _drop_channel_if_nothing_works(campaign_id, channel, serving, parked)
+    await _drop_channel_if_nothing_works(campaign_id, channel, serving, parked, now)
     return False
 
 
@@ -356,6 +364,7 @@ async def _drop_channel_if_nothing_works(
     channel: str,
     serving: list[str],
     parked: list[NeurocommentReadiness],
+    now: datetime,
 ) -> None:
     """Unlink a channel every serving account has run out of re-joins for.
 
@@ -363,9 +372,21 @@ async def _drop_channel_if_nothing_works(
     a serving account with NO readiness row was never tried here, not tried and failed,
     and onboarding reaches a fleet slowly. So every serving account must have a row, and
     any usable one keeps the channel.
+
+    A pair still waiting for an admin to press Approve keeps it too — the hold
+    ``_channel_pause`` already grants and this drop was missing. Such a pair is neither
+    parked nor ready, so it passed the coverage count as tried and held nothing: an account
+    onboarded late (the rolling join cap and the join jitter make that ordinary) had the 48h
+    ``_sweep._review_join_requests`` was giving it annulled here. ``_state.awaiting_approval``
+    is that review's own patience, so this hold ends exactly where its does, rather than
+    pinning a channel open on a request nobody will ever answer.
     """
     rows = (await list_channel_readiness(campaign_id, channel, serving)).readiness
-    if len(rows) != len(serving) or any(row.ready for row in rows):
+    if (
+        len(rows) != len(serving)
+        or any(row.ready for row in rows)
+        or any(_state.awaiting_approval(row, now) for row in rows)
+    ):
         return
     # Via the service, not the repository, so the listener reconciles and stops watching
     # the channel — exactly like the two sibling rules.

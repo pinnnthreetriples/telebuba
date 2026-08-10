@@ -16,9 +16,14 @@ spans days and this process does not.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.repositories.neurocomment import load_active_cooldowns, persist_cooldown
+
+if TYPE_CHECKING:
+    from schemas.neurocomment import NeurocommentReadiness
 
 # ponytail: single-process. A multi-process deployment would still need shared
 # storage for the read path; the DB here is durability, not cross-process sharing.
@@ -97,6 +102,28 @@ def channel_paused(paused_until: str | None, now: datetime) -> bool:
     read, the board from the channel link it lists anyway.
     """
     return paused_until is not None and datetime.fromisoformat(paused_until) > now
+
+
+def awaiting_approval(readiness: NeurocommentReadiness, now: datetime) -> bool:
+    """True while an admin could still land the Approve on this pair's join request.
+
+    The patience ``_sweep._review_join_requests`` spends before it accepts that nobody is
+    going to approve — its ``give_up_after``, one retry window per attempt, all measured from
+    the FIRST request (the column never moves) — read as a per-pair predicate, and beside
+    ``channel_paused`` for the same reason: every rule that can unlink a channel meanwhile
+    (``_channel_pause``, ``_rejoin``) must hold off on exactly the pairs that review is still
+    working on, and one predicate is what stops them disagreeing about which those are.
+
+    It EXPIRES, unlike ``_onboard_pair._join_request_in_flight`` — that one answers "may we
+    re-send?" and stays true forever once the attempts are gone. A request nobody ever
+    answered must not hold a finished channel linked for good; past this deadline the request
+    review is done with the pair and drops the channel itself.
+    """
+    if readiness.join_requested_at is None:
+        return False
+    nc = settings.neurocomment
+    patience = timedelta(hours=nc.join_request_retry_hours * nc.join_request_max_attempts)
+    return now - datetime.fromisoformat(readiness.join_requested_at) < patience
 
 
 def register_write_failure(channel: str, *, min_failures: int) -> bool:

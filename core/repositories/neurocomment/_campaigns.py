@@ -223,6 +223,11 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
                     # add another account, not to re-link.
                     unconfirmed_bans=0,
                     unconfirmed_ban_at=None,
+                    # The captcha budget (#49), whose drop hint says "link it again" too. The
+                    # stamp rides with the verdict: ``_captcha_retry.retry_spent`` reads a
+                    # ``checked_at`` newer than it as a lost re-solve, and onboarding writes one.
+                    captcha_retry_at=None,
+                    captcha_gave_up=0,
                 ),
             )
             link = _active_channel_link(connection, channel)
@@ -242,8 +247,8 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
 async def link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannelLink:
     """Bind a channel to a campaign as active.
 
-    Clears the channel's per-pair join-request and re-join counters: linking is a fresh
-    start for the channel, and those counters otherwise outlive the link that earned them.
+    Clears every per-pair budget and give-up verdict but ``banned`` and ``human_skipped``:
+    linking is a fresh start, and those otherwise outlive the link that earned them.
 
     Raises ``ChannelAlreadyAssignedError`` if the channel is already active in any
     campaign (the DB partial-unique index is the source of truth). Handles are

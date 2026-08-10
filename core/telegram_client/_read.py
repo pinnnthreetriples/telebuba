@@ -13,6 +13,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import TYPE_CHECKING, Literal, cast
 
 from telethon import errors
@@ -67,6 +68,7 @@ from schemas.telegram_actions import (
     SearchChannels,
     WaitForBotChallenge,
 )
+from schemas.telegram_actions_rights import CheckWriteRights, WriteRightsResult
 from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
 
 if TYPE_CHECKING:
@@ -200,6 +202,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await _dispatch_check_messages_alive(client, action)
         case CheckBannedInChannel():
             return await _dispatch_check_banned(client, action)
+        case CheckWriteRights():
+            return await _dispatch_check_write_rights(client, action)
         case WaitForBotChallenge():
             return await dispatch_wait_for_bot_challenge(client, action)
         case GetUserProfile():
@@ -346,6 +350,62 @@ async def _dispatch_check_banned(
     except errors.UserNotParticipantError:
         return BanCheckResult(state="not_member")
     return _classify_participant(getattr(result, "participant", None))
+
+
+def _mute_expiry(rights: object) -> str | None:
+    """ISO-8601 expiry of a ``ChatBannedRights``, or ``None`` when it carries none.
+
+    Telegram encodes "forever" as ``until_date=0`` and Telethon's date reader turns a
+    zero timestamp into ``None``, so a permanent mute simply has no date; the far-future
+    sentinel other clients send arrives as a real datetime instead. Both are handed on
+    as-is — deciding how long to wait on either is the caller's rule, not the gateway's.
+    """
+    until = getattr(rights, "until_date", None)
+    return until.isoformat() if isinstance(until, datetime) else None
+
+
+async def _dispatch_check_write_rights(
+    client: TelegramClient,
+    action: CheckWriteRights,
+) -> WriteRightsResult:
+    """Read whose mute forbids the write: the whole chat's, this account's, or neither.
+
+    The two RPCs ``_dispatch_check_banned`` already pays for, asked of the two records
+    that answer different questions. The chat-wide ``default_banned_rights`` is checked
+    FIRST and short-circuits the participant read: a group switched read-only leaves our
+    own record untouched, so reading ours first would report a channel-wide switch as a
+    personal mute — the confusion this whole action exists to end.
+
+    Slow mode is deliberately not read. It is a third thing, and Telegram answers a
+    too-fast send with ``SlowModeWaitError`` (mapped to the ``slow_mode_wait`` cooldown
+    status), never ``ChatWriteForbiddenError``, so it cannot reach this read at all.
+
+    Nothing here decides on a failure: no linked group, or a participant record we are
+    not in, is ``unknown`` with a content-free reason. Everything else propagates to
+    ``execute_read_many``, which collapses it to ``RPC: <ClassName>``.
+    """
+    entity = await _resolve_linked_group_entity(client, action.channel)
+    if entity is None:
+        return WriteRightsResult(scope="unknown", reason="no_linked_group")
+    if getattr(getattr(entity, "default_banned_rights", None), "send_messages", False):
+        return WriteRightsResult(scope="everyone")
+    try:
+        result = await client(GetParticipantRequest(channel=entity, participant=InputUserSelf()))  # ty: ignore[invalid-argument-type]
+    except errors.UserNotParticipantError:
+        return WriteRightsResult(scope="unknown", reason="not_member")
+    participant = getattr(result, "participant", None)
+    if isinstance(participant, ChannelParticipantBanned):
+        rights = getattr(participant, "banned_rights", None)
+        if getattr(rights, "view_messages", False):
+            # Kicked, not muted — ``_classify_participant`` reads the same record the same
+            # way. Telegram revokes every right at once on a ban, so without this the record
+            # would also satisfy the send_messages test below and a pair that is OUT of the
+            # chat would be parked waiting for a mute to lapse. A kick has its own error
+            # family (UserNotParticipant / ChannelPrivate) and its own branch.
+            return WriteRightsResult(scope="unknown", reason="not_member")
+        if getattr(rights, "send_messages", False):
+            return WriteRightsResult(scope="self_only", muted_until=_mute_expiry(rights))
+    return WriteRightsResult(scope="none")
 
 
 def _optional_str(value: object) -> str | None:

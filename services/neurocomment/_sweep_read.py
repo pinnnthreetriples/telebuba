@@ -20,6 +20,7 @@ unchanged.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.db import fetch_readiness, upsert_readiness
@@ -42,6 +43,35 @@ _RPC_REASON_PREFIX = "RPC: "
 # added here without weighing it against the side effect — parking pulls the pair out of
 # service and spends from the pair's re-join budget.
 _LOST_ACCESS_ERRORS = frozenset({"ChannelPrivateError", "UserNotParticipantError"})
+# How long a channel every reader is out of is left alone. That verdict parks nobody ON
+# PURPOSE (:func:`_park_kicked_readers`), so nothing about the next tick can differ: the same
+# walk, the same live ``GetFullChannelRequest``, the same WARNING — 288 of each a day, and a
+# live pair of channels spent 137 and 27 of them in half a day. An hour keeps a recovery
+# noticed inside one, at a 12th of the cost. A constant rather than a setting because there
+# is nothing here for an operator to tune: it only spaces out a line they already have, and
+# losing it on restart is the right default anyway.
+_MUTE_FOR = timedelta(hours=1)
+# Channel -> when it may be walked again. Process-local BY DESIGN, and the one piece of this
+# module's state that is: a readiness row would park a pair and spend a re-join, which is
+# exactly what the all-kicked branch refuses to do, so the back-off has to live where
+# ``_rejoin`` cannot mistake it for a verdict about an account.
+_MUTED_UNTIL: dict[str, datetime] = {}
+
+
+def reset_read_mutes() -> None:
+    """Forget every muted channel (test seam — same shape as ``_sweep.reset_prune_clock``)."""
+    _MUTED_UNTIL.clear()
+
+
+def _muted(channel: str) -> bool:
+    """True while this channel's all-kicked cooldown still holds.
+
+    Reads the clock rather than taking the caller's: ``_sweep._sweep_channel`` threads no
+    ``now``, and this deadline is shared with no other pass, so nothing can disagree about
+    where a tick falls the way the passes on the sweep's own clock could.
+    """
+    muted_until = _MUTED_UNTIL.get(channel)
+    return muted_until is not None and datetime.now(UTC) < muted_until
 
 
 def _lost_access_error(exc: BaseException) -> str | None:
@@ -63,25 +93,34 @@ def _lost_access_error(exc: BaseException) -> str | None:
 def _may_be_in_chat(readiness: NeurocommentReadiness | None) -> bool:
     """True while this pair could still be a member of the channel's discussion group.
 
-    Three states say it cannot, and every one of them is a row another rule owns:
+    Four states say it cannot, and every one of them is a row another rule owns:
 
     * ``banned`` — ``bans._mark_banned_and_leave`` marked the pair and walked it out of
       the chat, and that mark is sticky by design;
     * ``human_skipped`` — the operator took the pair out of service (#148) and onboarding
       refuses to re-join it;
+    * ``captcha_gave_up`` — ``_captcha_retry._give_up_and_leave`` spent the last re-solve,
+      marked the pair terminal and walked it out of the chat, the same shape as the ban;
     * :func:`_rejoin.access_lost` — already parked, the re-join rule owns the retry.
 
-    The first two are exactly the pairs ``access_lost`` excludes BY CONSTRUCTION (its own
-    docstring says why), so skipping only the parked ones never covered them: a banned
-    pair was re-read on every tick for as long as its comments stayed in the
-    ``deletion_sweep_lookback_hours`` window — 288 ticks a day into a group that had just
-    banned the account and seen it leave — and each failure re-wrote the row into the
-    access-loss sentinel, which on a skipped pair silently replaced the operator's mark.
+    The first three are exactly the pairs ``access_lost`` cannot cover — none of them can
+    satisfy its unjoined-plus-``captcha_passed`` sentinel — so skipping only the parked ones
+    never covered them: a banned pair was re-read on every tick for as long as its comments
+    stayed in the ``deletion_sweep_lookback_hours`` window — 288 ticks a day into a group that
+    had just banned the account and seen it leave — and each failure re-wrote the row into the
+    access-loss sentinel, which on a skipped pair silently replaced the operator's mark and
+    on a captcha-retired one handed a pair onboarding will NEVER re-join to ``_rejoin``: the
+    review stamps an attempt no pass can answer, so ``attempt_owed`` stays true forever.
     No row = never onboarded here, but it commented, so it was in that chat: read with it.
     """
     if readiness is None:
         return True
-    return not (readiness.banned or readiness.human_skipped or _rejoin.access_lost(readiness))
+    return not (
+        readiness.banned
+        or readiness.human_skipped
+        or readiness.captcha_gave_up
+        or _rejoin.access_lost(readiness)
+    )
 
 
 def _reader_candidates(comments: list[CommentRecord]) -> list[str]:
@@ -143,6 +182,61 @@ async def _park_kicked_readers(
     return len(kicked)
 
 
+async def _close_walk(
+    channel: str,
+    alive: CheckMessagesAliveResult | None,
+    reader: str | None,
+    verdict: tuple[int, int, int],
+    failure: dict[str, object],
+) -> None:
+    """Report what the finished walk was worth reporting, and mute the one that will repeat.
+
+    ``verdict`` is ``(tried, kicked, parked)``. Silent when somebody read (nothing failed
+    that the caller cannot see) and silent when the walk tried nobody — every author banned,
+    skipped, captcha-retired or already parked. That state IS those rows, which the board
+    badges and the re-join review acts on every tick, and a channel can sit in it for as long
+    as an operator leaves it there: a line per tick would be the five-minute drip this module
+    removed.
+
+    The all-kicked verdict is that same drip through the last door left open, and the only
+    walk that can be: everybody tried said it is out and :func:`_park_kicked_readers`
+    deliberately wrote nothing, so the next tick would find precisely this state, ask
+    precisely these accounts and say precisely this line — 288 times a day. It gets the line
+    once and then the channel is left alone until ``_MUTE_FOR`` lapses. ``tried`` guards that
+    arithmetic as well as the silence: a walk that asked nobody is also 0 kicked of 0, and
+    re-stamping on that would push the deadline out on every tick the mute itself silences.
+    """
+    tried, kicked, parked = verdict
+    if alive is not None:
+        # Somebody is in that chat after all, so a deadline set earlier must neither go on
+        # silencing a later genuine failure nor date it from the wrong hour.
+        _MUTED_UNTIL.pop(channel, None)
+        return
+    if not tried:
+        return
+    if not parked and kicked == tried:
+        _MUTED_UNTIL[channel] = datetime.now(UTC) + _MUTE_FOR
+    await log_event(
+        "WARNING",
+        "neurocomment_sweep_read_failed",
+        account_id=reader,
+        # Three counts because the rule above turns on the gap between them:
+        # ``readers_kicked == readers_tried`` with ``readers_parked`` at 0 is the
+        # channel having gone invisible to everyone, which is why nothing was touched
+        # (and why nothing will be asked again for an hour); a smaller ``readers_kicked``
+        # is the accounts, and every one of those was parked. Without the middle number
+        # the line could not tell an all-kicked channel from a walk that ended on a flood
+        # wait.
+        extra={
+            "channel": channel,
+            "readers_tried": tried,
+            "readers_kicked": kicked,
+            "readers_parked": parked,
+        }
+        | failure,
+    )
+
+
 async def read_alive(
     channel: str,
     comments: list[CommentRecord],
@@ -159,6 +253,11 @@ async def read_alive(
 
     Only pairs :func:`_may_be_in_chat` still admits are read with — reading as an account
     the group banned is the anti-ban risk this whole domain is built to avoid.
+
+    A walk that ends with every reader tried kicked and nobody parked leaves NOTHING changed
+    for the next tick to find, so it mutes the channel for ``_MUTE_FOR`` and returns ``None``
+    before the walk — no RPC, no line — until the deadline lapses. Any read that works forgets
+    the mute again; the muting itself writes nothing an operator or another rule can see.
 
     Two verdicts and only two — ``ChannelPrivateError`` and ``UserNotParticipantError`` —
     are Telegram saying that the account which produced them is not in the chat, so the walk
@@ -179,6 +278,8 @@ async def read_alive(
     deleted. The rotation cannot see that; add a reader quorum over the ANSWERS only if the
     canary ever shows it.
     """
+    if _muted(channel):
+        return None
     tried = 0
     # (reader, verdict) per author Telegram said is out, decided on after the walk: a
     # verdict is only about the account once the other authors have answered.
@@ -234,28 +335,5 @@ async def read_alive(
             failure = {"error_type": type(result).__name__, "reason": "unexpected_result"}
             break
     parked = await _park_kicked_readers(channel, kicked, tried)
-    if alive is None and tried:
-        # Silent when somebody read (nothing failed that the caller cannot see) and silent
-        # when the walk tried nobody — every author banned, skipped or already parked. That
-        # state IS those rows, which the board badges and the re-join review acts on every
-        # tick, and a channel can sit in it for as long as an operator leaves it there: a
-        # line per tick would be the five-minute drip this module removed.
-        await log_event(
-            "WARNING",
-            "neurocomment_sweep_read_failed",
-            account_id=last_reader,
-            # Three counts because the rule above turns on the gap between them:
-            # ``readers_kicked == readers_tried`` with ``readers_parked`` at 0 is the
-            # channel having gone invisible to everyone, which is why nothing was touched;
-            # a smaller ``readers_kicked`` is the accounts, and every one of those was
-            # parked. Without the middle number the line could not tell an all-kicked
-            # channel from a walk that ended on a flood wait.
-            extra={
-                "channel": channel,
-                "readers_tried": tried,
-                "readers_kicked": len(kicked),
-                "readers_parked": parked,
-            }
-            | failure,
-        )
+    await _close_walk(channel, alive, last_reader, (tried, len(kicked), parked), failure)
     return alive
