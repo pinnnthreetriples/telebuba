@@ -8,7 +8,8 @@ import httpx
 import pytest
 import respx
 
-from core.openai import generate_text
+from core.config import settings
+from core.openai import generate_text, generate_text_deepseek
 from schemas.gemini import GeminiRequest
 
 _ENDPOINT = r".*chat/completions.*"
@@ -53,6 +54,72 @@ async def test_sends_bearer_auth_header() -> None:
         route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
         await generate_text(_request())
     assert route.calls.last.request.headers["authorization"] == "Bearer sk-test"
+
+
+@pytest.mark.asyncio
+async def test_the_deepseek_entry_point_talks_to_deepseek() -> None:
+    """The whole point of the second entry point: same code, different host.
+
+    Asserted on the URL rather than on ``settings`` because that is the thing a
+    misconfiguration would get wrong silently — a DeepSeek key posted to OpenAI's
+    endpoint is a 401 the operator would read as a bad key.
+    """
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        result = await generate_text_deepseek(_request())
+    assert result.status == "ok"
+    assert str(route.calls.last.request.url) == f"{settings.deepseek.base_url}/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_the_default_entry_point_still_talks_to_openai() -> None:
+    """The other half: adding a provider must not move the one that was already here."""
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text(_request())
+    assert str(route.calls.last.request.url) == f"{settings.openai.base_url}/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_deepseek_is_told_not_to_think_by_default() -> None:
+    """The truncation trap, pinned: V4 reasons by default and bills it to max_tokens.
+
+    Omit the field and a 256-token comment budget goes to the thoughts, leaving a
+    stump the gateway reports as ``Truncated: hit max_tokens`` — i.e. every comment
+    fails. ``core.gemini`` sends ``thinkingBudget`` explicitly for the same reason.
+    """
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text_deepseek(_request())
+    body = json.loads(route.calls.last.request.content)
+    assert body["thinking"] == {"type": "disabled"}
+
+
+@pytest.mark.asyncio
+async def test_a_caller_that_asks_for_reasoning_gets_it_on_deepseek() -> None:
+    """``thinking_budget`` stays meaningful rather than being silently ignored.
+
+    DeepSeek grades effort instead of counting tokens, so a budget only switches
+    reasoning on and the provider's own default effort stands.
+    """
+    request = _request()
+    request.thinking_budget = 512
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text_deepseek(request)
+    body = json.loads(route.calls.last.request.content)
+    assert body["thinking"] == {"type": "enabled"}
+
+
+@pytest.mark.asyncio
+async def test_openai_is_never_sent_the_thinking_field() -> None:
+    """OpenAI rejects the parameter outright, so the capability flag has to gate it."""
+    request = _request()
+    request.thinking_budget = 512
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text(request)
+    assert "thinking" not in json.loads(route.calls.last.request.content)
 
 
 @pytest.mark.asyncio

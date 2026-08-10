@@ -300,6 +300,7 @@ def test_the_protected_field_set_is_pinned() -> None:
         ("auth", "admin_password"),
         ("auth", "admin_username"),
         ("auth", "secret"),
+        ("deepseek", "api_key"),
         ("gemini", "api_key"),
         ("logging", "sentry_dsn"),
         ("openai", "api_key"),

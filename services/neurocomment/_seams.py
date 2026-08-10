@@ -1,7 +1,9 @@
 """Injectable seams, centralised so tests patch them in one place.
 
 The neurocomment domain reaches Telegram (``execute`` / ``execute_read`` /
-``download_post_image``), Gemini (``generate_text``), Telemetr.io (``search_telemetr``),
+``download_post_image``), the LLMs (``generate_text`` for Gemini,
+``generate_text_deepseek`` for the text generator, ``generate_text_openai`` for the
+alternative solver), Telemetr.io (``search_telemetr``),
 the spam probe (``refresh_spam_status``), randomness (``rng``) and sleeping (``sleep``) only
 through this module, so a test patches ``services.neurocomment._seams.<name>``
 once and every submodule observes it. Mirrors ``services.warming._seams``.
@@ -15,6 +17,7 @@ from functools import partial
 
 from core.gemini import generate_text
 from core.openai import generate_text as generate_text_openai
+from core.openai import generate_text_deepseek
 from core.telegram_client import download_post_image, execute_read
 from core.telegram_client import execute as _gateway_execute
 from core.telemetr import search_catalog as search_telemetr
@@ -40,6 +43,7 @@ __all__ = [
     "execute",
     "execute_read",
     "generate_text",
+    "generate_text_deepseek",
     "generate_text_openai",
     "refresh_spam_status",
     "rng",

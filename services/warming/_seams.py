@@ -15,6 +15,7 @@ import random
 from functools import partial
 
 from core.gemini import generate_text
+from core.openai import generate_text_deepseek
 from core.telegram_client import execute as _gateway_execute
 from services.spam_status import refresh_spam_status
 
@@ -33,4 +34,11 @@ async def sleep(seconds: float) -> None:
     await asyncio.sleep(seconds)
 
 
-__all__ = ["execute", "generate_text", "refresh_spam_status", "rng", "sleep"]
+__all__ = [
+    "execute",
+    "generate_text",
+    "generate_text_deepseek",
+    "refresh_spam_status",
+    "rng",
+    "sleep",
+]

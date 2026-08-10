@@ -12,7 +12,7 @@ the ``Settings`` aggregate and the ``settings`` instance stay in ``core.config``
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -55,6 +55,12 @@ class OpenAISettings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="OPENAI__", extra="ignore")
 
+    # Whether this provider takes the ``thinking`` request field. A capability of the
+    # API, not a knob: an operator cannot make OpenAI accept it, and sending it there
+    # is a rejected request. ClassVar so it is not a settings field and cannot be set
+    # from the environment.
+    sends_thinking: ClassVar[bool] = False
+
     api_key: str = Field(default="", repr=False)
     model: str = Field(default="gpt-4o")
     base_url: str = Field(default="https://api.openai.com/v1")
@@ -63,6 +69,42 @@ class OpenAISettings(BaseSettings):
     max_output_tokens: int = Field(default=300, ge=1, le=2048)
     max_retries: int = Field(default=1, ge=0, le=5)
     retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
+
+
+class DeepseekSettings(OpenAISettings):
+    """DeepSeek — the text generator, and the reason Gemini now only does vision.
+
+    Subclasses the OpenAI settings because DeepSeek serves the same wire format
+    (``POST {base_url}/chat/completions``, ``Bearer`` key), which is what lets
+    ``core.openai`` drive both without a second gateway. Only the defaults differ.
+
+    The key lives HERE and not in the operator's DB record, unlike every other
+    provider: the Gemini/OpenAI keys are UI-set because the operator rotates them
+    per campaign, and this one is deployment config. That is also the fallback
+    switch — an empty key sends text generation back to Gemini rather than failing,
+    so a deployment that has not set ``DEEPSEEK__API_KEY`` keeps working unchanged.
+
+    ``deepseek-v4-flash`` is TEXT-ONLY (DeepSeek publishes ``input_modalities:
+    ["text"]``), so nothing carrying an image may be routed here — see
+    ``services.neurocomment._generate`` and ``services.warming._chat_text``, which
+    both keep the image path on Gemini.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DEEPSEEK__", extra="ignore")
+
+    # V4 thinks by DEFAULT (``thinking.type`` defaults to "enabled" at "high" effort)
+    # and charges the thoughts to ``max_tokens``, which is the same trap Gemini set:
+    # omit the field and reasoning eats the whole budget, so the reply comes back a
+    # stump — here, a ``finish_reason: "length"`` the gateway turns into an error, so
+    # every comment would simply fail. ``core.openai`` therefore always sends it.
+    sends_thinking: ClassVar[bool] = True
+
+    model: str = Field(default="deepseek-v4-flash")
+    base_url: str = Field(default="https://api.deepseek.com")
+    # Generation defaults, not the solver's: this provider writes comments and
+    # warming replies, so it inherits Gemini's shape rather than OpenAI's 0.0/300.
+    temperature: float = Field(default=0.9, ge=0.0, le=2.0)
+    max_output_tokens: int = Field(default=256, ge=1, le=2048)
 
 
 class TelemetrSettings(BaseSettings):
