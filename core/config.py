@@ -26,6 +26,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # budget; re-exported here so ``from core.config import WarmingSettings`` etc.
 # keep working unchanged.
 from core._config_domains import (
+    DeepseekSettings,
     GeminiSettings,
     NeurocommentSettings,
     OpenAISettings,
@@ -308,6 +309,7 @@ class Settings(BaseSettings):
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     openai: OpenAISettings = Field(default_factory=OpenAISettings)
+    deepseek: DeepseekSettings = Field(default_factory=DeepseekSettings)
     telemetr: TelemetrSettings = Field(default_factory=TelemetrSettings)
     trust: TrustSettings = Field(default_factory=TrustSettings)
     neurocomment: NeurocommentSettings = Field(default_factory=NeurocommentSettings)

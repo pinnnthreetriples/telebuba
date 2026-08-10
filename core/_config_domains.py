@@ -65,6 +65,35 @@ class OpenAISettings(BaseSettings):
     retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
 
 
+class DeepseekSettings(OpenAISettings):
+    """DeepSeek — the text generator, and the reason Gemini now only does vision.
+
+    Subclasses the OpenAI settings because DeepSeek serves the same wire format
+    (``POST {base_url}/chat/completions``, ``Bearer`` key), which is what lets
+    ``core.openai`` drive both without a second gateway. Only the defaults differ.
+
+    The key lives HERE and not in the operator's DB record, unlike every other
+    provider: the Gemini/OpenAI keys are UI-set because the operator rotates them
+    per campaign, and this one is deployment config. That is also the fallback
+    switch — an empty key sends text generation back to Gemini rather than failing,
+    so a deployment that has not set ``DEEPSEEK__API_KEY`` keeps working unchanged.
+
+    ``deepseek-v4-flash`` is TEXT-ONLY (DeepSeek publishes ``input_modalities:
+    ["text"]``), so nothing carrying an image may be routed here — see
+    ``services.neurocomment._generate`` and ``services.warming._chat_text``, which
+    both keep the image path on Gemini.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="DEEPSEEK__", extra="ignore")
+
+    model: str = Field(default="deepseek-v4-flash")
+    base_url: str = Field(default="https://api.deepseek.com")
+    # Generation defaults, not the solver's: this provider writes comments and
+    # warming replies, so it inherits Gemini's shape rather than OpenAI's 0.0/300.
+    temperature: float = Field(default=0.9, ge=0.0, le=2.0)
+    max_output_tokens: int = Field(default=256, ge=1, le=2048)
+
+
 class TelemetrSettings(BaseSettings):
     """Telemetr.io channel catalogue — the external half of channel discovery.
 

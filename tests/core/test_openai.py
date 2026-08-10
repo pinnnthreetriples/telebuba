@@ -8,7 +8,8 @@ import httpx
 import pytest
 import respx
 
-from core.openai import generate_text
+from core.config import settings
+from core.openai import generate_text, generate_text_deepseek
 from schemas.gemini import GeminiRequest
 
 _ENDPOINT = r".*chat/completions.*"
@@ -53,6 +54,30 @@ async def test_sends_bearer_auth_header() -> None:
         route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
         await generate_text(_request())
     assert route.calls.last.request.headers["authorization"] == "Bearer sk-test"
+
+
+@pytest.mark.asyncio
+async def test_the_deepseek_entry_point_talks_to_deepseek() -> None:
+    """The whole point of the second entry point: same code, different host.
+
+    Asserted on the URL rather than on ``settings`` because that is the thing a
+    misconfiguration would get wrong silently — a DeepSeek key posted to OpenAI's
+    endpoint is a 401 the operator would read as a bad key.
+    """
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        result = await generate_text_deepseek(_request())
+    assert result.status == "ok"
+    assert str(route.calls.last.request.url) == f"{settings.deepseek.base_url}/chat/completions"
+
+
+@pytest.mark.asyncio
+async def test_the_default_entry_point_still_talks_to_openai() -> None:
+    """The other half: adding a provider must not move the one that was already here."""
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text(_request())
+    assert str(route.calls.last.request.url) == f"{settings.openai.base_url}/chat/completions"
 
 
 @pytest.mark.asyncio

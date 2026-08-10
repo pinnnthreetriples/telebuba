@@ -276,9 +276,15 @@ async def _generate_acceptable(
     channel = event.channel
     recent = await _recent_channel_comments(campaign.campaign_id, channel)
     now = datetime.now(UTC)
-    # Comment generation always uses Gemini; read the operator's key from the DB
-    # (falls back to .env) so a UI-set key takes effect without a restart.
+    # Read the operator's Gemini key from the DB (falls back to .env) so a UI-set key
+    # takes effect without a restart. DeepSeek's key is deployment config instead —
+    # see ``core._config_domains.DeepseekSettings`` for why the two differ.
     secret = await load_warming_settings()
+    # Decided once, not per attempt: neither the image nor the key changes across the
+    # regeneration rounds, and a provider that could flip mid-loop would make the
+    # exhaustion reasons unattributable.
+    use_deepseek = _deepseek_generates(image_b64)
+    generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text
     reason: str | None = None
     for attempt in range(nc.max_retries + 1):
         # One beat per round, so the gap between beats is a single ``generate_text`` — the
@@ -290,8 +296,14 @@ async def _generate_acceptable(
         if not await touch_comment_claim(channel, event.post_id):
             return _GenOutcome(None, _CLAIM_LOST_REASON)
         await _log_regeneration(account_id, event, attempt, reason)
-        request = _build_request(campaign.prompt, event.text, secret=secret, image_b64=image_b64)
-        generated = await _seams.generate_text(request)
+        request = _build_request(
+            campaign.prompt,
+            event.text,
+            secret=secret,
+            image_b64=image_b64,
+            use_deepseek=use_deepseek,
+        )
+        generated = await generate(request)
         if generated.status != "ok" or not generated.text:
             reason = _gemini_reason(generated)
             continue
@@ -348,12 +360,26 @@ async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
     return [c.comment_text or "" for c in posted.comments]
 
 
+def _deepseek_generates(image_b64: str | None) -> bool:
+    """True when this comment is written by DeepSeek rather than Gemini.
+
+    Two conditions, and both are hard limits rather than preferences.
+    ``deepseek-v4-flash`` is text-only (DeepSeek publishes ``input_modalities:
+    ["text"]``), so a caption-less photo post — the one case that carries an image —
+    has nowhere to go but Gemini. And an unset ``DEEPSEEK__API_KEY`` means the
+    deployment never opted in, which must fall back rather than fail: this is the
+    hot path for every comment the campaign writes.
+    """
+    return image_b64 is None and bool(settings.deepseek.api_key)
+
+
 def _build_request(
     prompt: str,
     post_text: str,
     *,
     secret: WarmingSettingsSecret,
     image_b64: str | None = None,
+    use_deepseek: bool = False,
 ) -> GeminiRequest:
     nc = settings.neurocomment
     instruction = (
@@ -361,12 +387,16 @@ def _build_request(
         f"Reply in at most {nc.comment_max_words} words, as a natural reader comment. "
         f"{_post_clause(post_text, image_b64=image_b64)}"
     )
+    llm = settings.deepseek if use_deepseek else settings.gemini
     return GeminiRequest(
-        api_key=secret.gemini_api_key,
+        api_key=settings.deepseek.api_key if use_deepseek else secret.gemini_api_key,
         prompt=instruction,
-        model=secret.gemini_model,
-        temperature=settings.gemini.temperature,
-        max_output_tokens=settings.gemini.max_output_tokens,
+        model=settings.deepseek.model if use_deepseek else secret.gemini_model,
+        temperature=llm.temperature,
+        max_output_tokens=llm.max_output_tokens,
+        # Gemini-gateway self-throttle knobs; ``core.openai`` ignores both, the same
+        # way it ignores ``thinking_budget``. Left set so a fallback to Gemini in a
+        # later round would still honour the operator's pacing.
         max_retries=secret.gemini_max_retries,
         min_interval_seconds=secret.gemini_min_interval_seconds,
         image_b64=image_b64,
