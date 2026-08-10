@@ -5,9 +5,11 @@ The captcha-blocked triple ``(joined=1, captcha_passed=0, ready=0)`` matches non
 it, unbounded and untimed. ``_captcha_retry.review_captcha_blocked`` rides the deletion
 sweep and bounds it: one authorised re-solve per pair, stamped as the poke goes out.
 
-This file covers the AUTHORISATION half — who is picked up, who is not, and what the
-stamp stops. The give-up and the channel drop live in ``test_captcha_give_up.py`` (test
-file cap).
+This file covers the AUTHORISATION half — who is picked up, who is not, what the stamp
+stops, and what puts it back: the budget is one retry per EPISODE, so a pair that got past
+the bot and comments again starts over, while a ready row nobody proved buys nothing. The
+give-up and the channel drop live in ``test_captcha_give_up.py`` (test file cap); it is
+asserted here only where it is the observable end of a budget claim.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from core.db import (  # type: ignore[attr-defined]
     bump_channel_pause,
     create_account,
     create_campaign,
+    fetch_comment,
     fetch_readiness,
     insert_challenge,
     link_channel_to_campaign,
@@ -35,10 +38,14 @@ from core.repositories.neurocomment import set_campaign_account_channels
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate, NeurocommentReadiness
-from services.neurocomment import _captcha_retry, _runtime
+from schemas.telegram_actions import NewPostEvent
+from services.neurocomment import _captcha_retry, _runtime, _seams, engine
+from tests.services.neurocomment.engine_support import _CommentStub, _patch_io
+from tests.services.neurocomment.onboarding_support import _ok_action
 
 if TYPE_CHECKING:
     from schemas.logs import LogEntry
+    from schemas.telegram_actions import ActionResult, TelegramAction
 
 pytestmark = pytest.mark.usefixtures("isolate_onboarding")
 
@@ -109,6 +116,12 @@ async def _retry_stamp(account_id: str, *, channel: str = _CHANNEL) -> str | Non
     return row.captcha_retry_at
 
 
+async def _gave_up(account_id: str, *, channel: str = _CHANNEL) -> bool:
+    row = await fetch_readiness(account_id, channel)
+    assert row is not None
+    return row.captcha_gave_up
+
+
 # --------------------------------------------------------------------------- #
 # Who gets the one retry.
 # --------------------------------------------------------------------------- #
@@ -154,6 +167,48 @@ async def test_a_gate_error_pair_with_no_challenge_row_is_left_alone(
 
     assert triggered == []
     assert await _retry_stamp("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_a_muted_pair_sharing_a_channel_with_a_captcha_pair_is_left_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The case the single-account guard above could not see, and the auditor's reproduction.
+
+    A mute alone selects no channel at all, so a one-account channel was safe by accident.
+    Put the same muted pair on a channel where ANOTHER account really did lose a captcha and
+    the bulk read used to widen from the blocked pairs to every row of their channels — so
+    the muted sibling was stamped, retried, marked ``captcha_gave_up`` and walked out of a
+    group it had never fought a captcha in. Both halves of the rule now hold per row: the
+    readiness triple AND a failed challenge of this pair's own.
+    """
+    left: list[str] = []
+
+    async def _record_leave(account_id: str, action: TelegramAction) -> ActionResult:
+        left.append(account_id)
+        return await _ok_action(account_id, action)
+
+    await _campaign("acc-1", "acc-2")
+    await _block("acc-1")  # lost a real captcha
+    await _block("acc-2", challenge=False)  # admin mute: identical triple, no challenge row
+    monkeypatch.setattr(_seams, "execute", _record_leave)
+    triggered = _pokes(monkeypatch)
+    now = datetime.now(UTC)
+
+    await _captcha_retry.review_captcha_blocked(now)
+
+    assert await _retry_stamp("acc-1") is not None
+    assert await _retry_stamp("acc-2") is None
+
+    # The authorised re-solve comes back and loses again, so acc-1 is retired. acc-2 must
+    # not ride along on a verdict about somebody else's captcha.
+    await _block("acc-1")
+    await _captcha_retry.review_captcha_blocked(now + timedelta(minutes=5))
+
+    assert await _gave_up("acc-1") is True
+    assert await _gave_up("acc-2") is False
+    assert left == ["acc-1"]
+    assert len(triggered) == 1
 
 
 @pytest.mark.asyncio
@@ -252,6 +307,113 @@ async def test_a_pair_no_onboarding_pass_would_reach_is_ignored(
     # blanket refusal of the channel.
     assert await _retry_stamp("acc-2") is not None
     assert len(triggered) == 1
+
+
+# --------------------------------------------------------------------------- #
+# One retry per EPISODE: what refunds the budget, and what only looks like it.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_a_delivered_comment_refunds_the_retry_for_the_next_episode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The stamp is one EPISODE's authorisation, not a mark on the pair for life.
+
+    A pair whose re-solve worked comments for weeks and then meets a new guardian bot. With
+    the stamp left standing that pair is ``retry_owed=False`` and ``retry_spent=True`` on the
+    very FIRST tick of the new episode, so it is retired and walked out of the group without
+    a single retry — and the ``2/2`` line written on that same tick claims one was granted.
+    The engine fixture rides along because the refund hangs off a comment Telegram actually
+    accepted, which is the only evidence in the system that the wall is really gone.
+    """
+    await _campaign("acc-1")
+    await _block("acc-1")
+    triggered = _pokes(monkeypatch)
+    now = datetime.now(UTC)
+
+    await _captcha_retry.review_captcha_blocked(now)
+    assert await _retry_stamp("acc-1") is not None
+
+    # The authorised re-solve passes: onboarding writes the ready row, and the pair gets a
+    # comment past the bot. THAT is the recovery — the row alone would not be (see below).
+    await upsert_readiness("acc-1", _CHANNEL, joined=True, captcha_passed=True, ready=True)
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
+    await engine.handle_new_post(NewPostEvent(channel=_CHANNEL, post_id=1, text="hello world"))
+    delivered = await fetch_comment(_CHANNEL, 1)
+    assert delivered is not None
+    assert delivered.status == "posted"
+    assert await _retry_stamp("acc-1") is None
+
+    # A new episode: another bot, the same pair, and a budget that has to start over.
+    await _block("acc-1")
+    await _captcha_retry.review_captcha_blocked(now + timedelta(minutes=5))
+
+    assert await _retry_stamp("acc-1") is not None
+    assert await _gave_up("acc-1") is False
+    assert len(triggered) == 2
+    assert len(await _events("neurocomment_captcha_retry")) == 2
+
+
+@pytest.mark.asyncio
+async def test_an_optimistic_ready_row_alone_does_not_refund_the_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The boundary, and the whole reason the refund is not written where ready is.
+
+    ``_solve_and_record`` writes ``ready`` optimistically for ``no_challenge`` too — the
+    solver simply saw nothing in its wait window — and the engine only finds out on the first
+    comment. Refunding on that row would close a loop with no bound: block, stamp, poke, a
+    ready row nobody proved, refund, block again, five minutes later the same thing, and the
+    pair never reaches the terminal state this rule exists to give it. So the ready row buys
+    nothing, and the pair that produced one is retired exactly like any other spent retry —
+    the ``already_participant`` line ``_rejoin`` draws, drawn here.
+    """
+    await _campaign("acc-1")
+    await _block("acc-1")
+    triggered = _pokes(monkeypatch)
+    now = datetime.now(UTC)
+
+    await _captcha_retry.review_captcha_blocked(now)
+    stamp = await _retry_stamp("acc-1")
+
+    # The poked pass reports the pair comment-able...
+    await upsert_readiness("acc-1", _CHANNEL, joined=True, captcha_passed=True, ready=True)
+    # ...and the first comment is refused, so ``_outcomes``' gate branch writes the wall back.
+    await _block("acc-1")
+
+    await _captcha_retry.review_captcha_blocked(now + timedelta(minutes=5))
+
+    assert await _retry_stamp("acc-1") == stamp
+    assert await _gave_up("acc-1") is True
+    assert len(triggered) == 1
+    assert len(await _events("neurocomment_captcha_retry")) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_pair_that_never_recovers_still_gets_exactly_one_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The one-shot contract, end to end: authorise once, retire, and never come back.
+
+    The refund must not weaken this. A pair that answers its re-solve and loses again has
+    spent the budget, and no tick after that may hand it another — the unbounded re-solve
+    loop is what the rule was written to end.
+    """
+    await _campaign("acc-1")
+    await _block("acc-1")
+    triggered = _pokes(monkeypatch)
+    now = datetime.now(UTC)
+
+    await _captcha_retry.review_captcha_blocked(now)
+    await _block("acc-1")  # the re-solve came back and the bot still will not let it speak
+    await _captcha_retry.review_captcha_blocked(now + timedelta(minutes=5))
+    await _captcha_retry.review_captcha_blocked(now + timedelta(minutes=10))
+
+    assert await _gave_up("acc-1") is True
+    assert len(triggered) == 1
+    assert len(await _events("neurocomment_captcha_retry")) == 1
 
 
 # --------------------------------------------------------------------------- #

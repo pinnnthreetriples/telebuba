@@ -24,6 +24,7 @@ from core.db import (  # type: ignore[attr-defined]
     fetch_readiness,
     link_channel_to_campaign,
     list_recent_logs,
+    mark_captcha_gave_up,
     mark_comment_posted,
     mark_human_skipped,
     mark_pair_banned,
@@ -33,14 +34,24 @@ from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import BanCheckResult, CheckMessagesAlive, CheckMessagesAliveResult
-from services.neurocomment import _rejoin, _sweep
+from services.neurocomment import _rejoin, _sweep, _sweep_read
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from schemas.logs import LogEntry
 
 pytestmark = pytest.mark.usefixtures("isolate_runtime")
 
 _CHANNEL = "@a"
+
+
+@pytest.fixture(autouse=True)
+def _forget_read_mutes() -> Iterator[None]:
+    """The all-kicked mute is process state, so it must not travel between tests."""
+    _sweep_read.reset_read_mutes()
+    yield
+    _sweep_read.reset_read_mutes()
 
 
 def _kicked(error_type: str = "ChannelPrivateError") -> TelegramReadError:
@@ -101,6 +112,12 @@ async def _skip_pair(account_id: str) -> None:
     """The row an operator's «Пропустить» (#148) leaves behind."""
     await upsert_readiness(account_id, _CHANNEL, joined=True, captcha_passed=True, ready=True)
     await mark_human_skipped(account_id, _CHANNEL)
+
+
+async def _captcha_retire_pair(account_id: str) -> None:
+    """The row ``_captcha_retry._give_up_and_leave`` leaves: marked, then walked out of chat."""
+    await upsert_readiness(account_id, _CHANNEL, joined=True, captcha_passed=False, ready=False)
+    await mark_captcha_gave_up(account_id, _CHANNEL)
 
 
 async def _read_failures() -> list[LogEntry]:
@@ -452,3 +469,137 @@ async def test_a_flood_wait_parks_nobody_and_ends_the_walk(
     assert len(failures) == 1
     assert failures[0].extra["readers_tried"] == 1
     assert failures[0].extra["kind"] == "flood_wait"
+
+
+@pytest.mark.asyncio
+async def test_a_channel_nobody_can_read_is_not_asked_again_for_an_hour(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The all-kicked verdict changes nothing, so the identical tick must not repeat forever.
+
+    Live evidence: 137 identical ``neurocomment_sweep_read_failed`` rows for one channel in
+    11.5 hours and 27 for another — the same live ``GetFullChannelRequest`` and the same
+    WARNING, 288 of each a day, none of them telling an operator anything the first did not.
+    """
+    await _campaign_with_authors("acc-1", "acc-2")
+    reader = _patch_reader(
+        monkeypatch,
+        _Reader({"acc-2": _kicked(), "acc-1": _kicked("UserNotParticipantError")}),
+    )
+
+    await _sweep._sweep_once()
+    await _sweep._sweep_once()
+
+    assert reader.calls == ["acc-2", "acc-1"]  # the second tick asked Telegram nothing
+    assert len(await _read_failures()) == 1  # and reported nothing new
+    # And no row anywhere: the mute exists precisely because parking one would spend a
+    # re-join and start the 48h countdown on a channel that may simply have gone private.
+    for account_id in ("acc-1", "acc-2"):
+        assert await fetch_readiness(account_id, _CHANNEL) is None
+
+
+@pytest.mark.asyncio
+async def test_the_mute_lapses_and_the_channel_is_tried_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel that went private can come back, so the silence is a deadline, not a state."""
+    monkeypatch.setattr(_sweep_read, "_MUTE_FOR", timedelta(0))
+    await _campaign_with_authors("acc-1", "acc-2")
+    reader = _patch_reader(
+        monkeypatch,
+        _Reader({"acc-2": _kicked(), "acc-1": _kicked("UserNotParticipantError")}),
+    )
+
+    await _sweep._sweep_once()
+    await _sweep._sweep_once()
+
+    assert reader.calls == ["acc-2", "acc-1", "acc-2", "acc-1"]  # both authors, both ticks
+    assert len(await _read_failures()) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_read_that_works_forgets_the_mute(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lapsed deadline blocks nobody, and the read that proves it is dropped, not left.
+
+    Left behind, the entry would still be there when the channel next goes quiet — and an
+    hour that started before the recovery is not the hour this verdict is owed.
+    """
+    await _campaign_with_authors("acc-1", "acc-2")
+    _sweep_read._MUTED_UNTIL[_CHANNEL] = datetime.now(UTC) - timedelta(seconds=1)
+    reader = _patch_reader(
+        monkeypatch,
+        _Reader({"acc-2": CheckMessagesAliveResult(missing_ids=[101])}),
+    )
+
+    await _sweep._sweep_once()
+
+    assert reader.calls == ["acc-2"]
+    assert _CHANNEL not in _sweep_read._MUTED_UNTIL
+    gone = await fetch_comment(_CHANNEL, 1)
+    assert gone is not None
+    assert gone.deleted_at is not None  # and the deletion check ran on that answer
+
+
+@pytest.mark.asyncio
+async def test_a_single_kick_is_still_parked_and_never_mutes_the_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One reader out of several is the ACCOUNT talking, and that channel stays checked.
+
+    The mute is for the verdict that parks NOBODY. A walk that parks somebody has already
+    changed something, so the next tick is a different tick — and here it is the tick that
+    still notices what this channel deletes.
+    """
+    await _campaign_with_authors("acc-1", "acc-2")
+    reader = _patch_reader(
+        monkeypatch,
+        _Reader({"acc-2": _kicked(), "acc-1": CheckMessagesAliveResult(missing_ids=[101])}),
+    )
+
+    await _sweep._sweep_once()
+    await _sweep._sweep_once()
+
+    parked = await fetch_readiness("acc-2", _CHANNEL)
+    assert parked is not None
+    assert _rejoin.access_lost(parked) is True  # the re-join rule still owns it
+    # Second tick: the parked author is skipped, and ``acc-1`` reads the channel as before.
+    assert reader.calls == ["acc-2", "acc-1", "acc-1"]
+    assert await _read_failures() == []
+
+
+@pytest.mark.asyncio
+async def test_a_captcha_retired_author_is_never_read_with(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``_captcha_retry._give_up_and_leave`` walked this pair out of the chat — it is out.
+
+    Reading with it spends an RPC as a non-member (the anti-ban posture this module keeps),
+    Telegram answers ``UserNotParticipantError``, and if another author reads fine the row is
+    overwritten with the access-loss sentinel — handing a retired pair to ``_rejoin``, which
+    stamps an attempt onboarding refuses to answer, so ``attempt_owed`` never goes false.
+    """
+    await _campaign_with_authors("acc-1", "acc-2")
+    await _captcha_retire_pair("acc-2")  # the freshest author
+    before = await fetch_readiness("acc-2", _CHANNEL)
+    reader = _patch_reader(
+        monkeypatch,
+        _Reader(
+            {
+                "acc-2": _kicked("UserNotParticipantError"),
+                "acc-1": CheckMessagesAliveResult(missing_ids=[101]),
+            },
+        ),
+    )
+
+    await _sweep._sweep_once()
+
+    assert reader.calls == ["acc-1"]  # passed over, and the walk goes on
+    after = await fetch_readiness("acc-2", _CHANNEL)
+    assert after == before  # the terminal captcha verdict is intact
+    assert after is not None
+    assert (after.captcha_gave_up, after.access_lost_reason) == (True, None)
+    gone = await fetch_comment(_CHANNEL, 1)
+    assert gone is not None
+    assert gone.deleted_at is not None  # the check still ran on the fallback author

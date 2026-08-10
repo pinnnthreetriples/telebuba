@@ -216,7 +216,7 @@ async def _review_join_requests(now: datetime) -> None:
             if row.join_requested_at is not None
         ]
         if all(age >= give_up_after for _row, age in ages):
-            await _drop_unapproved_channel(campaign.campaign_id, channel, serving, len(ages))
+            await _drop_unapproved_channel(campaign.campaign_id, channel, serving, len(ages), now)
             continue
         retry_due = retry_due or any(
             # One window per attempt already spent, all measured from the first request:
@@ -240,6 +240,7 @@ async def _drop_unapproved_channel(
     channel: str,
     serving: list[str],
     pending: int,
+    now: datetime,
 ) -> None:
     """Unlink a channel nobody approved us into, via the service (so the listener reconciles).
 
@@ -252,9 +253,23 @@ async def _drop_unapproved_channel(
     keeps it. The caller resolves the pins, so its keep-check and this drop can no longer
     disagree about who serves the channel. One extra read per candidate channel, once per
     channel — this loop ticks every five minutes and is no hot path.
+
+    A pair still working its way back into the chat keeps it too — the mirror of the hold
+    ``_rejoin``'s own drop now grants an outstanding approval request, and the third corner
+    of the concession ``_channel_pause`` already made both ways. Such a pair is neither ready
+    nor absent, so it passed the coverage count as tried and held nothing: an account kicked
+    while a LATER one's request was still out (onboarding reaches a fleet slowly — the
+    rolling join cap, the join jitter) had its whole re-join budget annulled here with an
+    attempt in flight. ``_rejoin.still_retrying`` is that rule's own give-up test, so this
+    hold ends exactly where its does — a pair out of re-joins holds nothing, and the channel
+    goes on the same tick it always did.
     """
     rows = (await list_channel_readiness(campaign_id, channel, serving)).readiness
-    if len(rows) != len(serving) or any(row.ready for row in rows):
+    if (
+        len(rows) != len(serving)
+        or any(row.ready for row in rows)
+        or any(_rejoin.access_lost(row) and _rejoin.still_retrying(row, now) for row in rows)
+    ):
         return
     # Late import for the same cycle as above (campaigns -> _runtime -> _sweep).
     from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415

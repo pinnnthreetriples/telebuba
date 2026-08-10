@@ -23,7 +23,10 @@ why, are these:
   pair the poked pass cannot reach — an account at its rolling-24h join cap, a failing
   ``_safe_resolve``, an LLM 429 that writes no row. That is verbatim the defect ``_rejoin``'s
   docstring says a budget must not have. The table is used to IDENTIFY a captcha-blocked
-  pair (see ``_captcha_failed_since``); ``captcha_retry_at`` is the budget.
+  pair (see ``_captcha_failed_since``); ``captcha_retry_at`` is the budget. One budget per
+  EPISODE, not per pair for life: ``_outcomes._commit_delivered`` clears the stamp
+  (``clear_captcha_retry``), so a pair that got past the bot and is walled in again months
+  later is owed a retry again — see :func:`retry_owed`.
 * **The terminal state is a LEAVE, not a park.** ``_rejoin`` gives up on a pair that is
   already out of the chat; this one gives up on a pair that is still sitting in a group it
   cannot speak in, so it walks out (``_give_up_and_leave``). Nothing re-joins it: the
@@ -100,6 +103,17 @@ def retry_owed(readiness: NeurocommentReadiness) -> bool:
     saw the pair and which it can neither count nor repeat. So the setting would be
     describing something else, and tuning it would silently change a rule the operator
     stated as an absolute: one more try, then out.
+
+    Per EPISODE, and the stamp only means that because something clears it. A pair whose
+    re-solve WORKED comments for weeks and then meets a new guardian bot; with the first
+    episode's stamp still standing it is neither owed a retry nor mid-timeline, so
+    :func:`retry_spent` (``checked_at`` moved long ago) retires it on the very first tick of
+    the new episode — walked out of the group, its channel possibly unlinked, under a "2/2"
+    line claiming a retry that was never granted. ``_outcomes._commit_delivered`` is what
+    clears it, and a DELIVERED comment rather than the ``ready`` row onboarding writes: that
+    row is also written for ``no_challenge`` (the solver saw nothing in its wait window), so
+    refunding on it would let a pair bounce blocked → ready → blocked forever without ever
+    spending the budget — ``_rejoin``'s ``already_participant`` trap, in this rule's terms.
     """
     return readiness.captcha_retry_at is None
 
@@ -188,6 +202,13 @@ async def _review_channel(
     # accounts, pin-aware. A row left behind by an account since removed from the campaign,
     # or pinned to other channels, is nobody's to retry — authorising one would stamp a
     # budget against a solve that never runs and then give up on the pair for losing it.
+    #
+    # ``captcha_blocked`` is only the READINESS half of the rule and can never become the
+    # whole of it here: an admin mute writes the identical triple. The other half — a
+    # failed challenge belonging to THIS pair — is the bulk read's, and every row reaching
+    # this function now carries it. It did not always: the read used to widen from the
+    # blocked pairs to every row of their channels, so a muted sibling was retried and then
+    # retired for losing a fight it was never in.
     serving = serving_accounts((await list_campaign_accounts(campaign_id)).links, channel)
     blocked = [row for row in channel_rows if row.account_id in serving and captcha_blocked(row)]
     if not blocked:

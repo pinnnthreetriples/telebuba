@@ -46,7 +46,7 @@ from core.db import (
     release_channel_pause,
 )
 from core.logging import log_event
-from services.neurocomment import _onboard_pair, _rejoin, _state
+from services.neurocomment import _rejoin, _state
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -104,6 +104,43 @@ async def register_write_failure(channel: str, account_id: str) -> None:
         account_id=account_id,
         extra=extra,
     )
+
+
+async def hold_muted_pair(account_id: str, channel: str, muted_until: str | None) -> str:
+    """Sit out an admin mute on ONE account; returns the deadline actually waited to.
+
+    The pair-scoped sibling of :func:`register_write_failure`, and deliberately NOT that
+    function. Telegram says this restriction applies to this account alone, so it is not
+    the channel forbidding comments: counting it there would pause the other accounts out
+    of a chat they post in fine and spend one of the channel's rounds toward an unlink
+    nobody earned — the punish-the-wrong-thing mistake this rule exists to stop, one level
+    up. What IS shared is this module's promise, and it is why nothing else happens here:
+    no account leaves the chat over a write block, membership costs nothing, and
+    re-joining would spend the rolling-24h join cap.
+
+    The hold is the per-pair cooldown ``bans.register_unconfirmed_ban`` already parks a
+    pair with — persisted and rehydrated (#34), so a multi-day mute survives the restarts
+    a module dict would not, and ``engine._select_account`` is what honours it. It is
+    load-bearing rather than decorative: the readiness row alone stops selection only
+    until the next onboarding pass re-joins as ``already_participant``, finds no challenge
+    and writes ``ready`` back — and that pair's next refused post spends the CHANNEL a
+    round for a mute that was never the channel's doing.
+
+    Never longer than ``channel_pause_hours * channel_max_rounds`` — the same 48h every
+    sibling rule counts out, so the operator tunes one number. That bound is what makes
+    "forever" safe: a permanent restriction carries no date at all (see
+    ``WriteRightsResult.muted_until``) and a mute dated years out is no more useful, so
+    both fall back to the timeline and are simply re-armed by the next refusal.
+    """
+    nc = settings.neurocomment
+    bound = datetime.now(UTC) + timedelta(hours=nc.channel_pause_hours * nc.channel_max_rounds)
+    until = datetime.fromisoformat(muted_until) if muted_until else bound
+    # A naive deadline would break ``set_cooldown``'s aware-only contract; the gateway only
+    # ever emits aware datetimes, so this is a guard, not a branch anyone should hit.
+    if until.tzinfo is None or until > bound:
+        until = bound
+    await _state.set_cooldown(account_id, until, channel)
+    return until.isoformat()
 
 
 async def review_expired_pauses(now: datetime) -> None:
@@ -265,11 +302,12 @@ def _awaiting_approval(rows: list[NeurocommentReadiness], now: datetime) -> bool
     attempt, not its failure, and this deadline annulled the 48h of patience
     ``_sweep._review_join_requests`` had just started on the same budget.
 
-    ``_onboard_pair``'s own predicate, the one the onboarding pass refuses to re-request on,
-    so the two cannot disagree about a row. It ends its own hold: the request review drops the
-    channel when the patience runs out, exactly as this rule ends the one ``_rejoin`` waits on.
+    ``_state.awaiting_approval``, the one predicate ``_rejoin``'s own drop holds on too, so no
+    two rules can disagree about which pairs the request review is still working on. It ends
+    its own hold on that review's patience: once it runs out the request review drops the
+    channel itself, exactly as this rule ends the hold ``_rejoin`` waits on.
     """
-    return any(_onboard_pair._join_request_in_flight(row, now) for row in rows)  # noqa: SLF001
+    return any(_state.awaiting_approval(row, now) for row in rows)
 
 
 async def _channel_coverage(

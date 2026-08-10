@@ -22,7 +22,8 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
-from services.neurocomment import bans, challenge
+from schemas.telegram_actions_rights import CheckWriteRights, WriteRightsResult
+from services.neurocomment import _channel_pause, _comments_off, _seams, bans, challenge
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
@@ -125,13 +126,11 @@ async def _classify_join(
     if result.error_type in _GATE_ERRORS:
         # Telegram-level write block (mute / restrict) → chat_restricted (Ф2 #120).
         # Unsolvable by the challenge solver, so it is never invoked here; joined stays
-        # True (we are a member) but ready is False.
+        # True (we are a member) but ready is False. Written FIRST and unconditionally,
+        # exactly as before: whatever the probe below says, the pair must stop being
+        # selected, and that has to survive a probe that dies.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="chat_restricted",
-        )
+        return await _classify_write_block(account_id, channel)
     # Hard failure (invalid invite / banned / private): never joined and never will
     # without operator action. Persist a signal distinct from the approval-gate row
     # (which is also joined=False) so the board renders join_failed, not "awaiting
@@ -154,6 +153,75 @@ async def _classify_join(
         channel=channel,
         state="failed",
         reason=result.error_type or result.error_message,
+    )
+
+
+async def _write_block_scope(account_id: str, channel: str) -> WriteRightsResult:
+    """Ask Telegram WHOSE mute this is — the one extra RPC a refused write buys.
+
+    Only ever on an actual refusal, never speculatively and never on a schedule: the whole
+    point of this project is not getting accounts frozen, so the budget is one read per
+    refusal.
+
+    Never raises. ``execute_read`` throws (``TelegramReadError`` on flood/RPC,
+    account-not-found, or a wrong type) and an unknown must never become a verdict — that
+    is the mistake the caller exists to prevent. ``TelegramReadError`` already collapses
+    its cause to ``RPC: <ClassName>``, so its ``reason`` is carried through rather than
+    spelled a second time here.
+    """
+    try:
+        rights = await _seams.execute_read(account_id, CheckWriteRights(channel=channel))
+    except Exception as exc:  # noqa: BLE001 - an unreadable answer is not a verdict.
+        return WriteRightsResult(scope="unknown", reason=getattr(exc, "reason", type(exc).__name__))
+    if not isinstance(rights, WriteRightsResult):  # pragma: no cover - typed gateway
+        return WriteRightsResult(scope="unknown", reason="unexpected_result")
+    return rights
+
+
+async def _classify_write_block(account_id: str, channel: str) -> AccountChannelOnboarding:
+    """Turn "we cannot write here" into WHOSE doing it is, and hand it to the owning rule.
+
+    ``ChatWriteForbiddenError`` collapses two situations that need opposite responses — a
+    chat closed to everyone, where the CHANNEL is what should leave service, and a mute on
+    this one account, where nothing should be spent and nobody should leave. Before this
+    read they were indistinguishable, and a muted pair was retired as a lost captcha fight
+    it was never in. Each of the three answers has an owner:
+
+    * ``everyone`` → ``_comments_off``, which already IS the rule for "this channel's
+      comments are off" and already unlinks through the service so the listener
+      reconciles. ``report_and_drop``, not ``recheck``: recheck re-asks
+      ``full_chat.linked_chat_id``, which a read-only group still answers, so it would
+      find nothing wrong. That module insists its verdict be authoritative rather than
+      guessed at, and this one is — the chat-wide ``default_banned_rights`` read off the
+      group entity, not a resolve that merely failed.
+    * ``self_only`` → nothing terminal, nothing spent, nobody leaves. The readiness row
+      the caller already wrote stops the pair being selected, and the mute's own expiry is
+      the window we sit out (``_channel_pause.hold_muted_pair``, which bounds it).
+    * anything else → exactly today's behaviour, ``chat_restricted`` and no action. The
+      reason rides along so a probe that never answers is visible instead of silent.
+    """
+    rights = await _write_block_scope(account_id, channel)
+    if rights.scope == "everyone":
+        await _comments_off.report_and_drop(channel, account_id)
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="comments_off",
+            reason="write_blocked_for_everyone",
+        )
+    if rights.scope == "self_only":
+        held_until = await _channel_pause.hold_muted_pair(account_id, channel, rights.muted_until)
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="chat_restricted",
+            reason=f"muted_until:{held_until}",
+        )
+    return AccountChannelOnboarding(
+        account_id=account_id,
+        channel=channel,
+        state="chat_restricted",
+        reason=rights.reason,
     )
 
 
