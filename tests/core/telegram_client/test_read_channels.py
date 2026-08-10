@@ -9,6 +9,7 @@ import pytest
 from telethon import errors
 
 from core.telegram_client import (
+    TelegramReadError,
     execute_read,
 )
 from schemas.telegram_actions import (
@@ -19,6 +20,7 @@ from schemas.telegram_actions import (
     GetLinkedDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
+from schemas.telegram_actions_rights import CheckWriteRights, WriteRightsResult
 from tests.core.telegram_client.helpers import patch_read_client as _patch_client
 
 
@@ -320,3 +322,212 @@ async def test_check_banned_group_unresolvable_is_comments_disabled(
 
     assert isinstance(result, BanCheckResult)
     assert result.state == "comments_disabled"
+
+
+def _rights_client(
+    participant: object,
+    *,
+    default_banned_rights: object = None,
+    linked: int | None = 999,
+) -> tuple[object, list[object]]:
+    """A FakeClient for the write-rights probe, plus the requests it actually received.
+
+    ``default_banned_rights`` is passed EXPLICITLY: a bare ``MagicMock`` group would
+    auto-create a truthy ``send_messages`` and read every chat as closed to everyone. The
+    request list is what pins "the chat-wide answer costs no participant read".
+    """
+    from telethon.tl.functions.channels import (  # noqa: PLC0415
+        GetFullChannelRequest,
+        GetParticipantRequest,
+    )
+
+    group = MagicMock(id=999, default_banned_rights=default_banned_rights)
+    seen: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return group
+
+        async def __call__(self, request: object) -> object:
+            seen.append(request)
+            if isinstance(request, GetFullChannelRequest):
+                chats = [group] if linked is not None else []
+                return MagicMock(full_chat=MagicMock(linked_chat_id=linked), chats=chats)
+            assert isinstance(request, GetParticipantRequest)
+            if participant is None:
+                raise errors.UserNotParticipantError(request=None)
+            return MagicMock(participant=participant)
+
+    return FakeClient(), seen
+
+
+def _open_rights() -> object:
+    """Default rights that forbid nothing — the ordinary group everyone may write in."""
+    from telethon.tl.types import ChatBannedRights  # noqa: PLC0415
+
+    return ChatBannedRights(until_date=None)
+
+
+def _muted_self(until: object) -> object:
+    """Our own participant record with ``send_messages`` revoked until ``until``."""
+    from telethon.tl.types import (  # noqa: PLC0415
+        ChannelParticipantBanned,
+        ChatBannedRights,
+        PeerUser,
+    )
+
+    return ChannelParticipantBanned(
+        peer=PeerUser(1),
+        kicked_by=2,
+        date=datetime.now(UTC),
+        banned_rights=ChatBannedRights(until_date=until, send_messages=True),  # ty: ignore[invalid-argument-type]
+    )
+
+
+@pytest.mark.asyncio
+async def test_write_rights_chat_wide_mute_is_everyone_and_skips_the_participant_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A group whose DEFAULT rights revoke send_messages is closed to all — nobody's fault.
+
+    Checked before our own record and short-circuiting it, because a read-only group leaves
+    that record untouched: reading ours first would report a channel-wide switch as a
+    personal mute, which is the confusion this action exists to end.
+    """
+    from telethon.tl.functions.channels import GetParticipantRequest  # noqa: PLC0415
+    from telethon.tl.types import ChatBannedRights  # noqa: PLC0415
+
+    closed = ChatBannedRights(until_date=None, send_messages=True)
+    client, seen = _rights_client(MagicMock(), default_banned_rights=closed)
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert (result.scope, result.muted_until) == ("everyone", None)
+    assert not [request for request in seen if isinstance(request, GetParticipantRequest)]
+
+
+@pytest.mark.asyncio
+async def test_write_rights_own_record_muted_is_self_only_with_its_expiry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only WE are muted, and Telegram says until when — the answer that buys a wait."""
+    until = datetime(2026, 9, 1, 12, 0, tzinfo=UTC)
+    client, _seen = _rights_client(_muted_self(until), default_banned_rights=_open_rights())
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert (result.scope, result.muted_until) == ("self_only", until.isoformat())
+
+
+@pytest.mark.asyncio
+async def test_write_rights_permanent_mute_carries_no_expiry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forever is ``until_date=0``, which Telethon's date reader hands back as no date.
+
+    Reported as ``None`` rather than invented as some far-future stamp: the caller is what
+    bounds an unbounded wait, and it can only do that if it can tell there is no date.
+    """
+    client, _seen = _rights_client(_muted_self(None), default_banned_rights=_open_rights())
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert (result.scope, result.muted_until) == ("self_only", None)
+
+
+@pytest.mark.asyncio
+async def test_write_rights_unrestricted_member_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Rights permit writing: the refusal came from something else, so no mute is claimed."""
+    client, _seen = _rights_client(MagicMock(), default_banned_rights=_open_rights())
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert result.scope == "none"
+
+
+@pytest.mark.asyncio
+async def test_write_rights_kicked_record_is_not_a_mute(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Telegram revokes every right at once on a ban, ``send_messages`` included.
+
+    Without reading ``view_messages`` first, a pair that is OUT of the chat would come back
+    muted and be parked waiting out an expiry that means nothing to it.
+    """
+    from telethon.tl.types import (  # noqa: PLC0415
+        ChannelParticipantBanned,
+        ChatBannedRights,
+        PeerUser,
+    )
+
+    kicked = ChannelParticipantBanned(
+        peer=PeerUser(1),
+        kicked_by=2,
+        date=datetime.now(UTC),
+        banned_rights=ChatBannedRights(until_date=None, view_messages=True, send_messages=True),
+    )
+    client, _seen = _rights_client(kicked, default_banned_rights=_open_rights())
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert (result.scope, result.reason) == ("unknown", "not_member")
+
+
+@pytest.mark.asyncio
+async def test_write_rights_no_linked_group_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Nothing to read rights off → an honest unknown, never a verdict."""
+    client, _seen = _rights_client(MagicMock(), linked=None)
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert (result.scope, result.reason) == ("unknown", "no_linked_group")
+
+
+@pytest.mark.asyncio
+async def test_write_rights_not_a_participant_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No participant record of our own → no mute to read; the kick branch owns this."""
+    client, _seen = _rights_client(None, default_banned_rights=_open_rights())
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert isinstance(result, WriteRightsResult)
+    assert (result.scope, result.reason) == ("unknown", "not_member")
+
+
+@pytest.mark.asyncio
+async def test_write_rights_rpc_failure_collapses_to_the_shared_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failing probe rides the gateway's own error convention: ``RPC: <ClassName>``.
+
+    The reason stays machine-readable and content-free, which is what lets the caller carry
+    it through as "we could not tell" instead of reading a verdict out of a message.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            raise errors.ChatAdminRequiredError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    with pytest.raises(TelegramReadError) as exc_info:
+        await execute_read("acc-x", CheckWriteRights(channel="@news"))
+
+    assert exc_info.value.reason == "RPC: ChatAdminRequiredError"

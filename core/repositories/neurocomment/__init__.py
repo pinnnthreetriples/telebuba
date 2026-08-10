@@ -41,6 +41,7 @@ from core.repositories.neurocomment._campaigns import (
     update_solver_enabled,
 )
 from core.repositories.neurocomment._captcha_giveup import (
+    clear_captcha_retry,
     list_captcha_blocked_readiness,
     mark_captcha_gave_up,
     stamp_captcha_retry,
@@ -135,6 +136,7 @@ __all__ = [
     "assign_account_to_campaign",
     "bump_channel_pause",
     "claim_comment",
+    "clear_captcha_retry",
     "clear_channel_pause",
     "clear_join_request",
     "clear_rejoin_attempts",

@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
+    clear_captcha_retry,
     clear_unconfirmed_bans,
     mark_comment_failed,
     mark_comment_posted,
@@ -293,6 +294,11 @@ async def _commit_delivered(
         # reset above cannot speak for: the count that bans a pair is per (account,
         # channel), so another account's success must not spend or refund it.
         await clear_unconfirmed_bans(account_id, event.channel)
+        # The captcha rule's one-shot budget (#49) is per-pair too, and a delivered comment
+        # is the ONLY evidence that its episode is over: the ready row onboarding writes
+        # covers ``no_challenge`` — the solver saw nothing — so refunding on that would let a
+        # pair bounce between blocked and ready forever and never reach the terminal state.
+        await clear_captcha_retry(account_id, event.channel)
         # Exactly ONE line per delivery, describing the row this delivery actually landed
         # on. The clean line used to fire in addition to the warning, so the feed announced
         # "Comment posted" over a row reading ``failed`` — the very contradiction the

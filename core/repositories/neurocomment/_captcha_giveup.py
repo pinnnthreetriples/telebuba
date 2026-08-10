@@ -6,10 +6,11 @@ the same reason: one rule owns two columns nothing else writes, so the whole rul
 one place. ``core.db`` re-exports these via the package ``__init__``, so call sites are
 unchanged.
 
-The read below is a deliberate copy of ``_readiness._list_access_lost_readiness``'s shape
-(inner select over channels, outer select over every row of them) and its predicate is the
-twin of ``_readiness._ACCESS_LOST``; both docstrings say so, because a reader who finds one
-must be able to find the other.
+The read below pairs with ``_readiness._list_access_lost_readiness`` and its predicate is
+the twin of ``_readiness._ACCESS_LOST``; both docstrings say so, because a reader who finds
+one must be able to find the other. It deliberately does NOT copy that read's shape any
+more (inner select over channels, outer select over every row of them) — see the read's own
+docstring for the pair that shape retired for somebody else's captcha.
 
 Public functions wrap sync helpers via ``asyncio.to_thread`` and return Pydantic models —
 never raw rows (non-negotiable #2).
@@ -45,11 +46,8 @@ _CAPTCHA_BLOCKED = (
 
 
 def _list_captcha_blocked_readiness(since: str) -> ReadinessList:
-    channels = select(_neurocomment_readiness.c.channel).where(
-        _CAPTCHA_BLOCKED & _captcha_failed_since(since),
-    )
     statement = select(_neurocomment_readiness).where(
-        _neurocomment_readiness.c.channel.in_(channels),
+        _CAPTCHA_BLOCKED & _captcha_failed_since(since),
     )
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
@@ -59,13 +57,19 @@ def _list_captcha_blocked_readiness(since: str) -> ReadinessList:
 
 
 async def list_captcha_blocked_readiness(since: str) -> ReadinessList:
-    """Readiness rows for every channel where a captcha has beaten a pair since ``since``.
+    """Readiness rows of the pairs a captcha has beaten since ``since`` — and only those.
 
-    Shaped exactly like ``_readiness.list_access_lost_readiness``: the inner select picks
-    the CHANNELS holding at least one blocked pair, the outer one returns EVERY readiness
-    row of those channels. The give-up rule needs the siblings to prove nobody still works
-    there before it unlinks the channel, and one stubborn pair must never drop a channel
-    the other accounts comment in fine.
+    Every row satisfies BOTH halves of the rule: the readiness triple AND a failed
+    challenge of its own. It used to return every row of any channel holding one such
+    pair, on the theory that the give-up rule needs the siblings before it unlinks a
+    channel — but that rule re-reads them itself (``_drop_channel_if_nobody_passed`` →
+    ``list_channel_readiness``), so the extra rows fed nothing except the caller's
+    ``captcha_blocked`` filter, which is the readiness half alone. An admin mute writes
+    that same triple with no challenge row, so a muted account sharing a channel with a
+    captcha-blocked one was stamped, retried, then marked ``captcha_gave_up`` and walked
+    out of a group it had never fought a captcha in. The channel indirection WAS that bug;
+    the single-account case only ever looked safe because the mute alone selected no
+    channel at all.
 
     ``since`` is a required ISO-8601 lower bound on the challenge failure, not a default:
     the challenges table is append-only and retention keeps failures for 90 days, so an
@@ -94,10 +98,41 @@ async def stamp_captcha_retry(account_id: str, channel: str) -> None:
     stamp carried by that write would reset itself and re-solve forever.
 
     A plain overwrite, not a COALESCE like ``stamp_join_request``: this column is a one-shot
-    authorisation and its rule only ever writes it once (``_captcha_retry.retry_owed`` is
-    false the moment it is set), so there is no second stamp to protect the first from.
+    authorisation and its rule only ever writes it once per EPISODE
+    (``_captcha_retry.retry_owed`` is false the moment it is set), so there is no second
+    stamp to protect the first from — a later episode writes into the NULL
+    ``clear_captcha_retry`` left behind, and a COALESCE would pin that stamp to the wrong one.
     """
     await asyncio.to_thread(_stamp_captcha_retry, account_id, channel)
+
+
+def _clear_captcha_retry(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                # Only rows actually carrying a stamp — the caller runs on the post hot
+                # path, and a pair that never met a guardian bot must not pay an UPDATE per
+                # delivered comment to write the NULL already there. The filter
+                # ``_clear_join_request`` and ``clear_rejoin_attempts`` both use.
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel)
+                & _neurocomment_readiness.c.captcha_retry_at.is_not(None),
+            )
+            .values(captcha_retry_at=None),
+        )
+
+
+async def clear_captcha_retry(account_id: str, channel: str) -> None:
+    """Give this pair its one re-solve back: the episode that spent it is over.
+
+    ``captcha_gave_up`` deliberately does NOT ride along, unlike ``rejoin_gave_up`` in
+    ``clear_rejoin_attempts``. That verdict is terminal here — the account has WALKED OUT of
+    the discussion group and onboarding refuses it from then on, so a pair carrying it cannot
+    be selected, cannot comment, and can never reach this call. Clearing it would be a reset
+    nothing asked for and nothing could observe.
+    """
+    await asyncio.to_thread(_clear_captcha_retry, account_id, channel)
 
 
 def _mark_captcha_gave_up(account_id: str, channel: str) -> None:

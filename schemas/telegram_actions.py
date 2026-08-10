@@ -64,8 +64,10 @@ from schemas.telegram_actions_media import (
 
 # The account-privacy pair likewise lives in a sibling module; both unions below
 # reference these names, so importing them here keeps
-# ``from schemas.telegram_actions import SetPrivacySettings`` working.
+# ``from schemas.telegram_actions import SetPrivacySettings`` working. Same for the
+# write-rights read, of which only the ACTION is named here (for the union below).
 from schemas.telegram_actions_privacy import GetPrivacySettings, SetPrivacySettings
+from schemas.telegram_actions_rights import CheckWriteRights
 
 
 class JoinChannel(BaseModel):
@@ -300,6 +302,7 @@ TelegramReadAction = Annotated[
     GetLinkedDiscussionGroup
     | CheckMessagesAlive
     | CheckBannedInChannel
+    | CheckWriteRights
     | GetUserProfile
     | GetPrivacySettings
     | ListPinnedStories
