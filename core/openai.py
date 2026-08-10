@@ -15,6 +15,11 @@ Endpoint: ``POST {base_url}/chat/completions`` with a ``Bearer`` key. Images rid
 as a base64 ``image_url`` data-URI content part; structured output uses
 ``response_format: json_schema``. DeepSeek's models are text-only, so the image
 part must never reach it — the routing that guarantees that lives in the callers.
+
+The one place the two providers' payloads differ is ``thinking``: DeepSeek accepts
+it and reasons by default, OpenAI rejects the field outright. ``sends_thinking`` on
+the settings class carries that, because it is a property of the API rather than
+anything an operator may set.
 """
 
 from __future__ import annotations
@@ -63,7 +68,7 @@ def _endpoint(config: OpenAISettings) -> str:
     return f"{config.base_url}/chat/completions"
 
 
-def _payload(request: GeminiRequest) -> dict[str, object]:
+def _payload(request: GeminiRequest, provider: OpenAISettings) -> dict[str, object]:
     content: list[dict[str, object]] = [{"type": "text", "text": request.prompt}]
     if request.image_b64 is not None:
         # Vision: inline base64 as a data-URI image part.
@@ -75,6 +80,17 @@ def _payload(request: GeminiRequest) -> dict[str, object]:
         "temperature": request.temperature,
         "max_tokens": request.max_output_tokens,
     }
+    if provider.sends_thinking:
+        # Always explicit, exactly as ``core.gemini`` sends ``thinkingBudget`` — and for
+        # the identical reason. DeepSeek-V4 defaults ``thinking`` to enabled at "high"
+        # effort and bills the thoughts to ``max_tokens``, so omitting this hands a
+        # 256-token comment budget to the reasoning and leaves nothing for the reply.
+        # ``thinking_budget`` is the request's provider-neutral way to ask for
+        # reasoning: 0 (every short-text caller) means off. DeepSeek grades effort
+        # rather than counting tokens, so a non-zero budget only turns it on and lets
+        # the provider's own default effort stand — nothing here invents a mapping
+        # from a token count to "low"/"high"/"max".
+        payload["thinking"] = {"type": "enabled" if request.thinking_budget else "disabled"}
     if request.response_schema_json is not None:
         # Server-side structured output: the model must return JSON matching the schema.
         payload["response_format"] = {
@@ -158,7 +174,7 @@ async def generate_text(
             response = await client.post(
                 _endpoint(provider),
                 headers={"Authorization": f"Bearer {request.api_key}"},
-                json=_payload(request),
+                json=_payload(request, provider),
                 timeout=provider.timeout_seconds,
             )
         except httpx.HTTPError as exc:
