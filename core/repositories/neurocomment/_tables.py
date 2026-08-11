@@ -305,6 +305,44 @@ _neurocomment_runtime = Table(
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_runtime_single_row"),
 )
+# Durable boundary between Telegram updates and the commenting pipeline. Rows are kept
+# after completion long enough for live/backfill overlap and process restarts to dedupe.
+_neurocomment_inbox = Table(
+    "neurocomment_inbox",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("post_id", Integer, primary_key=True),
+    Column("date_unix", Integer, nullable=False),
+    Column("text", String, nullable=False),
+    Column("media_kind", String, nullable=False),
+    Column("is_forward", Boolean, nullable=False),
+    Column("state", String, nullable=False),
+    Column("stage", String, nullable=False),
+    Column("outcome", String, nullable=True),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("next_attempt_unix", Integer, nullable=False, server_default="0"),
+    Column("received_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+    CheckConstraint(
+        "state IN ('pending', 'processing', 'done', 'expired')",
+        name="ck_neurocomment_inbox_state",
+    ),
+    CheckConstraint(
+        "stage IN ('received', 'pre_send', 'dispatching', 'dispatched')",
+        name="ck_neurocomment_inbox_stage",
+    ),
+)
+_neurocomment_cursors = Table(
+    "neurocomment_cursors",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("last_post_id", Integer, nullable=False),
+    Column("updated_at", String, nullable=False),
+    Column("backfill_floor_post_id", Integer, nullable=True),
+    Column("backfill_before_post_id", Integer, nullable=True),
+    Column("backfill_success_at", String, nullable=True),
+    Column("backfill_retry_at", String, nullable=True),
+)
 # Single-row operator-editable neurocomment limits (migration #19). Empty until
 # the operator saves; reads fall back to ``settings.neurocomment`` config.
 _neurocomment_settings = Table(

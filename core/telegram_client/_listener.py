@@ -15,7 +15,9 @@ re-invokes :func:`subscribe_posts` (idempotent) to re-establish it.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from telethon import events
@@ -43,6 +45,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "fetch_recent_posts",
     "stop_post_listener",
     "subscribe_posts",
     "take_lost_access_channels",
@@ -56,6 +59,11 @@ _HANDLERS: dict[str, _EventHandler] = {}
 # The channel-filter each handler was registered with, so a pool rebuild can
 # re-attach the same subscription on the replacement client.
 _FILTERS: dict[str, object] = {}
+# One lock + monotonically increasing generation per account make subscribe, stop and
+# pool-rebuild reattach linearizable. Without them a slow subscribe could register after
+# a later stop, or an old callback could keep delivering after a subscription switch.
+_SUBSCRIPTION_LOCKS: dict[str, asyncio.Lock] = {}
+_GENERATIONS: dict[str, int] = {}
 # Resolved peer id per channel, so reconcile does not re-issue a get_peer_id RPC
 # for every watched channel on every call (fires on each link/unlink + boot =
 # O(channels) serial RPCs otherwise). Peer ids are stable, so a stale entry is
@@ -83,6 +91,19 @@ _LOST_ACCESS_ERRORS = (ChannelPrivateError, UserNotParticipantError, UserBannedI
 _LOST_ACCESS: dict[str, set[str]] = {}
 
 
+def _subscription_lock(account_id: str) -> asyncio.Lock:
+    lock = _SUBSCRIPTION_LOCKS.get(account_id)
+    if lock is None:
+        lock = _SUBSCRIPTION_LOCKS[account_id] = asyncio.Lock()
+    return lock
+
+
+def _next_generation(account_id: str) -> int:
+    generation = _GENERATIONS.get(account_id, 0) + 1
+    _GENERATIONS[account_id] = generation
+    return generation
+
+
 def take_lost_access_channels(account_id: str) -> set[str]:
     """Channels ``account_id`` failed to resolve as a member since the last call (drains).
 
@@ -100,19 +121,20 @@ async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
     firing until the next boot-time reconcile. Keyed off ``_HANDLERS`` so a
     stopped listener (already popped) is never resurrected.
     """
-    handler = _HANDLERS.get(account_id)
-    event_filter = _FILTERS.get(account_id)
-    if handler is None or event_filter is None:
-        return
-    # ``_FILTERS`` stores the ``events.NewMessage`` instance as ``object``; the
-    # stub types the param as ``EventBuilder``.
-    client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
+    async with _subscription_lock(account_id):
+        handler = _HANDLERS.get(account_id)
+        event_filter = _FILTERS.get(account_id)
+        if handler is None or event_filter is None:
+            return
+        # ``_FILTERS`` stores the ``events.NewMessage`` instance as ``object``; the
+        # stub types the param as ``EventBuilder``.
+        client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
 
 
 register_rebuild_hook(_reattach_on_rebuild)
 
 
-async def subscribe_posts(
+async def subscribe_posts(  # noqa: C901, PLR0911 - generation-fenced I/O state machine
     account_id: str,
     channels: list[str],
     on_post: Callable[[NewPostEvent], Awaitable[None]],
@@ -130,23 +152,32 @@ async def subscribe_posts(
     id is left out of the filter, so no post from it will EVER arrive — the caller
     only learns about that gap from this return value.
     """
-    await stop_post_listener(account_id)
-
+    # Reserve ownership before connecting. Pool construction calls rebuild hooks, so
+    # holding this lock across ``get_client`` would deadlock when our own hook re-enters.
+    # A stop/new subscribe during the connect advances the generation and wins.
+    async with _subscription_lock(account_id):
+        generation = _next_generation(account_id)
+        _detach_locked(account_id)
     client = await get_client(account_id)
+
+    # Peer resolution can block on Telegram. It must never hold the subscription lock:
+    # Stop/delete bump the generation and return immediately while this stale pass winds
+    # down. Every await is followed by an ownership check before another RPC or publish.
     channel_by_peer_id: dict[int, str] = {}
     resolved: list[str] = []
     for channel in channels:
+        if _GENERATIONS.get(account_id) != generation:
+            return []
         peer_id = _PEER_IDS.get(channel)
         if peer_id is None:
             try:
                 peer_id = await client.get_peer_id(channel)
-            except Exception as exc:  # noqa: BLE001 - one bad channel must not disable the whole listener
+            except Exception as exc:  # noqa: BLE001 - isolate one bad channel
+                if _GENERATIONS.get(account_id) != generation:
+                    return []
                 # ponytail: transport code named after its caller's domain. The log
                 # feeds are separated only by event-name prefix, and neurocomment is
-                # today the sole consumer of the post listener (services/neurocomment/
-                # _watch.py), so a neutral ``telegram_*`` name would be invisible in the
-                # 'neurocomment' view. A second consumer is the ceiling: at that point
-                # the rows need a real domain column instead of a prefix convention.
+                # today the sole consumer of the post listener.
                 if isinstance(exc, _LOST_ACCESS_ERRORS):
                     _LOST_ACCESS.setdefault(account_id, set()).add(channel)
                 await log_event(
@@ -155,7 +186,11 @@ async def subscribe_posts(
                     account_id=account_id,
                     extra={"channel": channel, "error_type": type(exc).__name__},
                 )
+                if _GENERATIONS.get(account_id) != generation:
+                    return []
                 continue
+            if _GENERATIONS.get(account_id) != generation:
+                return []
             _PEER_IDS[channel] = peer_id
         channel_by_peer_id[peer_id] = channel
         resolved.append(channel)
@@ -165,12 +200,22 @@ async def subscribe_posts(
         # watch EVERY chat. An empty whitelist must mean "listen to nothing".
         return resolved
 
-    handler = _make_handler(account_id, channel_by_peer_id, on_post)
-    event_filter = events.NewMessage(chats=resolved)
-    client.add_event_handler(handler, event_filter)
-    _HANDLERS[account_id] = handler
-    _FILTERS[account_id] = event_filter
-    return resolved
+    # Await-free commit: Stop either wins before this lock (generation mismatch) or
+    # immediately after registration and detaches the exact handler we publish here.
+    async with _subscription_lock(account_id):
+        if _GENERATIONS.get(account_id) != generation:
+            return []
+        handler = _make_handler(
+            account_id,
+            channel_by_peer_id,
+            on_post,
+            generation=generation,
+        )
+        event_filter = events.NewMessage(chats=resolved)
+        client.add_event_handler(handler, event_filter)
+        _HANDLERS[account_id] = handler
+        _FILTERS[account_id] = event_filter
+        return resolved
 
 
 async def update_post_subscription(
@@ -192,6 +237,13 @@ async def stop_post_listener(account_id: str) -> None:
     the pool is shutting down). If nothing is cached, dropping the registry
     entry is enough: a future rebuild won't carry the handler.
     """
+    async with _subscription_lock(account_id):
+        _next_generation(account_id)
+        _detach_locked(account_id)
+
+
+def _detach_locked(account_id: str) -> None:
+    """Detach one subscription while its account lock is held."""
     handler = _HANDLERS.pop(account_id, None)
     _FILTERS.pop(account_id, None)
     # The gap report goes with the subscription that witnessed it: this is also the account
@@ -206,6 +258,44 @@ async def stop_post_listener(account_id: str) -> None:
     # Telethon accepts the EventBuilder *class* here to drop all NewMessage
     # handlers; its stub only types the instance form.
     client.remove_event_handler(handler, events.NewMessage)  # ty: ignore[invalid-argument-type]
+
+
+async def fetch_recent_posts(
+    account_id: str,
+    channel: str,
+    *,
+    limit: int,
+    before_post_id: int | None = None,
+) -> list[NewPostEvent]:
+    """Read a small newest-first history page for explicit, bounded gap recovery.
+
+    This is deliberately not Telethon ``catch_up``: callers choose one known channel,
+    a hard row limit and a freshness cutoff. The push handler is already installed when
+    this runs, and the durable inbox deduplicates overlap between the two sources.
+    """
+    client = await get_client(account_id)
+    messages = await client.get_messages(
+        channel,
+        limit=limit,
+        offset_id=before_post_id or 0,
+    )
+    result: list[NewPostEvent] = []
+    for message in messages:  # ty: ignore[not-iterable]
+        if getattr(message, "post", None) is not True:
+            continue
+        raw_date = getattr(message, "date", None)
+        date_unix = int(raw_date.timestamp()) if isinstance(raw_date, datetime) else 0
+        result.append(
+            NewPostEvent(
+                channel=channel,
+                post_id=int(getattr(message, "id", 0) or 0),
+                text=str(getattr(message, "message", "") or ""),
+                media_kind=_media_kind(message),
+                is_forward=getattr(message, "fwd_from", None) is not None,
+                date_unix=max(0, date_unix),
+            ),
+        )
+    return [event for event in result if event.post_id > 0]
 
 
 def _media_kind(message: object) -> PostMediaKind:
@@ -231,8 +321,16 @@ def _make_handler(
     account_id: str,
     channel_by_peer_id: dict[int, str],
     on_post: Callable[[NewPostEvent], Awaitable[None]],
+    *,
+    generation: int | None = None,
 ) -> _EventHandler:
     async def handler(event: events.NewMessage.Event) -> None:
+        # ``generation=None`` keeps this small factory useful in isolated tests and for
+        # callers that only need event translation. Production subscriptions always pass
+        # an ownership token, so a detached handler already queued by Telethon cannot
+        # deliver into a replacement runtime.
+        if generation is not None and _GENERATIONS.get(account_id) != generation:
+            return
         message = event.message
         if message.post is not True:
             # Only channel broadcast posts; ``post`` is also falsy for megagroups.
@@ -244,6 +342,7 @@ def _make_handler(
             text=message.message or "",
             media_kind=_media_kind(message),
             is_forward=message.fwd_from is not None,
+            date_unix=int(getattr(message, "date", datetime.now(UTC)).timestamp()),
         )
         try:
             await on_post(post)
@@ -265,3 +364,5 @@ def _reset_for_tests() -> None:
     _FILTERS.clear()
     _PEER_IDS.clear()
     _LOST_ACCESS.clear()
+    _GENERATIONS.clear()
+    _SUBSCRIPTION_LOCKS.clear()

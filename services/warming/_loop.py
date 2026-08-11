@@ -380,6 +380,11 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each ea
         return await _finalize_after_cycle(
             account_id, result, age_hours, reservation, schedule, run_id=run_id
         )
+    except _seams.WarmingLeaseRevokedError:
+        # The RPC may already have crossed the process boundary when Stop revoked
+        # the lease. Keep the full reservation booked: an unknown external outcome
+        # must fail closed, never hand budget back for a possible Telegram action.
+        raise
     except BaseException:
         # ``BaseException`` on purpose: ``CancelledError`` does not inherit from
         # ``Exception``, and cancellation is the leak path that costs a whole day of

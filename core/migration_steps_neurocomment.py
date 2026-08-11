@@ -30,6 +30,31 @@ _CHANNEL_FOLD = channel_fold_sql("channel")
 _FOLD_INDEX = "ix_nc_channel_one_active_campaign_fold"
 
 
+def _add_neurocomment_inbox(connection: Connection) -> None:
+    """Durable post handoff + per-channel high-water cursor."""
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_inbox ("
+        " channel VARCHAR NOT NULL, post_id INTEGER NOT NULL, date_unix INTEGER NOT NULL,"
+        " text VARCHAR NOT NULL, media_kind VARCHAR NOT NULL, is_forward BOOLEAN NOT NULL,"
+        " state VARCHAR NOT NULL CHECK (state IN ('pending','processing','done','expired')),"
+        " stage VARCHAR NOT NULL CHECK (stage IN "
+        " ('received','pre_send','dispatching','dispatched')) DEFAULT 'received',"
+        " outcome VARCHAR, attempts INTEGER NOT NULL DEFAULT 0,"
+        " next_attempt_unix INTEGER NOT NULL DEFAULT 0, received_at VARCHAR NOT NULL,"
+        " updated_at VARCHAR NOT NULL, PRIMARY KEY (channel, post_id))",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_inbox_state_date "
+        "ON neurocomment_inbox(state, date_unix, post_id)",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_cursors ("
+        " channel VARCHAR PRIMARY KEY, last_post_id INTEGER NOT NULL, updated_at VARCHAR NOT NULL,"
+        " backfill_floor_post_id INTEGER, backfill_before_post_id INTEGER,"
+        " backfill_success_at VARCHAR, backfill_retry_at VARCHAR)",
+    )
+
+
 def _add_neurocomment_tables(connection: Connection) -> None:
     # Ф1 data layer (#114). Mirrors the SQLAlchemy tables in core.db; created
     # idempotently here so existing databases gain them on the next engine init.

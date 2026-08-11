@@ -45,6 +45,7 @@ from services.neurocomment._challenge_log import (
     log_result,
     refusal,
 )
+from services.neurocomment._onboarding_owner import ensure_current
 
 ChallengeOutcome = Literal["no_challenge", "give_up", "solved", "failed", "rate_limited"]
 
@@ -292,10 +293,12 @@ async def _dispatch(
     try:
         # The only unbounded Telethon await in the solver — a hung click must not
         # stall onboarding forever, so cap it and treat a timeout as a failed dispatch.
+        ensure_current()
         result = await asyncio.wait_for(
             _seams.execute(account_id, action),
             timeout=settings.neurocomment.challenge_dispatch_timeout_seconds,
         )
+        ensure_current()
     except TimeoutError:
         return False
     return result.status == "ok"
@@ -328,10 +331,12 @@ async def _wait_for_challenge(
     account_id: str, group_id: int, timeout_seconds: float
 ) -> BotChallengeMessage | None:
     """Wait up to ``timeout_seconds`` for a guardian-bot challenge, or ``None``."""
+    ensure_current()
     result = await _seams.execute_read(
         account_id,
         WaitForBotChallenge(chat_id=group_id, timeout_seconds=timeout_seconds),
     )
+    ensure_current()
     return result.message if isinstance(result, BotChallengeWaitResult) else None
 
 

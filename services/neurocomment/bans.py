@@ -38,6 +38,7 @@ from core.logging import log_event
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel, LeaveDiscussionGroup
 from services.neurocomment import _comments_off, _seams, _state
+from services.neurocomment._onboarding_owner import ensure_current
 from services.neurocomment._pins import serving_accounts
 
 _ChannelStatus = Literal["ok", "banned", "unknown"]
@@ -65,9 +66,11 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
     async def _probe(account_id: str, channel: str) -> str:
         async with semaphore:
             try:
+                ensure_current()
                 result = await _seams.execute_read(
                     account_id, CheckBannedInChannel(channel=channel)
                 )
+                ensure_current()
             except Exception:  # noqa: BLE001 - a probe fault degrades to "unknown".
                 return "unknown"
         return result.state if isinstance(result, BanCheckResult) else "unknown"
@@ -103,7 +106,9 @@ async def probe_group_state(account_id: str, channel: str) -> str:
     hands it to each as ``known_state`` instead of probing twice for one failed send.
     """
     try:
+        ensure_current()
         probe = await _seams.execute_read(account_id, CheckBannedInChannel(channel=channel))
+        ensure_current()
     except Exception:  # noqa: BLE001 - a probe fault is not evidence of a ban.
         return "probe_error"
     return probe.state if isinstance(probe, BanCheckResult) else "probe_error"
@@ -163,7 +168,9 @@ async def confirm_group_ban_and_leave(
             extra={"channel": channel, "state": state},
         )
         return False
+    ensure_current()
     verdict = await _seams.refresh_spam_status(account_id, force=True)
+    ensure_current()
     if verdict.status != "clean":
         await log_event(
             "WARNING",
@@ -315,7 +322,10 @@ async def _ban_on_a_spent_budget(
     silence — and it is literally the budget, because this branch is "at or over it" and an
     over-run must not render as "3/2".
     """
-    if (await _seams.refresh_spam_status(account_id, force=True)).status != "clean":
+    ensure_current()
+    verdict = await _seams.refresh_spam_status(account_id, force=True)
+    ensure_current()
+    if verdict.status != "clean":
         await log_event(
             "WARNING",
             "neurocomment_group_ban_account_limited",
@@ -365,7 +375,9 @@ async def _mark_banned_and_leave(
     # persist even if the leave RPC fails.
     await mark_pair_banned(account_id, channel)
     try:
+        ensure_current()
         leave = await _seams.execute(account_id, LeaveDiscussionGroup(channel=channel))
+        ensure_current()
         outcome = leave.status
     except Exception as exc:  # noqa: BLE001 - the mark stands; the leave is best-effort.
         outcome = type(exc).__name__

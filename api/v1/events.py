@@ -16,21 +16,33 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from core.config import settings
+from services import auth as auth_service
 from services.events import subscribe
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Awaitable, Callable
 
 router = APIRouter(tags=["events"])
 
 
-async def event_stream(request: Request) -> AsyncGenerator[str]:
+async def _session_is_valid(token: str) -> bool:
+    return bool(token and await auth_service.resolve_user(token) is not None)
+
+
+async def event_stream(
+    request: Request,
+    session_token: str,
+    *,
+    validate_session: Callable[[str], Awaitable[bool]] = _session_is_valid,
+) -> AsyncGenerator[str]:
     """Yield each live ``LogEntry`` as an SSE ``data:`` frame until disconnect.
 
     A keepalive comment is emitted whenever no event arrives within the
     configured window, so idle proxies don't close the stream.
     """
     async with subscribe() as queue:
+        if not await validate_session(session_token):
+            return
         while not await request.is_disconnected():
             try:
                 entry = await asyncio.wait_for(
@@ -38,11 +50,19 @@ async def event_stream(request: Request) -> AsyncGenerator[str]:
                     timeout=settings.api.sse_keepalive_seconds,
                 )
             except TimeoutError:
+                if not await validate_session(session_token):
+                    return
                 yield ": keepalive\n\n"
                 continue
+            if not await validate_session(session_token):
+                return
             yield f"data: {entry.model_dump_json()}\n\n"
 
 
 @router.get("/events", include_in_schema=False)
 async def stream_events(request: Request) -> StreamingResponse:
-    return StreamingResponse(event_stream(request), media_type="text/event-stream")
+    # The protected-router dependency validated this same cookie before the
+    # response started. Pass the original token into the long-lived generator so
+    # expiry or a logout token-version bump closes the already-open stream too.
+    token = request.cookies.get(settings.auth.cookie_name, "")
+    return StreamingResponse(event_stream(request, token), media_type="text/event-stream")

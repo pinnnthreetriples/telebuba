@@ -254,6 +254,20 @@ class NeurocommentSettings(BaseSettings):
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
     # L4: cap on concurrently in-flight on-post handler tasks (excess dropped under flood).
     max_concurrent_post_tasks: int = Field(default=50, ge=1)
+    # Startup/reconnect recovery is intentionally a small recent-history read, never
+    # Telethon's unbounded catch_up. TTL prevents an old post from looking fresh after a
+    # long outage; per-channel rows and channel pacing bound Telegram pressure.
+    post_backfill_ttl_seconds: float = Field(default=900.0, gt=0.0, le=86_400.0)
+    post_backfill_limit_per_channel: int = Field(default=10, ge=1, le=100)
+    post_backfill_max_pages_per_channel: int = Field(default=5, ge=1, le=20)
+    post_backfill_channel_delay_seconds: float = Field(default=0.5, ge=0.0)
+    post_backfill_max_channels: int = Field(default=50, ge=1, le=500)
+    post_backfill_retry_seconds: float = Field(default=30.0, ge=1.0, le=3600.0)
+    post_backfill_interval_seconds: float = Field(default=300.0, ge=30.0, le=86_400.0)
+    post_inbox_max_pending: int = Field(default=5000, ge=1, le=100_000)
+    post_inbox_max_attempts: int = Field(default=5, ge=1, le=20)
+    post_inbox_retry_base_seconds: float = Field(default=5.0, ge=0.1, le=3600.0)
+    post_inbox_retry_max_seconds: float = Field(default=300.0, ge=1.0, le=86_400.0)
     # L3: startup reclaim of claims stuck 'claimed' older than this.
     stale_claim_reclaim_seconds: float = Field(default=900.0, gt=0.0)
     # Ф2 deletion sweep. It RECORDS deletions and nothing else: a channel whose

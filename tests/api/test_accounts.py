@@ -10,7 +10,8 @@ from core.config import settings
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.phone_login import PhoneCodeRequestResult
 from schemas.spam_status import SpamStatusVerdict
-from schemas.tdata import TdataImportResult
+from schemas.tdata import TdataConvertRequest, TdataImportResult
+from services import warming as warming_service
 from services.accounts import (
     AccountActionError,
     PhoneLoginError,
@@ -21,6 +22,8 @@ from tests.api.accounts_helpers import account as _account
 from tests.api.accounts_helpers import client as _client
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from fastapi import FastAPI
 
 
@@ -343,6 +346,21 @@ async def test_delete_account_removes_it(app: FastAPI) -> None:
     assert [a["account_id"] for a in listed.json()["items"]] == []
 
 
+@pytest.mark.asyncio
+async def test_delete_account_returns_conflict_while_warming_task_is_still_stopping(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(account_id: str) -> None:
+        raise warming_service.WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.accounts.remove_account", _boom)
+    async with _client(app) as client:
+        resp = await client.delete("/api/v1/accounts/busy")
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
+
+
 @pytest.mark.parametrize(
     ("encoded", "victim"),
     [
@@ -409,7 +427,14 @@ async def test_import_tdata_accepts_multipart(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake(request: object) -> TdataImportResult:  # noqa: ARG001
+    staged_path: Path | None = None
+
+    async def _fake(request: TdataConvertRequest) -> TdataImportResult:
+        nonlocal staged_path
+        staged_path = request.content_path
+        assert request.content == b""
+        assert staged_path is not None
+        assert staged_path.read_bytes() == b"zip-bytes"
         return TdataImportResult(accounts=[_account("imported")])
 
     monkeypatch.setattr("services.accounts.import_account_tdata", _fake)
@@ -421,6 +446,8 @@ async def test_import_tdata_accepts_multipart(
         )
     assert resp.status_code == 200
     assert [a["account_id"] for a in resp.json()["accounts"]] == ["imported"]
+    assert staged_path is not None
+    assert not staged_path.exists()
 
 
 @pytest.mark.asyncio

@@ -37,6 +37,7 @@ from services.neurocomment import _comments_off, _rejoin, _seams, _state
 # The join ActionResult → OnboardingState mapping + solver recording live in
 # ``_classify`` (file-size cap); ``_join_and_classify`` below delegates to it.
 from services.neurocomment._classify import _classify_join
+from services.neurocomment._onboarding_owner import ensure_current
 
 
 def _effective_solver_enabled(campaign_override: bool | None) -> bool:  # noqa: FBT001 - tri-state value
@@ -180,7 +181,9 @@ async def _join_and_classify(
             state="joining",
             reason="rejoin_backoff",
         )
+    ensure_current()
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
+    ensure_current()
     if result.status == "ok":
         # A real join RPC landed → count it against the account's rolling-24h cap.
         # ``already_participant`` is a no-op re-join (still a success below) and must
@@ -270,7 +273,9 @@ def _join_request_in_flight(readiness: NeurocommentReadiness, now: datetime) -> 
 
 async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussionGroupResult:
     """Read the channel's linked discussion group and cache the resolution."""
+    ensure_current()
     linked = await _seams.execute_read(account_id, GetLinkedDiscussionGroup(channel=channel))
+    ensure_current()
     if not isinstance(linked, LinkedDiscussionGroupResult):  # pragma: no cover - typed gateway
         msg = f"Unexpected read result for {channel!r}: {type(linked).__name__}"
         raise TypeError(msg)

@@ -7,7 +7,7 @@ import { expect, test, vi } from 'vitest';
 
 import { toastError } from '@/shared/ui';
 
-import { queryClient } from './query-client';
+import { mutationErrorText, queryClient } from './query-client';
 
 vi.mock('@/shared/ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/ui')>()),
@@ -49,6 +49,17 @@ test('translates a stable media code in the mutation toast', async () => {
     // The operator sees the translated copy, not the raw stable code.
     expect(toastError).toHaveBeenCalledWith('Фото изменилось на Telegram — обновите список');
   });
+});
+
+test('translates shared API protection codes instead of exposing internals', () => {
+  expect(
+    mutationErrorText({
+      error: { code: 'too_many_requests', message: 'upload_capacity_exceeded' },
+    }),
+  ).toBe('Слишком много одновременных загрузок. Повторите попытку чуть позже.');
+  expect(mutationErrorText({ error: { code: 'forbidden', message: 'untrusted_origin' } })).toBe(
+    'Запрос пришёл с недоверенного сайта. Перезагрузите приложение и попробуйте снова.',
+  );
 });
 
 test('a flood_wait toast carries the retry-after seconds (string on the wire)', async () => {

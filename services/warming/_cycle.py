@@ -165,8 +165,10 @@ async def run_one_cycle(
         return await _build_cycle_result(account_id, tally, messages_sent)
 
     try:
-        online_result = await _seams.execute(account_id, SetOnline(online=True))
+        # Book before dispatch: cancellation can land while the RPC is already
+        # outside the process, so its outcome is ambiguous and must count spent.
         tally.attempts += 1
+        online_result = await _seams.execute(account_id, SetOnline(online=True))
         if online_result.status != "ok":
             if online_result.status in _WAIT_STATUSES:
                 flooded, seconds, until = _classify_flood(online_result)

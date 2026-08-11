@@ -37,6 +37,7 @@ from core.telegram_client._client import (
     telegram_client,
 )
 from core.telegram_client._listener import (
+    fetch_recent_posts,
     stop_post_listener,
     subscribe_posts,
     take_lost_access_channels,
@@ -73,6 +74,7 @@ __all__ = [
     "execute",
     "execute_read",
     "execute_read_many",
+    "fetch_recent_posts",
     "get_client",
     "log_out_session",
     "prepare_session_check_profile",

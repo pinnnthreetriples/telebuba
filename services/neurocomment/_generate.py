@@ -15,6 +15,7 @@ module object reached here).
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -23,11 +24,13 @@ from core.db import (
     list_posted_comments_for_channel_since,
     load_warming_settings,
     mark_comment_failed,
+    mark_inbox_stage,
     release_claim,
     touch_comment_claim,
 )
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
+from schemas.neurocomment_pipeline import InboxStage, PipelineOutcome
 from schemas.telegram_actions import CommentOnPost, NewPostEvent
 from services.content import (
     is_acceptable,
@@ -74,12 +77,12 @@ class _GenOutcome(NamedTuple):
     reason: str | None  # set only when text is None (surfaced in the exhausted log)
 
 
-async def _generate_and_post(
+async def _generate_and_post(  # noqa: PLR0911 - explicit durable terminal boundaries
     event: NewPostEvent,
     campaign: NeurocommentCampaign,
     account_id: str,
     limits: NeurocommentSettings,
-) -> None:
+) -> PipelineOutcome:
     """Generate + light-check a comment, pause, post, and classify the outcome.
 
     ``limits`` is loaded once per post by the caller and threaded in — only the reply
@@ -118,7 +121,7 @@ async def _generate_and_post(
                     "reason": f"media_{image.reason}",
                 },
             )
-            return
+            return PipelineOutcome.TERMINAL
         image_b64 = image.image_b64
 
     outcome = await _generate_acceptable(campaign, event, account_id, image_b64=image_b64)
@@ -139,7 +142,11 @@ async def _generate_and_post(
             account_id=account_id,
             extra={"channel": event.channel, "post_id": event.post_id, "reason": outcome.reason},
         )
-        return
+        return (
+            PipelineOutcome.RETRYABLE
+            if outcome.reason == _RATE_LIMITED_REASON
+            else PipelineOutcome.TERMINAL
+        )
 
     # ``text`` is now reserved (the exact-hash claim). Any raise before ``_classify_post``
     # releases it — a delayed/cancelled attempt must not leave the hash reserved, or a
@@ -166,16 +173,80 @@ async def _generate_and_post(
                 account_id=account_id,
                 extra={"channel": event.channel, "post_id": event.post_id},
             )
-            return
-        result = await _seams.execute(
-            account_id,
-            CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),
-        )
+            return PipelineOutcome.TERMINAL
+        from services.neurocomment import _runtime  # noqa: PLC0415
+
+        if not _runtime._worker_generation_is_current():  # noqa: SLF001
+            _remove_inflight(event.channel, text)
+            await release_sent_text(text)
+            await release_claim(event.channel, event.post_id)
+            return PipelineOutcome.RETRYABLE
+        await mark_inbox_stage(event, InboxStage.DISPATCHING)
+        try:
+            result = await _seams.execute(
+                account_id,
+                CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),
+            )
+            await mark_inbox_stage(event, InboxStage.DISPATCHED)
+        except BaseException as exc:  # noqa: BLE001 - dispatch boundary includes cancellation
+            await _settle_ambiguous_dispatch(
+                event,
+                account_id,
+                text,
+                event_code="neurocomment_dispatch_outcome_unknown",
+                exc=exc,
+            )
+            return PipelineOutcome.AMBIGUOUS
     except BaseException:
         _remove_inflight(event.channel, text)
         await release_sent_text(text)
         raise
-    await _classify_post(event, account_id, text, result)
+    try:
+        await _classify_post(event, account_id, text, result)
+    except Exception as exc:  # noqa: BLE001 - DB commit after dispatch is ambiguous
+        # Telegram returned, but committing the verdict failed. Never reopen the claim:
+        # a successful send may already be visible even if our DB write was lost.
+        await _settle_ambiguous_dispatch(
+            event,
+            account_id,
+            text,
+            event_code="neurocomment_dispatch_commit_unknown",
+            exc=exc,
+        )
+        return PipelineOutcome.AMBIGUOUS
+    return PipelineOutcome.TERMINAL
+
+
+async def _settle_ambiguous_dispatch(
+    event: NewPostEvent,
+    account_id: str,
+    text: str,
+    *,
+    event_code: str,
+    exc: BaseException,
+) -> None:
+    """Best-effort cleanup that can never reopen a crossed dispatch boundary."""
+    # Every await below is deliberately isolated. Once DISPATCHING is durable, even a
+    # broken SQLite/log sink/content-reservation cleanup must still return AMBIGUOUS to
+    # the inbox; letting any cleanup exception escape would make engine release the claim
+    # as though Telegram had never been called.
+    with suppress(Exception, asyncio.CancelledError):
+        await mark_comment_failed(event.channel, event.post_id)
+    with suppress(Exception, asyncio.CancelledError):
+        await log_event(
+            "ERROR",
+            event_code,
+            account_id=account_id,
+            extra={
+                "channel": event.channel,
+                "post_id": event.post_id,
+                "error_type": type(exc).__name__,
+            },
+        )
+    with suppress(Exception):
+        _remove_inflight(event.channel, text)
+    with suppress(Exception, asyncio.CancelledError):
+        await release_sent_text(text)
 
 
 async def _sleep_beating(event: NewPostEvent, seconds: float) -> bool:

@@ -121,7 +121,11 @@ async def _sweep_loop() -> None:
         # account turned out to be warming). Retire instead of sweeping on for a listener
         # that is already unsubscribed. Identity, not ``is None``: a later pass in the same
         # tick can re-link and start a FRESH task, and then this one must yield to it.
-        if _runtime._SWEEP_TASK is not asyncio.current_task():  # noqa: SLF001 - peer module
+        current = asyncio.current_task()
+        if (
+            _runtime._SWEEP_TASK is not current  # noqa: SLF001 - peer lifecycle handle
+            or _runtime._SWEEP_STOPPING_TASK is current  # noqa: SLF001 - peer stop marker
+        ):
             return
 
 

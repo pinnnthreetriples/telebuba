@@ -221,6 +221,21 @@ async def test_promote_graduates_account(app: FastAPI, monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_promote_refuses_an_account_whose_task_is_still_stopping(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(account_id: str) -> WarmingAccountState:
+        raise warming_service.WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.warming.promote_to_neurocomment", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/promote", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.asyncio
 async def test_handoff_moves_account_to_nc_pool(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -239,6 +254,21 @@ async def test_handoff_moves_account_to_nc_pool(
         resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
     assert resp.status_code == 200
     assert resp.json()["nc_handed_off"] is True
+
+
+@pytest.mark.asyncio
+async def test_handoff_refuses_an_account_whose_task_is_still_stopping(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(account_id: str) -> WarmingAccountState:
+        raise warming_service.WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.warming.handoff_to_neurocomment", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
 
 
 @pytest.mark.asyncio

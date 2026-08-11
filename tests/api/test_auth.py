@@ -17,6 +17,7 @@ from core import auth as core_auth
 from core.config import settings
 from core.repositories.users import create_user
 from schemas.auth import UserRecord
+from services import auth as auth_service
 from services.auth import _ratelimit
 
 if TYPE_CHECKING:
@@ -29,6 +30,7 @@ if TYPE_CHECKING:
 def _auth_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.auth, "secret", "api-test-secret-0123456789abcdef-pad")
     monkeypatch.setattr(settings.auth, "cookie_secure", False)
+    monkeypatch.setattr(settings.auth, "cookie_samesite", "strict")
     _ratelimit._attempts.clear()  # reset the process-global limiter
     yield
     _ratelimit._attempts.clear()
@@ -65,6 +67,7 @@ async def test_login_sets_cookie_and_me_returns_the_user() -> None:
         assert login.status_code == 200
         assert login.json()["username"] == "admin"
         assert settings.auth.cookie_name in login.cookies
+        assert "SameSite=strict" in login.headers["set-cookie"]
         me = await client.get("/api/v1/auth/me")
     assert me.status_code == 200
     assert me.json()["username"] == "admin"
@@ -80,6 +83,17 @@ async def test_login_rejects_wrong_credentials() -> None:
         )
     assert resp.status_code == 401
     assert resp.json()["error"]["code"] == "unauthorized"
+
+
+@pytest.mark.asyncio
+async def test_login_rejects_oversized_credentials_before_argon2() -> None:
+    async with _client(_raw_app()) as client:
+        resp = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "x" * 1025},
+        )
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "validation_error"
 
 
 @pytest.mark.asyncio
@@ -105,6 +119,24 @@ async def test_login_is_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_login_argon2_capacity_refusal_is_typed_and_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _busy(_body: object) -> None:
+        raise auth_service.AuthenticationCapacityError
+
+    monkeypatch.setattr(auth_service, "authenticate", _busy)
+    async with _client(_raw_app()) as client:
+        resp = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "pw"},
+        )
+    assert resp.status_code == 429
+    assert resp.headers["retry-after"] == "1"
+    assert resp.json()["error"]["code"] == "rate_limited"
+
+
+@pytest.mark.asyncio
 async def test_me_without_cookie_is_unauthorized() -> None:
     async with _client(_raw_app()) as client:
         resp = await client.get("/api/v1/auth/me")
@@ -116,7 +148,7 @@ async def test_logout_clears_the_session() -> None:
     await _seed_admin()
     async with _client(_raw_app()) as client:
         await client.post("/api/v1/auth/login", json={"username": "admin", "password": "pw"})
-        logout = await client.post("/api/v1/auth/logout")
+        logout = await client.post("/api/v1/auth/logout", headers={"Origin": "http://test"})
         assert logout.status_code == 204
         me = await client.get("/api/v1/auth/me")
     assert me.status_code == 401
@@ -133,7 +165,7 @@ async def test_logout_revokes_a_stolen_token() -> None:
             json={"username": "admin", "password": "pw"},
         )
         stolen = login.cookies[settings.auth.cookie_name]
-        await client.post("/api/v1/auth/logout")
+        await client.post("/api/v1/auth/logout", headers={"Origin": "http://test"})
         # Replay the captured cookie on a fresh client (no logout cookie clear).
         async with _client(_raw_app()) as attacker:
             attacker.cookies.set(settings.auth.cookie_name, stolen)

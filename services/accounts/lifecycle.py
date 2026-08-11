@@ -79,11 +79,34 @@ async def remove_account(account_id: str) -> None:
     started warming, so there's no task to cancel).
     """
     # Local import to avoid a services→services import cycle at module load.
-    from services.warming import _stop_warming_locked, account_lock  # noqa: PLC0415
+    from core.db import (  # noqa: PLC0415
+        get_listener_account_id,
+        set_listener_account_id,
+        set_listener_running,
+    )
+    from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
+    from services.warming import (  # noqa: PLC0415
+        WarmingTaskNotQuiescentError,
+        _stop_warming_locked,
+        account_lock,
+    )
 
-    async with account_lock(account_id):
+    # Lock order is global neurocomment lifecycle → per-account lifecycle everywhere.
+    # This makes delete atomic against listener start/switch/reconcile and prevents the
+    # in-memory handler from surviving a DB cascade or resurrecting on pool rebuild.
+    async with nc_runtime.neurocomment_lifecycle(), account_lock(account_id):
+        if await get_listener_account_id() == account_id:
+            try:
+                await nc_runtime.shutdown_neurocomment_runtime(account_id)
+            finally:
+                await set_listener_account_id(None)
+                await set_listener_running(running=False)
         try:
             await _stop_warming_locked(account_id)
+        except WarmingTaskNotQuiescentError:
+            # A live task still owns process resources. Deleting its account or
+            # session would turn it into an untracked ghost; retry after it exits.
+            raise
         except Exception as exc:  # delete must not fail because the stop did.
             logger.exception("stop warming failed while removing %s", account_id)
             await log_event(

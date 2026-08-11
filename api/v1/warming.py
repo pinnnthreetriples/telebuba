@@ -40,22 +40,38 @@ async def get_warmed_accounts() -> WarmedAccountList:
     return await warming_service.list_warmed_accounts(settings.neurocomment.warmed_min_days)
 
 
-@router.post("/promote", response_model=WarmingAccountState, operation_id="promoteToNeurocomment")
+@router.post(
+    "/promote",
+    response_model=WarmingAccountState,
+    operation_id="promoteToNeurocomment",
+    responses=error_responses(409),
+)
 async def promote_account(body: PromoteRequest) -> WarmingAccountState:
     """Graduate an account: stop warming + flag it for the neurocomment pool."""
-    return await warming_service.promote_to_neurocomment(body.account_id)
+    try:
+        return await warming_service.promote_to_neurocomment(body.account_id)
+    except warming_service.WarmingTaskNotQuiescentError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="warming task is still stopping",
+        ) from exc
 
 
 @router.post(
     "/handoff",
     response_model=WarmingAccountState,
     operation_id="handoffToNeurocomment",
-    responses=error_responses(400),
+    responses=error_responses(400, 409),
 )
 async def handoff_account(body: PromoteRequest) -> WarmingAccountState:
     """Second stage: move a warmed-card account into the neurocomment idle pool."""
     try:
         return await warming_service.handoff_to_neurocomment(body.account_id)
+    except warming_service.WarmingTaskNotQuiescentError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="warming task is still stopping",
+        ) from exc
     except ValueError as exc:
         # Not graduated / unknown account — a stale client racing an un-promote.
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

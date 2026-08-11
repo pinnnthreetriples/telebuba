@@ -38,10 +38,11 @@ from core.db import (
     list_device_fingerprints_by_ids,
     list_spam_statuses_by_ids,
     list_warming_states_by_ids,
-    mark_comment_failed,
+    release_claim,
     stamp_channel_post_seen,
 )
 from core.logging import log_event
+from schemas.neurocomment_pipeline import PipelineOutcome
 from services.neurocomment import _filters, _seams, _state
 from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
@@ -75,10 +76,12 @@ def _account_lock(account_id: str) -> asyncio.Lock:
     return lock
 
 
-async def handle_new_post(event: NewPostEvent) -> None:
-    """Comment on one fresh post, end-to-end. Never raises (listener-safe)."""
+async def handle_new_post(event: NewPostEvent) -> PipelineOutcome:
+    """Comment on one post and tell the durable inbox whether retry is safe."""
     try:
-        await _handle_new_post(event)
+        return await _handle_new_post(event)
+    except asyncio.CancelledError:
+        raise
     except Exception as exc:  # a fault must never kill the listener task.
         logger.exception("pipeline failed for %s post %s", event.channel, event.post_id)
         await log_event(
@@ -90,9 +93,12 @@ async def handle_new_post(event: NewPostEvent) -> None:
                 "error_type": type(exc).__name__,
             },
         )
+        return PipelineOutcome.RETRYABLE
 
 
-async def _handle_new_post(event: NewPostEvent) -> None:
+async def _handle_new_post(  # noqa: PLR0911 - each gate is a typed terminal outcome
+    event: NewPostEvent,
+) -> PipelineOutcome:
     campaign = await fetch_active_campaign_for_channel(event.channel)
     if campaign is None:
         await log_event(
@@ -100,7 +106,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
             "neurocomment_no_campaign",
             extra={"channel": event.channel, "post_id": event.post_id},
         )
-        return
+        return PipelineOutcome.TERMINAL
 
     # Before every gate BELOW, deliberately: this records that the CHANNEL is alive, and a
     # post we refuse to comment on (a forward, an album item, one arriving while the
@@ -117,7 +123,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
             "neurocomment_post_skipped",
             extra={"channel": event.channel, "post_id": event.post_id, "reason": skip},
         )
-        return
+        return PipelineOutcome.TERMINAL
 
     now = datetime.now(UTC)
     if _state.channel_paused(await fetch_channel_paused_until(event.channel), now):
@@ -133,7 +139,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
             "neurocomment_channel_cooled",
             extra={"channel": event.channel, "post_id": event.post_id},
         )
-        return
+        return PipelineOutcome.TERMINAL
 
     # Read the operator-editable limits ONCE per post (a DB read via to_thread) and
     # thread them through selection, the under-lock re-check, and the reply delay. The
@@ -149,7 +155,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
             "neurocomment_no_account_available",
             extra={"channel": event.channel, "post_id": event.post_id, "reason": selection.reason},
         )
-        return
+        return PipelineOutcome.TERMINAL
 
     async with _account_lock(account_id):
         # H1: re-verify the chosen account with fresh counts under its own lock (a
@@ -164,20 +170,27 @@ async def _handle_new_post(event: NewPostEvent) -> None:
                 "neurocomment_no_account_available",
                 extra={"channel": event.channel, "post_id": event.post_id, "reason": quota_reason},
             )
-            return
+            return PipelineOutcome.TERMINAL
         won = await claim_comment(event.channel, event.post_id, campaign.campaign_id, account_id)
     if not won:
         # Another worker already owns this post — idempotency, no duplicate.
-        return
+        return PipelineOutcome.TERMINAL
 
     # The claim is won; from here any exit other than a delivered comment must release
     # the claim, or the row stays 'claimed' forever (post never commentable, quota
     # consumed for the window). A CancelledError on shutdown is cleaned up then re-raised
     # so the task still cancels; other faults are handled by the outer listener guard.
     try:
-        await _generate_and_post(event, campaign, account_id, limits)
-    except BaseException:
-        await mark_comment_failed(event.channel, event.post_id)
+        return await _generate_and_post(event, campaign, account_id, limits)
+    except asyncio.CancelledError:
+        # The real dispatch boundary consumes cancellation as AMBIGUOUS. A cancellation
+        # escaping here is therefore proven pre-send (including provider waits).
+        await release_claim(event.channel, event.post_id)
+        raise
+    except Exception:
+        # No dispatch-boundary exception escapes ``_generate_and_post``. Releasing the
+        # claim makes a provider/DB pre-send fault safely retryable by the inbox.
+        await release_claim(event.channel, event.post_id)
         raise
 
 

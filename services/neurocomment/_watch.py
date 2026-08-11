@@ -61,54 +61,129 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
+    async with _runtime.neurocomment_lifecycle():
+        # The caller's id is only a hint. Re-read both persisted ownership fields while
+        # holding the same lifecycle lock as start/stop/clear: a queued reconcile for A
+        # must not replace B's subscription after a switch completes.
+        current = await _runtime.get_listener_account_id()
+        running = await _runtime.get_listener_running()
+        if _runtime._RUNTIME_OWNER_INITIALIZED:  # noqa: SLF001
+            if listener_account_id != _runtime._RUNTIME_ACCOUNT_ID:  # noqa: SLF001
+                return
+            if (current is not None or running) and (not running or current != listener_account_id):
+                return
+        generation = _runtime._activate_runtime_owner(listener_account_id)  # noqa: SLF001
+        reconcile_generation = _runtime._reserve_reconcile()  # noqa: SLF001
+    await _reconcile_owned(listener_account_id, generation, reconcile_generation)
+
+
+async def _reconcile_owned(  # noqa: C901, PLR0911 - staged generation-fenced commit
+    listener_account_id: str,
+    generation: int,
+    reconcile_generation: int,
+) -> None:
+    from services.neurocomment import _runtime  # noqa: PLC0415
+
     # Warming and neurocomment are mutually exclusive per account. This is the
     # single choke point every subscription path funnels through (start, channel
     # edit, startup resume), so the guard lives here — start_neurocomment adds an
     # early raise on top for the interactive 409. A warming listener is unsubscribed
     # (never re-subscribed) rather than raising, so boot/channel-edit stay safe.
     if listener_account_id in await _runtime.list_warming_account_ids():
-        await _runtime.stop_post_listener(listener_account_id)
-        await _runtime._stop_sweep()  # noqa: SLF001 - peer module
-        await _runtime._stop_join()  # noqa: SLF001 - peer module
-        # This path leaves ``listener_running`` set (the operator paused nothing), so the
-        # status query keeps reporting a running engine over a listener that is DOWN.
-        # Every requested channel is unwatched here — reporting the whole set is the only
-        # answer that cannot paint a green strip over a dead listener.
-        _publish_unwatched((await list_active_watch_channels()).channels)
-        await _runtime.log_event(
-            "WARNING",
-            "neurocomment_listener_warming_skipped",
-            account_id=listener_account_id,
-        )
+        if not _runtime._reconcile_owner_is_current(  # noqa: SLF001
+            listener_account_id, generation, reconcile_generation
+        ):
+            return
+        async with _runtime.neurocomment_lifecycle():
+            if not _runtime._reconcile_owner_is_current(  # noqa: SLF001
+                listener_account_id, generation, reconcile_generation
+            ):
+                return
+            await _runtime.stop_post_listener(listener_account_id)
+            await _runtime._inbox_runtime.stop_inbox()  # noqa: SLF001 - peer module
+            await _runtime._stop_sweep()  # noqa: SLF001 - peer module
+            await _runtime._stop_join()  # noqa: SLF001 - peer module
+            _publish_unwatched((await list_active_watch_channels()).channels)
+            await _runtime.log_event(
+                "WARNING",
+                "neurocomment_listener_warming_skipped",
+                account_id=listener_account_id,
+            )
         return
     channels = (await list_active_watch_channels()).channels
+    if not _runtime._reconcile_owner_is_current(  # noqa: SLF001
+        listener_account_id, generation, reconcile_generation
+    ):
+        return
     if not channels:
-        await _runtime.stop_post_listener(listener_account_id)
-        await _runtime._stop_sweep()  # noqa: SLF001 - peer module
-        await _runtime._stop_join()  # noqa: SLF001 - peer module
-        _publish_unwatched()  # unsubscribed → no channel is "requested but missing"
+        async with _runtime.neurocomment_lifecycle():
+            if not _runtime._reconcile_owner_is_current(  # noqa: SLF001
+                listener_account_id, generation, reconcile_generation
+            ):
+                return
+            await _runtime.stop_post_listener(listener_account_id)
+            await _runtime._inbox_runtime.stop_inbox()  # noqa: SLF001 - peer module
+            await _runtime._stop_sweep()  # noqa: SLF001 - peer module
+            await _runtime._stop_join()  # noqa: SLF001 - peer module
+            _publish_unwatched()  # unsubscribed → no channel is "requested but missing"
+        return
+    plans = await _runtime._inbox_runtime.prepare_backfill_plans(channels)  # noqa: SLF001
+    if not _runtime._reconcile_owner_is_current(  # noqa: SLF001
+        listener_account_id, generation, reconcile_generation
+    ):
         return
     subscribed = await _runtime.subscribe_posts(listener_account_id, channels, _runtime.on_post)
-    # The local — not the module set — feeds the logs below, so a pass overlapping ours
-    # can never make us report its numbers as our own.
-    unwatched = set(channels) - set(subscribed)
-    _publish_unwatched(unwatched)
-    _runtime._ensure_sweep_running()  # noqa: SLF001 - peer module
-    _runtime._ensure_join_running(listener_account_id)  # noqa: SLF001 - peer module
-    if unwatched:
-        # The only place an operator can learn a channel is dead to the engine.
-        await _runtime.log_event(
-            "WARNING",
-            "neurocomment_channels_unwatched",
-            account_id=listener_account_id,
-            extra={"count": len(unwatched), "channels": sorted(unwatched)},
+    async with _runtime.neurocomment_lifecycle():
+        # A Stop/clear/account switch is allowed to invalidate us while Telegram peer
+        # resolution is in flight.  The core listener normally observes its own bumped
+        # subscription generation and refuses the late commit, but keep this service
+        # boundary independently safe too: alternate gateways/test seams may complete a
+        # subscribe after invalidation.  Re-check while holding the lifecycle lock and
+        # tear that stale account down before a same-account restart can publish a new
+        # owner.  A merely superseded reconcile for the *current* owner must not stop the
+        # newer pass, so cleanup is keyed to runtime ownership, not reconcile generation.
+        if not _runtime._runtime_owner_is_current(  # noqa: SLF001
+            listener_account_id, generation
+        ):
+            # Stop/clear/account switch leaves this account with no owner, so an
+            # alternate gateway that committed late must be cleaned up. A same-account
+            # restart, however, may already have published a NEW subscription while this
+            # old pass was outside the lock; account-wide stop would remove that winner.
+            # The real core gateway generation-fences the old commit itself, so leave the
+            # new same-account owner untouched.
+            if listener_account_id != _runtime._RUNTIME_ACCOUNT_ID:  # noqa: SLF001
+                await _runtime.stop_post_listener(listener_account_id)
+            return
+        if not _runtime._reconcile_owner_is_current(  # noqa: SLF001
+            listener_account_id, generation, reconcile_generation
+        ):
+            return
+        await _runtime._inbox_runtime.start_inbox()  # noqa: SLF001 - peer module
+        await _runtime._inbox_runtime.ensure_backfill(  # noqa: SLF001
+            listener_account_id,
+            subscribed,
+            plans,
         )
-    await _runtime.log_event(
-        "INFO",
-        "neurocomment_runtime_reconciled",
-        account_id=listener_account_id,
-        extra={"channels": len(subscribed), "unwatched": len(unwatched)},
-    )
+        # The local — not the module set — feeds the logs below, so a pass overlapping ours
+        # can never make us report its numbers as our own.
+        unwatched = set(channels) - set(subscribed)
+        _publish_unwatched(unwatched)
+        _runtime._ensure_sweep_running()  # noqa: SLF001 - peer module
+        _runtime._ensure_join_running(listener_account_id)  # noqa: SLF001 - peer module
+        if unwatched:
+            # The only place an operator can learn a channel is dead to the engine.
+            await _runtime.log_event(
+                "WARNING",
+                "neurocomment_channels_unwatched",
+                account_id=listener_account_id,
+                extra={"count": len(unwatched), "channels": sorted(unwatched)},
+            )
+        await _runtime.log_event(
+            "INFO",
+            "neurocomment_runtime_reconciled",
+            account_id=listener_account_id,
+            extra={"channels": len(subscribed), "unwatched": len(unwatched)},
+        )
 
 
 async def _resubscribe_unwatched(listener_account_id: str) -> None:
@@ -133,18 +208,35 @@ async def _resubscribe_unwatched(listener_account_id: str) -> None:
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
-    if not _runtime._UNWATCHED_CHANNELS:  # noqa: SLF001 - peer module
-        return
+    async with _runtime.neurocomment_lifecycle():
+        current = await _runtime.get_listener_account_id()
+        running = await _runtime.get_listener_running()
+        if listener_account_id != _runtime._RUNTIME_ACCOUNT_ID:  # noqa: SLF001
+            return
+        if (current is not None or running) and (not running or current != listener_account_id):
+            return
+        if not _runtime._UNWATCHED_CHANNELS:  # noqa: SLF001 - peer module
+            return
+        generation = _runtime._RUNTIME_GENERATION  # noqa: SLF001
     try:
         channels = (await list_active_watch_channels()).channels
         if not channels:
             return
+        plans = await _runtime._inbox_runtime.prepare_backfill_plans(channels)  # noqa: SLF001
         subscribed = await _runtime.subscribe_posts(
             listener_account_id,
             channels,
             _runtime.on_post,
         )
-        _publish_unwatched(set(channels) - set(subscribed))
+        async with _runtime.neurocomment_lifecycle():
+            if not _runtime._runtime_owner_is_current(listener_account_id, generation):  # noqa: SLF001
+                return
+            await _runtime._inbox_runtime.ensure_backfill(  # noqa: SLF001
+                listener_account_id,
+                subscribed,
+                plans,
+            )
+            _publish_unwatched(set(channels) - set(subscribed))
     except Exception as exc:  # the join task must survive a failed heal.
         logger.exception("resubscribe failed for %s", listener_account_id)
         await _runtime.log_event(

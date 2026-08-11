@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-07
+last_updated: 2026-08-11
 edges:
   - target: context/runtime-discovery.md
     condition: where the campaign's channels came from
@@ -33,6 +33,8 @@ grounds_to:
 - A refusal names no culprit until something asks whose it is. A write block is the chat's rights (closed to everyone — the CHANNEL leaves) or ours (an expiry to sit out); a failed read is one account kicked or the channel gone, and when every reader says the same, stop asking for a while rather than punish the accounts. Each discriminator costs one extra read, taken only when the refusal happened; an unavailable answer stays unknown.
 - The operator's "clear logs" delete is prefix-scoped and unbounded in time. Its audit row is written AFTER the delete under a code with no domain prefix, so the next press cannot erase it; the count endpoint answers the delete's own clause, so the number confirmed is the number that goes.
 - Append-only comments/challenges/join logs are pruned by configured retention, which must not invalidate the rolling join window or delete in-flight/cache rows that still carry behavior.
-- Incoming posts have no durable queue/catch-up and send<->DB reconciliation is not durable; changing that needs a persistence design, not another in-process task.
+- Incoming posts cross a durable SQLite inbox boundary before dispatch. `(channel, post_id)` is the dedupe key; worker concurrency and pending depth are bounded; stale/done rows follow retention. Typed stages distinguish retryable pre-send faults from terminal decisions and ambiguous post-dispatch outcomes. Startup releases only proven pre-send claims; dispatching/unknown delivery fails closed so a crash or cleanup failure cannot duplicate a Telegram send.
+- Gap recovery installs the live handler first, then resumes a durable cursor through bounded, paced history pages with a per-channel TTL and per-pass page/channel budget. A transient fetch checkpoints retry state rather than success; periodic backfill heals reconnect gaps. The inbox key absorbs live/history overlap; never use Telethon `catch_up()` here.
+- Listener lifecycle locks reserve or commit ownership only; slow Telegram connect/peer resolution runs outside them. Runtime, reconcile, subscription, join, onboarding and backfill generations fence every await boundary. Stop can invalidate a hung operation promptly, while core subscription generations prevent a late old resolve from registering over a newer Stop/Start. Cancellation-resistant tasks remain retained until they actually finish, and runtime-owned onboarding checks ownership before and after every Telegram seam.
 
 Discovery has its own route in `runtime-discovery.md`.

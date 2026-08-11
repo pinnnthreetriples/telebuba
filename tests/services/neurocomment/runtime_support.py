@@ -18,7 +18,7 @@ from schemas.telegram_actions import (
     NewPostEvent,
     TelegramAction,
 )
-from services.neurocomment import _runtime, _seams, _state
+from services.neurocomment import _inbox_runtime, _runtime, _seams, _state
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -39,6 +39,11 @@ def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     # chat, so a test that only ticks the sweep would otherwise open a real client (and
     # leak its Telethon session handle). Tests asserting on actions override this.
     monkeypatch.setattr(_seams, "execute", _ok_action)
+
+    async def _no_backfill(*_args: object, **_kwargs: object) -> list[NewPostEvent]:
+        return []
+
+    monkeypatch.setattr(_inbox_runtime, "fetch_recent_posts", _no_backfill)
     _runtime.reset_for_tests()
     _state.reset_for_tests()
     yield

@@ -52,6 +52,66 @@ async def test_create_proxy_returns_pool_entry(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
+async def test_create_proxy_normalises_host_and_rejects_blank_without_poisoning(
+    app: FastAPI,
+) -> None:
+    async with _client(app) as client:
+        created = await client.post(
+            "/api/v1/proxies",
+            json={"proxy_type": "socks5", "host": "  nl.example  ", "port": 1080},
+        )
+        blank = await client.post(
+            "/api/v1/proxies",
+            json={"proxy_type": "socks5", "host": "   ", "port": 1081},
+        )
+        listed = await client.get("/api/v1/proxies")
+
+    assert created.status_code == 200
+    assert created.json()["host"] == "nl.example"
+    assert blank.status_code == 422
+    assert [proxy["host"] for proxy in listed.json()["proxies"]] == ["nl.example"]
+
+
+@pytest.mark.asyncio
+async def test_create_proxy_canonicalises_dns_and_ipv6_identity(app: FastAPI) -> None:
+    async with _client(app) as client:
+        dns = await client.post(
+            "/api/v1/proxies",
+            json={"proxy_type": "socks5", "host": "BÜCHER.Example.", "port": 1080},
+        )
+        ipv6 = await client.post(
+            "/api/v1/proxies",
+            json={"proxy_type": "socks5", "host": "[2001:0DB8::1]", "port": 1080},
+        )
+    assert dns.status_code == 200
+    assert dns.json()["host"] == "xn--bcher-kva.example"
+    assert ipv6.status_code == 200
+    assert ipv6.json()["host"] == "2001:db8::1"
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "example.com:1080",
+        "[2001:db8::1]:1080",
+        "bad_label.example",
+        "bad..example",
+        "example.com/path",
+        "example.com\x00",
+        "999.999.999.999",
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_proxy_rejects_non_host_syntax(app: FastAPI, host: str) -> None:
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/proxies",
+            json={"proxy_type": "socks5", "host": host, "port": 1080},
+        )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_assign_fills_a_slot(app: FastAPI) -> None:
     await create_account(AccountCreate(account_id="acc-1"))
     async with _client(app) as client:

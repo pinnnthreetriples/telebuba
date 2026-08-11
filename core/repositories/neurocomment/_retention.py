@@ -1,4 +1,4 @@
-"""Retention purge for the append-only neurocomment tables (comments/challenges/joins).
+"""Retention purge for append-only neurocomment history and the durable post inbox.
 
 The three tables were only ever emptied when a whole campaign was deleted, so an
 always-on deployment grew them forever and every per-post quota read paid for it.
@@ -21,6 +21,7 @@ from core.db import _get_engine
 from core.repositories.neurocomment._tables import (
     _neurocomment_challenges,
     _neurocomment_comments,
+    _neurocomment_inbox,
     _neurocomment_join_log,
 )
 
@@ -51,6 +52,13 @@ def _purge_neurocomment_history_older_than(cutoff_iso: str) -> int:
         # count under-report and let an account exceed the #270 anti-freeze join cap. Do not
         # call this with a sub-day cutoff.
         delete(_neurocomment_join_log).where(_neurocomment_join_log.c.joined_at < cutoff_iso),
+        # Completed/expired inbox rows are only an overlap/restart dedup journal. The
+        # backfill TTL is at most one day and retention is floored to one day, so a row is
+        # never forgotten while the bounded history reader could surface it again.
+        delete(_neurocomment_inbox).where(
+            (_neurocomment_inbox.c.received_at < cutoff_iso)
+            & (_neurocomment_inbox.c.state.in_(("done", "expired"))),
+        ),
     )
     with _get_engine().begin() as connection:
         return sum(connection.execute(statement).rowcount for statement in statements)

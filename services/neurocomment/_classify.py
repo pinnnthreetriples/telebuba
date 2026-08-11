@@ -24,6 +24,7 @@ from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
 from schemas.telegram_actions_rights import CheckWriteRights, WriteRightsResult
 from services.neurocomment import _channel_pause, _comments_off, _seams, bans, challenge
+from services.neurocomment._onboarding_owner import ensure_current
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
@@ -170,7 +171,9 @@ async def _write_block_scope(account_id: str, channel: str) -> WriteRightsResult
     spelled a second time here.
     """
     try:
+        ensure_current()
         rights = await _seams.execute_read(account_id, CheckWriteRights(channel=channel))
+        ensure_current()
     except Exception as exc:  # noqa: BLE001 - an unreadable answer is not a verdict.
         return WriteRightsResult(scope="unknown", reason=getattr(exc, "reason", type(exc).__name__))
     if not isinstance(rights, WriteRightsResult):  # pragma: no cover - typed gateway

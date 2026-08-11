@@ -99,11 +99,14 @@ async def test_a_stop_that_outran_its_cancel_wait_still_gives_the_day_back(
 
     stopped = await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
 
-    # The stop returned without the cycle: idle, no generation, whole budget booked.
-    assert stopped.state == "idle"
+    # The stop returned without losing task ownership. The lease is revoked and
+    # the row honestly reports the still-unwinding task instead of claiming idle.
+    assert stopped.state == "error"
+    assert warming._RUNTIME["acc-1"] is task
     booked = await fetch_warming_state("acc-1")
     assert booked is not None
-    assert booked.run_id is None
+    assert booked.run_id is not None
+    assert booked.run_id.startswith("stopping-")
     assert booked.daily_actions == settings.warming.phase_daily_cap["intro"]
 
     # Only now does the cleanup finish and the hand-back run.
@@ -114,8 +117,9 @@ async def test_a_stop_that_outran_its_cancel_wait_still_gives_the_day_back(
 
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    # set_online + the join really spent, not the 15-action reservation.
-    assert record.daily_actions == 2
+    # The blocked read crossed the gateway boundary too, so its unknown outcome
+    # is conservatively counted beside set_online + join.
+    assert record.daily_actions == 3
 
     # Same calendar day: the operator's Start has the rest of the budget.
     survivor = _Recorder()
@@ -136,11 +140,9 @@ async def test_a_start_before_the_dying_cycle_unwinds_still_gets_the_day_back(
 ) -> None:
     """The reported click order: Stop, then Start, while the old cycle is still unwinding.
 
-    ``start_warming`` mints the next generation EAGERLY — it stamps ``run_id`` on the
-    row before the dying cycle has finished — so by the time the hand-back runs the row
-    belongs to run-2 and no generation-based guard can accept it. The booking's own
-    token can: run-2 has not booked yet (its first cycle is up to
-    ``cold_start_spread_hours`` away), so the token on the row is still ours.
+    The first Stop times out honestly. A following Start sends cancellation again
+    and may proceed only if that makes the old task terminal; its booking token
+    reconciles the spent actions before the next generation is minted.
     """
     _no_quiet_days(monkeypatch)
     monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
@@ -158,7 +160,9 @@ async def test_a_start_before_the_dying_cycle_unwinds_still_gets_the_day_back(
     restarted = await fetch_warming_state("acc-1")
     assert restarted is not None
     assert restarted.run_id not in (None, "run-1")
-    assert restarted.daily_actions == settings.warming.phase_daily_cap["intro"]
+    # Start waited for the second cancellation to make the old task terminal;
+    # its reservation hand-back completed before the new generation was minted.
+    assert restarted.daily_actions == 3
 
     # Only now does the stalled cleanup finish and the hand-back run.
     await asyncio.wait_for(stalled.unwinding.wait(), timeout=5)
@@ -168,7 +172,7 @@ async def test_a_start_before_the_dying_cycle_unwinds_still_gets_the_day_back(
 
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.daily_actions == 2
+    assert record.daily_actions == 3
 
     survivor = _Recorder()
     monkeypatch.setattr(_seams, "execute", survivor.execute)

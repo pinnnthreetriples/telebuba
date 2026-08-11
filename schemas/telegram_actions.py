@@ -438,3 +438,7 @@ class NewPostEvent(BaseModel):
     text: str = ""
     media_kind: PostMediaKind = "none"
     is_forward: bool = False
+    # Telegram's source timestamp. Zero is accepted for older callers/tests, but the
+    # live listener and bounded startup backfill always populate it. The durable inbox
+    # uses it to refuse stale history rather than commenting on an old post after boot.
+    date_unix: int = Field(default=0, ge=0)

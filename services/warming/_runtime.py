@@ -35,6 +35,7 @@ from schemas.warming import (
 )
 from services.dialogues import assign_pairs
 from services.trust import account_trust_score
+from services.warming import _seams
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
 from services.warming._state import _current_card, _set_state
@@ -61,6 +62,12 @@ logger = logging.getLogger(__name__)
 # the "no classes for stateless logic" rule): the loops must outlive a single
 # UI handler call so the board can start/stop them.
 _RUNTIME: dict[str, asyncio.Task[None]] = {}
+
+# A revoked generation gets a distinct persisted marker. It fences every stale
+# run_id CAS immediately and lets the task's done callback settle only that same
+# timed-out stop to idle without racing a later Start.
+_STOPPING_MARKERS: dict[asyncio.Task[None], tuple[str, str]] = {}
+_STOP_FINALIZERS: set[asyncio.Task[None]] = set()
 
 # Per-account async lock: prevents concurrent start/stop interleaving from
 # leaving the DB and ``_RUNTIME`` in mismatched states. Locks are created lazily
@@ -97,12 +104,131 @@ class AccountIsListenerError(ValueError):
     """
 
 
+class WarmingTaskNotQuiescentError(RuntimeError):
+    """The previous warming coroutine is still alive after bounded cancellation."""
+
+
 def _account_lock(account_id: str) -> asyncio.Lock:
     lock = _ACCOUNT_LOCKS.get(account_id)
     if lock is None:
         lock = asyncio.Lock()
         _ACCOUNT_LOCKS[account_id] = lock
     return lock
+
+
+def _discard_runtime_task(account_id: str, task: asyncio.Task[None]) -> None:
+    """Release ownership only when ``task`` is still the registered task."""
+    if _RUNTIME.get(account_id) is task:
+        _RUNTIME.pop(account_id, None)
+
+
+async def _settle_late_stop(account_id: str, stopping_marker: str) -> None:
+    """Turn one timed-out stop idle iff its marker still owns the persisted row."""
+    async with _account_lock(account_id):
+        current = await fetch_warming_state(account_id)
+        if current is None or current.run_id != stopping_marker:
+            return
+        await _set_state(
+            account_id,
+            "idle",
+            last_event="stopped_after_timeout",
+            last_error=None,
+            stopped_at=_now_iso(),
+            run_id=None,
+            expected_run_id=stopping_marker,
+        )
+
+
+def _runtime_task_done(account_id: str, run_id: str, task: asyncio.Task[None]) -> None:
+    """Done callback: terminal tasks leave both ownership registries atomically."""
+    _discard_runtime_task(account_id, task)
+    _seams.revoke_lease(account_id, run_id)
+
+
+def _late_stopped_task_done(task: asyncio.Task[None]) -> None:
+    """Schedule the CAS settle registered only after a bounded wait timed out."""
+    stopped = _STOPPING_MARKERS.pop(task, None)
+    if stopped is not None:
+        stopped_account_id, marker = stopped
+        finalizer = asyncio.create_task(_settle_late_stop(stopped_account_id, marker))
+        _STOP_FINALIZERS.add(finalizer)
+        finalizer.add_done_callback(_STOP_FINALIZERS.discard)
+
+
+def _spawn_runtime_task(account_id: str, run_id: str) -> asyncio.Task[None]:
+    """Create and register the sole task/lease pair for one account generation."""
+    _seams.activate_lease(account_id, run_id)
+    task = asyncio.create_task(_warming_loop(account_id, run_id=run_id))
+    _RUNTIME[account_id] = task
+    task.add_done_callback(
+        lambda completed, aid=account_id, rid=run_id: _runtime_task_done(aid, rid, completed)
+    )
+    return task
+
+
+async def _await_runtime_task(account_id: str, task: asyncio.Task[None]) -> bool:
+    """Wait at most the configured budget; retain every non-terminal task."""
+    if task.done():
+        _discard_runtime_task(account_id, task)
+        return True
+    done, _pending = await asyncio.wait(
+        {task},
+        timeout=settings.warming.stop_cancel_timeout_seconds,
+    )
+    if not done:
+        return False
+    _discard_runtime_task(account_id, task)
+    try:
+        task.result()
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        logger.exception("warming task failed while stopping %s", account_id)
+        await log_event(
+            "WARNING",
+            "warming_stop_task_error",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__},
+        )
+    return True
+
+
+async def _cancel_runtime_task(account_id: str, *, last_event: str) -> bool:
+    """Revoke, cancel and bounded-wait without losing a cancellation-suppressing task."""
+    task = _RUNTIME.get(account_id)
+    if task is None or task.done():
+        if task is not None:
+            _discard_runtime_task(account_id, task)
+        _seams.revoke_lease(account_id)
+        return True
+
+    # Revoke before cancel: even if the task catches CancelledError, the seam's
+    # pre/post-dispatch fence prevents another Telegram action from this point.
+    _seams.revoke_lease(account_id)
+    stopping_marker = f"stopping-{uuid.uuid4().hex}"
+    await _set_state(
+        account_id,
+        "error",
+        last_event=last_event,
+        last_error="warming task is stopping",
+        heartbeat_at=_now_iso(),
+        run_id=stopping_marker,
+    )
+    task.cancel()
+    quiescent = await _await_runtime_task(account_id, task)
+    if not quiescent:
+        _STOPPING_MARKERS[task] = (account_id, stopping_marker)
+        # add_done_callback also schedules the callback when the task completed
+        # in the narrow window after asyncio.wait timed out.
+        task.add_done_callback(_late_stopped_task_done)
+    return quiescent
+
+
+def assert_runtime_quiescent(account_id: str) -> None:
+    """Refuse lifecycle hand-offs while an old warming coroutine still exists."""
+    task = _RUNTIME.get(account_id)
+    if task is not None and not task.done():
+        raise WarmingTaskNotQuiescentError(account_id)
 
 
 class _CarriedStint(NamedTuple):
@@ -178,14 +304,14 @@ async def _cancel_existing_task(account_id: str) -> None:
     Clearing that schedule cannot wake a sleeping task, so cancel-and-replace is
     the only way to honour the operator's "start now".
     """
-    existing = _RUNTIME.pop(account_id, None)
-    if existing is not None and not existing.done():
-        existing.cancel()
-        with suppress(TimeoutError, asyncio.CancelledError):
-            await asyncio.wait_for(
-                asyncio.shield(existing),
-                timeout=settings.warming.stop_cancel_timeout_seconds,
-            )
+    if await _cancel_runtime_task(account_id, last_event="restart_stopping"):
+        return
+    await log_event(
+        "WARNING",
+        "warming_restart_timeout",
+        account_id=account_id,
+    )
+    raise WarmingNotReadyError(["previous warming task is still stopping"])
 
 
 async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
@@ -200,17 +326,16 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if await get_listener_running() and await get_listener_account_id() == data.account_id:
             raise AccountIsListenerError(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
-        # Cancel first so a cycle that stops promptly is gone before the fresh stint is
-        # published. That is ALL this ordering buys: the wait below gives up after ~5s,
-        # so a cycle stuck on a slow proxy is still spending when the mint lands.
-        # The daily-budget reservation no longer depends on the order at all — since #10
-        # the hand-back carries a per-booking token, so it lands whether or not a new
-        # generation holds the row, which it must: this mint is eager (#10).
+        # Revoke + cancel first, and publish a fresh generation only after the old
+        # coroutine is terminal. A task that suppresses cancellation remains owned
+        # and makes Start fail instead of overlapping Telegram activity. The
+        # per-booking reservation token still lets normal cancellation hand unused
+        # budget back before this new generation is minted.
+        existing = await fetch_warming_state(data.account_id)
         await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        existing = await fetch_warming_state(data.account_id)
         stint = _carry_or_restamp(existing, data)
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
@@ -222,30 +347,50 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                 "warming_unpromoted_on_restart",
                 account_id=data.account_id,
             )
-        await _set_state(
-            data.account_id,
-            "active",
-            last_event="queued",
-            next_run_at=None,
-            started_at=stint.started_at,
-            stopped_at=None,
-            last_error=None,
-            # П6: clear the previous run's furthest-step/channel so the just-
-            # queued card shows "online", not a stale send_dm/react on an old
-            # channel until the first cycle write lands.
-            last_action=None,
-            last_channel=None,
-            flood_wait_seconds=None,
-            flood_wait_until=None,
-            proxy_snapshot=_proxy_snapshot(account),
-            run_id=run_id,
-            target_days=stint.target_days,
-            activity_persona=stint.activity_persona,
-        )
-        await _refresh_dialogue_pairs()
-        _RUNTIME[data.account_id] = asyncio.create_task(
-            _warming_loop(data.account_id, run_id=run_id),
-        )
+        try:
+            await _set_state(
+                data.account_id,
+                "active",
+                last_event="queued",
+                next_run_at=None,
+                started_at=stint.started_at,
+                stopped_at=None,
+                last_error=None,
+                # П6: clear the previous run's furthest-step/channel so the just-
+                # queued card shows "online", not a stale send_dm/react on an old
+                # channel until the first cycle write lands.
+                last_action=None,
+                last_channel=None,
+                flood_wait_seconds=None,
+                flood_wait_until=None,
+                proxy_snapshot=_proxy_snapshot(account),
+                run_id=run_id,
+                target_days=stint.target_days,
+                activity_persona=stint.activity_persona,
+            )
+            # Build dialogue ownership before the loop can run its first cycle.
+            # Cancellation in this awaited preparation is covered by the same
+            # rollback as cancellation during the state commit.
+            await _refresh_dialogue_pairs()
+        except asyncio.CancelledError:
+            # The write may already have committed when cancellation surfaced.
+            # Revoke it explicitly so DB=active can never be left without a task.
+            cleanup = asyncio.create_task(
+                _set_state(
+                    data.account_id,
+                    "idle",
+                    last_event="start_cancelled",
+                    stopped_at=_now_iso(),
+                    run_id=None,
+                    expected_run_id=run_id,
+                )
+            )
+            with suppress(asyncio.CancelledError):
+                await asyncio.shield(cleanup)
+            raise
+        # No await after the prepared generation and task registration: a request
+        # cancellation can now only land after ownership is complete.
+        _spawn_runtime_task(data.account_id, run_id)
     await log_event("INFO", "warming_started", account_id=data.account_id)
     return await _current_card(data.account_id)
 
@@ -342,9 +487,7 @@ async def reconcile_warming_runtime() -> None:
             # mismatch and bail.
             run_id = uuid.uuid4().hex
             await _set_state(record.account_id, fresh.state, run_id=run_id)
-            _RUNTIME[record.account_id] = asyncio.create_task(
-                _warming_loop(record.account_id, run_id=run_id),
-            )
+            _spawn_runtime_task(record.account_id, run_id)
             restarted += 1
     if restarted:
         await log_event(
@@ -398,30 +541,36 @@ async def shutdown_warming_runtime() -> None:
     await _stop_purge_task()
     if not _RUNTIME:
         return
-    tasks = list(_RUNTIME.values())
-    _RUNTIME.clear()
-    for task in tasks:
+    owned = list(_RUNTIME.items())
+    for account_id, task in owned:
+        _seams.revoke_lease(account_id)
         if not task.done():
             task.cancel()
-    try:
-        await asyncio.wait_for(
-            asyncio.gather(*tasks, return_exceptions=True),
-            timeout=settings.warming.stop_cancel_timeout_seconds,
-        )
-    except TimeoutError:
-        await log_event("WARNING", "warming_shutdown_timeout", extra={"count": len(tasks)})
+    done, pending = await asyncio.wait(
+        {task for _, task in owned},
+        timeout=settings.warming.stop_cancel_timeout_seconds,
+    )
+    for account_id, task in owned:
+        if task in done:
+            _discard_runtime_task(account_id, task)
+    if pending:
+        await log_event("WARNING", "warming_shutdown_timeout", extra={"count": len(pending)})
 
 
 async def _stop_purge_task() -> None:
     """Cancel and await the periodic retention sweep (no-op if not running)."""
     global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
     task = _PURGE_TASK
-    _PURGE_TASK = None
     if task is None or task.done():
+        _PURGE_TASK = None
         return
     task.cancel()
-    with suppress(asyncio.CancelledError):
-        await task
+    done, _pending = await asyncio.wait(
+        {task},
+        timeout=settings.warming.stop_cancel_timeout_seconds,
+    )
+    if done:
+        _PURGE_TASK = None
 
 
 # The stop/graduation lifecycle lives in ``_graduation`` (file-size budget). It

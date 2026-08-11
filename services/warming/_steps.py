@@ -98,11 +98,13 @@ async def _read_and_react(  # noqa: PLR0913
     warm = settings.warming
     out = _ReadReactOutcome()
     # Read the larger reaction pool in one pass so the react reuses these ids.
+    # Pre-book immediately before each RPC. If cancellation lands after dispatch,
+    # the unknown Telegram outcome stays counted instead of being handed back.
+    tally.attempts += 1
     read_result = await _seams.execute(
         account_id,
         ReadChannel(channel=channel, message_limit=warm.reaction_message_limit),
     )
-    tally.attempts += 1
     if read_result.status == "ok":
         out.reads = 1
     elif read_result.status in _FAILURE_STATUSES:
@@ -119,6 +121,7 @@ async def _read_and_react(  # noqa: PLR0913
         can_react = False
 
     if can_react and reactions_enabled and _seams.rng.random() < reaction_probability:
+        tally.attempts += 1
         react_result = await _seams.execute(
             account_id,
             ReactToPost(
@@ -128,7 +131,6 @@ async def _read_and_react(  # noqa: PLR0913
                 message_ids=[int(x) for x in read_result.recent_message_ids or []] or None,
             ),
         )
-        tally.attempts += 1
         if react_result.status in _HALT_STATUSES:
             out.flood = react_result
             return out
@@ -242,8 +244,8 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if not _can_attempt():
             break
         if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
-            join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
             tally.attempts += 1
+            join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
             if join_result.status in {"ok", "already_participant"}:
                 await record_channel_joined(account_id, channel.channel)
                 await _emit_step(on_step, "join")

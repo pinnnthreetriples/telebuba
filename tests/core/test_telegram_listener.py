@@ -8,6 +8,7 @@ and invoke the handler directly — no live MTProto loop needed.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock
 
@@ -120,6 +121,7 @@ def _make_event(  # noqa: PLR0913 - test helper mirrors the Telethon message fie
         post=post,
         fwd_from=fwd_from,
         grouped_id=grouped_id,
+        date=datetime.fromtimestamp(1_700_000_000, UTC),
     )
     return MagicMock(message=message, chat_id=chat_id)
 
@@ -148,7 +150,13 @@ async def test_subscribe_posts_surfaces_new_broadcast_post(
     )
 
     assert received == [
-        NewPostEvent(channel="@deals", post_id=42, text="big sale", media_kind="other"),
+        NewPostEvent(
+            channel="@deals",
+            post_id=42,
+            text="big sale",
+            media_kind="other",
+            date_unix=1_700_000_000,
+        ),
     ]
 
 
@@ -225,7 +233,15 @@ async def test_post_without_text_or_media_normalises(monkeypatch: pytest.MonkeyP
         _make_event(chat_id=-100, post_id=9, text=None, media=None, post=True),
     )
 
-    assert received == [NewPostEvent(channel="@news", post_id=9, text="", media_kind="none")]
+    assert received == [
+        NewPostEvent(
+            channel="@news",
+            post_id=9,
+            text="",
+            media_kind="none",
+            date_unix=1_700_000_000,
+        ),
+    ]
 
 
 @pytest.mark.asyncio

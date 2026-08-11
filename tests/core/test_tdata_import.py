@@ -180,6 +180,40 @@ async def test_happy_path_single_account(sessions_dir: Path, tmp_base: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_structured_tdata_logs_never_publish_absolute_credential_paths(
+    sessions_dir: Path,
+    tmp_base: Path,
+) -> None:
+    payload = _zip({"tdata/key_data": b"x"})
+    req = TdataConvertRequest(filename="good.zip", content=payload)
+    fake_account = MagicMock(UserId=12345)
+    fake_account.ToTelethon = AsyncMock(return_value=AsyncMock())
+    fake_td = MagicMock(accountsCount=1, accounts=[fake_account])
+    extras: list[dict[str, object]] = []
+
+    async def _capture(
+        _level: str,
+        _event: str,
+        *,
+        extra: dict[str, object] | None = None,
+        **_kwargs: object,
+    ) -> None:
+        extras.append(extra or {})
+
+    with (
+        patch("core.tdata_import.TDesktop", return_value=fake_td),
+        patch("core.tdata_import.log_event", side_effect=_capture),
+    ):
+        result = await convert_tdata_zip(req, sessions_dir, tmp_base=tmp_base)
+
+    assert result.status == "ok"
+    serialized = str(extras)
+    assert str(tmp_base) not in serialized
+    assert str(sessions_dir) not in serialized
+    assert any(extra.get("session_file") == "12345.session" for extra in extras)
+
+
+@pytest.mark.asyncio
 async def test_convert_accepts_content_path_streaming(
     sessions_dir: Path,
     tmp_base: Path,
@@ -259,6 +293,7 @@ async def test_tdesktop_load_failure_reports_only_the_exception_class(
     sessions_dir: Path,
     tmp_base: Path,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     r"""``error`` must be the class name — this value reaches the HTTP 400 body.
 
@@ -272,13 +307,13 @@ async def test_tdesktop_load_failure_reports_only_the_exception_class(
     The ``log_event`` extra is checked for the same reason and NOT as belt-and-braces:
     ``core.logging.log_event`` persists ``extra`` to the ``logs`` table, ``GET /logs``
     serves it as ``LogEntry.extra`` and ``GET /events`` streams it — so an unbounded
-    ``extra`` is an HTTP body by another route. The full text goes to the stdlib
-    logger instead, which no route reads.
+    ``extra`` is an HTTP body by another route. Process logs are also treated as a
+    security boundary because operators commonly ship them to external collectors.
 
     The stand-in below is shaped like the real thing. Pre-fix ``error`` was
     ``f"TDesktop load failed: {exc}"`` and the log extra carried ``str(exc)``, so
     both the path and ``bob:hunter2@…`` were in each and every negative assertion
-    below failed.
+    below failed. Standard process logs must not retain it either.
     """
     payload = _zip({"tdata/key_data": b"x"})
     req = TdataConvertRequest(filename="good.zip", content=payload)
@@ -304,6 +339,8 @@ async def test_tdesktop_load_failure_reports_only_the_exception_class(
     assert result.status == "conversion_error"
     assert result.error == "RuntimeError"
     assert "hunter2" not in (result.error or "")
+    assert "hunter2" not in caplog.text
+    assert "C:/Users/op" not in caplog.text
     assert "tdata_staging_x9" not in (result.error or "")
     persisted = repr(extras)
     assert "hunter2" not in persisted
