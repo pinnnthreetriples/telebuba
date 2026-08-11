@@ -264,25 +264,34 @@ async def test_cancel_bounded_gives_up_on_a_task_that_ignores_cancellation(
 ) -> None:
     """The bounded wait must return even when the cancelled task refuses to unwind.
 
-    Nothing covered the timeout branch: dropping either the ``wait_for`` or the
-    ``suppress(TimeoutError)`` would make shutdown HANG on one stuck on-post task (or
-    crash the shutdown hook) instead of failing a test.
+    Shutdown must return after its configured deadline even when a stuck
+    on-post task keeps suppressing repeated cancellation requests.
     """
-    monkeypatch.setattr(settings.neurocomment, "stop_cancel_timeout_seconds", 0.1)
+    monkeypatch.setattr(settings.neurocomment, "stop_cancel_timeout_seconds", 0.05)
     cancelled = asyncio.Event()
+    release = asyncio.Event()
+    cleaned_up = asyncio.Event()
 
     async def _swallow_cancel() -> None:
         try:
-            await asyncio.Event().wait()
-        except asyncio.CancelledError:
-            cancelled.set()
-            await asyncio.Event().wait()  # ignores the cancel and keeps holding the loop
+            while not release.is_set():
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    cancelled.set()
+        finally:
+            cleaned_up.set()
 
     task = asyncio.create_task(_swallow_cancel())
     await asyncio.sleep(0)  # let it reach the await so cancel lands inside the try
-
-    # Bound far above the 0.1s give-up: a regression that waits forever fails here.
-    await asyncio.wait_for(_runtime._cancel_bounded(task), timeout=5.0)
-
-    assert cancelled.is_set()  # the cancel WAS delivered; the task just ignored it
-    await asyncio.gather(task, return_exceptions=True)  # loop hygiene
+    bounded = asyncio.create_task(_runtime._cancel_bounded(task))
+    done, _pending = await asyncio.wait({bounded}, timeout=0.5)
+    try:
+        assert bounded in done
+        assert bounded.exception() is None
+        assert cancelled.is_set()  # the cancel WAS delivered; the task just ignored it
+        assert not cleaned_up.is_set()
+    finally:
+        release.set()
+        await asyncio.gather(task, bounded, return_exceptions=True)
+    assert cleaned_up.is_set()

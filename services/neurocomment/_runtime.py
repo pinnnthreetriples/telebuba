@@ -10,7 +10,6 @@ the tasks are tracked so shutdown can cancel them. Mirrors
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -297,11 +296,19 @@ async def _cancel_bounded(*tasks: asyncio.Task[None] | None) -> None:
     for task in live:
         if not task.done():
             task.cancel()
-    with suppress(TimeoutError):
-        await asyncio.wait_for(
-            asyncio.gather(*live, return_exceptions=True),
-            timeout=settings.neurocomment.stop_cancel_timeout_seconds,
-        )
+    done, pending = await asyncio.wait(
+        live,
+        timeout=settings.neurocomment.stop_cancel_timeout_seconds,
+    )
+
+    def consume_result(task: asyncio.Task[None]) -> None:
+        if not task.cancelled():
+            task.exception()
+
+    for task in done:
+        consume_result(task)
+    for task in pending:
+        task.add_done_callback(consume_result)
 
 
 async def _stop_sweep() -> None:

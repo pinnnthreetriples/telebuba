@@ -1,0 +1,51 @@
+{
+  "mutmut_version": "3.6.0",
+  "python_version": "3.13.14",
+  "hypothesis_profile": "mutation",
+  "max_children": 4,
+  "python_hash_seed": "0",
+  "timezone": "UTC",
+  "mutant_catalog_sha256": "8fc133e1ede73beea5f91ad870afc0f91be76e742d73e7642596d70305996be2",
+  "reviewed_timeouts": [
+    "services.accounts._tdata.x__run_tdata_import__mutmut_66",
+    "services.content.x_strip_markdown_delimiters__mutmut_11"
+  ],
+  "mutmut_config": {
+    "source_paths": [
+      "services",
+      "schemas"
+    ],
+    "only_mutate": [],
+    "do_not_mutate": [],
+    "do_not_mutate_patterns": [],
+    "max_stack_depth": -1,
+    "mutate_only_covered_lines": true,
+    "timeout_multiplier": 15.0,
+    "timeout_constant": 1.0,
+    "type_check_command": [],
+    "pytest_add_cli_args_test_selection": [
+      "tests"
+    ],
+    "pytest_add_cli_args": [
+      "-o",
+      "addopts="
+    ],
+    "also_copy": [
+      "api",
+      "core",
+      "main.py",
+      "tests",
+      "tools",
+      "conftest.py",
+      "pyproject.toml",
+      ".env.example",
+      "frontend/src/shared/i18n"
+    ]
+  },
+  "stats": {
+    "killed": 9243,
+    "survived": 1573,
+    "timeout": 2,
+    "total": 10818
+  }
+}
