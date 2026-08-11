@@ -23,6 +23,10 @@ from schemas.accounts import (
 )
 from schemas.challenge import BotChallengeMessage  # noqa: TC001
 
+# Privacy, write-rights and channel-activity reads likewise live in sibling modules; the
+# unions below reference them, so importing here keeps the original import paths working.
+from schemas.telegram_actions_activity import GetLastPostAt
+
 # The channel-management action cluster lives in a sibling module (file-size
 # cap); importing the names here keeps
 # ``from schemas.telegram_actions import CreateChannel`` working unchanged.
@@ -61,11 +65,6 @@ from schemas.telegram_actions_media import (
     ToggleStoryPinned,
     WatchPeerStories,
 )
-
-# The account-privacy pair likewise lives in a sibling module; both unions below
-# reference these names, so importing them here keeps
-# ``from schemas.telegram_actions import SetPrivacySettings`` working. Same for the
-# write-rights read, of which only the ACTION is named here (for the union below).
 from schemas.telegram_actions_privacy import GetPrivacySettings, SetPrivacySettings
 from schemas.telegram_actions_rights import CheckWriteRights
 
@@ -315,7 +314,8 @@ TelegramReadAction = Annotated[
     | ListChannelPosts
     | CheckChannelUsername
     | SearchChannels
-    | GetSimilarChannels,
+    | GetSimilarChannels
+    | GetLastPostAt,
     Field(discriminator="action_type"),
 ]
 

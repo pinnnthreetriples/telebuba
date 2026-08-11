@@ -805,7 +805,10 @@
     "neurocomment_captcha_gave_up": "Captcha not passed — the account left the chat",
     "neurocomment_channel_captcha_unsolved": "Channel dropped: no account got past the captcha",
     "neurocomment_captcha_review_failed": "Unsolved-captcha review failed",
-    "db_maintenance_failed": "Database maintenance failed"
+    "db_maintenance_failed": "Database maintenance failed",
+    "neurocomment_channel_inactive_dropped": "Channel dropped: it stopped publishing",
+    "neurocomment_channel_posts_missed": "Channel publishes, but its posts never reached us",
+    "neurocomment_channel_activity_unknown": "Could not tell whether the channel still publishes"
   },
   "logEventReason": {
     "row_kept": "account row kept, session file left in place",
@@ -894,7 +897,10 @@
     "neurocomment_listener_access_lost": "The listener fell out of this channel, so its posts will not arrive until it is back. The loss is counted and the listener re-joins on this same pass; the counter next to the row says which loss this is and how many are allowed. No action needed. Once they run out the listener leaves the channel alone and a \"Listener gave up re-joining channel\" row appears next to it. Losses are counted over a rolling week, so occasional blips do not add up.",
     "neurocomment_listener_rejoin_exhausted": "The allowed losses are used up: the listener no longer re-joins this channel, new posts from it will not arrive, and there will be nothing to comment on. The counter next to the row shows the whole budget and closes the count. The channel itself is not dropped from the campaign and no account is taken off it. Neither a restart nor linking the channel again undoes this: the count expires on its own a week after the last loss, and the listener tries again then.",
     "neurocomment_channel_cooled": "The post was skipped because the channel is paused right now after write errors. This is the only line about this post: nobody wrote a comment. The pause ends on its own — the channel goes back to work, or, on its last round, leaves the campaign instead. Deleted comments never cause a pause: the channel clears them out and we still comment on its next post.",
-    "neurocomment_no_campaign": "No active campaign for this channel."
+    "neurocomment_no_campaign": "No active campaign for this channel.",
+    "neurocomment_channel_inactive_dropped": "The channel published nothing for longer than the configured window — confirmed by asking Telegram, not inferred from our own silence alone. It was unlinked from the campaign, the listener stopped watching it, and every account walked out of both the discussion group and the channel itself. A subscription to a dead channel buys nothing, and spare subscriptions cost the account. Link it again if it comes back to life.",
+    "neurocomment_channel_posts_missed": "Our records showed silence, but Telegram reported recent posts. So the channel is fine and our subscription is not: the listener never received them. The channel stays in the campaign and its last-post stamp was repaired, so it will not be dropped. If this keeps appearing for the same channel, check that the listener account is still a member.",
+    "neurocomment_channel_activity_unknown": "The last-post read failed, so no verdict was reached: the channel stays in the campaign and is re-checked on the next pass. A one-off line is ordinary network noise. Hours of them mean the listener account has trouble reaching this channel specifically."
   },
   "logEventTelegram": {
     "action": {

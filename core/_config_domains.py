@@ -273,6 +273,11 @@ class NeurocommentSettings(BaseSettings):
     # A delete scan is far too expensive to run on every 5-minute deletion sweep, so the
     # prune rides that loop but fires at most once per this interval.
     retention_prune_interval_hours: float = Field(default=24.0, gt=0.0)
+    # A channel that has published nothing for this long leaves the campaign and everyone
+    # walks out of it. 0 disables the rule. Never read off our own silence alone — the
+    # listener sees posts only while the process is up — so the verdict is confirmed
+    # against Telegram first; ``services.neurocomment._inactive`` owns that.
+    inactive_channel_drop_days: float = Field(default=7.0, ge=0.0)
     # Max concurrent Telegram ban probes for the "Проверить каналы" check — keeps
     # a burst of GetParticipant reads on a few accounts from tripping flood limits.
     ban_check_concurrency: int = Field(default=4, ge=1, le=32)

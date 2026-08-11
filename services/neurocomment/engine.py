@@ -39,6 +39,7 @@ from core.db import (
     list_spam_statuses_by_ids,
     list_warming_states_by_ids,
     mark_comment_failed,
+    stamp_channel_post_seen,
 )
 from core.logging import log_event
 from services.neurocomment import _filters, _seams, _state
@@ -92,6 +93,12 @@ async def handle_new_post(event: NewPostEvent) -> None:
 
 
 async def _handle_new_post(event: NewPostEvent) -> None:
+    # BEFORE every gate below, deliberately: this records that the CHANNEL is alive, and a
+    # post we refuse to comment on (a forward, an album item, one arriving while the
+    # campaign is paused) proves that just as well as one we answer. Getting this wrong
+    # would feed the inactive-channel rule our commenting rate instead of the channel's
+    # publishing rate, and drop a channel that posts nothing but forwards.
+    await stamp_channel_post_seen(event.channel, datetime.now(UTC).isoformat())
     campaign = await fetch_active_campaign_for_channel(event.channel)
     if campaign is None:
         await log_event(

@@ -18,6 +18,10 @@ from core.repositories.neurocomment._accounts import (
     remove_account_from_campaign,
     set_campaign_account_channels,
 )
+from core.repositories.neurocomment._activity import (
+    list_silent_watch_channels,
+    stamp_channel_post_seen,
+)
 from core.repositories.neurocomment._bans import (
     clear_unconfirmed_bans,
     mark_pair_banned,
@@ -185,6 +189,7 @@ __all__ = [
     "list_posted_comments_for_channel_since",
     "list_posted_comments_page",
     "list_posted_comments_since",
+    "list_silent_watch_channels",
     "load_active_cooldowns",
     "load_neurocomment_settings",
     "lookup_cached_decision",
@@ -213,6 +218,7 @@ __all__ = [
     "set_listener_account_id",
     "set_listener_running",
     "stamp_captcha_retry",
+    "stamp_channel_post_seen",
     "stamp_join_request",
     "stamp_rejoin_attempt",
     "stamp_unconfirmed_ban",

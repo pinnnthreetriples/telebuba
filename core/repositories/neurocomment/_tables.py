@@ -64,6 +64,11 @@ _neurocomment_campaign_channels = Table(
     # starts its rounds over — the operator asked for it again.
     Column("pause_rounds", Integer, nullable=False, server_default="0"),
     Column("paused_until", String, nullable=True),
+    # When the listener last saw this channel publish (migration #51, ISO-8601 UTC).
+    # NULL on an existing row means "never seen since the column existed", so the
+    # inactive-channel rule ages it from ``created_at`` instead — a link made today is
+    # not silent, it is new.
+    Column("last_post_at", String, nullable=True),
 )
 
 
