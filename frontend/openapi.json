@@ -11130,6 +11130,17 @@
             ],
             "title": "Last Comment Text"
           },
+          "last_comment_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Comment Channel"
+          },
           "pinned_channels": {
             "items": {
               "type": "string"

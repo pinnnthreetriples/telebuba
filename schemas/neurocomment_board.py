@@ -81,6 +81,12 @@ class NeurocommentAccountCard(BaseModel):
     # Text of the most recent posted comment (None until the account comments, or
     # when the stored row has no text). Surfaces the real comment in the board.
     last_comment_text: str | None = None
+    # Where that same comment went. Rides the card rather than being looked up in
+    # ``NeurocommentBoard.comments``, which is a newest-first prefix capped at
+    # ``board_comment_feed_limit`` (50) across the WHOLE campaign: six accounts under the
+    # default hourly cap outrun it in under an hour, and the board would then pair this
+    # account's real ``last_comment_text`` with some other channel it merely joined.
+    last_comment_channel: str | None = None
     # Campaign channels this account targets (comments only there); empty = all.
     pinned_channels: list[str] = Field(default_factory=list)
     readiness: list[AccountChannelReadiness] = Field(default_factory=list)

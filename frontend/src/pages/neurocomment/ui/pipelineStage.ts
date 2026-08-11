@@ -8,12 +8,32 @@ import type { LogEntry } from '@/shared/api';
 // Matched on the code and exactly where a prefix would collide
 // (`neurocomment_post_received` is a detection, `_post_skipped` a filter verdict).
 // First match wins, so the list is ordered late-stage first.
+//
+// Only codes the PER-POST path emits may appear here. Two omissions are deliberate and
+// must stay omitted:
+//   * the whole `challenge_*` / `captcha_*` family — those come from the onboarding join
+//     (`_classify.solve_if_present`) and from the deletion sweep's captcha pass, never
+//     from a post. Mapping them to «Капча» made pressing Start green-check every earlier
+//     step and claim a comment was generated and being sent, with no post in flight.
+//     «Капча» therefore stays dark until the post path itself grows a captcha event.
+//   * `neurocomment_no_campaign` — written ABOVE `post_received`, for a post on a channel
+//     with no active campaign. Calling it a filter verdict green-checked a detection that
+//     never happened; the listener did see it, so it belongs to stage 0.
+//   * `neurocomment_account_banned` — the one branch of the outcome ladder that is NOT
+//     post-only: `bans.confirm_group_ban_and_leave` writes it from the onboarding join too
+//     (`_classify.py`), and the row carries no post id to tell the two apart. Left out, a
+//     ban falls through to that post's own `generation_started` — stale by one stage for up
+//     to a minute, which beats asserting a comment was sent during onboarding.
 const STAGE_OF: [RegExp, number][] = [
-  [/^neurocomment_(posted|post_(failed|gated|access_lost|cooldown|unavailable))$/, 5],
+  // Every post-only branch of `_outcomes._classify_post`, which writes exactly one terminal
+  // row per attempt — miss one and that outcome parks the rail on «Генерация» for a minute.
+  [
+    /^neurocomment_(posted|posted_after_reclaim|posted_row_missing|post_(failed|gated|access_lost|cooldown|unavailable|ban_unconfirmed|commit_failed))$/,
+    5,
+  ],
   [/^neurocomment_telegram_comment_on_post$/, 5],
-  [/^neurocomment_(challenge|captcha)_/, 4],
   [/^neurocomment_(generation_|claim_lost_before_send$)/, 3],
-  [/^neurocomment_(post_skipped|channel_cooled|no_campaign|no_account_available)$/, 2],
+  [/^neurocomment_(post_skipped|channel_cooled|no_account_available)$/, 2],
   [/^neurocomment_(post_received|post_dropped_overloaded)$/, 1],
 ];
 

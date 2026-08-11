@@ -160,6 +160,9 @@ def _build_card(
         deleted_today=sum(1 for c in posted if c.deleted_at),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
+        # Same row as the text above, so the board's channel and comment columns can
+        # never name two different events.
+        last_comment_channel=latest.channel if latest else None,
         pinned_channels=pinned_channels,
         readiness=[
             AccountChannelReadiness(

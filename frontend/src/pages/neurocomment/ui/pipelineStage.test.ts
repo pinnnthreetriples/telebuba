@@ -24,13 +24,55 @@ test('each stage of a post’s life maps to its own step', () => {
     ['neurocomment_generation_started', 3],
     ['neurocomment_generation_retry', 3],
     ['neurocomment_claim_lost_before_send', 3],
-    ['neurocomment_challenge_attempt', 4],
-    ['neurocomment_captcha_retry', 4],
     ['neurocomment_posted', 5],
     ['neurocomment_post_failed', 5],
   ];
   for (const [event, stage] of cases) {
     expect(pipelineStage([line(event)], true, NOW).stage, event).toBe(stage);
+  }
+});
+
+// `_outcomes._classify_post` writes exactly one terminal row per attempt. Miss one and
+// that outcome falls through to the post's own `generation_started`, parking the rail on
+// «Генерация» for a minute after the post already died at the comment step.
+test('every post-only branch of the outcome ladder lands on «Комментарий»', () => {
+  const terminal = [
+    'neurocomment_posted',
+    'neurocomment_posted_after_reclaim',
+    'neurocomment_posted_row_missing',
+    'neurocomment_post_commit_failed',
+    'neurocomment_post_failed',
+    'neurocomment_post_gated',
+    'neurocomment_post_access_lost',
+    'neurocomment_post_cooldown',
+    'neurocomment_post_unavailable',
+    'neurocomment_post_ban_unconfirmed',
+  ];
+  for (const event of terminal) {
+    expect(pipelineStage([line(event)], true, NOW).stage, event).toBe(5);
+  }
+});
+
+// Codes that are NOT on the per-post path must never move the rail: the card green-checks
+// every step below the active one, so a stray match asserts a comment was generated and
+// sent when no post exists at all. Pressing Start used to light «Капча» this way.
+test('work that is not a post never claims a pipeline stage', () => {
+  const offPath = [
+    // onboarding join (`_classify.solve_if_present`) and the deletion sweep's captcha pass
+    'neurocomment_challenge_attempt',
+    'neurocomment_challenge_result',
+    'neurocomment_captcha_retry',
+    'neurocomment_captcha_gave_up',
+    // written ABOVE post_received, for a post on a channel with no active campaign
+    'neurocomment_no_campaign',
+    // the outcome ladder's one non-post-only branch: onboarding writes it too
+    'neurocomment_account_banned',
+    // background sweeps, discovery, re-join
+    'neurocomment_comment_deleted',
+    'neurocomment_listener_started',
+  ];
+  for (const event of offPath) {
+    expect(pipelineStage([line(event)], true, NOW), event).toEqual({ stage: 0, staleAt: null });
   }
 });
 

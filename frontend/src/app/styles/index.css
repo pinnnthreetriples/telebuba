@@ -204,12 +204,6 @@
   .tb-drawerin {
     animation: none;
   }
-  /* Near-zero duration, NOT `none`: removing the transition kills the
-     transitionend that unmounts a closing sub-row, and it would sit there
-     collapsed-but-present in the a11y tree forever. */
-  .tb-subrow {
-    transition-duration: 0.01ms;
-  }
 }
 
 .tb-tip {
@@ -337,6 +331,16 @@
 }
 .tb-subrow.tb-closing {
   grid-template-rows: minmax(0, 0fr);
+}
+/* Declared AFTER the base rule, not up in the reduced-motion block near the other
+   three: same specificity, and a media query adds none, so the later `transition`
+   shorthand there would have reset this duration and the override was dead.
+   Near-zero duration and NOT `none`: removing the transition kills the transitionend
+   that unmounts a closing sub-row, leaving it collapsed-but-present in the a11y tree. */
+@media (prefers-reduced-motion: reduce) {
+  .tb-subrow {
+    transition-duration: 0.01ms;
+  }
 }
 .tb-subrow > * {
   min-height: 0;

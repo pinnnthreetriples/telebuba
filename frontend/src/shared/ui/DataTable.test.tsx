@@ -190,6 +190,65 @@ test('the last table row keeps its closing sub-row until the transition ends', a
   });
 });
 
+// Regression: the exit state used to be one "which row is closing" id on the table, so
+// the next expansion change wiped it and the row still animating was dropped in a single
+// frame — the exact snap the animation exists to remove, on the commonest gesture there
+// is (browsing accounts one after another).
+test('opening another row does not cut short the one still closing', async () => {
+  renderTable();
+
+  const first = screen.getByLabelText('Раскрыть first-row');
+  await userEvent.click(first);
+  await userEvent.click(first);
+  // second-row's sub-row opens while first-row's is mid-exit
+  await userEvent.click(screen.getByLabelText('Раскрыть second-row'));
+
+  const closing = screen.getByText('подробности first-row').closest('.tb-subrow');
+  expect(closing).toHaveClass('tb-closing');
+  expect(screen.getByText('подробности second-row').closest('.tb-subrow')).not.toHaveClass(
+    'tb-closing',
+  );
+});
+
+// Regression: with a shared closing id and index-based row ids, a poll that shortened the
+// data left the id matching a LATER, collapsed row — whose sub-row then rendered, and
+// stayed focusable, for the life of the component.
+test('a row that unmounts mid-close leaves no ghost behind', async () => {
+  const { rerender } = render(
+    <DataTable
+      data={DATA}
+      columns={COLUMNS}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+
+  const second = screen.getByLabelText('Раскрыть second-row');
+  await userEvent.click(second);
+  await userEvent.click(second);
+  expect(screen.getByText('подробности second-row')).toBeInTheDocument();
+
+  // the poll returns one row, dropping the row that was mid-exit…
+  rerender(
+    <DataTable
+      data={[DATA[0]!]}
+      columns={COLUMNS}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+  expect(screen.queryByText('подробности second-row')).toBeNull();
+
+  // …and when it grows back, the row at that index is collapsed, with nothing revealed.
+  rerender(
+    <DataTable
+      data={DATA}
+      columns={COLUMNS}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+  expect(screen.getByText('second-row')).toBeInTheDocument();
+  expect(screen.queryByText('подробности second-row')).toBeNull();
+});
+
 test('getRowProps reaches the card', async () => {
   setViewport(375);
   const clicked: string[] = [];

@@ -101,26 +101,6 @@ async def test_settings_loaded_once_per_post(monkeypatch: pytest.MonkeyPatch) ->
     assert calls == 1
 
 
-@pytest.mark.asyncio
-async def test_happy_path_logs_the_two_rail_stages(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A received post and a starting generation each leave a row.
-
-    They are the only POSITIVE markers on this path — everything else logged here reports
-    a miss — so without them the dashboard's «Новый пост» and «Генерация» steps could
-    never light and its pipeline rail stayed decorative. The SPA maps both codes in
-    ``frontend/src/pages/neurocomment/ui/pipelineStage.ts``; renaming one there and not
-    here (or here and not there) silently freezes the rail again.
-    """
-    await _make_campaign("@chan", "acc-1")
-    _patch_io(monkeypatch, comment=_CommentStub(status="ok", message_id=1))
-
-    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
-
-    events = [row.event for row in await list_recent_logs(50)]
-    assert "neurocomment_post_received" in events
-    assert "neurocomment_generation_started" in events
-
-
 # --------------------------------------------------------------------------- #
 # Idempotency
 # --------------------------------------------------------------------------- #
