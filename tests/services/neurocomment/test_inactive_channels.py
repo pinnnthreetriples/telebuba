@@ -115,8 +115,16 @@ async def test_a_channel_telegram_confirms_is_dead_is_dropped(
 
     assert probe.channels == [_CHANNEL]
     assert not await _channel_is_linked(campaign_id)
-    assert "neurocomment_channel_inactive_dropped" in await _events()
     assert sorted(_leaves(comment)) == ["acc-1", "acc-2"]
+    dropped = next(
+        row
+        for row in await list_recent_logs(limit=50)
+        if row.event == "neurocomment_channel_inactive_dropped"
+    )
+    # How long it was quiet, in the one ``extra`` field the log table renders beside the
+    # label. A bare date would leave the operator doing the arithmetic that decided it.
+    assert dropped.extra["reason"] == "252d"
+    assert dropped.extra["last_post_at"] == _LONG_DEAD
 
 
 @pytest.mark.asyncio

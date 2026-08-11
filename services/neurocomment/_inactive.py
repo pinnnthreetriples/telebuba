@@ -94,7 +94,7 @@ async def review_silent_channels(now: datetime) -> None:
         return
     for link in due:
         _PROBED_AT[link.channel] = now
-        await _judge_channel(link, listener, cutoff)
+        await _judge_channel(link, listener, now, cutoff)
 
 
 def _probe_due(channel: str, now: datetime) -> bool:
@@ -102,7 +102,12 @@ def _probe_due(channel: str, now: datetime) -> bool:
     return probed_at is None or now - probed_at >= _PROBE_EVERY
 
 
-async def _judge_channel(link: CampaignChannelLink, listener: str, cutoff: datetime) -> None:
+async def _judge_channel(
+    link: CampaignChannelLink,
+    listener: str,
+    now: datetime,
+    cutoff: datetime,
+) -> None:
     """Ask Telegram when ``link.channel`` last published, then act on the answer.
 
     Only ONE answer retires the channel: a post whose date is older than the cutoff. The
@@ -149,7 +154,7 @@ async def _judge_channel(link: CampaignChannelLink, listener: str, cutoff: datet
             extra={"channel": link.channel, "last_post_at": result.last_post_at},
         )
         return
-    await _drop_and_leave(link, result.last_post_at)
+    await _drop_and_leave(link, result.last_post_at, (now - last_post_at).days)
 
 
 async def _log_unknown(link: CampaignChannelLink, listener: str, error_type: str) -> None:
@@ -161,7 +166,11 @@ async def _log_unknown(link: CampaignChannelLink, listener: str, error_type: str
     )
 
 
-async def _drop_and_leave(link: CampaignChannelLink, last_post_at: str) -> None:
+async def _drop_and_leave(
+    link: CampaignChannelLink,
+    last_post_at: str,
+    silent_days: int,
+) -> None:
     """Unlink the dead channel, then walk its comment authors out of the discussion group.
 
     Who serves the channel is read BEFORE the unlink, not after: ``deactivate_channel``
@@ -199,6 +208,11 @@ async def _drop_and_leave(link: CampaignChannelLink, last_post_at: str) -> None:
             "channel": link.channel,
             "campaign_id": link.campaign_id,
             "last_post_at": last_post_at,
+            # The number goes in ``reason`` because that is the only ``extra`` field the
+            # log table renders beside the label, and an unmapped value renders raw —
+            # the same idiom the re-join budget uses for its "2/2". A bare date would
+            # leave the operator doing the arithmetic that decided the verdict.
+            "reason": f"{silent_days}d",
         },
     )
     await _walk_out(link.channel, rows)
