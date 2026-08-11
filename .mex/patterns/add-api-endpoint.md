@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-07
+last_updated: 2026-08-11
 grounds_to:
   - node: "function:bad8e00aa6ca4667b5132e4fa9dac582"
     fingerprint: "mh:64:7b226d696e68617368223a5b32323132353435372c3130373232303930392c3132333434373234342c3138383430363032342c38363130323039382c37313733393334302c32323736393730352c3130333434373737352c31323732353739302c3133373032353233382c3339323234372c3132353037333139332c34323234323235342c35323931303230312c32363435373333382c3133373439313436392c32353938313634392c3139383337383536342c37373830333637382c38303934333634362c3132353432313235382c38343331303739302c3134323436393537392c3133343232353733372c39313938373438302c3132373633353837372c3237323133353334332c35313532323032362c33313131393833342c313431343134372c31303139383139312c3134363731353938312c343431393134332c31313633323738312c3136303431313632362c3132393431373436342c3131303731353836362c34363433343636352c333035303433332c3133323233333533372c32393637313335342c3331333333333636322c3832363536312c31353034323932342c38373936353635312c32383739343438382c32363234373734362c3131363631323932362c31383539383131352c32323934333537332c3133393839373933312c39313432393436322c34313638303530332c3230383337353737342c38353336313636392c31393438363037312c3131343632323437362c32343036353337372c393035303337382c35303733303035362c31343632303439302c37373637393735362c333235313338392c31313732363932355d2c226e65696768626f7273223a5b2266756e6374696f6e3a3039636532613135343635353138393339363632366361376332663262663433222c2266756e6374696f6e3a3630633230323433366435663031356339303262633463636235373830303331222c2266756e6374696f6e3a3737626535663064356263303830343363633230383935336237353832653037225d2c22746f6b656e436f756e74223a39387d"
@@ -17,9 +17,9 @@ edges:
 2. Implement and test policy in `services/` through `core/` gateways.
 3. Add an async `api/v1/` route: bind, call, return. Do NOT attach an auth dependency — `api/v1/__init__.py` mounts every domain router behind [`Depends(get_current_user)`](mex://function:bad8e00aa6ca4667b5132e4fa9dac582); only `auth` and `health` are unprotected.
 4. Set `operation_id` on the decorator, always. It is copied verbatim into the generated client (`operation_id="listProxies"` → `export const listProxies`), so omitting it lets hey-api synthesize a name from path+method and silently renames the TS surface. Only `include_in_schema=False` routes (binary thumbnails, SSE) skip it.
-5. Use the shared error envelope and locale-neutral values.
+5. Use the shared error envelope and locale-neutral values. Large bodies are admitted by raw ASGI middleware only for an exact multipart route plus a valid, non-revoked session; route dependencies are too late.
 6. When a router nears the file-size budget, move a cohesive cluster into a private sibling exporting a bare `APIRouter()`; the parent keeps prefix, tags and auth.
 7. Add route tests mocking the service.
 8. Run `uv run python -m tools.gen_api` and relevant backend/frontend gates.
 
-Verify: no business logic or direct DB/Telegram/provider imports in `api/`; schema-visible routes carry stable `operation_id`s; service/route tests pass; regenerated client is committed.
+Verify: no business logic or direct DB/Telegram/provider imports in `api/`; schema-visible routes carry stable `operation_id`s; service/route tests pass; regenerated client is committed. New upload routes must be added to the explicit body-admission policy and its fail-closed tests.
