@@ -413,6 +413,13 @@ class NeurocommentSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
+        if 0.0 < self.inactive_channel_drop_days < 1.0:
+            # A fraction of a day is a typo, never an intent, and this is the one setting
+            # here whose mistake is unrecoverable: a cutoff minutes in the past makes every
+            # channel a suspect at once and unlinks the fleet, deleting per-account pins
+            # nothing restores. 0 disables the rule; anything else is at least a day.
+            msg = "inactive_channel_drop_days must be 0 (disabled) or at least 1 day"
+            raise ValueError(msg)
         if self.reply_delay_min_seconds > self.reply_delay_max_seconds:
             msg = "reply_delay_min_seconds must not exceed reply_delay_max_seconds"
             raise ValueError(msg)

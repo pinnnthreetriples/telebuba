@@ -1,10 +1,11 @@
-"""A channel that stops publishing leaves the campaign, and everyone leaves the channel.
+"""A channel that stops publishing leaves the campaign, and its authors leave its group.
 
 The rule's whole difficulty is that OUR silence is not the channel's: the listener sees
-posts only while the process is up, and this app restarts every day or two. So the tests
-below are mostly about the guard rather than the drop — a suspect is only ever convicted
-on Telegram's own answer, and the two ways that answer can fail to arrive (a live channel,
-a failed read) each keep the channel.
+posts only while the process is up, and this app restarts every day or two. So most of the
+tests below are about the guard rather than the drop — only a DATED post older than the
+cutoff retires a channel, and every other answer (a failed read, an empty one, an undated
+message, a paused campaign) has to keep it. The drop deletes per-account pins nothing
+restores, so absence of evidence must never reach it.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from core.db import (
     set_listener_account_id,
     upsert_readiness,
 )
+from core.repositories.neurocomment import set_campaign_account_channels, set_campaign_status
 from schemas.telegram_actions import NewPostEvent
 from schemas.telegram_actions_activity import LastPostResult
 from services.neurocomment import _inactive, _seams, engine
@@ -38,6 +40,13 @@ _NOW = datetime(2026, 8, 11, 12, 0, tzinfo=UTC)
 # Far enough past the shipped 7 days that every link in these tests is a suspect on age
 # alone; the cutoff arithmetic itself is asserted by the "not yet silent" case.
 _LATER = _NOW + timedelta(days=30)
+_LONG_DEAD = "2026-01-01T00:00:00+00:00"
+
+
+@pytest.fixture(autouse=True)
+def _forget_probes() -> None:
+    """The probe clock is process-global, like every other in-memory rule state here."""
+    _inactive.reset_probe_clock()
 
 
 class _ProbeStub:
@@ -54,10 +63,10 @@ class _ProbeStub:
 
 class _FailingProbe:
     def __init__(self) -> None:
-        self.calls = 0
+        self.channels: list[str] = []
 
-    async def read(self, _account_id: str, _action: object) -> LastPostResult:
-        self.calls += 1
+    async def read(self, _account_id: str, action: object) -> LastPostResult:
+        self.channels.append(getattr(action, "channel", ""))
         msg = "read failed"
         raise RuntimeError(msg)
 
@@ -77,11 +86,17 @@ async def _events() -> list[str]:
     return [row.event for row in await list_recent_logs(limit=50)]
 
 
-def _leaves(comment: _CommentStub) -> list[tuple[str, str]]:
+def _leaves(comment: _CommentStub) -> list[str]:
     return [
-        (account_id, action.action_type)
+        account_id
         for account_id, action in comment.calls
-        if action.action_type in {"leave_channel", "leave_discussion_group"}
+        if action.action_type == "leave_discussion_group"
+    ]
+
+
+def _left_channel(comment: _CommentStub) -> list[str]:
+    return [
+        account_id for account_id, action in comment.calls if action.action_type == "leave_channel"
     ]
 
 
@@ -89,11 +104,11 @@ def _leaves(comment: _CommentStub) -> list[tuple[str, str]]:
 async def test_a_channel_telegram_confirms_is_dead_is_dropped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The verdict: unlinked, and every membership it cost is handed back."""
+    """The one verdict: a dated post older than the cutoff. Authors hand back the group."""
     campaign_id = await _setup("acc-1", "acc-2")
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)
-    probe = _ProbeStub(last_post_at="2026-01-01T00:00:00+00:00")
+    probe = _ProbeStub(last_post_at=_LONG_DEAD)
     monkeypatch.setattr(_seams, "execute_read", probe.read)
 
     await _inactive.review_silent_channels(_LATER)
@@ -101,34 +116,48 @@ async def test_a_channel_telegram_confirms_is_dead_is_dropped(
     assert probe.channels == [_CHANNEL]
     assert not await _channel_is_linked(campaign_id)
     assert "neurocomment_channel_inactive_dropped" in await _events()
-    # Both authors out of the discussion group, the listener out of the channel itself.
-    assert sorted(_leaves(comment)) == [
-        ("acc-1", "leave_discussion_group"),
-        ("acc-2", "leave_discussion_group"),
-        ("listener", "leave_channel"),
-    ]
+    assert sorted(_leaves(comment)) == ["acc-1", "acc-2"]
 
 
 @pytest.mark.asyncio
-async def test_a_channel_that_never_posted_at_all_is_dropped_too(
+async def test_the_listener_keeps_its_subscription(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The listener keeps its subscription, on purpose.
+
+    Leaving honestly means stamping the standing join lost, which spends the listener's
+    re-join budget — so a channel re-linked later could arrive already exhausted. One
+    account holding a dead subscription is the cheaper mistake, and the unlink already
+    stops the listener watching it.
+    """
+    await _setup("acc-1")
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
+    monkeypatch.setattr(_seams, "execute_read", _ProbeStub(last_post_at=_LONG_DEAD).read)
+
+    await _inactive.review_silent_channels(_LATER)
+
+    assert _left_channel(comment) == []
+
+
+@pytest.mark.asyncio
+async def test_an_empty_answer_is_unknown_and_never_a_drop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``None`` is an empty channel, not an unknown one — the link bought nothing."""
+    """Telethon returns an empty list WITHOUT raising for a channel it can see but not read.
+
+    It skips ``MessageEmpty`` silently and warns in its own source that some channels
+    "return less messages than requested" for content excluded by local law. Reading that
+    as "never published" would drop exactly the channels Telegram is being awkward about.
+    """
     campaign_id = await _setup("acc-1")
-    _patch_io(monkeypatch, comment=_CommentStub())
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
     monkeypatch.setattr(_seams, "execute_read", _ProbeStub(last_post_at=None).read)
 
     await _inactive.review_silent_channels(_LATER)
 
-    assert not await _channel_is_linked(campaign_id)
-    dropped = next(
-        row
-        for row in await list_recent_logs(limit=50)
-        if row.event == "neurocomment_channel_inactive_dropped"
-    )
-    # Spelt out rather than left blank: "never published" and "went quiet" are different
-    # mistakes, and the feed is where the operator tells them apart.
-    assert dropped.extra["last_post_at"] == "never"
+    assert await _channel_is_linked(campaign_id)
+    assert _leaves(comment) == []
+    assert "neurocomment_channel_activity_unknown" in await _events()
 
 
 @pytest.mark.asyncio
@@ -172,8 +201,52 @@ async def test_a_probe_that_fails_decides_nothing(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+async def test_a_failing_probe_is_not_repeated_every_tick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A suspect nothing can decide is not re-read every tick.
+
+    A channel nothing can decide — deleted, private, an unresolvable handle — would
+    otherwise cost 288 reads and 288 log rows a day for the life of the process.
+    """
+    await _setup("acc-1")
+    _patch_io(monkeypatch, comment=_CommentStub())
+    probe = _FailingProbe()
+    monkeypatch.setattr(_seams, "execute_read", probe.read)
+
+    await _inactive.review_silent_channels(_LATER)
+    await _inactive.review_silent_channels(_LATER + timedelta(minutes=5))
+    await _inactive.review_silent_channels(_LATER + timedelta(minutes=10))
+
+    assert probe.channels == [_CHANNEL]
+
+    # The hold expires; the channel is re-examined rather than abandoned.
+    await _inactive.review_silent_channels(_LATER + timedelta(hours=2))
+    assert probe.channels == [_CHANNEL, _CHANNEL]
+
+
+@pytest.mark.asyncio
+async def test_a_paused_campaign_is_never_judged(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A paused campaign is never judged.
+
+    A paused campaign is unsubscribed, so NOTHING can stamp its channels and every one
+    of them ages past any cutoff by construction. Judging them would dismantle the channel
+    list of a campaign the operator deliberately stopped.
+    """
+    campaign_id = await _setup("acc-1")
+    await set_campaign_status(campaign_id, "paused")
+    probe = _ProbeStub(last_post_at=_LONG_DEAD)
+    monkeypatch.setattr(_seams, "execute_read", probe.read)
+
+    await _inactive.review_silent_channels(_LATER)
+
+    assert probe.channels == []
+    assert await _channel_is_linked(campaign_id)
+
+
+@pytest.mark.asyncio
 async def test_a_channel_seen_recently_is_never_probed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """No suspects, no RPCs: the common case must cost one indexed query and nothing else."""
+    """No suspects, no RPCs: the common case must cost one query and nothing else."""
     await _setup("acc-1")
     _patch_io(monkeypatch, comment=_CommentStub())
     probe = _ProbeStub(last_post_at=None)
@@ -190,13 +263,32 @@ async def test_zero_days_disables_the_rule(monkeypatch: pytest.MonkeyPatch) -> N
     """The escape hatch: an operator who wants dead channels kept can keep them."""
     campaign_id = await _setup("acc-1")
     monkeypatch.setattr(settings.neurocomment, "inactive_channel_drop_days", 0.0)
-    probe = _ProbeStub(last_post_at=None)
+    probe = _ProbeStub(last_post_at=_LONG_DEAD)
     monkeypatch.setattr(_seams, "execute_read", probe.read)
 
     await _inactive.review_silent_channels(_LATER)
 
     assert probe.channels == []
     assert await _channel_is_linked(campaign_id)
+
+
+@pytest.mark.asyncio
+async def test_a_pinned_account_is_still_walked_out(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Who serves the channel must be read BEFORE the unlink.
+
+    ``deactivate_channel`` deletes every per-account pin for the channel, and a pinned
+    account then reads as not-serving — so read afterwards, it is left sitting in the group
+    of a channel we just wrote off, silently and only for the pinned ones.
+    """
+    campaign_id = await _setup("acc-1", "acc-2")
+    await set_campaign_account_channels(campaign_id, "acc-1", [_CHANNEL])
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
+    monkeypatch.setattr(_seams, "execute_read", _ProbeStub(last_post_at=_LONG_DEAD).read)
+
+    await _inactive.review_silent_channels(_LATER)
+
+    assert sorted(_leaves(comment)) == ["acc-1", "acc-2"]
 
 
 @pytest.mark.asyncio
@@ -213,19 +305,19 @@ async def test_nobody_is_walked_out_of_a_chat_we_are_already_out_of(
     await upsert_readiness("acc-2", _CHANNEL, joined=False, captcha_passed=False, ready=False)
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)
-    monkeypatch.setattr(_seams, "execute_read", _ProbeStub(last_post_at=None).read)
+    monkeypatch.setattr(_seams, "execute_read", _ProbeStub(last_post_at=_LONG_DEAD).read)
 
     await _inactive.review_silent_channels(_LATER)
 
     assert not await _channel_is_linked(campaign_id)
-    assert _leaves(comment) == [("listener", "leave_channel")]
+    assert _leaves(comment) == []
 
 
 @pytest.mark.asyncio
 async def test_a_post_we_refuse_to_comment_on_still_proves_the_channel_alive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The stamp lands before every gate, or the rule measures US instead of the channel.
+    """The stamp lands before the filters, or the rule measures US instead of the channel.
 
     A channel that publishes nothing but forwards is skipped by the filters on every post
     — and would otherwise look silent and be dropped while publishing daily.
@@ -239,5 +331,25 @@ async def test_a_post_we_refuse_to_comment_on_still_proves_the_channel_alive(
 
     links = (await list_campaign_channels(campaign_id)).links
     assert next(link for link in links if link.channel == _CHANNEL).last_post_at is not None
-    events = await _events()
-    assert "neurocomment_post_skipped" in events
+    assert "neurocomment_post_skipped" in await _events()
+
+
+@pytest.mark.asyncio
+async def test_the_stamp_never_moves_backwards(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The stamp never moves backwards.
+
+    Two writers race: a live post stamping now, and the repair path carrying an older
+    date read before it. Unguarded, the repair re-nominates a demonstrably active channel.
+    """
+    campaign_id = await _setup("acc-1")
+    _patch_io(monkeypatch, comment=_CommentStub(), gen=_GenStub("hello"))
+    await engine.handle_new_post(NewPostEvent(channel=_CHANNEL, post_id=1, text="hello there"))
+    links = (await list_campaign_channels(campaign_id)).links
+    fresh = next(link for link in links if link.channel == _CHANNEL).last_post_at
+
+    from core.db import stamp_channel_post_seen  # noqa: PLC0415 - one call, one test
+
+    await stamp_channel_post_seen(_CHANNEL, _LONG_DEAD)
+
+    links = (await list_campaign_channels(campaign_id)).links
+    assert next(link for link in links if link.channel == _CHANNEL).last_post_at == fresh

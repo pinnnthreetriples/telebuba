@@ -93,12 +93,6 @@ async def handle_new_post(event: NewPostEvent) -> None:
 
 
 async def _handle_new_post(event: NewPostEvent) -> None:
-    # BEFORE every gate below, deliberately: this records that the CHANNEL is alive, and a
-    # post we refuse to comment on (a forward, an album item, one arriving while the
-    # campaign is paused) proves that just as well as one we answer. Getting this wrong
-    # would feed the inactive-channel rule our commenting rate instead of the channel's
-    # publishing rate, and drop a channel that posts nothing but forwards.
-    await stamp_channel_post_seen(event.channel, datetime.now(UTC).isoformat())
     campaign = await fetch_active_campaign_for_channel(event.channel)
     if campaign is None:
         await log_event(
@@ -107,6 +101,14 @@ async def _handle_new_post(event: NewPostEvent) -> None:
             extra={"channel": event.channel, "post_id": event.post_id},
         )
         return
+
+    # Before every gate BELOW, deliberately: this records that the CHANNEL is alive, and a
+    # post we refuse to comment on (a forward, an album item, one arriving while the
+    # channel is paused) proves that just as well as one we answer. Getting this wrong
+    # would feed the inactive-channel rule our commenting rate instead of the channel's
+    # publishing rate, and drop a channel that posts nothing but forwards. It sits under
+    # the campaign gate only because a channel with no active link has no row to stamp.
+    await stamp_channel_post_seen(event.channel, datetime.now(UTC).isoformat())
 
     skip = _filters.filter_reason(event)
     if skip is not None:
