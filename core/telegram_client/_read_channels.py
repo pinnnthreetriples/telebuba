@@ -1,4 +1,4 @@
-"""Read-only channel dispatchers — own-channel list, detail, posts, handle check.
+"""Read-only channel dispatchers — own-channel list, detail, posts, handle check, liveness.
 
 Extracted-sibling pattern (see ``_read_stories.py``): ``_read.py`` keeps the
 match and imports these dispatchers. Errors ride the ``execute_read_many``
@@ -8,6 +8,7 @@ ladder untouched (RPC → ``TelegramReadError``; the shared entity guard's
 
 from __future__ import annotations
 
+from datetime import UTC
 from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
@@ -16,6 +17,7 @@ from telethon.tl.types import InputChannelEmpty
 
 from core.config import settings
 from core.telegram_client._channels import _input_channel
+from schemas.telegram_actions_activity import LastPostResult
 from schemas.telegram_actions_channels import (
     ChannelUsernameCheck,
     TelegramChannelPost,
@@ -34,6 +36,31 @@ if TYPE_CHECKING:
         ListChannelPosts,
         ListOwnChannels,
     )
+    from schemas.telegram_actions_activity import GetLastPostAt
+
+
+async def dispatch_get_last_post_at(
+    client: TelegramClient,
+    action: GetLastPostAt,
+) -> LastPostResult:
+    """The newest message's date, normalised to UTC; ``None`` for an empty channel.
+
+    The one dispatcher here that is NOT about an owned channel: it takes the campaign's
+    handle string and lets Telethon resolve it, like every other neurocomment read, rather
+    than going through ``_input_channel``.
+
+    ``limit=1`` on purpose: the caller only ever compares this against one cutoff, so a
+    page would cost the same RPC and hand it fourteen dates it has no use for. A message
+    with no usable date reads as an empty channel rather than an error — Telethon always
+    sets one, so the guard is for a stub or a truncated update, and "nothing datable here"
+    is what the caller then checks against its own records before acting.
+    """
+    messages = await client.get_messages(action.channel, limit=1)
+    for message in messages:  # ty: ignore[not-iterable]
+        date = getattr(message, "date", None)
+        if date is not None:
+            return LastPostResult(last_post_at=date.astimezone(UTC).isoformat())
+    return LastPostResult()
 
 
 async def dispatch_list_own_channels(

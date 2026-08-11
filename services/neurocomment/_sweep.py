@@ -29,7 +29,13 @@ from core.db import (
     reclaim_stale_claims,
 )
 from core.logging import log_event
-from services.neurocomment import _captcha_retry, _channel_pause, _rejoin, _sweep_read
+from services.neurocomment import (
+    _captcha_retry,
+    _channel_pause,
+    _inactive,
+    _rejoin,
+    _sweep_read,
+)
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -56,9 +62,9 @@ async def _sweep_loop() -> None:
 
     The lone non-event loop in the runtime, and it must never die (mirrors the
     listener-safe on-post pipeline). The retention prune, the join-request review, the
-    access-loss review, the captcha give-up review, the write-blocked-channel review and
-    the stale-claim reclaim
-    piggyback on the same tick, and every pass is awaited behind the ONE guard below rather
+    access-loss review, the captcha give-up review, the write-blocked-channel review,
+    the silent-channel review and the stale-claim reclaim piggyback on the same tick,
+    and every pass is awaited behind the ONE guard below rather
     than behind the ones inside it: each of those covers only its own first bulk read, so
     everything after it — a locked SQLite, a malformed timestamp, the live Telegram RPC
     ``deactivate_channel`` reaches through the listener reconcile — unwound into this loop
@@ -93,6 +99,10 @@ async def _sweep_loop() -> None:
             # judging a window that no longer stands.
             ("captcha_retry", partial(_captcha_retry.review_captcha_blocked, now)),
             ("channel_pause", partial(_channel_pause.review_expired_pauses, now)),
+            # LAST of the drop rules on purpose: the ones above judge a channel that
+            # refuses us, and a channel they unlink this tick must not also be probed for
+            # posts it will never be asked for again.
+            ("silent_channels", partial(_inactive.review_silent_channels, now)),
             ("stale_claims", partial(_reclaim_stale_claims, now)),
         ):
             try:

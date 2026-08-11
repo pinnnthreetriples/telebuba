@@ -273,6 +273,11 @@ class NeurocommentSettings(BaseSettings):
     # A delete scan is far too expensive to run on every 5-minute deletion sweep, so the
     # prune rides that loop but fires at most once per this interval.
     retention_prune_interval_hours: float = Field(default=24.0, gt=0.0)
+    # A channel that has published nothing for this long leaves the campaign and everyone
+    # walks out of it. 0 disables the rule. Never read off our own silence alone — the
+    # listener sees posts only while the process is up — so the verdict is confirmed
+    # against Telegram first; ``services.neurocomment._inactive`` owns that.
+    inactive_channel_drop_days: float = Field(default=7.0, ge=0.0)
     # Max concurrent Telegram ban probes for the "Проверить каналы" check — keeps
     # a burst of GetParticipant reads on a few accounts from tripping flood limits.
     ban_check_concurrency: int = Field(default=4, ge=1, le=32)
@@ -408,6 +413,13 @@ class NeurocommentSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
+        if 0.0 < self.inactive_channel_drop_days < 1.0:
+            # A fraction of a day is a typo, never an intent, and this is the one setting
+            # here whose mistake is unrecoverable: a cutoff minutes in the past makes every
+            # channel a suspect at once and unlinks the fleet, deleting per-account pins
+            # nothing restores. 0 disables the rule; anything else is at least a day.
+            msg = "inactive_channel_drop_days must be 0 (disabled) or at least 1 day"
+            raise ValueError(msg)
         if self.reply_delay_min_seconds > self.reply_delay_max_seconds:
             msg = "reply_delay_min_seconds must not exceed reply_delay_max_seconds"
             raise ValueError(msg)

@@ -98,6 +98,10 @@ class CampaignChannelLink(BaseModel):
     # already make, instead of one query per channel.
     pause_rounds: int = 0
     paused_until: str | None = None
+    # When the listener last saw this channel publish (ISO-8601 UTC). ``None`` = not since
+    # the column existed, which the inactive-channel rule reads as "age it from
+    # ``created_at``" rather than as silence.
+    last_post_at: str | None = None
 
 
 class CampaignChannelList(BaseModel):

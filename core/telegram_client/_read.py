@@ -31,6 +31,7 @@ from core.telegram_client._privacy import dispatch_get_privacy_settings
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
 from core.telegram_client._read_channels import (
     dispatch_check_channel_username,
+    dispatch_get_last_post_at,
     dispatch_get_own_channel,
     dispatch_list_channel_posts,
     dispatch_list_own_channels,
@@ -53,6 +54,7 @@ from schemas.telegram_actions import (
     CheckChannelUsername,
     CheckMessagesAlive,
     CheckMessagesAliveResult,
+    GetLastPostAt,
     GetLinkedDiscussionGroup,
     GetOwnChannel,
     GetPrivacySettings,
@@ -233,6 +235,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await dispatch_search_channels(client, action)
         case GetSimilarChannels():
             return await dispatch_get_similar_channels(client, action)
+        case GetLastPostAt():
+            return await dispatch_get_last_post_at(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)

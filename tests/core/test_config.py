@@ -31,6 +31,17 @@ def test_join_delay_min_must_not_exceed_max() -> None:
         NeurocommentSettings(join_delay_min_seconds=60.0, join_delay_max_seconds=30.0)
 
 
+def test_inactive_channel_drop_days_rejects_a_fraction_of_a_day() -> None:
+    """A sub-day window is a typo, never an intent, and this setting's mistake is not undoable.
+
+    A cutoff minutes in the past makes every channel a suspect at once and unlinks the
+    fleet, deleting per-account pins nothing restores. 0 stays valid — it disables the rule.
+    """
+    with pytest.raises(ValidationError):
+        NeurocommentSettings(inactive_channel_drop_days=0.5)
+    assert NeurocommentSettings(inactive_channel_drop_days=0.0).inactive_channel_drop_days == 0.0
+
+
 def test_max_joins_per_account_per_day_defaults_to_conservative_cap() -> None:
     assert NeurocommentSettings().max_joins_per_account_per_day == 20
 
