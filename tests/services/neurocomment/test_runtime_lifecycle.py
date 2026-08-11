@@ -520,7 +520,6 @@ async def test_reconcile_if_running_gates_on_persisted_listener(
     spy = _ReconcileSpy()
     monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", spy.reconcile)
 
-    # Stopped: no listener persisted → no-op.
     await _runtime.reconcile_if_running()
     assert spy.reconciled == []
 
