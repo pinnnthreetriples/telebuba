@@ -28,10 +28,10 @@ from core.db import fetch_account
 from core.telegram_client._channels import ChannelGatewayError
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._privacy import dispatch_get_privacy_settings
-from core.telegram_client._read_activity import dispatch_get_last_post_at
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
 from core.telegram_client._read_channels import (
     dispatch_check_channel_username,
+    dispatch_get_last_post_at,
     dispatch_get_own_channel,
     dispatch_list_channel_posts,
     dispatch_list_own_channels,

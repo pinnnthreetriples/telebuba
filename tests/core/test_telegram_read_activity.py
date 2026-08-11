@@ -1,4 +1,4 @@
-"""Unit tests for the channel-liveness read (``_read_activity.py``).
+"""Unit tests for the channel-liveness read (``_read_channels.dispatch_get_last_post_at``).
 
 Small surface, but the whole inactive-channel rule reads its verdict off this one value,
 so the shapes that could quietly become "no posts" are pinned here.
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from core.telegram_client._read_activity import dispatch_get_last_post_at
+from core.telegram_client._read_channels import dispatch_get_last_post_at
 from schemas.telegram_actions_activity import GetLastPostAt
 
 if TYPE_CHECKING:
