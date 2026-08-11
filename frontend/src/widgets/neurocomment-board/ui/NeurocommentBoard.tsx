@@ -44,6 +44,13 @@ function deriveRows(
 ): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
   const channelDeleted = new Map((board.channels ?? []).map((c) => [c.channel, c.deleted_recent]));
+  // Where each account commented LAST. The board's feed is already newest-first, so
+  // the first hit per account wins. This leads the channel choice below, which is
+  // what makes the row track live work instead of standing still all campaign.
+  const lastChannel = new Map<string, string>();
+  for (const comment of board.comments ?? []) {
+    if (!lastChannel.has(comment.account_id)) lastChannel.set(comment.account_id, comment.channel);
+  }
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
     const pins = account.pinned_channels ?? [];
@@ -51,7 +58,13 @@ function deriveRows(
     // outranks a working one: the row shows ONE channel per account, and a working
     // channel is already reported by the "N/M" progress badge, while a stuck pair had
     // nowhere else to surface. A pin still wins: that is the operator's own choice.
+    // ponytail: the account's own last-commented channel now leads the chain — the
+    // row is meant to name the comment it shows, and that pair is the live fact. A
+    // banned/stuck pair therefore stops surfacing HERE once the account posts
+    // anywhere else; the neuro-accounts modal still lists banned_channels per
+    // account (#30), so the diagnosis is not lost, only moved.
     const primary =
+      readiness.find((r) => r.channel === lastChannel.get(account.account_id)) ??
       readiness.find((r) => pins.includes(r.channel)) ??
       readiness.find((r) => r.banned || (r.rejoin_gave_up && !r.ready)) ??
       readiness.find((r) => r.joined) ??
@@ -218,7 +231,13 @@ export function NeurocommentBoard({
         accessorKey: 'channel',
         header: t('neurocomment.board.col.channel'),
         cell: ({ row }) => (
-          <span className="inline-flex items-center gap-[6px] whitespace-nowrap">
+          // Keyed by the channel so a switch remounts the cell and replays `swapin` —
+          // the channel now moves with the account's last comment, and a value that
+          // changes under the operator's eyes should say so.
+          <span
+            key={row.original.channel}
+            className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
+          >
             {row.original.channel}
             {row.original.deletedRecent > 0 ? (
               <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">

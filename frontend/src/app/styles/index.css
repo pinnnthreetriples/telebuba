@@ -204,6 +204,12 @@
   .tb-drawerin {
     animation: none;
   }
+  /* Near-zero duration, NOT `none`: removing the transition kills the
+     transitionend that unmounts a closing sub-row, and it would sit there
+     collapsed-but-present in the a11y tree forever. */
+  .tb-subrow {
+    transition-duration: 0.01ms;
+  }
 }
 
 .tb-tip {
@@ -303,6 +309,38 @@
    measured height (added later, e.g. an expanding log) is never clipped. */
 .tb-collapse.tb-open.tb-settled {
   max-height: none;
+}
+
+/* A DataTable sub-row, opening and closing on grid-template-rows. Both ends were
+   a single frame before: for the LAST row that frame is the bottom of the
+   document, so losing the sub-row's ~270px clamped the window scroll and slid the
+   whole card while the chevron was still 420ms into its spring.
+   `grid-template-rows` and NOT max-height, deliberately: CollapsibleCard's
+   onTransitionEnd filters on max-height, and a bubbled one from in here would take
+   its entire body out of the a11y tree. @starting-style buys the open animation
+   the same way it does for .tb-collapse above; the curve is the no-overshoot one
+   (an overshoot on grid-rows is an overshoot in height).
+   `minmax(0, …)` and not a bare `0fr`, which is the shape usually quoted for this
+   trick: an `fr` track keeps an automatic minimum, so a child with a definite or
+   min-content height pins the track open — measured in Chrome, `0fr` computed to the
+   full 275px while `minmax(0, 0fr)` computed to 0. The `min-height: 0` below is still
+   needed; it is not sufficient on its own. */
+.tb-subrow {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  transition: grid-template-rows 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@starting-style {
+  .tb-subrow {
+    grid-template-rows: minmax(0, 0fr);
+  }
+}
+.tb-subrow.tb-closing {
+  grid-template-rows: minmax(0, 0fr);
+}
+.tb-subrow > * {
+  min-height: 0;
+  overflow: hidden;
 }
 .tb-sw-thumb {
   transition: transform 0.18s ease;

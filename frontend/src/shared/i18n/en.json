@@ -634,6 +634,8 @@
     "neurocomment_group_ban_account_limited": "Account is limited across Telegram",
     "neurocomment_channel_all_accounts_banned": "Channel unlinked — every account banned",
     "neurocomment_post_access_lost": "Lost access to channel chat",
+    "neurocomment_post_received": "New post",
+    "neurocomment_generation_started": "Writing the text",
     "neurocomment_generation_retry": "Writing the text again",
     "neurocomment_generation_exhausted": "Text generation failed",
     "neurocomment_no_account_available": "No account available",

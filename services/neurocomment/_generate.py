@@ -121,6 +121,15 @@ async def _generate_and_post(
             return
         image_b64 = image.image_b64
 
+    # Claim won, image (if any) in hand — the model is about to be asked. The only
+    # positive marker of this step: everything else on the generation path logs a retry
+    # or an exhaustion, so the dashboard's «Генерация» stage had nothing to stand on.
+    await log_event(
+        "INFO",
+        "neurocomment_generation_started",
+        account_id=account_id,
+        extra={"channel": event.channel, "post_id": event.post_id},
+    )
     outcome = await _generate_acceptable(campaign, event, account_id, image_b64=image_b64)
     text = outcome.text
     if text is None:

@@ -344,6 +344,61 @@ test('the open board body carries no max-height cap to clip an expanded account'
   expect(body).toHaveClass('tb-open', 'tb-settled');
 });
 
+// The row exists to name the comment it shows. It used to stand still on the first
+// joined channel for the whole campaign, so the operator could not tell from the board
+// where an account was actually working.
+test('the channel column follows the account’s last comment', () => {
+  const stamp = (iso: string) => ({ created_at: iso, updated_at: iso });
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 2, total_accounts: 3 },
+      { channel: '@sport', status: 'ready', ready_accounts: 1, total_accounts: 3 },
+    ],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        readiness: [
+          { channel: '@news', ready: true, joined: true, captcha_passed: true },
+          { channel: '@sport', ready: true, joined: true, captcha_passed: true },
+        ],
+      },
+    ],
+    // Newest first, as the backend feed is ordered.
+    comments: [
+      {
+        channel: '@sport',
+        post_id: 9,
+        campaign_id: 'c1',
+        account_id: 'acc-1',
+        status: 'posted',
+        comment_text: 'Отличный пост!',
+        ...stamp('2026-07-11T12:00:00+00:00'),
+      },
+      {
+        channel: '@news',
+        post_id: 8,
+        campaign_id: 'c1',
+        account_id: 'acc-1',
+        status: 'posted',
+        comment_text: 'старый',
+        ...stamp('2026-07-11T09:00:00+00:00'),
+      },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+
+  expect(screen.getByText('@sport')).toBeInTheDocument();
+  expect(screen.queryByText('@news')).not.toBeInTheDocument();
+});
+
 test('shows the Telegram name, not the raw session id, in the account column', () => {
   // Reproduces the live data: an imported session has an empty operator label, so
   // the backend board sends the session-stem id and the column read "5_telethon".

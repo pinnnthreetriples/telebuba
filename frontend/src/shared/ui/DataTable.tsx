@@ -1,12 +1,13 @@
 import {
   type ColumnDef,
+  type ExpandedState,
   flexRender,
   getCoreRowModel,
   getExpandedRowModel,
   type Row,
   useReactTable,
 } from '@tanstack/react-table';
-import { Fragment, type HTMLAttributes, type ReactNode, useRef } from 'react';
+import { Fragment, type HTMLAttributes, type ReactNode, useRef, useState } from 'react';
 
 import { useWideContainer } from './useWideViewport';
 
@@ -64,13 +65,50 @@ export function DataTable<TData>({
   getRowProps,
   renderSubRow,
 }: DataTableProps<TData>) {
+  // Expansion is controlled here rather than left to TanStack's internal state for
+  // one reason: the exit has to animate. Removing a sub-row in a single frame is
+  // what made the LAST row jump — that row sits at the bottom of the document, so
+  // losing ~270px at once clamps the window scroll and slides the whole card, while
+  // the chevron is still 420ms into its own spring. So the row that just closed is
+  // parked in `closing` and keeps rendering (at 0fr) until `.tb-subrow`'s
+  // transitionend takes it out.
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [closing, setClosing] = useState<string | null>(null);
   const table = useReactTable({
     data,
     columns,
+    state: { expanded },
+    onExpandedChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(expanded) : updater;
+      // `true` means "everything expanded" — no single row closed, nothing to park.
+      setClosing(
+        typeof expanded === 'object' && typeof next === 'object'
+          ? (Object.keys(expanded).find((id) => expanded[id] && !next[id]) ?? null)
+          : null,
+      );
+      setExpanded(next);
+    },
     getCoreRowModel: getCoreRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: () => renderSubRow !== undefined,
   });
+
+  // The animating wrapper, shared by both layouts so the transition runs on the
+  // same element in each; `extra` carries the layout's own frame. It transitions
+  // `grid-template-rows` and NOT max-height on purpose: CollapsibleCard's
+  // onTransitionEnd filters on max-height, and a bubbled one from in here would
+  // pull its whole body out of the a11y tree.
+  const subRow = (row: Row<TData>, extra?: string) =>
+    renderSubRow && (row.getIsExpanded() || closing === row.id) ? (
+      <div
+        className={join('tb-subrow', row.getIsExpanded() ? undefined : 'tb-closing', extra)}
+        onTransitionEnd={(event) => {
+          if (event.target === event.currentTarget) setClosing(null);
+        }}
+      >
+        <div>{renderSubRow(row)}</div>
+      </div>
+    ) : null;
 
   // Measured on the wrapper below rather than on the <table>: the table carries
   // `min-w-[880px]`, so measuring it would always read "it fits" and never switch
@@ -140,9 +178,7 @@ export function DataTable<TData>({
               })}
               {/* Bled out of the card's padding: sub-row content already carries its
                   own border-t/tint designed to sit flush under a table row. */}
-              {renderSubRow && row.getIsExpanded() ? (
-                <div className="-mx-4 -mb-[13px] mt-[11px]">{renderSubRow(row)}</div>
-              ) : null}
+              {subRow(row, '-mx-4 -mb-[13px] mt-[11px]')}
             </div>
           );
         })}
@@ -173,6 +209,7 @@ export function DataTable<TData>({
         <tbody>
           {table.getRowModel().rows.map((row) => {
             const rowProps = getRowProps?.(row);
+            const sub = subRow(row);
             return (
               <Fragment key={row.id}>
                 <tr {...rowProps} className={join(ROW, rowProps?.className)}>
@@ -188,10 +225,10 @@ export function DataTable<TData>({
                     </td>
                   ))}
                 </tr>
-                {renderSubRow && row.getIsExpanded() ? (
+                {sub ? (
                   <tr>
                     <td colSpan={row.getVisibleCells().length} className="p-0">
-                      {renderSubRow(row)}
+                      {sub}
                     </td>
                   </tr>
                 ) : null}

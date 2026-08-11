@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 
@@ -156,9 +156,37 @@ test('the expander still toggles, and the sub-row renders inside its own card', 
   expect(toggle.closest('div.tb-row')).toContainElement(subRow);
   expect(screen.queryByText('подробности second-row')).toBeNull();
 
+  // Collapsing no longer removes the sub-row in the same commit: it stays, marked
+  // `tb-closing`, so grid-template-rows can animate 1fr → 0fr. Dropping ~270px in a
+  // single frame is what made the LAST row of a board jump — that row sits at the
+  // bottom of the document, so the browser clamped the window scroll and slid the
+  // whole card. No CSS runs in happy-dom, hence the hand-fired transitionend.
   await userEvent.click(toggle);
+  const closing = screen.getByText('подробности first-row').closest('.tb-subrow');
+  expect(closing).toHaveClass('tb-closing');
+
+  fireEvent.transitionEnd(closing as HTMLElement);
   await waitFor(() => {
     expect(screen.queryByText('подробности first-row')).toBeNull();
+  });
+});
+
+// The reported bug's own layout: the desktop table, and its LAST row — the one whose
+// sub-row is the bottom of the document.
+test('the last table row keeps its closing sub-row until the transition ends', async () => {
+  renderTable();
+
+  const toggle = screen.getByLabelText('Раскрыть second-row');
+  await userEvent.click(toggle);
+  expect(await screen.findByText('подробности second-row')).toBeInTheDocument();
+
+  await userEvent.click(toggle);
+  const closing = screen.getByText('подробности second-row').closest('.tb-subrow');
+  expect(closing).toHaveClass('tb-closing');
+
+  fireEvent.transitionEnd(closing as HTMLElement);
+  await waitFor(() => {
+    expect(screen.queryByText('подробности second-row')).toBeNull();
   });
 });
 
