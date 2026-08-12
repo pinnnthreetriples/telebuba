@@ -34,6 +34,7 @@ from services.content import release_sent_text
 from services.neurocomment import _channel_pause, _state, bans
 
 if TYPE_CHECKING:
+    from schemas.gemini import GeminiResult
     from schemas.telegram_actions import ActionResult, NewPostEvent
 
 # Solver-clearable write gates: joined the group but a captcha/gate forbids writing.
@@ -81,6 +82,19 @@ _COOLDOWN_STATUSES = frozenset(
 # under the post, so the row must not be handed back. See the branch.
 _UNAVAILABLE_STATUS = "unavailable"
 _RATE_LIMITED_REASON = "gemini_rate_limited"
+
+
+def _provider_error(result: GeminiResult, *, use_deepseek: bool) -> str:
+    """Name WHICH generator failed and quote it, for the log's ``error_type`` half.
+
+    The reason codes are all named after Gemini because it was the only generator when
+    they were written, so a DeepSeek failure reaches the operator as "ошибка Gemini" with
+    the gateway's own message (``HTTP 429: ...``, ``ReadTimeout: ...``) dropped entirely.
+    Unlocalized: it is an upstream string, not a code we own, and the log table renders an
+    unmapped ``error_type`` raw. Cut because only an HTTP body is bounded upstream.
+    """
+    return f"{'deepseek' if use_deepseek else 'gemini'}: {(result.error or 'no text')[:200]}"
+
 
 # In-flight comments per channel: (text, reserved_at). The posted-comment semantic
 # dedup only sees *delivered* rows, so two accounts generating near-duplicates inside

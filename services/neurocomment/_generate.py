@@ -46,6 +46,7 @@ from services.neurocomment._outcomes import (  # noqa: F401 - _generate.<name> i
     _apply_cooldown,
     _classify_post,
     _inflight_texts,
+    _provider_error,
     _remove_inflight,
 )
 
@@ -72,6 +73,7 @@ class _GenOutcome(NamedTuple):
 
     text: str | None
     reason: str | None  # set only when text is None (surfaced in the exhausted log)
+    error: str | None = None  # provider + its message, only when the LLM itself failed
 
 
 async def _generate_and_post(
@@ -137,7 +139,8 @@ async def _generate_and_post(
             "INFO",
             "neurocomment_generation_exhausted",
             account_id=account_id,
-            extra={"channel": event.channel, "post_id": event.post_id, "reason": outcome.reason},
+            extra={"channel": event.channel, "post_id": event.post_id, "reason": outcome.reason}
+            | ({"error_type": outcome.error} if outcome.error else {}),
         )
         return
 
@@ -212,6 +215,7 @@ async def _log_regeneration(
     event: NewPostEvent,
     attempt: int,
     reason: str | None,
+    error: str | None,
 ) -> None:
     """Say that this post is being written again, and what was wrong with the last try.
 
@@ -242,7 +246,8 @@ async def _log_regeneration(
             "reason": reason,
             "attempt": attempt,
             "max_retries": settings.neurocomment.max_retries,
-        },
+        }
+        | ({"error_type": error} if error else {}),
     )
 
 
@@ -286,6 +291,7 @@ async def _generate_acceptable(
     use_deepseek = _deepseek_generates(image_b64)
     generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text
     reason: str | None = None
+    error: str | None = None
     for attempt in range(nc.max_retries + 1):
         # One beat per round, so the gap between beats is a single ``generate_text`` — the
         # only await here that cannot be sliced, since it waits inside ``core.gemini``.
@@ -295,7 +301,7 @@ async def _generate_acceptable(
         # is for; the send's own abandon line stays for the claims lost after this point.
         if not await touch_comment_claim(channel, event.post_id):
             return _GenOutcome(None, _CLAIM_LOST_REASON)
-        await _log_regeneration(account_id, event, attempt, reason)
+        await _log_regeneration(account_id, event, attempt, reason, error)
         request = _build_request(
             campaign.prompt,
             event.text,
@@ -306,12 +312,17 @@ async def _generate_acceptable(
         generated = await generate(request)
         if generated.status != "ok" or not generated.text:
             reason = _gemini_reason(generated)
+            error = _provider_error(generated, use_deepseek=use_deepseek)
             continue
         # Markdown markers come off before the word count and the dedup hash: with
         # ``parse_mode`` disabled a ``**Отличный пост!**`` would post with the
         # asterisks visible, and the operator's own ``campaign.prompt`` is free to
         # ask for formatting, so no prompt instruction can be relied on here.
         candidate = strip_markdown_delimiters(generated.text).strip()
+        # Cleared here, not in each rejection below: they all mean the provider ANSWERED,
+        # so a message kept from an earlier round would blame an upstream fault for a
+        # comment that was merely too long.
+        error = None
         words = len(candidate.split())
         if words > nc.comment_max_words:
             reason = "too_long"
@@ -347,7 +358,7 @@ async def _generate_acceptable(
         if nc.semantic_dedup_threshold > 0:
             _add_inflight(channel, candidate, now)
         return _GenOutcome(candidate, None)
-    return _GenOutcome(None, reason)
+    return _GenOutcome(None, reason, error)
 
 
 async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
