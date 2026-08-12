@@ -43,6 +43,7 @@ from services.neurocomment._llm import (  # noqa: F401 - _generate.<name> is the
     _deepseek_generates,
     _gemini_reason,
     _post_clause,
+    _Subject,
 )
 from services.neurocomment._outcomes import (  # noqa: F401 - _generate.<name> is the call-site path
     _COOLDOWN_STATUSES,
@@ -59,6 +60,7 @@ from services.neurocomment._outcomes import (  # noqa: F401 - _generate.<name> i
 
 if TYPE_CHECKING:
     from schemas.neurocomment import NeurocommentCampaign, NeurocommentSettings
+    from schemas.telegram_actions_comments import PostCommentRecord
 
 
 # Longest stretch the pipeline may go without telling the reclaim it is alive. Any value
@@ -86,11 +88,18 @@ async def _generate_and_post(
     campaign: NeurocommentCampaign,
     account_id: str,
     limits: NeurocommentSettings,
+    *,
+    target: PostCommentRecord | None = None,
 ) -> None:
     """Generate + light-check a comment, pause, post, and classify the outcome.
 
     ``limits`` is loaded once per post by the caller and threaded in — only the reply
     delay bounds are read here, so no separate settings read is needed.
+
+    ``target`` is set only by ``reply`` mode's wait (``_reply_wait``): the comment is then
+    aimed at that reader's message in the linked discussion group, and their own text goes
+    into the prompt — fenced as untrusted exactly like the post is
+    (``_llm._reply_clause``). Left ``None``, this is the ``first``-mode path unchanged.
     """
     image_b64: str | None = None
     if event.media_kind == "photo" and not event.text.strip():
@@ -137,7 +146,9 @@ async def _generate_and_post(
         account_id=account_id,
         extra={"channel": event.channel, "post_id": event.post_id},
     )
-    outcome = await _generate_acceptable(campaign, event, account_id, image_b64=image_b64)
+    outcome = await _generate_acceptable(
+        campaign, event, account_id, image_b64=image_b64, target=target
+    )
     text = outcome.text
     if text is None:
         # An exhaustion caused by a 429 is the Gemini gateway's state, not this post's, so
@@ -186,7 +197,12 @@ async def _generate_and_post(
             return
         result = await _seams.execute(
             account_id,
-            CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),
+            CommentOnPost(
+                channel=event.channel,
+                post_id=event.post_id,
+                text=text,
+                reply_to=target.message_id if target is not None else None,
+            ),
         )
     except BaseException:
         _remove_inflight(event.channel, text)
@@ -262,6 +278,7 @@ async def _generate_acceptable(
     account_id: str,
     *,
     image_b64: str | None = None,
+    target: PostCommentRecord | None = None,
 ) -> _GenOutcome:
     """Generate a comment passing word-count + filter + exact-hash + semantic dedup.
 
@@ -309,7 +326,7 @@ async def _generate_acceptable(
         await _log_regeneration(account_id, event, attempt, reason, error)
         request = _build_request(
             campaign.prompt,
-            event.text,
+            _Subject(event.text, target),
             secret=secret,
             image_b64=image_b64,
             use_deepseek=use_deepseek,

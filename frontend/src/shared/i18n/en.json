@@ -635,6 +635,11 @@
     "neurocomment_channel_all_accounts_banned": "Channel unlinked — every account banned",
     "neurocomment_post_access_lost": "Lost access to channel chat",
     "neurocomment_post_received": "New post",
+    "neurocomment_post_parked": "Waiting for a reader's comment to reply to",
+    "neurocomment_reply_to_human": "Replying to a reader's comment",
+    "neurocomment_reply_wait_expired": "The wait ran out — commenting first",
+    "neurocomment_reply_post_gone": "Post deleted while we waited for comments",
+    "neurocomment_reply_mode_unavailable": "Cannot wait for comments: the deleted-comment sweep is switched off",
     "neurocomment_generation_started": "Writing the text",
     "neurocomment_generation_retry": "Writing the text again",
     "neurocomment_generation_exhausted": "Text generation failed",
@@ -859,7 +864,10 @@
     "join_impossible": "the chat cannot be joined",
     "comments_off": "comments are disabled",
     "no_admin_approval": "no admin approval",
-    "all_accounts_banned": "every account banned"
+    "all_accounts_banned": "every account banned",
+    "no_readers": "nobody commented on the post",
+    "thread_unread": "the discussion could not be read",
+    "too_old": "the post is stale — waited too long"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel right now. The exact reason is written next to the row. \"Per-account hourly limit reached\" is raised by the \"Comments per hour (per account)\" setting, \"per-channel daily limit reached\" by \"Comments per day per channel\". \"The account is not warmed up, or its Trust-score is below the threshold\" — let the account warm up, or lower \"Min. trust-score to run\". \"No accounts linked\" and \"the account is not cleared for this channel\" are fixed by linking an account, linking the channel again, or adding another account. \"Account paused\" clears on its own.",
@@ -1063,6 +1071,15 @@
       "activeCampaigns": "active campaigns",
       "warmingBlocked": "This account is currently warming — it can't be the listener",
       "unwatched": "Not watched ({{count}}): {{channels}} — no post from these channels reaches the engine"
+    },
+    "mode": {
+      "label": "Comment mode",
+      "first": "We comment first",
+      "reply": "We reply in comments",
+      "failed": "Could not change the comment mode",
+      "waitLabel": "Wait for a human comment",
+      "waitHint": "minutes, then we comment first",
+      "waitFailed": "Could not change the wait time"
     },
     "captcha": {
       "title": "Captcha solving",

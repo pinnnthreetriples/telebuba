@@ -29,6 +29,7 @@ from core.db import (
     mark_comments_deleted,
     mark_human_skipped,
     mark_pair_banned,
+    park_comment,
     record_comment_msg_id,
     save_neurocomment_settings,
     stamp_rejoin_attempt,
@@ -184,6 +185,49 @@ async def test_card_counts_today_and_last_hour() -> None:
     assert card.comments_last_hour == 2
     assert card.last_comment_at is not None
     assert card.last_comment_text == "hi"
+
+
+@pytest.mark.asyncio
+async def test_card_hourly_count_includes_parked_posts() -> None:
+    """The hourly number must count what the QUOTA counts, parked posts included.
+
+    A parked post has already spent its slot (``_quota`` counts ``waiting``), so a card
+    counting only ``posted`` showed free capacity for an account selection was refusing —
+    the board contradicting the engine. ``comments_today`` keeps meaning "published".
+    """
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await _post_comment("@chan", 1, campaign.campaign_id, "acc-1")
+    assert await park_comment("@chan", 2, campaign.campaign_id, "acc-1") is True
+    assert await park_comment("@chan", 3, campaign.campaign_id, "acc-1") is True
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    card = board.accounts[0]
+    assert card.comments_last_hour == 3
+    assert card.comments_today == 1
+    assert card.deleted_today == 0
+
+
+@pytest.mark.asyncio
+async def test_card_hourly_count_ignores_another_campaigns_parked_post() -> None:
+    # The parked-rows reader is fleet-wide, so a shared account's card would otherwise
+    # carry a neighbouring campaign's wait — the same scoping the readiness chips get.
+    await create_account(AccountCreate(account_id="acc-1"))
+    this_campaign = await create_campaign(CampaignCreate(name="This", prompt="p"))
+    other_campaign = await create_campaign(CampaignCreate(name="Other", prompt="p"))
+    await assign_account_to_campaign(this_campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(other_campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(this_campaign.campaign_id, "@mine")
+    assert await park_comment("@theirs", 9, other_campaign.campaign_id, "acc-1") is True
+
+    board = await load_neurocomment_board(this_campaign.campaign_id)
+
+    assert board is not None
+    assert board.accounts[0].comments_last_hour == 0
 
 
 @pytest.mark.asyncio

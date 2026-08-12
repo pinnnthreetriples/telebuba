@@ -10241,6 +10241,7 @@
           "status": {
             "type": "string",
             "enum": [
+              "waiting",
               "claimed",
               "posted",
               "failed"
@@ -11427,6 +11428,22 @@
             "minimum": 0.0,
             "title": "Min Trust Score"
           },
+          "comment_mode": {
+            "type": "string",
+            "enum": [
+              "first",
+              "reply"
+            ],
+            "title": "Comment Mode",
+            "default": "first"
+          },
+          "reply_wait_minutes": {
+            "type": "integer",
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Reply Wait Minutes",
+            "default": 10
+          },
           "updated_at": {
             "type": "string",
             "minLength": 1,
@@ -11472,6 +11489,34 @@
             "maximum": 100.0,
             "minimum": 0.0,
             "title": "Min Trust Score"
+          },
+          "comment_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "first",
+                  "reply"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Mode"
+          },
+          "reply_wait_minutes": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 120.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply Wait Minutes"
           }
         },
         "additionalProperties": false,

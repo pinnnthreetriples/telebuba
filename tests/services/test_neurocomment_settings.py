@@ -19,6 +19,8 @@ from services.neurocomment import settings_store
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from schemas.neurocomment import CommentMode
+
 
 @pytest.fixture(autouse=True)
 def _isolate_db(tmp_path: Path) -> None:
@@ -100,6 +102,48 @@ def test_settings_update_accepts_a_reply_delay_longer_than_a_claim_cutoff() -> N
         min_trust_score=0,
     )
     assert update.reply_delay_max_seconds == 1000.0
+
+
+@pytest.mark.asyncio
+async def test_comment_mode_defaults_to_writing_first() -> None:
+    """The whole point of the default: a deploy changes nothing until an operator flips it."""
+    loaded = await settings_store.load_settings()
+    assert loaded.comment_mode == "first"
+    assert loaded.reply_wait_minutes == 10
+
+
+def _mode_update(
+    comment_mode: CommentMode | None = None,
+    reply_wait_minutes: int | None = None,
+) -> NeurocommentSettingsUpdate:
+    """An update whose five limits are fixed — these cases are about the mode pair only."""
+    return NeurocommentSettingsUpdate(
+        max_comments_per_hour=5,
+        max_comments_per_channel_per_day=2,
+        reply_delay_min_seconds=1.0,
+        reply_delay_max_seconds=2.0,
+        min_trust_score=10,
+        comment_mode=comment_mode,
+        reply_wait_minutes=reply_wait_minutes,
+    )
+
+
+@pytest.mark.asyncio
+async def test_saving_the_mode_keeps_it_and_a_limits_only_save_does_not_reset_it() -> None:
+    """The Settings screen never sends the mode; that must not undo the page's toggle."""
+    saved = await settings_store.save_settings(_mode_update("reply", 45))
+    assert (saved.comment_mode, saved.reply_wait_minutes) == ("reply", 45)
+
+    after_limits_only = await settings_store.save_settings(_mode_update())
+    assert (after_limits_only.comment_mode, after_limits_only.reply_wait_minutes) == ("reply", 45)
+
+
+def test_settings_update_rejects_an_unknown_mode_and_an_out_of_range_wait() -> None:
+    with pytest.raises(ValidationError):
+        # A mode the schema does not know — what a hand-rolled request body would carry.
+        _mode_update(comment_mode="last")  # ty: ignore[invalid-argument-type]
+    with pytest.raises(ValidationError):
+        _mode_update(reply_wait_minutes=121)
 
 
 def test_campaign_create_rejects_over_long_name_and_prompt() -> None:

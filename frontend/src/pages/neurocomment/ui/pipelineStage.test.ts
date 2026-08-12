@@ -32,6 +32,23 @@ test('each stage of a post’s life maps to its own step', () => {
   }
 });
 
+// `reply` mode adds a wait between the filter and the generation, and every one of its
+// codes is written on the per-post path — so each has to name a step. Left out, the newest
+// line would carry no stage and the rail would fall back to «Слушатель» while a post sits
+// parked or is being answered.
+test('the reply-mode wait maps onto the rail instead of falling back to «Слушатель»', () => {
+  const cases: [string, number][] = [
+    ['neurocomment_post_parked', 2],
+    ['neurocomment_reply_post_gone', 2],
+    ['neurocomment_reply_mode_unavailable', 2],
+    ['neurocomment_reply_to_human', 3],
+    ['neurocomment_reply_wait_expired', 3],
+  ];
+  for (const [event, stage] of cases) {
+    expect(pipelineStage([line(event)], true, NOW).stage, event).toBe(stage);
+  }
+});
+
 // `_outcomes._classify_post` writes exactly one terminal row per attempt. Miss one and
 // that outcome falls through to the post's own `generation_started`, parking the rail on
 // «Генерация» for a minute after the post already died at the comment step.
