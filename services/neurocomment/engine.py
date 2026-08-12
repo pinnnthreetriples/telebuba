@@ -110,6 +110,16 @@ async def _handle_new_post(event: NewPostEvent) -> None:
     # the campaign gate only because a channel with no active link has no row to stamp.
     await stamp_channel_post_seen(event.channel, datetime.now(UTC).isoformat())
 
+    # The only positive record that a post ARRIVED. Everything below logs misses, so
+    # without this row the dashboard's «Новый пост» stage could never light and the
+    # pipeline rail stayed decorative. Cost is one INFO row per received post;
+    # `log_event` is best-effort, so it cannot be the reason a post goes uncommented.
+    await log_event(
+        "INFO",
+        "neurocomment_post_received",
+        extra={"channel": event.channel, "post_id": event.post_id},
+    )
+
     skip = _filters.filter_reason(event)
     if skip is not None:
         await log_event(

@@ -30,12 +30,15 @@ interface BoardRow {
   armedTarget: number;
 }
 
-// One work row per account, joined on the account's OWN channel: its pinned
-// channel when set, else its first joined channel from the readiness list (a
-// real link, not an arbitrary pairing) with that channel's real aggregate
-// status — unless the pair itself is banned, which the aggregate hides (see
-// below). The comment cell shows the account's real last comment text (falling
-// back to a generic "posted" hint, then an em dash when it has never commented).
+// One work row per account, joined on the account's OWN channel: where it commented
+// LAST, so the row names the comment it shows and moves as the account works —
+// narrowed to the operator's pins when there are any, because a pin is an explicit
+// instruction and re-pinning must be visible before the account next posts. Failing
+// both, a stuck pair (banned here, or done re-joining here), then its first joined
+// channel from the readiness list — a real link, not an arbitrary pairing — with that
+// channel's real aggregate status. The comment cell shows the account's real last
+// comment text (falling back to a generic "posted" hint, then an em dash when it has
+// never commented).
 function deriveRows(
   board: NeurocommentBoardData,
   placeholder: string,
@@ -47,12 +50,25 @@ function deriveRows(
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
     const pins = account.pinned_channels ?? [];
+    // Where this account commented last. Read off the CARD, not looked up in
+    // `board.comments`: that feed is a campaign-wide newest-first prefix capped at 50,
+    // so a busy account drops out of it within the hour and the row would quietly fall
+    // back to a channel it merely joined while still showing the real comment text.
+    const lastChannel = account.last_comment_channel;
+    // A pin outranks it: pinning is the operator instructing this account where to work,
+    // and re-pinning has to show up before the account next posts (which can be a day).
+    // Among several pins the last-commented one still wins.
+    //
     // A pair carrying its own verdict — banned here (#30), or done re-joining here —
-    // outranks a working one: the row shows ONE channel per account, and a working
-    // channel is already reported by the "N/M" progress badge, while a stuck pair had
-    // nowhere else to surface. A pin still wins: that is the operator's own choice.
+    // used to outrank everything but a pin, because the row shows ONE channel per
+    // account and a stuck pair had nowhere else to surface. ponytail: it now sits below
+    // the live channel, accepted deliberately — the row's job is to name the comment it
+    // shows, and the neuro-accounts modal still lists `banned_channels` per account, so
+    // the diagnosis moved rather than disappeared.
     const primary =
+      readiness.find((r) => r.channel === lastChannel && pins.includes(r.channel)) ??
       readiness.find((r) => pins.includes(r.channel)) ??
+      readiness.find((r) => r.channel === lastChannel) ??
       readiness.find((r) => r.banned || (r.rejoin_gave_up && !r.ready)) ??
       readiness.find((r) => r.joined) ??
       readiness[0];
@@ -218,7 +234,13 @@ export function NeurocommentBoard({
         accessorKey: 'channel',
         header: t('neurocomment.board.col.channel'),
         cell: ({ row }) => (
-          <span className="inline-flex items-center gap-[6px] whitespace-nowrap">
+          // Keyed by the channel so a switch remounts the cell and replays `swapin` —
+          // the channel now moves with the account's last comment, and a value that
+          // changes under the operator's eyes should say so.
+          <span
+            key={row.original.channel}
+            className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
+          >
             {row.original.channel}
             {row.original.deletedRecent > 0 ? (
               <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">

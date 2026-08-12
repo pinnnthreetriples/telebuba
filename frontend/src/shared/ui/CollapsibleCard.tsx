@@ -111,6 +111,10 @@ export function CollapsibleCard({
         hidden={!reachable}
         className={`tb-collapse ${open ? 'tb-open' : ''} ${open && settled ? 'tb-settled' : ''}`}
         onTransitionEnd={(event) => {
+          // React's handler bubbles: without this, any descendant transitioning
+          // max-height drives THIS card's settled/reachable — and while closed that
+          // means `hidden` on the whole body.
+          if (event.target !== event.currentTarget) return;
           if (event.propertyName !== 'max-height') return;
           if (open) setSettled(true);
           else setReachable(false);

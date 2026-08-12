@@ -187,6 +187,35 @@ async def test_card_counts_today_and_last_hour() -> None:
 
 
 @pytest.mark.asyncio
+async def test_card_names_the_channel_of_its_last_comment() -> None:
+    """The channel travels on the card, beside the text of the SAME comment.
+
+    The board's work row shows one channel per account and the text of its last comment.
+    Deriving the channel from ``board.comments`` instead looks equivalent and is not: that
+    feed is a campaign-wide newest-first prefix capped at ``board_comment_feed_limit``,
+    while the card's ``last_comment_*`` come from the account's whole day window — so a
+    busy account drops out of the feed and the row pairs its real comment with a channel it
+    merely joined.
+    """
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@first")
+    await link_channel_to_campaign(campaign.campaign_id, "@second")
+    await _post_comment("@first", 1, campaign.campaign_id, "acc-1")
+    await _post_comment("@second", 2, campaign.campaign_id, "acc-1")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    card = board.accounts[0]
+    # Same row as the text: whichever comment is newest supplies both.
+    latest = max(board.comments, key=lambda c: c.created_at)
+    assert card.last_comment_channel == latest.channel
+    assert card.last_comment_text == latest.comment_text
+
+
+@pytest.mark.asyncio
 async def test_board_comment_feed_is_recent_first() -> None:
     # The board carries a published-comments feed: every posted comment in the day
     # window, most-recent first (so the UI can show all N, not just the last one).

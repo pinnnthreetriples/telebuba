@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 
@@ -82,6 +82,32 @@ test('a control that appears after the open is reachable, not sealed in', async 
   // the card did not measure at open time still has to be operable.
   rerender(<Card extra />);
   expect(screen.getByRole('button', { name: 'Показать причину' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Удалить аккаунт' })).toBeVisible();
+});
+
+// React's onTransitionEnd bubbles, and the handler keys off `propertyName === 'max-height'`
+// — which any descendant can satisfy (`.tb-dd` dropdowns transition exactly that, and so
+// would a sub-row animated the same way). Without the target check, a descendant's
+// transition ending while the card is closed applies `hidden` to the WHOLE body, which is
+// the a11y regression the tests above exist to prevent.
+test('a descendant’s max-height transition does not seal the card', async () => {
+  render(
+    <CollapsibleCard label="Действия" defaultOpen header={<span>Действия</span>}>
+      <div data-testid="inner-dropdown">
+        <button type="button">Удалить аккаунт</button>
+      </div>
+    </CollapsibleCard>,
+  );
+  const body = document.getElementById(toggles()[0]?.getAttribute('aria-controls') ?? '');
+
+  // The card is closing; 80ms later an inner dropdown finishes its own max-height run.
+  await userEvent.click(screen.getByText('Действия'));
+  fireEvent.transitionEnd(screen.getByTestId('inner-dropdown'), { propertyName: 'max-height' });
+  expect(body).not.toHaveAttribute('hidden');
+
+  // Re-opening still works, i.e. the guard did not cost the card its own transitionend.
+  await userEvent.click(screen.getByText('Действия'));
+  fireEvent.transitionEnd(body as HTMLElement, { propertyName: 'max-height' });
   expect(screen.getByRole('button', { name: 'Удалить аккаунт' })).toBeVisible();
 });
 

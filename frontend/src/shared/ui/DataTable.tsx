@@ -6,7 +6,7 @@ import {
   type Row,
   useReactTable,
 } from '@tanstack/react-table';
-import { Fragment, type HTMLAttributes, type ReactNode, useRef } from 'react';
+import { Fragment, type HTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
 
 import { useWideContainer } from './useWideViewport';
 
@@ -56,6 +56,54 @@ const CARD_VALUE = 'min-w-0 break-words text-right text-[12.5px] text-[#3a3a3a]'
 // utilities via column meta / getRowProps.
 function join(...parts: (string | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
+}
+
+// A sub-row that animates its own exit: it outlives `open` going false until
+// `.tb-subrow`'s grid-rows transition ends. Removing it in a single frame is what made
+// the LAST row of a board jump — that row is the bottom of the document, so losing
+// ~270px at once clamps the window scroll and slides the whole card, while the chevron
+// is still 420ms into its own spring.
+//
+// The mount state lives HERE, per row, and not as a "which row is closing" id on the
+// table, which was the first shape and was wrong twice over: row ids are index-based, so
+// a poll that shortened the data left the id matching a LATER, collapsed row whose
+// sub-row then rendered — and stayed focusable — indefinitely; and one id can hold one
+// row, so a second toggle inside the 420ms cancelled the first row's exit and brought
+// back the very snap this animates away. Per-row state dies with the row.
+function SubRow({
+  open,
+  className,
+  // The table layout has to wrap the animating div in its own <tr><td>. Passing that in
+  // keeps the frame out of the DOM entirely while the sub-row is unmounted — no stray
+  // empty row per record.
+  frame,
+  children,
+}: {
+  open: boolean;
+  className?: string;
+  frame?: (inner: ReactNode) => ReactNode;
+  children: ReactNode;
+}) {
+  const [mounted, setMounted] = useState(open);
+  useEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+  if (!mounted) return null;
+  const inner = (
+    <div
+      className={join('tb-subrow', open ? undefined : 'tb-closing', className)}
+      // `grid-template-rows` and NOT max-height, deliberately: CollapsibleCard's
+      // onTransitionEnd filters on max-height, and a bubbled one from in here would pull
+      // its whole body out of the a11y tree. The target check keeps a descendant's
+      // transition from unmounting us early.
+      onTransitionEnd={(event) => {
+        if (!open && event.target === event.currentTarget) setMounted(false);
+      }}
+    >
+      <div>{children}</div>
+    </div>
+  );
+  return frame ? frame(inner) : inner;
 }
 
 export function DataTable<TData>({
@@ -140,8 +188,10 @@ export function DataTable<TData>({
               })}
               {/* Bled out of the card's padding: sub-row content already carries its
                   own border-t/tint designed to sit flush under a table row. */}
-              {renderSubRow && row.getIsExpanded() ? (
-                <div className="-mx-4 -mb-[13px] mt-[11px]">{renderSubRow(row)}</div>
+              {renderSubRow ? (
+                <SubRow open={row.getIsExpanded()} className="-mx-4 -mb-[13px] mt-[11px]">
+                  {renderSubRow(row)}
+                </SubRow>
               ) : null}
             </div>
           );
@@ -188,12 +238,19 @@ export function DataTable<TData>({
                     </td>
                   ))}
                 </tr>
-                {renderSubRow && row.getIsExpanded() ? (
-                  <tr>
-                    <td colSpan={row.getVisibleCells().length} className="p-0">
-                      {renderSubRow(row)}
-                    </td>
-                  </tr>
+                {renderSubRow ? (
+                  <SubRow
+                    open={row.getIsExpanded()}
+                    frame={(inner) => (
+                      <tr>
+                        <td colSpan={row.getVisibleCells().length} className="p-0">
+                          {inner}
+                        </td>
+                      </tr>
+                    )}
+                  >
+                    {renderSubRow(row)}
+                  </SubRow>
                 ) : null}
               </Fragment>
             );

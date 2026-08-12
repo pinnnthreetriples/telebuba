@@ -635,6 +635,8 @@
     "neurocomment_group_ban_account_limited": "Аккаунт ограничен во всём Telegram",
     "neurocomment_channel_all_accounts_banned": "Канал отключён — забанены все аккаунты",
     "neurocomment_post_access_lost": "Потерян доступ к чату канала",
+    "neurocomment_post_received": "Новый пост",
+    "neurocomment_generation_started": "Генерируем текст",
     "neurocomment_generation_retry": "Генерируем текст заново",
     "neurocomment_generation_exhausted": "Не удалось сгенерировать текст",
     "neurocomment_no_account_available": "Нет доступного аккаунта",
