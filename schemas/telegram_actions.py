@@ -44,6 +44,10 @@ from schemas.telegram_actions_channels import (
     SetChannelPhoto,
 )
 
+# The comment cluster (the write action and the thread read) is a sibling module too;
+# ``PostMediaKind`` went with it, being a classification of what a comment could use.
+from schemas.telegram_actions_comments import CommentOnPost, PostMediaKind, ReadPostComments
+
 # The channel-discovery read cluster likewise lives in a sibling module; the read
 # union below references both names.
 from schemas.telegram_actions_discovery import GetSimilarChannels, SearchChannels
@@ -107,20 +111,6 @@ class LeaveDiscussionGroup(BaseModel):
 class PostComment(BaseModel):
     action_type: Literal["post_comment"] = "post_comment"
     chat_id: int
-    text: str = Field(min_length=1)
-
-
-class CommentOnPost(BaseModel):
-    """Post a comment under a channel post via the linked discussion group.
-
-    Telethon's ``send_message(channel, text, comment_to=post_id)`` routes the
-    message into the channel's linked group; the account must already be a
-    member of that group (onboarding handles the join).
-    """
-
-    action_type: Literal["comment_on_post"] = "comment_on_post"
-    channel: str = Field(min_length=1)
-    post_id: int
     text: str = Field(min_length=1)
 
 
@@ -302,6 +292,7 @@ TelegramReadAction = Annotated[
     | CheckMessagesAlive
     | CheckBannedInChannel
     | CheckWriteRights
+    | ReadPostComments
     | GetUserProfile
     | GetPrivacySettings
     | ListPinnedStories
@@ -415,14 +406,6 @@ class PostImageResult(BaseModel):
 
     image_b64: str | None = None
     reason: Literal["unavailable", "too_large"] | None = None
-
-
-# What the post carries besides its text, classified by what a comment generator could
-# actually make a comment OUT of — not by Telegram's media union. ``photo`` is the only
-# kind the vision path can read; ``album`` is called out separately because a caption-less
-# album item is not a missed opportunity but a duplicate of its own album's head (every
-# item fires its own event, and every comment on them lands in the same discussion thread).
-PostMediaKind = Literal["none", "photo", "album", "other"]
 
 
 class NewPostEvent(BaseModel):

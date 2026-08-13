@@ -10,6 +10,8 @@ Campaign lifecycle (``CampaignStatus``):
 - ``archived`` — retired.
 
 Comment lifecycle (``CommentStatus``):
+- ``waiting`` — the post is parked: the claim is won but held, waiting for a human
+  comment to reply to. Resolved by the sweep, which promotes it to ``claimed``.
 - ``claimed`` — a fleet account won the ``(channel, post_id)`` claim, not yet posted.
 - ``posted``  — comment delivered (``comment_msg_id`` set).
 - ``failed``  — delivery failed after retries.
@@ -38,12 +40,13 @@ from schemas._neurocomment_requests import (  # noqa: F401 - re-export for exist
 
 # The operator-editable settings pair moved out for the same budget, the same way.
 from schemas._neurocomment_settings import (  # noqa: F401 - re-export for existing call sites
+    CommentMode,
     NeurocommentSettings,
     NeurocommentSettingsUpdate,
 )
 
 CampaignStatus = Literal["active", "paused", "archived"]
-CommentStatus = Literal["claimed", "posted", "failed"]
+CommentStatus = Literal["waiting", "claimed", "posted", "failed"]
 
 
 class CampaignCreate(BaseModel):

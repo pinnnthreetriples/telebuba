@@ -34,6 +34,9 @@ async def save_settings(data: NeurocommentSettingsUpdate) -> NeurocommentSetting
             "max_comments_per_hour": saved.max_comments_per_hour,
             "max_comments_per_channel_per_day": saved.max_comments_per_channel_per_day,
             "min_trust_score": saved.min_trust_score,
+            # The mode is the one setting here that changes WHAT the fleet posts, not
+            # how fast — so a flip has to be findable in the log after the fact.
+            "comment_mode": saved.comment_mode,
         },
     )
     return saved

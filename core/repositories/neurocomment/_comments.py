@@ -120,7 +120,15 @@ async def fetch_comment(channel: str, post_id: int) -> CommentRecord | None:
     return await asyncio.to_thread(_fetch_comment, channel, post_id)
 
 
-def _claim_comment(channel: str, post_id: int, campaign_id: str, account_id: str) -> bool:
+def _claim_comment(
+    channel: str,
+    post_id: int,
+    campaign_id: str,
+    account_id: str,
+    # Parametrized so ``_waiting.park_comment`` reserves posts through THIS insert
+    # instead of a second one that would have to re-earn its conflict guarantee.
+    status: CommentStatus = "claimed",
+) -> bool:
     now = _now_iso()
     statement = (
         sqlite_insert(_neurocomment_comments)
@@ -129,7 +137,7 @@ def _claim_comment(channel: str, post_id: int, campaign_id: str, account_id: str
             post_id=post_id,
             campaign_id=campaign_id,
             account_id=account_id,
-            status="claimed",
+            status=status,
             comment_text=None,
             comment_msg_id=None,
             created_at=now,

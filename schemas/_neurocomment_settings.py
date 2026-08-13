@@ -17,7 +17,16 @@ campaign/board read models left behind.
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Which message in a channel the fleet answers:
+# - ``first`` — the post itself, the moment it lands (the only behaviour there has ever
+#   been, hence the default everywhere: nothing changes until an operator flips it).
+# - ``reply`` — a HUMAN's comment under the post, so the fleet arrives after the
+#   discussion has started instead of opening it.
+CommentMode = Literal["first", "reply"]
 
 
 class NeurocommentSettings(BaseModel):
@@ -28,6 +37,11 @@ class NeurocommentSettings(BaseModel):
     reply_delay_min_seconds: float = Field(ge=0)
     reply_delay_max_seconds: float = Field(ge=0)
     min_trust_score: int = Field(ge=0, le=100)
+    comment_mode: CommentMode = "first"
+    # How long ``reply`` mode waits for a human comment to appear under a fresh post
+    # before it gives that post up. Bounded at two hours: past that the post is off
+    # the channel's first screen and a reply reads as necromancy, not conversation.
+    reply_wait_minutes: int = Field(default=10, ge=1, le=120)
     updated_at: str = Field(min_length=1)
 
 
@@ -42,6 +56,13 @@ class NeurocommentSettingsUpdate(BaseModel):
     # No upper bound, deliberately — ``_generate._sleep_beating``'s docstring says why.
     reply_delay_max_seconds: float = Field(ge=0)
     min_trust_score: int = Field(ge=0, le=100)
+    # Omitted (``None``) means "leave as stored", unlike the limits above which are a
+    # full replace. Two callers now share this one body and neither knows the other's
+    # half: the Settings screen's limits form would reset the mode toggle to its default
+    # on every unrelated save, and the neurocomment page's toggle has no limits form to
+    # read the numbers off.
+    comment_mode: CommentMode | None = None
+    reply_wait_minutes: int | None = Field(default=None, ge=1, le=120)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettingsUpdate:

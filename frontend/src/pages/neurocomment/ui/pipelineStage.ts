@@ -33,7 +33,19 @@ const STAGE_OF: [RegExp, number][] = [
   ],
   [/^neurocomment_telegram_comment_on_post$/, 5],
   [/^neurocomment_(generation_|claim_lost_before_send$)/, 3],
+  // `reply` mode resumes a parked post in the sweep, and both of its decisions — answer a
+  // reader, or give up waiting and write first — are immediately followed by that post's own
+  // `generation_started`. So they belong to «Генерация», not to a step of their own.
+  [/^neurocomment_reply_(to_human|wait_expired)$/, 3],
   [/^neurocomment_(post_skipped|channel_cooled|no_account_available)$/, 2],
+  // The same step as the filter verdicts, for the same reason: the post is past detection
+  // and nothing is being written on it right now — it is parked for readers, given up
+  // because it was deleted mid-wait, or refused the mode because the sweep that owns the
+  // wait is switched off. What this buys is only the FRESH minute: unmapped, the parked line
+  // was invisible and the rail fell through to an older line that had already gone stale, so
+  // the very moment of parking read as idle. It does not track the ten-minute wait — past
+  // `STAGE_FRESH_MS` every stage drops back to «Слушатель», and this one is no exception.
+  [/^neurocomment_(post_parked|reply_(post_gone|mode_unavailable))$/, 2],
   [/^neurocomment_(post_received|post_dropped_overloaded)$/, 1],
 ];
 

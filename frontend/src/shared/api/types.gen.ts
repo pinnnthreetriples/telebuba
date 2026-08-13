@@ -938,7 +938,7 @@ export type CommentRecord = {
   /**
    * Status
    */
-  status: 'claimed' | 'posted' | 'failed';
+  status: 'waiting' | 'claimed' | 'posted' | 'failed';
   /**
    * Comment Text
    */
@@ -1669,6 +1669,14 @@ export type NeurocommentSettings = {
    */
   min_trust_score: number;
   /**
+   * Comment Mode
+   */
+  comment_mode?: 'first' | 'reply';
+  /**
+   * Reply Wait Minutes
+   */
+  reply_wait_minutes?: number;
+  /**
    * Updated At
    */
   updated_at: string;
@@ -1700,6 +1708,14 @@ export type NeurocommentSettingsUpdate = {
    * Min Trust Score
    */
   min_trust_score: number;
+  /**
+   * Comment Mode
+   */
+  comment_mode?: 'first' | 'reply' | null;
+  /**
+   * Reply Wait Minutes
+   */
+  reply_wait_minutes?: number | null;
 };
 
 /**

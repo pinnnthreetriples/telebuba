@@ -316,6 +316,12 @@ _neurocomment_settings = Table(
     Column("reply_delay_min_seconds", Float, nullable=False),
     Column("reply_delay_max_seconds", Float, nullable=False),
     Column("min_trust_score", Integer, nullable=False),
+    # Which message the fleet answers, and how long the reply mode waits for a human
+    # (migration #52). Server defaults, not NULLs: the row predates both columns on
+    # every upgraded database, and a NULL here would leave the engine deciding for
+    # itself what mode an operator never chose.
+    Column("comment_mode", String, nullable=False, server_default="first"),
+    Column("reply_wait_minutes", Integer, nullable=False, server_default="10"),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_settings_single_row"),
 )
