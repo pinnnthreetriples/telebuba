@@ -7,7 +7,7 @@ import {
   updateNeurocommentSettingsMutation,
 } from '@/entities/campaign';
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { toastError } from '@/shared/ui';
+import { HintBubble, toastError } from '@/shared/ui';
 
 // Fleet-wide choice of WHICH message the fleet answers: the post itself, or a human's
 // comment under it — plus how long the reply mode holds a post open waiting for that
@@ -97,27 +97,45 @@ export function CommentModeToggle() {
         </div>
         <div className="flex gap-1">
           {MODES.map((option) => (
-            <button
-              key={option}
-              type="button"
-              // The aria-pressed idiom PrivacyLevelRow documents: two honest toggles, not a
-              // radiogroup whose arrow-key navigation the app does not implement.
-              aria-pressed={mode === option}
-              // `disabled` is the whole in-flight guard: a second click while the PUT is
-              // open would send the same body again, because `mode` still reads the old
-              // value until the invalidated query comes back.
-              disabled={busy}
-              onClick={() => {
-                pick(option);
-              }}
-              className={`flex-1 rounded-[8px] border px-[10px] py-[6px] text-[12px] font-medium transition-colors disabled:opacity-60 ${
-                mode === option
-                  ? 'border-primary bg-[#f2f6ff] text-primary'
-                  : 'border-line-input bg-white text-ink-muted hover:border-[#c8c6c2] hover:bg-[#f7f6f4]'
-              }`}
-            >
-              {t(`neurocomment.mode.${option}`)}
-            </button>
+            // `group relative` is what anchors the bubble; the wrapper carries the `flex-1`
+            // the button used to, so the two options still split the row evenly. The hint
+            // hangs off the BUTTON rather than a "?" badge beside it — the badge is
+            // focusable, and nesting it inside a <button> would be invalid markup.
+            //
+            // The 230px bubble is wider than a half-row button, so it spills ~25px past the
+            // card edge on the outer side. Left as is: neither this card nor the page clips
+            // (no `overflow-hidden` on either), and centring the same bubble on HelpHint's
+            // 15px badge already spills four times as far — matching that is consistent, and
+            // narrowing it here would give the app two tooltip widths.
+            <span key={option} className="group relative flex-1">
+              <button
+                type="button"
+                // The aria-pressed idiom PrivacyLevelRow documents: two honest toggles, not a
+                // radiogroup whose arrow-key navigation the app does not implement.
+                aria-pressed={mode === option}
+                // `disabled` is the whole in-flight guard: a second click while the PUT is
+                // open would send the same body again, because `mode` still reads the old
+                // value until the invalidated query comes back.
+                disabled={busy}
+                onClick={() => {
+                  pick(option);
+                }}
+                // `title` is the native fallback the styled bubble does not replace: it is
+                // what a touch device and a screen reader get, since neither hovers.
+                title={`${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`}
+                className={`w-full rounded-[8px] border px-[10px] py-[6px] text-[12px] font-medium transition-colors disabled:opacity-60 ${
+                  mode === option
+                    ? 'border-primary bg-[#f2f6ff] text-primary'
+                    : 'border-line-input bg-white text-ink-muted hover:border-[#c8c6c2] hover:bg-[#f7f6f4]'
+                }`}
+              >
+                {t(`neurocomment.mode.${option}.label`)}
+              </button>
+              <HintBubble
+                text={t(`neurocomment.mode.${option}.hint`)}
+                example={t(`neurocomment.mode.${option}.example`)}
+              />
+            </span>
           ))}
         </div>
       </div>

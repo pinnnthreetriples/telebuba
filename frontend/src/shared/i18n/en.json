@@ -1074,8 +1074,16 @@
     },
     "mode": {
       "label": "Comment mode",
-      "first": "We comment first",
-      "reply": "We reply in comments",
+      "first": {
+        "label": "We comment first",
+        "hint": "Comments the moment a post lands. Fast, but we open every thread — which is what moderators notice.",
+        "example": "Post at 12:00 → our comment at 12:00."
+      },
+      "reply": {
+        "label": "We reply in comments",
+        "hint": "Waits for real readers to comment, then answers one of them. Nobody in time and we comment first after all.",
+        "example": "Post at 12:00, readers at 12:04 and 12:06 → at 12:07 we answer the second."
+      },
       "failed": "Could not change the comment mode",
       "waitLabel": "Wait for a human comment",
       "waitHint": "minutes, then we comment first",

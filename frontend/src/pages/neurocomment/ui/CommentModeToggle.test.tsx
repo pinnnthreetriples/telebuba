@@ -179,3 +179,31 @@ test('the pressed position stays where the backend put it when the write fails',
     expect(screen.getByRole('button', { name: FIRST })).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+test('each mode explains itself with a plain-language line and a worked example', async () => {
+  routeSettings('first');
+  renderWithClient(<CommentModeToggle />);
+  await waitFor(() => {
+    expect(screen.getByRole('button', { name: REPLY })).toBeEnabled();
+  });
+
+  // Both bubbles are in the DOM at all times — CSS reveals them on hover/focus, so this
+  // asserts the content, and the `title` below is what a device that cannot hover gets.
+  const hints = screen.getAllByRole('tooltip');
+  expect(hints).toHaveLength(2);
+  expect(hints[0]).toHaveTextContent('всегда первые в ветке');
+  expect(hints[0]).toHaveTextContent('Пост в 12:00 → наш комментарий в 12:00.');
+  expect(hints[1]).toHaveTextContent('отвечаем одному из них');
+  // The example teaches the 2nd-4th rule rather than restating the label.
+  expect(hints[1]).toHaveTextContent('в 12:07 отвечаем второму');
+});
+
+test('the hint is also reachable without hovering', async () => {
+  routeSettings('first');
+  renderWithClient(<CommentModeToggle />);
+  const button = await screen.findByRole('button', { name: FIRST });
+
+  // A touch device and a screen reader never hover; the native tooltip carries both halves.
+  expect(button.title).toContain('всегда первые в ветке');
+  expect(button.title).toContain('Пост в 12:00');
+});
