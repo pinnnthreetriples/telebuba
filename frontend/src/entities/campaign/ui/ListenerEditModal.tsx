@@ -1,13 +1,23 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import type { NeurocommentSettingsUpdate } from '@/shared/api';
+import { Modal, toastError } from '@/shared/ui';
+
+import {
+  neurocommentSettingsQueryOptions,
+  updateNeurocommentSettingsMutation,
+} from '../api/campaign.queries';
+import { type CommentMode, CommentModeFields } from './CommentModeFields';
 
 const TRIGGER =
   'tb-time flex w-full cursor-pointer items-center justify-between rounded-[10px] border border-line-input bg-white px-[13px] py-[10px] text-[13px]';
 
 // Design modal: listener-edit (L1387-1422) — pick the listener account from a
-// custom dropdown, save with a check→"Сохранено" swap.
+// custom dropdown, save with a check→"Сохранено" swap. Also the home of the fleet-wide
+// comment mode: it is the same decision about the same listener, and here it obeys the
+// modal's own contract — applied on "Сохранить", thrown away by "Отмена".
 export function ListenerEditModal({
   options,
   selected,
@@ -20,15 +30,73 @@ export function ListenerEditModal({
   onSave: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const settings = useQuery(neurocommentSettingsQueryOptions());
+  const saveSettings = useMutation(updateNeurocommentSettingsMutation());
+  const stored = settings.data;
   const [pick, setPick] = useState(selected);
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  // `null` means "untouched", which is also how the draft survives a read that lands after
+  // the modal opened: no effect syncing query into state, and nothing to compare when the
+  // operator never touched the fields.
+  const [mode, setMode] = useState<CommentMode | null>(null);
+  const [wait, setWait] = useState<number | null>(null);
   const current = options.find((o) => o.id === pick);
 
-  const save = () => {
-    if (pick) onSave(pick);
+  const finish = () => {
     setSaved(true);
     setTimeout(onClose, 650);
+  };
+
+  const save = () => {
+    // The account goes through the page, which owns its own failure path; the settings PUT
+    // is the one that can fail here, so it — and only it — gates the "Сохранено" swap.
+    if (pick) onSave(pick);
+    // Only what actually differs from the stored settings, so a Save the operator changed
+    // nothing in — or one that ended back where it started — costs no request at all.
+    const patch: Partial<NeurocommentSettingsUpdate> = {};
+    if (stored !== undefined) {
+      if (mode !== null && mode !== stored.comment_mode) patch.comment_mode = mode;
+      if (wait !== null && wait !== stored.reply_wait_minutes) patch.reply_wait_minutes = wait;
+    }
+    if (stored === undefined || Object.keys(patch).length === 0) {
+      finish();
+      return;
+    }
+    saveSettings.mutate(
+      {
+        // PUT /settings replaces the limits wholesale and forbids extra keys, so the write
+        // carries the stored numbers back unchanged — and `updated_at` cannot ride along.
+        body: {
+          max_comments_per_hour: stored.max_comments_per_hour,
+          max_comments_per_channel_per_day: stored.max_comments_per_channel_per_day,
+          reply_delay_min_seconds: stored.reply_delay_min_seconds,
+          reply_delay_max_seconds: stored.reply_delay_max_seconds,
+          min_trust_score: stored.min_trust_score,
+          ...patch,
+        },
+      },
+      {
+        onSuccess: async () => {
+          await queryClient.invalidateQueries({
+            queryKey: neurocommentSettingsQueryOptions().queryKey,
+          });
+          finish();
+        },
+        // Stay open and say so: a check mark over a rejected PUT would send the operator
+        // away believing the fleet had changed mode.
+        onError: () => {
+          toastError(
+            t(
+              patch.comment_mode === undefined
+                ? 'neurocomment.mode.waitFailed'
+                : 'neurocomment.mode.failed',
+            ),
+          );
+        },
+      },
+    );
   };
 
   return (
@@ -131,6 +199,16 @@ export function ListenerEditModal({
           </div>
         </div>
 
+        {/* Until the read lands, the backend's own fallbacks, so the control never renders
+            with nothing pressed — which would read as a third state. */}
+        <CommentModeFields
+          mode={mode ?? stored?.comment_mode ?? 'first'}
+          waitMinutes={wait ?? stored?.reply_wait_minutes ?? 10}
+          disabled={stored === undefined || saveSettings.isPending}
+          onModeChange={setMode}
+          onWaitChange={setWait}
+        />
+
         <div className="mt-[22px] flex justify-end gap-2">
           <button
             type="button"
@@ -142,7 +220,9 @@ export function ListenerEditModal({
           <button
             type="button"
             onClick={save}
-            className={`rounded-full border px-5 py-[9px] text-[13px] font-semibold text-white ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
+            // A second click while the PUT is open would send the same body again.
+            disabled={saveSettings.isPending}
+            className={`rounded-full border px-5 py-[9px] text-[13px] font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
           >
             {saved ? (
               <span className="inline-flex items-center gap-[6px]">

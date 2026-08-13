@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 
-import { CommentModeToggle } from './CommentModeToggle';
 import { SurfHover } from './SurfHover';
 
 // The listener-account card: shows the active listener with pause/edit/remove
@@ -253,11 +252,6 @@ export function ListenerCard({
           </div>
         </div>
       )}
-
-      {/* Next to the run controls because it answers the same question they do — what the
-          listener will DO with the next post — and it is fleet-wide, so it stays visible
-          even before an account is picked. Self-contained (own read + PUT). */}
-      <CommentModeToggle />
 
       {/* The listener silently drops a channel it cannot resolve, and the board still
           paints that channel `ready` — so this strip is the only place an operator can
