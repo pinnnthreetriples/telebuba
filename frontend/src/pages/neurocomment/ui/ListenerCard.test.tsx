@@ -1,4 +1,3 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -14,33 +13,26 @@ const OPTIONS: AccountRead[] = [
   { account_id: 'a2', status: 'alive', first_name: 'Boris', created_at: 'now', updated_at: 'now' },
 ];
 
-// The card hosts CommentModeToggle, which reads /settings itself, so the tree needs a
-// query client. It is inside `card()` (not a renderWithClient wrapper) because the test
-// below rerenders — a wrapper applied once would be dropped by the second render.
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
 // No listener set yet, so the card renders the account-picking dropdown. `listenerOpen`
 // is owned by the page, so opening the list is a rerender, not a click.
 function card(listenerOpen: boolean): ReactElement {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ListenerCard
-        listenerId=""
-        running={false}
-        activeCampaignCount={0}
-        activeChannelCount={0}
-        unwatchedChannels={[]}
-        listenerActionsOpen={false}
-        onToggleActions={vi.fn()}
-        onToggleRuntime={vi.fn()}
-        onEdit={vi.fn()}
-        onRemove={vi.fn()}
-        listenerOpen={listenerOpen}
-        onToggleOpen={vi.fn()}
-        accountOptions={OPTIONS}
-        onPickListener={vi.fn()}
-      />
-    </QueryClientProvider>
+    <ListenerCard
+      listenerId=""
+      running={false}
+      activeCampaignCount={0}
+      activeChannelCount={0}
+      unwatchedChannels={[]}
+      listenerActionsOpen={false}
+      onToggleActions={vi.fn()}
+      onToggleRuntime={vi.fn()}
+      onEdit={vi.fn()}
+      onRemove={vi.fn()}
+      listenerOpen={listenerOpen}
+      onToggleOpen={vi.fn()}
+      accountOptions={OPTIONS}
+      onPickListener={vi.fn()}
+    />
   );
 }
 
@@ -51,24 +43,22 @@ function plaque(
   activeChannelCount: number,
 ): ReactElement {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ListenerCard
-        listenerId="a1"
-        running={running}
-        activeCampaignCount={activeCampaignCount}
-        activeChannelCount={activeChannelCount}
-        unwatchedChannels={[]}
-        listenerActionsOpen={false}
-        onToggleActions={vi.fn()}
-        onToggleRuntime={vi.fn()}
-        onEdit={vi.fn()}
-        onRemove={vi.fn()}
-        listenerOpen={false}
-        onToggleOpen={vi.fn()}
-        accountOptions={OPTIONS}
-        onPickListener={vi.fn()}
-      />
-    </QueryClientProvider>
+    <ListenerCard
+      listenerId="a1"
+      running={running}
+      activeCampaignCount={activeCampaignCount}
+      activeChannelCount={activeChannelCount}
+      unwatchedChannels={[]}
+      listenerActionsOpen={false}
+      onToggleActions={vi.fn()}
+      onToggleRuntime={vi.fn()}
+      onEdit={vi.fn()}
+      onRemove={vi.fn()}
+      listenerOpen={false}
+      onToggleOpen={vi.fn()}
+      accountOptions={OPTIONS}
+      onPickListener={vi.fn()}
+    />
   );
 }
 
