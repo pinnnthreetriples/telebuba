@@ -12,6 +12,7 @@ export function ListenerCard({
   listenerId,
   running,
   activeCampaignCount,
+  activeChannelCount,
   unwatchedChannels,
   listenerActionsOpen,
   onToggleActions,
@@ -26,6 +27,7 @@ export function ListenerCard({
   listenerId: string;
   running: boolean;
   activeCampaignCount: number;
+  activeChannelCount: number;
   unwatchedChannels: string[];
   listenerActionsOpen: boolean;
   onToggleActions: () => void;
@@ -38,6 +40,24 @@ export function ListenerCard({
   onPickListener: (accountId: string) => void;
 }) {
   const { t } = useTranslation();
+  // Green promised work that was not happening: an operator deleted their only campaign,
+  // read the still-green plaque as "all fine", and came asking why it said «Слушает».
+  //
+  // The test is the WATCH SET, not the campaign count, because they come apart in three
+  // reachable ways and the campaign count is green in all of them: an active campaign whose
+  // channels were freed one at a time, a campaign created and not yet given any, and the
+  // "up but deaf" state ``_lifecycle`` documents, where reconcile unsubscribed the listener
+  // because its account is warming. This is also the number the card's own «Каналов» tile
+  // shows, so the plaque can no longer contradict the tile beside it.
+  //
+  // The process itself stays up and the pause action stays where it is — the operator may
+  // be between campaigns, and being switched off unasked is worse than a muted label.
+  const working = running && activeChannelCount > 0;
+  const statusLabel = working
+    ? t('neurocomment.listener.listening')
+    : running
+      ? t('neurocomment.listener.listeningNoChannels')
+      : t('neurocomment.listener.paused');
   return (
     <div className="relative z-[5] rounded-2xl border border-line bg-white px-[14px] py-[13px]">
       <div className="mb-[3px] flex items-center gap-[9px]">
@@ -133,27 +153,25 @@ export function ListenerCard({
               <div
                 className="flex items-center justify-between gap-2 rounded-[10px] border px-[10px] py-2"
                 style={{
-                  background: running ? '#ddf7e9' : '#f7f6f4',
-                  borderColor: running ? '#b8ecce' : '#e6e5e3',
+                  background: working ? '#ddf7e9' : '#f7f6f4',
+                  borderColor: working ? '#b8ecce' : '#e6e5e3',
                 }}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${running ? 'tb-livedot' : ''}`}
-                    style={{ background: running ? '#12a150' : '#9a9893' }}
+                    className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot' : ''}`}
+                    style={{ background: working ? '#12a150' : '#9a9893' }}
                   />
                   <span
-                    className={`text-[12.5px] font-semibold ${running ? 'tb-pulse' : ''}`}
-                    style={{ color: running ? '#12a150' : '#74726e' }}
+                    className={`text-[12.5px] font-semibold ${working ? 'tb-pulse' : ''}`}
+                    style={{ color: working ? '#12a150' : '#74726e' }}
                   >
-                    {running
-                      ? t('neurocomment.listener.listening')
-                      : t('neurocomment.listener.paused')}
+                    {statusLabel}
                   </span>
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
                     className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-[10.5px] font-bold text-white"
-                    style={{ background: running ? '#12a150' : '#74726e' }}
+                    style={{ background: working ? '#12a150' : '#74726e' }}
                   >
                     {activeCampaignCount}
                   </span>

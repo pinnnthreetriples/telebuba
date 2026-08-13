@@ -87,6 +87,17 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
         await _runtime._stop_sweep()  # noqa: SLF001 - peer module
         await _runtime._stop_join()  # noqa: SLF001 - peer module
         _publish_unwatched()  # unsubscribed → no channel is "requested but missing"
+        # Same code and fields as the tail below, because this IS a finished reconcile — it
+        # resolved to "watch nothing". It returned before either log line, so the listener
+        # went silent with ``listener_running`` still set and not a word about it. Deleting
+        # the last campaign is precisely how an operator reaches here, and that delete is
+        # now recorded, so its consequence must not be the missing half.
+        await _runtime.log_event(
+            "INFO",
+            "neurocomment_runtime_reconciled",
+            account_id=listener_account_id,
+            extra={"channels": 0, "unwatched": 0},
+        )
         return
     subscribed = await _runtime.subscribe_posts(listener_account_id, channels, _runtime.on_post)
     # The local — not the module set — feeds the logs below, so a pass overlapping ours
