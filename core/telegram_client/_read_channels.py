@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import ChatReactionsNone, InputChannelEmpty
+from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, InputChannelEmpty
 
 from core.config import settings
 from core.telegram_client._channels import _input_channel
@@ -145,9 +145,26 @@ async def dispatch_get_own_channel(
 
 
 def _reactions_enabled(full_chat: object) -> bool:
-    """``chatReactionsNone`` — and an absent field — both mean nobody can react."""
+    """Can anyone react? Same reading of the field as ``_react``'s whitelist.
+
+    The three-way split is copied deliberately from
+    ``_react._channel_reaction_whitelist``: ``chatReactionsNone`` and a ``Some``
+    with an empty list mean nobody can react, while ALL / unknown / absent lands
+    in the permissive branch. An absent field must not read as "off" here while
+    the react action reads it as "any emoji accepted" — the editor would call a
+    channel silent that warming is happily reacting to.
+
+    Paid (star) reactions count as reactions: turning them off is part of what
+    the operator's toggle does, so a channel that still accepts stars is not off.
+    """
+    if getattr(full_chat, "paid_reactions_available", False):
+        return True
     available = getattr(full_chat, "available_reactions", None)
-    return available is not None and not isinstance(available, ChatReactionsNone)
+    if isinstance(available, ChatReactionsNone):
+        return False
+    if isinstance(available, ChatReactionsSome):
+        return bool(available.reactions)
+    return True
 
 
 async def dispatch_list_channel_posts(

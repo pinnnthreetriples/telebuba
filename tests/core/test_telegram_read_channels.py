@@ -184,7 +184,14 @@ async def test_get_own_channel_maps_about_and_participants(
         async def __call__(self, request: object) -> object:
             requested.append(request)
             return SimpleNamespace(
-                full_chat=SimpleNamespace(about="All about it", participants_count=77),
+                full_chat=SimpleNamespace(
+                    about="All about it",
+                    participants_count=77,
+                    # Real ``channelFull`` always carries this; a fake without it
+                    # would quietly exercise the reactions-off path, which the
+                    # dedicated parametrized test below owns on purpose.
+                    available_reactions=ChatReactionsAll(),
+                ),
                 chats=[SimpleNamespace(id=100, title="Mine", username="mine")],
             )
 
@@ -202,20 +209,31 @@ async def test_get_own_channel_maps_about_and_participants(
 
 
 @pytest.mark.parametrize(
-    ("available", "enabled"),
+    ("available", "paid", "enabled"),
     [
-        (ChatReactionsAll(), True),
-        (ChatReactionsSome(reactions=[ReactionEmoji(emoticon="👍")]), True),
-        (ChatReactionsNone(), False),
-        # Absent field — the official client reads that as "none" too.
-        (None, False),
+        (ChatReactionsAll(), None, True),
+        (ChatReactionsSome(reactions=[ReactionEmoji(emoticon="👍")]), None, True),
+        (ChatReactionsNone(), None, False),
+        # An empty Some permits nothing — same as None (mirrors _react.py, which
+        # turns it into an empty whitelist and skips reacting).
+        (ChatReactionsSome(reactions=[]), None, False),
+        # Absent / unknown lands in the permissive branch, exactly as
+        # _channel_reaction_whitelist reads the same field. The two readers
+        # disagreeing would let the editor call a channel silent that the react
+        # action is happily reacting to.
+        (None, None, True),
+        # Paid star reactions are reactions: standard ones off but stars still
+        # landing is NOT "reactions off".
+        (ChatReactionsNone(), True, True),
     ],
 )
 @pytest.mark.asyncio
 async def test_get_own_channel_reports_reactions_availability(
     monkeypatch: pytest.MonkeyPatch,
+    *,
     available: object,
-    enabled: bool,  # noqa: FBT001 - parametrized value, not a flag argument
+    paid: bool | None,
+    enabled: bool,
 ) -> None:
     class FakeClient:
         async def connect(self) -> None:
@@ -230,6 +248,7 @@ async def test_get_own_channel_reports_reactions_availability(
                     about="",
                     participants_count=None,
                     available_reactions=available,
+                    paid_reactions_available=paid,
                 ),
                 chats=[SimpleNamespace(id=100, title="Mine", username=None)],
             )
@@ -262,7 +281,11 @@ async def test_get_own_channel_picks_the_requested_chat_not_the_first(
 
         async def __call__(self, _request: object) -> object:
             return SimpleNamespace(
-                full_chat=SimpleNamespace(about="All about it", participants_count=77),
+                full_chat=SimpleNamespace(
+                    about="All about it",
+                    participants_count=77,
+                    available_reactions=ChatReactionsAll(),
+                ),
                 chats=[
                     # The linked discussion group comes first in the vector.
                     SimpleNamespace(id=555, title="Mine Chat", username="mine_chat"),
@@ -305,7 +328,11 @@ async def test_get_own_channel_blank_when_no_chat_matches(
 
         async def __call__(self, _request: object) -> object:
             return SimpleNamespace(
-                full_chat=SimpleNamespace(about="About", participants_count=None),
+                full_chat=SimpleNamespace(
+                    about="About",
+                    participants_count=None,
+                    available_reactions=ChatReactionsAll(),
+                ),
                 chats=[SimpleNamespace(id=555, title="Mine Chat", username="mine_chat")],
             )
 
@@ -333,7 +360,11 @@ async def test_get_own_channel_tolerates_missing_chats(
 
         async def __call__(self, _request: object) -> object:
             return SimpleNamespace(
-                full_chat=SimpleNamespace(about="", participants_count=None),
+                full_chat=SimpleNamespace(
+                    about="",
+                    participants_count=None,
+                    available_reactions=ChatReactionsAll(),
+                ),
                 chats=[],
             )
 

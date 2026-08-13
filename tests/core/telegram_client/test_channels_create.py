@@ -131,6 +131,40 @@ async def test_create_channel_reactions_failure_carries_id(
 
 
 @pytest.mark.asyncio
+async def test_create_channel_flood_on_reactions_reaches_flood_ladder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FloodWait on the reactions call keeps its dedicated handling.
+
+    Sibling of the username case: a fleet account that has been minting channels
+    hits FLOOD_WAIT exactly here, and wrapping it into ``ChannelGatewayError``
+    would hide the wait-seconds from the flood ladder (both are ``RPCError``
+    subclasses, so without the re-raise they degrade to a hard failure).
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=4245)])
+            if isinstance(request, SetChatAvailableReactionsRequest):
+                raise errors.FloodWaitError(request=None, capture=55)
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-reactflood",
+        CreateChannel(title="Silent", reactions_enabled=False),
+    )
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 55
+
+
+@pytest.mark.asyncio
 async def test_create_channel_with_username_assigns_after_precheck(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

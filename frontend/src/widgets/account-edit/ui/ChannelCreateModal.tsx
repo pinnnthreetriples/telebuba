@@ -145,13 +145,15 @@ export function ChannelCreateModal({
           void invalidateList();
           const channelId = errorChannelId(err);
           // An id in the envelope's fields means the create itself SUCCEEDED and
-          // only the public-username step failed. Create must not re-arm (a
-          // second click makes a second real channel), but the hand-off is NOT
-          // automatic: unmounting here would take the reason with it, and the
-          // editor cannot fix a handle — EditChannel carries only title/about and
+          // one of the post-create steps failed — the public-username assignment
+          // or turning reactions off. Create must not re-arm (a second click
+          // makes a second real channel), but the hand-off is NOT automatic:
+          // unmounting here would take the reason with it, and for the username
+          // the editor cannot even fix it — EditChannel carries no username and
           // UpdateUsernameRequest exists nowhere outside _create_channel, so an
           // operator dropped straight into it reads "private" with no idea why.
-          // The reason stays on screen and the operator opens the channel itself.
+          // (Reactions ARE fixable there, hence the button below offers the
+          // editor rather than doing nothing.) The reason stays on screen.
           if (channelId !== null) {
             setCreatedId(channelId);
             return;

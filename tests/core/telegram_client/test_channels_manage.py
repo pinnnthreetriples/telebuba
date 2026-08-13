@@ -84,7 +84,8 @@ async def test_edit_channel_title_only_skips_about(
 @pytest.mark.asyncio
 async def test_edit_channel_sets_reactions_availability(
     monkeypatch: pytest.MonkeyPatch,
-    enabled: bool,  # noqa: FBT001 - parametrized value, not a flag argument
+    *,
+    enabled: bool,
     expected: type,
 ) -> None:
     """Off → chatReactionsNone; back on → chatReactionsAll (standard emoji)."""
@@ -100,6 +101,9 @@ async def test_edit_channel_sets_reactions_availability(
     reactions = [r for r in client.captured if isinstance(r, SetChatAvailableReactionsRequest)]
     assert len(reactions) == 1
     assert isinstance(reactions[0].available_reactions, expected)
+    # Off takes paid star reactions with it; on leaves that switch untouched
+    # rather than enabling monetisation nobody asked for.
+    assert reactions[0].paid_enabled is (None if enabled else False)
     # Reactions-only edit: no title/about writes.
     assert not any(isinstance(r, EditTitleRequest) for r in client.captured)
     assert not any(isinstance(r, EditChatAboutRequest) for r in client.captured)
@@ -126,6 +130,9 @@ async def test_edit_channel_reactions_not_modified_is_ok(
     )
 
     assert result.status == "ok"
+    # Attempted, not skipped — an "ok" alone would also hold with the whole
+    # reactions branch deleted from _edit_channel.
+    assert any(isinstance(r, SetChatAvailableReactionsRequest) for r in client.captured)
 
 
 @pytest.mark.asyncio

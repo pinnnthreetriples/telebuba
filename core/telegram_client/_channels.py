@@ -216,6 +216,11 @@ async def _apply_reactions(client: TelegramClient, entity: object, *, enabled: b
     premium-gated); disabling means ``chatReactionsNone``. Re-applying the
     current value answers ``ChatNotModified``, which is an idempotent no-op here
     for the same reason as title/about.
+
+    ``paid_enabled`` is a SEPARATE switch from ``available_reactions``, and it is
+    omitted (= leave unchanged) on the way in: "off" has to mean off, so paid
+    star reactions go down with the rest, but turning reactions back on must not
+    silently enable a monetisation feature the operator never asked for.
     """
     available = ChatReactionsAll() if enabled else ChatReactionsNone()
     with suppress(errors.ChatNotModifiedError):
@@ -223,6 +228,7 @@ async def _apply_reactions(client: TelegramClient, entity: object, *, enabled: b
             SetChatAvailableReactionsRequest(
                 peer=entity,  # ty: ignore[invalid-argument-type]
                 available_reactions=available,
+                paid_enabled=None if enabled else False,
             ),
         )
 

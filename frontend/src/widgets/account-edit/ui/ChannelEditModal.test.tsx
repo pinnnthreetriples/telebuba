@@ -162,6 +162,34 @@ test('a channel with reactions already off starts checked and can turn them back
   expect(body).toEqual({ reactions_enabled: true });
 });
 
+// `reactions_enabled` is optional in the generated client (the backend defaults
+// it, so OpenAPI marks it not-required), which a version-skewed deploy can
+// actually deliver. Prefill and dirty-check must read an absent value the SAME
+// way — deriving it twice made the box check itself while Save stayed dead.
+test('a detail without reactions_enabled still lets the toggle arm Save', async () => {
+  const withoutField: Record<string, unknown> = { ...DETAIL };
+  delete withoutField.reactions_enabled;
+  routeApi(withoutField);
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+  const checkbox = screen.getByRole('checkbox', { name: 'Отключить реакции' });
+  expect(checkbox).toHaveAttribute('aria-checked', 'false');
+
+  await userEvent.click(checkbox);
+  expect(checkbox).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByText('Сохранить')).toBeEnabled();
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ reactions_enabled: false });
+});
+
 test('an about-only edit stays saveable when the title prefill came back blank', async () => {
   routeApi({ ...DETAIL, title: '' });
   renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);

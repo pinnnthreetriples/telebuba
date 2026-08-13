@@ -52,14 +52,20 @@ export function ChannelEditModal({
 
   const shownTitle = title ?? detail.data?.title ?? '';
   const shownAbout = about ?? detail.data?.about ?? '';
+  // ONE predicate for "the live channel has reactions off", used by both the
+  // prefill and the dirty check. Deriving it twice let them disagree: the field
+  // is optional in the generated client (the backend defaults it, so OpenAPI
+  // marks it not-required), and for an absent value `=== false` said "on" while
+  // `!value` said "off" — the box checked itself and Save stayed dead forever.
+  const liveReactionsOff = detail.data?.reactions_enabled === false;
   // Same "null until touched" rule as the text fields: the live detail shows
   // through, phrased as the create dialog phrases it (checked = reactions off).
-  const shownReactionsOff = reactionsOff ?? detail.data?.reactions_enabled === false;
+  const shownReactionsOff = reactionsOff ?? liveReactionsOff;
   const titleChanged = detail.data != null && title !== null && title.trim() !== detail.data.title;
   const aboutChanged =
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
   const reactionsChanged =
-    detail.data != null && reactionsOff !== null && reactionsOff !== !detail.data.reactions_enabled;
+    detail.data != null && reactionsOff !== null && reactionsOff !== liveReactionsOff;
   const dirty = titleChanged || aboutChanged || reactionsChanged;
   const busy = update.isPending || setPhoto.isPending;
   // The blank-title guard belongs to the title alone: the title is only sent

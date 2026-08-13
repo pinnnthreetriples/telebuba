@@ -132,7 +132,8 @@ test('the reactions checkbox sends reactions_enabled=false for the new channel',
   await openCreate();
 
   await userEvent.type(screen.getByLabelText('Название'), 'Новости');
-  await userEvent.click(screen.getByText('Отключить реакции'));
+  // By role, not text: the text query would also match a non-interactive label.
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Отключить реакции' }));
   await userEvent.click(screen.getByText('Создать'));
 
   await waitFor(() => {
