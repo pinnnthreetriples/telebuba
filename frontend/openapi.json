@@ -9979,6 +9979,11 @@
               }
             ],
             "title": "Username"
+          },
+          "reactions_enabled": {
+            "type": "boolean",
+            "title": "Reactions Enabled",
+            "default": true
           }
         },
         "type": "object",
@@ -10024,6 +10029,11 @@
             "type": "string",
             "title": "About",
             "default": ""
+          },
+          "reactions_enabled": {
+            "type": "boolean",
+            "title": "Reactions Enabled",
+            "default": true
           }
         },
         "type": "object",
@@ -10144,6 +10154,17 @@
               }
             ],
             "title": "About"
+          },
+          "reactions_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactions Enabled"
           }
         },
         "type": "object",

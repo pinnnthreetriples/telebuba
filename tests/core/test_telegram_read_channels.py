@@ -10,7 +10,13 @@ from unittest.mock import MagicMock
 import pytest
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import InputChannelEmpty
+from telethon.tl.types import (
+    ChatReactionsAll,
+    ChatReactionsNone,
+    ChatReactionsSome,
+    InputChannelEmpty,
+    ReactionEmoji,
+)
 
 from core.config import settings
 from core.db import configure_database
@@ -193,6 +199,47 @@ async def test_get_own_channel_maps_about_and_participants(
     assert result.about == "All about it"
     assert result.participants_count == 77
     assert any(isinstance(r, GetFullChannelRequest) for r in requested)
+
+
+@pytest.mark.parametrize(
+    ("available", "enabled"),
+    [
+        (ChatReactionsAll(), True),
+        (ChatReactionsSome(reactions=[ReactionEmoji(emoticon="👍")]), True),
+        (ChatReactionsNone(), False),
+        # Absent field — the official client reads that as "none" too.
+        (None, False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_get_own_channel_reports_reactions_availability(
+    monkeypatch: pytest.MonkeyPatch,
+    available: object,
+    enabled: bool,  # noqa: FBT001 - parametrized value, not a flag argument
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
+
+        async def __call__(self, _request: object) -> object:
+            return SimpleNamespace(
+                full_chat=SimpleNamespace(
+                    about="",
+                    participants_count=None,
+                    available_reactions=available,
+                ),
+                chats=[SimpleNamespace(id=100, title="Mine", username=None)],
+            )
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-detail-reactions", GetOwnChannel(channel_id=100))
+
+    assert isinstance(result, TelegramOwnChannelDetail)
+    assert result.reactions_enabled is enabled
 
 
 @pytest.mark.asyncio

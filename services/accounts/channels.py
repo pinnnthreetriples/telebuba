@@ -88,7 +88,12 @@ async def create_account_channel(
 ) -> ActionResult:
     result = await execute(
         account_id,
-        CreateChannel(title=data.title, about=data.about, username=data.username),
+        CreateChannel(
+            title=data.title,
+            about=data.about,
+            username=data.username,
+            reactions_enabled=data.reactions_enabled,
+        ),
     )
     raise_for_result(result)
     await log_event(
@@ -98,6 +103,7 @@ async def create_account_channel(
         extra={
             "title": data.title,
             "has_username": data.username is not None,
+            "reactions_enabled": data.reactions_enabled,
             "channel_id": result.channel_id,
         },
     )
@@ -133,6 +139,7 @@ async def get_account_channel(account_id: str, channel_id: int) -> ChannelDetail
         username=detail.username,
         about=detail.about,
         participants_count=detail.participants_count,
+        reactions_enabled=detail.reactions_enabled,
     )
 
 
@@ -143,7 +150,12 @@ async def update_account_channel(
 ) -> ActionResult:
     result = await execute(
         account_id,
-        EditChannel(channel_id=channel_id, title=data.title, about=data.about),
+        EditChannel(
+            channel_id=channel_id,
+            title=data.title,
+            about=data.about,
+            reactions_enabled=data.reactions_enabled,
+        ),
     )
     raise_for_result(result)
     await log_event(
@@ -154,6 +166,7 @@ async def update_account_channel(
             "channel_id": channel_id,
             "has_title": data.title is not None,
             "has_about": data.about is not None,
+            "reactions_enabled": data.reactions_enabled,
         },
     )
     return result

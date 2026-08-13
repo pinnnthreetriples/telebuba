@@ -19,6 +19,7 @@ import {
   FIELD,
   LABEL,
 } from './_channelsShared';
+import { CheckRow } from './_CheckRow';
 
 // New-channel dialog (opened above the profile modal, z=75): title + about +
 // an optional public username with a debounced live availability check.
@@ -55,6 +56,9 @@ export function ChannelCreateModal({
   const [title, setTitle] = useState('');
   const [about, setAbout] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  // Phrased as the operator asked for it ("disable reactions"), so the default —
+  // Telegram's own, reactions on — is the unchecked box.
+  const [reactionsOff, setReactionsOff] = useState(false);
   const [username, setUsername] = useState('');
   // The availability probe hits Telegram — debounce it so typing doesn't fire
   // a request per keystroke.
@@ -126,6 +130,7 @@ export function ChannelCreateModal({
           title: title.trim(),
           about: about.trim(),
           username: isPublic ? username : null,
+          reactions_enabled: !reactionsOff,
         },
       },
       {
@@ -243,31 +248,21 @@ export function ChannelCreateModal({
           />
         </label>
 
-        <button
-          type="button"
-          onClick={() => {
+        <CheckRow
+          label={t('accounts.channel.publicToggle')}
+          on={isPublic}
+          onToggle={() => {
             setIsPublic((value) => !value);
           }}
-          className="mb-[14px] flex w-full items-center gap-[10px] text-left"
-        >
-          <span
-            className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border ${isPublic ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
-          >
-            {isPublic && (
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#fff"
-                strokeWidth="3"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            )}
-          </span>
-          <span className="text-[13px] text-[#3a3a3a]">{t('accounts.channel.publicToggle')}</span>
-        </button>
+        />
+
+        <CheckRow
+          label={t('accounts.channel.reactionsToggle')}
+          on={reactionsOff}
+          onToggle={() => {
+            setReactionsOff((value) => !value);
+          }}
+        />
 
         {isPublic && (
           <label className="mb-[14px] block">

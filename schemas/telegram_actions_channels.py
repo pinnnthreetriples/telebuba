@@ -34,26 +34,32 @@ class CreateChannel(BaseModel):
     deterministic occupied-handle case fails before anything exists; if the
     post-create username assignment still fails, the created (private)
     channel's id is carried on the error instead of being silently orphaned.
+
+    ``reactions_enabled`` mirrors Telegram's own default (reactions on): only
+    ``False`` costs an extra RPC after the create, since ``CreateChannelRequest``
+    itself carries no reactions flag.
     """
 
     action_type: Literal["channel_create"] = "channel_create"
     title: str = Field(min_length=1, max_length=CHANNEL_TITLE_MAX_LENGTH)
     about: str = Field(default="", max_length=CHANNEL_ABOUT_MAX_LENGTH)
     username: str | None = Field(default=None, pattern=CHANNEL_USERNAME_PATTERN)
+    reactions_enabled: bool = True
 
 
 class EditChannel(BaseModel):
-    """Edit a channel's title and/or about. ``None`` = unchanged, ``""`` clears about."""
+    """Edit title, about and/or reactions. ``None`` = unchanged, ``""`` clears about."""
 
     action_type: Literal["channel_edit"] = "channel_edit"
     channel_id: int = Field(gt=0)
     title: str | None = Field(default=None, min_length=1, max_length=CHANNEL_TITLE_MAX_LENGTH)
     about: str | None = Field(default=None, max_length=CHANNEL_ABOUT_MAX_LENGTH)
+    reactions_enabled: bool | None = None
 
     @model_validator(mode="after")
     def _check_any_field(self) -> EditChannel:
-        if self.title is None and self.about is None:
-            msg = "at least one of title/about must be set"
+        if self.title is None and self.about is None and self.reactions_enabled is None:
+            msg = "at least one of title/about/reactions_enabled must be set"
             raise ValueError(msg)
         return self
 
@@ -165,9 +171,10 @@ class TelegramOwnChannels(BaseModel):
 
 
 class TelegramOwnChannelDetail(TelegramOwnChannel):
-    """Gateway output for ``GetOwnChannel`` — the list row plus the about text."""
+    """Gateway output for ``GetOwnChannel`` — the list row plus about and reactions."""
 
     about: str = ""
+    reactions_enabled: bool = True
 
 
 class TelegramChannelPost(BaseModel):

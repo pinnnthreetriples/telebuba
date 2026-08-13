@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import InputChannelEmpty
+from telethon.tl.types import ChatReactionsNone, InputChannelEmpty
 
 from core.config import settings
 from core.telegram_client._channels import _input_channel
@@ -140,7 +140,14 @@ async def dispatch_get_own_channel(
         username=getattr(chat, "username", None),
         about=str(getattr(full_chat, "about", "") or ""),
         participants_count=getattr(full_chat, "participants_count", None),
+        reactions_enabled=_reactions_enabled(full_chat),
     )
+
+
+def _reactions_enabled(full_chat: object) -> bool:
+    """``chatReactionsNone`` — and an absent field — both mean nobody can react."""
+    available = getattr(full_chat, "available_reactions", None)
+    return available is not None and not isinstance(available, ChatReactionsNone)
 
 
 async def dispatch_list_channel_posts(

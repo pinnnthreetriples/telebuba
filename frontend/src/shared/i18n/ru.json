@@ -383,6 +383,7 @@
       "titleLabel": "Название",
       "aboutLabel": "Описание",
       "publicToggle": "Публичный канал",
+      "reactionsToggle": "Отключить реакции",
       "usernameLabel": "Юзернейм",
       "errTitle": "Укажите название",
       "errTitleMax": "Название — не более 128 символов",
@@ -437,6 +438,7 @@
         "channel_read_failed": "Не удалось получить данные канала из Telegram",
         "channel_create_failed": "Не удалось создать канал",
         "channel_username_assign_failed": "Не удалось присвоить имя пользователя — канал создан как приватный",
+        "channel_reactions_failed": "Канал создан, но реакции отключить не удалось",
         "failed": "Telegram отклонил действие — попробуйте ещё раз",
         "unavailable": "Telegram временно недоступен — попробуйте ещё раз"
       }
