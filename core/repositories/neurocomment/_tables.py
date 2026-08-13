@@ -272,6 +272,26 @@ _neurocomment_comments = Table(
     # Set (migration #27) when a posted comment is later found deleted from the
     # channel — NULL = still live. Its status stays 'posted' (it *was* delivered).
     Column("deleted_at", String, nullable=True),
+    # Reply-mode ownership (migration #53). ``status`` remains the public quota/result
+    # lifecycle; these fields say whether a parked reply is safe to retry after a crash.
+    Column("reply_state", String, nullable=True),
+    Column("reply_stage", String, nullable=True),
+    Column("reply_outcome", String, nullable=True),
+    Column("reply_attempts", Integer, nullable=False, server_default="0"),
+    Column("reply_deadline_at", String, nullable=True),
+    CheckConstraint(
+        "reply_state IS NULL OR reply_state IN ('waiting', 'reply_processing', 'terminal')",
+        name="ck_neurocomment_comments_reply_state",
+    ),
+    CheckConstraint(
+        "reply_stage IS NULL OR "
+        "reply_stage IN ('waiting', 'pre_send', 'dispatching', 'dispatched')",
+        name="ck_neurocomment_comments_reply_stage",
+    ),
+    CheckConstraint(
+        "reply_outcome IS NULL OR reply_outcome IN ('retryable', 'terminal', 'ambiguous')",
+        name="ck_neurocomment_comments_reply_outcome",
+    ),
 )
 # Challenge audit-and-cache table (migration #14): one row per guardian-bot
 # challenge encountered at onboarding. Doubles as the global solved-decision
@@ -354,6 +374,12 @@ _neurocomment_settings = Table(
     Column("reply_delay_min_seconds", Float, nullable=False),
     Column("reply_delay_max_seconds", Float, nullable=False),
     Column("min_trust_score", Integer, nullable=False),
+    # Which message the fleet answers, and how long the reply mode waits for a human
+    # (migration #52). Server defaults, not NULLs: the row predates both columns on
+    # every upgraded database, and a NULL here would leave the engine deciding for
+    # itself what mode an operator never chose.
+    Column("comment_mode", String, nullable=False, server_default="first"),
+    Column("reply_wait_minutes", Integer, nullable=False, server_default="10"),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_settings_single_row"),
 )

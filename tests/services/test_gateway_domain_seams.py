@@ -55,6 +55,12 @@ async def test_domain_seam_stamps_its_prefix_on_the_gateway_event(
 
     patch_action_client(monkeypatch, _OnlineClient())
     monkeypatch.setattr(_actions, "log_event", _fake_log)
+    if seam is neurocomment_seams:
+
+        async def _available(_account_id: str) -> bool:
+            return True
+
+        monkeypatch.setattr(neurocomment_seams, "_account_is_available", _available)
 
     await seam.execute("acc-seam", SetOnline(online=True))
 

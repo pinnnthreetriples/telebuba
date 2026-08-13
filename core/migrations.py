@@ -45,6 +45,7 @@ from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
 from core.migration_steps_channel_pause import _add_campaign_channel_pause
+from core.migration_steps_comment_mode import _add_neurocomment_settings_comment_mode
 from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
@@ -158,8 +159,13 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (49, "add_readiness_captcha_giveup", _add_readiness_captcha_giveup),
     (50, "add_readiness_rejoin_gave_up", _add_readiness_rejoin_gave_up),
     (51, "add_campaign_channel_last_post", _add_campaign_channel_last_post),
-    (52, "add_neurocomment_inbox", _add_neurocomment_inbox),
-    (53, "harden_proxy_hosts", _harden_proxy_hosts),
+    (
+        52,
+        "add_neurocomment_settings_comment_mode",
+        _add_neurocomment_settings_comment_mode,
+    ),
+    (53, "add_neurocomment_inbox", _add_neurocomment_inbox),
+    (54, "harden_proxy_hosts", _harden_proxy_hosts),
 )
 
 

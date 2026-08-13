@@ -1,9 +1,13 @@
 """Read-only channel dispatchers — own-channel list, detail, posts, handle check, liveness.
 
-Extracted-sibling pattern (see ``_read_stories.py``): ``_read.py`` keeps the
-match and imports these dispatchers. Errors ride the ``execute_read_many``
-ladder untouched (RPC → ``TelegramReadError``; the shared entity guard's
-``ChannelGatewayError`` is wrapped there too).
+Extracted-sibling pattern (see ``_read_stories.py``), with one difference: this module owns
+its slice of the ``match`` as well as the dispatchers, because ``_read``'s single match hit
+the cyclomatic-complexity gate at rank D and the arms that belong with these handlers are
+the ones that had somewhere better to be. ``_read`` matches its own arms and falls through
+to :func:`_dispatch_channel_read_action` here.
+
+Errors ride the ``execute_read_many`` ladder untouched (RPC → ``TelegramReadError``; the
+shared entity guard's ``ChannelGatewayError`` is wrapped there too).
 """
 
 from __future__ import annotations
@@ -13,10 +17,26 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import InputChannelEmpty
+from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, InputChannelEmpty
 
 from core.config import settings
 from core.telegram_client._channels import _input_channel
+from core.telegram_client._read_discovery import (
+    dispatch_get_similar_channels,
+    dispatch_search_channels,
+)
+
+# Runtime, not ``TYPE_CHECKING``: the dispatcher at the bottom pattern-matches on these
+# classes, so they have to exist when it runs and not only when a type checker reads it.
+from schemas.telegram_actions import (
+    CheckChannelUsername,
+    GetLastPostAt,
+    GetOwnChannel,
+    GetSimilarChannels,
+    ListChannelPosts,
+    ListOwnChannels,
+    SearchChannels,
+)
 from schemas.telegram_actions_activity import LastPostResult
 from schemas.telegram_actions_channels import (
     ChannelUsernameCheck,
@@ -28,15 +48,10 @@ from schemas.telegram_actions_channels import (
 )
 
 if TYPE_CHECKING:
+    from pydantic import BaseModel
     from telethon import TelegramClient
 
-    from schemas.telegram_actions import (
-        CheckChannelUsername,
-        GetOwnChannel,
-        ListChannelPosts,
-        ListOwnChannels,
-    )
-    from schemas.telegram_actions_activity import GetLastPostAt
+    from schemas.telegram_actions import TelegramReadAction
 
 
 async def dispatch_get_last_post_at(
@@ -125,7 +140,31 @@ async def dispatch_get_own_channel(
         username=getattr(chat, "username", None),
         about=str(getattr(full_chat, "about", "") or ""),
         participants_count=getattr(full_chat, "participants_count", None),
+        reactions_enabled=_reactions_enabled(full_chat),
     )
+
+
+def _reactions_enabled(full_chat: object) -> bool:
+    """Can anyone react? Same reading of the field as ``_react``'s whitelist.
+
+    The three-way split is copied deliberately from
+    ``_react._channel_reaction_whitelist``: ``chatReactionsNone`` and a ``Some``
+    with an empty list mean nobody can react, while ALL / unknown / absent lands
+    in the permissive branch. An absent field must not read as "off" here while
+    the react action reads it as "any emoji accepted" — the editor would call a
+    channel silent that warming is happily reacting to.
+
+    Paid (star) reactions count as reactions: turning them off is part of what
+    the operator's toggle does, so a channel that still accepts stars is not off.
+    """
+    if getattr(full_chat, "paid_reactions_available", False):
+        return True
+    available = getattr(full_chat, "available_reactions", None)
+    if isinstance(available, ChatReactionsNone):
+        return False
+    if isinstance(available, ChatReactionsSome):
+        return bool(available.reactions)
+    return True
 
 
 async def dispatch_list_channel_posts(
@@ -202,3 +241,40 @@ async def dispatch_check_channel_username(
     if not available:
         return ChannelUsernameCheck(available=False, code="channel_username_occupied")
     return ChannelUsernameCheck(available=True)
+
+
+async def _dispatch_channel_read_action(  # noqa: PLR0911 - one return per read-action case
+    client: TelegramClient,
+    action: TelegramReadAction,
+) -> BaseModel:
+    """The own-channel and discovery half of the match above, split off for radon.
+
+    The whole match is one flat type -> dispatcher mapping, so a new read action costs one
+    arm and one point of cyclomatic complexity; ``ReadPostComments`` was the arm that took
+    the single function to 21 against the D-rank gate's 20. Split by DOMAIN rather than
+    down the middle — the arms here are the ones whose handlers live in ``_read_channels``
+    and ``_read_discovery``, so both halves keep a coherent subject and both have room for
+    the next action.
+
+    Still a ``match`` and not a handler dict: ``ty`` narrows ``action`` to the concrete model
+    inside each arm, which is the reason this dispatcher is shaped like this at all, and a
+    dict of thunks would hand every handler the union instead.
+    """
+    match action:
+        case ListOwnChannels():
+            return await dispatch_list_own_channels(client, action)
+        case GetOwnChannel():
+            return await dispatch_get_own_channel(client, action)
+        case ListChannelPosts():
+            return await dispatch_list_channel_posts(client, action)
+        case CheckChannelUsername():
+            return await dispatch_check_channel_username(client, action)
+        case SearchChannels():
+            return await dispatch_search_channels(client, action)
+        case GetSimilarChannels():
+            return await dispatch_get_similar_channels(client, action)
+        case GetLastPostAt():
+            return await dispatch_get_last_post_at(client, action)
+        case _:  # pragma: no cover - discriminated union is exhaustive
+            msg = f"Unsupported read action_type: {action.action_type}"
+            raise ValueError(msg)

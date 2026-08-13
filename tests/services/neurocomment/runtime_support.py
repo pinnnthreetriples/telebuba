@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import pytest
+import pytest_asyncio
 
 from core.config import settings
 from core.db import (
@@ -21,12 +21,17 @@ from schemas.telegram_actions import (
 from services.neurocomment import _inbox_runtime, _runtime, _seams, _state
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable, Iterator
+    from collections.abc import AsyncIterator, Awaitable, Callable
     from pathlib import Path
 
+    import pytest
 
-@pytest.fixture
-def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+
+@pytest_asyncio.fixture
+async def isolate_runtime(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> AsyncIterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
@@ -40,14 +45,19 @@ def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     # leak its Telethon session handle). Tests asserting on actions override this.
     monkeypatch.setattr(_seams, "execute", _ok_action)
 
+    async def _available(_account_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr(_seams, "_account_is_available", _available)
+
     async def _no_backfill(*_args: object, **_kwargs: object) -> list[NewPostEvent]:
         return []
 
     monkeypatch.setattr(_inbox_runtime, "fetch_recent_posts", _no_backfill)
-    _runtime.reset_for_tests()
+    await _runtime.reset_for_tests_async()
     _state.reset_for_tests()
     yield
-    _runtime.reset_for_tests()
+    await _runtime.reset_for_tests_async()
     _state.reset_for_tests()
 
 

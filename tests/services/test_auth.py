@@ -102,8 +102,10 @@ async def test_authenticate_bounds_parallel_argon2_work(
     tasks = [asyncio.create_task(auth_service.authenticate(credentials)) for _ in range(6)]
     for _ in range(100):
         with lock:
-            if active == settings.auth.argon2_max_concurrency:
-                break
+            active_full = active == settings.auth.argon2_max_concurrency
+        refused_count = sum(task.done() for task in tasks)
+        if active_full and refused_count >= len(tasks) - settings.auth.argon2_max_concurrency:
+            break
         await asyncio.sleep(0.005)
     release.set()
     results = await asyncio.gather(*tasks, return_exceptions=True)

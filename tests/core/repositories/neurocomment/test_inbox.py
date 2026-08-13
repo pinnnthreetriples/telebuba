@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import inspect, select
@@ -14,8 +15,12 @@ from core.db import (
     enqueue_post,
     requeue_processing_posts,
 )
+from core.migration_steps_neurocomment import _add_neurocomment_inbox
 from core.repositories.neurocomment._tables import _neurocomment_cursors, _neurocomment_inbox
 from schemas.telegram_actions import NewPostEvent
+
+if TYPE_CHECKING:
+    from tests.core.conftest import _EngineFactory
 
 
 def _event(post_id: int, *, date_unix: int = 1_700_000_000) -> NewPostEvent:
@@ -33,9 +38,39 @@ def test_inbox_migration_creates_both_tables_index_and_stamp() -> None:
     }
     with engine.connect() as connection:
         name = connection.exec_driver_sql(
-            "SELECT name FROM schema_version WHERE version = 52",
+            "SELECT name FROM schema_version WHERE version = 53",
         ).scalar_one()
     assert name == "add_neurocomment_inbox"
+
+
+def test_inbox_migration_backfills_existing_waiting_reply_state(
+    legacy_engine: _EngineFactory,
+) -> None:
+    engine = legacy_engine("pre-inbox-reply.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_comments (channel VARCHAR, post_id INTEGER, "
+            "status VARCHAR, created_at VARCHAR, updated_at VARCHAR)",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_settings (id INTEGER PRIMARY KEY, "
+            "reply_wait_minutes INTEGER NOT NULL)",
+        )
+        connection.exec_driver_sql("INSERT INTO neurocomment_settings VALUES (1, 25)")
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_comments VALUES "
+            "('@chan', 1, 'waiting', '2026-01-01T00:00:00+00:00', "
+            "'2026-01-01T00:00:00+00:00')",
+        )
+
+        _add_neurocomment_inbox(connection)
+        _add_neurocomment_inbox(connection)
+
+        row = connection.exec_driver_sql(
+            "SELECT reply_state, reply_stage, reply_outcome, reply_attempts, "
+            "reply_deadline_at FROM neurocomment_comments",
+        ).one()
+    assert row == ("waiting", "waiting", None, 0, "2026-01-01T00:25:00.000+00:00")
 
 
 @pytest.mark.asyncio

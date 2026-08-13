@@ -13,6 +13,8 @@ from telethon.tl.functions.channels import (
     DeleteChannelRequest,
     UpdateUsernameRequest,
 )
+from telethon.tl.functions.messages import SetChatAvailableReactionsRequest
+from telethon.tl.types import ChatReactionsNone
 
 from core.telegram_client import execute
 from schemas.telegram_actions import CreateChannel, DeleteChannel
@@ -51,8 +53,115 @@ async def test_create_channel_sends_broadcast_request(
     # No username → no availability probe, no username assignment.
     assert not any(isinstance(r, CheckUsernameRequest) for r in captured)
     assert not any(isinstance(r, UpdateUsernameRequest) for r in captured)
+    # Reactions default to Telegram's own default (on) → no extra RPC.
+    assert not any(isinstance(r, SetChatAvailableReactionsRequest) for r in captured)
     # The new channel id rides back as an int64 STRING.
     assert result.channel_id == "4242"
+
+
+@pytest.mark.asyncio
+async def test_create_channel_disables_reactions_after_create(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``reactions_enabled=False`` → chatReactionsNone on the new channel."""
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=4243)])
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-noreact",
+        CreateChannel(title="Silent", reactions_enabled=False),
+    )
+
+    assert result.status == "ok"
+    assert result.channel_id == "4243"
+    reactions = [r for r in captured if isinstance(r, SetChatAvailableReactionsRequest)]
+    assert len(reactions) == 1
+    assert isinstance(reactions[0].available_reactions, ChatReactionsNone)
+    # The create has to exist before its reactions can be set.
+    kinds = [type(r).__name__ for r in captured]
+    assert kinds.index("CreateChannelRequest") < kinds.index("SetChatAvailableReactionsRequest")
+
+
+@pytest.mark.asyncio
+async def test_create_channel_reactions_failure_carries_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused reactions call happens AFTER the create — the id must ride it.
+
+    Same contract as the post-create username assignment: the channel exists,
+    so the operator adopts it (and retries the toggle in the editor) instead of
+    creating a duplicate. Nothing is rolled back.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=4244)])
+            if isinstance(request, SetChatAvailableReactionsRequest):
+                raise errors.ChatAdminRequiredError(request=None)
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-reactfail",
+        CreateChannel(title="Silent", reactions_enabled=False),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "channel_reactions_failed"
+    assert result.channel_id == "4244"
+    assert not any(isinstance(r, DeleteChannelRequest) for r in captured)
+
+
+@pytest.mark.asyncio
+async def test_create_channel_flood_on_reactions_reaches_flood_ladder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FloodWait on the reactions call keeps its dedicated handling.
+
+    Sibling of the username case: a fleet account that has been minting channels
+    hits FLOOD_WAIT exactly here, and wrapping it into ``ChannelGatewayError``
+    would hide the wait-seconds from the flood ladder (both are ``RPCError``
+    subclasses, so without the re-raise they degrade to a hard failure).
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=4245)])
+            if isinstance(request, SetChatAvailableReactionsRequest):
+                raise errors.FloodWaitError(request=None, capture=55)
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-reactflood",
+        CreateChannel(title="Silent", reactions_enabled=False),
+    )
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 55
 
 
 @pytest.mark.asyncio

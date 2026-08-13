@@ -36,6 +36,7 @@ from core.telegram_client._profile import (
     _mark_account_status,
 )
 from core.telegram_client._react import dispatch_react_to_post
+from core.telegram_client._read_comments import _resolve_linked_group_entity
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._util import event_name
 from schemas.telegram_actions import (
@@ -235,12 +236,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             message = await client.send_message(action.chat_id, action.text)
             message_id = int(getattr(message, "id", 0)) or None
         case CommentOnPost():
-            message = await client.send_message(
-                action.channel,
-                action.text,
-                comment_to=action.post_id,
-            )
-            message_id = int(getattr(message, "id", 0)) or None
+            message_id = await _dispatch_comment_on_post(client, action)
         case ClickButton():
             await _dispatch_click_button(client, action)
         case UpdateProfile():
@@ -269,6 +265,38 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             # its own dispatcher raises for anything genuinely unhandled.
             message_id = await _dispatch_profile_media_action(client, action)
     return _DispatchResult(message_id=message_id, log_extra=log_extra)
+
+
+async def _dispatch_comment_on_post(client: TelegramClient, action: CommentOnPost) -> int | None:
+    """Comment under a channel post — at the post, or at one of the comments already there.
+
+    Without ``reply_to`` this is the original one-liner: ``comment_to`` is Telethon sugar
+    that resolves the linked group and derives the reply target by itself.
+
+    With it the sugar has to go. ``comment_to`` takes precedence over ``reply_to`` inside
+    Telethon, so passing both silently posts a top-level comment; the reply is aimed by
+    sending to the linked group directly, ``action.reply_to`` already being an id in that
+    group (``ReadPostComments`` is where the caller got it).
+
+    An unresolvable group FAILS the action — ``ValueError``, the idiom
+    ``_groups._resolve_linked_group`` uses so the executor classifies it like any other
+    refused send — rather than falling back to the top-level comment. ``reply_to`` is only
+    ever set by ``comment_mode='reply'``, whose entire purpose is not to be the first
+    commenter, so that fallback wrote the one comment the operator asked us never to write,
+    and wrote it silently: the log extra below reports ``reply_to`` off the ACTION, and
+    ``neurocomment_reply_to_human`` was already on record from the wait. Both lines then
+    lied the same way, under-counting the "we wrote first" share the wait length is tuned
+    by. Losing a comment in this rare case is cheaper than a metric that hides it.
+    """
+    if action.reply_to is not None:
+        entity = await _resolve_linked_group_entity(client, action.channel)
+        if entity is None:
+            msg = f"No linked discussion group to aim a reply at for {action.channel!r}"
+            raise ValueError(msg)
+        message = await client.send_message(entity, action.text, reply_to=action.reply_to)  # ty: ignore[invalid-argument-type]
+        return int(getattr(message, "id", 0)) or None
+    message = await client.send_message(action.channel, action.text, comment_to=action.post_id)
+    return int(getattr(message, "id", 0)) or None
 
 
 async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> _DispatchResult:
@@ -325,7 +353,13 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
         case PostComment():
             extra = {"chat_id": action.chat_id}
         case CommentOnPost():
-            extra = {"channel": action.channel, "post_id": action.post_id}
+            # ``reply_to`` too: a reply and a top-level comment are the same action_type,
+            # and the log is the only place the difference survives.
+            extra = {
+                "channel": action.channel,
+                "post_id": action.post_id,
+                "reply_to": action.reply_to,
+            }
         case ClickButton():
             extra = {"chat_id": action.chat_id, "message_id": action.message_id}
         case SetOnline():

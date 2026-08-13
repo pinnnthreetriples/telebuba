@@ -42,6 +42,54 @@ test('the pipeline stats include the errors odometer', async () => {
   expect(screen.getByText('ошибок')).toBeInTheDocument();
 });
 
+// Which of the six labels is active is only expressed by its weight, so this probes the
+// class — but scoped to the rail's own `w-[88px]` labels, so it cannot drift onto some
+// other bold blue span on the page.
+function activeStageLabel(container: HTMLElement): string {
+  const labels = [...container.querySelectorAll<HTMLElement>('span[class*="w-[88px]"]')];
+  return labels.find((el) => el.className.includes('font-semibold'))?.textContent ?? '';
+}
+
+// Anti-decorative regression, the same one WarmingBoard.test.tsx keeps for its rail:
+// `activeCell` used to be pinned to «Фильтр» for as long as the engine ran, so the
+// operator watched a pipeline that never moved. It now reads the activity log.
+test('the pipeline rail names the stage the log reports, not a hardcoded one', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: true, active_channels: 1, listener_account_id: 'acc-1' }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: new Date().toISOString(),
+              level: 'INFO',
+              status: 'success',
+              event: 'neurocomment_posted',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  const { container } = renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(activeStageLabel(container)).toBe('Комментарий');
+  });
+});
+
 test('the neuro log localizes a known event code and falls back for an unknown one', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

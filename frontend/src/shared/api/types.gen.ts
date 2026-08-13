@@ -764,6 +764,10 @@ export type ChannelCreateRequest = {
    * Username
    */
   username?: string | null;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean;
 };
 
 /**
@@ -790,6 +794,10 @@ export type ChannelDetailView = {
    * About
    */
   about?: string;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean;
 };
 
 /**
@@ -867,6 +875,10 @@ export type ChannelUpdateRequest = {
    * About
    */
   about?: string | null;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean | null;
 };
 
 /**
@@ -938,7 +950,7 @@ export type CommentRecord = {
   /**
    * Status
    */
-  status: 'claimed' | 'posted' | 'failed';
+  status: 'waiting' | 'claimed' | 'posted' | 'failed';
   /**
    * Comment Text
    */
@@ -1462,6 +1474,10 @@ export type NeurocommentAccountCard = {
    */
   last_comment_text?: string | null;
   /**
+   * Last Comment Channel
+   */
+  last_comment_channel?: string | null;
+  /**
    * Pinned Channels
    */
   pinned_channels?: Array<string>;
@@ -1665,6 +1681,14 @@ export type NeurocommentSettings = {
    */
   min_trust_score: number;
   /**
+   * Comment Mode
+   */
+  comment_mode?: 'first' | 'reply';
+  /**
+   * Reply Wait Minutes
+   */
+  reply_wait_minutes?: number;
+  /**
    * Updated At
    */
   updated_at: string;
@@ -1696,6 +1720,14 @@ export type NeurocommentSettingsUpdate = {
    * Min Trust Score
    */
   min_trust_score: number;
+  /**
+   * Comment Mode
+   */
+  comment_mode?: 'first' | 'reply' | null;
+  /**
+   * Reply Wait Minutes
+   */
+  reply_wait_minutes?: number | null;
 };
 
 /**

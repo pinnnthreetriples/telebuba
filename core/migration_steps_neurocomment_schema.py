@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.migration_steps import _sqlite_columns
+from core.migration_steps import _sqlite_columns, _sqlite_table_exists
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
 
 
 def _add_neurocomment_inbox(connection: Connection) -> None:
-    """Durable post handoff + per-channel high-water cursor."""
+    """Durable post handoff, backfill cursor, and reply-attempt state."""
     connection.exec_driver_sql(
         "CREATE TABLE IF NOT EXISTS neurocomment_inbox ("
         " channel VARCHAR NOT NULL, post_id INTEGER NOT NULL, date_unix INTEGER NOT NULL,"
@@ -37,6 +37,52 @@ def _add_neurocomment_inbox(connection: Connection) -> None:
         " channel VARCHAR PRIMARY KEY, last_post_id INTEGER NOT NULL, updated_at VARCHAR NOT NULL,"
         " backfill_floor_post_id INTEGER, backfill_before_post_id INTEGER,"
         " backfill_success_at VARCHAR, backfill_retry_at VARCHAR)",
+    )
+    _add_durable_reply_columns(connection)
+
+
+def _add_durable_reply_columns(connection: Connection) -> None:
+    """Add the reply-mode crash boundary to databases created before migration #53."""
+    if not _sqlite_table_exists(connection, "neurocomment_comments"):
+        return
+    rows = connection.exec_driver_sql("PRAGMA table_info(neurocomment_comments)").mappings().all()
+    columns = {str(row["name"]) for row in rows}
+    additions = (
+        (
+            "reply_state",
+            "VARCHAR CHECK (reply_state IN ('waiting','reply_processing','terminal'))",
+        ),
+        (
+            "reply_stage",
+            "VARCHAR CHECK (reply_stage IN ('waiting','pre_send','dispatching','dispatched'))",
+        ),
+        (
+            "reply_outcome",
+            "VARCHAR CHECK (reply_outcome IN ('retryable','terminal','ambiguous'))",
+        ),
+        ("reply_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ("reply_deadline_at", "VARCHAR"),
+    )
+    for name, definition in additions:
+        if name not in columns:
+            connection.exec_driver_sql(
+                f"ALTER TABLE neurocomment_comments ADD COLUMN {name} {definition}",
+            )
+    # Main's reply mode existed just before this unreleased migration. Preserve any row
+    # already parked there and freeze the deadline it used to derive on every sweep.
+    wait_minutes = 10
+    if _sqlite_table_exists(connection, "neurocomment_settings"):
+        saved = connection.exec_driver_sql(
+            "SELECT reply_wait_minutes FROM neurocomment_settings WHERE id = 1",
+        ).scalar_one_or_none()
+        if saved is not None:
+            wait_minutes = int(saved)
+    connection.exec_driver_sql(
+        "UPDATE neurocomment_comments SET reply_state = 'waiting', reply_stage = 'waiting', "
+        "reply_deadline_at = COALESCE(reply_deadline_at, "
+        "strftime('%Y-%m-%dT%H:%M:%f+00:00', created_at, ?)) "
+        "WHERE status = 'waiting' AND reply_state IS NULL",
+        (f"+{wait_minutes} minutes",),
     )
 
 

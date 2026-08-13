@@ -166,14 +166,20 @@ async def _retry(event: NewPostEvent) -> None:
 
 
 async def _run_one(event: NewPostEvent, generation: int) -> None:
-    from services.neurocomment import _runtime  # noqa: PLC0415
+    from services.neurocomment import _runtime, _seams  # noqa: PLC0415
 
     token = _runtime._WORKER_GENERATION.set(generation)  # noqa: SLF001
     try:
         if generation != _runtime._RUNTIME_GENERATION:  # noqa: SLF001
             await _retry(event)
             return
-        outcome = await _runtime._handle_inbox_post(event)  # noqa: SLF001
+        with _seams.generation_scope(
+            lambda: (
+                generation == _runtime._RUNTIME_GENERATION  # noqa: SLF001
+                and _runtime._RUNTIME_ACCOUNT_ID is not None  # noqa: SLF001
+            )
+        ):
+            outcome = await _runtime._handle_inbox_post(event)  # noqa: SLF001
         if outcome == PipelineOutcome.RETRYABLE:
             await _retry(event)
         else:
@@ -254,13 +260,26 @@ async def _fetch_backfill_page(
     listener_account_id: str,
     channel: str,
     before: int | None,
+    generation: int,
+    owner_generation: int,
 ) -> list[NewPostEvent]:
     kwargs: dict[str, int] = {
         "limit": settings.neurocomment.post_backfill_limit_per_channel,
     }
     if before is not None:
         kwargs["before_post_id"] = before
-    return await fetch_recent_posts(listener_account_id, channel, **kwargs)
+    from services.neurocomment import _seams  # noqa: PLC0415
+    from services.warming import account_lock  # noqa: PLC0415
+
+    async with account_lock(listener_account_id):
+        if not _backfill_is_current(listener_account_id, generation, owner_generation):
+            raise _seams.NeurocommentLeaseRevokedError
+        if not await _seams._account_is_available(listener_account_id):  # noqa: SLF001
+            raise _seams.NeurocommentAccountUnavailableError(listener_account_id)
+        posts = await fetch_recent_posts(listener_account_id, channel, **kwargs)
+        if not _backfill_is_current(listener_account_id, generation, owner_generation):
+            raise _seams.NeurocommentLeaseRevokedError
+        return posts
 
 
 async def _enqueue_backfill_page(
@@ -305,7 +324,13 @@ async def _backfill_channel(
         for _page in range(settings.neurocomment.post_backfill_max_pages_per_channel):
             if not _backfill_is_current(listener_account_id, generation, owner_generation):
                 return None
-            posts = await _fetch_backfill_page(listener_account_id, channel, before)
+            posts = await _fetch_backfill_page(
+                listener_account_id,
+                channel,
+                before,
+                generation,
+                owner_generation,
+            )
             if not _backfill_is_current(listener_account_id, generation, owner_generation):
                 return None
             if not posts:

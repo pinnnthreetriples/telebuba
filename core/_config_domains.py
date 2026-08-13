@@ -1,6 +1,6 @@
 """Overflow settings domains — split from ``core.config`` for the file-size budget.
 
-Holds trust and neurocomment settings and re-exports external-provider settings.
+Holds the larger self-contained nested namespaces (telemetr, trust, neurocomment).
 They are re-exported from ``core.config`` so existing
 ``from core.config import WarmingSettings`` call sites keep working unchanged;
 the ``Settings`` aggregate and the ``settings`` instance stay in ``core.config``.
@@ -17,12 +17,34 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from core import _config_providers
+# The three LLM gateways moved to a sibling module for the same budget, the way
+# ``WarmingSettings`` did; re-exported so ``core.config`` (and any other importer of
+# this module) keeps finding them here.
+from core._config_llm import (  # noqa: F401 - re-export for existing call sites
+    DeepseekSettings,
+    GeminiSettings,
+    OpenAISettings,
+)
 
-DeepseekSettings = _config_providers.DeepseekSettings
-GeminiSettings = _config_providers.GeminiSettings
-OpenAISettings = _config_providers.OpenAISettings
-TelemetrSettings = _config_providers.TelemetrSettings
+
+class TelemetrSettings(BaseSettings):
+    """Telemetr.io channel catalogue — the external half of channel discovery.
+
+    Supplies keyword/country/language/subscriber filters and subscriber counts that
+    Telegram's own search does not return. The key is operator-set in the DB (falls
+    back to ``TELEMETR__API_KEY`` in .env); an empty key means the source is simply
+    skipped, never an error.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="TELEMETR__", extra="ignore")
+
+    api_key: str = Field(default="", repr=False)
+    base_url: str = Field(default="https://api.telemetr.io/v1")
+    timeout_seconds: float = Field(default=20.0, ge=1.0)
+    # Rows requested per keyword (server max is 100).
+    search_limit: int = Field(default=30, ge=1, le=100)
+    max_retries: int = Field(default=1, ge=0, le=5)
+    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
 
 
 class TrustSettings(BaseSettings):
@@ -102,6 +124,12 @@ class NeurocommentSettings(BaseSettings):
     # Minimum Trust Score an account needs to be picked for commenting (0 = no
     # gate). Operator-tunable via the neurocomment settings store + Settings UI.
     min_trust_score: int = Field(default=0, ge=0, le=100)
+    # Which message the fleet answers — see ``schemas.CommentMode``. ``first`` is the
+    # only behaviour that ever shipped, so it is the default here too: a deploy of the
+    # reply mode changes nothing at all until an operator flips the toggle.
+    comment_mode: Literal["first", "reply"] = Field(default="first")
+    # ``reply`` mode's patience for a human comment under a fresh post.
+    reply_wait_minutes: int = Field(default=10, ge=1, le=120)
     # Comment length guardrail (words).
     comment_max_words: int = Field(default=30, ge=1)
     # Floor on the same guardrail (1 = off). Defence in depth behind the gateway's

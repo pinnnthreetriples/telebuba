@@ -463,6 +463,7 @@ export function NeurocommentPage() {
             running={running}
             canStart={Boolean(listenerId)}
             stats={stats}
+            events={logLines}
             onToggle={toggleRuntime}
           />
 

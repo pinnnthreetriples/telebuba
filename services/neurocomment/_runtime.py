@@ -157,6 +157,10 @@ async def neurocomment_lifecycle() -> AsyncIterator[None]:
 # (re)start and cancel it. None when the runtime is stopped or the sweep disabled.
 _SWEEP_TASK: asyncio.Task[None] | None = None
 _SWEEP_STOPPING_TASK: asyncio.Task[None] | None = None
+# Owner that asked for a sweep while a cancellation-resistant predecessor was
+# still retiring.  ``_stop_sweep`` deliberately clears this: a genuine stop
+# (empty watch set, warming listener, operator Stop) is not a restart request.
+_SWEEP_RESTART_OWNER: tuple[str, int] | None = None
 
 # The single in-flight campaign-onboarding task spawned by Start. Tracked so a rapid
 # second Start does not spawn a duplicate, and so shutdown cancels it cleanly. None
@@ -235,15 +239,31 @@ async def _runtime_log_event(
 
 def _ensure_sweep_running() -> None:
     """Start the periodic deletion sweep if enabled and not already running."""
-    global _SWEEP_TASK, _SWEEP_STOPPING_TASK  # noqa: PLW0603
+    global _SWEEP_RESTART_OWNER, _SWEEP_TASK, _SWEEP_STOPPING_TASK  # noqa: PLW0603
     if settings.neurocomment.deletion_sweep_interval_seconds <= 0:
         return  # sweep disabled by config
+    account_id = _RUNTIME_ACCOUNT_ID
+    generation = _RUNTIME_GENERATION
+    if account_id is None:
+        return
     if _SWEEP_STOPPING_TASK is not None and not _SWEEP_STOPPING_TASK.done():
+        # Coalesce any number of Start/reconcile calls into one owner-scoped
+        # replacement.  The predecessor's done callback consumes this marker.
+        _SWEEP_RESTART_OWNER = (account_id, generation)
         return
     _SWEEP_STOPPING_TASK = None
+    _SWEEP_RESTART_OWNER = None
     if _SWEEP_TASK is not None and not _SWEEP_TASK.done():
         return
-    _SWEEP_TASK = asyncio.create_task(_sweep_loop())
+    _SWEEP_TASK = asyncio.create_task(_run_owned_sweep(account_id, generation))
+
+
+async def _run_owned_sweep(account_id: str, generation: int) -> None:
+    """Run the sweep with a lease inherited by every Telegram/LLM seam it calls."""
+    from services.neurocomment import _seams  # noqa: PLC0415
+
+    with _seams.generation_scope(lambda: _runtime_owner_is_current(account_id, generation)):
+        await _sweep_loop()
 
 
 async def _cancel_bounded(*tasks: asyncio.Task[None] | None) -> set[asyncio.Task[None]]:
@@ -287,7 +307,10 @@ async def _cancel_bounded(*tasks: asyncio.Task[None] | None) -> set[asyncio.Task
 
 async def _stop_sweep() -> None:
     """Cancel the periodic deletion sweep (bounded wait), if running."""
-    global _SWEEP_TASK, _SWEEP_STOPPING_TASK  # noqa: PLW0603
+    global _SWEEP_RESTART_OWNER, _SWEEP_TASK, _SWEEP_STOPPING_TASK  # noqa: PLW0603
+    # Stop is authoritative.  A later Start/reconcile may arm a replacement by
+    # calling ``_ensure_sweep_running`` while the old task is still retiring.
+    _SWEEP_RESTART_OWNER = None
     task = _SWEEP_TASK
     if task is None:
         return
@@ -308,9 +331,16 @@ async def _stop_sweep() -> None:
     _retain_until_done(task)
 
     def _clear(completed: asyncio.Task[None]) -> None:
-        global _SWEEP_STOPPING_TASK  # noqa: PLW0603
+        global _SWEEP_RESTART_OWNER, _SWEEP_STOPPING_TASK  # noqa: PLW0603
         if _SWEEP_STOPPING_TASK is completed:
             _SWEEP_STOPPING_TASK = None
+            requested = _SWEEP_RESTART_OWNER
+            _SWEEP_RESTART_OWNER = None
+            # A Start/reconcile may have arrived while this stubborn task was still
+            # retiring. Recover exactly that owner once quiescent. A self-stop never
+            # arms the marker, and an owner switch makes a stale request a no-op.
+            if requested == (_RUNTIME_ACCOUNT_ID, _RUNTIME_GENERATION):
+                _ensure_sweep_running()
 
     task.add_done_callback(_clear)
 
@@ -362,6 +392,7 @@ from services.neurocomment._runtime_operations import (  # noqa: E402, F401 - co
 )
 
 reset_for_tests = _test_reset.reset_for_tests
+reset_for_tests_async = _test_reset.reset_for_tests_async
 
 # The deletion sweep's work lives in ``_sweep`` (file-size cap); the task handle and
 # its start/stop stay above (this module's lifecycle owns reconcile/shutdown). Re-

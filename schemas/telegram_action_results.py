@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from schemas.challenge import BotChallengeMessage  # noqa: TC001
+from schemas.telegram_actions_comments import PostMediaKind  # noqa: TC001
 
 
 class LinkedDiscussionGroupResult(BaseModel):
@@ -104,14 +105,6 @@ class PostImageResult(BaseModel):
 
     image_b64: str | None = None
     reason: Literal["unavailable", "too_large"] | None = None
-
-
-# What the post carries besides its text, classified by what a comment generator could
-# actually make a comment OUT of — not by Telegram's media union. ``photo`` is the only
-# kind the vision path can read; ``album`` is called out separately because a caption-less
-# album item is not a missed opportunity but a duplicate of its own album's head (every
-# item fires its own event, and every comment on them lands in the same discussion thread).
-PostMediaKind = Literal["none", "photo", "album", "other"]
 
 
 class NewPostEvent(BaseModel):

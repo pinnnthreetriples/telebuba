@@ -26,6 +26,7 @@ from core.db import (
     list_delivered_comments_since,
     list_linked_groups,
     list_posted_comments_since,
+    list_waiting_comments,
 )
 from schemas.neurocomment_board import (
     AccountChannelReadiness,
@@ -50,6 +51,7 @@ class _AccountSignals(NamedTuple):
 
     account: AccountRead
     pinned_channels: list[str]  # channel subset, or empty when the account serves all
+    parked: list[CommentRecord]  # posts held for a human comment — quota is already spent
 
 
 class _ChannelFlags(NamedTuple):
@@ -87,12 +89,19 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     now = datetime.now(UTC)
     day_ago = (now - timedelta(days=1)).isoformat()
     posted = (await list_posted_comments_since(campaign_id, day_ago)).comments
+    # The quota spends a slot the moment a post is PARKED, not when it is published, so a
+    # card counting only ``posted`` against the hourly cap reported free capacity while
+    # selection was already answering ``no_account_available`` — the board contradicting the
+    # engine. One fleet-wide read (nothing else revisits parked rows, so the reader is
+    # unscoped), narrowed to this campaign here and to the hour window per card.
+    parked = [c for c in (await list_waiting_comments()).comments if c.campaign_id == campaign_id]
 
     cards = [
         _build_card(
             signals=_AccountSignals(
                 account=accounts[account_id],
                 pinned_channels=pins.get(account_id, []),
+                parked=[c for c in parked if c.account_id == account_id],
             ),
             readiness=[r for r in readiness if r.account_id == account_id],
             posted=[c for c in posted if c.account_id == account_id],
@@ -147,9 +156,12 @@ def _build_card(
     max_comments_per_hour: int,
     now: datetime,
 ) -> NeurocommentAccountCard:
-    account, pinned_channels = signals
+    account, pinned_channels, parked = signals
     hour_ago = (now - timedelta(hours=1)).isoformat()
-    last_hour = sum(1 for c in posted if c.created_at >= hour_ago)
+    # Parked posts count here and NOWHERE else on the card: this is the only number read
+    # against the engine's hourly cap, while ``comments_today`` / ``deleted_today`` answer
+    # "what did this account publish", which a post still waiting has not done.
+    last_hour = sum(1 for c in (*posted, *parked) if c.created_at >= hour_ago)
     latest = max(posted, key=lambda c: c.created_at, default=None)
     return NeurocommentAccountCard(
         account_id=account.account_id,
@@ -160,6 +172,9 @@ def _build_card(
         deleted_today=sum(1 for c in posted if c.deleted_at),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
+        # Same row as the text above, so the board's channel and comment columns can
+        # never name two different events.
+        last_comment_channel=latest.channel if latest else None,
         pinned_channels=pinned_channels,
         readiness=[
             AccountChannelReadiness(

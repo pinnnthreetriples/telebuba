@@ -34,6 +34,7 @@ const DETAIL = {
   username: 'mychan',
   participants_count: 42,
   about: 'Описание канала',
+  reactions_enabled: true,
 };
 
 function routeApi(detail: Record<string, unknown> = DETAIL) {
@@ -115,6 +116,78 @@ test('editing only the about sends only the about', async () => {
     unknown
   >;
   expect(body).toEqual({ about: 'Новое описание' });
+});
+
+test('the reactions checkbox reflects the live state and sends only that field', async () => {
+  routeApi();
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+  const checkbox = screen.getByRole('checkbox', { name: 'Отключить реакции' });
+  // Reactions are on in the detail → the "disable" box starts unchecked.
+  expect(checkbox).toHaveAttribute('aria-checked', 'false');
+
+  await userEvent.click(checkbox);
+  expect(checkbox).toHaveAttribute('aria-checked', 'true');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ reactions_enabled: false });
+});
+
+test('a channel with reactions already off starts checked and can turn them back on', async () => {
+  routeApi({ ...DETAIL, reactions_enabled: false });
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+  const checkbox = screen.getByRole('checkbox', { name: 'Отключить реакции' });
+  expect(checkbox).toHaveAttribute('aria-checked', 'true');
+  // Back to the live state → nothing to save.
+  expect(screen.getByText('Сохранить')).toBeDisabled();
+
+  await userEvent.click(checkbox);
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ reactions_enabled: true });
+});
+
+// `reactions_enabled` is optional in the generated client (the backend defaults
+// it, so OpenAPI marks it not-required), which a version-skewed deploy can
+// actually deliver. Prefill and dirty-check must read an absent value the SAME
+// way — deriving it twice made the box check itself while Save stayed dead.
+test('a detail without reactions_enabled still lets the toggle arm Save', async () => {
+  const withoutField: Record<string, unknown> = { ...DETAIL };
+  delete withoutField.reactions_enabled;
+  routeApi(withoutField);
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Мой канал');
+  const checkbox = screen.getByRole('checkbox', { name: 'Отключить реакции' });
+  expect(checkbox).toHaveAttribute('aria-checked', 'false');
+
+  await userEvent.click(checkbox);
+  expect(checkbox).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByText('Сохранить')).toBeEnabled();
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ reactions_enabled: false });
 });
 
 test('an about-only edit stays saveable when the title prefill came back blank', async () => {

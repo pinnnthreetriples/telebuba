@@ -146,6 +146,13 @@ from core.repositories.neurocomment._settings import (
     load_neurocomment_settings,
     save_neurocomment_settings,
 )
+from core.repositories.neurocomment._waiting import (
+    list_waiting_comments,
+    mark_reply_stage,
+    park_comment,
+    promote_waiting_to_claimed,
+    set_comment_dispatch_stage,
+)
 
 __all__ = [
     "ChannelAlreadyAssignedError",
@@ -208,6 +215,7 @@ __all__ = [
     "list_posted_comments_page",
     "list_posted_comments_since",
     "list_silent_watch_channels",
+    "list_waiting_comments",
     "load_active_cooldowns",
     "load_neurocomment_settings",
     "lookup_cached_decision",
@@ -220,10 +228,13 @@ __all__ = [
     "mark_inbox_stage",
     "mark_pair_banned",
     "mark_rejoin_gave_up",
+    "mark_reply_stage",
     "mark_watch_channel_join_lost",
     "next_pending_attempt_unix",
+    "park_comment",
     "persist_cooldown",
     "prepare_backfill",
+    "promote_waiting_to_claimed",
     "purge_neurocomment_history_older_than",
     "reclaim_stale_claims",
     "record_comment_msg_id",
@@ -239,6 +250,7 @@ __all__ = [
     "save_neurocomment_settings",
     "set_campaign_account_channels",
     "set_campaign_status",
+    "set_comment_dispatch_stage",
     "set_listener_account_id",
     "set_listener_running",
     "stamp_captcha_retry",

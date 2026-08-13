@@ -22,8 +22,13 @@ from telethon.tl.functions.channels import (
     EditTitleRequest,
     UpdateUsernameRequest,
 )
-from telethon.tl.functions.messages import EditChatAboutRequest
+from telethon.tl.functions.messages import (
+    EditChatAboutRequest,
+    SetChatAvailableReactionsRequest,
+)
 from telethon.tl.types import (
+    ChatReactionsAll,
+    ChatReactionsNone,
     DocumentAttributeVideo,
     InputChannelEmpty,
     InputChatUploadedPhoto,
@@ -189,7 +194,43 @@ async def _create_channel(client: TelegramClient, action: CreateChannel) -> _Dis
             mapped = _map_telethon_error(exc)
             code = mapped.code if mapped is not None else "channel_username_assign_failed"
             raise ChannelGatewayError(code, channel_id=new_id) from exc
+    if not action.reactions_enabled:
+        # Same post-create contract as the username step: the channel exists, so
+        # a refusal carries its id (the operator turns reactions off in the
+        # editor) instead of orphaning it behind a bare failure.
+        try:
+            await _apply_reactions(client, entity, enabled=False)
+        except (errors.FloodWaitError, errors.PeerFloodError):
+            raise
+        except errors.RPCError as exc:
+            code = "channel_reactions_failed"
+            raise ChannelGatewayError(code, channel_id=new_id) from exc
     return _DispatchResult(channel_id=new_id)
+
+
+async def _apply_reactions(client: TelegramClient, entity: object, *, enabled: bool) -> None:
+    """Allow every standard reaction, or none at all.
+
+    Telegram has no "reactions" flag on create/edit — availability is its own
+    RPC. Enabling means ``chatReactionsAll`` (standard emoji, custom ones stay
+    premium-gated); disabling means ``chatReactionsNone``. Re-applying the
+    current value answers ``ChatNotModified``, which is an idempotent no-op here
+    for the same reason as title/about.
+
+    ``paid_enabled`` is a SEPARATE switch from ``available_reactions``, and it is
+    omitted (= leave unchanged) on the way in: "off" has to mean off, so paid
+    star reactions go down with the rest, but turning reactions back on must not
+    silently enable a monetisation feature the operator never asked for.
+    """
+    available = ChatReactionsAll() if enabled else ChatReactionsNone()
+    with suppress(errors.ChatNotModifiedError):
+        await client(
+            SetChatAvailableReactionsRequest(
+                peer=entity,  # ty: ignore[invalid-argument-type]
+                available_reactions=available,
+                paid_enabled=None if enabled else False,
+            ),
+        )
 
 
 def _created_channel(result: object) -> object:
@@ -217,6 +258,8 @@ async def _edit_channel(client: TelegramClient, action: EditChannel) -> None:
     if action.about is not None:
         with suppress(errors.ChatAboutNotModifiedError):
             await client(EditChatAboutRequest(peer=entity, about=action.about))  # ty: ignore[invalid-argument-type]
+    if action.reactions_enabled is not None:
+        await _apply_reactions(client, entity, enabled=action.reactions_enabled)
 
 
 async def _set_channel_photo(client: TelegramClient, action: SetChannelPhoto) -> None:
@@ -301,12 +344,17 @@ def _channel_log_extra(action: TelegramAction) -> dict[str, object]:
     extra: dict[str, object]
     match action:
         case CreateChannel():
-            extra = {"title": action.title, "has_username": action.username is not None}
+            extra = {
+                "title": action.title,
+                "has_username": action.username is not None,
+                "reactions_enabled": action.reactions_enabled,
+            }
         case EditChannel():
             extra = {
                 "channel_id": action.channel_id,
                 "has_title": action.title is not None,
                 "has_about": action.about is not None,
+                "reactions_enabled": action.reactions_enabled,
             }
         case SetChannelPhoto():
             extra = {"channel_id": action.channel_id, "filename": action.filename}

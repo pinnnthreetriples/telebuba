@@ -51,6 +51,7 @@ from core.telegram_client._pool import (
     removing_client,
     shutdown_telegram_pool,
 )
+from core.telegram_client._react import invalidate_reaction_whitelist_cache
 from core.telegram_client._read import (
     TelegramAccountNotFoundError,
     TelegramReadError,
@@ -76,6 +77,7 @@ __all__ = [
     "execute_read_many",
     "fetch_recent_posts",
     "get_client",
+    "invalidate_reaction_whitelist_cache",
     "log_out_session",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",

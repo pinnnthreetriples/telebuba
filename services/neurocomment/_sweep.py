@@ -34,9 +34,11 @@ from services.neurocomment import (
     _channel_pause,
     _inactive,
     _rejoin,
+    _reply_wait,
     _sweep_read,
 )
 from services.neurocomment._pins import serving_accounts
+from services.neurocomment._seams import NeurocommentLeaseRevokedError
 
 if TYPE_CHECKING:
     from schemas.neurocomment import CommentRecord, NeurocommentReadiness
@@ -107,6 +109,8 @@ async def _sweep_loop() -> None:
         ):
             try:
                 await run_pass()
+            except NeurocommentLeaseRevokedError:
+                return
             except Exception as exc:  # a pass fault must never kill the loop.
                 logger.exception("neurocomment sweep pass %s failed", name)
                 await log_event(
@@ -350,7 +354,15 @@ async def _reclaim_stale_claims(now: datetime) -> None:
 
 
 async def _sweep_once() -> None:
-    """One deletion pass: per active channel, stamp the comments that have vanished."""
+    """One deletion pass: per active channel, stamp the comments that have vanished.
+
+    Then the ``reply``-mode wait, which rides this pass rather than the loop's own list
+    because it is the same shape of work — revisit rows nobody else will come back to. There
+    is no pass at startup (only the stale-claim reclaim runs there, and this loop sleeps a
+    full interval before its first tick), so a restart mid-wait is survived by the queue
+    being the ``waiting`` rows themselves: the first tick finds every parked post, deadline
+    already gone by or not.
+    """
     now = datetime.now(UTC)
     since_iso = (
         now - timedelta(hours=settings.neurocomment.deletion_sweep_lookback_hours)
@@ -384,6 +396,7 @@ async def _sweep_once() -> None:
                     "neurocomment_sweep_channel_failed",
                     extra={"channel": channel, "error_type": type(exc).__name__},
                 )
+    await _reply_wait.review_waiting_posts(now)
 
 
 async def _sweep_channel(channel: str, comments: list[CommentRecord]) -> None:

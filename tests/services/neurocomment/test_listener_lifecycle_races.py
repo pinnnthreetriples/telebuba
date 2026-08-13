@@ -290,6 +290,7 @@ async def test_stubborn_stopping_sweep_blocks_replacement_until_done(
                 cancelled.set()
 
     monkeypatch.setattr(_runtime, "_sweep_loop", _stubborn_sweep)
+    _runtime._activate_runtime_owner("listener-1")
     _runtime._ensure_sweep_running()
     old = _runtime._SWEEP_TASK
     assert old is not None
@@ -307,11 +308,12 @@ async def test_stubborn_stopping_sweep_blocks_replacement_until_done(
     release.set()
     await old
     await asyncio.sleep(0)
-    assert _runtime._SWEEP_TASK is None
+    replacement = _runtime._SWEEP_TASK
+    assert replacement is not None
     assert _runtime._SWEEP_STOPPING_TASK is None
-    _runtime._ensure_sweep_running()
     await asyncio.sleep(0)
     assert starts == 2
+    await replacement
 
 
 @pytest.mark.asyncio
