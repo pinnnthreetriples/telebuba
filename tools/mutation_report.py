@@ -81,14 +81,21 @@ def _overlay_targeted_repairs(
     repair_results: list[Result],
 ) -> tuple[list[Result], list[dict[str, str]]]:
     repair_by_name = _validated_repair_index(first_results, repair_results)
-    requested_names = {item.name for item in first_results if item.status in INCOMPLETE_STATUSES}
     repairs: list[dict[str, str]] = []
     effective: list[Result] = []
     for first in first_results:
-        if first.name not in requested_names:
+        repair = repair_by_name[first.name]
+        required = first.status in INCOMPLETE_STATUSES
+        # Nightly also rechecks first-attempt timeout candidates serially. A
+        # targeted mutmut run resets every non-selected identity to
+        # ``not checked``, so a completed timeout repair is self-identifying:
+        # only explicitly selected timeout rows can have a final status here.
+        optional_timeout_repair = (
+            first.status == "timeout" and repair.status not in INCOMPLETE_STATUSES
+        )
+        if not required and not optional_timeout_repair:
             effective.append(first)
             continue
-        repair = repair_by_name[first.name]
         if repair.status in INCOMPLETE_STATUSES:
             raise ReportError(
                 f"targeted repair remains incomplete: {repair.name}: {repair.status}",

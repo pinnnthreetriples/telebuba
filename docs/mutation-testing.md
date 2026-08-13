@@ -11,11 +11,11 @@ preserves every available partial snapshot and diagnostic log.
 
 | Result | Count |
 |---|---:|
-| Total | 13,879 |
-| Killed | 11,744 |
-| Survived | 2,124 |
-| Timeout | 11 |
-| Score | 84.6170% |
+| Total | 13,949 |
+| Killed | 11,813 |
+| Survived | 2,129 |
+| Timeout | 7 |
+| Score | 84.6871% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -24,14 +24,17 @@ cover additional production paths.
 The current calibration uses CPython 3.13.14, mutmut 3.6.0, the deterministic
 `mutation` Hypothesis profile, four mutmut workers, `PYTHONHASHSEED=0`, and
 `TZ=UTC`. Its catalogue digest is
-`7a474a66800c97643e6213b73c109c64a25404b721ef3615de768657a76b0c34`;
+`c96326469752080f50b68c9520c5d3e638894fef1b0310cbe3c6fde386063237`;
 the digest binds mutant identities to the exact Python source paths and bytes,
 so a semantic source change cannot silently reuse a reviewed timeout identity.
-A complete clean local sweep measured the checked-in 11,744/2,124/11 floor.
+A complete clean local sweep measured the checked-in 11,813/2,129/7 floor.
 GitHub Nightly is the clean-run confirmation.
 Nightly preserves separate first-attempt and repair snapshots when repair is
 needed because mutmut 3.6 resets non-selected statuses during a targeted run
 and omits `not_checked` from `export-cicd-stats`.
+It also rechecks first-attempt timeout identities that are not in the reviewed
+baseline with one worker. Only that completed serial status is overlaid; a
+reviewed timeout or a non-selected row keeps the official first-attempt status.
 
 ## Classification policy
 
@@ -106,10 +109,10 @@ and the Nightly has no timeout. A test asserting the exact number of random
 draws would still be implementation-coupled score padding.
 
 The current-main catalogue produced eleven timeout candidates in the official
-four-worker calibration. A second run executed those candidates serially: seven
-reproduced as timeouts, three were killed, and one survived. The baseline keeps
-all eleven first-attempt identities because Nightly gates the official parallel
-measurement; the serial result is an audit, not a replacement measurement.
+four-worker calibration. Seven were already serially proven timeouts. The four
+new `_reply_and_post` candidates were all killed by the automatic one-worker
+repair, so only the seven reproducible identities remain in the effective
+baseline. Parallel-only timeout noise stays in the raw first-attempt artifact.
 
 | Current mutant(s) | Result | Rationale |
 |---|---|---|
@@ -118,7 +121,7 @@ measurement; the serial result is an audit, not a replacement measurement.
 | `services.neurocomment._generate.x__sleep_beating__mutmut_2`, `__mutmut_16`, `__mutmut_17` | Reviewed timeout | The mutations prevent the heartbeat countdown from reaching a negative/zero terminal state and reproduce serially as unbounded loops. |
 | `services.warming._chat.x__maybe_inter_account_chat__mutmut_10` | Reviewed timeout | Marking `None` instead of the selected inbox row prevents the oldest-unreplied query from advancing and reproduces serially. |
 | `services.warming._graduation.x__stop_warming_locked__mutmut_9` | Reviewed timeout | Removing the configured cancellation deadline makes a cancellation-suppressing task wait without a bound and reproduces serially. |
-| `services.neurocomment._join.x__mark_lost_channels__mutmut_10` through `__mutmut_13` | Parallel-only reviewed timeout | The official four-worker sweep timed out. In the serial audit the first three were killed and the fourth survived, so these identities are retained only to make the official Nightly measurement reproducible, not classified as proven infinite loops. |
+| `services.neurocomment._reply_wait.x__reply_and_post__mutmut_45` through `__mutmut_48` | Repaired parallel-only timeout | The official four-worker sweep timed out; the automatic serial repair killed all four, and the effective report overlays those completed results. |
 
 ## Confirmed production bugs found by the audit
 

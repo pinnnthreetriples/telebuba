@@ -11,8 +11,11 @@ from telethon.tl.functions.channels import (
     EditPhotoRequest,
     EditTitleRequest,
 )
-from telethon.tl.functions.messages import EditChatAboutRequest
-from telethon.tl.types import InputChatUploadedPhoto
+from telethon.tl.functions.messages import (
+    EditChatAboutRequest,
+    SetChatAvailableReactionsRequest,
+)
+from telethon.tl.types import ChatReactionsAll, ChatReactionsNone, InputChatUploadedPhoto
 
 from core.telegram_client import execute
 from schemas.telegram_actions import DeleteChannel, EditChannel, SetChannelPhoto
@@ -70,6 +73,66 @@ async def test_edit_channel_title_only_skips_about(
     assert result.status == "ok"
     assert any(isinstance(r, EditTitleRequest) for r in client.captured)
     assert not any(isinstance(r, EditChatAboutRequest) for r in client.captured)
+    # Untouched reactions (None) send nothing.
+    assert not any(isinstance(r, SetChatAvailableReactionsRequest) for r in client.captured)
+
+
+@pytest.mark.parametrize(
+    ("enabled", "expected"),
+    [(False, ChatReactionsNone), (True, ChatReactionsAll)],
+)
+@pytest.mark.asyncio
+async def test_edit_channel_sets_reactions_availability(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    enabled: bool,
+    expected: type,
+) -> None:
+    """Off → chatReactionsNone; back on → chatReactionsAll (standard emoji)."""
+    client = _ChannelClient()
+    _patch_client(monkeypatch, client)
+
+    result = await execute(
+        "acc-edit-react",
+        EditChannel(channel_id=42, reactions_enabled=enabled),
+    )
+
+    assert result.status == "ok"
+    reactions = [r for r in client.captured if isinstance(r, SetChatAvailableReactionsRequest)]
+    assert len(reactions) == 1
+    assert isinstance(reactions[0].available_reactions, expected)
+    # Off takes paid star reactions with it; on leaves that switch untouched
+    # rather than enabling monetisation nobody asked for.
+    assert reactions[0].paid_enabled is (None if enabled else False)
+    # Reactions-only edit: no title/about writes.
+    assert not any(isinstance(r, EditTitleRequest) for r in client.captured)
+    assert not any(isinstance(r, EditChatAboutRequest) for r in client.captured)
+
+
+@pytest.mark.asyncio
+async def test_edit_channel_reactions_not_modified_is_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-applying the current availability answers NotModified — an ok no-op."""
+
+    class FakeClient(_ChannelClient):
+        async def __call__(self, request: object) -> object:
+            self.captured.append(request)
+            if isinstance(request, SetChatAvailableReactionsRequest):
+                raise errors.ChatNotModifiedError(request=None)
+            return MagicMock()
+
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+
+    result = await execute(
+        "acc-edit-react-same", EditChannel(channel_id=42, reactions_enabled=False)
+    )
+
+    assert result.status == "ok"
+    # Attempted, not skipped — an "ok" alone would also hold with the whole
+    # reactions branch deleted from _edit_channel.
+    assert any(isinstance(r, SetChatAvailableReactionsRequest) for r in client.captured)
 
 
 @pytest.mark.asyncio

@@ -20,6 +20,7 @@ import {
   PHOTO_MAX_BYTES,
   PHOTO_SUFFIXES,
 } from './_channelsShared';
+import { CheckRow } from './_CheckRow';
 import { ChannelPostsPanel } from './ChannelPostsPanel';
 
 // Channel editor (opened above the profile modal, z=75): title/about edit
@@ -46,14 +47,26 @@ export function ChannelEditModal({
   const photoInput = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState<string | null>(null);
   const [about, setAbout] = useState<string | null>(null);
+  const [reactionsOff, setReactionsOff] = useState<boolean | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const shownTitle = title ?? detail.data?.title ?? '';
   const shownAbout = about ?? detail.data?.about ?? '';
+  // ONE predicate for "the live channel has reactions off", used by both the
+  // prefill and the dirty check. Deriving it twice let them disagree: the field
+  // is optional in the generated client (the backend defaults it, so OpenAPI
+  // marks it not-required), and for an absent value `=== false` said "on" while
+  // `!value` said "off" — the box checked itself and Save stayed dead forever.
+  const liveReactionsOff = detail.data?.reactions_enabled === false;
+  // Same "null until touched" rule as the text fields: the live detail shows
+  // through, phrased as the create dialog phrases it (checked = reactions off).
+  const shownReactionsOff = reactionsOff ?? liveReactionsOff;
   const titleChanged = detail.data != null && title !== null && title.trim() !== detail.data.title;
   const aboutChanged =
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
-  const dirty = titleChanged || aboutChanged;
+  const reactionsChanged =
+    detail.data != null && reactionsOff !== null && reactionsOff !== liveReactionsOff;
+  const dirty = titleChanged || aboutChanged || reactionsChanged;
   const busy = update.isPending || setPhoto.isPending;
   // The blank-title guard belongs to the title alone: the title is only sent
   // when it changed, so an about-only edit must stay saveable whatever the title
@@ -89,6 +102,7 @@ export function ChannelEditModal({
         body: {
           ...(titleChanged ? { title: shownTitle.trim() } : {}),
           ...(aboutChanged ? { about: shownAbout.trim() } : {}),
+          ...(reactionsChanged ? { reactions_enabled: !shownReactionsOff } : {}),
         },
       },
       {
@@ -97,6 +111,7 @@ export function ChannelEditModal({
           // carries the just-saved values, and the form is no longer dirty.
           setTitle(null);
           setAbout(null);
+          setReactionsOff(null);
         },
         onSettled: invalidate,
       },
@@ -221,6 +236,15 @@ export function ChannelEditModal({
                   className={`${FIELD} resize-none [font-family:inherit]`}
                 />
               </label>
+
+              <CheckRow
+                label={t('accounts.channel.reactionsToggle')}
+                on={shownReactionsOff}
+                disabled={busy}
+                onToggle={() => {
+                  setReactionsOff(!shownReactionsOff);
+                }}
+              />
 
               {update.isError && (
                 <div className="mb-[14px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">

@@ -132,6 +132,51 @@ def test_targeted_repair_preserves_unexpected_timeout_gate() -> None:
     assert report["meets_baseline"] is False
 
 
+def test_targeted_repair_overlays_a_completed_first_attempt_timeout() -> None:
+    first_text = (
+        "    services.a.x_f__mutmut_1: killed\n"
+        "    services.a.x_f__mutmut_2: timeout\n"
+        "    services.a.x_f__mutmut_3: timeout"
+    )
+    # The workflow selected only mutmut_2. mutmut resets the non-selected
+    # mutmut_1 and mutmut_3 rows, so the latter timeout must remain official.
+    repair_text = (
+        "    services.a.x_f__mutmut_1: not checked\n"
+        "    services.a.x_f__mutmut_2: killed\n"
+        "    services.a.x_f__mutmut_3: not checked"
+    )
+    retained_timeout = "services.a.x_f__mutmut_3"
+    report = base._build_report(
+        base._stats(killed=1, survived=0, timeout=2, total=3),
+        base._result_objects(first_text),
+        base._baseline(
+            results_text=first_text,
+            reviewed_timeouts=[retained_timeout],
+            killed=2,
+            survived=0,
+            timeout=1,
+            total=3,
+        ),
+        base._result_objects(repair_text),
+    )
+
+    assert report["effective_stats"] == base._stats(
+        killed=2,
+        survived=0,
+        timeout=1,
+        total=3,
+    )
+    assert report["timeouts"] == [retained_timeout]
+    assert report["unexpected_timeouts"] == []
+    assert report["targeted_repairs"] == [
+        {
+            "name": "services.a.x_f__mutmut_2",
+            "first_status": "timeout",
+            "repair_status": "killed",
+        },
+    ]
+
+
 @pytest.mark.parametrize("command", ["report", "gate"])
 def test_report_and_gate_cli_accept_targeted_repair_results(command: str) -> None:
     arguments = [

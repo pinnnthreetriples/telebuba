@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -118,6 +118,24 @@ def _fetch_comment(channel: str, post_id: int) -> CommentRecord | None:
 
 async def fetch_comment(channel: str, post_id: int) -> CommentRecord | None:
     return await asyncio.to_thread(_fetch_comment, channel, post_id)
+
+
+def _count_campaign_comments(campaign_id: str) -> int:
+    statement = select(func.count()).where(
+        _neurocomment_comments.c.campaign_id == campaign_id,
+    )
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_campaign_comments(campaign_id: str) -> int:
+    """Count every comment row a campaign owns, whatever its status.
+
+    Unscoped on purpose, unlike ``_quota``'s counters: the question here is not how much
+    quota is spent but how much history hangs off the campaign — the number the delete is
+    about to destroy with no way back.
+    """
+    return await asyncio.to_thread(_count_campaign_comments, campaign_id)
 
 
 def _claim_comment(

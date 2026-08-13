@@ -150,7 +150,12 @@ async def test_create_account_channel_executes_and_logs(
             "INFO",
             "account_channel_created",
             "acc-1",
-            {"title": "Mine", "has_username": True, "channel_id": "42"},
+            {
+                "title": "Mine",
+                "has_username": True,
+                "reactions_enabled": True,
+                "channel_id": "42",
+            },
         ),
     ]
 
@@ -320,7 +325,12 @@ async def test_update_account_channel_threads_fields(
     assert events == [("INFO", "account_channel_updated")]
     assert details[0][2:] == (
         "acc-1",
-        {"channel_id": 42, "has_title": True, "has_about": True},
+        {
+            "channel_id": 42,
+            "has_title": True,
+            "has_about": True,
+            "reactions_enabled": None,
+        },
     )
 
 

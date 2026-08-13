@@ -111,7 +111,12 @@ test('the happy path posts the request and hands off into the editor', async () 
     expect(createPosts()).toHaveLength(1);
   });
   const body = (await (createPosts()[0] as Request).clone().json()) as Record<string, unknown>;
-  expect(body).toEqual({ title: 'Новости', about: '', username: null });
+  expect(body).toEqual({
+    title: 'Новости',
+    about: '',
+    username: null,
+    reactions_enabled: true,
+  });
 
   // onCreated lifts the created channel_id into the editor (create closes).
   expect(await screen.findByDisplayValue('Новости')).toBeInTheDocument();
@@ -119,6 +124,27 @@ test('the happy path posts the request and hands off into the editor', async () 
   // The channels list was invalidated (initial GET + refetch).
   await waitFor(() => {
     expect(listGets()).toBe(2);
+  });
+});
+
+test('the reactions checkbox sends reactions_enabled=false for the new channel', async () => {
+  routeApi();
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  // By role, not text: the text query would also match a non-interactive label.
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Отключить реакции' }));
+  await userEvent.click(screen.getByText('Создать'));
+
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(1);
+  });
+  const body = (await (createPosts()[0] as Request).clone().json()) as Record<string, unknown>;
+  expect(body).toEqual({
+    title: 'Новости',
+    about: '',
+    username: null,
+    reactions_enabled: false,
   });
 });
 
@@ -156,7 +182,12 @@ test('a public channel sends the username and the debounced check shows taken/fr
     expect(createPosts()).toHaveLength(1);
   });
   const body = (await (createPosts()[0] as Request).clone().json()) as Record<string, unknown>;
-  expect(body).toEqual({ title: 'Новости', about: '', username: 'freshname' });
+  expect(body).toEqual({
+    title: 'Новости',
+    about: '',
+    username: 'freshname',
+    reactions_enabled: true,
+  });
 });
 
 test('a definite "taken" verdict disarms Create (no round-trip that cannot succeed)', async () => {
@@ -327,7 +358,12 @@ test('an id-less PRE-create refusal keeps Create armed so the handle can be corr
     expect(createPosts()).toHaveLength(2);
   });
   const body = (await (createPosts()[1] as Request).clone().json()) as Record<string, unknown>;
-  expect(body).toEqual({ title: 'Новости', about: '', username: 'freshname' });
+  expect(body).toEqual({
+    title: 'Новости',
+    about: '',
+    username: 'freshname',
+    reactions_enabled: true,
+  });
   expect(await screen.findByDisplayValue('Новости')).toBeInTheDocument();
 });
 

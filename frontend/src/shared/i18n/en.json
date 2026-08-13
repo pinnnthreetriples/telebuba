@@ -382,6 +382,7 @@
       "titleLabel": "Title",
       "aboutLabel": "Description",
       "publicToggle": "Public channel",
+      "reactionsToggle": "Disable reactions",
       "usernameLabel": "Username",
       "errTitle": "Enter a title",
       "errTitleMax": "Title must be at most 128 characters",
@@ -436,6 +437,7 @@
         "channel_read_failed": "Couldn't read the channel data from Telegram",
         "channel_create_failed": "Couldn't create the channel",
         "channel_username_assign_failed": "The username could not be assigned — the channel was created as private",
+        "channel_reactions_failed": "The channel was created, but reactions could not be disabled",
         "failed": "Telegram refused the action — try again",
         "unavailable": "Telegram is temporarily unavailable — try again"
       }
@@ -666,6 +668,8 @@
     "neurocomment_start_onboard_failed": "Could not start connecting accounts to channels",
     "neurocomment_sweep_failed": "Deleted-comment sweep failed",
     "neurocomment_settings_saved": "Settings saved",
+    "neurocomment_campaign_deleted": "Campaign deleted along with its channels and comment history",
+    "neurocomment_campaign_delete_reconcile_failed": "Campaign deleted, but the watch list was not rebuilt — it refreshes on the next change or restart",
     "warming_started": "Warming started",
     "warming_stopped": "Warming stopped",
     "warming_complete": "Warming complete",
@@ -1062,6 +1066,7 @@
       "choose": "Choose an account…",
       "noAccounts": "No accounts available",
       "listening": "Listening",
+      "listeningNoChannels": "Listening, no channels",
       "paused": "Paused",
       "pause": "Pause",
       "resume": "Resume",
@@ -1074,8 +1079,16 @@
     },
     "mode": {
       "label": "Comment mode",
-      "first": "We comment first",
-      "reply": "We reply in comments",
+      "first": {
+        "label": "We comment first",
+        "hint": "Comments the moment a post lands. Fast, but we open every thread — which is what moderators notice.",
+        "example": "Post at 12:00 → our comment at 12:00."
+      },
+      "reply": {
+        "label": "We reply in comments",
+        "hint": "Waits for real readers to comment, then answers one of them. Nobody in time and we comment first after all.",
+        "example": "Post at 12:00, readers at 12:04 and 12:06 → at 12:07 we answer the second."
+      },
       "failed": "Could not change the comment mode",
       "waitLabel": "Wait for a human comment",
       "waitHint": "minutes, then we comment first",

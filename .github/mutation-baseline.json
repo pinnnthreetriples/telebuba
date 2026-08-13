@@ -5,16 +5,12 @@
   "max_children": 4,
   "python_hash_seed": "0",
   "timezone": "UTC",
-  "mutant_catalog_sha256": "7a474a66800c97643e6213b73c109c64a25404b721ef3615de768657a76b0c34",
+  "mutant_catalog_sha256": "c96326469752080f50b68c9520c5d3e638894fef1b0310cbe3c6fde386063237",
   "reviewed_timeouts": [
     "services.content.x_strip_markdown_delimiters__mutmut_11",
     "services.neurocomment._generate.x__sleep_beating__mutmut_16",
     "services.neurocomment._generate.x__sleep_beating__mutmut_17",
     "services.neurocomment._generate.x__sleep_beating__mutmut_2",
-    "services.neurocomment._join.x__mark_lost_channels__mutmut_10",
-    "services.neurocomment._join.x__mark_lost_channels__mutmut_11",
-    "services.neurocomment._join.x__mark_lost_channels__mutmut_12",
-    "services.neurocomment._join.x__mark_lost_channels__mutmut_13",
     "services.neurocomment._llm.x__strip_fence_tags__mutmut_8",
     "services.warming._chat.x__maybe_inter_account_chat__mutmut_10",
     "services.warming._graduation.x__stop_warming_locked__mutmut_9"
@@ -53,9 +49,9 @@
     ]
   },
   "stats": {
-    "killed": 11744,
-    "survived": 2124,
-    "timeout": 11,
-    "total": 13879
+    "killed": 11813,
+    "survived": 2129,
+    "timeout": 7,
+    "total": 13949
   }
 }
