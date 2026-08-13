@@ -15,7 +15,7 @@ import asyncio
 import logging
 import uuid
 from contextlib import suppress
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
@@ -30,14 +30,12 @@ from core.db import (
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
-from schemas.warming import (
-    is_warming,
-)
 from services.dialogues import assign_pairs
 from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
+from services.warming._start_state import carry_or_restamp
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
     _now_iso,
@@ -48,7 +46,6 @@ from services.warming.pacing import (
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.warming import (
-        ActivityPersona,
         StartWarmingRequest,
         WarmingAccountState,
         WarmingReadiness,
@@ -231,40 +228,6 @@ def assert_runtime_quiescent(account_id: str) -> None:
         raise WarmingTaskNotQuiescentError(account_id)
 
 
-class _CarriedStint(NamedTuple):
-    """The started_at / target_days / activity_persona a start should apply.
-
-    П7: a restart-while-warming carries the original stint anchor, operator
-    target, and persona; a genuine (re)start from idle/stopped restamps them.
-    """
-
-    started_at: str
-    target_days: int
-    activity_persona: ActivityPersona
-
-
-def _carry_or_restamp(
-    existing: WarmingStateRecord | None, data: StartWarmingRequest
-) -> _CarriedStint:
-    """Decide the stint fields once: carry the in-flight ones, restamp the rest."""
-    started_at = (
-        existing.started_at
-        if existing and existing.started_at and is_warming(existing.state)
-        else _now_iso()
-    )
-    target_days = (
-        existing.target_days
-        if existing is not None and existing.target_days and is_warming(existing.state)
-        else (data.target_days or settings.neurocomment.warmed_min_days)
-    )
-    activity_persona = (
-        existing.activity_persona
-        if existing is not None and is_warming(existing.state)
-        else data.activity_persona
-    )
-    return _CarriedStint(started_at, target_days, activity_persona)
-
-
 async def _evaluate_account_readiness(
     account_id: str,
     account: AccountRead,
@@ -336,7 +299,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        stint = _carry_or_restamp(existing, data)
+        stint = carry_or_restamp(existing, data)
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
         # warmed-account overview drops it on the next poll.
@@ -396,132 +359,8 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
 
 
 def account_lock(account_id: str) -> asyncio.Lock:
-    """Public accessor for the per-account lifecycle lock (P2.2).
-
-    Use this from a service-level operation that needs to hold the same lock
-    ``start_warming`` / ``stop_warming`` / ``reconcile_warming_runtime`` use,
-    e.g. to serialize stop + delete in ``remove_account``. The bare locked
-    primitive (rather than a context manager wrapper) keeps the call site
-    explicit about lock scope.
-    """
+    """Expose the lifecycle lock for compound service-level operations."""
     return _account_lock(account_id)
-
-
-async def reconcile_warming_runtime() -> None:
-    """Re-attach loop tasks for accounts whose DB state says they were running.
-
-    ``_RUNTIME`` lives in process memory: after a restart the DB still shows
-    ``active``/``sleeping``/``flood_wait`` but no task exists. We restart the
-    loop for each such account so the board does not lie.
-
-    Also refreshes the inter-account dialogue graph — ``assign_pairs`` is the
-    only path that materialises pairs, so without this call the feature stays
-    silently dormant. The call is idempotent (it rebuilds only when stale or
-    membership-changed), so running it on every reconcile is cheap.
-    """
-    records = await list_warming_states()
-    controls = await load_warming_settings()
-    channel_count = len((await list_warming_channels()).channels)
-    restarted = 0
-    for record in records:
-        # ``error`` is part of ``_ACTIVE_STATES`` so the UI keeps the card in
-        # the warming column, but reconcile must not auto-resurrect a broken
-        # account — the operator has to acknowledge and restart it.
-        if not is_warming(record.state) or record.state == "error":
-            continue
-        # F3: take the same per-account lock as start/stop. Reconcile reads
-        # state then spawns a task; without the lock, a parallel stop can
-        # interleave and we end up with DB=idle + a live task.
-        async with _account_lock(record.account_id):
-            # Re-read inside the lock — stop_warming may have flipped this row
-            # between the listing and acquiring the lock.
-            fresh = await fetch_warming_state(record.account_id)
-            if fresh is None or not is_warming(fresh.state) or fresh.state == "error":
-                continue
-            existing = _RUNTIME.get(record.account_id)
-            if existing is not None and not existing.done():
-                continue
-            account = await fetch_account(record.account_id)
-            if account is None:
-                # Orphan state row — mark it stopped so the board is honest.
-                await _set_state(
-                    record.account_id,
-                    "idle",
-                    last_event="reconcile_orphan",
-                    stopped_at=_now_iso(),
-                )
-                continue
-            # Only gate the operator-startable cycling states. quarantine and
-            # flood_wait are engine-managed recovery/cooldown states with their
-            # own gates (a quarantined account is *expected* to read spam=limited
-            # while it re-probes); applying the start_warming readiness gate to
-            # them would abort an in-progress recovery and park it in error.
-            if controls.enforce_readiness and fresh.state in ("active", "sleeping"):
-                readiness = await _evaluate_account_readiness(
-                    record.account_id,
-                    account,
-                    channel_count,
-                )
-                if not readiness.ready:
-                    # Same gate as start_warming: a proxy that died / a fresh
-                    # spam-limit / trust-critical drift mid-warming must not be
-                    # silently resurrected on restart (start_warming would
-                    # refuse it). Park it so the operator has to acknowledge.
-                    await _set_state(
-                        record.account_id,
-                        "error",
-                        last_event="reconcile_not_ready",
-                        last_error="; ".join(readiness.reasons),
-                        heartbeat_at=_now_iso(),
-                    )
-                    await log_event(
-                        "WARNING",
-                        "warming_reconcile_not_ready",
-                        account_id=record.account_id,
-                        extra={"reasons": readiness.reasons},
-                    )
-                    continue
-            # P1.2: mint a fresh generation marker so this restarted loop owns
-            # the row going forward; any pre-restart cycle that somehow lives
-            # on (it shouldn't, post-restart, but be defensive) will see the
-            # mismatch and bail.
-            run_id = uuid.uuid4().hex
-            await _set_state(record.account_id, fresh.state, run_id=run_id)
-            _spawn_runtime_task(record.account_id, run_id)
-            restarted += 1
-    if restarted:
-        await log_event(
-            "INFO",
-            "warming_runtime_reconciled",
-            extra={"restarted": restarted},
-        )
-    await _refresh_dialogue_pairs()
-    await purge_stale_history()
-    _start_purge_task()
-
-
-async def _purge_loop() -> None:  # pragma: no cover - long-running task body.
-    """Rerun the retention sweep every ``purge_interval_hours`` until cancelled.
-
-    ``purge_stale_history`` swallows its own errors, so a failing sweep never
-    breaks the cadence. Cancelled cleanly on shutdown like the per-account loops.
-    Also reshuffles the acquaintance graph so frozen/fail-health partners drop
-    out on the purge cadence (``_refresh_dialogue_pairs`` swallows its own
-    errors too).
-    """
-    interval = settings.warming.purge_interval_hours * 3600
-    while True:
-        await asyncio.sleep(interval)
-        await purge_stale_history()
-        await _refresh_dialogue_pairs()
-
-
-def _start_purge_task() -> None:
-    """Spawn the periodic retention sweep if one is not already running."""
-    global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
-    if _PURGE_TASK is not None and not _PURGE_TASK.done():
-        return
-    _PURGE_TASK = asyncio.create_task(_purge_loop())
 
 
 async def _refresh_dialogue_pairs() -> None:
@@ -536,52 +375,25 @@ async def _refresh_dialogue_pairs() -> None:
         )
 
 
-async def shutdown_warming_runtime() -> None:
-    """Cancel every running loop and wait briefly for graceful exits."""
-    await _stop_purge_task()
-    if not _RUNTIME:
-        return
-    owned = list(_RUNTIME.items())
-    for account_id, task in owned:
-        _seams.revoke_lease(account_id)
-        if not task.done():
-            task.cancel()
-    done, pending = await asyncio.wait(
-        {task for _, task in owned},
-        timeout=settings.warming.stop_cancel_timeout_seconds,
-    )
-    for account_id, task in owned:
-        if task in done:
-            _discard_runtime_task(account_id, task)
-    if pending:
-        await log_event("WARNING", "warming_shutdown_timeout", extra={"count": len(pending)})
+async def _list_runtime_states() -> list[WarmingStateRecord]:
+    return await list_warming_states()
 
 
-async def _stop_purge_task() -> None:
-    """Cancel and await the periodic retention sweep (no-op if not running)."""
-    global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
-    task = _PURGE_TASK
-    if task is None or task.done():
-        _PURGE_TASK = None
-        return
-    task.cancel()
-    done, _pending = await asyncio.wait(
-        {task},
-        timeout=settings.warming.stop_cancel_timeout_seconds,
-    )
-    if done:
-        _PURGE_TASK = None
+async def _purge_runtime_history() -> None:
+    await purge_stale_history()
 
 
-# The stop/graduation lifecycle lives in ``_graduation`` (file-size budget). It
-# imports this module for the shared ``_RUNTIME`` / locks / ``_refresh_dialogue_pairs``
-# seam, so the import lands at the bottom — after those are defined — to avoid a
-# circular-import cycle. Re-exported so ``services.warming._runtime.<name>`` (and
-# the package root) keep resolving these, and tests keep patching seams here.
 from services.warming._graduation import (  # noqa: E402, F401 - re-export after globals are defined.
     _stop_warming_locked,
     handoff_to_neurocomment,
     promote_to_neurocomment,
     stop_warming,
     unmark_neurocomment,
+)
+from services.warming._maintenance import (  # noqa: E402, F401 - lifecycle re-exports.
+    _purge_loop,
+    _start_purge_task,
+    _stop_purge_task,
+    reconcile_warming_runtime,
+    shutdown_warming_runtime,
 )

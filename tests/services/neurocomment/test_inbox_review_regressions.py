@@ -103,6 +103,7 @@ async def test_retry_transition_atomically_clears_lingering_pre_send_claim() -> 
     # Models engine.release_claim failing before the typed RETRYABLE result reaches the
     # inbox. The inbox transition itself must clear the proven-pre-send claim atomically.
     assert await release_post(event, 5, 0.1, 1.0) is True
+    await asyncio.sleep(0.11)
     claimed = await claim_pending_posts(1, event.date_unix - 1)
     assert [item.post_id for item in claimed] == [1]
     with _get_engine().connect() as connection:

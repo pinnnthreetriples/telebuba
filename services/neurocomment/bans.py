@@ -24,11 +24,9 @@ from typing import Literal
 
 from core.config import settings
 from core.db import (
-    fetch_active_campaign_for_channel,
     fetch_campaign,
     list_campaign_accounts,
     list_campaign_channels,
-    list_channel_readiness,
     mark_pair_banned,
     stamp_unconfirmed_ban,
     unconfirmed_ban_is_countable,
@@ -38,6 +36,9 @@ from core.logging import log_event
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel, LeaveDiscussionGroup
 from services.neurocomment import _comments_off, _seams, _state
+from services.neurocomment._ban_cleanup import (
+    unlink_channel_if_no_account_left as _unlink_channel_if_no_account_left,
+)
 from services.neurocomment._onboarding_owner import ensure_current
 from services.neurocomment._pins import serving_accounts
 
@@ -388,63 +389,3 @@ async def _mark_banned_and_leave(
         extra={"channel": channel, "leave": outcome, **extra},
     )
     await _unlink_channel_if_no_account_left(account_id, channel)
-
-
-async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> None:
-    """Drop ``channel`` from its campaign once every serving account is banned there.
-
-    A channel nobody can write in produces nothing but failed posts, so it is
-    unlinked through the service (not the repository) exactly like the join-request
-    expiry in ``_sweep._drop_unapproved_channel`` — that is what makes the running
-    listener reconcile and stop watching it.
-
-    The verdict is read from persisted readiness, never a live probe: this runs on the
-    post hot path and must not spend Telegram calls. Serving accounts respect the
-    per-account channel subset, and any serving account with NO row keeps the channel: a
-    missing row means that account was never tried here, not that it failed. Onboarding
-    has no timer, so the fleet reaches a freshly linked channel slowly; counting only the
-    rows that exist would let the first banned account drop a channel the other five
-    never touched.
-
-    Every row present must then be in a TERMINAL state — banned (#30), operator-skipped
-    (#148), or gone from the chat having given up on its captcha (#49; that rule keeps its
-    own drop, on its own clock, because this one has none — and without the third state
-    here five gave-up pairs plus one ban would hold a dead channel forever). All three are
-    permanent verdicts on the pair, and reading a skip as "still usable"
-    meant five bans plus one skip held a channel that produces nothing, forever: a per-pair
-    ban has no un-ban path, so nothing would ever revisit it. The three sibling rules
-    phrase the same clause as "no serving row is ``ready``", which would also fix this —
-    but this rule is the one with no clock of its own. ``_sweep`` and ``_rejoin`` overrule
-    the other accounts only after their own 48h have run out, whereas one ban
-    lands here mid-post; a pair still inside its approval window is not ready either, and
-    dropping on that would cancel patience those two rules are still counting out.
-    """
-    campaign = await fetch_active_campaign_for_channel(channel)
-    if campaign is None:
-        return
-    links = (await list_campaign_accounts(campaign.campaign_id)).links
-    serving = serving_accounts(links, channel)
-    rows = (await list_channel_readiness(campaign.campaign_id, channel, serving)).readiness
-    if len(rows) != len(serving) or any(
-        not (row.banned or row.human_skipped or row.captcha_gave_up) for row in rows
-    ):
-        return
-    # Late import: ``campaigns`` reaches ``_runtime``, which reaches this module — the
-    # same cycle ``_sweep._drop_unapproved_channel`` dodges the same way.
-    from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
-
-    await campaigns_service.deactivate_channel(campaign.campaign_id, channel)
-    await log_event(
-        "WARNING",
-        "neurocomment_channel_all_accounts_banned",
-        account_id=account_id,
-        extra={
-            "channel": channel,
-            "campaign_id": campaign.campaign_id,
-            # The rows, not their count: a skipped pair rides along in the drop but was
-            # never banned, and reporting it as one sends the operator hunting a ban that
-            # does not exist.
-            "banned_accounts": sum(1 for row in rows if row.banned),
-            "reason": "all_accounts_banned",
-        },
-    )

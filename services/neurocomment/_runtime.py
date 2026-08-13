@@ -1,11 +1,4 @@
-"""Neurocomment runtime — listener wiring, on-post task ownership, shutdown.
-
-One dedicated account runs the standing post listener (issue #119 wires which
-account from the UI/config). Each surfaced post is handled in its own fire-and-
-forget :class:`asyncio.Task` so the Telethon listener loop is never blocked, and
-the tasks are tracked so shutdown can cancel them. Mirrors
-``services.warming._runtime`` task ownership + shutdown-with-timeout.
-"""
+"""Neurocomment listener ownership, durable dispatch, and bounded shutdown."""
 
 from __future__ import annotations
 
@@ -20,8 +13,6 @@ from core.db import (
     get_listener_running,  # noqa: F401 - re-exported for _watch ownership validation
     list_campaigns,
     list_warming_account_ids,
-    set_listener_account_id,
-    set_listener_running,
 )
 from core.logging import log_event
 from core.telegram_client import (
@@ -29,9 +20,7 @@ from core.telegram_client import (
     subscribe_posts,  # noqa: F401 - re-exported: read by _watch + patched by tests via _runtime.
     take_lost_access_channels,  # noqa: F401 - re-exported: read by _join + patched via _runtime.
 )
-from services.neurocomment import _signals
-from services.neurocomment._onboarding_owner import generation_fence
-from services.neurocomment.engine import handle_new_post  # noqa: F401 - patched/runtime seam
+from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import (
     _join_jitter_seconds,  # noqa: F401 - re-exported: read by _join + patched by tests via _runtime.
     onboard_campaign,
@@ -40,6 +29,9 @@ from services.neurocomment.onboarding import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
 
+    from schemas.logs import LogLevel
+    from schemas.neurocomment import CampaignList
+    from schemas.neurocomment_pipeline import PipelineOutcome
     from schemas.neurocomment_progress import OnboardingProgressEvent
     from schemas.telegram_actions import NewPostEvent
 
@@ -58,7 +50,7 @@ class ListenerBusyWarmingError(Exception):
 # ``settings.neurocomment.max_concurrent_post_tasks``. Excess work remains pending
 # in SQLite rather than being lost under a flood.
 _TASKS: set[asyncio.Task[None]] = set()
-_INBOX_ACCEPTING = False
+_INBOX_ACCEPTING: bool = False
 _INBOX_DISPATCH_LOCK: asyncio.Lock | None = None
 _INBOX_GENERATION = 0
 _INBOX_RETRY_TASK: asyncio.Task[None] | None = None
@@ -175,7 +167,7 @@ _ONBOARD_TASK_OWNER: tuple[str, int] | None = None
 # A trigger that arrives while onboarding is in flight queues exactly one rerun,
 # so a channel/account added mid-run is picked up when the pass finishes instead
 # of waiting for the next mutation. ponytail: one coalescing bool, not a queue.
-_ONBOARD_RERUN = False
+_ONBOARD_RERUN: bool = False
 
 # The single in-flight paced channel-join task. Running the jittered per-channel joins
 # inline blocked Start (under the per-account lock) and channel-edit requests for minutes,
@@ -186,14 +178,9 @@ _JOIN_TASK_OWNER: tuple[str, int] | None = None
 
 # A trigger while a join pass is in flight queues one rerun, so channels linked mid-pace
 # are joined by the coalesced rerun (which re-reads the watch set). Mirrors _ONBOARD_RERUN.
-_JOIN_RERUN = False
+_JOIN_RERUN: bool = False
 
-# (listener, channel) pairs successfully joined this process, so reconcile does not
-# re-join every channel on every call (10 rapid channel links = dozens of join RPCs
-# before this guard — a real Telegram flood risk). Joins are idempotent, so this is
-# a flood guard, not a correctness cache. ponytail: process-lifetime; a failed join
-# simply retries on the next reconcile, and only a PROVEN access loss evicts an entry
-# (see ``_join._mark_lost_channels``), and only while re-join attempts remain.
+# Process-local successful joins prevent duplicate join bursts during reconciliation.
 _JOINED_CHANNELS: set[tuple[str, str]] = set()
 
 # Watch channels the listener could not resolve to a peer id: absent from the NewMessage
@@ -208,196 +195,42 @@ async def on_post(event: NewPostEvent) -> None:
     await _inbox_runtime.on_post(event)
 
 
-async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
-    """Stop the listener + deletion sweep and cancel in-flight on-post tasks (bounded wait)."""
-    _invalidate_runtime_owner(listener_account_id)
-    await stop_post_listener(listener_account_id)
-    await _inbox_runtime.stop_inbox()
-    await _stop_sweep()
-    await _stop_onboarding()
-    await _stop_join()
-    # Drop the gap report with the subscription it described: ``start_neurocomment`` sets
-    # ``listener_running`` BEFORE it reconciles, so a poll landing in between would
-    # otherwise be served the previous session's channel names.
-    _publish_unwatched()
-    tasks = list(_TASKS)
-    await _cancel_bounded(*tasks)
+async def _handle_inbox_post(event: NewPostEvent) -> PipelineOutcome:
+    """Call the patchable engine seam while making its runtime ownership explicit."""
+    return await handle_new_post(event)
 
 
-async def start_neurocomment(
-    listener_account_id: str,
+async def _stop_post_listener(account_id: str) -> None:
+    await stop_post_listener(account_id)
+
+
+async def _list_warming_account_ids() -> set[str]:
+    return await list_warming_account_ids()
+
+
+async def _runtime_get_listener_account_id() -> str | None:
+    return await get_listener_account_id()
+
+
+async def _list_campaigns() -> CampaignList:
+    return await list_campaigns()
+
+
+async def _onboard_campaign(
+    campaign_id: str,
     *,
     on_progress: Callable[[OnboardingProgressEvent], None] | None = None,
 ) -> None:
-    """Point the runtime at ``listener_account_id`` promptly; onboard in the background.
-
-    Persisting the listener + reconciling are fast, so Start returns at once instead of
-    blocking on onboarding's minutes of jittered join/challenge sleeps; onboarding runs
-    as a tracked background task (progress on the SSE log stream, cancelled on shutdown).
-    Switching accounts stops the previous account's subscription first (listeners are
-    keyed per account); a rapid second Start won't spawn a duplicate onboarding task.
-
-    The warming-check → flag-commit → reconcile all run under the shared per-account
-    lifecycle lock (the one ``start_warming`` holds): a concurrent ``start_warming`` or
-    ``stop_neurocomment`` can't interleave, so no orphan listener survives a pause. No
-    deadlock — reconcile hits Telegram only via ``core.telegram_client``/``_seams``
-    (which never take this lock) and onboarding is fire-and-forget, not awaited.
-    """
-    from services.warming import account_lock  # noqa: PLC0415 - avoid a services import cycle.
-
-    async with neurocomment_lifecycle(), account_lock(listener_account_id):
-        if listener_account_id in await list_warming_account_ids():
-            raise ListenerBusyWarmingError(listener_account_id)
-        previous = await get_listener_account_id()
-        if previous is not None and previous != listener_account_id:
-            _invalidate_runtime_owner(previous)
-            await stop_post_listener(previous)
-        generation = _activate_runtime_owner(listener_account_id)
-        await set_listener_account_id(listener_account_id)
-        await set_listener_running(running=True)
-    # Peer resolution is generation-fenced but deliberately outside the lifecycle lock,
-    # so Stop/delete can invalidate a hung Start immediately.
-    await reconcile_neurocomment_runtime(listener_account_id)
-    async with neurocomment_lifecycle():
-        if not _runtime_owner_is_current(listener_account_id, generation):
-            return
-        _ensure_onboarding_running(on_progress or _signals.signal_onboarding_progress)
+    await onboard_campaign(campaign_id, on_progress=on_progress)
 
 
-def is_onboarding_running() -> bool:
-    """True while the background campaign-onboarding pass is in flight."""
-    return _ONBOARD_TASK is not None and not _ONBOARD_TASK.done()
-
-
-def _ensure_onboarding_running(
-    on_progress: Callable[[OnboardingProgressEvent], None] | None,
+async def _runtime_log_event(
+    level: LogLevel,
+    event: str,
+    account_id: str | None = None,
+    extra: dict[str, object] | None = None,
 ) -> None:
-    """Spawn the onboarding task unless one is in flight; a mid-pass trigger queues one rerun."""
-    global _ONBOARD_TASK, _ONBOARD_RERUN, _ONBOARD_TASK_OWNER  # noqa: PLW0603
-    account_id = _RUNTIME_ACCOUNT_ID
-    if account_id is None:
-        return
-    owner = (account_id, _RUNTIME_GENERATION)
-    if _ONBOARD_TASK is not None and not _ONBOARD_TASK.done():
-        if owner == _ONBOARD_TASK_OWNER:
-            _ONBOARD_RERUN = True
-            return
-        _ONBOARD_TASK.cancel()
-        _retain_until_done(_ONBOARD_TASK)
-        _ONBOARD_RERUN = False
-    _ONBOARD_TASK = asyncio.create_task(
-        _onboard_active_campaigns(on_progress, account_id, _RUNTIME_GENERATION),
-    )
-    _ONBOARD_TASK_OWNER = owner
-
-
-async def _onboard_active_campaigns(
-    on_progress: Callable[[OnboardingProgressEvent], None] | None,
-    owner_account_id: str,
-    generation: int,
-) -> None:
-    """Onboard every active campaign (background); failures isolated, mid-pass reruns honored."""
-    global _ONBOARD_RERUN  # noqa: PLW0603 - single module-level rerun flag
-    while True:
-        if not _runtime_owner_is_current(owner_account_id, generation):
-            return
-        for campaign in (await list_campaigns()).campaigns:
-            if not _runtime_owner_is_current(owner_account_id, generation):
-                return
-            if campaign.status != "active":
-                continue
-            try:
-                # Cancellation is the fast path. The task-local predicate also fences
-                # a gateway/provider that catches cancellation and returns normally.
-                with generation_fence(
-                    lambda: _runtime_owner_is_current(owner_account_id, generation)
-                ):
-                    await onboard_campaign(campaign.campaign_id, on_progress=on_progress)
-            except Exception as exc:  # noqa: BLE001 - one campaign must never abort onboarding
-                await log_event(
-                    "ERROR",
-                    "neurocomment_start_onboard_failed",
-                    extra={
-                        "campaign_id": campaign.campaign_id,
-                        "error_type": type(exc).__name__,
-                    },
-                )
-        if not _ONBOARD_RERUN:
-            return
-        _ONBOARD_RERUN = False
-
-
-def _ensure_join_running(listener_account_id: str) -> None:
-    """Spawn the paced join task unless one is in flight; a mid-pace trigger queues one rerun."""
-    global _JOIN_TASK, _JOIN_RERUN, _JOIN_TASK_OWNER  # noqa: PLW0603
-    generation = _activate_runtime_owner(listener_account_id)
-    if _JOIN_TASK is not None and not _JOIN_TASK.done():
-        if (listener_account_id, generation) == _JOIN_TASK_OWNER:
-            _JOIN_RERUN = True
-            return
-        _JOIN_TASK.cancel()
-        _retain_until_done(_JOIN_TASK)
-    _JOIN_TASK = asyncio.create_task(_join_watch_channels(listener_account_id, generation))
-    _JOIN_TASK_OWNER = (listener_account_id, generation)
-
-
-async def _join_watch_channels(listener_account_id: str, generation: int) -> None:
-    """Paced join task (background); reruns once if a channel was linked mid-pace.
-
-    Single-flighted, so only one pacing stream runs at a time (no concurrent bursts)
-    and the per-join cap check-then-record is serialized across passes. Its tail is the
-    one place a channel that only became resolvable once joined gets back into the filter.
-    """
-    global _JOIN_RERUN  # noqa: PLW0603 - single module-level rerun flag
-    while True:
-        if not _runtime_owner_is_current(listener_account_id, generation):
-            return
-        await run_join_pass(listener_account_id, generation=generation)
-        if not _runtime_owner_is_current(listener_account_id, generation):
-            return
-        if not _JOIN_RERUN:
-            break
-        _JOIN_RERUN = False
-    # A channel unresolvable at subscribe time (not joined yet) is absent from the live
-    # filter forever — nothing else reconciles. The joins are done now, so heal it here.
-    if _runtime_owner_is_current(listener_account_id, generation):
-        await _resubscribe_unwatched(listener_account_id)
-
-
-async def _teardown_listener_locked(listener_account_id: str, *, clear_account: bool) -> None:
-    """Tear down under the per-account lock; clear running (and the account when asked)."""
-    from services.warming import account_lock  # noqa: PLC0415 - see start_neurocomment.
-
-    async with neurocomment_lifecycle(), account_lock(listener_account_id):
-        try:
-            await shutdown_neurocomment_runtime(listener_account_id)
-        finally:
-            if clear_account:
-                await set_listener_account_id(None)
-            await set_listener_running(running=False)
-
-
-async def stop_neurocomment() -> None:
-    """PAUSE: unsubscribe but KEEP the remembered account (unlike clear, which forgets it)."""
-    async with neurocomment_lifecycle():
-        listener_account_id = await get_listener_account_id()
-        if listener_account_id is None:
-            _invalidate_runtime_owner()
-            await set_listener_running(running=False)
-            return
-        await _teardown_listener_locked(listener_account_id, clear_account=False)
-
-
-async def clear_neurocomment_listener() -> None:
-    """REMOVE the listener ("снять слушателя"): unsubscribe and forget the account."""
-    async with neurocomment_lifecycle():
-        listener_account_id = await get_listener_account_id()
-        if listener_account_id is None:
-            _invalidate_runtime_owner()
-            await set_listener_account_id(None)
-            await set_listener_running(running=False)
-            return
-        await _teardown_listener_locked(listener_account_id, clear_account=True)
+    await log_event(level, event, account_id=account_id, extra=extra)
 
 
 def _ensure_sweep_running() -> None:
@@ -500,65 +333,10 @@ async def _stop_join() -> None:
     await _cancel_bounded(task)
 
 
-def reset_for_tests() -> None:  # noqa: PLR0915 - resets every owned runtime handle
-    """Test-only reset; production code never calls this."""
-    global _SWEEP_TASK, _SWEEP_STOPPING_TASK  # noqa: PLW0603
-    global _ONBOARD_TASK, _ONBOARD_RERUN, _JOIN_TASK, _JOIN_RERUN  # noqa: PLW0603
-    global _ONBOARD_TASK_OWNER  # noqa: PLW0603
-    global _JOIN_TASK_OWNER  # noqa: PLW0603
-    global _INBOX_DISPATCH_LOCK, _INBOX_ACCEPTING, _INBOX_GENERATION  # noqa: PLW0603
-    global _INBOX_RETRY_TASK, _BACKFILL_TASK, _BACKFILL_GENERATION  # noqa: PLW0603
-    global _BACKFILL_TIMER_TASK  # noqa: PLW0603
-    global _LIFECYCLE_LOCK, _LIFECYCLE_OWNER, _LIFECYCLE_DEPTH  # noqa: PLW0603
-    global _RUNTIME_ACCOUNT_ID, _RUNTIME_GENERATION, _RUNTIME_OWNER_INITIALIZED  # noqa: PLW0603
-    global _RECONCILE_GENERATION  # noqa: PLW0603
-    _TASKS.clear()
-    _JOINED_CHANNELS.clear()
-    _UNWATCHED_CHANNELS.clear()
-    _ONBOARD_RERUN = False
-    _ONBOARD_TASK_OWNER = None
-    _JOIN_RERUN = False
-    _JOIN_TASK_OWNER = None
-    _INBOX_ACCEPTING = True
-    _INBOX_DISPATCH_LOCK = None
-    _INBOX_GENERATION = 0
-    _BACKFILL_GENERATION = 0
-    _BACKFILL_AT.clear()
-    _LIFECYCLE_LOCK = None
-    _LIFECYCLE_OWNER = None
-    _LIFECYCLE_DEPTH = 0
-    _RUNTIME_ACCOUNT_ID = None
-    _RUNTIME_GENERATION = 0
-    _RUNTIME_OWNER_INITIALIZED = False
-    _RECONCILE_GENERATION = 0
-    for task in tuple(_RETIRED_TASKS):
-        task.cancel()
-    _RETIRED_TASKS.clear()
-    if _BACKFILL_TASK is not None:
-        _BACKFILL_TASK.cancel()
-        _BACKFILL_TASK = None
-    if _BACKFILL_TIMER_TASK is not None:
-        _BACKFILL_TIMER_TASK.cancel()
-        _BACKFILL_TIMER_TASK = None
-    if _INBOX_RETRY_TASK is not None:
-        _INBOX_RETRY_TASK.cancel()
-        _INBOX_RETRY_TASK = None
-    if _SWEEP_TASK is not None:  # pragma: no cover - tests await shutdown, so it's already None
-        _SWEEP_TASK.cancel()
-        _SWEEP_TASK = None
-    _SWEEP_STOPPING_TASK = None
-    if _ONBOARD_TASK is not None:
-        _ONBOARD_TASK.cancel()
-        _ONBOARD_TASK = None
-    if _JOIN_TASK is not None:
-        _JOIN_TASK.cancel()
-        _JOIN_TASK = None
-
-
-# The paced join loop body lives in ``_join`` (file-size cap); the handle + start/stop
-# stay above. Re-exported so ``_join_watch_channels`` finds ``run_join_pass``.
+# Late imports preserve the runtime facade while avoiding peer-module cycles.
 from services.neurocomment import _inbox_runtime  # noqa: E402 - peer runtime module
-from services.neurocomment._join import run_join_pass  # noqa: E402 - re-export after body.
+from services.neurocomment import _runtime_test_reset as _test_reset  # noqa: E402
+from services.neurocomment._join import run_join_pass  # noqa: E402
 
 # The app-lifecycle hooks + reconcile trigger + UI status query live in ``_lifecycle``
 # (file-size cap); they call back into this module's core machinery. Re-exported so
@@ -570,6 +348,20 @@ from services.neurocomment._lifecycle import (  # noqa: E402, F401 - re-export a
     reconcile_neurocomment_on_startup,
     shutdown_neurocomment_on_shutdown,
 )
+from services.neurocomment._runtime_operations import (  # noqa: E402, F401 - compatibility facade
+    _ensure_join_running,
+    _ensure_onboarding_running,
+    _join_watch_channels,
+    _onboard_active_campaigns,
+    _teardown_listener_locked,
+    clear_neurocomment_listener,
+    is_onboarding_running,
+    shutdown_neurocomment_runtime,
+    start_neurocomment,
+    stop_neurocomment,
+)
+
+reset_for_tests = _test_reset.reset_for_tests
 
 # The deletion sweep's work lives in ``_sweep`` (file-size cap); the task handle and
 # its start/stop stay above (this module's lifecycle owns reconcile/shutdown). Re-
@@ -585,8 +377,24 @@ from services.neurocomment._sweep import (  # noqa: E402, F401 - re-export after
 # ``_UNWATCHED_CHANNELS`` set they publish into stays above (tests read and seed it as
 # ``_runtime._UNWATCHED_CHANNELS``). Re-exported so shutdown/the join tail find the
 # helpers and ``_runtime.reconcile_neurocomment_runtime`` still resolves for callers.
-from services.neurocomment._watch import (  # noqa: E402 - re-export after the module body.
+from services.neurocomment._watch import (  # noqa: E402
     _publish_unwatched,
     _resubscribe_unwatched,
     reconcile_neurocomment_runtime,
 )
+
+
+async def _reconcile_runtime(account_id: str) -> None:
+    await reconcile_neurocomment_runtime(account_id)
+
+
+def _publish_unwatched_runtime() -> None:
+    _publish_unwatched()
+
+
+async def _run_join_pass(account_id: str, *, generation: int) -> None:
+    await run_join_pass(account_id, generation=generation)
+
+
+async def _resubscribe_runtime(account_id: str) -> None:
+    await _resubscribe_unwatched(account_id)
