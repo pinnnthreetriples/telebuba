@@ -764,6 +764,10 @@ export type ChannelCreateRequest = {
    * Username
    */
   username?: string | null;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean;
 };
 
 /**
@@ -790,6 +794,10 @@ export type ChannelDetailView = {
    * About
    */
   about?: string;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean;
 };
 
 /**
@@ -867,6 +875,10 @@ export type ChannelUpdateRequest = {
    * About
    */
   about?: string | null;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean | null;
 };
 
 /**

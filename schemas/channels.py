@@ -28,6 +28,9 @@ class ChannelCreateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=CHANNEL_TITLE_MAX_LENGTH)
     about: str = Field(default="", max_length=CHANNEL_ABOUT_MAX_LENGTH)
     username: str | None = Field(default=None, pattern=CHANNEL_USERNAME_PATTERN)
+    # Telegram's own default for a new channel; False turns reactions off right
+    # after the create.
+    reactions_enabled: bool = True
 
 
 class ChannelUpdateRequest(BaseModel):
@@ -39,6 +42,7 @@ class ChannelUpdateRequest(BaseModel):
 
     title: str | None = Field(default=None, min_length=1, max_length=CHANNEL_TITLE_MAX_LENGTH)
     about: str | None = Field(default=None, max_length=CHANNEL_ABOUT_MAX_LENGTH)
+    reactions_enabled: bool | None = None
 
 
 class ChannelPostEditRequest(BaseModel):
@@ -56,6 +60,7 @@ class ChannelView(BaseModel):
 
 class ChannelDetailView(ChannelView):
     about: str = ""
+    reactions_enabled: bool = True
 
 
 class ChannelPostView(BaseModel):

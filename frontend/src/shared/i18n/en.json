@@ -382,6 +382,7 @@
       "titleLabel": "Title",
       "aboutLabel": "Description",
       "publicToggle": "Public channel",
+      "reactionsToggle": "Disable reactions",
       "usernameLabel": "Username",
       "errTitle": "Enter a title",
       "errTitleMax": "Title must be at most 128 characters",
@@ -436,6 +437,7 @@
         "channel_read_failed": "Couldn't read the channel data from Telegram",
         "channel_create_failed": "Couldn't create the channel",
         "channel_username_assign_failed": "The username could not be assigned — the channel was created as private",
+        "channel_reactions_failed": "The channel was created, but reactions could not be disabled",
         "failed": "Telegram refused the action — try again",
         "unavailable": "Telegram is temporarily unavailable — try again"
       }
