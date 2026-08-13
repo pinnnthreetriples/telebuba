@@ -1,6 +1,10 @@
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { LogEntry } from '@/shared/api';
+
 import { Odometer } from './Odometer';
+import { pipelineStage } from './pipelineStage';
 
 const STAGES = ['listen', 'detect', 'filter', 'generate', 'solve', 'comment'] as const;
 
@@ -16,17 +20,33 @@ export function PipelineCard({
   running,
   canStart,
   stats,
+  events,
   onToggle,
 }: {
   running: boolean;
   canStart: boolean;
   stats: Stat[];
+  // The page's neurocomment activity log — the rail's real position comes from it.
+  events: LogEntry[];
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  // Decorative pipeline position: a mid-flight look while running, idle when off.
-  // `number`, not the inferred `2 | -1`: TS rejects a negative literal tuple index.
-  const activeCell: number = running ? 2 : -1;
+  // Bumped only to re-read the clock when the current stage goes stale.
+  const [, tick] = useState(0);
+  // The real pipeline position. `Date.now()` at render (not state) so a stage that
+  // arrives after a long idle stretch is measured against now, not against mount.
+  const { stage: activeCell, staleAt } = pipelineStage(events, running, Date.now());
+  useEffect(() => {
+    if (staleAt === null) return;
+    const ms = staleAt - Date.now();
+    if (ms <= 0) return;
+    const id = setTimeout(() => {
+      tick((n) => n + 1);
+    }, ms);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [staleAt]);
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (

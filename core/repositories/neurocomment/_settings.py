@@ -20,6 +20,8 @@ from schemas.neurocomment import NeurocommentSettings, NeurocommentSettingsUpdat
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from schemas.neurocomment import CommentMode
+
 _SETTINGS_ID = 1
 
 
@@ -31,6 +33,8 @@ def _config_defaults() -> dict[str, object]:
         "reply_delay_min_seconds": nc.reply_delay_min_seconds,
         "reply_delay_max_seconds": nc.reply_delay_max_seconds,
         "min_trust_score": nc.min_trust_score,
+        "comment_mode": nc.comment_mode,
+        "reply_wait_minutes": nc.reply_wait_minutes,
         "updated_at": _now_iso(),
     }
 
@@ -44,6 +48,8 @@ def _row_to_settings(mapping: Mapping[str, object]) -> NeurocommentSettings:
         reply_delay_min_seconds=float(cast("float", mapping["reply_delay_min_seconds"])),
         reply_delay_max_seconds=float(cast("float", mapping["reply_delay_max_seconds"])),
         min_trust_score=int(cast("int", mapping["min_trust_score"])),
+        comment_mode=cast("CommentMode", mapping["comment_mode"]),
+        reply_wait_minutes=int(cast("int", mapping["reply_wait_minutes"])),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -65,12 +71,19 @@ async def load_neurocomment_settings() -> NeurocommentSettings:
 
 
 def _save_neurocomment_settings(data: NeurocommentSettingsUpdate) -> NeurocommentSettings:
+    # The mode pair is patch-shaped where the limits are a full replace, so an omitted
+    # field carries over the effective value instead of the schema default — otherwise
+    # the Settings screen's limits form, which never sends the mode, would silently
+    # reset the toggle the operator set on the neurocomment page.
+    current = _load_neurocomment_settings()
     values = {
         "max_comments_per_hour": data.max_comments_per_hour,
         "max_comments_per_channel_per_day": data.max_comments_per_channel_per_day,
         "reply_delay_min_seconds": data.reply_delay_min_seconds,
         "reply_delay_max_seconds": data.reply_delay_max_seconds,
         "min_trust_score": data.min_trust_score,
+        "comment_mode": data.comment_mode or current.comment_mode,
+        "reply_wait_minutes": data.reply_wait_minutes or current.reply_wait_minutes,
         "updated_at": _now_iso(),
     }
     with _get_engine().begin() as connection:

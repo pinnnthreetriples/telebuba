@@ -25,8 +25,6 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.db import (
     claim_comment,
-    count_account_channel_comments_since,
-    count_account_comments_since,
     count_channel_comments_per_account_since,
     count_comments_per_account_since,
     fetch_active_campaign_for_channel,
@@ -42,7 +40,7 @@ from core.db import (
     stamp_channel_post_seen,
 )
 from core.logging import log_event
-from services.neurocomment import _filters, _seams, _state
+from services.neurocomment import _filters, _reply_wait, _seams, _state
 from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from services.trust import account_trust_score_from
@@ -110,6 +108,16 @@ async def _handle_new_post(event: NewPostEvent) -> None:
     # the campaign gate only because a channel with no active link has no row to stamp.
     await stamp_channel_post_seen(event.channel, datetime.now(UTC).isoformat())
 
+    # The only positive record that a post ARRIVED. Everything below logs misses, so
+    # without this row the dashboard's «Новый пост» stage could never light and the
+    # pipeline rail stayed decorative. Cost is one INFO row per received post;
+    # `log_event` is best-effort, so it cannot be the reason a post goes uncommented.
+    await log_event(
+        "INFO",
+        "neurocomment_post_received",
+        extra={"channel": event.channel, "post_id": event.post_id},
+    )
+
     skip = _filters.filter_reason(event)
     if skip is not None:
         await log_event(
@@ -165,9 +173,16 @@ async def _handle_new_post(event: NewPostEvent) -> None:
                 extra={"channel": event.channel, "post_id": event.post_id, "reason": quota_reason},
             )
             return
-        won = await claim_comment(event.channel, event.post_id, campaign.campaign_id, account_id)
+        # ``reply`` mode stops here: the post is parked under the same atomic INSERT this
+        # claim uses, and the sweep decides minutes later whose comment we answer. Inside
+        # the lock with the claim because it spends the same quota slot.
+        parked = await _reply_wait.park_for_reply(event, campaign, account_id, limits)
+        won = not parked and await claim_comment(
+            event.channel, event.post_id, campaign.campaign_id, account_id
+        )
     if not won:
-        # Another worker already owns this post — idempotency, no duplicate.
+        # Another worker already owns this post — idempotency, no duplicate. Or the post is
+        # now parked, and the wait owns everything that happens to it from here.
         return
 
     # The claim is won; from here any exit other than a delivered comment must release
@@ -356,49 +371,15 @@ def _is_healthy(
     return health.ready
 
 
-def _quota_block_reason(
-    account_id: str,
-    limits: NeurocommentSettings,
-    hourly: dict[str, int],
-    daily: dict[str, int],
-) -> str | None:
-    """Which cap the account has reached, or ``None`` while under both.
-
-    ``quota_hour`` (per-account/hour) is reported before ``quota_day`` (per-channel/
-    day) when both are full, so the log names the specific limit the operator hit.
-    Quota counts in-flight claims AND delivered comments (status in claimed/posted),
-    so a burst arriving inside one account's reply-delay window can't stack past the
-    cap — each claim consumes quota the moment it is won.
-    """
-    if hourly.get(account_id, 0) >= limits.max_comments_per_hour:
-        return "quota_hour"
-    day_cap = limits.max_comments_per_channel_per_day
-    if day_cap > 0 and daily.get(account_id, 0) >= day_cap:
-        return "quota_day"
-    return None
-
-
-async def _account_quota_block_reason(
-    account_id: str, channel: str, limits: NeurocommentSettings
-) -> str | None:
-    """Fresh single-account quota re-read (which cap, if any) under the lock before the claim.
-
-    Reads only this account's fresh counts (not the whole fleet's grouped counts) — the
-    re-check is per-account by nature, so the narrow single-account readers keep it
-    O(1) rather than scanning every account's window. ``quota_hour`` outranks
-    ``quota_day`` (same order as :func:`_quota_block_reason`).
-    """
-    now = datetime.now(UTC)
-    hour_ago = (now - timedelta(hours=1)).isoformat()
-    if await count_account_comments_since(account_id, hour_ago) >= limits.max_comments_per_hour:
-        return "quota_hour"
-    day_cap = limits.max_comments_per_channel_per_day
-    if day_cap > 0:
-        day_ago = (now - timedelta(days=1)).isoformat()
-        if await count_account_channel_comments_since(account_id, channel, day_ago) >= day_cap:
-            return "quota_day"
-    return None
-
+# The quota ladder lives in ``_gates`` (file-size budget), together with the re-check the
+# ``reply``-mode wait runs before it sends: both paths score the caps through ONE function,
+# so a cap that moves moves for the immediate send and for a post parked an hour ago alike.
+# Re-exported so ``engine._quota_block_reason`` / ``engine._account_quota_block_reason``
+# still resolve for the selection ladder above and for callers.
+from services.neurocomment._gates import (  # noqa: E402 - re-export after the module body.
+    _account_quota_block_reason,
+    _quota_block_reason,
+)
 
 # The generation + outcome-classification back half lives in ``_generate`` (file-
 # size budget). ``handle_new_post`` calls ``_generate_and_post`` below; the rest

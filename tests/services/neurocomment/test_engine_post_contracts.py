@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -76,11 +76,18 @@ async def test_filtered_post_reports_reason_before_selection(
     await engine._handle_new_post(_event())
 
     select.assert_not_awaited()
-    log.assert_awaited_once_with(
-        "INFO",
-        "neurocomment_post_skipped",
-        extra={"channel": "@channel", "post_id": 41, "reason": "too_old"},
-    )
+    assert log.await_args_list == [
+        call(
+            "INFO",
+            "neurocomment_post_received",
+            extra={"channel": "@channel", "post_id": 41},
+        ),
+        call(
+            "INFO",
+            "neurocomment_post_skipped",
+            extra={"channel": "@channel", "post_id": 41, "reason": "too_old"},
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -101,10 +108,18 @@ async def test_persisted_channel_pause_blocks_selection(
     await engine._handle_new_post(_event())
 
     select.assert_not_awaited()
-    log.assert_awaited_once()
-    call = log.await_args
-    assert call is not None
-    assert call.args == ("INFO", "neurocomment_channel_cooled")
+    assert log.await_args_list == [
+        call(
+            "INFO",
+            "neurocomment_post_received",
+            extra={"channel": "@channel", "post_id": 41},
+        ),
+        call(
+            "INFO",
+            "neurocomment_channel_cooled",
+            extra={"channel": "@channel", "post_id": 41},
+        ),
+    ]
 
 
 @pytest.mark.asyncio

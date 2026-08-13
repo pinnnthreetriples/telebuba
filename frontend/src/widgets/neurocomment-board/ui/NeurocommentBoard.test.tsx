@@ -344,6 +344,101 @@ test('the open board body carries no max-height cap to clip an expanded account'
   expect(body).toHaveClass('tb-open', 'tb-settled');
 });
 
+// One account armed in two channels, having last commented in the second. The channel
+// comes off the CARD (`last_comment_channel`) and not out of `board.comments`: that feed
+// is a campaign-wide newest-first prefix capped at 50, so a busy account falls out of it
+// within the hour and the row would pair its real comment text with a channel it merely
+// joined — the very mismatch this column exists to prevent.
+function twoChannelBoard(
+  account: Partial<NonNullable<NeurocommentBoardData['accounts']>[number]>,
+): NeurocommentBoardData {
+  return {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 2, total_accounts: 3 },
+      { channel: '@sport', status: 'ready', ready_accounts: 1, total_accounts: 3 },
+    ],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        readiness: [
+          { channel: '@news', ready: true, joined: true, captcha_passed: true },
+          { channel: '@sport', ready: true, joined: true, captcha_passed: true },
+        ],
+        ...account,
+      },
+    ],
+  };
+}
+
+function renderBoard(board: NeurocommentBoardData) {
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+}
+
+// The row exists to name the comment it shows. It used to stand still on the first
+// joined channel for the whole campaign, so the operator could not tell from the board
+// where an account was actually working.
+test('the channel column follows the account’s last comment', () => {
+  renderBoard(twoChannelBoard({ last_comment_channel: '@sport' }));
+
+  expect(screen.getByText('@sport')).toBeInTheDocument();
+  expect(screen.queryByText('@news')).not.toBeInTheDocument();
+});
+
+// The comment feed is capped campaign-wide, so it can lack this account entirely while
+// the card still knows where it posted. Reading the feed instead silently reverted the
+// row to the readiness pick for exactly the busiest accounts.
+test('the channel column ignores the capped comment feed and reads the card', () => {
+  const board = twoChannelBoard({ last_comment_channel: '@sport' });
+  renderBoard({ ...board, comments: [] });
+
+  expect(screen.getByText('@sport')).toBeInTheDocument();
+});
+
+// A pin is the operator instructing this account where to work. Re-pinning has to show
+// up straight away — waiting for the account's next comment can mean waiting a day.
+test('a pin outranks the last-commented channel', () => {
+  renderBoard(twoChannelBoard({ last_comment_channel: '@sport', pinned_channels: ['@news'] }));
+
+  expect(screen.getByText('@news')).toBeInTheDocument();
+  expect(screen.queryByText('@sport')).not.toBeInTheDocument();
+});
+
+// With several pins the operator has named a set, not one channel, so within that set the
+// live one wins again.
+test('among several pins the last-commented one wins', () => {
+  renderBoard(
+    twoChannelBoard({ last_comment_channel: '@sport', pinned_channels: ['@news', '@sport'] }),
+  );
+
+  expect(screen.getByText('@sport')).toBeInTheDocument();
+});
+
+// Accepted trade-off, stated so a future reader does not "fix" it by accident: the live
+// channel outranks a stuck pair, so a ban stops surfacing HERE once the account posts
+// elsewhere. `banned_channels` in the neuro-accounts modal is where it still shows.
+test('the last-commented channel outranks a pair banned elsewhere', () => {
+  renderBoard(
+    twoChannelBoard({
+      last_comment_channel: '@sport',
+      readiness: [
+        { channel: '@news', ready: false, joined: false, captcha_passed: false, banned: true },
+        { channel: '@sport', ready: true, joined: true, captcha_passed: true },
+      ],
+    }),
+  );
+
+  expect(screen.getByText('@sport')).toBeInTheDocument();
+  expect(screen.queryByText('Забанен')).not.toBeInTheDocument();
+});
+
 test('shows the Telegram name, not the raw session id, in the account column', () => {
   // Reproduces the live data: an imported session has an empty operator label, so
   // the backend board sends the session-stem id and the column read "5_telethon".

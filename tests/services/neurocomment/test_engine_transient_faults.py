@@ -375,3 +375,29 @@ async def test_rate_limited_generation_does_not_spend_the_channels_daily_quota(
     record = await fetch_comment("@chan", 2)
     assert record is not None
     assert record.status == "posted"
+
+
+@pytest.mark.asyncio
+async def test_exhaustion_names_the_generator_and_quotes_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reason code says "gemini" for both providers, so the log must say which one.
+
+    A live day of DeepSeek timeouts reached the operator as "ошибка Gemini" with the
+    gateway's own message dropped on the floor — unreadable twice over.
+    """
+    await _make_campaign("@chan", "acc-1")
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
+    monkeypatch.setattr(settings.deepseek, "api_key", "k")  # text post + a key = DeepSeek
+
+    async def _generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="error", error="ReadTimeout: timed out")
+
+    monkeypatch.setattr(_seams, "generate_text_deepseek", _generate)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_extra("neurocomment_generation_exhausted", "reason") == "gemini_error"
+    assert await _latest_extra("neurocomment_generation_exhausted", "error_type") == (
+        "deepseek: ReadTimeout: timed out"
+    )

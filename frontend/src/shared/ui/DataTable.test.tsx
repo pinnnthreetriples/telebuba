@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 
@@ -156,10 +156,97 @@ test('the expander still toggles, and the sub-row renders inside its own card', 
   expect(toggle.closest('div.tb-row')).toContainElement(subRow);
   expect(screen.queryByText('подробности second-row')).toBeNull();
 
+  // Collapsing no longer removes the sub-row in the same commit: it stays, marked
+  // `tb-closing`, so grid-template-rows can animate 1fr → 0fr. Dropping ~270px in a
+  // single frame is what made the LAST row of a board jump — that row sits at the
+  // bottom of the document, so the browser clamped the window scroll and slid the
+  // whole card. No CSS runs in happy-dom, hence the hand-fired transitionend.
   await userEvent.click(toggle);
+  const closing = screen.getByText('подробности first-row').closest('.tb-subrow');
+  expect(closing).toHaveClass('tb-closing');
+
+  fireEvent.transitionEnd(closing as HTMLElement);
   await waitFor(() => {
     expect(screen.queryByText('подробности first-row')).toBeNull();
   });
+});
+
+// The reported bug's own layout: the desktop table, and its LAST row — the one whose
+// sub-row is the bottom of the document.
+test('the last table row keeps its closing sub-row until the transition ends', async () => {
+  renderTable();
+
+  const toggle = screen.getByLabelText('Раскрыть second-row');
+  await userEvent.click(toggle);
+  expect(await screen.findByText('подробности second-row')).toBeInTheDocument();
+
+  await userEvent.click(toggle);
+  const closing = screen.getByText('подробности second-row').closest('.tb-subrow');
+  expect(closing).toHaveClass('tb-closing');
+
+  fireEvent.transitionEnd(closing as HTMLElement);
+  await waitFor(() => {
+    expect(screen.queryByText('подробности second-row')).toBeNull();
+  });
+});
+
+// Regression: the exit state used to be one "which row is closing" id on the table, so
+// the next expansion change wiped it and the row still animating was dropped in a single
+// frame — the exact snap the animation exists to remove, on the commonest gesture there
+// is (browsing accounts one after another).
+test('opening another row does not cut short the one still closing', async () => {
+  renderTable();
+
+  const first = screen.getByLabelText('Раскрыть first-row');
+  await userEvent.click(first);
+  await userEvent.click(first);
+  // second-row's sub-row opens while first-row's is mid-exit
+  await userEvent.click(screen.getByLabelText('Раскрыть second-row'));
+
+  const closing = screen.getByText('подробности first-row').closest('.tb-subrow');
+  expect(closing).toHaveClass('tb-closing');
+  expect(screen.getByText('подробности second-row').closest('.tb-subrow')).not.toHaveClass(
+    'tb-closing',
+  );
+});
+
+// Regression: with a shared closing id and index-based row ids, a poll that shortened the
+// data left the id matching a LATER, collapsed row — whose sub-row then rendered, and
+// stayed focusable, for the life of the component.
+test('a row that unmounts mid-close leaves no ghost behind', async () => {
+  const { rerender } = render(
+    <DataTable
+      data={DATA}
+      columns={COLUMNS}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+
+  const second = screen.getByLabelText('Раскрыть second-row');
+  await userEvent.click(second);
+  await userEvent.click(second);
+  expect(screen.getByText('подробности second-row')).toBeInTheDocument();
+
+  // the poll returns one row, dropping the row that was mid-exit…
+  rerender(
+    <DataTable
+      data={[DATA[0]!]}
+      columns={COLUMNS}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+  expect(screen.queryByText('подробности second-row')).toBeNull();
+
+  // …and when it grows back, the row at that index is collapsed, with nothing revealed.
+  rerender(
+    <DataTable
+      data={DATA}
+      columns={COLUMNS}
+      renderSubRow={(row) => <div>подробности {row.original.name}</div>}
+    />,
+  );
+  expect(screen.getByText('second-row')).toBeInTheDocument();
+  expect(screen.queryByText('подробности second-row')).toBeNull();
 });
 
 test('getRowProps reaches the card', async () => {

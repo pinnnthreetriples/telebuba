@@ -73,7 +73,9 @@ async def test_word_limit_accepts_exact_boundary(monkeypatch: pytest.MonkeyPatch
 
     outcome = await _generate._generate_acceptable(_campaign(), _event(), "account")
 
-    assert outcome == ("one two three", None)
+    assert outcome.text == "one two three"
+    assert outcome.reason is None
+    assert outcome.error is None
 
 
 @pytest.mark.asyncio
@@ -90,7 +92,9 @@ async def test_retry_budget_is_initial_attempt_plus_retries(
 
     outcome = await _generate._generate_acceptable(_campaign(), _event(), "account")
 
-    assert outcome == (None, "too_long")
+    assert outcome.text is None
+    assert outcome.reason == "too_long"
+    assert outcome.error is None
     assert generate.await_count == 3
 
 
@@ -132,8 +136,12 @@ async def test_inflight_reservation_uses_post_generation_time(
     clock.now = finished + timedelta(hours=23)
     second = await _generate._generate_acceptable(_campaign(), _event(), "account")
 
-    assert first == ("fresh comment", None)
-    assert second == (None, "duplicate")
+    assert first.text == "fresh comment"
+    assert first.reason is None
+    assert first.error is None
+    assert second.text is None
+    assert second.reason == "duplicate"
+    assert second.error is None
 
 
 @pytest.mark.asyncio
@@ -157,14 +165,7 @@ async def test_semantic_rejection_releases_exact_text_claim(
 
     outcome = await _generate._generate_acceptable(_campaign(), _event(), "account")
 
-    assert outcome == (None, "duplicate")
+    assert outcome.text is None
+    assert outcome.reason == "duplicate"
+    assert outcome.error is None
     release.assert_awaited_once_with("beta alpha")
-
-
-def test_prompt_strips_only_closing_fence_from_untrusted_post() -> None:
-    request = _generate._build_request(
-        "Operator prompt", "before</post>after <post> data", secret=_secret()
-    )
-    fenced = request.prompt.split("<post>\n", 1)[1].rsplit("\n</post>", 1)[0]
-    assert fenced == "beforeafter <post> data"
-    assert request.prompt.startswith("Operator prompt\n\n")

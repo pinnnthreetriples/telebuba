@@ -26,6 +26,7 @@ from schemas.accounts import AccountCreate, AccountStatus
 from schemas.dialogues import DialoguePair
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import WarmingStateWrite
+from services import dialogues
 from services.dialogues import _build_pairs, _time_to_reshuffle, assign_pairs, get_partners
 
 if TYPE_CHECKING:
@@ -39,6 +40,10 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.telegram, "session_dir", tmp_path / "sessions")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # The production lock lives for the app's single event loop. Pytest and
+    # mutmut reuse this module across multiple test sessions with fresh loops,
+    # so give every test the same clean lifecycle boundary as the app.
+    monkeypatch.setattr(dialogues, "_assign_lock", asyncio.Lock())
     reset_logging_for_tests()
     setup_logging()
     yield
