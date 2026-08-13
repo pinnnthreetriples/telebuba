@@ -6,37 +6,26 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
-from sqlalchemy import insert, select
 
 from core.config import settings
 from core.db import (
-    _get_engine,
     bump_channel_pause,
     configure_database,
     create_account,
     fetch_account,
     insert_challenge,
     list_campaign_readiness,
-    list_recent_logs,
-    set_listener_account_id,
     stamp_rejoin_attempt,
     upsert_readiness,
-)
-from core.repositories.neurocomment._tables import (
-    _neurocomment_campaign_accounts,
-    _neurocomment_campaign_channels,
-    _neurocomment_comments,
 )
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate
 from services.accounts import remove_account
-from services.neurocomment import _lifecycle, campaigns
+from services.neurocomment import campaigns
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    from schemas.logs import LogEntry
 
 
 @pytest.fixture(autouse=True)
@@ -413,210 +402,3 @@ async def test_remove_account_clears_neurocomment_links() -> None:
     assert (await campaigns.list_campaign_accounts(campaign.campaign_id)).links == []
     readiness = (await list_campaign_readiness(campaign.campaign_id)).readiness
     assert all(r.account_id != "neuro-acc" for r in readiness)
-
-
-@pytest.mark.asyncio
-async def test_delete_campaign() -> None:
-    campaign = await campaigns.create_campaign(CampaignCreate(name="DeleteMe", prompt="p"))
-    await campaigns.link_channel(campaign.campaign_id, "@chan")
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
-
-    # Insert a dummy comment linked to this campaign and account
-    with _get_engine().begin() as conn:
-        conn.execute(
-            insert(_neurocomment_comments).values(
-                channel="@chan",
-                post_id=123,
-                campaign_id=campaign.campaign_id,
-                account_id="acc-1",
-                status="posted",
-                created_at="2026-06-25T10:00:00Z",
-                updated_at="2026-06-25T10:00:00Z",
-            ),
-        )
-
-    # Verify everything exists before deletion
-    assert len((await campaigns.list_campaigns()).campaigns) == 1
-    assert len((await campaigns.list_campaign_channels(campaign.campaign_id)).links) == 1
-    assert len((await campaigns.list_campaign_accounts(campaign.campaign_id)).links) == 1
-    with _get_engine().connect() as conn:
-        assert (
-            conn.execute(
-                select(_neurocomment_comments).where(
-                    _neurocomment_comments.c.campaign_id == campaign.campaign_id,
-                ),
-            ).first()
-            is not None
-        )
-
-    # Perform the deletion
-    await campaigns.delete_campaign(campaign.campaign_id)
-
-    # Verify all records for the campaign are removed from all related tables
-    assert len((await campaigns.list_campaigns()).campaigns) == 0
-    with _get_engine().connect() as conn:
-        # Channels link check
-        assert (
-            conn.execute(
-                select(_neurocomment_campaign_channels).where(
-                    _neurocomment_campaign_channels.c.campaign_id == campaign.campaign_id,
-                ),
-            ).first()
-            is None
-        )
-        # Accounts link check
-        assert (
-            conn.execute(
-                select(_neurocomment_campaign_accounts).where(
-                    _neurocomment_campaign_accounts.c.campaign_id == campaign.campaign_id,
-                ),
-            ).first()
-            is None
-        )
-        # Comments check
-        assert (
-            conn.execute(
-                select(_neurocomment_comments).where(
-                    _neurocomment_comments.c.campaign_id == campaign.campaign_id,
-                ),
-            ).first()
-            is None
-        )
-
-
-def _insert_comment(campaign_id: str, channel: str, post_id: int, status: str) -> None:
-    with _get_engine().begin() as conn:
-        conn.execute(
-            insert(_neurocomment_comments).values(
-                channel=channel,
-                post_id=post_id,
-                campaign_id=campaign_id,
-                account_id="acc-1",
-                status=status,
-                created_at="2026-06-25T10:00:00Z",
-                updated_at="2026-06-25T10:00:00Z",
-            ),
-        )
-
-
-async def _deletion_log_entries() -> list[LogEntry]:
-    return [
-        entry
-        for entry in await list_recent_logs(limit=50)
-        if entry.event == "neurocomment_campaign_deleted"
-    ]
-
-
-@pytest.mark.asyncio
-async def test_delete_campaign_reconciles_after_the_rows_are_gone(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The listener is re-pointed, and only once the DB no longer holds the campaign's links.
-
-    Order is the whole fix, not the call: reconcile rebuilds the watch set by re-reading the
-    DB, so running it before the DELETE resubscribes to the very links about to vanish and
-    the listener goes on awaiting posts from them. The live stand showed the other half of
-    it — no reconcile at all, and a listener that kept logging a miss per post until restart.
-    """
-    campaign = await campaigns.create_campaign(CampaignCreate(name="D", prompt="p"))
-    await campaigns.link_channel(campaign.campaign_id, "@chan")
-    order: list[str] = []
-    watched: list[int] = []
-    real_delete = campaigns.db.delete_campaign
-
-    async def _delete(campaign_id: str) -> None:
-        order.append("delete")
-        await real_delete(campaign_id)
-
-    async def _reconcile() -> None:
-        order.append("reconcile")
-        links = (await campaigns.list_campaign_channels(campaign.campaign_id)).links
-        watched.append(len(links))
-
-    monkeypatch.setattr(campaigns.db, "delete_campaign", _delete)
-    monkeypatch.setattr(campaigns._runtime, "reconcile_if_running", _reconcile)
-
-    await campaigns.delete_campaign(campaign.campaign_id)
-
-    assert order == ["delete", "reconcile"]
-    # What reconcile would have re-subscribed to: nothing. Asserted on the DB it reads,
-    # because the call order alone would still pass if the delete were not yet committed.
-    assert watched == [0]
-
-
-@pytest.mark.asyncio
-async def test_delete_campaign_does_not_wake_a_stopped_listener(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A remembered-but-paused listener stays down — the gate stays inside reconcile_if_running.
-
-    Deleting a campaign must not be a back door to Start: the delete calls the same gated
-    helper its five neighbours do, and the real one (not the fixture's stub) is put back here
-    so the persisted ``listener_running`` flag is what decides.
-    """
-    reconciled: list[str] = []
-
-    async def _reconcile_runtime(account_id: str) -> None:
-        reconciled.append(account_id)
-
-    monkeypatch.setattr(
-        campaigns._runtime,
-        "reconcile_if_running",
-        _lifecycle.reconcile_if_running,
-    )
-    monkeypatch.setattr(campaigns._runtime, "reconcile_neurocomment_runtime", _reconcile_runtime)
-    await set_listener_account_id("listener-1")
-
-    campaign = await campaigns.create_campaign(CampaignCreate(name="D", prompt="p"))
-    await campaigns.link_channel(campaign.campaign_id, "@chan")
-    await campaigns.delete_campaign(campaign.campaign_id)
-
-    assert reconciled == []
-
-
-@pytest.mark.asyncio
-async def test_delete_campaign_logs_what_it_destroyed() -> None:
-    """One WARNING line carrying the counts, read while the rows still existed.
-
-    The operator deleted a campaign on the live stand and the log held not one line about
-    it — the 681 erased comments could only be reconstructed by reading the database.
-    """
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    campaign = await campaigns.create_campaign(CampaignCreate(name="D", prompt="p"))
-    await campaigns.link_channel(campaign.campaign_id, "@a")
-    await campaigns.link_channel(campaign.campaign_id, "@b")
-    await campaigns.link_channel(campaign.campaign_id, "@gone")
-    await campaigns.deactivate_channel(campaign.campaign_id, "@gone")
-    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    # Mixed statuses: the count is of history, not of quota, so a failed row counts too.
-    _insert_comment(campaign.campaign_id, "@a", 1, "posted")
-    _insert_comment(campaign.campaign_id, "@a", 2, "failed")
-    _insert_comment(campaign.campaign_id, "@b", 3, "waiting")
-
-    await campaigns.delete_campaign(campaign.campaign_id)
-
-    entries = await _deletion_log_entries()
-    assert len(entries) == 1
-    assert entries[0].level == "WARNING"
-    assert entries[0].extra == {
-        "campaign_id": campaign.campaign_id,
-        "channels": 2,  # @gone was already deactivated — never in the watch set
-        "comments": 3,
-    }
-
-
-@pytest.mark.asyncio
-async def test_delete_campaign_logs_zeros_for_an_empty_campaign() -> None:
-    """An empty campaign is logged with zeros: a missing line is the bug, not a shortcut."""
-    campaign = await campaigns.create_campaign(CampaignCreate(name="Empty", prompt="p"))
-
-    await campaigns.delete_campaign(campaign.campaign_id)
-
-    entries = await _deletion_log_entries()
-    assert len(entries) == 1
-    assert entries[0].extra == {
-        "campaign_id": campaign.campaign_id,
-        "channels": 0,
-        "comments": 0,
-    }

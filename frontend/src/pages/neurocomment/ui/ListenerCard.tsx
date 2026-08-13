@@ -12,6 +12,7 @@ export function ListenerCard({
   listenerId,
   running,
   activeCampaignCount,
+  activeChannelCount,
   unwatchedChannels,
   listenerActionsOpen,
   onToggleActions,
@@ -26,6 +27,7 @@ export function ListenerCard({
   listenerId: string;
   running: boolean;
   activeCampaignCount: number;
+  activeChannelCount: number;
   unwatchedChannels: string[];
   listenerActionsOpen: boolean;
   onToggleActions: () => void;
@@ -38,12 +40,19 @@ export function ListenerCard({
   onPickListener: (accountId: string) => void;
 }) {
   const { t } = useTranslation();
-  // A running listener with no active campaign has no channel to listen to, so green
-  // promised work that is not happening — an operator read that as "all fine" and came
-  // asking why. The process itself stays up (the operator may be between campaigns, and
-  // the pause action stays where it is): only the plaque drops to the stopped palette
-  // and names the half that is false.
-  const working = running && activeCampaignCount > 0;
+  // Green promised work that was not happening: an operator deleted their only campaign,
+  // read the still-green plaque as "all fine", and came asking why it said «Слушает».
+  //
+  // The test is the WATCH SET, not the campaign count, because they come apart in three
+  // reachable ways and the campaign count is green in all of them: an active campaign whose
+  // channels were freed one at a time, a campaign created and not yet given any, and the
+  // "up but deaf" state ``_lifecycle`` documents, where reconcile unsubscribed the listener
+  // because its account is warming. This is also the number the card's own «Каналов» tile
+  // shows, so the plaque can no longer contradict the tile beside it.
+  //
+  // The process itself stays up and the pause action stays where it is — the operator may
+  // be between campaigns, and being switched off unasked is worse than a muted label.
+  const working = running && activeChannelCount > 0;
   const statusLabel = working
     ? t('neurocomment.listener.listening')
     : running

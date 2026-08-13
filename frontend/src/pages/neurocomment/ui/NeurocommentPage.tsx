@@ -506,6 +506,10 @@ export function NeurocommentPage() {
             listenerId={listenerId}
             running={running}
             activeCampaignCount={activeCampaignCount}
+            // The same number the «Каналов» tile shows, so the plaque and the tile cannot
+            // disagree. `running` is already false until the runtime read lands, so the 0
+            // fallback here can never paint a live listener as idle.
+            activeChannelCount={runtime.data?.active_channels ?? 0}
             unwatchedChannels={runtime.data?.unwatched_channels ?? []}
             listenerActionsOpen={listenerActionsOpen}
             onToggleActions={() => {

@@ -670,6 +670,7 @@
     "neurocomment_sweep_failed": "Ошибка проверки удалённых комментариев",
     "neurocomment_settings_saved": "Настройки сохранены",
     "neurocomment_campaign_deleted": "Кампания удалена вместе с каналами и историей комментариев",
+    "neurocomment_campaign_delete_reconcile_failed": "Кампания удалена, но прослушивание не пересобралось — оно обновится при следующем изменении или перезапуске",
     "warming_started": "Прогрев запущен",
     "warming_stopped": "Прогрев остановлен",
     "warming_complete": "Прогрев завершён",

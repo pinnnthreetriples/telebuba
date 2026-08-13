@@ -28,6 +28,7 @@ function card(listenerOpen: boolean): ReactElement {
         listenerId=""
         running={false}
         activeCampaignCount={0}
+        activeChannelCount={0}
         unwatchedChannels={[]}
         listenerActionsOpen={false}
         onToggleActions={vi.fn()}
@@ -44,13 +45,18 @@ function card(listenerOpen: boolean): ReactElement {
 }
 
 // A listener IS set, so the card renders the status plaque instead of the dropdown.
-function plaque(running: boolean, activeCampaignCount: number): ReactElement {
+function plaque(
+  running: boolean,
+  activeCampaignCount: number,
+  activeChannelCount: number,
+): ReactElement {
   return (
     <QueryClientProvider client={queryClient}>
       <ListenerCard
         listenerId="a1"
         running={running}
         activeCampaignCount={activeCampaignCount}
+        activeChannelCount={activeChannelCount}
         unwatchedChannels={[]}
         listenerActionsOpen={false}
         onToggleActions={vi.fn()}
@@ -67,7 +73,7 @@ function plaque(running: boolean, activeCampaignCount: number): ReactElement {
 }
 
 test('a listener with campaigns still reads as plainly listening', () => {
-  render(plaque(true, 2));
+  render(plaque(true, 2, 5));
 
   expect(screen.getByText('Слушает')).toBeVisible();
   expect(screen.queryByText(/каналов нет/)).toBeNull();
@@ -76,14 +82,14 @@ test('a listener with campaigns still reads as plainly listening', () => {
 // The process is up but has no channel to listen to; the plaque used to keep promising
 // green "Слушает" next to its own `0`, and an operator came asking which one was true.
 test('a listener left with no campaign says so instead of promising work', () => {
-  render(plaque(true, 0));
+  render(plaque(true, 0, 0));
 
   expect(screen.getByText('Слушает, каналов нет')).toBeVisible();
   expect(screen.queryByText('Слушает')).toBeNull();
 });
 
 test('a paused listener still reads as paused', () => {
-  render(plaque(false, 0));
+  render(plaque(false, 0, 0));
 
   expect(screen.getByText('На паузе')).toBeVisible();
 });
@@ -103,4 +109,15 @@ test('a closed listener dropdown takes no focus, an open one does', () => {
   const open = screen.getByRole('button', { name: 'Boris' });
   open.focus();
   expect(open).toHaveFocus();
+});
+
+// The state an audit found the first version of this plaque still lying in: the campaign is
+// active, so a campaign-count test called it healthy, but its channels were freed one at a
+// time and the watch set is empty. Same shape as the "up but deaf" state `_lifecycle`
+// documents, where reconcile unsubscribes a listener whose account is warming.
+test('an active campaign with no channels left does not buy a green plaque', () => {
+  render(plaque(true, 1, 0));
+
+  expect(screen.getByText('Слушает, каналов нет')).toBeVisible();
+  expect(screen.queryByText('Слушает')).toBeNull();
 });

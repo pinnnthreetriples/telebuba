@@ -669,6 +669,7 @@
     "neurocomment_sweep_failed": "Deleted-comment sweep failed",
     "neurocomment_settings_saved": "Settings saved",
     "neurocomment_campaign_deleted": "Campaign deleted along with its channels and comment history",
+    "neurocomment_campaign_delete_reconcile_failed": "Campaign deleted, but the watch list was not rebuilt — it refreshes on the next change or restart",
     "warming_started": "Warming started",
     "warming_stopped": "Warming stopped",
     "warming_complete": "Warming complete",
