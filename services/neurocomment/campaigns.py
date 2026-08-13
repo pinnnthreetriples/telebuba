@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from core import db
 from core.config import settings
+from core.logging import log_event
 from core.repositories.neurocomment import (
     set_campaign_account_channels,
     set_campaign_status,
@@ -225,4 +226,22 @@ async def delete_campaign(campaign_id: str) -> None:
     # First: a discovery run would otherwise keep probing the shared listener for
     # minutes on behalf of rows this delete is about to remove, writing to nothing.
     _discovery_state.cancel_campaign_run(campaign_id)
+    # Counted while the rows are still there. This is the most destructive action in the
+    # domain and the only irreversible one — the comment history has no other copy — so the
+    # log line is the whole record of what went, and after the DELETE both numbers read
+    # zero. Channels are the ACTIVE links, the count the campaign card showed the operator
+    # a click earlier and the one the listener was watching.
+    channels = len((await db.list_campaign_channels(campaign_id)).links)
+    comments = await db.count_campaign_comments(campaign_id)
     await db.delete_campaign(campaign_id)
+    await log_event(
+        "WARNING",
+        "neurocomment_campaign_deleted",
+        extra={"campaign_id": campaign_id, "channels": channels, "comments": comments},
+    )
+    # After the delete, never before: reconcile rebuilds the watch set by re-reading the DB,
+    # so running it first would resubscribe the listener to the very links about to vanish and
+    # leave it awaiting posts from channels the campaign no longer has — writing a miss for
+    # each one until the next restart. ``reconcile_if_running`` keeps its own gate on
+    # ``listener_running``, so a delete never wakes a stopped listener.
+    await _runtime.reconcile_if_running()

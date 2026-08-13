@@ -43,6 +43,51 @@ function card(listenerOpen: boolean): ReactElement {
   );
 }
 
+// A listener IS set, so the card renders the status plaque instead of the dropdown.
+function plaque(running: boolean, activeCampaignCount: number): ReactElement {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ListenerCard
+        listenerId="a1"
+        running={running}
+        activeCampaignCount={activeCampaignCount}
+        unwatchedChannels={[]}
+        listenerActionsOpen={false}
+        onToggleActions={vi.fn()}
+        onToggleRuntime={vi.fn()}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        listenerOpen={false}
+        onToggleOpen={vi.fn()}
+        accountOptions={OPTIONS}
+        onPickListener={vi.fn()}
+      />
+    </QueryClientProvider>
+  );
+}
+
+test('a listener with campaigns still reads as plainly listening', () => {
+  render(plaque(true, 2));
+
+  expect(screen.getByText('Слушает')).toBeVisible();
+  expect(screen.queryByText(/каналов нет/)).toBeNull();
+});
+
+// The process is up but has no channel to listen to; the plaque used to keep promising
+// green "Слушает" next to its own `0`, and an operator came asking which one was true.
+test('a listener left with no campaign says so instead of promising work', () => {
+  render(plaque(true, 0));
+
+  expect(screen.getByText('Слушает, каналов нет')).toBeVisible();
+  expect(screen.queryByText('Слушает')).toBeNull();
+});
+
+test('a paused listener still reads as paused', () => {
+  render(plaque(false, 0));
+
+  expect(screen.getByText('На паузе')).toBeVisible();
+});
+
 // .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so the account buttons
 // are rendered and kept their tab stops while the list was closed. `inert` is what
 // keeps a keyboard operator out; happy-dom honours it for focus, which is exactly the
