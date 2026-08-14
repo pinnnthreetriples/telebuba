@@ -19,7 +19,7 @@ from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._errors import service_errors_to_http
-from api.v1._uploads import reject_oversized_upload
+from api.v1._uploads import reject_oversized_upload, staged_upload
 from core.config import settings
 from schemas.accounts import (
     _ACCOUNT_ID_PATTERN,
@@ -34,6 +34,7 @@ from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, 
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from services import accounts, spam_status
+from services import warming as warming_service
 
 # No router-wide ``responses``: the routes here do NOT share one error surface (a
 # blanket declaration advertised 404/503 on ``/accounts/stats``, which answers
@@ -202,13 +203,19 @@ async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRe
     "/accounts/{account_id}",
     status_code=http_status.HTTP_204_NO_CONTENT,
     operation_id="deleteAccount",
-    responses=SERVICE_ERRORS,
+    responses=SERVICE_ERRORS | error_responses(409),
 )
 async def delete_account(account_id: AccountIdPath) -> None:
     # 404 on a missing row instead of a 204 that deleted nothing (or, before the
     # service-side guard, unlinked whatever the id resolved to).
-    with service_errors_to_http():
-        await accounts.remove_account(account_id)
+    try:
+        with service_errors_to_http():
+            await accounts.remove_account(account_id)
+    except warming_service.WarmingTaskNotQuiescentError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="warming task is still stopping",
+        ) from exc
 
 
 @router.post(
@@ -221,27 +228,22 @@ async def import_account_tdata(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
 ) -> TdataImportResult:
-    # ponytail: reads the archive into memory; stream to a temp file + content_path
-    # if multi-hundred-MB tdata archives become common.
-    reject_oversized_upload(
+    async with staged_upload(
         file,
         max_bytes=settings.profile_media.tdata_max_bytes,
         detail="tdata archive is too large",
-    )
-    content = await file.read()
-    # Model construction stays INSIDE the mapper (same as ``import-session``): the
-    # request model is assembled here from Form/File params, so an empty archive or a
-    # blank ``label`` reaches this route as a Pydantic ``ValidationError`` and the
-    # local 400 answered with its multi-line English prose naming the model
-    # (non-negotiable #12). It now gets the same 422 ``validation_error`` envelope
-    # every other malformed request gets; genuine service refusals still map to 400.
-    with service_errors_to_http():
-        request = TdataConvertRequest(
-            filename=file.filename or "tdata.zip",
-            content=content,
-            label=label,
-        )
-        return await accounts.import_account_tdata(request)
+        suffix=".zip",
+    ) as content_path:
+        # Keep the private temp file alive through conversion and remove it after
+        # success, refusal, exception, or cancellation. No 200 MB ``bytes`` copy.
+        with service_errors_to_http():
+            request = TdataConvertRequest(
+                filename=file.filename or "tdata.zip",
+                # Preserve the normal Pydantic 422 for an explicitly empty part.
+                content_path=content_path if file.size != 0 else None,
+                label=label,
+            )
+            return await accounts.import_account_tdata(request)
 
 
 @router.post(

@@ -8,20 +8,44 @@ logic, no direct DB/Telegram access.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api._middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from api._middleware import (
+    BodyLimitPolicy,
+    BodySizeLimitMiddleware,
+    OriginProtectionMiddleware,
+    SecurityHeadersMiddleware,
+)
 from api.errors import register_error_handlers
 from api.v1 import router as v1_router
 from core.config import settings
+from services import auth as auth_service
 
 # FastAPI's lifespan: a callable taking the app and yielding once. Typed here in
 # stdlib terms so api/ needs no starlette import (allowlist discipline).
 Lifespan = Callable[[FastAPI], AbstractAsyncContextManager[None]]
+
+
+async def _valid_session(token: str) -> bool:
+    """Fail closed unless JWT signature, expiry, user, and revocation version pass."""
+    return await auth_service.resolve_user(token) is not None
+
+
+def _large_upload_patterns() -> tuple[str, ...]:
+    """Exact upload endpoints allowed to exceed the anonymous body budget."""
+    prefix = re.escape(f"/api/{settings.api.version}")
+    segment = r"[^/]+"
+    return (
+        rf"{prefix}/accounts/import-(?:tdata|session)",
+        rf"{prefix}/accounts/photo",
+        rf"{prefix}/accounts/{segment}/(?:story|music)",
+        rf"{prefix}/accounts/{segment}/channels/{segment}/(?:photo|posts)",
+    )
 
 
 def create_app(lifespan: Lifespan | None = None) -> FastAPI:
@@ -43,9 +67,21 @@ def create_app(lifespan: Lifespan | None = None) -> FastAPI:
     # routing resolves the auth dependency, and the header stamp must wrap its 413.
     app.add_middleware(
         BodySizeLimitMiddleware,
-        max_bytes=settings.api.max_request_bytes,
-        max_anonymous_bytes=settings.api.max_anonymous_request_bytes,
+        policy=BodyLimitPolicy(
+            max_bytes=settings.api.max_request_bytes,
+            max_anonymous_bytes=settings.api.max_anonymous_request_bytes,
+            cookie_name=settings.auth.cookie_name,
+            max_concurrent_uploads=settings.api.max_concurrent_uploads,
+            large_upload_path_patterns=_large_upload_patterns(),
+        ),
+        validate_session=_valid_session,
+    )
+    # Added after the body limiter, therefore wraps it: a browser-originated CSRF
+    # refusal happens before session DB validation or any request-body read.
+    app.add_middleware(
+        OriginProtectionMiddleware,
         cookie_name=settings.auth.cookie_name,
+        allowed_origins=settings.api.cors_origins,
     )
     app.add_middleware(SecurityHeadersMiddleware)
     register_error_handlers(app)

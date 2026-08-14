@@ -1188,7 +1188,13 @@ export type DiscoverySearchOutcome = {
   /**
    * Status
    */
-  status: 'started' | 'already_running' | 'no_account' | 'account_cooling' | 'daily_limit_reached';
+  status:
+    | 'started'
+    | 'already_running'
+    | 'no_account'
+    | 'account_busy'
+    | 'account_cooling'
+    | 'daily_limit_reached';
 };
 
 /**
@@ -3562,6 +3568,10 @@ export type DeleteAccountErrors = {
    */
   404: ErrorEnvelope;
   /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -5279,6 +5289,10 @@ export type PromoteToNeurocommentErrors = {
    */
   401: ErrorEnvelope;
   /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -5317,6 +5331,10 @@ export type HandoffToNeurocommentErrors = {
    * Not authenticated
    */
   401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
   /**
    * Request validation failed
    */

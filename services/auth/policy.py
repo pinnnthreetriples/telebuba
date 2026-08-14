@@ -19,6 +19,7 @@ from core.repositories.users import (
     get_user_by_username,
 )
 from schemas.auth import LoginRequest, UserRead, UserRecord
+from services.auth import _argon2
 
 # Verifying against a throwaway hash when the user does not exist equalizes login
 # timing, so a caller cannot enumerate usernames by response time.
@@ -28,9 +29,9 @@ _DUMMY_HASH = core_auth.hash_password("timing-equalizer-not-a-real-password")
 async def authenticate(credentials: LoginRequest) -> UserRead | None:
     record = await get_user_by_username(credentials.username)
     if record is None:
-        core_auth.verify_password(credentials.password, _DUMMY_HASH)
+        await _argon2.verify_password(credentials.password, _DUMMY_HASH)
         return None
-    if not core_auth.verify_password(credentials.password, record.password_hash):
+    if not await _argon2.verify_password(credentials.password, record.password_hash):
         return None
     return record.to_read()
 
@@ -67,7 +68,7 @@ async def seed_admin_if_empty() -> None:
     record = UserRecord(
         id=uuid.uuid4().hex,
         username=settings.auth.admin_username,
-        password_hash=core_auth.hash_password(settings.auth.admin_password),
+        password_hash=await _argon2.hash_password(settings.auth.admin_password),
         role="admin",
     )
     await create_user(record)

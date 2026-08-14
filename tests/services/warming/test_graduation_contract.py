@@ -213,7 +213,10 @@ async def test_task_cleanup_error_is_logged_but_stop_still_lands(
     async def log(_level: str, event: str, **kwargs: object) -> None:
         events.append((event, kwargs))
 
+    # The failed-task report is emitted by the shared cancellation primitive in
+    # ``_runtime``; only ``warming_stopped`` comes from ``_graduation`` itself.
     monkeypatch.setattr(_graduation, "log_event", log)
+    monkeypatch.setattr(_runtime, "log_event", log)
 
     card = await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
 

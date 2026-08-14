@@ -1,0 +1,25 @@
+# One line ending everywhere, including in the Windows working tree.
+#
+# Without this, `core.autocrlf=true` hands the working tree CRLF while the
+# repository keeps LF, and the two tools that read those files disagree:
+# `prettier --check .` reports 200+ untouched files as misformatted, while
+# `git status` stays clean because it converts back on the way in. The
+# pre-commit `mixed-line-ending` hook then rewrites the staged files and aborts
+# the first commit of every session, so each commit has to be made twice.
+#
+# `eol=lf` is what stops it: it pins the checkout, not just the blob, so a fresh
+# clone or worktree on Windows gets exactly what CI on Linux gets.
+* text=auto eol=lf
+
+# Binary assets: never touched, never diffed as text.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.db binary
+*.session binary

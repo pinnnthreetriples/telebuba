@@ -11,6 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from core.config import settings
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     claim_comment,
@@ -25,7 +26,9 @@ from core.db import (  # type: ignore[attr-defined]
     park_comment,
     promote_waiting_to_claimed,
     reclaim_stale_claims,
+    release_claim,
 )
+from core.repositories.neurocomment._waiting import ReplyStage, mark_reply_stage
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 
@@ -57,6 +60,28 @@ def _backdate_created_and_updated(post_id: int, when: datetime) -> None:
         )
 
 
+def _backdate_updated(post_id: int, when: datetime) -> None:
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_comments SET updated_at = ? WHERE post_id = ?",
+            (when.isoformat(), post_id),
+        )
+
+
+def _reply_metadata(post_id: int) -> dict[str, object]:
+    with _get_engine().connect() as connection:
+        row = (
+            connection.exec_driver_sql(
+                "SELECT status, created_at, updated_at, reply_state, reply_stage, reply_outcome, "
+                "reply_attempts, reply_deadline_at FROM neurocomment_comments WHERE post_id = ?",
+                (post_id,),
+            )
+            .mappings()
+            .one()
+        )
+    return dict(row)
+
+
 @pytest.mark.asyncio
 async def test_park_creates_a_waiting_row_and_is_idempotent() -> None:
     campaign_id = await _campaign_with_account()
@@ -65,6 +90,12 @@ async def test_park_creates_a_waiting_row_and_is_idempotent() -> None:
     parked = await fetch_comment("@chan", 100)
     assert parked is not None
     assert parked.status == "waiting"
+    metadata = _reply_metadata(100)
+    assert metadata["reply_state"] == "waiting"
+    assert metadata["reply_stage"] == "waiting"
+    assert metadata["reply_outcome"] is None
+    assert metadata["reply_attempts"] == 0
+    assert metadata["reply_deadline_at"] is not None
 
     # Same guarantee as claim_comment: a re-delivered post or a restart replaying it
     # loses the conflict rather than opening a second row for the same post.
@@ -88,8 +119,8 @@ async def test_park_and_claim_compete_for_the_same_post() -> None:
 
 
 @pytest.mark.asyncio
-async def test_park_stamps_created_at_so_the_deadline_needs_no_column() -> None:
-    """The wait expires at ``created_at + N``; this proves the stamp is there to add to."""
+async def test_park_freezes_deadline_from_the_same_creation_timestamp() -> None:
+    """A parked row keeps the exact deadline promised when it consumed quota."""
     campaign_id = await _campaign_with_account()
     before = datetime.now(UTC)
 
@@ -99,6 +130,9 @@ async def test_park_stamps_created_at_so_the_deadline_needs_no_column() -> None:
     assert parked is not None
     created = datetime.fromisoformat(parked.created_at)
     assert before - timedelta(seconds=5) <= created <= datetime.now(UTC) + timedelta(seconds=5)
+    metadata = _reply_metadata(100)
+    deadline = datetime.fromisoformat(str(metadata["reply_deadline_at"]))
+    assert deadline == created + timedelta(minutes=settings.neurocomment.reply_wait_minutes)
 
 
 @pytest.mark.asyncio
@@ -192,6 +226,88 @@ async def test_promotion_restarts_the_stale_clock_rather_than_inheriting_the_wai
     row = await fetch_comment("@chan", 1)
     assert row is not None
     assert row.status == "claimed"
+
+
+@pytest.mark.asyncio
+async def test_crash_after_reply_promotion_requeues_proven_pre_send_work() -> None:
+    """Regression: a crash after promotion must not lose the durable parked post."""
+    campaign_id = await _campaign_with_account()
+    assert await park_comment("@chan", 1, campaign_id, "acc-1")
+    parked = _reply_metadata(1)
+    deadline = str(parked["reply_deadline_at"])
+    assert await promote_waiting_to_claimed("@chan", 1)
+    promoted = _reply_metadata(1)
+    assert promoted["status"] == "claimed"
+    assert promoted["reply_state"] == "reply_processing"
+    assert promoted["reply_stage"] == "pre_send"
+    assert promoted["reply_attempts"] == 1
+
+    _backdate_updated(1, datetime.now(UTC) - timedelta(hours=1))
+    assert await reclaim_stale_claims(datetime.now(UTC).isoformat()) == 1
+
+    recovered = _reply_metadata(1)
+    assert recovered["status"] == "waiting"
+    assert recovered["reply_state"] == "waiting"
+    assert recovered["reply_stage"] == "waiting"
+    assert recovered["reply_outcome"] == "retryable"
+    assert recovered["reply_attempts"] == 1
+    assert recovered["created_at"] == parked["created_at"]
+    assert recovered["reply_deadline_at"] == deadline
+    assert {row.post_id for row in (await list_waiting_comments()).comments} == {1}
+
+    assert await promote_waiting_to_claimed("@chan", 1)
+    assert _reply_metadata(1)["reply_attempts"] == 2
+
+
+@pytest.mark.asyncio
+async def test_release_requeues_only_a_proven_pre_send_reply() -> None:
+    campaign_id = await _campaign_with_account()
+    assert await park_comment("@chan", 1, campaign_id, "acc-1")
+    assert await promote_waiting_to_claimed("@chan", 1)
+
+    await release_claim("@chan", 1)
+
+    metadata = _reply_metadata(1)
+    assert metadata["status"] == "waiting"
+    assert metadata["reply_state"] == "waiting"
+    assert metadata["reply_outcome"] == "retryable"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["dispatching", "dispatched"])
+async def test_stale_post_dispatch_reply_is_terminal_ambiguous(stage: ReplyStage) -> None:
+    campaign_id = await _campaign_with_account()
+    assert await park_comment("@chan", 1, campaign_id, "acc-1")
+    assert await promote_waiting_to_claimed("@chan", 1)
+    assert await mark_reply_stage("@chan", 1, "dispatching")
+    if stage == "dispatched":
+        assert await mark_reply_stage("@chan", 1, "dispatched")
+    _backdate_updated(1, datetime.now(UTC) - timedelta(hours=1))
+
+    assert await reclaim_stale_claims(datetime.now(UTC).isoformat()) == 1
+
+    metadata = _reply_metadata(1)
+    assert metadata["status"] == "failed"
+    assert metadata["reply_state"] == "terminal"
+    assert metadata["reply_stage"] == stage
+    assert metadata["reply_outcome"] == "ambiguous"
+    assert (await list_waiting_comments()).comments == []
+
+
+@pytest.mark.asyncio
+async def test_reply_stage_is_monotonic_and_dispatch_cannot_be_released() -> None:
+    campaign_id = await _campaign_with_account()
+    assert await park_comment("@chan", 1, campaign_id, "acc-1")
+    assert await promote_waiting_to_claimed("@chan", 1)
+    assert await mark_reply_stage("@chan", 1, "dispatched") is False
+    assert await mark_reply_stage("@chan", 1, "dispatching") is True
+
+    await release_claim("@chan", 1)
+
+    metadata = _reply_metadata(1)
+    assert metadata["status"] == "claimed"
+    assert metadata["reply_state"] == "reply_processing"
+    assert metadata["reply_stage"] == "dispatching"
 
 
 @pytest.mark.asyncio

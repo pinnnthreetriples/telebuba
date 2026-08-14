@@ -9,8 +9,10 @@ UserRole = Literal["admin"]
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=1)
-    password: str = Field(min_length=1)
+    username: str = Field(min_length=1, max_length=128)
+    # Prevent oversized attacker-controlled values from being copied into a
+    # memory-hard password operation. This comfortably exceeds practical secrets.
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class SessionClaims(BaseModel):

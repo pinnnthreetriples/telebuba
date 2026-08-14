@@ -476,15 +476,17 @@ async def test_the_handler_leaves_a_live_generations_own_reservation_alone(
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.run_id == "run-2"
-    # ``run-2``'s reservation, not the dead cycle's two spent actions.
+    # ``run-2``'s reservation, not the dead cycle's three dispatched actions.
     assert record.daily_actions == rebooked
-    # The 13 actions this cycle booked and never spent are inside ``run-2``'s count now.
+    # The 12 actions this cycle booked and never dispatched are inside ``run-2``'s
+    # count now.  The crashing gateway call crossed the dispatch boundary, so its
+    # ambiguous outcome is conservatively counted as spent.
     # Reported under its own code: the payload describes OUR booking (reserved, spent,
     # unreleased) and never quotes a count, which by now belongs to ``run-2``.
     assert logged == [
         (
             "warming_reservation_absorbed",
-            {"spent": 2, "booked": rebooked, "unreleased": rebooked - 2},
+            {"spent": 3, "booked": rebooked, "unreleased": rebooked - 3},
         ),
     ]
 

@@ -5,10 +5,12 @@ import { expect, test, vi } from 'vitest';
 import '@/shared/i18n';
 
 import type { AccountRead } from '@/shared/api';
+import type { FeedbackResult } from '@/shared/lib';
 
 import { AccountsTable } from './AccountsTable';
 
 const NONE_BUSY = new Set<string>();
+const NO_RESULTS: Record<string, FeedbackResult> = {};
 
 const ACCOUNTS: AccountRead[] = [
   {
@@ -32,7 +34,13 @@ const ACCOUNTS: AccountRead[] = [
 
 test('renders a row per account with handle and country flag', () => {
   const { container } = render(
-    <AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
   );
   expect(screen.getByText('acc-1')).toBeInTheDocument();
   expect(screen.getByText('@mainuser')).toBeInTheDocument();
@@ -54,7 +62,13 @@ test('shows the telegram name on top, username below, and the captured photo', (
     },
   ];
   const { container } = render(
-    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
+    <AccountsTable
+      data={named}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
   );
   expect(screen.getByText('Vika M')).toBeInTheDocument();
   expect(screen.getByText('@vikamn')).toBeInTheDocument();
@@ -75,7 +89,13 @@ test('falls back to name initials when no photo is captured, and on a broken ima
     },
   ];
   const { container } = render(
-    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
+    <AccountsTable
+      data={named}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
   );
   // A failed image load swaps the <img> for the mono initials avatar.
   fireEvent.error(container.querySelector('img')!);
@@ -85,7 +105,13 @@ test('falls back to name initials when no photo is captured, and on a broken ima
 
 test('renders the real trust score and device, dashes when absent', () => {
   render(
-    <AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyIds={NONE_BUSY} />,
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
   );
   // acc-1 carries a backend trust score + device fingerprint
   expect(screen.getByText('82')).toBeInTheDocument();
@@ -98,12 +124,51 @@ test('fires the row actions for the clicked account', async () => {
   const onCheck = vi.fn();
   const onDelete = vi.fn();
   render(
-    <AccountsTable data={ACCOUNTS} onCheck={onCheck} onDelete={onDelete} busyIds={NONE_BUSY} />,
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={onCheck}
+      onDelete={onDelete}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
   );
   await userEvent.click(screen.getAllByTitle('Проверить')[0]!);
   await userEvent.click(screen.getAllByTitle('Удалить')[0]!);
   expect(onCheck).toHaveBeenCalledWith('acc-1');
   expect(onDelete).toHaveBeenCalledWith('acc-1');
+});
+
+test('each row wears its own check verdict', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={{ 'acc-1': 'ok', 'acc-2': 'err' }}
+    />,
+  );
+  // Keyed per row like busyIds: two checks can settle at different times, so the
+  // verdicts must not share one slot. Asserted by accessible name, which is also
+  // the thing a screen reader gets — the fill and the glyph alone say nothing.
+  expect(screen.getByLabelText('Аккаунт живой')).toBeInTheDocument();
+  expect(screen.getByLabelText('Аккаунт недоступен')).toBeInTheDocument();
+});
+
+test('a re-checked row drops its old verdict instead of spinning on top of it', () => {
+  const { container } = render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={new Set(['acc-1'])}
+      checkResults={{ 'acc-1': 'ok' }}
+    />,
+  );
+  // The button re-enables as soon as its spinner clears, so a second click inside
+  // the flash window would render the spinner over the previous answer's fill.
+  expect(container.querySelector('button.bg-success')).toBeNull();
+  expect(screen.queryByLabelText('Аккаунт живой')).not.toBeInTheDocument();
 });
 
 test('busy state is per row, and more than one row can be busy', () => {
@@ -113,6 +178,7 @@ test('busy state is per row, and more than one row can be busy', () => {
       onCheck={vi.fn()}
       onDelete={vi.fn()}
       busyIds={new Set(['acc-2'])}
+      checkResults={NO_RESULTS}
     />,
   );
   // Only the row in the set is disabled — a single busy id could not say "row 2
@@ -126,6 +192,7 @@ test('busy state is per row, and more than one row can be busy', () => {
       onCheck={vi.fn()}
       onDelete={vi.fn()}
       busyIds={new Set(['acc-1', 'acc-2'])}
+      checkResults={NO_RESULTS}
     />,
   );
   for (const button of screen.getAllByTitle('Проверить').slice(2)) {
@@ -143,6 +210,7 @@ test('a row opens from the keyboard', async () => {
       onOpen={onOpen}
       onProfile={vi.fn()}
       busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
     />,
   );
   // The row is the ONLY entry point to the account-edit view (the pencil opens
@@ -174,6 +242,7 @@ test('opens the clicked row and does not bubble action clicks to the row', async
       onDelete={vi.fn()}
       onOpen={onOpen}
       busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
     />,
   );
   await userEvent.click(screen.getByText('@mainuser'));

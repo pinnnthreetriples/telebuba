@@ -31,6 +31,8 @@ function routeApi(options: {
   page1: unknown;
   page2?: unknown;
   listStatus?: number;
+  checkStatus?: number;
+  checked?: AccountRead;
   stats?: unknown;
 }) {
   vi.mocked(fetch).mockImplementation((input) => {
@@ -70,6 +72,12 @@ function routeApi(options: {
           ],
         }),
       );
+    }
+    if (url.pathname === '/api/v1/accounts/check') {
+      if (options.checkStatus) {
+        return Promise.resolve(jsonResponse({ detail: 'boom' }, options.checkStatus));
+      }
+      if (options.checked) return Promise.resolve(jsonResponse(options.checked));
     }
     return Promise.resolve(jsonResponse(account('acc-1')));
   });
@@ -180,6 +188,57 @@ test('runs the check action on a row', async () => {
       .mocked(fetch)
       .mock.calls.some(([input]) => (input as Request).url.includes('/accounts/check'));
     expect(checked).toBe(true);
+  });
+});
+
+// The spinner was the whole story before: a check that came back unauthorized
+// looked exactly like one that came back alive, so the operator learned nothing.
+test('a passing check leaves a green tick on the row button', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByTitle('Проверить'));
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Аккаунт живой')).toBeInTheDocument();
+  });
+});
+
+// The whole point of the change: this answer is an HTTP 200, so nothing else —
+// not the global failure toast, not a rejected mutation — reports it. Before,
+// it left exactly the same trace as a passing check: none.
+test('a check that answers with a dead status is a red cross, not a tick', async () => {
+  routeApi({
+    page1: { items: [account('acc-1')], next_cursor: null },
+    checked: { ...account('acc-1'), status: 'unauthorized' },
+  });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByTitle('Проверить'));
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Аккаунт недоступен')).toBeInTheDocument();
+  });
+  expect(screen.queryByLabelText('Аккаунт живой')).not.toBeInTheDocument();
+});
+
+test('a failed check leaves a red cross too', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null }, checkStatus: 500 });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByTitle('Проверить'));
+
+  await waitFor(() => {
+    expect(screen.getByLabelText('Аккаунт недоступен')).toBeInTheDocument();
   });
 });
 

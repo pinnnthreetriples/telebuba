@@ -1,0 +1,254 @@
+"""Foundational neurocomment schema migration bodies.
+
+These early, related table/index migrations live together so the migration
+registry can keep importing them through ``migration_steps_neurocomment`` while
+each implementation module remains within the project size budget.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from core.migration_steps import _sqlite_columns, _sqlite_table_exists
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Connection
+
+
+def _add_neurocomment_inbox(connection: Connection) -> None:
+    """Durable post handoff, backfill cursor, and reply-attempt state.
+
+    Registered as ``add_neurocomment_inbox``, but the name only covers the two new
+    tables. It also ALTERs ``neurocomment_comments`` with five reply columns and
+    back-fills ``reply_deadline_at`` for rows already parked in reply mode — the one
+    part of this step that cannot be undone by dropping a table. The registry name
+    is left as it is because databases in the field have already stamped it; the
+    extra work is documented here and covered by
+    ``tests/core/test_migrations_neurocomment_inbox.py``.
+    """
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_inbox ("
+        " channel VARCHAR NOT NULL, post_id INTEGER NOT NULL, date_unix INTEGER NOT NULL,"
+        " text VARCHAR NOT NULL, media_kind VARCHAR NOT NULL, is_forward BOOLEAN NOT NULL,"
+        " state VARCHAR NOT NULL CHECK (state IN ('pending','processing','done','expired')),"
+        " stage VARCHAR NOT NULL CHECK (stage IN "
+        " ('received','pre_send','dispatching','dispatched')) DEFAULT 'received',"
+        " outcome VARCHAR, attempts INTEGER NOT NULL DEFAULT 0,"
+        " next_attempt_unix INTEGER NOT NULL DEFAULT 0, received_at VARCHAR NOT NULL,"
+        " updated_at VARCHAR NOT NULL, PRIMARY KEY (channel, post_id))",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_inbox_state_date "
+        "ON neurocomment_inbox(state, date_unix, post_id)",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_cursors ("
+        " channel VARCHAR PRIMARY KEY, last_post_id INTEGER NOT NULL, updated_at VARCHAR NOT NULL,"
+        " backfill_floor_post_id INTEGER, backfill_before_post_id INTEGER,"
+        " backfill_success_at VARCHAR, backfill_retry_at VARCHAR)",
+    )
+    _add_durable_reply_columns(connection)
+
+
+def _add_durable_reply_columns(connection: Connection) -> None:
+    """Add the reply-mode crash boundary to databases created before migration #53."""
+    if not _sqlite_table_exists(connection, "neurocomment_comments"):
+        return
+    rows = connection.exec_driver_sql("PRAGMA table_info(neurocomment_comments)").mappings().all()
+    columns = {str(row["name"]) for row in rows}
+    additions = (
+        (
+            "reply_state",
+            "VARCHAR CHECK (reply_state IN ('waiting','reply_processing','terminal'))",
+        ),
+        (
+            "reply_stage",
+            "VARCHAR CHECK (reply_stage IN ('waiting','pre_send','dispatching','dispatched'))",
+        ),
+        (
+            "reply_outcome",
+            "VARCHAR CHECK (reply_outcome IN ('retryable','terminal','ambiguous'))",
+        ),
+        ("reply_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ("reply_deadline_at", "VARCHAR"),
+    )
+    for name, definition in additions:
+        if name not in columns:
+            connection.exec_driver_sql(
+                f"ALTER TABLE neurocomment_comments ADD COLUMN {name} {definition}",
+            )
+    # Main's reply mode existed just before this unreleased migration. Preserve any row
+    # already parked there and freeze the deadline it used to derive on every sweep.
+    wait_minutes = 10
+    if _sqlite_table_exists(connection, "neurocomment_settings"):
+        saved = connection.exec_driver_sql(
+            "SELECT reply_wait_minutes FROM neurocomment_settings WHERE id = 1",
+        ).scalar_one_or_none()
+        if saved is not None:
+            wait_minutes = int(saved)
+    connection.exec_driver_sql(
+        "UPDATE neurocomment_comments SET reply_state = 'waiting', reply_stage = 'waiting', "
+        "reply_deadline_at = COALESCE(reply_deadline_at, "
+        "strftime('%Y-%m-%dT%H:%M:%f+00:00', created_at, ?)) "
+        "WHERE status = 'waiting' AND reply_state IS NULL",
+        (f"+{wait_minutes} minutes",),
+    )
+
+
+def _add_neurocomment_tables(connection: Connection) -> None:
+    # Ф1 data layer (#114). Mirrors the SQLAlchemy tables in core.db; created
+    # idempotently here so existing databases gain them on the next engine init.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaigns ("
+        "  campaign_id VARCHAR PRIMARY KEY,"
+        "  name VARCHAR NOT NULL,"
+        "  prompt VARCHAR NOT NULL,"
+        "  status VARCHAR NOT NULL,"
+        "  created_at VARCHAR NOT NULL,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaign_channels ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  channel VARCHAR NOT NULL,"
+        "  active INTEGER NOT NULL,"
+        "  created_at VARCHAR NOT NULL"
+        ")",
+    )
+    # The invariant, enforced in the DB: a channel sits in at most one ACTIVE
+    # campaign. Partial unique index (SQLite >= 3.35) — inactive links are
+    # exempt, so a channel can move between campaigns over its lifetime.
+    connection.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_neurocomment_channel_one_active_campaign "
+        "ON neurocomment_campaign_channels(channel) WHERE active = 1",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaign_accounts ("
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  created_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (campaign_id, account_id)"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_linked_groups ("
+        "  channel VARCHAR PRIMARY KEY,"
+        "  linked_chat_id BIGINT,"
+        "  comments_enabled INTEGER NOT NULL,"
+        "  checked_at VARCHAR NOT NULL"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_readiness ("
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  channel VARCHAR NOT NULL,"
+        "  joined INTEGER NOT NULL,"
+        "  captcha_passed INTEGER NOT NULL,"
+        "  ready INTEGER NOT NULL,"
+        "  checked_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (account_id, channel)"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_comments ("
+        "  channel VARCHAR NOT NULL,"
+        "  post_id INTEGER NOT NULL,"
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  status VARCHAR NOT NULL,"
+        "  comment_text VARCHAR,"
+        "  comment_msg_id INTEGER,"
+        "  created_at VARCHAR NOT NULL,"
+        "  updated_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (channel, post_id)"
+        ")",
+    )
+
+
+def _add_neurocomment_runtime(connection: Connection) -> None:
+    # #119: single-row table persisting the active listener account id so the
+    # engine can re-point the listener at boot. id is pinned to 1; NULL
+    # listener_account_id means the listener is stopped.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_runtime ("
+        "  id INTEGER PRIMARY KEY CHECK (id = 1),"
+        "  listener_account_id VARCHAR,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+
+
+def _add_neurocomment_settings(connection: Connection) -> None:
+    # #19: single-row operator-editable neurocomment limits. Empty until the
+    # operator saves; reads fall back to settings.neurocomment config defaults.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_settings ("
+        "  id INTEGER PRIMARY KEY CHECK (id = 1),"
+        "  max_comments_per_hour INTEGER NOT NULL,"
+        "  max_comments_per_channel_per_day INTEGER NOT NULL,"
+        "  reply_delay_min_seconds REAL NOT NULL,"
+        "  reply_delay_max_seconds REAL NOT NULL,"
+        "  min_trust_score INTEGER NOT NULL,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+
+
+def _add_neurocomment_comment_indexes(connection: Connection) -> None:
+    # Secondary indexes for the quota gate + bulk account selection. The PK
+    # (channel, post_id) serves the per-post claim/mark lookups but not the
+    # account-wide hourly count, the per-channel day count, or the campaign+channel
+    # recent-posted dedup read — each would full-scan neurocomment_comments as it
+    # grows. Column order matches those query shapes (verified via EXPLAIN QUERY PLAN).
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_comments_account_status_created "
+        "ON neurocomment_comments(account_id, status, created_at)",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_comments_channel_account_status_created "
+        "ON neurocomment_comments(channel, account_id, status, created_at)",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_comments_campaign_channel_status_created "
+        "ON neurocomment_comments(campaign_id, channel, status, created_at)",
+    )
+
+
+def _add_neurocomment_challenges(connection: Connection) -> None:
+    # Ф2 #120: one audit-and-cache table (the cache is a ``WHERE outcome='solved'``
+    # projection — no dual-write) plus a per-campaign solver override column.
+    # No data remap for the captcha_gated -> chat_restricted state split: the
+    # channel status is *derived* from neurocomment_readiness booleans, never
+    # stored, so the same (joined, captcha_passed) row now reads as chat_restricted
+    # once board._channel_status changes.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_challenges ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  challenge_hash VARCHAR NOT NULL,"
+        "  account_id VARCHAR NOT NULL,"
+        "  channel VARCHAR NOT NULL,"
+        "  raw_text VARCHAR NOT NULL,"
+        "  button_labels_json VARCHAR NOT NULL,"
+        "  decision_json VARCHAR,"
+        "  outcome VARCHAR NOT NULL DEFAULT 'pending',"
+        "  decided_at VARCHAR NOT NULL,"
+        "  outcome_at VARCHAR"
+        ")",
+    )
+    # Cache fast-path: lookup a solved decision by hash.
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_challenges_hash_outcome "
+        "ON neurocomment_challenges(challenge_hash, outcome)",
+    )
+    # Engine outcome resolution: latest pending row for an (account, channel).
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_challenges_account_channel_decided "
+        "ON neurocomment_challenges(account_id, channel, decided_at DESC)",
+    )
+    if "solver_enabled" not in _sqlite_columns(connection, "neurocomment_campaigns"):
+        # NULL = defer to the global challenge_solver_enabled flag (per-campaign override).
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_campaigns ADD COLUMN solver_enabled BOOLEAN DEFAULT NULL",
+        )

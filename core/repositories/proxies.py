@@ -26,6 +26,7 @@ from schemas.proxy import (
     ProxySettings,
     ProxyStatus,
     ProxyType,
+    canonicalize_proxy_host,
 )
 
 if TYPE_CHECKING:
@@ -193,8 +194,11 @@ async def fetch_account_proxy_settings(account_id: str) -> ProxySettings | None:
 
 
 def _create_proxy(data: ProxyCreate) -> ProxyRead:
+    # Keep the same strict canonicalizer at the persistence boundary for callers
+    # using ``model_construct`` or a future non-Pydantic adapter. It runs before
+    # ``begin()`` so malformed input cannot open, much less commit, a transaction.
+    host = canonicalize_proxy_host(data.host)
     now = _now_iso()
-    host = data.host.strip()
     username = data.username.strip() if data.username else None
     with _get_engine().begin() as connection:
         existing = connection.execute(

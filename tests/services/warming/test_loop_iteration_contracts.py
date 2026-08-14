@@ -24,7 +24,7 @@ from schemas.warming import (
     WarmingStateWrite,
     WarmingStateWriteResult,
 )
-from services.warming import _loop, _transitions
+from services.warming import _iteration, _loop, _transitions
 from tests.services.warming._support import _account, _seed_channel
 
 if TYPE_CHECKING:
@@ -102,16 +102,16 @@ async def test_iteration_propagates_budget_trust_and_persona_policy(
         return cast("WarmingCycleResult", args[1])
 
     monkeypatch.setattr(_loop, "fetch_warming_state", fetch_state)
-    monkeypatch.setattr(_loop, "fetch_account", fetch_account)
-    monkeypatch.setattr(_loop, "account_trust_score", trust_score)
-    monkeypatch.setattr(_loop, "_gate_target_reached", no_gate)
-    monkeypatch.setattr(_loop, "_gate_readiness", no_gate)
+    monkeypatch.setattr(_iteration, "fetch_account", fetch_account)
+    monkeypatch.setattr(_iteration, "account_trust_score", trust_score)
+    monkeypatch.setattr(_iteration, "_gate_target_reached", no_gate)
+    monkeypatch.setattr(_iteration, "_gate_readiness", no_gate)
     monkeypatch.setattr(_loop, "_gate_quiet_day", no_gate)
     monkeypatch.setattr(_loop, "_gate_daily_limit", no_gate)
-    monkeypatch.setattr(_loop, "compute_intensity", lambda *_args, **_kwargs: intensity)
+    monkeypatch.setattr(_iteration, "compute_intensity", lambda *_args, **_kwargs: intensity)
     monkeypatch.setattr(_loop, "_set_state", set_state)
-    monkeypatch.setattr(_loop, "run_one_cycle", cycle)
-    monkeypatch.setattr(_loop, "_calculate_next_run", schedule)
+    monkeypatch.setattr(_loop, "_execute_cycle", cycle)
+    monkeypatch.setattr(_loop, "_schedule_next_run", schedule)
     monkeypatch.setattr(_loop, "_finalize_after_cycle", finalize)
 
     result = await _loop.run_loop_iteration("acc-1", run_id="generation-a")
@@ -185,17 +185,17 @@ async def test_progress_events_are_monotonic_and_duplicate_safe(  # noqa: C901
         return 0, datetime.now(UTC), "sleeping"
 
     monkeypatch.setattr(_loop, "fetch_warming_state", fetch_state)
-    monkeypatch.setattr(_loop, "fetch_account", fetch_account)
-    monkeypatch.setattr(_loop, "account_trust_score", trust_score)
-    monkeypatch.setattr(_loop, "_gate_target_reached", no_gate)
-    monkeypatch.setattr(_loop, "_gate_readiness", no_gate)
+    monkeypatch.setattr(_iteration, "fetch_account", fetch_account)
+    monkeypatch.setattr(_iteration, "account_trust_score", trust_score)
+    monkeypatch.setattr(_iteration, "_gate_target_reached", no_gate)
+    monkeypatch.setattr(_iteration, "_gate_readiness", no_gate)
     monkeypatch.setattr(_loop, "_gate_quiet_day", no_gate)
     monkeypatch.setattr(_loop, "_gate_daily_limit", no_gate)
     monkeypatch.setattr(_loop, "_set_state", set_state)
-    monkeypatch.setattr(_loop, "run_one_cycle", cycle)
+    monkeypatch.setattr(_loop, "_execute_cycle", cycle)
     monkeypatch.setattr(
         _loop,
-        "_calculate_next_run",
+        "_schedule_next_run",
         schedule,
     )
     monkeypatch.setattr(_loop, "_finalize_after_cycle", finalize)
@@ -262,7 +262,7 @@ async def test_readiness_gate_losing_cas_emits_no_phantom_error(
     monkeypatch.setattr(_transitions, "_set_state", rejected)
     monkeypatch.setattr(_transitions, "log_event", log)
 
-    result = await _loop._gate_readiness(
+    result = await _transitions._gate_readiness(
         _account(status="new"),
         controls,
         record,
@@ -295,7 +295,7 @@ async def test_cycle_exception_leaves_truthful_active_partial_state(
         message = "Telegram disconnected"
         raise RuntimeError(message)
 
-    monkeypatch.setattr(_loop, "run_one_cycle", fail_cycle)
+    monkeypatch.setattr(_loop, "_execute_cycle", fail_cycle)
 
     with pytest.raises(RuntimeError, match="Telegram disconnected"):
         await _loop.run_loop_iteration("acc-1")
@@ -320,8 +320,8 @@ async def test_missing_row_with_generation_is_rejected_before_other_io(
         raise AssertionError(message)
 
     monkeypatch.setattr(_loop, "fetch_warming_state", no_state)
-    monkeypatch.setattr(_loop, "fetch_account", forbidden)
-    monkeypatch.setattr(_loop, "account_trust_score", forbidden)
+    monkeypatch.setattr(_iteration, "fetch_account", forbidden)
+    monkeypatch.setattr(_iteration, "account_trust_score", forbidden)
 
     result = await _loop.run_loop_iteration("acc-1", run_id="generation-a")
 

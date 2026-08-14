@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from services.auth._argon2 import AuthenticationCapacityError
 from services.auth._ratelimit import check_and_record as check_login_rate_limit
 from services.auth.policy import (
     authenticate,
@@ -12,6 +13,7 @@ from services.auth.policy import (
 )
 
 __all__ = [
+    "AuthenticationCapacityError",
     "authenticate",
     "check_login_rate_limit",
     "issue_session_token",

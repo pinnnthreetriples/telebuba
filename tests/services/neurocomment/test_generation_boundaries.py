@@ -13,7 +13,7 @@ from schemas.gemini import GeminiResult
 from schemas.neurocomment import NeurocommentCampaign
 from schemas.telegram_actions import NewPostEvent
 from schemas.warming import WarmingSettingsSecret
-from services.neurocomment import _generate, _seams
+from services.neurocomment import _generate, _generation_candidates, _seams
 
 pytestmark = pytest.mark.usefixtures("isolate_engine")
 
@@ -62,9 +62,13 @@ async def test_word_limit_accepts_exact_boundary(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(settings.neurocomment, "comment_max_words", 3)
     monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
     monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.0)
-    monkeypatch.setattr(_generate, "_recent_channel_comments", AsyncMock(return_value=[]))
-    monkeypatch.setattr(_generate, "load_warming_settings", AsyncMock(return_value=_secret()))
-    monkeypatch.setattr(_generate, "touch_comment_claim", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        _generation_candidates, "recent_channel_comments", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        _generation_candidates, "load_warming_settings", AsyncMock(return_value=_secret())
+    )
+    monkeypatch.setattr(_generation_candidates, "touch_comment_claim", AsyncMock(return_value=True))
     monkeypatch.setattr(
         _seams,
         "generate_text",
@@ -84,9 +88,13 @@ async def test_retry_budget_is_initial_attempt_plus_retries(
 ) -> None:
     monkeypatch.setattr(settings.neurocomment, "comment_max_words", 1)
     monkeypatch.setattr(settings.neurocomment, "max_retries", 2)
-    monkeypatch.setattr(_generate, "_recent_channel_comments", AsyncMock(return_value=[]))
-    monkeypatch.setattr(_generate, "load_warming_settings", AsyncMock(return_value=_secret()))
-    monkeypatch.setattr(_generate, "touch_comment_claim", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        _generation_candidates, "recent_channel_comments", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        _generation_candidates, "load_warming_settings", AsyncMock(return_value=_secret())
+    )
+    monkeypatch.setattr(_generation_candidates, "touch_comment_claim", AsyncMock(return_value=True))
     generate = AsyncMock(return_value=GeminiResult(status="ok", text="too many words"))
     monkeypatch.setattr(_seams, "generate_text", generate)
 
@@ -123,11 +131,15 @@ async def test_inflight_reservation_uses_post_generation_time(
 
     monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
     monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.9)
-    monkeypatch.setattr(_generate, "datetime", ClockDateTime)
-    monkeypatch.setattr(_generate, "_recent_channel_comments", AsyncMock(return_value=[]))
-    monkeypatch.setattr(_generate, "load_warming_settings", AsyncMock(return_value=_secret()))
-    monkeypatch.setattr(_generate, "touch_comment_claim", AsyncMock(return_value=True))
-    monkeypatch.setattr(_generate, "try_reserve_sent", AsyncMock(return_value=True))
+    monkeypatch.setattr(_generation_candidates, "datetime", ClockDateTime)
+    monkeypatch.setattr(
+        _generation_candidates, "recent_channel_comments", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        _generation_candidates, "load_warming_settings", AsyncMock(return_value=_secret())
+    )
+    monkeypatch.setattr(_generation_candidates, "touch_comment_claim", AsyncMock(return_value=True))
+    monkeypatch.setattr(_generation_candidates, "try_reserve_sent", AsyncMock(return_value=True))
     monkeypatch.setattr(_seams, "generate_text", generate)
 
     first = await _generate._generate_acceptable(_campaign(), _event(), "account")
@@ -151,17 +163,19 @@ async def test_semantic_rejection_releases_exact_text_claim(
     monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
     monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.5)
     monkeypatch.setattr(
-        _generate, "_recent_channel_comments", AsyncMock(return_value=["alpha beta"])
+        _generation_candidates, "recent_channel_comments", AsyncMock(return_value=["alpha beta"])
     )
-    monkeypatch.setattr(_generate, "load_warming_settings", AsyncMock(return_value=_secret()))
-    monkeypatch.setattr(_generate, "touch_comment_claim", AsyncMock(return_value=True))
+    monkeypatch.setattr(
+        _generation_candidates, "load_warming_settings", AsyncMock(return_value=_secret())
+    )
+    monkeypatch.setattr(_generation_candidates, "touch_comment_claim", AsyncMock(return_value=True))
     monkeypatch.setattr(
         _seams,
         "generate_text",
         AsyncMock(return_value=GeminiResult(status="ok", text="beta alpha")),
     )
     release = AsyncMock()
-    monkeypatch.setattr(_generate, "release_sent_text", release)
+    monkeypatch.setattr(_generation_candidates, "release_sent_text", release)
 
     outcome = await _generate._generate_acceptable(_campaign(), _event(), "account")
 

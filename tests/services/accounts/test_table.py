@@ -9,6 +9,10 @@ import pytest
 from core.config import settings
 from core.db import (
     fetch_account,
+    get_listener_account_id,
+    get_listener_running,
+    set_listener_account_id,
+    set_listener_running,
     update_account_from_session_check,
     update_proxy_check,
     upsert_spam_status,
@@ -90,6 +94,41 @@ async def test_remove_account_unknown_id_raises_and_touches_no_file() -> None:
         await remove_account("evil")
 
     assert bystander.exists(), "an unknown account must not unlink anything"
+
+
+@pytest.mark.asyncio
+async def test_a_delete_refused_by_a_live_warming_task_changes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 409 must leave the account exactly as the operator left it.
+
+    ``_stop_warming_locked`` is the one step here that can refuse the delete, and there
+    is no rollback behind it. Run after the neurocomment teardown, a refusal answered
+    "conflict, nothing deleted" while the listener account and its running flag had
+    already been cleared — so the operator retried the delete and, whether it succeeded
+    or not, their listener was configured back to nothing either way.
+    """
+    from services.warming import WarmingTaskNotQuiescentError  # noqa: PLC0415
+
+    await add_account(AccountCreate(account_id="busy", session_name="sess-busy"))
+    session_file = settings.telegram.session_dir / "sess-busy.session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"sqlite session bytes")
+    await set_listener_account_id("busy")
+    await set_listener_running(running=True)
+
+    async def _still_stopping(account_id: str) -> None:
+        raise WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.warming._stop_warming_locked", _still_stopping)
+
+    with pytest.raises(WarmingTaskNotQuiescentError):
+        await remove_account("busy")
+
+    assert await get_listener_account_id() == "busy"
+    assert await get_listener_running() is True
+    assert await fetch_account("busy") is not None
+    assert session_file.exists()
 
 
 @pytest.mark.asyncio

@@ -123,7 +123,7 @@ async def test_persisted_channel_pause_blocks_selection(
 
 
 @pytest.mark.asyncio
-async def test_lost_claim_has_no_generation_or_failure_write(
+async def test_lost_claim_neither_generates_nor_releases_another_workers_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
@@ -138,14 +138,14 @@ async def test_lost_claim_has_no_generation_or_failure_write(
     monkeypatch.setattr(engine, "_account_quota_block_reason", AsyncMock(return_value=None))
     monkeypatch.setattr(engine, "claim_comment", AsyncMock(return_value=False))
     generate = AsyncMock()
-    failed = AsyncMock()
+    released = AsyncMock()
     monkeypatch.setattr(engine, "_generate_and_post", generate)
-    monkeypatch.setattr(engine, "mark_comment_failed", failed)
+    monkeypatch.setattr(engine, "release_claim", released)
 
     await engine._handle_new_post(_event())
 
     generate.assert_not_awaited()
-    failed.assert_not_awaited()
+    released.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -164,13 +164,13 @@ async def test_post_claim_failure_releases_claim_and_propagates(
     monkeypatch.setattr(engine, "_account_quota_block_reason", AsyncMock(return_value=None))
     monkeypatch.setattr(engine, "claim_comment", AsyncMock(return_value=True))
     monkeypatch.setattr(engine, "_generate_and_post", AsyncMock(side_effect=RuntimeError("boom")))
-    failed = AsyncMock()
-    monkeypatch.setattr(engine, "mark_comment_failed", failed)
+    released = AsyncMock()
+    monkeypatch.setattr(engine, "release_claim", released)
 
     with pytest.raises(RuntimeError, match="boom"):
         await engine._handle_new_post(_event())
 
-    failed.assert_awaited_once_with("@channel", 41)
+    released.assert_awaited_once_with("@channel", 41)
 
 
 @pytest.mark.asyncio

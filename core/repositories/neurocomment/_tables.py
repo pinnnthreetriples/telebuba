@@ -272,6 +272,26 @@ _neurocomment_comments = Table(
     # Set (migration #27) when a posted comment is later found deleted from the
     # channel — NULL = still live. Its status stays 'posted' (it *was* delivered).
     Column("deleted_at", String, nullable=True),
+    # Reply-mode ownership (migration #53). ``status`` remains the public quota/result
+    # lifecycle; these fields say whether a parked reply is safe to retry after a crash.
+    Column("reply_state", String, nullable=True),
+    Column("reply_stage", String, nullable=True),
+    Column("reply_outcome", String, nullable=True),
+    Column("reply_attempts", Integer, nullable=False, server_default="0"),
+    Column("reply_deadline_at", String, nullable=True),
+    CheckConstraint(
+        "reply_state IS NULL OR reply_state IN ('waiting', 'reply_processing', 'terminal')",
+        name="ck_neurocomment_comments_reply_state",
+    ),
+    CheckConstraint(
+        "reply_stage IS NULL OR "
+        "reply_stage IN ('waiting', 'pre_send', 'dispatching', 'dispatched')",
+        name="ck_neurocomment_comments_reply_stage",
+    ),
+    CheckConstraint(
+        "reply_outcome IS NULL OR reply_outcome IN ('retryable', 'terminal', 'ambiguous')",
+        name="ck_neurocomment_comments_reply_outcome",
+    ),
 )
 # Challenge audit-and-cache table (migration #14): one row per guardian-bot
 # challenge encountered at onboarding. Doubles as the global solved-decision
@@ -304,6 +324,44 @@ _neurocomment_runtime = Table(
     Column("listener_running", Boolean, nullable=False, server_default="0"),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_runtime_single_row"),
+)
+# Durable boundary between Telegram updates and the commenting pipeline. Rows are kept
+# after completion long enough for live/backfill overlap and process restarts to dedupe.
+_neurocomment_inbox = Table(
+    "neurocomment_inbox",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("post_id", Integer, primary_key=True),
+    Column("date_unix", Integer, nullable=False),
+    Column("text", String, nullable=False),
+    Column("media_kind", String, nullable=False),
+    Column("is_forward", Boolean, nullable=False),
+    Column("state", String, nullable=False),
+    Column("stage", String, nullable=False),
+    Column("outcome", String, nullable=True),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("next_attempt_unix", Integer, nullable=False, server_default="0"),
+    Column("received_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+    CheckConstraint(
+        "state IN ('pending', 'processing', 'done', 'expired')",
+        name="ck_neurocomment_inbox_state",
+    ),
+    CheckConstraint(
+        "stage IN ('received', 'pre_send', 'dispatching', 'dispatched')",
+        name="ck_neurocomment_inbox_stage",
+    ),
+)
+_neurocomment_cursors = Table(
+    "neurocomment_cursors",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("last_post_id", Integer, nullable=False),
+    Column("updated_at", String, nullable=False),
+    Column("backfill_floor_post_id", Integer, nullable=True),
+    Column("backfill_before_post_id", Integer, nullable=True),
+    Column("backfill_success_at", String, nullable=True),
+    Column("backfill_retry_at", String, nullable=True),
 )
 # Single-row operator-editable neurocomment limits (migration #19). Empty until
 # the operator saves; reads fall back to ``settings.neurocomment`` config.

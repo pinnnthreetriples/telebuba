@@ -13,6 +13,8 @@ from core.db import (
     create_account,
     create_campaign,
     link_channel_to_campaign,
+    mark_nc_handed_off,
+    mark_promoted_to_nc,
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
@@ -135,6 +137,8 @@ async def _make_campaign(channel: str, *accounts: str) -> str:
     await link_channel_to_campaign(campaign.campaign_id, channel)
     for acc in accounts:
         await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+        await mark_promoted_to_nc(acc)
+        await mark_nc_handed_off(acc)
         await assign_account_to_campaign(campaign.campaign_id, acc)
         await upsert_readiness(acc, channel, joined=True, captcha_passed=True, ready=True)
     return campaign.campaign_id

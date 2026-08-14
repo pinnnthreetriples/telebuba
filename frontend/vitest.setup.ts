@@ -43,6 +43,18 @@ class MockEventSource {
   emitError(): void {
     this.onerror?.();
   }
+  // Named server-sent events (`event: <type>`) arrive through addEventListener,
+  // not onmessage — the backend uses one to say a session was revoked.
+  private readonly listeners = new Map<string, Set<(event: MessageEvent) => void>>();
+  addEventListener(type: string, handler: (event: MessageEvent) => void): void {
+    const handlers = this.listeners.get(type) ?? new Set<(event: MessageEvent) => void>();
+    handlers.add(handler);
+    this.listeners.set(type, handlers);
+  }
+  emitNamed(type: string, data: unknown = {}): void {
+    const event = new MessageEvent(type, { data: JSON.stringify(data) });
+    for (const handler of this.listeners.get(type) ?? []) handler(event);
+  }
 }
 vi.stubGlobal('EventSource', MockEventSource);
 

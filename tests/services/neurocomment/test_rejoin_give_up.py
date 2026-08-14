@@ -26,6 +26,8 @@ from core.db import (  # type: ignore[attr-defined]
     link_channel_to_campaign,
     list_campaign_channels,
     list_recent_logs,
+    mark_nc_handed_off,
+    mark_promoted_to_nc,
     stamp_rejoin_attempt,
     upsert_readiness,
 )
@@ -181,6 +183,8 @@ async def test_the_account_keeps_commenting_on_its_other_channels(
     alone, so the pair that gave up here must not cost the account a post there.
     """
     campaign_id = await _campaign("acc-1", channels=(_CHANNEL, _OTHER))
+    await mark_promoted_to_nc("acc-1")
+    await mark_nc_handed_off("acc-1")
     await _spend_the_budget("acc-1")
     await upsert_readiness("acc-1", _OTHER, joined=True, captcha_passed=True, ready=True)
     _patch_telegram(monkeypatch)

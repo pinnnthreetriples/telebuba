@@ -14,13 +14,13 @@ grounds_to:
 
 # Warming Runtime
 
-- One in-memory `asyncio.Task` runs per persisted active account. FastAPI lifespan reconciles persisted state; one uvicorn worker is required while ownership is process-local.
+- One owned in-memory `asyncio.Task` runs per persisted active account. Ownership is retained until the task is terminal; a timed-out Stop remains non-quiescent and blocks restart, promotion, handoff and deletion. FastAPI lifespan reconciles persisted state; one uvicorn worker is required while ownership is process-local.
 - Persona controls cadence while phase/trust/readiness remain safety ceilings. Timing and caps come from config; persisted `next_run_at` survives restart, while an explicit stop/start may re-roll startup timing.
-- Daily action budget is reserved before a cycle and reconciled afterward. The reservation is guarded by a per-booking token, not only generation or booked value, so a cancelled old cycle cannot release a newer booking. Hard process death remains fail-closed because actual spend is unknown.
+- Daily action budget is reserved before a cycle and reconciled afterward. The reservation is guarded by a per-booking token, not only generation or booked value, so a cancelled old cycle cannot release a newer booking. Each Telegram attempt is booked immediately before dispatch; cancellation or lease loss after dispatch is an unknown outcome and remains spent. Hard process death remains fail-closed because actual spend is unknown.
 - Cycle work spends one shared budget across online/join/read/react/story/DM actions. When tuning caps or cadence, verify later steps remain reachable rather than reasoning from a single action in isolation.
 - Inter-account DMs resolve cold peers by phone through `contacts.resolvePhone`, never by saving them as contacts. A permanently unaddressable peer skips the turn without parking the healthy sender, but the attempt still consumes budget.
 - Quarantine releases only on a confirmed clean spam check. An unreadable/unknown check does not release the account and still advances the bounded recovery attempt counter. Recovery, extension and exhaustion publish their outcome only after the final generation-guarded write applies, so a concurrent stop/restart cannot emit a stale result.
-- Scheduling/de-correlation lives in pacing/fleet modules; cycle modules own one session; runtime modules own task state, sleep, cancellation and recovery. Keep injectable collaborators behind the warming seam.
+- Scheduling/de-correlation lives in pacing/fleet modules; cycle modules own one session; runtime modules own task state, sleep, bounded cancellation and recovery. A generation lease is checked around Telegram dispatch so a retired cycle cannot begin a later action. Keep injectable collaborators behind the warming seam.
 - Board/read paths stay bulk-loaded; loop failures are logged and persisted rather than silently killing a task.
 
 Exact caps, timings and implementation headroom belong to config/tests/code, not memory.

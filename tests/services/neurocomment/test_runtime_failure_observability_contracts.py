@@ -103,10 +103,19 @@ async def test_join_failure_persists_complete_audit_contract(
 
 
 @pytest.mark.asyncio
-async def test_overload_persists_one_exact_warning_per_dropped_post(
+async def test_a_full_inbox_persists_one_exact_warning_per_refused_post(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings.neurocomment, "max_concurrent_post_tasks", 2)
+    """Overload no longer drops posts, but a FULL inbox still refuses them.
+
+    Excess work now waits in SQLite instead of being lost, so the only post that
+    never gets processed is one the bounded queue refuses outright. That refusal
+    is invisible unless it is reported, and the report has to name the exact
+    channel and post so an operator can tell what was lost from what was merely
+    delayed.
+    """
+    monkeypatch.setattr(settings.neurocomment, "post_inbox_max_pending", 2)
+    monkeypatch.setattr(settings.neurocomment, "max_concurrent_post_tasks", 1)
     release = asyncio.Event()
 
     async def blocking_handle(_event: NewPostEvent) -> None:
@@ -116,17 +125,19 @@ async def test_overload_persists_one_exact_warning_per_dropped_post(
 
     for post_id in range(5):
         await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
-
-    dropped = [
-        (row.level, row.status, row.account_id, row.extra)
-        for row in await list_recent_logs(limit=20)
-        if row.event == "neurocomment_post_dropped_overloaded"
-    ]
-    assert dropped == [
-        ("WARNING", "warning", None, {"channel": "@a", "in_flight": 2}),
-        ("WARNING", "warning", None, {"channel": "@a", "in_flight": 2}),
-        ("WARNING", "warning", None, {"channel": "@a", "in_flight": 2}),
-    ]
-
     release.set()
-    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+    refused = [
+        (row.level, row.extra)
+        for row in await list_recent_logs(limit=20)
+        if row.event == "neurocomment_inbox_queue_full"
+    ]
+
+    assert refused, "a refused post must be reported, not silently discarded"
+    assert [level for level, _extra in refused] == ["WARNING"] * len(refused)
+    refused_ids = [extra["post_id"] for _level, extra in refused]
+    assert [extra for _level, extra in refused] == [
+        {"channel": "@a", "post_id": post_id} for post_id in refused_ids
+    ]
+    assert len(set(refused_ids)) == len(refused_ids), "one warning per refused post, not repeats"
+    assert set(refused_ids) <= {0, 1, 2, 3, 4}

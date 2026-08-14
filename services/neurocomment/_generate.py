@@ -1,51 +1,32 @@
-"""Neurocomment comment generation, and the post attempt it hands to ``_outcomes``.
-
-The back half of the on-post pipeline: generate a short on-prompt comment that
-passes the word-count / content / exact-hash / semantic-dedup gates, pause a
-human beat, and post it. Split from ``engine`` for the file-size budget, and twice
-more for the same reason and along seams that were already there: what the attempt's
-answer COSTS (the outcome ladder and its state writes) is in ``_outcomes``, and what
-the model is ASKED (provider choice, instruction, post fence) is in ``_llm``. Both are
-re-imported below, so ``engine``'s re-exports and ``services.neurocomment.engine.<name>``
-still resolve unchanged.
-
-Telegram / Gemini / randomness stay behind ``_seams``; the reply delay uses
-``asyncio.sleep`` (tests patch ``asyncio.sleep`` via ``engine.asyncio``, the same
-module object reached here).
-"""
+"""Generate, reserve, and durably dispatch one neurocomment."""
 
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+import logging
+from contextlib import suppress
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.db import (
-    list_posted_comments_for_channel_since,
-    load_warming_settings,
     mark_comment_failed,
     release_claim,
+    set_comment_dispatch_stage,
     touch_comment_claim,
 )
 from core.logging import log_event
+from schemas.neurocomment_pipeline import PipelineOutcome
 from schemas.telegram_actions import CommentOnPost, NewPostEvent
-from services.content import (
-    is_acceptable,
-    release_sent_text,
-    similarity,
-    strip_markdown_delimiters,
-    try_reserve_sent,
-)
+from services.content import release_sent_text
 from services.neurocomment import _seams
-from services.neurocomment._llm import (  # noqa: F401 - _generate.<name> is the call-site path
+from services.neurocomment._llm import (  # noqa: F401 - compatibility facade
     _build_request,
     _deepseek_generates,
     _gemini_reason,
     _post_clause,
     _Subject,
 )
-from services.neurocomment._outcomes import (  # noqa: F401 - _generate.<name> is the call-site path
+from services.neurocomment._outcomes import (  # noqa: F401 - compatibility facade
     _COOLDOWN_STATUSES,
     _GATE_ERRORS,
     _INFLIGHT,
@@ -62,25 +43,190 @@ if TYPE_CHECKING:
     from schemas.neurocomment import NeurocommentCampaign, NeurocommentSettings
     from schemas.telegram_actions_comments import PostCommentRecord
 
+# Stdlib sink for evidence that must survive a log-store fault — see
+# ``core.proxy_check._failed_result`` for the same route.
+logger = logging.getLogger(__name__)
 
-# Longest stretch the pipeline may go without telling the reclaim it is alive. Any value
-# well under ``stale_claim_reclaim_seconds`` (900) works; 60s keeps the beat writes down to
-# one a minute even on an operator delay measured in hours.
 _CLAIM_BEAT_INTERVAL_SECONDS = 60.0
-
-# Bound rather than inlined at the return below: a literal in a positional ``_GenOutcome``
-# field is the one reason shape ``tests.test_logevent_i18n_parity`` cannot see, and this one
-# reaches the operator through ``logEventReason`` — where a missing label renders as a blank,
-# not as the code. A ``*_reason`` NAME is what puts it back under that guard.
 _CLAIM_LOST_REASON = "claim_lost"
 
 
 class _GenOutcome(NamedTuple):
-    """A generated comment, or ``None`` with the last attempt's failure reason."""
+    """A generated comment, or the last rejection and provider detail."""
 
     text: str | None
-    reason: str | None  # set only when text is None (surfaced in the exhausted log)
-    error: str | None = None  # provider + its message, only when the LLM itself failed
+    reason: str | None
+    error: str | None = None
+
+
+async def _prepare_post_content(
+    event: NewPostEvent,
+    account_id: str,
+) -> tuple[str | None, PipelineOutcome | None]:
+    """Load a caption-less photo once, after the durable comment claim."""
+    if event.media_kind != "photo" or event.text.strip():
+        return None, None
+    image = await _seams.download_post_image(
+        account_id,
+        event.channel,
+        event.post_id,
+        settings.neurocomment.vision_max_image_bytes,
+    )
+    if image.image_b64 is not None:
+        return image.image_b64, None
+    await mark_comment_failed(event.channel, event.post_id)
+    await log_event(
+        "INFO",
+        "neurocomment_post_skipped",
+        account_id=account_id,
+        extra={
+            "channel": event.channel,
+            "post_id": event.post_id,
+            "reason": f"media_{image.reason}",
+        },
+    )
+    return None, PipelineOutcome.TERMINAL
+
+
+async def _settle_generation_exhausted(
+    event: NewPostEvent,
+    account_id: str,
+    outcome: _GenOutcome,
+) -> PipelineOutcome:
+    if outcome.reason == _RATE_LIMITED_REASON:
+        await release_claim(event.channel, event.post_id)
+        result = PipelineOutcome.RETRYABLE
+    else:
+        await mark_comment_failed(event.channel, event.post_id)
+        result = PipelineOutcome.TERMINAL
+    extra: dict[str, object] = {
+        "channel": event.channel,
+        "post_id": event.post_id,
+        "reason": outcome.reason,
+    }
+    if outcome.error:
+        extra["error_type"] = outcome.error
+    await log_event(
+        "INFO",
+        "neurocomment_generation_exhausted",
+        account_id=account_id,
+        extra=extra,
+    )
+    return result
+
+
+async def _release_reserved_comment(event: NewPostEvent, text: str) -> None:
+    _remove_inflight(event.channel, text)
+    await release_sent_text(text)
+
+
+async def _settle_revoked_dispatch(
+    event: NewPostEvent,
+    account_id: str,
+    text: str,
+    exc: _seams.NeurocommentLeaseRevokedError,
+) -> PipelineOutcome:
+    if isinstance(exc, _seams.NeurocommentLeaseLostAfterDispatchError):
+        await _settle_ambiguous_dispatch(
+            event,
+            account_id,
+            text,
+            event_code="neurocomment_dispatch_outcome_unknown",
+            exc=exc,
+        )
+        return PipelineOutcome.AMBIGUOUS
+    await _release_reserved_comment(event, text)
+    if isinstance(exc, _seams.NeurocommentAccountDeletedError):
+        # No account row means no later attempt can ever succeed, so the surviving
+        # ``failed`` row is the right answer. Every other refusal here — warming,
+        # mid-handoff, a revoked generation — ends on its own and issued no Telegram
+        # request, so the claim is deleted and the post goes back on the retry ladder.
+        await mark_comment_failed(event.channel, event.post_id)
+        return PipelineOutcome.TERMINAL
+    await release_claim(event.channel, event.post_id)
+    return PipelineOutcome.RETRYABLE
+
+
+async def _dispatch_reserved_comment(  # noqa: PLR0911 - explicit durable outcomes
+    event: NewPostEvent,
+    account_id: str,
+    text: str,
+    limits: NeurocommentSettings,
+    *,
+    target: PostCommentRecord | None = None,
+) -> PipelineOutcome:
+    """Cross the dispatch boundary once, then settle its known or ambiguous result."""
+    try:
+        alive = await _sleep_beating(
+            event,
+            _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
+        )
+        if not alive or not await touch_comment_claim(event.channel, event.post_id):
+            await _release_reserved_comment(event, text)
+            await log_event(
+                "WARNING",
+                "neurocomment_claim_lost_before_send",
+                account_id=account_id,
+                extra={"channel": event.channel, "post_id": event.post_id},
+            )
+            return PipelineOutcome.TERMINAL
+        from services.neurocomment import _runtime  # noqa: PLC0415
+
+        if not _runtime._worker_generation_is_current():  # noqa: SLF001
+            await _release_reserved_comment(event, text)
+            await release_claim(event.channel, event.post_id)
+            return PipelineOutcome.RETRYABLE
+        try:
+            result = await _seams.execute_comment(
+                account_id,
+                CommentOnPost(
+                    channel=event.channel,
+                    post_id=event.post_id,
+                    text=text,
+                    reply_to=target.message_id if target is not None else None,
+                ),
+                lambda: set_comment_dispatch_stage(event, "dispatching"),
+            )
+            # ``False`` means the row was reclaimed or removed while Telegram was in
+            # flight. The boundary has still been crossed and ``result`` is authoritative:
+            # let the normal outcome path persist a returned message id (or emit the
+            # row-missing diagnostic) rather than downgrading a known delivery to an
+            # ambiguous one. A storage exception remains ambiguous in the handler below.
+            await set_comment_dispatch_stage(event, "dispatched")
+        except _seams.NeurocommentPreDispatchCancelledError:
+            await _release_reserved_comment(event, text)
+            await release_claim(event.channel, event.post_id)
+            raise
+        except _seams.NeurocommentPreDispatchError:
+            await _release_reserved_comment(event, text)
+            await release_claim(event.channel, event.post_id)
+            return PipelineOutcome.RETRYABLE
+        except _seams.NeurocommentLeaseRevokedError as exc:
+            return await _settle_revoked_dispatch(event, account_id, text, exc)
+        except BaseException as exc:  # noqa: BLE001 - cancellation is ambiguous here
+            await _settle_ambiguous_dispatch(
+                event,
+                account_id,
+                text,
+                event_code="neurocomment_dispatch_outcome_unknown",
+                exc=exc,
+            )
+            return PipelineOutcome.AMBIGUOUS
+    except BaseException:
+        await _release_reserved_comment(event, text)
+        raise
+    try:
+        await _classify_post(event, account_id, text, result)
+    except Exception as exc:  # noqa: BLE001 - a post-send DB fault is ambiguous
+        await _settle_ambiguous_dispatch(
+            event,
+            account_id,
+            text,
+            event_code="neurocomment_dispatch_commit_unknown",
+            exc=exc,
+        )
+        return PipelineOutcome.AMBIGUOUS
+    return PipelineOutcome.TERMINAL
 
 
 async def _generate_and_post(
@@ -90,137 +236,81 @@ async def _generate_and_post(
     limits: NeurocommentSettings,
     *,
     target: PostCommentRecord | None = None,
-) -> None:
-    """Generate + light-check a comment, pause, post, and classify the outcome.
-
-    ``limits`` is loaded once per post by the caller and threaded in — only the reply
-    delay bounds are read here, so no separate settings read is needed.
-
-    ``target`` is set only by ``reply`` mode's wait (``_reply_wait``): the comment is then
-    aimed at that reader's message in the linked discussion group, and their own text goes
-    into the prompt — fenced as untrusted exactly like the post is
-    (``_llm._reply_clause``). Left ``None``, this is the ``first``-mode path unchanged.
-    """
-    image_b64: str | None = None
-    if event.media_kind == "photo" and not event.text.strip():
-        # A caption-less photo only says something to the model if we hand it the image.
-        # The download sits HERE, past the claim, so it is paid for exactly once and only
-        # for a post this account is about to comment on — a paused channel, a filtered
-        # post, an account-less campaign, or a lost claim race never reaches it.
-        image = await _seams.download_post_image(
-            account_id,
-            event.channel,
-            event.post_id,
-            settings.neurocomment.vision_max_image_bytes,
-        )
-        if image.image_b64 is None:
-            # No image means nothing to comment ON: degrade to the skip the filter used to
-            # hand out. ``failed``, not ``release_claim``'s DELETE, and for the reason
-            # ``_reclaim_stale_claims`` already spells out — the row is the idempotency
-            # gate ``claim_comment`` wins, so dropping it hands the attempt back for free:
-            # every re-delivery of the same post would re-run the selection reads, the
-            # claim and the fetch again, at the say-so of whoever posts here. ``failed``
-            # is terminal AND costs the account nothing, because ``_quota`` counts only
-            # ``claimed``/``posted`` — which is the point: a gateway that will not hand
-            # over a picture must not eat into an account's hourly or per-channel cap.
-            await mark_comment_failed(event.channel, event.post_id)
-            await log_event(
-                "INFO",
-                "neurocomment_post_skipped",
-                account_id=account_id,
-                extra={
-                    "channel": event.channel,
-                    "post_id": event.post_id,
-                    "reason": f"media_{image.reason}",
-                },
-            )
-            return
-        image_b64 = image.image_b64
-
-    # Claim won, image (if any) in hand — the model is about to be asked. The only
-    # positive marker of this step: everything else on the generation path logs a retry
-    # or an exhaustion, so the dashboard's «Генерация» stage had nothing to stand on.
-    await log_event(
-        "INFO",
-        "neurocomment_generation_started",
-        account_id=account_id,
-        extra={"channel": event.channel, "post_id": event.post_id},
-    )
-    outcome = await _generate_acceptable(
-        campaign, event, account_id, image_b64=image_b64, target=target
-    )
-    text = outcome.text
-    if text is None:
-        # An exhaustion caused by a 429 is the Gemini gateway's state, not this post's, so
-        # the claim is not burnt for the reason ``_RATE_LIMITED_REASON`` documents — but it
-        # is released rather than left in flight, or the slot it holds in the day cap would
-        # charge the account 24 hours for a comment that was never even generated.
-        # ``reason`` in the log below already tells it apart from a real generation failure.
-        if outcome.reason == _RATE_LIMITED_REASON:
-            await release_claim(event.channel, event.post_id)
-        else:
-            await mark_comment_failed(event.channel, event.post_id)
+) -> PipelineOutcome:
+    """Generate, reserve, human-delay and publish one durable comment attempt."""
+    image_b64, terminal = await _prepare_post_content(event, account_id)
+    if terminal is not None:
+        return terminal
+    # Telemetry is not a precondition for the paid generation/send path. In
+    # particular, a logging outage must not turn a later dispatch fault from
+    # AMBIGUOUS into a seemingly pre-send RETRYABLE outcome.
+    with suppress(Exception):
         await log_event(
             "INFO",
-            "neurocomment_generation_exhausted",
+            "neurocomment_generation_started",
             account_id=account_id,
-            extra={"channel": event.channel, "post_id": event.post_id, "reason": outcome.reason}
-            | ({"error_type": outcome.error} if outcome.error else {}),
+            extra={"channel": event.channel, "post_id": event.post_id},
         )
-        return
+    generated = await _generate_acceptable(
+        campaign,
+        event,
+        account_id,
+        image_b64=image_b64,
+        target=target,
+    )
+    if generated.text is None:
+        return await _settle_generation_exhausted(event, account_id, generated)
+    return await _dispatch_reserved_comment(
+        event,
+        account_id,
+        generated.text,
+        limits,
+        target=target,
+    )
 
-    # ``text`` is now reserved (the exact-hash claim). Any raise before ``_classify_post``
-    # releases it — a delayed/cancelled attempt must not leave the hash reserved, or a
-    # later regeneration of the same text is filtered as its own duplicate.
-    try:
-        alive = await _sleep_beating(
-            event,
-            _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
+
+async def _settle_ambiguous_dispatch(
+    event: NewPostEvent,
+    account_id: str,
+    text: str,
+    *,
+    event_code: str,
+    exc: BaseException,
+) -> None:
+    """Best-effort cleanup that can never reopen a crossed dispatch boundary."""
+    # An ambiguous post is the one ending nothing else can recover from: it may already
+    # carry a live comment, so no retry is allowed and the record below is all the
+    # operator ever gets. Everything here is suppressed — including the event write —
+    # so the stdlib sink goes first and keeps the evidence even when the log store is
+    # the very thing that faulted.
+    logger.error(
+        "%s for %s/%s after %s",
+        event_code,
+        event.channel,
+        event.post_id,
+        type(exc).__name__,
+    )
+    with suppress(Exception, asyncio.CancelledError):
+        await mark_comment_failed(event.channel, event.post_id)
+    with suppress(Exception, asyncio.CancelledError):
+        await log_event(
+            "ERROR",
+            event_code,
+            account_id=account_id,
+            extra={
+                "channel": event.channel,
+                "post_id": event.post_id,
+                "error_type": type(exc).__name__,
+            },
         )
-        # The last beat, and the one that gates the send: everything ahead of it is beaten
-        # too (each generation round, and every slice of the delay above), so no operator
-        # value can put a live attempt past ``stale_claim_reclaim_seconds`` unnoticed. And
-        # the beat is now asked what it found: a claim that is no longer ``claimed`` has
-        # been reclaimed to ``failed`` and its quota slot handed back, so sending under it
-        # would publish a comment the account was never charged for and the campaign counts
-        # as a failure. Nobody else can take the post either — the reclaim marks ``failed``
-        # rather than deleting — so abandoning costs this one post and nothing more.
-        if not alive or not await touch_comment_claim(event.channel, event.post_id):
-            _remove_inflight(event.channel, text)
-            await release_sent_text(text)
-            await log_event(
-                "WARNING",
-                "neurocomment_claim_lost_before_send",
-                account_id=account_id,
-                extra={"channel": event.channel, "post_id": event.post_id},
-            )
-            return
-        result = await _seams.execute(
-            account_id,
-            CommentOnPost(
-                channel=event.channel,
-                post_id=event.post_id,
-                text=text,
-                reply_to=target.message_id if target is not None else None,
-            ),
-        )
-    except BaseException:
+    with suppress(Exception):
         _remove_inflight(event.channel, text)
+    with suppress(Exception, asyncio.CancelledError):
         await release_sent_text(text)
-        raise
-    await _classify_post(event, account_id, text, result)
 
 
 async def _sleep_beating(event: NewPostEvent, seconds: float) -> bool:
-    """Wait ``seconds``, beating the claim between slices; ``False`` if the claim went.
-
-    The reply delay is the one long stretch the operator sets directly, and it is spent
-    INSIDE a claim — so a single beat placed after it covers nothing at all. Sliced instead,
-    a delay of any length keeps its claim alive, which is why the write schema needs no
-    arbitrary upper bound on it — and why the one it briefly had would have locked the
-    Settings form: the read model is unbounded and every save resends the whole object, so
-    one already-stored value above the cap 422s every unrelated edit with no field flagged.
-    """
+    """Wait in bounded slices, returning false once the durable claim is gone."""
     remaining = seconds
     while remaining > 0:
         if not await touch_comment_claim(event.channel, event.post_id):
@@ -236,161 +326,29 @@ async def _log_regeneration(
     event: NewPostEvent,
     attempt: int,
     reason: str | None,
-    error: str | None,
+    error: str | None = None,
 ) -> None:
-    """Say that this post is being written again, and what was wrong with the last try.
-
-    Only a REPEAT round earns a line, which is why round zero is filtered HERE rather than
-    at the call site: this is the rule, and the ladder above it is already at its branch
-    budget. A first-try comment is the normal case on every post, so logging that too
-    would double the feed's volume and say nothing. Reaching a round with ``attempt`` set
-    means the previous one failed a check — a usable candidate returns, and a lost claim
-    returns before this — so ``reason`` is always set here, and filtering on it as well
-    keeps that invariant honest instead of logging a blank.
-
-    ``reason`` carries that failing check's own code and NOT the position in the budget,
-    which is what it used to carry. A bare "2/2" beside the label is exactly how the three
-    DAILY rules render theirs — re-join, channel pause, join request — so two regenerations
-    of one post, a second apart, read as a channel that had burned two days of its retry
-    budget. The rounds are still countable: they are consecutive lines on the same
-    ``post_id``, and the raw numbers ride along in ``attempt`` / ``max_retries``.
-    """
+    """Report only repeat rounds, including the failing provider when known."""
     if not attempt or reason is None:
         return
+    extra: dict[str, object] = {
+        "channel": event.channel,
+        "post_id": event.post_id,
+        "reason": reason,
+        "attempt": attempt,
+        "max_retries": settings.neurocomment.max_retries,
+    }
+    if error:
+        extra["error_type"] = error
     await log_event(
         "INFO",
         "neurocomment_generation_retry",
         account_id=account_id,
-        extra={
-            "channel": event.channel,
-            "post_id": event.post_id,
-            "reason": reason,
-            "attempt": attempt,
-            "max_retries": settings.neurocomment.max_retries,
-        }
-        | ({"error_type": error} if error else {}),
+        extra=extra,
     )
 
 
-async def _generate_acceptable(
-    campaign: NeurocommentCampaign,
-    event: NewPostEvent,
-    account_id: str,
-    *,
-    image_b64: str | None = None,
-    target: PostCommentRecord | None = None,
-) -> _GenOutcome:
-    """Generate a comment passing word-count + filter + exact-hash + semantic dedup.
+from services.neurocomment import _generation_candidates as _candidates  # noqa: E402
 
-    ``image_b64`` (set only for a caption-less photo post) makes every attempt a vision
-    request — the image is downloaded once by the caller and reused across regenerations,
-    so a retry costs the same tokens as the first try, not a second download.
-
-    Tries once plus ``max_retries`` regenerations, each REPEAT of which is announced by
-    :func:`_log_regeneration` — hence ``account_id``, which nothing else here needs. The
-    exact-hash reservation is the atomic claim; the semantic check (token-set Jaccard vs
-    the channel's recent posted comments) is layered after it as a cross-account
-    near-duplicate guard. A reserved-but-rejected text is released so a later attempt isn't
-    filtered as its own duplicate. On exhaustion the last attempt's failure reason travels
-    back for the log.
-
-    Takes the whole ``event`` because this loop is the longest stretch of the pipeline and
-    has to beat the claim while it runs: at the operator-settable ``le`` bounds one round is
-    ~245s (the shared Gemini throttle plus six timed-out attempts and their backoff), so
-    three rounds already outlive ``stale_claim_reclaim_seconds`` on their own.
-    """
-    nc = settings.neurocomment
-    channel = event.channel
-    recent = await _recent_channel_comments(campaign.campaign_id, channel)
-    # Read the operator's Gemini key from the DB (falls back to .env) so a UI-set key
-    # takes effect without a restart. DeepSeek's key is deployment config instead —
-    # see ``core._config_domains.DeepseekSettings`` for why the two differ.
-    secret = await load_warming_settings()
-    # Decided once, not per attempt: neither the image nor the key changes across the
-    # regeneration rounds, and a provider that could flip mid-loop would make the
-    # exhaustion reasons unattributable.
-    use_deepseek = _deepseek_generates(image_b64)
-    generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text
-    reason: str | None = None
-    error: str | None = None
-    for attempt in range(nc.max_retries + 1):
-        # One beat per round, so the gap between beats is a single ``generate_text`` — the
-        # only await here that cannot be sliced, since it waits inside ``core.gemini``.
-        # Acted on, because the pre-send gate WILL abandon once the claim is gone: every
-        # Gemini call from here on is guaranteed waste, and there are up to three rounds of
-        # six paid attempts left. Reported as an exhaustion reason, which is what that field
-        # is for; the send's own abandon line stays for the claims lost after this point.
-        if not await touch_comment_claim(channel, event.post_id):
-            return _GenOutcome(None, _CLAIM_LOST_REASON)
-        await _log_regeneration(account_id, event, attempt, reason, error)
-        request = _build_request(
-            campaign.prompt,
-            _Subject(event.text, target),
-            secret=secret,
-            image_b64=image_b64,
-            use_deepseek=use_deepseek,
-        )
-        generated = await generate(request)
-        if generated.status != "ok" or not generated.text:
-            reason = _gemini_reason(generated)
-            error = _provider_error(generated, use_deepseek=use_deepseek)
-            continue
-        # Markdown markers come off before the word count and the dedup hash: with
-        # ``parse_mode`` disabled a ``**Отличный пост!**`` would post with the
-        # asterisks visible, and the operator's own ``campaign.prompt`` is free to
-        # ask for formatting, so no prompt instruction can be relied on here.
-        candidate = strip_markdown_delimiters(generated.text).strip()
-        # Cleared here, not in each rejection below: they all mean the provider ANSWERED,
-        # so a message kept from an earlier round would blame an upstream fault for a
-        # comment that was merely too long.
-        error = None
-        words = len(candidate.split())
-        if words > nc.comment_max_words:
-            reason = "too_long"
-            continue
-        if words < nc.comment_min_words:
-            reason = "too_short"
-            continue
-        if not is_acceptable(candidate):
-            reason = "not_acceptable"
-            continue
-        if not await try_reserve_sent(candidate):
-            reason = "duplicate"
-            continue
-        # In-flight (reserved-but-unposted) comments on this channel, read LIVE here —
-        # after the multi-second generate await, not at function entry — so a rival on
-        # another account that reserved a near-duplicate during that await is now visible.
-        # An entry-time snapshot froze a stale (often empty) view both racers passed,
-        # letting them post near-identical comments inside each other's delay window.
-        # Empty when the semantic gate is off (preserving the off-switch); `recent` is
-        # likewise [] then, so the any() below is the off-switch — don't re-guard here.
-        # Take the reservation timestamp only after the slow provider call and the
-        # exact-text claim.  An entry-time timestamp makes a long generation consume
-        # part (or all) of the semantic-dedup lifetime before the text even exists.
-        reserved_at = datetime.now(UTC)
-        inflight = (
-            _inflight_texts(channel, reserved_at, nc.semantic_dedup_window_hours)
-            if nc.semantic_dedup_threshold > 0
-            else []
-        )
-        if any(
-            similarity(candidate, prev) >= nc.semantic_dedup_threshold
-            for prev in (*recent, *inflight)
-        ):
-            await release_sent_text(candidate)
-            reason = "duplicate"
-            continue
-        if nc.semantic_dedup_threshold > 0:
-            _add_inflight(channel, candidate, reserved_at)
-        return _GenOutcome(candidate, None)
-    return _GenOutcome(None, reason, error)
-
-
-async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
-    """The channel's recent posted comment texts for semantic dedup (empty when disabled)."""
-    nc = settings.neurocomment
-    if nc.semantic_dedup_threshold <= 0:
-        return []
-    since = (datetime.now(UTC) - timedelta(hours=nc.semantic_dedup_window_hours)).isoformat()
-    posted = await list_posted_comments_for_channel_since(campaign_id, channel, since)
-    return [c.comment_text or "" for c in posted.comments]
+_generate_acceptable = _candidates.generate_acceptable
+_recent_channel_comments = _candidates.recent_channel_comments

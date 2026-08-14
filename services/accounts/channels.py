@@ -3,8 +3,8 @@
 ``execute`` / ``execute_read`` are imported at module scope so tests can
 monkeypatch ``services.accounts.channels.execute`` / ``.execute_read``.
 
-No profile-cache involvement: channel data is not part of the profile
-snapshot, so there is nothing to invalidate.
+Channel data is not part of the profile snapshot.  Successful reaction-setting
+writes do invalidate the warming gateway's reaction whitelist.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from core.telegram_client import (
     TelegramReadError,
     execute,
     execute_read,
+    invalidate_reaction_whitelist_cache,
 )
 from schemas.api import Page
 from schemas.channels import ChannelDetailView, ChannelUsernameCheckView, ChannelView
@@ -95,6 +96,10 @@ async def create_account_channel(
             reactions_enabled=data.reactions_enabled,
         ),
     )
+    # A timeout/unavailable result may mean Telegram applied the mutation but its
+    # acknowledgement was lost. Invalidate before interpreting the result so warming
+    # cannot reuse a possibly stale whitelist for an hour.
+    invalidate_reaction_whitelist_cache()
     raise_for_result(result)
     await log_event(
         "INFO",
@@ -157,6 +162,8 @@ async def update_account_channel(
             reactions_enabled=data.reactions_enabled,
         ),
     )
+    if data.reactions_enabled is not None:
+        invalidate_reaction_whitelist_cache()
     raise_for_result(result)
     await log_event(
         "INFO",

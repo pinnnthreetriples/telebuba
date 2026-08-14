@@ -58,6 +58,7 @@ from core.migration_steps_neurocomment import (
     _add_neurocomment_channel_case_fold_index,
     _add_neurocomment_comment_deleted_at,
     _add_neurocomment_cooldowns,
+    _add_neurocomment_inbox,
     _add_neurocomment_join_log,
     _add_neurocomment_join_log_watch_channel,
     _add_readiness_join_request,
@@ -68,6 +69,7 @@ from core.migration_steps_pool import (
     _add_proxy_pool,
     _add_warming_state_activity_persona,
 )
+from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 
@@ -162,6 +164,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         "add_neurocomment_settings_comment_mode",
         _add_neurocomment_settings_comment_mode,
     ),
+    (53, "add_neurocomment_inbox", _add_neurocomment_inbox),
+    (54, "harden_proxy_hosts", _harden_proxy_hosts),
 )
 
 

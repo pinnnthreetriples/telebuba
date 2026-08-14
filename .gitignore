@@ -17,6 +17,12 @@ wheels/
 *.session
 *.session-journal
 
+# Upload staging (credentials) — API__UPLOAD_STAGING_DIR defaults inside the
+# working tree, and a staged telebuba_upload_* file IS the tdata/session archive.
+# The name pattern covers a staging dir relocated elsewhere in the tree.
+runtime/
+telebuba_upload_*
+
 # SQLite databases (runtime data)
 *.db
 *.db-journal

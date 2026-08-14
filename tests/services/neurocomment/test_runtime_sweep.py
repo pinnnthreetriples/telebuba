@@ -607,6 +607,7 @@ async def _run_until_second_tick(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_sweep, "_sweep_once", counted)
     # Started through the runtime, not by hand: the loop retires the moment it is not the
     # registered sweep task, so a hand-built one would quit after tick one.
+    _runtime._activate_runtime_owner("listener-1")
     _runtime._ensure_sweep_running()
     try:
         await asyncio.wait_for(second.wait(), timeout=5.0)

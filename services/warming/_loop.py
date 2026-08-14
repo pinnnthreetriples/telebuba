@@ -8,51 +8,37 @@ are reached via :mod:`services.warming._seams`.
 from __future__ import annotations
 
 import asyncio
-import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account, fetch_warming_state, load_warming_settings
+from core.db import fetch_warming_state
 from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
-from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._fleet import _is_quiet_day
-from services.warming._quarantine import _recover_from_quarantine
-from services.warming._reservation import (
-    _reconcile_reservation,
-    _release_reservation_on_exit,
-    _Reservation,
-)
+from services.warming._reservation import _reconcile_reservation, _Reservation
 from services.warming._state import _set_state
-from services.warming._steps import _ChannelTally
 from services.warming._transitions import (
     _calculate_next_run,
-    _gate_readiness,
-    _gate_target_reached,
     _matches_active_run,
     _resolve_phase_after_cycle,
 )
 from services.warming.pacing import (
-    _account_age_hours,
     _account_tz,
     _next_utc_midnight,
     _now_iso,
-    _roll_daily,
     _shift_to_active_hours,
-    compute_intensity,
 )
 
 if TYPE_CHECKING:
-    from schemas.warming import WarmingState
+    from collections.abc import Awaitable, Callable
+    from datetime import datetime
+
+    from schemas.warming import ActivityPersona, WarmingState
+    from services.warming._steps import _ChannelTally
 
     _Schedule = tuple[int, datetime, WarmingState]
-
-# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
-logger = logging.getLogger(__name__)
-
 
 # A cycle always spends one action on the SetOnline presence flip; require room
 # for at least one real action (join/read/react) beyond it before starting, or
@@ -235,156 +221,24 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     return result
 
 
-async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential gates, each early-exits.
-    account_id: str,
+async def _execute_cycle(
+    request: WarmingCycleRequest,
     *,
-    run_id: str | None = None,
+    on_step: Callable[[str], Awaitable[None]],
+    tally: _ChannelTally,
 ) -> WarmingCycleResult:
-    """Run one iteration of the warming loop (cycle + state transitions).
+    """Patch-friendly indirection retained for tests and engine instrumentation."""
+    return await run_one_cycle(request, on_step=on_step, tally=tally)
 
-    Updates DB state but does NOT sleep — writes ``next_run_at`` instead,
-    so a restart resumes the existing schedule. When ``run_id`` is set,
-    every state write is CAS-guarded against it so a concurrent
-    stop/restart wins over a stale cycle.
-    """
-    now = datetime.now(UTC)
-    controls = await load_warming_settings()
-    record = await fetch_warming_state(account_id)
 
-    if not _matches_active_run(record, run_id):
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+async def _schedule_next_run(
+    account_id: str,
+    result: WarmingCycleResult,
+    persona: ActivityPersona,
+    effective_cap: int,
+) -> _Schedule:
+    """Patch-friendly scheduling indirection used by the iteration slice."""
+    return await _calculate_next_run(account_id, result, persona, effective_cap)
 
-    done = await _gate_target_reached(account_id, record, now, run_id=run_id)
-    if done is not None:
-        return done
 
-    if record is not None and record.state == "quarantine":
-        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
-
-    account = await fetch_account(account_id)
-    age_hours = _account_age_hours(account, now)
-    trust = await account_trust_score(account_id)
-
-    not_ready = await _gate_readiness(account, controls, record, trust, now, run_id=run_id)
-    if not_ready is not None:
-        return not_ready
-
-    intensity = compute_intensity(age_hours, trust_band=trust.band)
-    # П2: the per-account auto cap (phase + trust band) is the single source of
-    # truth. The legacy fleet-wide ``controls.max_daily_actions`` override is
-    # retired — no longer read here, so a stale nonzero DB value can no longer
-    # silently neuter the auto cap (and there was no UI to clear it).
-    effective_cap = intensity.daily_cap
-
-    daily = _roll_daily(record, now.date().isoformat())
-    daily_count, daily_date = daily
-    quiet = await _gate_quiet_day(account_id, daily, now, run_id=run_id)
-    if quiet is not None:
-        return quiet
-    gated = await _gate_daily_limit(account_id, effective_cap, daily, now, run_id=run_id)
-    if gated is not None:
-        return gated
-
-    remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
-    reservation = _Reservation.book(daily, remaining)
-    # #208: reserve the whole remaining budget on the row BEFORE the cycle spends
-    # any of it. Only ``_finalize_after_cycle`` ever incremented ``daily_actions``,
-    # so a crash between here and there left today's count untouched — and because
-    # the stale ``next_run_at`` is already past due, the restarted loop re-read a
-    # full budget and spent it again on top of the actions this cycle had already
-    # performed. The finalize write reconciles the reservation back down to the
-    # real ``daily_count + actions_done``, so the crash path now fails closed: the
-    # worst case is losing the rest of today's budget, never exceeding it. The
-    # ``_on_step`` hook below cannot carry this — it is gated to the monotonic step
-    # rail, so it fires once per step name and never sees the per-action tally.
-    started = await _set_state(
-        account_id,
-        "active",
-        last_event="cycle_started",
-        heartbeat_at=now.isoformat(),
-        last_error=None,
-        last_action="set_online",
-        last_channel=None,
-        daily_actions=reservation.booked,
-        daily_count_date=daily_date,
-        expected_run_id=run_id,
-        # Stamps this booking's identity on the row so the hand-back can tell it from
-        # a newer generation's — the operator's Start mints its run_id eagerly, so the
-        # generation marker cannot serve (#10).
-        reservation_token=reservation.token,
-    )
-    if run_id is not None and not started.applied:
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
-
-    # set_online is already seeded on the cycle_started write above, so the rail
-    # lights up "online" the moment the cycle starts; the hook advances from join.
-    max_step = 0
-
-    async def _on_step(step: str) -> None:
-        # ponytail: best-effort, monotonic progress write. CAS-guarded by run_id
-        # but the result is ignored — the cycle isn't abortable mid-flight, so a
-        # stale generation's write degrades to a no-op. A raising write (e.g. a
-        # transient SQLite lock) is swallowed too: this is cosmetic rail progress
-        # and must never abort the live cycle or park a healthy account in error.
-        nonlocal max_step
-        idx = _PROGRESS_STEPS.index(step) if step in _PROGRESS_STEPS else -1
-        if idx <= max_step:
-            return
-        max_step = idx
-        try:
-            await _set_state(
-                account_id,
-                "active",
-                last_action=step,
-                heartbeat_at=_now_iso(),
-                expected_run_id=run_id,
-            )
-        except Exception as exc:  # cosmetic progress, never abort the cycle.
-            logger.exception("progress write failed for %s at step %s", account_id, step)
-            await log_event(
-                "WARNING",
-                "warming_progress_write_failed",
-                account_id=account_id,
-                extra={"step": step, "error_type": type(exc).__name__},
-            )
-
-    persona = record.activity_persona if record is not None else "normal"
-    # The cycle counts its attempts on a tally we own, so an exit that never
-    # reaches the finalize write below can still hand back what it did not spend.
-    # In-process abnormal exits are the routine case, not the exotic one:
-    # ``CancelledError`` arrives at the innermost await on every lifespan
-    # shutdown, ``stop_warming`` and ``start_warming`` cancel-and-replace.
-    tally = _ChannelTally()
-    try:
-        # The semaphore caps fleet-wide concurrent cycles; hold it only for the
-        # Telegram-heavy cycle, not the surrounding state writes or inter-cycle sleep.
-        async with _cycle_semaphore:
-            result = await run_one_cycle(
-                WarmingCycleRequest(
-                    account_id=account_id,
-                    remaining_actions=remaining,
-                    # П11: trust+age-aware DM permission (readiness already enforced by
-                    # the gate above when enabled). The cycle's own intensity is
-                    # trust-blind, so pass the loop's trust-aware value instead.
-                    dm_allowed=intensity.dm_allowed,
-                    activity_persona=persona,
-                ),
-                on_step=_on_step,
-                tally=tally,
-            )
-        schedule = await _calculate_next_run(account_id, result, persona, effective_cap)
-        # Inside the ``try`` as well: the finalize is three DB round-trips, and the
-        # transient SQLite lock this module already anticipates would otherwise
-        # escape with the whole reservation still booked — costing the rest of the
-        # day on top of parking the account in ``error``.
-        return await _finalize_after_cycle(
-            account_id, result, age_hours, reservation, schedule, run_id=run_id
-        )
-    except BaseException:
-        # ``BaseException`` on purpose: ``CancelledError`` does not inherit from
-        # ``Exception``, and cancellation is the leak path that costs a whole day of
-        # warming per restart. Re-raised unchanged so cancellation keeps propagating
-        # to the task that asked for it, and so a genuine crash still reaches
-        # ``_runner``'s ``except Exception``.
-        await _release_reservation_on_exit(account_id, reservation, tally.attempts)
-        raise
+from services.warming._iteration import run_loop_iteration  # noqa: E402, F401

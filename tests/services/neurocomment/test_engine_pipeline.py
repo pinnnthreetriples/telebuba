@@ -18,6 +18,8 @@ from core.db import (
     list_recent_logs,
     mark_comment_posted,
     mark_comments_deleted,
+    mark_nc_handed_off,
+    mark_promoted_to_nc,
     upsert_readiness,
 )
 from core.repositories.neurocomment import (
@@ -162,6 +164,8 @@ async def test_pinned_account_not_selected_for_other_channel(
     for channel in ("@a", "@b"):
         await link_channel_to_campaign(campaign.campaign_id, channel)
     await create_account(AccountCreate(account_id="acc-1", label="a", session_name="acc-1"))
+    await mark_promoted_to_nc("acc-1")
+    await mark_nc_handed_off("acc-1")
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
     # Ready on BOTH channels, but pinned to @a.
     await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
@@ -190,6 +194,8 @@ async def test_unpinned_account_eligible_for_every_channel(
     for channel in ("@a", "@b"):
         await link_channel_to_campaign(campaign.campaign_id, channel)
     await create_account(AccountCreate(account_id="acc-1", label="a", session_name="acc-1"))
+    await mark_promoted_to_nc("acc-1")
+    await mark_nc_handed_off("acc-1")
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")  # no pin
     await upsert_readiness("acc-1", "@b", joined=True, captcha_passed=True, ready=True)
 

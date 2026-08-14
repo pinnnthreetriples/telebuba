@@ -38,7 +38,14 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Use
             status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
             detail="too many login attempts",
         )
-    user = await auth_service.authenticate(body)
+    try:
+        user = await auth_service.authenticate(body)
+    except auth_service.AuthenticationCapacityError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="authentication capacity exceeded",
+            headers={"Retry-After": "1"},
+        ) from exc
     if user is None:
         raise HTTPException(
             status_code=http_status.HTTP_401_UNAUTHORIZED,

@@ -21,9 +21,13 @@ async def test_onboarding_without_queued_trigger_runs_one_pass(
         assert scans == 1, "onboarding repeated without a queued trigger"
         return CampaignList(campaigns=[])
 
-    monkeypatch.setattr(_runtime, "list_campaigns", list_campaigns_once)
+    monkeypatch.setattr(_runtime, "_list_campaigns", list_campaigns_once)
     monkeypatch.setattr(_runtime, "_ONBOARD_RERUN", False)
+    # The pass is fenced to the runtime owner, so claim ownership first or it
+    # returns before scanning anything and the contract proves nothing.
+    monkeypatch.setattr(_runtime, "_RUNTIME_ACCOUNT_ID", "listener-1")
+    monkeypatch.setattr(_runtime, "_RUNTIME_GENERATION", 7)
 
-    await _runtime._onboard_active_campaigns(None)
+    await _runtime._onboard_active_campaigns(None, "listener-1", 7)
 
     assert scans == 1

@@ -17,7 +17,7 @@ from __future__ import annotations
 import ast
 import json
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 
@@ -124,8 +124,8 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
 
     Compares by type so the template's natural forms all pass: booleans as
     ``true``/``false``, numbers by value (so a ``float`` default of ``30.0`` may be
-    written ``30``), lists/dicts as JSON (tuples normalise to JSON arrays),
-    everything else as its ``str``.
+    written ``30``), lists/dicts as JSON (tuples normalise to JSON arrays), paths in
+    their POSIX form, everything else as its ``str``.
     """
     if isinstance(default, bool):
         return raw == ("true" if default else "false")
@@ -141,6 +141,11 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
             return json.loads(raw) == json.loads(json.dumps(default))
         except (json.JSONDecodeError, TypeError):
             return False
+    if isinstance(default, PurePath):
+        # ``str`` of a multi-segment default is ``runtime\uploads`` on Windows, while
+        # the template writes the one POSIX-style form for both platforms — so the
+        # separator would otherwise be the thing under test.
+        default = default.as_posix()
     return raw == str(default)
 
 

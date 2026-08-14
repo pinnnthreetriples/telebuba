@@ -157,56 +157,57 @@ async def _warming_loop(
     it, a stale loop that crashed after a restart would stamp ``error`` over
     the new generation's row, undoing the restart.
     """
-    try:
-        record = await fetch_warming_state(account_id)
-        if not _is_live_generation(record, run_id):
-            return
-        now = datetime.now(UTC)
-        delay = await _initial_delay_seconds(account_id, record, now)
-        await _persist_cold_start_schedule(account_id, record, delay, now, run_id)
-        await asyncio.sleep(delay)
-        while True:
+    with _seams.lease_scope(account_id, run_id):
+        try:
             record = await fetch_warming_state(account_id)
             if not _is_live_generation(record, run_id):
-                break
-            await run_loop_iteration(account_id, run_id=run_id)
-            record = await fetch_warming_state(account_id)
-            if not _is_live_generation(record, run_id):
-                break
-            await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:  # a background loop must never crash silently.
-        logger.exception("warming loop crashed for %s", account_id)
-        await log_event(
-            "ERROR",
-            "warming_loop_crashed",
-            account_id=account_id,
-            extra={"error_type": type(exc).__name__},
-        )
-        # Round-6 P1: pre-check generation so a stale crash does not even try
-        # to write. The CAS predicate below is the suspenders — if our pre-read
-        # raced a restart, the upsert still refuses to overwrite a fresh
-        # generation's row.
-        latest = await fetch_warming_state(account_id)
-        if not _is_live_generation(latest, run_id):
-            return
-        # Class name only, for the same reason the ``extra`` above carries one.
-        # ``last_error`` is a field of ``WarmingAccountState``, the response model of
-        # ``GET /warming/board`` — so the interpolated ``{exc}`` was the identical
-        # leak one route over: a python_socks connect failure stringifies as
-        # ``proxy socks5://user:pass@host:port refused``. Every other writer of this
-        # field already composes its own prose (readiness reasons in ``_runtime`` and
-        # ``_transitions``, a check count in ``_quarantine``, ``result.detail`` in
-        # ``_loop``); this was the only one handing it a third-party exception. The
-        # field stays populated — nothing pattern-matches it and the board shows the
-        # red pill off ``state``, so the class name is all it ever needed to carry.
-        # The full text is on the stdlib logger above.
-        await _set_state(
-            account_id,
-            "error",
-            last_event="loop_crashed",
-            last_error=type(exc).__name__,
-            heartbeat_at=_now_iso(),
-            expected_run_id=run_id,
-        )
+                return
+            now = datetime.now(UTC)
+            delay = await _initial_delay_seconds(account_id, record, now)
+            await _persist_cold_start_schedule(account_id, record, delay, now, run_id)
+            await asyncio.sleep(delay)
+            while True:
+                record = await fetch_warming_state(account_id)
+                if not _is_live_generation(record, run_id):
+                    break
+                await run_loop_iteration(account_id, run_id=run_id)
+                record = await fetch_warming_state(account_id)
+                if not _is_live_generation(record, run_id):
+                    break
+                await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # a background loop must never crash silently.
+            logger.exception("warming loop crashed for %s", account_id)
+            await log_event(
+                "ERROR",
+                "warming_loop_crashed",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__},
+            )
+            # Round-6 P1: pre-check generation so a stale crash does not even try
+            # to write. The CAS predicate below is the suspenders — if our pre-read
+            # raced a restart, the upsert still refuses to overwrite a fresh
+            # generation's row.
+            latest = await fetch_warming_state(account_id)
+            if not _is_live_generation(latest, run_id):
+                return
+            # Class name only, for the same reason the ``extra`` above carries one.
+            # ``last_error`` is a field of ``WarmingAccountState``, the response model of
+            # ``GET /warming/board`` — so the interpolated ``{exc}`` was the identical
+            # leak one route over: a python_socks connect failure stringifies as
+            # ``proxy socks5://user:pass@host:port refused``. Every other writer of this
+            # field already composes its own prose (readiness reasons in ``_runtime`` and
+            # ``_transitions``, a check count in ``_quarantine``, ``result.detail`` in
+            # ``_loop``); this was the only one handing it a third-party exception. The
+            # field stays populated — nothing pattern-matches it and the board shows the
+            # red pill off ``state``, so the class name is all it ever needed to carry.
+            # The full text is on the stdlib logger above.
+            await _set_state(
+                account_id,
+                "error",
+                last_event="loop_crashed",
+                last_error=type(exc).__name__,
+                heartbeat_at=_now_iso(),
+                expected_run_id=run_id,
+            )

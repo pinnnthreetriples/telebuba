@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
 
 from api import create_app
+from api.v1._uploads import cleanup_stale_uploads
 from core.config import settings
 from core.db import run_db_maintenance_loop
 from core.gemini import close_gemini_client
@@ -117,6 +118,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     ``.session`` SQLite file.
     """
     setup_logging()
+    await cleanup_stale_uploads()
     await _log_app_started()
     await seed_admin_if_empty()
     # DB is initialised by the seed above; start the periodic SQLite maintenance

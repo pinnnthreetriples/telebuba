@@ -152,12 +152,12 @@ def test_conflict_is_declared_only_on_the_accounts_routes_that_can_raise_it(
 ) -> None:
     """409 is never declared router-wide — only per route, where a handler raises it.
 
-    Five operations declare it across the whole API (``assignProxy``,
-    ``importAccountSession``, ``startNeurocomment``, ``startPhoneLogin``,
-    ``startWarming``). On the accounts surface that is the two session-creating
-    routes below, and their siblings must not inherit it.
+    409 is attached to the individual operations that can conflict. On the
+    accounts surface that includes session creation and deletion while a
+    runtime task is still draining; unrelated siblings must not inherit it.
     """
     paths = app.openapi()["paths"]
     assert "409" in paths["/api/v1/accounts/import-session"]["post"]["responses"]
     assert "409" in paths["/api/v1/accounts/start-login"]["post"]["responses"]
+    assert "409" in paths["/api/v1/accounts/{account_id}"]["delete"]["responses"]
     assert "409" not in paths["/api/v1/accounts"]["get"]["responses"]
