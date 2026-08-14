@@ -256,6 +256,13 @@ async def test_fetch_live_profile_evicts_the_stale_entry(
     times = iter([1_000.0, 1_500.0, 1_500.0])
     monkeypatch.setattr("services.accounts.profile_read.time.time", lambda: next(times))
 
+    # Establish the generation the eviction has to reset. An operator reaches
+    # this state by editing the profile (which invalidates) and opening the
+    # dialog again; asserting the key is gone below says nothing unless it was
+    # there to begin with.
+    invalidate_account_profile_cache("acc-1")
+    assert profile_read._CACHE_GEN["acc-1"] == 1
+
     await fetch_live_account_profile("acc-1")
     assert "acc-1" in profile_read._CACHE
 

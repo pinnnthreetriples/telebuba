@@ -58,6 +58,15 @@ have since been made deterministic:
   field. Both are the only signal naming the subject or the cause, so the
   existing runtime tests now assert them.
 
+Clearing the module state cost four kills it had been buying by accident: the
+old fixtures called `invalidate_account_profile_cache` on every test, which
+exercised the generation bump and left the key that made the stale-eviction
+reset observable. Those contracts are now tested on purpose — a stale eviction
+establishes the generation it resets, and two back-to-back clear-all
+invalidations prove the generation advances instead of being stamped. Stubbing
+`log_event` in the resubscribe test cost three more, because the real callee had
+been validating the level; the test asserts the level itself now.
+
 Two are left deliberately. `..._watch.x_reconcile_neurocomment_runtime__mutmut_13`
 only changes the case of a log event name, which the static i18n parity test
 already guards on the real tree; a duplicate runtime assertion would be score

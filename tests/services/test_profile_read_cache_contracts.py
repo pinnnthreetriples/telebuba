@@ -166,3 +166,49 @@ async def test_invalidation_starts_new_generation_without_joining_stale_fetch(
     assert stale.first_name == "stale"
     assert fresh.first_name == "fresh"
     assert cached is fresh
+
+
+@pytest.mark.asyncio
+async def test_back_to_back_clear_all_invalidations_keep_advancing_the_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The clear-all branch must ADVANCE each generation, not just stamp one.
+
+    Two profile edits in a row, with a fetch started between them: the fetch
+    captured the generation the first edit produced, and the second edit has to
+    move past it, or that fetch stores pre-second-edit state right after the
+    invalidation and pins the dialog to it for a full TTL. A branch that stamps a
+    constant — or the same value twice — still disowns a fetch from before the
+    FIRST edit, which is why one invalidation cannot show the difference.
+    """
+    started = asyncio.Event()
+    release = asyncio.Event()
+    calls = 0
+
+    async def execute(_account_id: str, _actions: list[object]) -> list[object]:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            started.set()
+            await release.wait()
+        return _empty_results(f"read-{calls}")
+
+    monkeypatch.setattr("services.accounts.profile_read.execute_read_many", execute)
+    await fetch_live_account_profile("acc-clear-all")  # populates the cache
+    invalidate_account_profile_cache()  # first edit: generation 1
+    disowned = asyncio.create_task(fetch_live_account_profile("acc-clear-all"))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2.0)
+        invalidate_account_profile_cache()  # second edit: must reach generation 2
+        release.set()
+        await disowned
+        served = await fetch_live_account_profile("acc-clear-all")
+    finally:
+        release.set()
+        if not disowned.done():
+            disowned.cancel()
+        await asyncio.gather(disowned, return_exceptions=True)
+
+    # The disowned read must not have been cached, so this is a third round-trip.
+    assert served.first_name == "read-3"
+    assert calls == 3
