@@ -10,7 +10,8 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import type { FeedbackResult } from '@/shared/lib';
+import { DataTable, type DataTableColumnMeta, StatusIcon } from '@/shared/ui';
 
 interface AccountsTableProps {
   data: AccountRead[];
@@ -20,10 +21,24 @@ interface AccountsTableProps {
   onProfile?: (account: AccountRead) => void;
   // A set, not one id: two rows can have a check or a delete in flight at once.
   busyIds: ReadonlySet<string>;
+  // Verdict of the row's last check, while it is being flashed. Absent = the
+  // button shows its ordinary refresh glyph.
+  checkResults: Readonly<Record<string, FeedbackResult>>;
 }
 
 const ACTION_BTN =
   'flex h-[30px] w-[30px] items-center justify-center rounded-full border border-line bg-white disabled:opacity-50';
+
+// The check button wears its own verdict (repo rule: every mutation ends in a
+// green check or a red cross), so the ✓/✗ lands where the click did. A busy row
+// falls back to `idle`: the button re-enables the moment its spinner clears, so
+// a second click inside the flash window would otherwise spin on the previous
+// verdict's fill — the old answer asserted over an unresolved check.
+const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
+  idle: 'text-ink-muted',
+  ok: 'border-success bg-success text-white',
+  err: 'border-danger bg-danger text-white',
+};
 
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
@@ -86,6 +101,7 @@ export function AccountsTable({
   onOpen,
   onProfile,
   busyIds,
+  checkResults,
 }: AccountsTableProps) {
   const { t } = useTranslation();
 
@@ -186,6 +202,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         const busy = busyIds.has(account.account_id);
+        const checked = checkResults[account.account_id];
         return (
           <div className="flex items-center justify-end gap-[6px]">
             <button
@@ -196,10 +213,22 @@ export function AccountsTable({
                 event.stopPropagation();
                 onCheck(account.account_id);
               }}
-              className={`${ACTION_BTN} text-ink-muted`}
+              className={`${ACTION_BTN} transition-colors duration-300 ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
             >
               {busy ? (
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
+              ) : checked ? (
+                // Named, not colour-only: the fill and the glyph say nothing to a
+                // screen reader, and `title` stays the constant action label.
+                <span
+                  className="tb-pop inline-flex"
+                  role="img"
+                  aria-label={t(
+                    checked === 'ok' ? 'accounts.edit.aliveOk' : 'accounts.edit.aliveErr',
+                  )}
+                >
+                  <StatusIcon kind={checked} />
+                </span>
               ) : (
                 <svg
                   width="14"
