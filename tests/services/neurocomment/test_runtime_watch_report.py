@@ -230,11 +230,20 @@ async def test_resubscribe_failure_does_not_kill_the_join_task(
         msg = "peer resolution exploded"
         raise RuntimeError(msg)
 
+    logged: list[tuple[str, object]] = []
+
+    async def _fake_log(_level: str, event: str, **kwargs: object) -> None:
+        logged.append((event, kwargs.get("extra")))
+
     monkeypatch.setattr(_runtime, "subscribe_posts", _boom)
+    monkeypatch.setattr(_runtime, "log_event", _fake_log)
     gate.set()
     await _drain_joins()  # re-raises whatever the join task raised — must be nothing
 
     assert sorted(_runtime._UNWATCHED_CHANNELS) == ["@b"]  # report left as it stood
+    # Contained is not silent: ``error_type`` is the only thing that tells an
+    # operator what swallowed the heal, so the warning must carry it.
+    assert ("neurocomment_resubscribe_failed", {"error_type": "RuntimeError"}) in logged
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 

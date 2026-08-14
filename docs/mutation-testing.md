@@ -34,15 +34,36 @@ Nightly red. The floor is the union of two consecutive runner sweeps: every
 identity either sweep saw survive is a reviewed survivor, so the score cannot
 drift below it on noise alone.
 
-Twelve identities were killed in one sweep and survived in the other:
-`services.accounts.profile_read.x__fetch_and_maybe_cache__mutmut_6`, `__mutmut_8`,
-`__mutmut_9`; `..._read.x_fetch_live_account_profile__mutmut_14`, `__mutmut_17`,
-`__mutmut_19`, `__mutmut_20`; `services.neurocomment._join.x_run_join_pass__mutmut_44`;
-`services.neurocomment._watch.x__resubscribe_unwatched__mutmut_33`;
-`..._watch.x_reconcile_neurocomment_runtime__mutmut_13`, `__mutmut_54`; and
-`services.warming.pacing.x__next_utc_midnight__mutmut_7`. They are counted as
-survivors, so the gate under-reports rather than flapping. Making their tests
-insensitive to load and wall-clock time is the way to reclaim those kills.
+Twelve identities were killed in one sweep and survived in the other. They are
+counted as survivors, so the gate under-reports rather than flapping, and ten
+have since been made deterministic:
+
+- Seven in `services.accounts.profile_read` (`x__fetch_and_maybe_cache__mutmut_6`,
+  `__mutmut_8`, `__mutmut_9`; `x_fetch_live_account_profile__mutmut_14`,
+  `__mutmut_17`, `__mutmut_19`, `__mutmut_20`) all mutate the default of
+  `_CACHE_GEN.get(account_id, 0)` / `.pop(account_id, None)`, which only matters
+  when the key is absent. The test fixtures called
+  `invalidate_account_profile_cache` as isolation, but that is production
+  invalidation: it bumps the generation and leaves the key behind. Whether a
+  mutant met a populated dict depended on what ran earlier in the same worker
+  process. `tests/services/conftest.py` now clears the module state outright.
+- `services.warming.pacing.x__next_utc_midnight__mutmut_7` drops `second=0`.
+  Every test reaching it pinned `now` to a whole minute, so the mutation was
+  equivalent for them; the live loop calls it with `datetime.now(UTC)`, where it
+  persists a `next_run_at` seconds off. A direct contract test now passes a
+  non-zero second.
+- `..._watch.x_reconcile_neurocomment_runtime__mutmut_54` drops `account_id` from
+  the `neurocomment_channels_unwatched` warning, and
+  `..._watch.x__resubscribe_unwatched__mutmut_33` misspells its `error_type`
+  field. Both are the only signal naming the subject or the cause, so the
+  existing runtime tests now assert them.
+
+Two are left deliberately. `..._watch.x_reconcile_neurocomment_runtime__mutmut_13`
+only changes the case of a log event name, which the static i18n parity test
+already guards on the real tree; a duplicate runtime assertion would be score
+padding. `services.neurocomment._join.x_run_join_pass__mutmut_44` could not be
+identified with confidence, because coverage filtering shifts that function's
+mutant numbering between a local generation and the measured catalogue.
 Nightly preserves separate first-attempt and repair snapshots when repair is
 needed because mutmut 3.6 resets non-selected statuses during a targeted run
 and omits `not_checked` from `export-cicd-stats`.

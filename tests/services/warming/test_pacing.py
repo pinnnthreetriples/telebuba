@@ -410,6 +410,19 @@ def test_loop_sleep_respects_future_next_run() -> None:
     assert warming._loop_sleep_seconds(record, now) == pytest.approx(900)
 
 
+def test_next_utc_midnight_zeroes_the_whole_time_of_day() -> None:
+    """A park time must be midnight exactly, not midnight plus the current second.
+
+    Every other test that reaches ``_next_utc_midnight`` pins ``now`` to a whole
+    minute, so dropping ``second=0`` was invisible to them; the live loop calls
+    it with ``datetime.now(UTC)``, where it persists a ``next_run_at`` that is
+    seconds off. Pass a time whose second is non-zero and assert the instant.
+    """
+    parked = _loop._next_utc_midnight(datetime(2026, 6, 12, 12, 34, 56, 789_000, tzinfo=UTC))
+
+    assert parked == datetime(2026, 6, 13, 0, 0, tzinfo=UTC)
+
+
 def test_loop_sleep_falls_back_without_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
     # No persisted schedule (shouldn't happen after run_loop_iteration writes one)
     # → a persona-paced gap, not a crash. Assert it's a sane positive duration.
