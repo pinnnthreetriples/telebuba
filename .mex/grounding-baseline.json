@@ -1,6 +1,6 @@
 [
   {
-    "body_hash": "df5645b44d207706c509fa55fd9f023efbbcd0b42cfcf7efd6c2e31c33befbb0",
+    "body_hash": "787013e66aef633e3c92bfef29a84b59743c289142b47f614c41d7ef32d1013f",
     "node_id": "function:ba8f355bd012e2daedeea6b4da65becb",
     "scaffold_file": ".mex/context/runtime-discovery.md"
   },
@@ -70,7 +70,7 @@
     "scaffold_file": ".mex/patterns/add-auth.md"
   },
   {
-    "body_hash": "991cb35d56309e292d270577a5e82c51642210078b024893c2e255d088b3a143",
+    "body_hash": "750033440b355ebe49b84bc1cd508b439f98dcfe34b6e3eb7d08bfd7d97c0cd4",
     "node_id": "function:fd7aebfa2186e8d7f0da28e661677d85",
     "scaffold_file": ".mex/patterns/add-discovery-source.md"
   },
@@ -105,7 +105,7 @@
     "scaffold_file": ".mex/patterns/add-telegram-task.md"
   },
   {
-    "body_hash": "77c702696b08dc4adb1920f3f90a95abbcdbe7db8230519f57fee27fd954219b",
+    "body_hash": "63414d10a29efa11373d737113712eaa8ccf351b38fde08cc424172bc8803d72",
     "node_id": "function:cc4a14399d709104c7b6f0e3856e631f",
     "scaffold_file": ".mex/patterns/add-telegram-task.md"
   },
