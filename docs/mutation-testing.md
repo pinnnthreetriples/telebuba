@@ -11,11 +11,11 @@ preserves every available partial snapshot and diagnostic log.
 
 | Result | Count |
 |---|---:|
-| Total | 13,949 |
-| Killed | 11,799 |
-| Survived | 2,144 |
-| Timeout | 6 |
-| Score | 84.5867% |
+| Total | 15,458 |
+| Killed | 12,762 |
+| Survived | 2,500 |
+| Timeout | 196 |
+| Score | 82.5592% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -24,17 +24,33 @@ cover additional production paths.
 The current calibration uses CPython 3.13.14, mutmut 3.6.0, the deterministic
 `mutation` Hypothesis profile, four mutmut workers, `PYTHONHASHSEED=0`, and
 `TZ=UTC`. Its catalogue digest is
-`c96326469752080f50b68c9520c5d3e638894fef1b0310cbe3c6fde386063237`;
+`116845582d14a72d0c438a39e0c00112387a03d7bb067e1c6ce4ddffd3e5d026`;
 the digest binds mutant identities to the exact Python source paths and bytes,
 so a semantic source change cannot silently reuse a reviewed timeout identity.
-The checked-in 11,799/2,144/6 floor is measured on the GitHub runner, not
-locally. A clean local sweep reaches 11,813 killed, but the hosted runner is
-slower and more contended, and pinning the floor to the best machine made every
-Nightly red. The floor is the union of two consecutive runner sweeps: every
-identity either sweep saw survive is a reviewed survivor, so the score cannot
-drift below it on noise alone.
+The floor is measured on the GitHub runner, not locally. A clean local sweep
+scores higher, but the hosted runner is slower and more contended, and pinning
+the floor to the best machine made every Nightly red.
 
-Twelve identities were killed in one sweep and survived in the other. They are
+The 12,762/2,500/196 floor is the merge of current `main` into this branch. The
+score dropped from 84.56% because the catalogue grew by 1,509 mutants over code
+that arrived with main, not because anything regressed. All 196 timeouts were
+individually rerun with one worker and all 196 reproduced, so every one is a
+reviewed identity rather than contention noise. That first post-merge sweep took
+5h14m for exactly that reason — 191 serial timeout reruns, each paying the full
+mutmut timeout. Once those identities are reviewed they are not rechecked, so
+the following sweeps cost what they did before.
+
+The first post-merge sweep also found one mutant mutmut could not run at all:
+`services.warming._seams.x_refresh_spam_status__mutmut_1`, reported as `no
+tests`. The warming seam fences the quarantine spam probe with the runtime lease
+exactly as it fences gateway dispatch, but every test patches that seam, so its
+body had never executed. The gateway half had a lease test and this half did
+not; it has one now. `no tests` is reported and gated by name rather than
+refusing to build the report — one such mutant used to leave Nightly with no
+`report.json`, no summary, and a generic "required artifact missing" error.
+
+The twelve identities below were measured before that merge, so their numbers
+belong to the previous catalogue. They are
 counted as survivors, so the gate under-reports rather than flapping, and ten
 have since been made deterministic:
 

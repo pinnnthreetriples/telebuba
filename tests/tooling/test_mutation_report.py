@@ -375,10 +375,30 @@ def test_build_report_rejects_officially_omitted_type_check_status(tmp_path: Pat
         )
 
 
+def test_an_untested_mutant_is_reported_and_gated_instead_of_killing_the_report() -> None:
+    """``no tests`` is a finding, not broken infrastructure.
+
+    Refusing to build the report left Nightly with no report.json, no summary and
+    a generic "required artifact missing" error for one mutant whose function had
+    no covering test — which is exactly the thing worth reading.
+    """
+    results_text = "    services.a.x_f__mutmut_1: no tests"
+    stats = _stats(killed=0, survived=0, timeout=0, total=1, no_tests=1)
+
+    report = _build_report(
+        stats,
+        _result_objects(results_text),
+        _baseline(results_text=results_text, reviewed_timeouts=[], reviewed_survivors=[]),
+    )
+
+    assert report["untested_mutants"] == ["services.a.x_f__mutmut_1"]
+    assert report["meets_baseline"] is False
+    assert "Mutants with no covering test" in mutation_report.render_markdown(report)
+
+
 @pytest.mark.parametrize(
     ("status", "stats_key"),
     [
-        ("no tests", "no_tests"),
         ("skipped", "skipped"),
         ("suspicious", "suspicious"),
         ("segfault", "segfault"),

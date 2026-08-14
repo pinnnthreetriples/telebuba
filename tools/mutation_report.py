@@ -146,7 +146,12 @@ def _validate_effective_results(results: list[Result]) -> None:
     counts = _result_counts(results)
     if any(counts[status.replace(" ", "_")] for status in INCOMPLETE_STATUSES):
         raise ReportError("mutmut run is incomplete after targeted repair")
-    allowed = {"killed", "survived", "timeout"}
+    # ``no tests`` is a finding, not broken infrastructure: mutmut could not
+    # attribute a single test to that mutant's function. Refusing to build the
+    # report buried it — one such mutant left Nightly with no report.json, no
+    # summary and a generic "required artifact missing" error. It is reported and
+    # gated by name below instead, and counts as unkilled either way.
+    allowed = {"killed", "survived", "timeout", "no tests"}
     invalid = [item for item in results if item.status not in allowed]
     if invalid:
         details = ", ".join(f"{item.name}: {item.status}" for item in invalid)
@@ -228,6 +233,7 @@ def build_report(
             and catalog_matches_baseline
             and not unexpected_timeouts
             and not unexpected_survivors
+            and not any(item.status == "no tests" for item in effective_results)
         ),
         "mutant_catalog_sha256": catalog_digest,
         "catalog_matches_baseline": catalog_matches_baseline,
@@ -238,6 +244,7 @@ def build_report(
         "resolved_reviewed_timeouts": resolved_reviewed_timeouts,
         "unexpected_survivors": unexpected_survivors,
         "resolved_reviewed_survivors": resolved_reviewed_survivors,
+        "untested_mutants": [item.name for item in effective_results if item.status == "no tests"],
     }
     if repairs is not None:
         report.update(
@@ -304,6 +311,7 @@ def render_markdown(report: dict[str, Any]) -> str:
     _append_name_section(lines, "Timeout mutants", report["timeouts"])
     _append_name_section(lines, "Unexpected timeout mutants", report["unexpected_timeouts"])
     _append_name_section(lines, "Unexpected survivor mutants", report["unexpected_survivors"])
+    _append_name_section(lines, "Mutants with no covering test", report["untested_mutants"])
     for title, names in (
         ("Resolved reviewed timeout mutants", report["resolved_reviewed_timeouts"]),
         ("Resolved reviewed survivor mutants", report["resolved_reviewed_survivors"]),
@@ -364,12 +372,13 @@ def gate_command(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         failed = True
-    for label, names in (
-        ("timeout", report["unexpected_timeouts"]),
-        ("survivor", report["unexpected_survivors"]),
+    for message, names in (
+        ("unexpected timeout mutants", report["unexpected_timeouts"]),
+        ("unexpected survivor mutants", report["unexpected_survivors"]),
+        ("mutants with no covering test", report["untested_mutants"]),
     ):
         if names:
-            print(f"unexpected {label} mutants: " + ", ".join(names), file=sys.stderr)
+            print(f"{message}: " + ", ".join(names), file=sys.stderr)
             failed = True
     if not report["meets_score_baseline"]:
         print(
