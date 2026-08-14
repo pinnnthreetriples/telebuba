@@ -100,14 +100,13 @@ async def test_get_linked_discussion_group_reads_group_gates(
         default_banned_rights=MagicMock(send_messages=True),
     )
     broadcast = MagicMock(id=111, scam=True, fake=None, restricted=None)
-    full_chat = MagicMock(id=111, linked_chat_id=999, participants_count=4321, slowmode_seconds=30)
+    full_chat = MagicMock(id=111, linked_chat_id=999, participants_count=4321)
     _patch_client(monkeypatch, _full_channel_client(full_chat, [broadcast, group]))
 
     result = await execute_read("acc-gates", GetLinkedDiscussionGroup(channel="@news"))
 
     assert isinstance(result, LinkedDiscussionGroupResult)
     assert result.participants_count == 4321
-    assert result.broadcast_slowmode_seconds == 30
     assert (result.join_to_send, result.join_request) == (True, True)
     assert result.can_send_messages is False  # banned for everyone, positive sense
     assert result.group_slowmode_enabled is True
@@ -136,14 +135,13 @@ async def test_get_linked_discussion_group_gates_unknown_without_group_entity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Telegram omits the group entity for some channels — report unknown, don't guess."""
-    full_chat = MagicMock(id=111, linked_chat_id=999, slowmode_seconds=None)
+    full_chat = MagicMock(id=111, linked_chat_id=999)
     _patch_client(monkeypatch, _full_channel_client(full_chat, [MagicMock(id=222)]))
 
     result = await execute_read("acc-noentity", GetLinkedDiscussionGroup(channel="@news"))
 
     assert isinstance(result, LinkedDiscussionGroupResult)
     assert result.comments_enabled is True
-    assert result.broadcast_slowmode_seconds is None
     assert result.join_to_send is None
     assert result.join_request is None
     assert result.can_send_messages is None

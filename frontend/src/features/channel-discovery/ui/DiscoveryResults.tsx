@@ -79,18 +79,15 @@ const BLOCKING = new Set(['cantWrite', 'scam', 'fake', 'restricted']);
  * would tell the operator a channel is writable when nothing ever checked it.
  */
 function verdictMarks(verdict: DiscoveryChannelVerdict) {
-  const marks: { key: string; seconds?: number | null }[] = [];
+  const marks: { key: string }[] = [];
   if (verdict.can_send_messages === false) marks.push({ key: 'cantWrite' });
   if (verdict.join_to_send === true) marks.push({ key: 'joinRequired' });
   if (verdict.join_request === true) marks.push({ key: 'joinRequest' });
-  // Two different chats, so two different marks. The group's flag says slow mode is ON
-  // where the campaign would comment but carries no interval (that would cost a second
-  // getFullChannel), and pairing it with the broadcast's number printed "slow mode: —
-  // seconds" for the ordinary case of a 30s group under a channel with none.
+  // The DISCUSSION GROUP's flag — where the comments are actually written. It carries no
+  // interval (that would cost a second getFullChannel), so the mark shows none. The
+  // broadcast channel's own slowmode_seconds is not carried at all: Telegram documents
+  // it for supergroups, so on a channel it is never set and the mark never appeared.
   if (verdict.group_slowmode_enabled === true) marks.push({ key: 'slowMode' });
-  if ((verdict.broadcast_slowmode_seconds ?? 0) > 0) {
-    marks.push({ key: 'channelSlowMode', seconds: verdict.broadcast_slowmode_seconds });
-  }
   if (verdict.scam === true) marks.push({ key: 'scam' });
   if (verdict.fake === true) marks.push({ key: 'fake' });
   if (verdict.restricted === true) marks.push({ key: 'restricted' });
@@ -154,9 +151,7 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
           key={mark.key}
           className={`text-[11px] ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning'}`}
         >
-          {/* Only the marks that carry an interval interpolate one — no placeholder
-              stands in for a number the backend deliberately does not have. */}
-          {t(`neurocomment.modal.discovery.verdict.${mark.key}`, { seconds: mark.seconds })}
+          {t(`neurocomment.modal.discovery.verdict.${mark.key}`)}
         </span>
       ))}
     </div>

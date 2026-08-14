@@ -10681,17 +10681,6 @@
             ],
             "title": "Group Slowmode Enabled"
           },
-          "broadcast_slowmode_seconds": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Broadcast Slowmode Seconds"
-          },
           "scam": {
             "anyOf": [
               {

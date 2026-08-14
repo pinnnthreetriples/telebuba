@@ -47,7 +47,8 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
 _CONCURRENT_STARTS = 2
-_FLOOD_REASON = "FloodWait(900s)"
+_FLOOD_SECONDS = 900
+_FLOOD_REASON = f"FloodWait({_FLOOD_SECONDS}s)"
 
 
 async def _seed_candidates(campaign_id: str, *channels: str) -> None:
@@ -70,7 +71,7 @@ def _hit_then_flood() -> Callable[[TelegramReadAction], BaseModel]:
 
     def _search(_action: TelegramReadAction) -> BaseModel:
         if answered:
-            raise TelegramReadError(_FLOOD_REASON)
+            raise TelegramReadError(_FLOOD_REASON, kind="flood_wait", seconds=_FLOOD_SECONDS)
         answered.append("done")
         return matches(("found", "F", None))
 

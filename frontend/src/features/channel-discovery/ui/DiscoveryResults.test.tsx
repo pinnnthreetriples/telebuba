@@ -516,7 +516,6 @@ describe('DiscoveryResults', () => {
               join_to_send: null,
               join_request: null,
               group_slowmode_enabled: null,
-              broadcast_slowmode_seconds: null,
               scam: null,
               fake: null,
               restricted: null,
@@ -541,7 +540,6 @@ describe('DiscoveryResults', () => {
               join_to_send: true,
               join_request: true,
               group_slowmode_enabled: true,
-              broadcast_slowmode_seconds: 30,
               scam: true,
               fake: true,
               restricted: true,
@@ -553,31 +551,19 @@ describe('DiscoveryResults', () => {
 
     expect(screen.getByText(/нужно вступить в чат обсуждения/)).toBeInTheDocument();
     expect(screen.getByText(/по заявке с одобрением админа/)).toBeInTheDocument();
-    // Two different chats, so two marks — the group's flag carries no interval, and
-    // pairing it with the broadcast's number printed "медленный режим: — с".
     expect(screen.getByText('в чате обсуждения включён медленный режим')).toBeInTheDocument();
-    expect(screen.getByText('собственный медленный режим канала: 30 с')).toBeInTheDocument();
     expect(screen.getByText(/как скам/)).toBeInTheDocument();
     expect(screen.getByText(/как фейк/)).toBeInTheDocument();
     expect(screen.getByText(/ограничил канал/)).toBeInTheDocument();
   });
 
   it('states a group slow mode without inventing an interval for it', () => {
-    // The ordinary case: a 30s discussion group under a broadcast with no slow mode of
-    // its own. The two fields describe different chats, and the interval of the group's
-    // would cost a second getFullChannel — so the mark says so instead of printing "—".
-    render(
-      <Harness
-        data={board([
-          candidate({
-            verdict: { group_slowmode_enabled: true, broadcast_slowmode_seconds: null },
-          }),
-        ])}
-      />,
-    );
+    // The interval would cost a second getFullChannel, so the mark states the fact and
+    // prints no number rather than standing "—" in for one.
+    render(<Harness data={board([candidate({ verdict: { group_slowmode_enabled: true } })])} />);
 
     expect(screen.getByText('в чате обсуждения включён медленный режим')).toBeInTheDocument();
-    expect(screen.queryByText(/медленный режим канала/)).not.toBeInTheDocument();
+    expect(screen.queryAllByText(/медленный режим/)).toHaveLength(1);
   });
 
   it('leaves an unknown verdict adoptable', () => {

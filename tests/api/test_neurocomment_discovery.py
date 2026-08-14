@@ -66,7 +66,7 @@ def _board() -> DiscoveryBoard:
                 qualification="comments_on",
                 verdict=DiscoveryChannelVerdict(
                     join_to_send=True,
-                    broadcast_slowmode_seconds=30,
+                    group_slowmode_enabled=True,
                 ),
             ),
             DiscoveryCandidate(
@@ -278,7 +278,7 @@ async def test_get_discovery_serializes_the_board(
     # unmeasured gate crosses the wire as null — unknown, never a cleared gate — and a
     # candidate with no verdict at all (run lost to a restart) carries null.
     assert first["verdict"]["join_to_send"] is True
-    assert first["verdict"]["broadcast_slowmode_seconds"] == 30
+    assert first["verdict"]["group_slowmode_enabled"] is True
     assert first["verdict"]["can_send_messages"] is None
     assert second["verdict"] is None
     assert second["qualification"] == "pending"

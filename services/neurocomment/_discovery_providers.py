@@ -7,11 +7,11 @@ imports telethon.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from core.db import fetch_warming_state, list_warming_account_ids
 from core.repositories.neurocomment import (
     get_listener_account_id,
@@ -32,8 +32,26 @@ if TYPE_CHECKING:
     from schemas.neurocomment_discovery import DiscoverySource, DiscoverySourceState
     from schemas.telegram_actions_discovery import GlobalPostsCursor
 
-# The gateway renders a flood wait as ``FloodWait(<seconds>s)`` (core.telegram_client).
-_FLOOD_SECONDS = re.compile(r"FloodWait\((\d+)s\)")
+
+def flood_cooldown(exc: TelegramReadError) -> int | None:
+    """How long this read failure must park the account, or ``None`` — it was no limit.
+
+    The gateway's own ``kind`` is the classification; re-reading the string it just
+    formatted is what made discovery narrower than the rest of the fleet. Only
+    ``FloodWaitError`` renders as ``FloodWait(<n>s)``, while ``FLOOD_PREMIUM_WAIT`` (the
+    reply a non-premium account genuinely gets), ``SLOW_MODE_WAIT`` and ``PEER_FLOOD``
+    are siblings of it — so they matched nothing, no cooldown was written, and every
+    remaining read of the run fired into a live limit. Same family
+    ``services.neurocomment._classify`` and the write gateway already treat as one.
+
+    A limit with no duration on the wire (peer flood) takes the config default the
+    comment engine's own cooldown already applies to exactly that case.
+    """
+    if exc.kind != "flood_wait":
+        return None
+    if exc.seconds is None:
+        return int(settings.neurocomment.peer_flood_cooldown_seconds)
+    return exc.seconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +78,10 @@ class SourceOutcome:
     state: DiscoverySourceState = "ran"
     candidates: tuple[RawCandidate, ...] = ()
     error: str | None = None
+    # Seconds this failure must park the account for, ``None`` when it was not a rate
+    # limit at all. Carried rather than re-derived from ``error``: only the gateway knows
+    # WHICH limit landed, and the whole family reads back as one opaque string.
+    flood_seconds: int | None = None
     # Set on the placeholder outcome a wave appends when the run's shared read budget
     # left it a read short, so the board can separate "this is all there was" from
     # "we stopped asking".
@@ -131,19 +153,28 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     return SearchAccount(account_id=account_id)
 
 
-async def record_flood(account_id: str, reason: str | None) -> bool:
-    """Register a discovery-caused FloodWait as a cooldown; says whether it was one.
+async def record_flood(account_id: str, seconds: int | None) -> bool:
+    """Register a discovery-caused rate limit as a cooldown; says whether it was one.
 
     Discovery reads both fleet flood signals but wrote neither, so its own limit was
     invisible to everyone else: the operator's immediate retry passed the health gate,
     and the reconcile that follows an adopt would run peer resolution and joins on a
     flooded account — leaving the engine deaf on the channels just added.
     """
-    match = _FLOOD_SECONDS.search(reason or "")
-    if match is None:
+    if seconds is None:
         return False
-    await set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=int(match.group(1))))
+    await set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds))
     return True
+
+
+def _failed(source: DiscoverySource, exc: TelegramReadError) -> SourceOutcome:
+    """A source the gateway refused, carrying the cooldown the refusal earns."""
+    return SourceOutcome(
+        source=source,
+        state="failed",
+        error=exc.reason,
+        flood_seconds=flood_cooldown(exc),
+    )
 
 
 def _matches_outcome(result: object, source: DiscoverySource) -> SourceOutcome:
@@ -176,7 +207,7 @@ async def search_native(account_id: str, keyword: str) -> SourceOutcome:
             SearchChannels(query=keyword),
         )
     except TelegramReadError as exc:
-        return SourceOutcome(source="telegram_search", state="failed", error=exc.reason)
+        return _failed("telegram_search", exc)
     return _matches_outcome(result, "telegram_search")
 
 
@@ -196,7 +227,7 @@ async def search_similar(
     try:
         result = await _seams.execute_read(account_id, GetSimilarChannels(seed=seed))
     except TelegramReadError as exc:
-        return SourceOutcome(source=source, state="failed", error=exc.reason)
+        return _failed(source, exc)
     return _matches_outcome(result, source)
 
 
@@ -231,7 +262,7 @@ async def search_global(
             SearchGlobalPosts(query=keyword, cursor=cursor),
         )
     except TelegramReadError as exc:
-        return GlobalPage(SourceOutcome(source="telegram_posts", state="failed", error=exc.reason))
+        return GlobalPage(_failed("telegram_posts", exc))
     return GlobalPage(
         _matches_outcome(result, "telegram_posts"),
         result.next_cursor if isinstance(result, TelegramGlobalPostMatches) else None,

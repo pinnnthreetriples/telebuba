@@ -22,6 +22,7 @@ from services.neurocomment._discovery_qualify import run_qualification
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
+    flood_error,
     read_error,
 )
 
@@ -101,7 +102,6 @@ async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
                 linked_chat_id=-100,
                 comments_enabled=True,
                 group_slowmode_enabled=True,
-                broadcast_slowmode_seconds=30,
                 join_to_send=True,
                 join_request=True,
                 can_send_messages=False,
@@ -123,7 +123,6 @@ async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
         "join_to_send": True,
         "join_request": True,
         "group_slowmode_enabled": True,
-        "broadcast_slowmode_seconds": 30,
         "scam": True,
         "fake": False,
         "restricted": True,
@@ -359,7 +358,7 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Retrying into a rate limit is how a soft limit becomes a hard one."""
-    reader = ReadRecorder(linked=read_error("FloodWait(300s)"))
+    reader = ReadRecorder(linked=flood_error(300))
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("aaa", "bbb", "ccc")
 

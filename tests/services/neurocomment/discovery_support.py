@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
     from pydantic import BaseModel
 
+    from core.telegram_client._read import ReadErrorKind
     from schemas.telegram_actions import TelegramReadAction
 
 _Scripted = "BaseModel | Callable[[TelegramReadAction], BaseModel]"
@@ -173,17 +174,35 @@ class ReadRecorder:
         return [call for call in self.calls if isinstance(call, SearchGlobalPosts)]
 
 
-def read_error(reason: str, only: str | None = None) -> Callable[[TelegramReadAction], BaseModel]:
+def read_error(
+    reason: str,
+    only: str | None = None,
+    *,
+    kind: ReadErrorKind = "other",
+    seconds: int | None = None,
+) -> Callable[[TelegramReadAction], BaseModel]:
     """Scripted gateway failure for :class:`ReadRecorder`.
 
     Keeps the reason string out of the test body (ruff EM101/TRY003) and, with
-    ``only``, fails just the channels whose handle contains that fragment.
+    ``only``, fails just the channels whose handle contains that fragment. ``kind`` is
+    the gateway's own classification, which is what discovery reads — never the reason
+    text, since only one member of the rate-limit family spells itself "FloodWait".
     """
 
     def _raise(action: TelegramReadAction) -> BaseModel:
         channel = getattr(action, "channel", "")
         if only is None or only in channel:
-            raise TelegramReadError(reason)
+            raise TelegramReadError(reason, kind=kind, seconds=seconds)
         return LinkedDiscussionGroupResult(linked_chat_id=-100, comments_enabled=True)
 
     return _raise
+
+
+def flood_error(
+    seconds: int,
+    only: str | None = None,
+    *,
+    reason: str = "FloodWait",
+) -> Callable[[TelegramReadAction], BaseModel]:
+    """A rate limit exactly as ``core.telegram_client._read`` classifies one."""
+    return read_error(f"{reason}({seconds}s)", only, kind="flood_wait", seconds=seconds)

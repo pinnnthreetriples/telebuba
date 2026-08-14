@@ -19,7 +19,7 @@ see ``_discovery_state``) instead of being thrown away for the sake of one bool.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.repositories.neurocomment import (
@@ -32,7 +32,7 @@ from core.telegram_client import TelegramReadError
 from schemas.neurocomment_discovery import DiscoveryChannelVerdict
 from schemas.telegram_actions import GetLinkedDiscussionGroup, LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_state, _seams
-from services.neurocomment._discovery_providers import record_flood
+from services.neurocomment._discovery_providers import flood_cooldown, record_flood
 from services.neurocomment._signals import signal_discovery_progress
 
 if TYPE_CHECKING:
@@ -50,6 +50,18 @@ _PROGRESS_EVERY = 5
 # ordinary sweep off a stale catalogue; a session failing as often as it answers over
 # twenty probes is broken, and that is the case the consecutive counter cannot see.
 _ERROR_RATE_MIN_PROBES = 20
+
+
+class _Probe(NamedTuple):
+    """One probe's failure reason, and whether it was a rate limit that ends the pass.
+
+    The flag, not a second reading of ``reason``: the gateway spells the flood family
+    four different ways and only one of them contains "FloodWait", so the string test
+    this replaces let a premium wait or a slow-mode wait run the pass to its end.
+    """
+
+    reason: str | None
+    flooded: bool = False
 
 
 def is_fresh(checked_at: str, now: datetime) -> bool:
@@ -77,7 +89,7 @@ def _fresh_cache(groups: list[LinkedDiscussionGroup], now: datetime) -> set[str]
 async def run_qualification(campaign_id: str, account_id: str) -> str | None:
     """Probe every unqualified candidate, paced. Returns a failure reason or ``None``.
 
-    A FloodWait aborts the pass immediately and leaves the remainder pending —
+    A rate limit aborts the pass immediately and leaves the remainder pending —
     retrying into a rate limit is how a soft limit becomes a hard one, and
     ``qualified_at`` makes the next run resume exactly where this one stopped.
     """
@@ -103,9 +115,10 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
         if probed:
             await _pace()
         probed += 1
-        reason = await _probe_one(campaign_id, account_id, row.channel)
-        if reason is not None and "FloodWait" in reason:
-            return reason
+        probe = await _probe_one(campaign_id, account_id, row.channel)
+        if probe.flooded:
+            return probe.reason
+        reason = probe.reason
         if reason is None:
             consecutive_errors = 0
         else:
@@ -146,14 +159,13 @@ def _verdict_of(result: LinkedDiscussionGroupResult) -> DiscoveryChannelVerdict:
         join_to_send=result.join_to_send,
         join_request=result.join_request,
         group_slowmode_enabled=result.group_slowmode_enabled,
-        broadcast_slowmode_seconds=result.broadcast_slowmode_seconds,
         scam=result.scam,
         fake=result.fake,
         restricted=result.restricted,
     )
 
 
-async def _probe_one(campaign_id: str, account_id: str, channel: str) -> str | None:
+async def _probe_one(campaign_id: str, account_id: str, channel: str) -> _Probe:
     """One comments-enabled probe. Records the attempt either way."""
     try:
         result = await _seams.execute_read(
@@ -161,18 +173,18 @@ async def _probe_one(campaign_id: str, account_id: str, channel: str) -> str | N
             GetLinkedDiscussionGroup(channel=channel),
         )
     except TelegramReadError as exc:
-        if await record_flood(account_id, exc.reason):
-            # A flood wait says nothing about this channel, so leave it unprobed —
+        if await record_flood(account_id, flood_cooldown(exc)):
+            # A rate limit says nothing about this channel, so leave it unprobed —
             # stamping it would show a permanent "could not check" verdict that only a
             # full re-search clears. Recording the cooldown also keeps the retry off
             # this account until the window closes.
-            return exc.reason
+            return _Probe(exc.reason, flooded=True)
         await mark_discovery_qualified(campaign_id, channel, error=exc.reason)
-        return exc.reason
+        return _Probe(exc.reason)
 
     if not isinstance(result, LinkedDiscussionGroupResult):  # pragma: no cover - typed gateway
         await mark_discovery_qualified(campaign_id, channel, error="unexpected_result")
-        return "unexpected_result"
+        return _Probe("unexpected_result")
 
     # Refresh the shared cache so every campaign (and onboarding) benefits. Only the
     # comments verdict has a column there; the rest of the reply rides the run's
@@ -188,4 +200,4 @@ async def _probe_one(campaign_id: str, account_id: str, channel: str) -> str | N
         channel,
         subscribers=result.participants_count,
     )
-    return None
+    return _Probe(None)

@@ -27,6 +27,7 @@ from services.neurocomment._state import in_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
+    flood_error,
     matches,
     posts_page,
     read_error,
@@ -189,7 +190,7 @@ async def test_a_flood_wait_stops_the_recommendation_wave(
     """The wave is cheap, not exempt: it obeys the same flood rule as the keyword sweep."""
     reader = ReadRecorder(
         search=matches(("alpha", "A", 30), ("bravo", "B", 20), ("charlie", "C", 10)),
-        similar=read_error("FloodWait(900s)"),
+        similar=flood_error(900),
     )
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
@@ -377,7 +378,7 @@ async def test_rows_from_a_wave_replace_even_when_the_sweep_failed(
 @pytest.mark.asyncio
 async def test_a_flood_wait_stops_the_keyword_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every further read lands inside the live window, and Telegram escalates repeats."""
-    reader = ReadRecorder(search=read_error("FloodWait(1800s)"), similar=matches(("x", "X", None)))
+    reader = ReadRecorder(search=flood_error(1800), similar=matches(("x", "X", None)))
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
@@ -409,7 +410,7 @@ async def test_a_flood_wait_puts_the_account_on_cooldown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Discovery read both fleet flood signals but wrote neither, so its own was invisible."""
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=read_error("FloodWait(600s)")))
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=flood_error(600)))
     campaign_id = await _new_campaign()
 
     await run_search(campaign_id, LISTENER_ID, _request())

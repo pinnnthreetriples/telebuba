@@ -27,10 +27,6 @@ class LinkedDiscussionGroupResult(BaseModel):
     # Free ride: ``channels.getFullChannel`` already returns the subscriber count,
     # so discovery backfills it here instead of spending a second RPC.
     participants_count: int | None = None
-    # The BROADCAST channel's own slow mode (``ChannelFull.slowmode_seconds``). Named
-    # for its entity: the group's interval is NOT in this reply and would cost a second
-    # ``getFullChannel``, so no reader may pair this number with the group flag below.
-    broadcast_slowmode_seconds: int | None = None
     # The next three come off the LINKED GROUP's ``Channel``: the signals that decide
     # whether a campaign can actually comment, learnt at discovery instead of when
     # the live campaign fails against the channel.
@@ -43,7 +39,8 @@ class LinkedDiscussionGroupResult(BaseModel):
     # ("writing is banned for everyone"), and a caller should not have to unpick a
     # double negative to answer "may we write here at all".
     can_send_messages: bool | None = None
-    # Slow mode is ON in the discussion group — the interval is unknown here, see above.
+    # Slow mode is ON in the discussion group; its interval is not in this reply, and
+    # re-reading it would cost a second ``getFullChannel``.
     group_slowmode_enabled: bool | None = None
     # Telegram's marks on the BROADCAST channel itself, which is the entity the operator
     # adopts. Read off the group they described the wrong channel in both directions.

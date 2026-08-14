@@ -214,7 +214,7 @@ async def test_the_board_carries_the_fitness_verdict_of_the_run_in_flight() -> N
     _discovery_state.record_verdict(
         campaign_id,
         "gated",
-        DiscoveryChannelVerdict(join_request=True, broadcast_slowmode_seconds=60),
+        DiscoveryChannelVerdict(join_request=True, group_slowmode_enabled=True),
     )
 
     board = await load_discovery(campaign_id)
@@ -223,7 +223,7 @@ async def test_the_board_carries_the_fitness_verdict_of_the_run_in_flight() -> N
     verdict = board.candidates[0].verdict
     assert verdict is not None
     assert verdict.join_request is True
-    assert verdict.broadcast_slowmode_seconds == 60
+    assert verdict.group_slowmode_enabled is True
     # Not measured by this run, and it must not read as a "no".
     assert verdict.can_send_messages is None
 

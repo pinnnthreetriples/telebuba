@@ -225,15 +225,13 @@ class DiscoveryChannelVerdict(BaseModel):
     join_to_send: bool | None = None
     # ...and that join needs an admin's approval — a dead end for an unattended campaign.
     join_request: bool | None = None
-    # Slow mode is on in the DISCUSSION GROUP. Its interval is deliberately absent: it is
-    # not in the probe's reply and reading it would cost a second ``getFullChannel``, so
-    # the board says "slow mode" without a number rather than pairing this with the
-    # broadcast's interval below, which describes a different chat.
+    # Slow mode is on in the DISCUSSION GROUP — where the comments are actually written.
+    # Its interval is deliberately absent: it is not in the probe's reply and reading it
+    # would cost a second ``getFullChannel``, so the board says "slow mode" without a
+    # number. The BROADCAST channel's own ``slowmode_seconds`` is not carried at all:
+    # core.telegram.org documents it for supergroups only, so on the channel a campaign
+    # adopts Telegram never sets it and the field was ``None`` in every real reply.
     group_slowmode_enabled: bool | None = None
-    # The BROADCAST channel's own slow-mode interval. Unbounded here on purpose: it is
-    # copied verbatim from the gateway model, and a bound would turn odd Telegram data
-    # into a ValidationError inside a background probe.
-    broadcast_slowmode_seconds: int | None = None
     # Telegram's own marks on the broadcast channel — the entity the operator adopts.
     scam: bool | None = None
     fake: bool | None = None

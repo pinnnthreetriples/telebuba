@@ -1273,7 +1273,6 @@
           "joinRequired": "you must join the discussion group before commenting",
           "joinRequest": "joining the group needs an admin's approval",
           "slowMode": "slow mode is on in the discussion group",
-          "channelSlowMode": "the channel's own slow mode: {{seconds}} s",
           "scam": "Telegram marks this channel as a scam",
           "fake": "Telegram marks this channel as fake",
           "restricted": "Telegram restricts this channel"

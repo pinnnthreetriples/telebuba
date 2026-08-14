@@ -1176,10 +1176,6 @@ export type DiscoveryChannelVerdict = {
    */
   group_slowmode_enabled?: boolean | null;
   /**
-   * Broadcast Slowmode Seconds
-   */
-  broadcast_slowmode_seconds?: number | null;
-  /**
    * Scam
    */
   scam?: boolean | null;
