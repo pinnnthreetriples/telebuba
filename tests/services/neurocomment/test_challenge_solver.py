@@ -125,8 +125,11 @@ async def test_dispatch_timeout_records_failed(monkeypatch: pytest.MonkeyPatch) 
 
     # Bound the public operation too: a regression that removes the internal
     # deadline must fail this test promptly instead of consuming mutmut's much
-    # larger process timeout.
-    async with asyncio.timeout(0.2):
+    # larger process timeout. The bound only has to be far below that timeout,
+    # not close to the 0.01s deadline — at 0.2s a loaded runner tripped it with
+    # nothing wrong, and an unbounded dispatch hangs forever, so 2s still fails
+    # fast for the regression this guards.
+    async with asyncio.timeout(2.0):
         outcome = await challenge.solve_if_present("acc-1", "@chan", 99)
 
     assert outcome == "failed"
