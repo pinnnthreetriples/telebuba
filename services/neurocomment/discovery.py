@@ -58,8 +58,8 @@ async def start_discovery(
     spend a search slot and real RPCs, then die on the foreign key.
 
     Refusals are statuses, not exceptions, so the API can report them verbatim:
-    another run in flight, no usable account, that account cooling off, or the
-    rolling-24h search allowance spent.
+    another run in flight, no usable account, that account busy or cooling off, or
+    the rolling-24h search allowance spent.
     """
     if await db.fetch_campaign(campaign_id) is None:
         return None
