@@ -74,3 +74,26 @@ test('with no verdicts the chips stay the default gray', () => {
   renderCard();
   expect(chipFor('@a').className).toContain('bg-[#f4f3f0]');
 });
+
+test('the selected campaign card carries exactly one background utility', () => {
+  // Asserting the *count*, not the tint: jsdom has no cascade, and a stray
+  // second `bg-*` is precisely how the selected card lost its tint to bg-white.
+  renderCard({
+    campaignList: [
+      {
+        campaign_id: 'c1',
+        name: 'tabacum',
+        prompt: '',
+        status: 'active',
+        created_at: '',
+        updated_at: '',
+      },
+    ],
+  });
+  const card = screen.getByText('tabacum').closest('[role="button"]');
+  // The surviving one has to be the tint, and it has to be THIS card: without
+  // both halves the assertion passes just as happily on an unselected card.
+  expect(card?.className.split(' ').filter((cls) => cls.startsWith('bg-'))).toEqual([
+    'bg-primary/[0.06]',
+  ]);
+});
