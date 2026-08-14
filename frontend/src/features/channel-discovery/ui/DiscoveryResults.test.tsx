@@ -407,7 +407,7 @@ describe('DiscoveryResults', () => {
       />,
     );
 
-    expect(screen.getByText(/уникальных 0/)).toBeInTheDocument();
+    expect(screen.getByText(/только здесь: 0/)).toBeInTheDocument();
   });
 
   it('renders subscribers compactly and an em dash when unknown', () => {
@@ -446,7 +446,7 @@ describe('DiscoveryResults', () => {
     );
 
     expect(screen.getByText(/поиск по постам: 12 из 40/)).toBeInTheDocument();
-    expect(screen.getByText(/остановлен раньше времени/)).toBeInTheDocument();
+    expect(screen.getByText(/\(оборван\)/)).toBeInTheDocument();
     expect(screen.getByText(/кончился лимит чтений/)).toBeInTheDocument();
   });
 
@@ -465,7 +465,7 @@ describe('DiscoveryResults', () => {
 
     expect(screen.getByText(/похожие: не запрашивался/)).toBeInTheDocument();
     expect(screen.getByText(/не похож на корректный хэндл/)).toBeInTheDocument();
-    expect(screen.getByText(/похожие на находки: 9 из 9/)).toBeInTheDocument();
+    expect(screen.getByText(/похожие на найденные: 9 из 9/)).toBeInTheDocument();
   });
 
   it('shows the whole path that found a channel, not just one label', () => {
@@ -483,7 +483,7 @@ describe('DiscoveryResults', () => {
       />,
     );
 
-    expect(screen.getByText('поиск Telegram + похожие на находки')).toBeInTheDocument();
+    expect(screen.getByText('поиск Telegram + похожие на найденные')).toBeInTheDocument();
   });
 
   it('falls back to the single source when no provenance came through', () => {
@@ -506,7 +506,10 @@ describe('DiscoveryResults', () => {
 
   it('never turns an unanswered field into a cleared gate', () => {
     // Every field is tri-state: null means Telegram did not answer, never "no". A mark
-    // either way would be a claim nothing checked.
+    // either way would be a claim nothing checked — and NO mark is what a channel
+    // cleared on every gate looks like, so the absence has to be said out loud. Asserting
+    // only the missing marks passed against exactly the row this is meant to catch: a
+    // green comments tick with no mark and no notice.
     render(
       <Harness
         data={board([
@@ -529,6 +532,7 @@ describe('DiscoveryResults', () => {
     expect(screen.queryByText(/нужно вступить/)).not.toBeInTheDocument();
     expect(screen.queryByText(/медленный режим/)).not.toBeInTheDocument();
     expect(screen.queryByText(/скам/)).not.toBeInTheDocument();
+    expect(screen.getByText('пригодность не проверена')).toBeInTheDocument();
   });
 
   it('spells out the gates the backend did answer', () => {
@@ -550,7 +554,7 @@ describe('DiscoveryResults', () => {
     );
 
     expect(screen.getByText(/нужно вступить в чат обсуждения/)).toBeInTheDocument();
-    expect(screen.getByText(/по заявке с одобрением админа/)).toBeInTheDocument();
+    expect(screen.getByText(/по заявке — её одобряет админ/)).toBeInTheDocument();
     expect(screen.getByText('в чате обсуждения включён медленный режим')).toBeInTheDocument();
     expect(screen.getByText(/как скам/)).toBeInTheDocument();
     expect(screen.getByText(/как фейк/)).toBeInTheDocument();

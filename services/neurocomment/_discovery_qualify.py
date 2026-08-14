@@ -47,7 +47,7 @@ _PROGRESS_EVERY = 5
 # re-inserts every candidate with ``qualified_at = NULL``: a count would abort at the
 # same handle on every retry, so the tail past it could never be qualified however many
 # searches the operator spends. Ten dead, private or deleted handles in a hundred is an
-# ordinary sweep off a stale catalogue; a session failing as often as it answers over
+# ordinary sweep off a broad keyword search; a session failing as often as it answers over
 # twenty probes is broken, and that is the case the consecutive counter cannot see.
 _ERROR_RATE_MIN_PROBES = 20
 
@@ -150,9 +150,10 @@ async def _pace() -> None:
 def _verdict_of(result: LinkedDiscussionGroupResult) -> DiscoveryChannelVerdict:
     """Everything the one ``getFullChannel`` reply says about fitness, carried verbatim.
 
-    Copied field for field rather than folded into a summary: ``None`` means "the reply
-    did not answer", so collapsing any of these into a bool here would turn an
-    unanswered signal into a confident "no" for every reader downstream.
+    Copied field for field rather than folded into a summary: collapsing any of these
+    into a bool here would break the tri-state contract
+    :class:`schemas.telegram_action_results.LinkedDiscussionGroupResult` states, turning
+    an unanswered signal into a confident "no" for every reader downstream.
     """
     return DiscoveryChannelVerdict(
         can_send_messages=result.can_send_messages,

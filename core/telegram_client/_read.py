@@ -276,15 +276,17 @@ async def _dispatch_get_linked_group(
     # linked group carried none of them while a clean channel with a flagged group
     # was reported as a scam.
     broadcast = _chat_by_id(result, getattr(full_chat, "id", None))
-    banned = _flag(getattr(group, "default_banned_rights", None), "send_messages")
+    # The RIGHTS object answers "may anyone write", not the group's presence: a linked
+    # ``ChannelForbidden``/``ChatEmpty`` carries none, and its absence is not a "no ban".
+    rights = getattr(group, "default_banned_rights", None)
     return LinkedDiscussionGroupResult(
         linked_chat_id=linked_id,
         comments_enabled=linked_id is not None,
         participants_count=participants if isinstance(participants, int) else None,
         join_to_send=_flag(group, "join_to_send"),
         join_request=_flag(group, "join_request"),
-        # No group seen = no verdict; a group with the ban flag unset may be written to.
-        can_send_messages=None if group is None else banned is not True,
+        # Present, an unset ban flag genuinely means everyone may write; absent, unknown.
+        can_send_messages=None if rights is None else _flag(rights, "send_messages") is not True,
         group_slowmode_enabled=_flag(group, "slowmode_enabled"),
         scam=_flag(broadcast, "scam"),
         fake=_flag(broadcast, "fake"),

@@ -147,7 +147,12 @@ class DiscoverySourceReport(BaseModel):
 
     source: DiscoverySource
     state: DiscoverySourceState
-    # Rows the source returned, before dedup, the member filter and the candidate cap.
+    # DISTINCT usable channels the source returned, before the cross-source dedup, the
+    # member filter and the candidate cap. Summing each attempt's own list instead
+    # double-counted: three keywords returning the same three channels reported
+    # "3 of 9", so a merge that lost nothing read as one that threw six rows away. Rows
+    # with no public handle (invite links) are out of it too — no operator filter
+    # controls them, so counting them made the same sentence overstate the loss.
     hits: int = Field(default=0, ge=0)
     # Rows of the stored set this source produced. A channel two sources both returned
     # counts for both — crediting only the dedup winner is what hid the starvation.
@@ -177,6 +182,11 @@ class DiscoveryCandidateOrigin(BaseModel):
     """
 
     sources: list[DiscoverySource] = Field(default_factory=list)
+    # Did this row enter the set without a subscriber count? The bounds can only be
+    # applied to a hit Telegram returned a count for, and qualification backfills the
+    # real number later — so without this flag the board shows "300" in a list the
+    # operator filtered to "from 10 000" and nothing explains it.
+    uncounted: bool = False
 
 
 class DiscoveryRunReport(BaseModel):
@@ -185,6 +195,12 @@ class DiscoveryRunReport(BaseModel):
     sources: list[DiscoverySourceReport] = Field(default_factory=list)
     # Keyed by candidate handle exactly as stored.
     origins: dict[str, DiscoveryCandidateOrigin] = Field(default_factory=dict)
+    # Did this run's findings actually reach the table? A rate limit leaves the previous
+    # run's rows in place, and the strip must not then credit rows that exist nowhere.
+    stored: bool = True
+    # Did ``discovery_max_candidates`` cut the merged set? "Channels found: 100" is a
+    # floor when it did, and reads as everything Telegram has when it did not say so.
+    capped: bool = False
 
 
 class DiscoverySearchStageResult(BaseModel):
@@ -205,12 +221,9 @@ class DiscoveryChannelVerdict(BaseModel):
     """Why a candidate is (or is not) a place this campaign can comment in.
 
     Every field rides the SAME ``channels.getFullChannel`` reply the comments-enabled
-    probe already spends, so learning any of it costs no extra RPC.
-
-    Tri-state on purpose: ``None`` means the reply did not answer that field (no linked
-    group, an older TL layer, a field Telegram omitted) and NEVER "no". The board must
-    render an unanswered signal as unknown, and no caller may block a channel on
-    anything but an explicit positive verdict — never on falsiness.
+    probe already spends, so learning any of it costs no extra RPC — and every one of
+    them keeps the tri-state contract
+    :class:`schemas.telegram_action_results.LinkedDiscussionGroupResult` states.
 
     Deliberately NOT persisted, exactly like :class:`DiscoveryCandidateOrigin`: the
     candidate table has no column for it, and a migration against the operator's live
@@ -244,9 +257,18 @@ class DiscoveryCandidate(BaseModel):
     channel: str = Field(min_length=1)
     title: str = ""
     subscribers: int | None = None
-    source: DiscoverySource
+    # A plain string, like the stored row it comes from: see
+    # :class:`DiscoveryCandidateRow`. The UI falls back to the raw code as its label.
+    source: str = Field(min_length=1)
     # Every source that returned this channel, not just the one whose spelling won.
-    sources: list[DiscoverySource] = Field(default_factory=list)
+    # Plain strings for the same reason as ``source``: with no run state to read, this
+    # falls back to the stored label.
+    sources: list[str] = Field(default_factory=list)
+    # The subscriber bounds never applied to this row — the search returned no count for
+    # it, so it was admitted unfiltered and any number beside it arrived later, from the
+    # qualification probe. ``False`` for a row whose provenance this process does not
+    # hold (a board read after a restart), which says nothing either way.
+    uncounted: bool = False
     qualification: DiscoveryQualification
     # What the qualification probe learnt beyond comments on/off, while this process
     # holds the run's state. ``None`` = no verdict available (never probed here, or lost
@@ -270,6 +292,13 @@ class DiscoveryProgress(BaseModel):
     # One entry per source the last run considered. Empty for a campaign that never
     # searched, or whose run predates this process.
     sources: list[DiscoverySourceReport] = Field(default_factory=list)
+    # The candidates below are NOT the last run's: it stored nothing (a rate limit cut
+    # it short), so they are the previous search's and must not be counted as this
+    # run's find.
+    stale_candidates: bool = False
+    # ``total`` is a ceiling, not a total: the merge had more rows than
+    # ``discovery_max_candidates`` and dropped the tail.
+    capped: bool = False
 
 
 class DiscoveryBoard(BaseModel):
@@ -328,12 +357,19 @@ class DiscoveryCandidateRow(BaseModel):
 
     Separate from :class:`DiscoveryCandidate`: the wire model carries campaign
     membership flags that are computed per read, not stored.
+
+    ``source`` is a plain string, NOT :data:`DiscoverySource`: this table is a live
+    working set, and a row written by an older build names a source this one no longer
+    has. Validated against the literal, such a row raised straight out of the
+    repository and answered the whole board with a 500 — permanently, since the rows are
+    only replaced by a run that stores something. The label is descriptive, so an
+    unrecognised one is rendered verbatim rather than being made fatal.
     """
 
     channel: str = Field(min_length=1)
     title: str = ""
     subscribers: int | None = None
-    source: DiscoverySource
+    source: str = Field(min_length=1)
     qualified_at: str | None = None
     qualify_error: str | None = None
 

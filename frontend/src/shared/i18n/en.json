@@ -1222,6 +1222,7 @@
           "keywordsDropped": "Ignored: {{tokens}} — shorter than {{min}} characters or past the {{max}}-word limit",
           "minSubscribers": "Subscribers from",
           "maxSubscribers": "Subscribers up to",
+          "membersHint": "The bounds only apply to hits Telegram returned a subscriber count for. The rest are listed unfiltered — their count arrives with the comment check and may land outside the bounds.",
           "boundsInverted": "\"Subscribers from\" is above \"Subscribers up to\" — the search would match nothing.",
           "seedChannel": "Similar to channel",
           "seedChannelHint": "Telegram suggests channels similar to this one based on overlapping audiences. It is the cheapest way to widen the sweep.",
@@ -1233,6 +1234,10 @@
         "results": {
           "back": "← Change parameters",
           "count": "Channels found: {{count}}",
+          "countStale": "Channels from the previous search: {{count}}",
+          "countCapped": "Channels found: {{count}} — the ceiling for one search, the rest were dropped",
+          "commentsOn": "with comments: {{count}}",
+          "uncounted": "admitted without a count",
           "qualifying": "Checking comments: {{done}}/{{total}}",
           "searching": "Searching for channels…",
           "empty": "Nothing found. Try different keywords or add a seed channel.",
@@ -1254,7 +1259,8 @@
           "sourceSkipped": "{{source}}: not queried",
           "reason": {
             "seed_unusable": "the seed channel is not a usable handle",
-            "read_budget": "the run's read budget ran out",
+            "channel_not_found": "Telegram could not find that channel",
+            "read_budget": "the read budget for one search ran out",
             "unexpected_result": "Telegram returned an unexpected reply"
           },
           "sourceExclusive": "({{exclusive}} found only here)",

@@ -1118,13 +1118,15 @@ export type DiscoveryCandidate = {
   /**
    * Source
    */
-  source: 'telegram_search' | 'telegram_similar' | 'telegram_posts' | 'telegram_recommended';
+  source: string;
   /**
    * Sources
    */
-  sources?: Array<
-    'telegram_search' | 'telegram_similar' | 'telegram_posts' | 'telegram_recommended'
-  >;
+  sources?: Array<string>;
+  /**
+   * Uncounted
+   */
+  uncounted?: boolean;
   /**
    * Qualification
    */
@@ -1146,12 +1148,9 @@ export type DiscoveryCandidate = {
  * Why a candidate is (or is not) a place this campaign can comment in.
  *
  * Every field rides the SAME ``channels.getFullChannel`` reply the comments-enabled
- * probe already spends, so learning any of it costs no extra RPC.
- *
- * Tri-state on purpose: ``None`` means the reply did not answer that field (no linked
- * group, an older TL layer, a field Telegram omitted) and NEVER "no". The board must
- * render an unanswered signal as unknown, and no caller may block a channel on
- * anything but an explicit positive verdict — never on falsiness.
+ * probe already spends, so learning any of it costs no extra RPC — and every one of
+ * them keeps the tri-state contract
+ * :class:`schemas.telegram_action_results.LinkedDiscussionGroupResult` states.
  *
  * Deliberately NOT persisted, exactly like :class:`DiscoveryCandidateOrigin`: the
  * candidate table has no column for it, and a migration against the operator's live
@@ -1221,6 +1220,14 @@ export type DiscoveryProgress = {
    * Sources
    */
   sources?: Array<DiscoverySourceReport>;
+  /**
+   * Stale Candidates
+   */
+  stale_candidates?: boolean;
+  /**
+   * Capped
+   */
+  capped?: boolean;
 };
 
 /**

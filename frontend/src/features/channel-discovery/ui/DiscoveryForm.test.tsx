@@ -93,6 +93,14 @@ describe('DiscoveryForm', () => {
     expect(submitButton()).toBeDisabled();
   });
 
+  it('says what the subscriber bounds actually do', () => {
+    // They only reach hits Telegram returned a count for. Unsaid, a row that plainly
+    // breaks the filter reads as a broken filter.
+    render(<Harness />);
+
+    expect(screen.getByText(/Границы применяются только к находкам/)).toBeInTheDocument();
+  });
+
   it('resets every field', async () => {
     render(<Harness initial={{ ...EMPTY_FORM, keywords: 'crypto', minSubscribers: '500' }} />);
 

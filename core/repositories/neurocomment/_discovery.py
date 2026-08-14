@@ -30,7 +30,9 @@ def _row_to_candidate(row: RowMapping) -> DiscoveryCandidateRow:
         channel=str(row["channel"]),
         title=str(row["title"] or ""),
         subscribers=None if row["subscribers"] is None else int(row["subscribers"]),
-        source=row["source"],
+        # Verbatim: the column outlives the code that wrote it, and a row naming a source
+        # this build no longer has must reach the board as a label, not as a 500.
+        source=str(row["source"]),
         qualified_at=None if row["qualified_at"] is None else str(row["qualified_at"]),
         qualify_error=None if row["qualify_error"] is None else str(row["qualify_error"]),
     )
@@ -106,7 +108,7 @@ def _mark_discovery_qualified(
 ) -> None:
     values: dict[str, object] = {"qualified_at": _now_iso(), "qualify_error": error}
     # Only overwrite the subscriber count when the probe actually learned one —
-    # a failed probe must not wipe what the catalogue already told us.
+    # a failed probe must not wipe the count the search itself returned.
     if subscribers is not None:
         values["subscribers"] = subscribers
     with _get_engine().begin() as connection:

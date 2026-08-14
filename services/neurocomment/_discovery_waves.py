@@ -287,7 +287,7 @@ def _wave_seeds(outcomes: list[SourceOutcome], limit: int, spent: str | None = N
         if len(seeds) >= limit:
             break
         handle = normalize_channel(hit.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
-        if handle is None or handle.startswith("+"):
+        if handle is None:
             continue
         key = dedup_key(handle)
         if key == asked:

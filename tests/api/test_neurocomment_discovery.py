@@ -175,7 +175,7 @@ async def test_duplicate_keywords_collapse_to_one(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ten copies of one keyword spent ten Telegram RPCs and ten catalogue requests."""
+    """Ten copies of one keyword spent ten identical Telegram RPCs."""
     seen: list[DiscoverySearchRequest] = []
 
     async def _fake(campaign_id: str, body: DiscoverySearchRequest) -> DiscoverySearchOutcome:  # noqa: ARG001
@@ -193,27 +193,17 @@ async def test_duplicate_keywords_collapse_to_one(
     assert seen[0].keywords == ["Crypto", "trading"]
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        {"keywords": ["crypto"], "language": "tr"},
-        {"keywords": ["crypto"], "country": "TR"},
-        {"keywords": ["crypto"], "use_telemetr": True},
-        {"keywords": ["crypto"], "catalogue_only": True},
-    ],
-)
 @pytest.mark.asyncio
-async def test_the_retired_catalogue_fields_are_refused(
-    app: FastAPI,
-    body: dict[str, object],
-) -> None:
-    """Nothing filters by locale any more, so accepting these would promise a no-op.
+async def test_a_retired_catalogue_field_is_refused(app: FastAPI) -> None:
+    """Nothing filters by locale or reads a catalogue any more.
 
     ``extra="forbid"`` is what makes an old client's request fail loudly instead of
-    running unfiltered and reporting success.
+    running unfiltered and reporting success. One field is the whole test: ``language``,
+    ``country``, ``use_telemetr`` and ``catalogue_only`` all reach the same rejection,
+    so a case each proved the same thing four times.
     """
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/search", json=body)
+        resp = await client.post(f"{_BASE}/search", json={"keywords": ["crypto"], "language": "tr"})
 
     assert resp.status_code == 422
 

@@ -192,6 +192,23 @@ async def test_board_reports_per_source_outcomes_and_provenance() -> None:
 
 
 @pytest.mark.asyncio
+async def test_the_board_says_when_the_rows_are_not_the_last_run_s() -> None:
+    """A run that stored nothing leaves the previous search's channels on screen.
+
+    Counted under "Channels found" they read as this run's find, which is the same lie
+    the source strip used to tell with its ``kept``.
+    """
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("from_last_run")])
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport(stored=False))
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    assert board.progress.stale_candidates is True
+
+
+@pytest.mark.asyncio
 async def test_a_candidate_with_no_run_state_falls_back_to_its_stored_source() -> None:
     """Multi-source provenance is not persisted, so a restart loses that only."""
     campaign_id = await _campaign()
@@ -202,6 +219,24 @@ async def test_a_candidate_with_no_run_state_falls_back_to_its_stored_source() -
     assert board is not None
     assert board.candidates[0].sources == ["telegram_similar"]
     assert board.progress.sources == []
+
+
+@pytest.mark.asyncio
+async def test_a_row_naming_a_source_this_build_no_longer_has_still_loads() -> None:
+    """The candidate table is live data an older build also wrote to.
+
+    Validated against the source literal, one migrated ``telemetr`` row answered the
+    whole board with a 500 — and permanently, since only a run that stores something
+    replaces those rows, which a rate-limited run never does.
+    """
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("legacy", source="telemetr")])
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    # Carried verbatim; the SPA renders an unrecognised label as the code itself.
+    assert board.candidates[0].source == "telemetr"
 
 
 @pytest.mark.asyncio
@@ -265,9 +300,7 @@ async def test_adopt_refuses_a_channel_whose_cached_verdict_says_comments_are_of
         ("silent", "comments_off"),
         ("talkative", "linked"),
     ]
-    from core.db import list_campaign_channels  # noqa: PLC0415
-
-    links = await list_campaign_channels(campaign_id)
+    links = await db.list_campaign_channels(campaign_id)
     assert [link.channel for link in links.links] == ["talkative"]
 
 
@@ -330,9 +363,7 @@ async def test_adopt_links_every_pick() -> None:
 
     assert result is not None
     assert [outcome.status for outcome in result.outcomes] == ["linked", "linked"]
-    from core.db import list_campaign_channels  # noqa: PLC0415
-
-    links = await list_campaign_channels(campaign_id)
+    links = await db.list_campaign_channels(campaign_id)
     assert sorted(link.channel for link in links.links) == ["alpha", "beta"]
 
 
@@ -469,9 +500,7 @@ async def test_a_failing_reconcile_does_not_cost_the_batch_report(
 
     assert result is not None
     assert [outcome.status for outcome in result.outcomes] == ["linked", "linked"]
-    from core.db import list_campaign_channels  # noqa: PLC0415
-
-    links = await list_campaign_channels(campaign_id)
+    links = await db.list_campaign_channels(campaign_id)
     assert sorted(link.channel for link in links.links) == ["alpha", "beta"]
 
 

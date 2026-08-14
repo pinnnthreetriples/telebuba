@@ -131,6 +131,24 @@ async def test_get_linked_discussion_group_unbanned_group_can_be_written_to(
 
 
 @pytest.mark.asyncio
+async def test_a_group_that_carries_no_rights_object_stays_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``ChannelForbidden``/``ChatEmpty`` have no ``default_banned_rights`` at all.
+
+    The entity IS in the reply, so keying the verdict off the group's presence answered
+    "writing is allowed" for a group whose rights nothing ever read.
+    """
+    group = MagicMock(id=999, spec=["id"])
+    _patch_client(monkeypatch, _full_channel_client(MagicMock(linked_chat_id=999), [group]))
+
+    result = await execute_read("acc-forbidden", GetLinkedDiscussionGroup(channel="@news"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.can_send_messages is None
+
+
+@pytest.mark.asyncio
 async def test_get_linked_discussion_group_gates_unknown_without_group_entity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

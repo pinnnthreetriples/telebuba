@@ -110,6 +110,12 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         </label>
       </div>
 
+      {/* What the bounds actually do. Telegram's own search returns a subscriber count
+          for only some hits, and the rest enter the list unfiltered — with the number
+          arriving later, from the comment check. Unsaid, a row that plainly breaks the
+          filter looks like a bug in the filter. */}
+      <span className={HINT}>{t('neurocomment.modal.discovery.form.membersHint')}</span>
+
       {/* The API refuses members_min > members_max, and canSubmit blocks it — without
           this the Search button would just go dead naming no field. */}
       {inverted ? (

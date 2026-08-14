@@ -56,7 +56,10 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
           }
           // The run's read budget stopped this wave, so its counts are a floor rather
           // than a total — "20 of 20" would otherwise read as a source read to the end.
-          if (report.truncated === true) {
+          // Only for a source that RAN: on a skipped one it composed "not queried
+          // (stopped early) — the read budget ran out", where a source nobody asked did
+          // not stop early and two of the three clauses said the same thing.
+          if (report.truncated === true && report.state === 'ran') {
             line += ` ${t('neurocomment.modal.discovery.results.sourceTruncated')}`;
           }
           // A skipped or failed source is the whole point of this strip, so it says why.
@@ -73,10 +76,10 @@ const BLOCKING = new Set(['cantWrite', 'scam', 'fake', 'restricted']);
 
 /** The gates the backend explicitly answered — and only those.
  *
- * Every field is tri-state and `null` means Telegram did not answer it (no linked group,
- * an older TL layer, a field omitted), NEVER "no". So a mark appears on an explicit
- * signal only: an unanswered field produces no mark rather than a cleared gate, which
- * would tell the operator a channel is writable when nothing ever checked it.
+ * Every field is tri-state (the contract the backend's LinkedDiscussionGroupResult
+ * states), so a mark appears on an explicit signal only. An unanswered field produces no
+ * mark — and `VerdictCell` below says so in words, because no mark alone is exactly what
+ * a channel cleared on every gate looks like.
  */
 function verdictMarks(verdict: DiscoveryChannelVerdict) {
   const marks: { key: string }[] = [];
@@ -134,10 +137,15 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
   const raw = candidate.qualification ?? 'pending';
   const state = settled && raw === 'pending' ? 'notChecked' : raw;
   const verdict = candidate.verdict;
-  // No verdict at all: never probed in this process, or lost to a restart — the backend
-  // does not persist it. Suppressed where the comments state already says "not checked",
-  // which would be the same sentence twice.
-  const unanswered = verdict == null && state !== 'pending' && state !== 'notChecked';
+  // Suppressed where the comments mark has already settled the row: "not checked" would
+  // be the same sentence twice, and a definitive comments_off excludes it anyway.
+  const settledByComments =
+    state === 'pending' || state === 'notChecked' || state === 'comments_off';
+  // No verdict at all (never probed in this process, or lost to a restart — the backend
+  // does not persist it), OR one whose write gate Telegram never answered: a linked group
+  // that came back without its rights renders zero marks, which is precisely what a
+  // channel measured and cleared on every gate renders too.
+  const unanswered = !settledByComments && (verdict == null || verdict.can_send_messages == null);
   return (
     <div className="flex flex-col items-start gap-[3px]">
       <CommentsMark state={state} />
@@ -156,6 +164,17 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
       ))}
     </div>
   );
+}
+
+/** Which sentence the row count is allowed to be.
+ *
+ * "Channels found: N" claims the rows are this run's find and that N is all there was.
+ * Neither survives a run that stored nothing (a rate limit left the PREVIOUS search's
+ * rows on screen) or one the candidate cap cut short.
+ */
+function foundCountKey(progress: DiscoveryBoard['progress'] | undefined) {
+  if (progress?.stale_candidates === true) return 'countStale';
+  return progress?.capped === true ? 'countCapped' : 'count';
 }
 
 type Props = {
@@ -196,6 +215,7 @@ export function DiscoveryResults({
   const settled = !running;
   const qualified = board?.progress.qualified ?? 0;
   const total = board?.progress.total ?? 0;
+  const countKey = foundCountKey(board?.progress);
 
   const columns: ColumnDef<DiscoveryCandidate>[] = [
     {
@@ -259,9 +279,20 @@ export function DiscoveryResults({
       id: 'subscribers',
       header: () => t('neurocomment.modal.discovery.results.colSubscribers'),
       cell: ({ row }) => (
-        <span className="tb-time">
-          {formatSubscribers(row.original.subscribers, i18n.language || 'ru')}
-        </span>
+        <div className="flex flex-col items-end">
+          <span className="tb-time">
+            {formatSubscribers(row.original.subscribers, i18n.language || 'ru')}
+          </span>
+          {/* The subscriber bounds can only be applied to a hit Telegram returned a
+              count for, and the comment check backfills the real number afterwards — so
+              without this the operator reads a number that plainly breaks their own
+              filter, or an em dash that looks like a row which passed it. */}
+          {row.original.uncounted === true ? (
+            <span className="text-[11px] text-ink-subtle">
+              {t('neurocomment.modal.discovery.results.uncounted')}
+            </span>
+          ) : null}
+        </div>
       ),
       meta: { className: 'text-right', cellClassName: 'text-right' } satisfies DataTableColumnMeta,
     },
@@ -277,7 +308,11 @@ export function DiscoveryResults({
         return (
           <span className="text-[11.5px] text-ink-subtle">
             {sources
-              .map((source) => t(`neurocomment.modal.discovery.source.${source}`))
+              // The stored label outlives the build that wrote it, so an unmapped code
+              // renders as itself instead of as a raw i18n key.
+              .map((source) =>
+                t(`neurocomment.modal.discovery.source.${source}`, { defaultValue: source }),
+              )
               .join(' + ')}
           </span>
         );
@@ -385,7 +420,18 @@ export function DiscoveryResults({
             {t('neurocomment.modal.discovery.results.selectAll')}
           </label>
         )}
-        <span>{t('neurocomment.modal.discovery.results.count', { count: candidates.length })}</span>
+        <span>
+          {t(`neurocomment.modal.discovery.results.${countKey}`, { count: candidates.length })}
+        </span>
+        {/* The run's yield, once nothing else will change it. During the pass the
+            qualification counter beside this says more. */}
+        {settled && qualified > 0 ? (
+          <span>
+            {t('neurocomment.modal.discovery.results.commentsOn', {
+              count: board?.progress.comments_on ?? 0,
+            })}
+          </span>
+        ) : null}
         {/* Also the only trace of how far an aborted run got ("40/300"), so it has to
             outlive the qualifying phase. */}
         {phase === 'qualifying' || qualified < total ? (

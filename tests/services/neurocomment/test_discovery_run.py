@@ -22,7 +22,9 @@ from core.telegram_client import TelegramReadError
 from schemas.neurocomment_discovery import (
     DiscoveryCandidateRow,
     DiscoveryChannelVerdict,
+    DiscoveryRunReport,
     DiscoverySearchStageResult,
+    DiscoverySourceReport,
 )
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
@@ -459,12 +461,22 @@ async def test_an_unexpected_error_fails_the_run_without_escaping(
     monkeypatch.setattr(discovery_module, "run_search", _boom)
     await seed_listener()
     campaign_id = await new_campaign()
+    _discovery_state.set_run_report(
+        campaign_id,
+        DiscoveryRunReport(
+            sources=[DiscoverySourceReport(source="telegram_search", state="ran", hits=9, kept=9)],
+        ),
+    )
 
     await start_discovery(campaign_id, search_request())
     await drain_discovery(campaign_id)
 
     assert _discovery_state.phase_of(campaign_id) == "failed"
     assert _discovery_state.last_error(campaign_id) == "RuntimeError"
+    # The strip is per-run like the phase and the error: a crash never sets one, so
+    # keeping the previous run's published a source report beside a run that made no
+    # reads at all.
+    assert _discovery_state.run_report(campaign_id).sources == []
 
 
 @pytest.mark.asyncio

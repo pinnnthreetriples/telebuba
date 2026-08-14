@@ -326,10 +326,14 @@ async def test_similar_channels_blank_seed_is_treated_as_absent(
 
 
 @pytest.mark.asyncio
-async def test_unresolvable_seed_yields_no_items_not_a_failure(
+async def test_a_seed_telegram_cannot_resolve_is_a_refusal_not_an_empty_answer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The keyword arm of a sweep must survive a bad seed handle."""
+    """Swallowed, it read as "this seed simply has no recommendations".
+
+    Both spend no RPC and return nothing, so the operator kept a dead handle in the
+    form forever. The stable code rides the read ladder like any other refusal.
+    """
 
     class BadSeedClient(_FakeClient):
         async def get_input_entity(self, handle: str, /) -> object:
@@ -339,10 +343,10 @@ async def test_unresolvable_seed_yields_no_items_not_a_failure(
     client = BadSeedClient([_channel("never_seen")])
     _patch_client(monkeypatch, client)
 
-    result = await execute_read("acc-1", GetSimilarChannels(seed="ghost"))
+    with pytest.raises(TelegramReadError) as excinfo:
+        await execute_read("acc-1", GetSimilarChannels(seed="ghost"))
 
-    assert isinstance(result, TelegramChannelMatches)
-    assert result.items == []
+    assert excinfo.value.reason == "channel_not_found"
     assert client.requests == []
 
 

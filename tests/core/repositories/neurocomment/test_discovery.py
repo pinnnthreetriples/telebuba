@@ -137,7 +137,7 @@ async def test_mark_qualified_backfills_subscribers() -> None:
 
 @pytest.mark.asyncio
 async def test_mark_qualified_keeps_a_known_count_when_the_probe_learned_none() -> None:
-    """A failed probe must not wipe what the catalogue already told us."""
+    """A failed probe must not wipe the count the search itself returned."""
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
     await replace_discovery_candidates(campaign.campaign_id, [_row("cat", subscribers=900)])
 

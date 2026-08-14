@@ -30,6 +30,7 @@ from schemas.neurocomment_discovery import (
     DiscoveryBoard,
     DiscoveryCandidate,
     DiscoveryProgress,
+    DiscoveryRunReport,
     DiscoverySearchOutcome,
 )
 from services.neurocomment import _discovery_state, _runtime
@@ -83,6 +84,10 @@ async def start_discovery(
     # channel without probing it at all — so a kept verdict would be shown beside a row
     # nothing measured this time, and the map would grow for the life of the process.
     _discovery_state.clear_verdicts(campaign_id)
+    # The source strip is per-run for the same reason, and the exception path below never
+    # sets one: without this, a run that crashed published the PREVIOUS run's strip
+    # beside its own failure.
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
     _discovery_state.spawn(campaign_id, _run(campaign_id, account, request))
     await log_event(
         "INFO",
@@ -105,15 +110,10 @@ async def _run(
     try:
         stage = await run_search(campaign_id, account.account_id, request)
         _discovery_state.set_last_error(campaign_id, stage.error)
-        # Per-source outcomes ALWAYS: they describe what the sources did, which is true
-        # whether or not the rows were stored — and a run that stored nothing is exactly
-        # when the operator needs to see which source refused. The per-row origins are
-        # different: keyed by handle, they would staple this run's provenance onto the
-        # previous run's rows, so they are dropped unless this run's set was written.
-        _discovery_state.set_run_report(
-            campaign_id,
-            stage.report if stage.replaced else stage.report.model_copy(update={"origins": {}}),
-        )
+        # Published whether or not the rows were stored: a run that stored nothing is
+        # exactly when the operator needs to see which source refused. The search stage
+        # has already stripped everything that would describe rows nobody can see.
+        _discovery_state.set_run_report(campaign_id, stage.report)
         qualify_error = None
         if not stage.replaced or stage.flooded:
             # Not replaced: no source answered (or the filter-aware one did not), so the
@@ -208,8 +208,9 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
         owner = owners.get(row.channel)
         owner_id = None if owner is None else owner.campaign_id
         # Provenance and the fitness verdict are only known while the run's state lives;
-        # a board read after a restart falls back to the one source the row itself stores,
-        # and to no verdict at all — which the wire model documents as unknown.
+        # a board read after a restart falls back to the one source the row itself stores
+        # — verbatim, whatever build wrote it — and to no verdict at all, which the wire
+        # model documents as unknown.
         origin = report.origins.get(row.channel)
         candidates.append(
             DiscoveryCandidate(
@@ -217,8 +218,9 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
                 title=row.title,
                 subscribers=row.subscribers,
                 source=row.source,
-                sources=[row.source] if origin is None else origin.sources,
+                sources=[row.source] if origin is None else list(origin.sources),
                 qualification=qualification,
+                uncounted=origin is not None and origin.uncounted,
                 verdict=verdicts.get(row.channel),
                 in_campaign=owner_id == campaign_id,
                 taken_by_other_campaign=owner_id is not None and owner_id != campaign_id,
@@ -235,6 +237,10 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
             comments_on=comments_on,
             last_error=_discovery_state.last_error(campaign_id),
             sources=report.sources,
+            # The rows below outlived the last run: it stored nothing, so they are the
+            # previous search's and the board must not present them as this one's find.
+            stale_candidates=not report.stored,
+            capped=report.capped,
         ),
         candidates=candidates,
     )

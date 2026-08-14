@@ -23,6 +23,7 @@ from telethon.tl.functions.contacts import SearchRequest
 from telethon.tl.functions.messages import SearchGlobalRequest
 from telethon.tl.types import InputMessagesFilterEmpty, InputPeerEmpty
 
+from core.telegram_client._channels import ChannelGatewayError
 from schemas.telegram_actions_discovery import (
     CHANNEL_SEARCH_MIN_QUERY_LENGTH,
     GlobalPostsCursor,
@@ -85,18 +86,22 @@ async def dispatch_get_similar_channels(
 
     Free of the search-flood exposure that repeated keyword queries carry, which
     makes it the cheapest way to widen a sweep. With no seed, Telegram recommends
-    against the account's own subscriptions. A seed we cannot resolve yields an
-    empty result rather than failing the run — the keyword arm still has results.
+    against the account's own subscriptions. A seed Telegram cannot resolve is a
+    refusal, not an empty answer: swallowing it reported the source as having run
+    and found nothing, which is exactly what a perfectly good seed with no
+    recommendations looks like — so the operator kept a dead handle in the form.
     """
     seed = None if action.seed is None else action.seed.strip().lstrip("@")
     channel: object = None
     if seed:
         try:
             channel = await client.get_input_entity(seed)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exc:
             # Unknown/invalid handle: Telethon raises ValueError for an unresolvable
-            # peer. RPC-level failures still ride the execute_read_many ladder.
-            return TelegramChannelMatches(items=[])
+            # peer. The same stable code the write side uses, so it rides the
+            # ``execute_read_many`` ladder as a ``TelegramReadError`` like any refusal.
+            code = "channel_not_found"
+            raise ChannelGatewayError(code) from exc
     result = await client(GetChannelRecommendationsRequest(channel=channel))  # ty: ignore[invalid-argument-type]
     return _collect(getattr(result, "chats", None))
 
