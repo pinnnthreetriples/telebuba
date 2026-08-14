@@ -226,14 +226,21 @@ function WarmingCard({
     <div className="rounded-[14px] border border-[#e4ecfa] bg-[#f7faff] px-[17px] py-4">
       {/* header */}
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-[9px]">
+        <div className="flex min-w-0 items-center gap-[9px]">
           <AccountAvatar
             account={account}
             className="h-7 w-7 shrink-0 rounded-full"
             fallbackClassName="text-[11px] font-semibold bg-[#e8f0ff] text-[#0066ff]"
           />
-          <div>
-            <div className="text-[13px] font-semibold">{primaryId}</div>
+          <div className="min-w-0">
+            {/* Telegram supplies this name, so it can be one 90-char word with nowhere
+                to break: measured, it painted straight out through the card's right
+                border. The card's own grid track has a fixed 320px minimum, so the
+                name cannot widen the track — it can only spill. `title` keeps the
+                whole name reachable now that the card shows a prefix of it. */}
+            <div className="truncate text-[13px] font-semibold" title={primaryId}>
+              {primaryId}
+            </div>
             <div className="mt-[2px] flex items-center gap-[6px]">
               <span
                 className="inline-flex items-center gap-1 rounded-full px-[7px] py-px text-[10.5px] font-semibold"
@@ -254,7 +261,9 @@ function WarmingCard({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-[7px]">
+        {/* shrink-0: without it the truncating name above just pushes its cost onto
+            the actions instead, and the "Стоп" button loses its label. */}
+        <div className="flex shrink-0 items-center gap-[7px]">
           <span className="tb-tip inline-flex">
             <span className="inline-flex h-[18px] w-[18px] cursor-help items-center justify-center rounded-full border border-[#cbd7ec] bg-white text-[11px] font-bold text-[#7a8aa6]">
               ?
