@@ -10,12 +10,15 @@ from sqlalchemy import inspect, select
 
 from core.db import (
     _get_engine,
+    checkpoint_backfill,
     claim_pending_posts,
     complete_post,
     enqueue_post,
+    prepare_backfill,
     requeue_processing_posts,
 )
 from core.migration_steps_neurocomment import _add_neurocomment_inbox
+from core.repositories.neurocomment._inbox import BackfillPlan
 from core.repositories.neurocomment._tables import _neurocomment_cursors, _neurocomment_inbox
 from schemas.telegram_actions import NewPostEvent
 
@@ -97,7 +100,7 @@ async def test_processing_rows_recover_after_restart_but_done_rows_do_not() -> N
     assert [event.post_id for event in claimed] == [1, 2]
     await complete_post(first)
 
-    assert await requeue_processing_posts() == 1
+    assert await requeue_processing_posts() == (1, 0)
     replay = await claim_pending_posts(2, now - 1)
     assert [event.post_id for event in replay] == [2]
 
@@ -109,3 +112,49 @@ async def test_stale_pending_history_expires_instead_of_being_commented() -> Non
     with _get_engine().connect() as connection:
         state = connection.execute(select(_neurocomment_inbox.c.state)).scalar_one()
     assert state == "expired"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_backfill_pass_is_held_off_and_then_resumes_where_it_stopped() -> None:
+    """``checkpoint_backfill`` is what decides whether history gets read again.
+
+    A pass that dies partway owes two things to the next one: the page it had reached,
+    so recovery does not restart from the newest post every time, and a hold-off, so an
+    unreadable channel is not re-fetched by every reconcile that comes past.
+    """
+    await enqueue_post(_event(10))
+    assert await prepare_backfill(["@news"], interval_seconds=300) == {
+        "@news": BackfillPlan(floor_post_id=10, before_post_id=None),
+    }
+
+    await checkpoint_backfill("@news", before_post_id=4, success=False, retry_seconds=300)
+
+    # Held off: the channel is simply absent from the plan, so no page is fetched at all.
+    assert await prepare_backfill(["@news"], interval_seconds=300) == {}
+
+    # The same checkpoint with its hold-off already spent. The floor is unchanged -- the
+    # pass still owes everything down to post 10 -- and the resume point is the page the
+    # failure stopped on, not the top of the channel.
+    await checkpoint_backfill("@news", before_post_id=4, success=False, retry_seconds=0)
+
+    assert await prepare_backfill(["@news"], interval_seconds=300) == {
+        "@news": BackfillPlan(floor_post_id=10, before_post_id=4),
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_successful_backfill_pass_clears_the_cursor_and_waits_out_the_interval() -> None:
+    """Success ends the recovery: nothing to resume, and no re-read until the interval."""
+    await enqueue_post(_event(10))
+    assert await prepare_backfill(["@news"], interval_seconds=300)
+    await checkpoint_backfill("@news", before_post_id=4, success=False, retry_seconds=300)
+
+    await checkpoint_backfill("@news", before_post_id=None, success=True, retry_seconds=300)
+
+    assert await prepare_backfill(["@news"], interval_seconds=300) == {}
+    # Zero interval isolates the second stamp: the channel plans again only because
+    # success also dropped the hold-off the failed pass had written, and it starts from
+    # the cursor's high-water mark with nothing left to resume.
+    assert await prepare_backfill(["@news"], interval_seconds=0) == {
+        "@news": BackfillPlan(floor_post_id=10, before_post_id=None),
+    }

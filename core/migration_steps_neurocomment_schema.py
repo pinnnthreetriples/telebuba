@@ -16,7 +16,16 @@ if TYPE_CHECKING:
 
 
 def _add_neurocomment_inbox(connection: Connection) -> None:
-    """Durable post handoff, backfill cursor, and reply-attempt state."""
+    """Durable post handoff, backfill cursor, and reply-attempt state.
+
+    Registered as ``add_neurocomment_inbox``, but the name only covers the two new
+    tables. It also ALTERs ``neurocomment_comments`` with five reply columns and
+    back-fills ``reply_deadline_at`` for rows already parked in reply mode — the one
+    part of this step that cannot be undone by dropping a table. The registry name
+    is left as it is because databases in the field have already stamped it; the
+    extra work is documented here and covered by
+    ``tests/core/test_migrations_neurocomment_inbox.py``.
+    """
     connection.exec_driver_sql(
         "CREATE TABLE IF NOT EXISTS neurocomment_inbox ("
         " channel VARCHAR NOT NULL, post_id INTEGER NOT NULL, date_unix INTEGER NOT NULL,"

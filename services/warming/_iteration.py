@@ -202,8 +202,14 @@ async def _run_reserved_cycle(
             schedule,
             run_id=run_id,
         )
-    except _seams.WarmingLeaseRevokedError:
-        raise  # Unknown external outcome: keep the full reservation booked.
+    except _seams.WarmingLeaseLostMidDispatchError:
+        # The request was already outside the process when the lease went, so what
+        # Telegram did with it is unknowable — the conservative reading is that the
+        # whole remaining budget went with it, and the reservation stays booked.
+        # Only THIS fence earns the exemption: its sibling raises before dispatch,
+        # where nothing was sent and keeping the day booked would park the account on
+        # a limit it never spent — the very forfeit ``_reservation`` exists to prevent.
+        raise
     except BaseException:
         await _release_reservation_on_exit(account_id, reserved.reservation, tally.attempts)
         raise

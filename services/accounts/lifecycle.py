@@ -15,7 +15,7 @@ from core.db import (
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from core.phone_geo import evaluate_geo
-from core.telegram_client import remove_account_session, removing_client
+from core.telegram_client import forget_post_listener, remove_account_session, removing_client
 from schemas.geo import GeoMatch
 from services.accounts._result import AccountNotFoundError
 
@@ -95,12 +95,11 @@ async def remove_account(account_id: str) -> None:
     # This makes delete atomic against listener start/switch/reconcile and prevents the
     # in-memory handler from surviving a DB cascade or resurrecting on pool rebuild.
     async with nc_runtime.neurocomment_lifecycle(), account_lock(account_id):
-        if await get_listener_account_id() == account_id:
-            try:
-                await nc_runtime.shutdown_neurocomment_runtime(account_id)
-            finally:
-                await set_listener_account_id(None)
-                await set_listener_running(running=False)
+        # The warming stop comes first because it is the only step here that can
+        # REFUSE the delete. Nothing above it may have destroyed operator state by
+        # then: run after the listener teardown, a 409 would answer "nothing was
+        # deleted" while the listener account and its running flag were already
+        # cleared, with no rollback and nothing in the response to say so.
         try:
             await _stop_warming_locked(account_id)
         except WarmingTaskNotQuiescentError:
@@ -115,6 +114,12 @@ async def remove_account(account_id: str) -> None:
                 account_id=account_id,
                 extra={"error_type": type(exc).__name__},
             )
+        if await get_listener_account_id() == account_id:
+            try:
+                await nc_runtime.shutdown_neurocomment_runtime(account_id)
+            finally:
+                await set_listener_account_id(None)
+                await set_listener_running(running=False)
         # Disconnect the pooled client so it stops holding the account's
         # ``.session`` handle open (Windows can't unlink a live handle), then
         # unlink the orphaned session file before purging the DB rows. The
@@ -133,6 +138,10 @@ async def remove_account(account_id: str) -> None:
                 raise AccountNotFoundError(account_id)
             await remove_account_session(account_id, account.session_name)
             await delete_account(account_id)
+        # Only once the row is really gone: the listener registries are keyed by
+        # account id and nothing else ever drops those keys, so an app that outlives
+        # many deletes accumulates one dead generation and one dead lock per account.
+        await forget_post_listener(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

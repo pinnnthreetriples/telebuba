@@ -327,6 +327,14 @@ class OriginProtectionMiddleware:
     prevents a same-site sibling subdomain from using the HttpOnly cookie as
     ambient auth. Cookie-authenticated unsafe requests without exactly one Origin
     are refused: this API has no bearer-authenticated non-browser write path.
+
+    BREAKING for scripted clients. The session cookie is the only credential this
+    API has, so a script that writes with it — ``curl -b "tb_session=..." -X POST``
+    — now gets a bare 403 (``untrusted_origin``) unless it also sends an ``Origin``
+    header the server trusts: ``-H "Origin: <the origin the request is addressed
+    to>"``. Fail-closed is deliberate; a missing Origin is exactly what a CSRF
+    request from an old browser looks like, and there is no second credential that
+    could tell the two apart. Reads (``GET``/``HEAD``/``OPTIONS``) are untouched.
     """
 
     def __init__(self, app: ASGIApp, *, cookie_name: str, allowed_origins: Sequence[str]) -> None:

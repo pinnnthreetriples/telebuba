@@ -14,6 +14,7 @@ from core.db import (
     claim_comment,
     claim_pending_posts,
     enqueue_post,
+    list_recent_logs,
 )
 from core.repositories.neurocomment._tables import (
     _neurocomment_comments,
@@ -55,6 +56,21 @@ def _durable_rows() -> tuple[RowMapping, RowMapping]:
         inbox = connection.execute(select(_neurocomment_inbox)).mappings().one()
         comment = connection.execute(select(_neurocomment_comments)).mappings().one()
     return inbox, comment
+
+
+class _CommitError(RuntimeError):
+    """A named class, because the report's whole value is saying which fault it was."""
+
+
+async def _ambiguous_event() -> tuple[str, object]:
+    """The single settlement report an ambiguous dispatch owes the operator."""
+    reported = [
+        entry
+        for entry in await list_recent_logs(limit=100)
+        if entry.event.startswith("neurocomment_dispatch_") and entry.event.endswith("_unknown")
+    ]
+    assert len(reported) == 1
+    return reported[0].event, reported[0].extra["error_type"]
 
 
 @pytest.mark.asyncio
@@ -147,16 +163,21 @@ async def test_generation_revoked_before_dispatch_releases_claim_for_retry(
 
 
 @pytest.mark.asyncio
-async def test_unavailable_account_is_terminal_before_dispatch(
+async def test_deleted_account_is_terminal_before_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A gone account is the one refusal worth spending the post on.
+
+    Its transient siblings (warming, mid-handoff) raise the parent class and are
+    released for retry instead — see ``test_account_unavailable_drop``.
+    """
     event, limits = await _seed(13)
     account_id = "acc-1"
 
-    async def _unavailable(*_args: object, **_kwargs: object) -> ActionResult:
-        raise _seams.NeurocommentAccountUnavailableError(account_id)
+    async def _deleted(*_args: object, **_kwargs: object) -> ActionResult:
+        raise _seams.NeurocommentAccountDeletedError(account_id)
 
-    monkeypatch.setattr(_seams, "execute", _unavailable)
+    monkeypatch.setattr(_seams, "execute", _deleted)
 
     outcome = await _generate._dispatch_reserved_comment(
         event,
@@ -168,6 +189,90 @@ async def test_unavailable_account_is_terminal_before_dispatch(
     assert outcome == PipelineOutcome.TERMINAL
     _inbox, comment = _durable_rows()
     assert comment["status"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_a_comment_that_lands_after_its_lease_is_revoked_is_ambiguous(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fail-closed case the whole boundary exists for, driven through the real seam.
+
+    Stop lands while the send is in flight. ``_seams.execute`` re-checks the generation
+    AFTER the gateway returns, and a comment that may well be live on Telegram must not
+    be re-sent by the next attempt -- so the post is settled ambiguous rather than
+    released. Nothing else in the suite makes the real seam raise
+    ``NeurocommentLeaseLostAfterDispatchError``; the stubs all raise it by hand.
+    """
+    event, limits = await _seed(15)
+    live = True
+    sent: list[TelegramAction] = []
+
+    async def _gateway(
+        account_id: str,
+        action: TelegramAction,
+        *,
+        domain: str = "neurocomment",  # noqa: ARG001 - mirrors the real signature
+    ) -> ActionResult:
+        nonlocal live
+        sent.append(action)
+        live = False  # operator Stop, landing while Telegram already has the comment
+        return ActionResult(
+            status="ok",
+            action_type=action.action_type,
+            account_id=account_id,
+            message_id=88,
+        )
+
+    monkeypatch.setattr(_seams, "_gateway_execute", _gateway)
+
+    with _seams.generation_scope(lambda: live):
+        outcome = await _generate._dispatch_reserved_comment(event, "acc-1", "too late", limits)
+
+    assert outcome == PipelineOutcome.AMBIGUOUS
+    assert len(sent) == 1  # the send really happened: that is why it cannot be retried
+    inbox, comment = _durable_rows()
+    assert inbox["stage"] == InboxStage.DISPATCHING
+    assert comment["status"] == "failed"
+    assert await _ambiguous_event() == (
+        "neurocomment_dispatch_outcome_unknown",
+        "NeurocommentLeaseLostAfterDispatchError",
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_delivered_comment_whose_bookkeeping_faults_is_ambiguous_not_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram accepted the comment and the write recording that did not.
+
+    ``_classify_post`` runs after the boundary, so a fault in it says nothing about
+    whether the comment landed -- it did. The post is settled ambiguous under its own
+    event code, which is the only thing that tells the operator the difference between
+    "sent, unrecorded" and "never sent".
+    """
+    event, limits = await _seed(16)
+
+    async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
+        return ActionResult(
+            status="ok",
+            action_type=action.action_type,
+            account_id=account_id,
+            message_id=99,
+        )
+
+    async def _fault(*_args: object) -> None:
+        raise _CommitError
+
+    monkeypatch.setattr(_seams, "execute", _execute)
+    monkeypatch.setattr(_generate, "_classify_post", _fault)
+
+    outcome = await _generate._dispatch_reserved_comment(event, "acc-1", "recorded badly", limits)
+
+    assert outcome == PipelineOutcome.AMBIGUOUS
+    inbox, comment = _durable_rows()
+    assert inbox["stage"] == InboxStage.DISPATCHED  # the send is durably known to be done
+    assert comment["status"] == "failed"
+    assert await _ambiguous_event() == ("neurocomment_dispatch_commit_unknown", "_CommitError")
 
 
 @pytest.mark.asyncio

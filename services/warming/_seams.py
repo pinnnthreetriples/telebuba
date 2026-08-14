@@ -37,7 +37,22 @@ _ACTIVE_LEASES: dict[str, str] = {}
 
 
 class WarmingLeaseRevokedError(RuntimeError):
-    """A stale warming generation attempted external I/O after lease revocation."""
+    """A stale warming generation attempted external I/O after lease revocation.
+
+    Raised by the fence *before* dispatch, where the request never left the process:
+    nothing reached Telegram, so the caller may unwind as cleanly as a cancellation.
+    """
+
+
+class WarmingLeaseLostMidDispatchError(WarmingLeaseRevokedError):
+    """The lease was revoked while this generation's request was already in flight.
+
+    A subclass, not a flag, because the two fences differ in exactly one way that
+    callers act on: whether the Telegram outcome is knowable. ``_run_reserved_cycle``
+    keeps the whole daily reservation booked for this one and hands it back for its
+    parent — a distinction it cannot make from a shared type, and getting it wrong
+    costs the account the rest of its day (#208).
+    """
 
 
 def activate_lease(account_id: str, run_id: str) -> None:
@@ -64,15 +79,37 @@ def lease_scope(account_id: str, run_id: str | None) -> Iterator[None]:
         _LEASE.reset(token)
 
 
-def _assert_live_lease(account_id: str) -> None:
+def _assert_live_lease(account_id: str, error: type[WarmingLeaseRevokedError]) -> None:
     lease = _LEASE.get()
     # Direct/test calls to ``run_one_cycle`` do not own a long-running runtime
-    # lease.  Their existing explicit lifetime remains unchanged.
+    # lease.  Their existing explicit lifetime remains unchanged.  ``cleanup_scope``
+    # borrows the same escape hatch for one deliberate RPC.
     if lease is None:
         return
     lease_account_id, run_id = lease
     if lease_account_id != account_id or _ACTIVE_LEASES.get(account_id) != run_id:
-        raise WarmingLeaseRevokedError(account_id)
+        raise error(account_id)
+
+
+@contextmanager
+def cleanup_scope() -> Iterator[None]:
+    """Let this generation's own cleanup RPC through after its lease was revoked.
+
+    The lease exists to stop a stale generation issuing *new* warming activity. The
+    cycle's ``SetOnline(False)`` is the opposite: it is how the generation that owns
+    the account hands it back, and it is a deliberate anti-ban step — an account left
+    permanently "online" after every Stop is exactly the signal warming is shaped to
+    avoid. Revocation happens before cancellation, so without this the cleanup's own
+    fence raised and ``_set_offline`` swallowed it.
+
+    Suspends the lease for the calling task only, and only for as long as the block
+    runs, so it can widen no further than the single RPC it wraps.
+    """
+    token = _LEASE.set(None)
+    try:
+        yield
+    finally:
+        _LEASE.reset(token)
 
 
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:
@@ -80,19 +117,21 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
 
     The second check handles a cancellation-suppressing gateway call that was
     already in flight when Stop revoked the lease.  Its uncertain outcome is
-    failed closed by raising instead of allowing the stale cycle to continue.
+    failed closed by raising instead of allowing the stale cycle to continue —
+    as the distinct error type, so callers can tell "never sent" from "sent, outcome
+    unknown" without re-deriving it.
     """
-    _assert_live_lease(account_id)
+    _assert_live_lease(account_id, WarmingLeaseRevokedError)
     result = await _gateway_execute(account_id, action, domain="warming")
-    _assert_live_lease(account_id)
+    _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
 
 
 async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
     """Fence the quarantine Telegram probe with the same runtime lease."""
-    _assert_live_lease(account_id)
+    _assert_live_lease(account_id, WarmingLeaseRevokedError)
     result = await _refresh_spam_status(account_id, force=force)
-    _assert_live_lease(account_id)
+    _assert_live_lease(account_id, WarmingLeaseLostMidDispatchError)
     return result
 
 

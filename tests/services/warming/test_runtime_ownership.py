@@ -19,7 +19,7 @@ from core.db import (
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest, StopWarmingRequest
 from services import warming
-from services.warming import _runtime, _seams
+from services.warming import _maintenance, _runtime, _seams
 from tests.services.warming._support import (
     _iteration,
     _no_quiet_days,
@@ -79,7 +79,10 @@ async def test_stop_retains_suppressed_task_and_restart_waits_for_quiescence(
     assert warming._RUNTIME["acc-1"] is original
     assert not original.done()
 
-    with pytest.raises(warming.WarmingNotReadyError, match="still stopping"):
+    # A lifecycle conflict, not a readiness verdict: the same signal promote/handoff
+    # raise, so the route answers 409 instead of listing "still stopping" among the
+    # reasons an account is unfit to warm.
+    with pytest.raises(warming.WarmingTaskNotQuiescentError):
         await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
     assert warming._RUNTIME["acc-1"] is original
 
@@ -192,9 +195,17 @@ async def test_handoff_and_delete_refuse_non_quiescent_warming_task(
 
 
 @pytest.mark.asyncio
-async def test_shutdown_is_bounded_when_purge_suppresses_cancellation(
+async def test_a_stuck_retention_sweep_does_not_switch_retention_off_for_good(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Shutdown stays bounded, and the next start still gets a sweep.
+
+    Retaining the handle of a sweep that outlived its cancellation made
+    ``_start_purge_task`` read ``not task.done()`` as "one is already running" and skip,
+    so a single stuck sweep left the append-only tables growing unwatched for the rest
+    of the process lifetime. Releasing the handle costs at most a duplicate sweep of
+    deletes that are idempotent anyway.
+    """
     started = asyncio.Event()
     release = asyncio.Event()
 
@@ -211,8 +222,16 @@ async def test_shutdown_is_bounded_when_purge_suppresses_cancellation(
 
     await asyncio.wait_for(warming.shutdown_warming_runtime(), timeout=0.2)
 
-    assert _runtime._PURGE_TASK is task
+    # Bounded: the stuck sweep is still alive and shutdown returned anyway.
     assert not task.done()
+    assert _runtime._PURGE_TASK is None
+
+    _maintenance._start_purge_task()
+    replacement = _runtime._PURGE_TASK
+    assert replacement is not None
+    assert replacement is not task
+
+    replacement.cancel()
     release.set()
     await asyncio.wait_for(task, timeout=1)
     _runtime._PURGE_TASK = None
@@ -242,11 +261,106 @@ async def test_lease_fences_before_and_after_gateway_dispatch(
     from schemas.telegram_actions import SetOnline  # noqa: PLC0415
 
     with _seams.lease_scope("acc-1", "run-1"):
-        with pytest.raises(_seams.WarmingLeaseRevokedError):
+        # First call: the lease was live going in, so the request went out and only the
+        # post-dispatch fence caught it — an outcome nobody can know.
+        with pytest.raises(_seams.WarmingLeaseLostMidDispatchError):
             await _seams.execute("acc-1", SetOnline(online=True))
-        with pytest.raises(_seams.WarmingLeaseRevokedError):
+        # Second call: refused before dispatch, so nothing is in doubt. The two carry
+        # different types because the reservation hand-back turns on the difference.
+        with pytest.raises(_seams.WarmingLeaseRevokedError) as refused:
             await _seams.execute("acc-1", SetOnline(online=True))
+    assert not isinstance(refused.value, _seams.WarmingLeaseLostMidDispatchError)
     assert calls == ["set_online"]
+
+
+@pytest.mark.asyncio
+async def test_a_second_stop_cancels_again_so_a_timed_out_stop_is_recoverable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The operator's way out of a stop that ran out of time.
+
+    A coroutine parked inside its own ``except CancelledError`` cleanup survives one
+    cancel and keeps the account owned, so Start, Promote, Handoff and Delete all
+    refuse. That refusal is only defensible while it can be lifted: every lifecycle
+    entry point that stops comes back through ``_cancel_runtime_task``, which finds the
+    retained task still non-terminal and cancels it a second time. Nothing else in the
+    process ever will, so if this stopped happening the account would be locked out
+    until a restart.
+    """
+    cancellations = 0
+    started = asyncio.Event()
+
+    async def survives_one_cancel(account_id: str, *, run_id: str | None = None) -> None:
+        del account_id, run_id
+        nonlocal cancellations
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancellations += 1
+            await asyncio.Event().wait()  # a cleanup that outlives the stop budget
+
+    monkeypatch.setattr(_runtime, "_warming_loop", survives_one_cancel)
+    monkeypatch.setattr(settings.warming, "stop_cancel_timeout_seconds", 0.01)
+    await _ready_account()
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    await started.wait()
+
+    timed_out = await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
+    assert timed_out.state == "error"
+    assert timed_out.last_event == "stop_timeout"
+
+    recovered = await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
+
+    assert cancellations == 1  # the second cancel landed in the cleanup and finished it
+    assert recovered.state == "idle"
+    assert recovered.last_event == "stopped"
+    assert "acc-1" not in warming._RUNTIME
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_cycle_still_takes_the_account_offline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Going offline is anti-ban work, not warming activity the lease should fence.
+
+    Stop revokes the lease before it cancels, so the ``SetOnline(False)`` in the
+    cycle's ``finally`` met the fence and ``_set_offline``'s ``except Exception``
+    swallowed the refusal without a trace — every Stop left the account showing as
+    online, which is the pattern warming is shaped to avoid. The cleanup belongs to the
+    generation that owned the account, so it is let through; nothing else is.
+    """
+    _no_quiet_days(monkeypatch)
+    dispatched: list[TelegramAction] = []
+
+    async def revoke_mid_cycle(
+        account_id: str,
+        action: TelegramAction,
+        *,
+        domain: str,
+    ) -> ActionResult:
+        from tests.services.warming._support import _ok  # noqa: PLC0415
+
+        del domain
+        dispatched.append(action)
+        # Not on the presence flip itself: the account has to actually be online
+        # before its cleanup is the thing under test.
+        if len(dispatched) > 1:
+            _seams.revoke_lease(account_id, "run-1")
+        return _ok(account_id, action)
+
+    monkeypatch.setattr(_seams, "_gateway_execute", revoke_mid_cycle)
+    await _seed_warming_account(run_id="run-1")
+    _seams.activate_lease("acc-1", "run-1")
+
+    with (
+        _seams.lease_scope("acc-1", "run-1"),
+        pytest.raises(_seams.WarmingLeaseRevokedError),
+    ):
+        await warming.run_loop_iteration("acc-1", run_id="run-1")
+
+    presence = [action.online for action in dispatched if action.action_type == "set_online"]
+    assert presence == [True, False]
 
 
 @pytest.mark.asyncio

@@ -57,7 +57,6 @@ _INBOX_RETRY_TASK: asyncio.Task[None] | None = None
 _BACKFILL_TASK: asyncio.Task[None] | None = None
 _BACKFILL_TIMER_TASK: asyncio.Task[None] | None = None
 _BACKFILL_GENERATION = 0
-_BACKFILL_AT: dict[tuple[str, str], float] = {}
 _RUNTIME_GENERATION = 0
 _RUNTIME_ACCOUNT_ID: str | None = None
 _RUNTIME_OWNER_INITIALIZED = False

@@ -72,7 +72,6 @@ def reset_for_tests() -> None:
     _runtime._INBOX_DISPATCH_LOCK = None  # noqa: SLF001
     _runtime._INBOX_GENERATION = 0  # noqa: SLF001
     _runtime._BACKFILL_GENERATION = 0  # noqa: SLF001
-    _runtime._BACKFILL_AT.clear()  # noqa: SLF001
     _runtime._LIFECYCLE_LOCK = None  # noqa: SLF001
     _runtime._LIFECYCLE_OWNER = None  # noqa: SLF001
     _runtime._LIFECYCLE_DEPTH = 0  # noqa: SLF001

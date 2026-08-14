@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -41,6 +42,10 @@ from services.neurocomment._outcomes import (  # noqa: F401 - compatibility faca
 if TYPE_CHECKING:
     from schemas.neurocomment import NeurocommentCampaign, NeurocommentSettings
     from schemas.telegram_actions_comments import PostCommentRecord
+
+# Stdlib sink for evidence that must survive a log-store fault — see
+# ``core.proxy_check._failed_result`` for the same route.
+logger = logging.getLogger(__name__)
 
 _CLAIM_BEAT_INTERVAL_SECONDS = 60.0
 _CLAIM_LOST_REASON = "claim_lost"
@@ -131,7 +136,11 @@ async def _settle_revoked_dispatch(
         )
         return PipelineOutcome.AMBIGUOUS
     await _release_reserved_comment(event, text)
-    if isinstance(exc, _seams.NeurocommentAccountUnavailableError):
+    if isinstance(exc, _seams.NeurocommentAccountDeletedError):
+        # No account row means no later attempt can ever succeed, so the surviving
+        # ``failed`` row is the right answer. Every other refusal here — warming,
+        # mid-handoff, a revoked generation — ends on its own and issued no Telegram
+        # request, so the claim is deleted and the post goes back on the retry ladder.
         await mark_comment_failed(event.channel, event.post_id)
         return PipelineOutcome.TERMINAL
     await release_claim(event.channel, event.post_id)
@@ -269,6 +278,18 @@ async def _settle_ambiguous_dispatch(
     exc: BaseException,
 ) -> None:
     """Best-effort cleanup that can never reopen a crossed dispatch boundary."""
+    # An ambiguous post is the one ending nothing else can recover from: it may already
+    # carry a live comment, so no retry is allowed and the record below is all the
+    # operator ever gets. Everything here is suppressed — including the event write —
+    # so the stdlib sink goes first and keeps the evidence even when the log store is
+    # the very thing that faulted.
+    logger.error(
+        "%s for %s/%s after %s",
+        event_code,
+        event.channel,
+        event.post_id,
+        type(exc).__name__,
+    )
     with suppress(Exception, asyncio.CancelledError):
         await mark_comment_failed(event.channel, event.post_id)
     with suppress(Exception, asyncio.CancelledError):

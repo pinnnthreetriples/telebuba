@@ -123,5 +123,69 @@ async def test_stale_handler_generation_drops_event_after_switch(
     assert received == []
 
 
+@pytest.mark.asyncio
+async def test_forgetting_a_deleted_account_drops_its_per_account_registry_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A deleted account must not leave a generation and a lock behind for good.
+
+    ``stop_post_listener`` keeps both on purpose — the account can still be started
+    again. Nothing distinguished a delete from a stop, so an app that outlives many
+    deletes carried one dead entry per account in each of the two dicts.
+    """
+    client = _Client()
+
+    async def _get(_account_id: str) -> _Client:
+        _listener._CLIENTS["gone"] = client  # ty: ignore[invalid-assignment]
+        return client
+
+    monkeypatch.setattr(_listener, "get_client", _get)
+    assert await _listener.subscribe_posts("gone", ["@news"], _noop) == ["@news"]
+    assert "gone" in _listener._GENERATIONS
+    assert "gone" in _listener._SUBSCRIPTION_LOCKS
+
+    await _listener.forget_post_listener("gone")
+
+    assert client.handlers == []
+    assert "gone" not in _listener._GENERATIONS
+    assert "gone" not in _listener._SUBSCRIPTION_LOCKS
+
+
+@pytest.mark.asyncio
+async def test_a_subscribe_from_before_a_forget_cannot_register_over_the_new_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Dropping the generation is only safe because the numbers are never reused.
+
+    Counted per account, the first subscribe after a forget would have drawn the same
+    number the forgotten pass is still holding — so a slow subscribe from the deleted
+    incarnation would come back, believe it is current, and register a SECOND handler
+    on top of the live one. The sequence is process-wide for exactly this reason.
+    """
+    client = _Client()
+    started, release = asyncio.Event(), asyncio.Event()
+    stall = True
+
+    async def _get(_account_id: str) -> _Client:
+        if stall:
+            started.set()
+            await release.wait()
+        _listener._CLIENTS["reused"] = client  # ty: ignore[invalid-assignment]
+        return client
+
+    monkeypatch.setattr(_listener, "get_client", _get)
+    stale = asyncio.create_task(_listener.subscribe_posts("reused", ["@news"], _noop))
+    await started.wait()
+
+    await _listener.forget_post_listener("reused")
+    stall = False
+    assert await _listener.subscribe_posts("reused", ["@news"], _noop) == ["@news"]
+
+    release.set()
+
+    assert await stale == []
+    assert len(client.handlers) == 1
+
+
 async def _noop(_event: object) -> None:
     return None

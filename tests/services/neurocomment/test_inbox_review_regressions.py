@@ -17,6 +17,7 @@ from core.db import (
     create_account,
     create_campaign,
     enqueue_post,
+    list_recent_logs,
     mark_inbox_stage,
     prepare_backfill,
     release_post,
@@ -29,7 +30,7 @@ from core.repositories.neurocomment._tables import (
 )
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
-from schemas.neurocomment_pipeline import InboxStage, PipelineOutcome
+from schemas.neurocomment_pipeline import InboxStage, PipelineOutcome, ReleaseOutcome
 from schemas.telegram_actions import NewPostEvent
 from services.neurocomment import _inbox_runtime, _runtime
 
@@ -48,6 +49,12 @@ def _event(channel: str, post_id: int) -> NewPostEvent:
         text=f"post {post_id}",
         date_unix=int(datetime.now(UTC).timestamp()),
     )
+
+
+async def _reported(event: str) -> list[dict[str, object]]:
+    """The ``extra`` of every log entry under one event code, newest last."""
+    entries = reversed(await list_recent_logs(limit=100))
+    return [entry.extra for entry in entries if entry.event == event]
 
 
 async def _wait_for(predicate: Callable[[], bool]) -> None:
@@ -71,7 +78,7 @@ async def test_restart_releases_only_proven_pre_send_claim() -> None:
     event = _event("@pre", 1)
     await _seed_claim(event)
 
-    assert await requeue_processing_posts() == 1
+    assert await requeue_processing_posts() == (1, 0)
     with _get_engine().connect() as connection:
         inbox = connection.execute(select(_neurocomment_inbox)).mappings().one()
         comment = connection.execute(select(_neurocomment_comments)).first()
@@ -86,7 +93,9 @@ async def test_restart_fail_closes_dispatching_claim() -> None:
     await _seed_claim(event)
     await mark_inbox_stage(event, InboxStage.DISPATCHING)
 
-    assert await requeue_processing_posts() == 1
+    # Counted apart from the safely requeued rows, because this is the half a restart
+    # can only report: it will never resend them.
+    assert await requeue_processing_posts() == (0, 1)
     with _get_engine().connect() as connection:
         inbox = connection.execute(select(_neurocomment_inbox)).mappings().one()
         comment = connection.execute(select(_neurocomment_comments)).mappings().one()
@@ -102,12 +111,95 @@ async def test_retry_transition_atomically_clears_lingering_pre_send_claim() -> 
 
     # Models engine.release_claim failing before the typed RETRYABLE result reaches the
     # inbox. The inbox transition itself must clear the proven-pre-send claim atomically.
-    assert await release_post(event, 5, 0.1, 1.0) is True
+    assert await release_post(event, 5, 0.1, 1.0) == ReleaseOutcome.REQUEUED
     await asyncio.sleep(0.11)
     claimed = await claim_pending_posts(1, event.date_unix - 1)
     assert [item.post_id for item in claimed] == [1]
     with _get_engine().connect() as connection:
         assert connection.execute(select(_neurocomment_comments)).first() is None
+
+
+@pytest.mark.asyncio
+async def test_a_post_that_spends_its_retry_budget_says_so_before_it_leaves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The end of the retry ladder was reached in silence.
+
+    ``release_post`` writes ``retry_exhausted`` and the runtime threw its answer away, so
+    a post that failed its last allowed attempt looked exactly like one that was never
+    received: the row goes to ``done`` and nothing is ever said about it again.
+    """
+    monkeypatch.setattr(settings.neurocomment, "post_inbox_max_attempts", 1)
+    attempts = 0
+
+    async def _always_retryable(_event: NewPostEvent) -> PipelineOutcome:
+        nonlocal attempts
+        attempts += 1
+        return PipelineOutcome.RETRYABLE
+
+    monkeypatch.setattr(_runtime, "handle_new_post", _always_retryable)
+
+    await _runtime.on_post(_event("@spent", 1))
+    await _wait_for(lambda: not _runtime._TASKS)
+
+    with _get_engine().connect() as connection:
+        row = connection.execute(select(_neurocomment_inbox)).mappings().one()
+    assert attempts == 1  # the budget really is spent, not merely deferred
+    assert row["state"] == "done"
+    assert row["outcome"] == ReleaseOutcome.EXHAUSTED
+    assert await _reported("neurocomment_inbox_retry_exhausted") == [
+        {"channel": "@spent", "post_id": 1},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_worker_that_dies_after_dispatch_reports_the_post_it_cannot_retry() -> None:
+    """Refusing to resend is right; refusing in silence is what left no way to look.
+
+    ``release_post`` fails closed on a row past ``pre_send`` -- the comment may be live
+    on Telegram, so no retry is allowed. The row is settled ``ambiguous`` and, before
+    this, the only trace was a column no query reads.
+    """
+    event = _event("@half-sent", 1)
+    await _seed_claim(event)
+    await mark_inbox_stage(event, InboxStage.DISPATCHING)
+
+    await _inbox_runtime._retry(event)
+
+    with _get_engine().connect() as connection:
+        row = connection.execute(select(_neurocomment_inbox)).mappings().one()
+    assert row["outcome"] == PipelineOutcome.AMBIGUOUS
+    assert await _reported("neurocomment_inbox_dispatch_ambiguous") == [
+        {"channel": "@half-sent", "post_id": 1},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_restart_recovery_reports_the_posts_it_refuses_to_resend() -> None:
+    """A crash mid-send is the one loss recovery cannot repair, so it has to name it."""
+    resumable, half_sent = _event("@safe", 1), _event("@half-sent", 2)
+    await _seed_claim(resumable)
+    await enqueue_post(half_sent)
+    assert await claim_pending_posts(1, half_sent.date_unix - 1)
+    await mark_inbox_stage(half_sent, InboxStage.DISPATCHED)
+
+    await _inbox_runtime.recover_inbox()
+
+    # The requeued row rides along for scale, so the operator can tell one abandoned
+    # post out of two from a restart that abandoned everything it found.
+    assert await _reported("neurocomment_inbox_recovery_ambiguous") == [
+        {"posts": 1, "requeued": 1},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_restart_with_nothing_mid_send_stays_quiet() -> None:
+    """The report must mean something: an ordinary restart raises no alarm."""
+    await _seed_claim(_event("@safe", 1))
+
+    await _inbox_runtime.recover_inbox()
+
+    assert await _reported("neurocomment_inbox_recovery_ambiguous") == []
 
 
 @pytest.mark.asyncio

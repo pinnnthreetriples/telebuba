@@ -9,7 +9,12 @@ from pydantic import BaseModel, BeforeValidator, Field
 ProxyType = Literal["socks5", "https"]
 ProxyStatus = Literal["unknown", "tcp_working", "failed"]
 GeoStatus = Literal["unknown", "single_source", "confirmed", "conflict", "unavailable"]
-_DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+# Underscores are illegal in a *hostname* per RFC 1123 but legal in a DNS label, and
+# commercial proxy vendors sell endpoints shaped like ``gate_1.smartproxy.com``.
+# ``getaddrinfo`` resolves them, so rejecting them would lock working endpoints out of
+# the pool. Only the interior is permissive: a leading or trailing ``_`` or ``-`` still
+# fails, as does a label over 63 characters.
+_DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9_-]{0,61}[a-z0-9])?$")
 _CONTROL_MAX = 32
 _ASCII_DELETE = 127
 _MAX_DNS_HOST_CHARS = 253
@@ -63,6 +68,10 @@ def canonicalize_proxy_host(value: str) -> str:
         msg = "Proxy host is not a valid internationalized DNS name"
         raise ValueError(msg) from None
     labels = ascii_hostname.split(".")
+    # An all-numeric name is a malformed IP, not a DNS name: ``999.999.999.999``, and
+    # zero-padded forms such as ``10.0.0.010`` which ``inet_aton`` reads as octal (a
+    # DIFFERENT address than the decimal reading). Refusing beats guessing which one
+    # the operator meant and silently pinning traffic to the wrong host.
     if (
         not ascii_hostname
         or len(ascii_hostname) > _MAX_DNS_HOST_CHARS

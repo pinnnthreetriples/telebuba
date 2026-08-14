@@ -62,7 +62,10 @@ _RUNTIME: dict[str, asyncio.Task[None]] = {}
 
 # A revoked generation gets a distinct persisted marker. It fences every stale
 # run_id CAS immediately and lets the task's done callback settle only that same
-# timed-out stop to idle without racing a later Start.
+# timed-out stop to idle without racing a later Start. The prefix is what makes such
+# a marker recognisable after a restart, when the task it named is gone — see
+# ``_maintenance._settle_interrupted_stop``.
+_STOPPING_MARKER_PREFIX = "stopping-"
 _STOPPING_MARKERS: dict[asyncio.Task[None], tuple[str, str]] = {}
 _STOP_FINALIZERS: set[asyncio.Task[None]] = set()
 
@@ -191,7 +194,21 @@ async def _await_runtime_task(account_id: str, task: asyncio.Task[None]) -> bool
 
 
 async def _cancel_runtime_task(account_id: str, *, last_event: str) -> bool:
-    """Revoke, cancel and bounded-wait without losing a cancellation-suppressing task."""
+    """Revoke, cancel and bounded-wait without losing a cancellation-suppressing task.
+
+    Also the operator's way out of a stop that ran out of time, which is what makes the
+    resulting lockout defensible. Every lifecycle entry point that can refuse — Stop,
+    Start's cancel-and-replace, and Promote (which stops first) — comes back through
+    here, finds the retained task still non-terminal, and cancels it AGAIN. A coroutine
+    that survived the first cancel because it was parked inside its own ``except
+    CancelledError`` cleanup dies on the second, and the row settles to idle. Only a
+    task that suppresses cancellation unconditionally stays owned, and there the
+    refusal is the honest answer: something is still holding the session, and publishing
+    a second generation on top of it is how one account ends up with two runtimes
+    talking to Telegram. Handoff and Delete refuse without cancelling
+    (``assert_runtime_quiescent``) because neither may replace the coroutine — the
+    operator presses Stop first.
+    """
     task = _RUNTIME.get(account_id)
     if task is None or task.done():
         if task is not None:
@@ -202,7 +219,7 @@ async def _cancel_runtime_task(account_id: str, *, last_event: str) -> bool:
     # Revoke before cancel: even if the task catches CancelledError, the seam's
     # pre/post-dispatch fence prevents another Telegram action from this point.
     _seams.revoke_lease(account_id)
-    stopping_marker = f"stopping-{uuid.uuid4().hex}"
+    stopping_marker = f"{_STOPPING_MARKER_PREFIX}{uuid.uuid4().hex}"
     await _set_state(
         account_id,
         "error",
@@ -266,6 +283,13 @@ async def _cancel_existing_task(account_id: str) -> None:
     ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous* ``next_run_at``.
     Clearing that schedule cannot wake a sleeping task, so cancel-and-replace is
     the only way to honour the operator's "start now".
+
+    Refuses with ``WarmingTaskNotQuiescentError``, the same signal Promote / Handoff /
+    Delete raise for the same condition — a transient lifecycle conflict (409), not a
+    readiness verdict. ``WarmingNotReadyError`` sent it to the 400 branch and the SPA
+    listed "previous warming task is still stopping" among the account's readiness
+    reasons, next to a missing proxy: the operator was told the account is unfit to
+    warm when the truth is "try again in a moment".
     """
     if await _cancel_runtime_task(account_id, last_event="restart_stopping"):
         return
@@ -274,7 +298,7 @@ async def _cancel_existing_task(account_id: str) -> None:
         "warming_restart_timeout",
         account_id=account_id,
     )
-    raise WarmingNotReadyError(["previous warming task is still stopping"])
+    raise WarmingTaskNotQuiescentError(account_id)
 
 
 async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:

@@ -61,9 +61,16 @@ async def _watch_stories_step(
 
 
 async def _set_offline(account_id: str) -> None:
-    """SetOnline(False), swallowing errors — cleanup must never raise."""
+    """SetOnline(False), swallowing errors — cleanup must never raise.
+
+    Runs inside ``cleanup_scope`` because Stop revokes the generation's lease
+    *before* cancelling it, so by the time this ``finally`` runs the fence would
+    refuse the very RPC that hands the account back — and ``except Exception``
+    below would swallow the refusal, leaving the account online after every Stop.
+    """
     try:
-        await _seams.execute(account_id, SetOnline(online=False))
+        with _seams.cleanup_scope():
+            await _seams.execute(account_id, SetOnline(online=False))
     except Exception as exc:  # cleanup must never raise.
         logger.exception("set_offline failed for %s", account_id)
         await log_event(

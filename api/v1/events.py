@@ -24,6 +24,16 @@ if TYPE_CHECKING:
 
 router = APIRouter(tags=["events"])
 
+# A named terminal frame, sent once before the generator returns on a dead session.
+#
+# Closing the generator silently is indistinguishable, to a native ``EventSource``,
+# from the server going away — and its answer to that is to reconnect in ~3s,
+# forever. The tab that most needs closing (a second one the operator forgot, a
+# stolen cookie) is exactly the one that never stops asking, so revocation turned
+# into a permanent poll, each attempt costing a session lookup. Saying *why* the
+# stream ended lets the client close deliberately instead of retrying.
+SESSION_REVOKED_FRAME = "event: session-invalid\ndata: {}\n\n"
+
 
 async def _session_is_valid(token: str) -> bool:
     return bool(token and await auth_service.resolve_user(token) is not None)
@@ -39,9 +49,13 @@ async def event_stream(
 
     A keepalive comment is emitted whenever no event arrives within the
     configured window, so idle proxies don't close the stream.
+
+    Every exit caused by a dead session emits ``SESSION_REVOKED_FRAME`` first, so
+    the client can tell revocation from a server restart and stop reconnecting.
     """
     async with subscribe() as queue:
         if not await validate_session(session_token):
+            yield SESSION_REVOKED_FRAME
             return
         while not await request.is_disconnected():
             try:
@@ -51,10 +65,12 @@ async def event_stream(
                 )
             except TimeoutError:
                 if not await validate_session(session_token):
+                    yield SESSION_REVOKED_FRAME
                     return
                 yield ": keepalive\n\n"
                 continue
             if not await validate_session(session_token):
+                yield SESSION_REVOKED_FRAME
                 return
             yield f"data: {entry.model_dump_json()}\n\n"
 

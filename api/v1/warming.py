@@ -98,6 +98,14 @@ async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
         return await warming_service.start_warming(body)
     except warming_service.UnknownAccountError as exc:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except warming_service.WarmingTaskNotQuiescentError as exc:
+        # Same 409 as promote/handoff: the previous coroutine has not unwound yet, which
+        # is a transient lifecycle conflict — not one of the readiness reasons the 400
+        # branch below feeds to the "account is not ready" list.
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="warming task is still stopping",
+        ) from exc
     except warming_service.WarmingNotReadyError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except warming_service.AccountIsListenerError as exc:

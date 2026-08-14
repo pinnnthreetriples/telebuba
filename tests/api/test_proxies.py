@@ -90,15 +90,44 @@ async def test_create_proxy_canonicalises_dns_and_ipv6_identity(app: FastAPI) ->
 
 
 @pytest.mark.parametrize(
+    ("host", "stored"),
+    [
+        # Commercial proxy vendors sell these shapes and getaddrinfo resolves them,
+        # so the pool must accept them the way it did before canonicalization.
+        ("gate_1.smartproxy.com", "gate_1.smartproxy.com"),
+        ("My_Proxy.Example.COM", "my_proxy.example.com"),
+        ("прокси.рф", "xn--h1adldfi.xn--p1ai"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_create_proxy_accepts_underscored_and_idn_endpoints(
+    app: FastAPI,
+    host: str,
+    stored: str,
+) -> None:
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/proxies",
+            json={"proxy_type": "socks5", "host": host, "port": 1080},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["host"] == stored
+
+
+@pytest.mark.parametrize(
     "host",
     [
         "example.com:1080",
         "[2001:db8::1]:1080",
-        "bad_label.example",
+        "_leading.example",
+        "trailing_.example",
+        f"{'a' * 64}.example",
         "bad..example",
         "example.com/path",
         "example.com\x00",
         "999.999.999.999",
+        # Zero-padded: inet_aton would read 010 as octal 8, a different address.
+        "10.0.0.010",
     ],
 )
 @pytest.mark.asyncio

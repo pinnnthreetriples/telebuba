@@ -12,7 +12,7 @@ from schemas.warming import is_warming
 from services.warming import _runtime
 
 if TYPE_CHECKING:
-    from schemas.warming import WarmingSettingsSecret
+    from schemas.warming import WarmingSettingsSecret, WarmingStateRecord
 
 
 async def reconcile_warming_runtime() -> None:
@@ -22,6 +22,9 @@ async def reconcile_warming_runtime() -> None:
     channel_count = len((await _runtime.list_warming_channels()).channels)
     restarted = 0
     for record in records:
+        if _is_interrupted_stop(record):
+            await _settle_interrupted_stop(record)
+            continue
         if not is_warming(record.state) or record.state == "error":
             continue
         restarted += await _reconcile_account(record.account_id, controls, channel_count)
@@ -30,6 +33,53 @@ async def reconcile_warming_runtime() -> None:
     await _runtime._refresh_dialogue_pairs()  # noqa: SLF001 - patchable runtime seam.
     await _runtime._purge_runtime_history()  # noqa: SLF001 - retention seam.
     _start_purge_task()
+
+
+def _is_interrupted_stop(record: WarmingStateRecord) -> bool:
+    """True for a row a Stop parked and then never came back to.
+
+    ``_cancel_runtime_task`` writes ``error`` plus a ``stopping-`` generation marker
+    BEFORE it cancels, so no stale CAS can land while the coroutine unwinds, and the
+    stop path rewrites the row the moment the wait resolves. A marker still on the row
+    in a process that has only just started therefore means the previous process died
+    inside that window — nothing in this one can be stopping anything yet.
+    """
+    return record.state == "error" and (record.run_id or "").startswith(
+        _runtime._STOPPING_MARKER_PREFIX  # noqa: SLF001 - shared marker vocabulary.
+    )
+
+
+async def _settle_interrupted_stop(record: WarmingStateRecord) -> None:
+    """Finish the Stop the previous process was killed in the middle of.
+
+    Left alone the row keeps a state ``reconcile_warming_runtime`` deliberately refuses
+    to resurrect, so the account quietly stops warming, and the reason it shows the
+    operator — "warming task is stopping" — names a coroutine that no longer exists in
+    any process. Both halves are wrong to leave: the silence is how a fleet loses an
+    account for days, and a lie on the card is how an operator learns not to read it.
+
+    Idle, not the state the row held before the stop: the operator had asked for a stop
+    (or for the restart that cancels first), and idle is where both were heading. From
+    there a Start is the same single click it is for any other idle account, which is
+    also the recovery for a restart that never got to publish its new generation.
+    The CAS is the marker itself — if anything in this process has already taken the
+    row, this write must not land on top of it.
+    """
+    marker = record.run_id
+    await _runtime._set_state(  # noqa: SLF001 - patchable state seam.
+        record.account_id,
+        "idle",
+        last_event="stopped_after_restart",
+        last_error=None,
+        stopped_at=_runtime._now_iso(),  # noqa: SLF001 - patchable time seam.
+        run_id=None,
+        expected_run_id=marker,
+    )
+    await log_event(
+        "WARNING",
+        "warming_stop_interrupted",
+        account_id=record.account_id,
+    )
 
 
 async def _reconcile_account(
@@ -123,15 +173,28 @@ async def shutdown_warming_runtime() -> None:
 
 
 async def _stop_purge_task() -> None:
-    """Cancel and bounded-wait for the retention sweep."""
+    """Cancel and bounded-wait for the retention sweep, releasing the handle either way.
+
+    Unlike a per-account loop, a sweep that outlives its cancellation is not something
+    ``_start_purge_task`` may refuse to work around: it reads ``not task.done()`` as
+    "one is already running" and skips, so a single stuck sweep switched retention off
+    for the rest of the process lifetime and the append-only tables — the exact growth
+    the periodic sweep exists to bound — grew unwatched and silently. Dropping the
+    handle costs at most a duplicate sweep, and the sweep only re-runs deletes that are
+    idempotent by construction; keeping it costs retention entirely.
+
+    There is no ownership to protect here either, which is what makes this safe and the
+    account loops different: a sweep touches no Telegram session, so a second one
+    cannot overlap the first the way two warming generations would.
+    """
     task = _runtime._PURGE_TASK  # noqa: SLF001 - shared task handle.
+    _runtime._PURGE_TASK = None  # noqa: SLF001
     if task is None or task.done():
-        _runtime._PURGE_TASK = None  # noqa: SLF001
         return
     task.cancel()
     done, _pending = await asyncio.wait(
         {task},
         timeout=settings.warming.stop_cancel_timeout_seconds,
     )
-    if done:
-        _runtime._PURGE_TASK = None  # noqa: SLF001
+    if not done:
+        await log_event("WARNING", "warming_purge_stop_timeout")

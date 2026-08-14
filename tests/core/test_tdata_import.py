@@ -307,13 +307,15 @@ async def test_tdesktop_load_failure_reports_only_the_exception_class(
     The ``log_event`` extra is checked for the same reason and NOT as belt-and-braces:
     ``core.logging.log_event`` persists ``extra`` to the ``logs`` table, ``GET /logs``
     serves it as ``LogEntry.extra`` and ``GET /events`` streams it — so an unbounded
-    ``extra`` is an HTTP body by another route. Process logs are also treated as a
-    security boundary because operators commonly ship them to external collectors.
+    ``extra`` is an HTTP body by another route. The full text goes to the stdlib
+    logger instead, which no route reads — and the positive assertion on ``caplog``
+    below pins that half down, so a future pass at "scrubbing the logs" has to
+    argue with a failing test rather than quietly cost us the traceback.
 
     The stand-in below is shaped like the real thing. Pre-fix ``error`` was
     ``f"TDesktop load failed: {exc}"`` and the log extra carried ``str(exc)``, so
     both the path and ``bob:hunter2@…`` were in each and every negative assertion
-    below failed. Standard process logs must not retain it either.
+    below failed.
     """
     payload = _zip({"tdata/key_data": b"x"})
     req = TdataConvertRequest(filename="good.zip", content=payload)
@@ -339,9 +341,11 @@ async def test_tdesktop_load_failure_reports_only_the_exception_class(
     assert result.status == "conversion_error"
     assert result.error == "RuntimeError"
     assert "hunter2" not in (result.error or "")
-    assert "hunter2" not in caplog.text
-    assert "C:/Users/op" not in caplog.text
     assert "tdata_staging_x9" not in (result.error or "")
+    # The other sink, deliberately unequal: stderr and debug.log are on no route,
+    # so they keep the traceback and its text — the only diagnosable record there is.
+    assert "Traceback" in caplog.text
+    assert "hunter2" in caplog.text
     persisted = repr(extras)
     assert "hunter2" not in persisted
     assert "failed to decrypt" not in persisted

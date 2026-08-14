@@ -248,13 +248,13 @@ async def _load_tdesktop_from_zip(
     tdesktop_factory, use_current_session = _opentele2_runtime()
     try:
         td = await asyncio.to_thread(tdesktop_factory, basePath=str(tdata_dir))
-    except Exception as exc:  # noqa: BLE001 -- third-party parser has no stable exception base.
-        # opentele2 exception text may embed the credential path and proxy URL.
-        # Keep even server logs free of that text; the type is enough to group it.
-        logger.error(  # noqa: TRY400 -- traceback would re-expose credential-bearing text.
-            "TDesktop load failed (%s)",
-            type(exc).__name__,
-        )
+    except Exception as exc:
+        # The two sinks are deliberately unequal. The stdlib logger reaches stderr
+        # and ``debug.log`` and is on no HTTP route, so it gets the traceback — an
+        # opentele2 failure is otherwise undiagnosable. ``log_event`` below persists
+        # its ``extra`` and GET /logs and GET /events serve it back, so that one
+        # stays at the class name (see ``_bounded_conversion_error``).
+        logger.exception("TDesktop load failed")
         await log_event(
             "ERROR",
             "tdata_convert_tdesktop_load_failed",
@@ -296,12 +296,10 @@ async def _convert_one_account(
 
     try:
         client = await account.ToTelethon(session=str(session_path), flag=use_current_session)
-    except Exception as exc:  # noqa: BLE001 -- opentele2 exposes heterogeneous failures.
-        logger.error(  # noqa: TRY400 -- traceback may contain session/proxy credentials.
-            "ToTelethon failed for user_id=%s (%s)",
-            user_id,
-            type(exc).__name__,
-        )
+    except Exception as exc:
+        # Traceback to the route-less stdlib logger, class name to the API-visible
+        # ``log_event`` — the same split as the TDesktop load above.
+        logger.exception("ToTelethon failed for user_id=%s", user_id)
         await log_event(
             "ERROR",
             "tdata_convert_to_telethon_failed",

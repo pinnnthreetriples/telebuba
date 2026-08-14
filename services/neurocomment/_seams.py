@@ -56,6 +56,17 @@ class NeurocommentAccountUnavailableError(NeurocommentLeaseRevokedError):
     """An absent account or one handed to warming attempted external I/O."""
 
 
+class NeurocommentAccountDeletedError(NeurocommentAccountUnavailableError):
+    """The account row itself is gone, so no later attempt can ever succeed.
+
+    Its parent covers the transient refusals too — an account inside a warming cycle,
+    or one caught between ``promoted_to_nc`` and ``nc_handed_off``. Both of those end
+    on their own, so a post refused by them is still ours to send later; only a
+    deleted row is worth settling a post against for good. Callers that merely need
+    "this account cannot act right now" keep catching the parent.
+    """
+
+
 class NeurocommentDispatchOwnershipLostError(NeurocommentLeaseRevokedError):
     """The durable claim was lost before Telegram dispatch began."""
 
@@ -94,6 +105,11 @@ async def _account_is_available(account_id: str) -> bool:
     )
 
 
+async def _account_is_deleted(account_id: str) -> bool:
+    """Is the refusal permanent? Read only once admission has already failed."""
+    return await fetch_account(account_id) is None
+
+
 async def _account_is_handed_to_neurocomment(account_id: str) -> bool:
     state = await fetch_warming_state(account_id)
     return state is not None and state.promoted_to_nc and state.nc_handed_off
@@ -108,13 +124,23 @@ async def _pre_dispatch_call(call: Callable[[], Awaitable[bool]]) -> bool:
         raise NeurocommentPreDispatchError from exc
 
 
+async def _unavailable_error(account_id: str) -> NeurocommentAccountUnavailableError:
+    """Name the refusal an unavailable account just made, permanent or transient."""
+    if await _pre_dispatch_call(lambda: _account_is_deleted(account_id)):
+        return NeurocommentAccountDeletedError(account_id)
+    return NeurocommentAccountUnavailableError(account_id)
+
+
 async def _admit_write(
     account_id: str,
     before_dispatch: Callable[[], Awaitable[bool]] | None,
 ) -> None:
     _assert_live_generation()
     if not await _pre_dispatch_call(lambda: _account_is_available(account_id)):
-        raise NeurocommentAccountUnavailableError(account_id)
+        # One extra read, on the failure path only, buys the caller the difference
+        # between "gone" and "busy" — which is the difference between settling the
+        # post for good and handing it back to the durable retry ladder.
+        raise await _unavailable_error(account_id)
     if before_dispatch is None:
         return
     if not await _pre_dispatch_call(lambda: _account_is_handed_to_neurocomment(account_id)):
@@ -253,6 +279,7 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
 rng = random.SystemRandom()
 
 __all__ = [
+    "NeurocommentAccountDeletedError",
     "NeurocommentAccountUnavailableError",
     "NeurocommentDispatchOwnershipLostError",
     "NeurocommentLeaseLostAfterDispatchError",

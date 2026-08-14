@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "fetch_recent_posts",
+    "forget_post_listener",
     "stop_post_listener",
     "subscribe_posts",
     "take_lost_access_channels",
@@ -64,6 +65,11 @@ _FILTERS: dict[str, object] = {}
 # a later stop, or an old callback could keep delivering after a subscription switch.
 _SUBSCRIPTION_LOCKS: dict[str, asyncio.Lock] = {}
 _GENERATIONS: dict[str, int] = {}
+# Generations are drawn from ONE process-wide sequence rather than counted per account,
+# so a number is never handed out twice. That is what makes ``forget_post_listener``
+# safe: an account id can be deleted and re-created, and a subscribe pass still in
+# flight from the previous incarnation cannot match the new one's first generation.
+_GENERATION_SEQUENCE = 0
 # Resolved peer id per channel, so reconcile does not re-issue a get_peer_id RPC
 # for every watched channel on every call (fires on each link/unlink + boot =
 # O(channels) serial RPCs otherwise). Peer ids are stable, so a stale entry is
@@ -99,9 +105,10 @@ def _subscription_lock(account_id: str) -> asyncio.Lock:
 
 
 def _next_generation(account_id: str) -> int:
-    generation = _GENERATIONS.get(account_id, 0) + 1
-    _GENERATIONS[account_id] = generation
-    return generation
+    global _GENERATION_SEQUENCE  # noqa: PLW0603 - single-process registry, like the dicts above
+    _GENERATION_SEQUENCE += 1
+    _GENERATIONS[account_id] = _GENERATION_SEQUENCE
+    return _GENERATION_SEQUENCE
 
 
 def take_lost_access_channels(account_id: str) -> set[str]:
@@ -240,6 +247,27 @@ async def stop_post_listener(account_id: str) -> None:
     async with _subscription_lock(account_id):
         _next_generation(account_id)
         _detach_locked(account_id)
+
+
+async def forget_post_listener(account_id: str) -> None:
+    """Stop the subscription of a DELETED account and drop its registry entries.
+
+    ``stop_post_listener`` deliberately keeps the generation and the lock: the account
+    still exists, so a later Start has to be able to out-number a pass that is still
+    winding down. A deleted account gets no later Start, and its two per-account
+    entries would otherwise sit in memory for the life of the process — one pair per
+    account ever deleted.
+
+    Dropping the generation is not a weakening: a stale pass compares against ``None``
+    and loses, and the sequence it drew from never repeats a number.
+    """
+    async with _subscription_lock(account_id):
+        _next_generation(account_id)
+        _detach_locked(account_id)
+        _GENERATIONS.pop(account_id, None)
+    # Popped after release, never while held. A deleted account has no later caller to
+    # contend with, so no one can end up waiting on a lock a newcomer would not find.
+    _SUBSCRIPTION_LOCKS.pop(account_id, None)
 
 
 def _detach_locked(account_id: str) -> None:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
-from typing import cast
+from typing import NamedTuple, cast
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -16,12 +16,24 @@ from core.repositories.neurocomment._tables import (
     _neurocomment_cursors,
     _neurocomment_inbox,
 )
-from schemas.neurocomment_pipeline import InboxStage, PipelineOutcome
+from schemas.neurocomment_pipeline import InboxStage, PipelineOutcome, ReleaseOutcome
 from schemas.telegram_actions import NewPostEvent
 
 BackfillPlan = _inbox_backfill.BackfillPlan
 checkpoint_backfill = _inbox_backfill.checkpoint_backfill
 prepare_backfill = _inbox_backfill.prepare_backfill
+
+
+class InboxRecovery(NamedTuple):
+    """How a restart split the rows it found mid-flight.
+
+    ``ambiguous`` is the half the operator has to know about: those posts may already
+    carry a comment on Telegram, so recovery deliberately refuses to resend them and
+    they leave the pipeline without any other trace.
+    """
+
+    requeued: int
+    ambiguous: int
 
 
 def _event_values(event: NewPostEvent, now: str) -> dict[str, object]:
@@ -253,7 +265,7 @@ def _release_post(
     max_attempts: int,
     retry_base_seconds: float,
     retry_max_seconds: float,
-) -> bool:
+) -> ReleaseOutcome:
     """Requeue a proven pre-send failure, or exhaust its bounded retry budget."""
     with _get_engine().begin() as connection:
         row = connection.execute(
@@ -264,7 +276,7 @@ def _release_post(
             ),
         ).one_or_none()
         if row is None:
-            return False
+            return ReleaseOutcome.UNCLAIMED
         attempts, stage = int(row.attempts), str(row.stage)
         if stage not in (InboxStage.RECEIVED, InboxStage.PRE_SEND):
             connection.execute(
@@ -280,7 +292,7 @@ def _release_post(
                     updated_at=_now_iso(),
                 ),
             )
-            return False
+            return ReleaseOutcome.AMBIGUOUS
         # PRE_SEND is durable proof that Telegram dispatch never began. Clear a claim in
         # this SAME transaction as the inbox transition: if engine's own release failed,
         # the next retry must still be able to win instead of terminally losing the post.
@@ -309,7 +321,7 @@ def _release_post(
                 updated_at=_now_iso(),
             ),
         )
-    return not exhausted
+    return ReleaseOutcome.EXHAUSTED if exhausted else ReleaseOutcome.REQUEUED
 
 
 async def release_post(
@@ -317,7 +329,7 @@ async def release_post(
     max_attempts: int,
     retry_base_seconds: float,
     retry_max_seconds: float,
-) -> bool:
+) -> ReleaseOutcome:
     return await asyncio.to_thread(
         _release_post,
         event,
@@ -344,7 +356,7 @@ async def mark_inbox_stage(event: NewPostEvent, stage: InboxStage) -> None:
     await asyncio.to_thread(_mark_inbox_stage, event, stage)
 
 
-def _requeue_processing_posts() -> int:
+def _requeue_processing_posts() -> InboxRecovery:
     with _get_engine().begin() as connection:
         safe_rows = connection.execute(
             select(_neurocomment_inbox.c.channel, _neurocomment_inbox.c.post_id).where(
@@ -387,9 +399,9 @@ def _requeue_processing_posts() -> int:
             )
             .values(state="done", outcome=PipelineOutcome.AMBIGUOUS, updated_at=_now_iso()),
         )
-    return safe.rowcount + ambiguous.rowcount
+    return InboxRecovery(requeued=safe.rowcount, ambiguous=ambiguous.rowcount)
 
 
-async def requeue_processing_posts() -> int:
+async def requeue_processing_posts() -> InboxRecovery:
     """Recover only process-orphaned work; comment claims remain the send fence."""
     return await asyncio.to_thread(_requeue_processing_posts)

@@ -14,13 +14,12 @@ from core.db import (
     enqueue_post_bounded,
     next_pending_attempt_unix,
     prepare_backfill,
-    release_post,
-    requeue_processing_posts,
     return_claimed_posts,
 )
 from core.logging import log_event
 from core.telegram_client import fetch_recent_posts
 from schemas.neurocomment_pipeline import PipelineOutcome
+from services.neurocomment import _inbox_release
 
 if TYPE_CHECKING:
     from core.repositories.neurocomment._inbox import BackfillPlan
@@ -54,13 +53,13 @@ async def start_inbox(*, recover_processing: bool = False) -> None:
         retry_task, _runtime._INBOX_RETRY_TASK = _runtime._INBOX_RETRY_TASK, None  # noqa: SLF001
     await _runtime._cancel_bounded(retry_task)  # noqa: SLF001
     if recover_processing:
-        await requeue_processing_posts()
+        await _inbox_release.recover_processing()
     await _dispatch_pending()
 
 
 async def recover_inbox() -> None:
     """Return crash-orphaned rows to pending without resuming a paused runtime."""
-    await requeue_processing_posts()
+    await _inbox_release.recover_processing()
 
 
 async def stop_inbox() -> None:
@@ -152,17 +151,7 @@ async def _arm_retry_timer_locked() -> None:
     task.add_done_callback(_clear)
 
 
-async def _retry(event: NewPostEvent) -> None:
-    """Retry only proven pre-send failures with exponential bounded backoff."""
-    nc = settings.neurocomment
-    # Attempts were incremented by the claim. The repository owns the final cap; using
-    # the configured maximum here gives an upper bound without another hot-path read.
-    await release_post(
-        event,
-        nc.post_inbox_max_attempts,
-        nc.post_inbox_retry_base_seconds,
-        nc.post_inbox_retry_max_seconds,
-    )
+_retry = _inbox_release.retry
 
 
 async def _run_one(event: NewPostEvent, generation: int) -> None:

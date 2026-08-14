@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -105,7 +106,9 @@ def test_security_concurrency_limits_have_safe_bounded_defaults() -> None:
 
 def test_upload_staging_has_private_cleanup_defaults_and_bounded_ttl() -> None:
     api = ApiSettings()
-    assert str(api.upload_staging_dir) == "runtime/uploads"
+    # Compared as a Path, not a string: the default renders with a backslash on
+    # Windows, which is the operator's platform and says nothing about the setting.
+    assert api.upload_staging_dir == Path("runtime/uploads")
     assert api.upload_staging_ttl_seconds == 86_400
     with pytest.raises(ValidationError):
         ApiSettings(upload_staging_ttl_seconds=59)

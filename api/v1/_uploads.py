@@ -8,6 +8,14 @@ disk) by the time the handler runs, and ``.size`` is the final measured byte cou
 So this guard caps peak memory, not bandwidth/disk (a Content-Length middleware
 would be needed for that). When ``.size`` is unavailable (``None``) we skip and let
 the service-layer size check reject after the read — kept as defense-in-depth.
+
+The module also owns the staging directory those uploads stream into. What "private"
+means there is platform-dependent, and this is the whole of it: on POSIX the directory
+is chmod 0700 and its mode is re-checked before a single byte is written, so a wrong
+mode fails the request loudly. On Windows ``chmod`` reaches nothing but the read-only
+bit, so neither the set nor the check happens and staged credentials inherit whatever
+the parent directory grants — there, the bounded lifetime (removal on every exit path,
+plus the startup TTL sweep) is the only protection, not the file mode.
 """
 
 from __future__ import annotations
@@ -41,6 +49,14 @@ logger = logging.getLogger(__name__)
 
 
 def _make_private_dir(path: Path) -> None:
+    """Create the staging directory, owner-only (0700) where the OS has such a mode.
+
+    Deliberately a copy of ``core.secure_paths.make_private_dir`` rather than a call
+    to it: ``api/`` may import from ``core`` only ``config`` and ``logging``, and
+    ``tests/test_architecture.py`` enforces that. It keeps the same POSIX-only
+    reasoning — on Windows ``chmod`` toggles nothing but the read-only bit, so
+    applying it there would report a privacy guarantee that was never made.
+    """
     path.mkdir(parents=True, exist_ok=True)
     if os.name == "posix":
         path.chmod(0o700)
@@ -66,6 +82,8 @@ def _staging_dir() -> Path:
         msg = "Upload staging directory permissions could not be set"
         raise RuntimeError(msg) from None
     if os.name == "posix":
+        # Nothing equivalent runs on Windows: there is no mode to read back that
+        # would mean anything. Do not read this absence as a verified directory.
         try:
             mode = stat.S_IMODE(path.stat().st_mode)
         except OSError:
@@ -104,7 +122,7 @@ async def _remove_with_retry(path: Path) -> bool:
                 continue
             # Never put the absolute credential path into logs. Startup cleanup
             # retries leftovers after abrupt shutdown or a transient filesystem
-            # failure, and the private directory limits exposure until then.
+            # failure, and on POSIX the 0700 directory limits exposure until then.
             # ``logger.exception`` would stringify ``OSError(filename=...)`` and
             # reintroduce the absolute credential path this boundary removes.
             logger.error(  # noqa: TRY400
@@ -147,7 +165,7 @@ async def staged_upload(
     detail: str,
     suffix: str = "",
 ) -> AsyncIterator[Path]:
-    """Stream an UploadFile to a private path and remove it on every exit path."""
+    """Stream an UploadFile into the staging directory, removing it on every exit path."""
     reject_oversized_upload(file, max_bytes=max_bytes, detail=detail)
     directory = await _file_io(_staging_dir)
     descriptor, raw_path = tempfile.mkstemp(

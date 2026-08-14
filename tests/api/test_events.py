@@ -9,7 +9,7 @@ import pytest
 from fastapi.responses import StreamingResponse
 
 from api import create_app
-from api.v1.events import event_stream, stream_events
+from api.v1.events import SESSION_REVOKED_FRAME, event_stream, stream_events
 from core import auth as core_auth
 from core import events
 from core.config import settings
@@ -47,6 +47,10 @@ class _FakeRequest:
 
 async def _valid(_token: str) -> bool:
     return True
+
+
+async def _revoked(_token: str) -> bool:
+    return False
 
 
 @pytest.mark.asyncio
@@ -147,8 +151,33 @@ async def test_stream_closes_after_logout_revokes_its_original_token(
             await asyncio.sleep(0)
         await auth_service.revoke_sessions("stream-user")
         events.publish(_entry("must-not-leak"))
+        # The revoked session is told so, and the entry it was waiting for is not
+        # delivered — then the stream ends.
+        assert await asyncio.wait_for(pull, timeout=1) == SESSION_REVOKED_FRAME
         with pytest.raises(StopAsyncIteration):
-            await asyncio.wait_for(pull, timeout=1)
+            await asyncio.wait_for(gen.__anext__(), timeout=1)
+    finally:
+        await gen.aclose()
+    assert events.subscriber_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_a_stream_whose_session_dies_says_so_instead_of_ending_silently() -> None:
+    """A silent close reads as a server restart, and EventSource answers that with a retry.
+
+    The tab this matters for is the one the operator is not watching, so a stream that
+    just ends becomes a permanent ~3s poll. The named frame is what lets the client
+    close on purpose.
+    """
+    gen = event_stream(
+        _FakeRequest(connected_calls=5),  # ty: ignore[invalid-argument-type]
+        "token",
+        validate_session=_revoked,
+    )
+    try:
+        assert await asyncio.wait_for(gen.__anext__(), timeout=1) == SESSION_REVOKED_FRAME
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(gen.__anext__(), timeout=1)
     finally:
         await gen.aclose()
     assert events.subscriber_count() == 0
