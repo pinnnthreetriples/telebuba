@@ -80,9 +80,14 @@ export function PipelineCard({
         </button>
       </div>
 
-      {/* stepper with dual progress fill */}
-      <div className="relative mx-2 mb-3 h-6">
-        <div className="absolute inset-x-[13px] top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]">
+      {/* Stepper with dual progress fill. Dot and label share ONE cell: as two rows
+          they had different geometry — the dots sat in an `mx-2` box while the labels
+          spread across the full width in 88px slots — and the ends drifted 29px apart.
+          Six equal cells put the first and last dot centres one half-cell (100%/12)
+          from the edges, which is where the rail has to start and stop for the
+          `activeCell / (STAGES.length - 1)` fill to land on a dot. */}
+      <div className="relative mb-3">
+        <div className="absolute inset-x-[8.3333%] top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]">
           <div
             className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
             style={{ width: `${String(greenPct)}%` }}
@@ -92,58 +97,57 @@ export function PipelineCard({
             style={{ width: `${String(bluePct)}%` }}
           />
         </div>
-        <div className="relative flex h-6 items-center justify-between">
+        <div className="relative flex">
           {STAGES.map((stage, index) => (
-            <div key={stage} className="relative flex h-4 w-4 shrink-0 items-center justify-center">
-              {index < activeCell ? (
-                <span className="tb-pop flex h-4 w-4 items-center justify-center rounded-full bg-success">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#fff"
-                    strokeWidth="3.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                </span>
-              ) : index === activeCell ? (
-                <span className="tb-livedot h-[11px] w-[11px] rounded-full bg-primary" />
-              ) : (
-                <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-[#c9d2e0] bg-white" />
-              )}
+            <div key={stage} className="flex flex-1 flex-col items-center">
+              <div className="flex h-6 w-4 items-center justify-center">
+                {index < activeCell ? (
+                  <span className="tb-pop flex h-4 w-4 items-center justify-center rounded-full bg-success">
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="3.4"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                ) : index === activeCell ? (
+                  <span className="tb-livedot h-[11px] w-[11px] rounded-full bg-primary" />
+                ) : (
+                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-[#c9d2e0] bg-white" />
+                )}
+              </div>
+              {/* No `min-w-0`: the cells then refuse to shrink under the widest label,
+                  so the six can never overlap. Hidden below `md`, where they stop
+                  contributing that minimum and the single line below names the stage
+                  instead — the dots stay at every width and would otherwise mean
+                  nothing on their own. */}
+              <span
+                className={`hidden whitespace-nowrap text-[11px] md:block ${
+                  index < activeCell
+                    ? 'font-medium text-success'
+                    : index === activeCell
+                      ? 'font-semibold text-primary'
+                      : 'text-ink-subtle'
+                }`}
+              >
+                {t(`neurocomment.stage.${stage}`)}
+              </span>
             </div>
           ))}
         </div>
       </div>
-      {/* The six labels are ~530px intrinsic (w-[88px], nowrap), so below `md` they
-          are replaced by the active stage's name alone — the dots above stay at
-          every width and would otherwise lose their meaning. Nothing to name while
-          stopped (activeCell -1); the status banner below already says so. */}
+      {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
         <div className="mb-3 text-center text-[11px] font-semibold text-primary md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
-      <div className="mb-3 hidden justify-between px-px md:flex">
-        {STAGES.map((stage, index) => (
-          <span
-            key={stage}
-            className={`w-[88px] whitespace-nowrap text-center text-[11px] ${
-              index < activeCell
-                ? 'font-medium text-success'
-                : index === activeCell
-                  ? 'font-semibold text-primary'
-                  : 'text-ink-subtle'
-            }`}
-          >
-            {t(`neurocomment.stage.${stage}`)}
-          </span>
-        ))}
-      </div>
 
       <div className="mb-[14px] flex items-center gap-[9px] rounded-[10px] border border-[#dce7fb] bg-[#eef4ff] px-[13px] py-[10px]">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />

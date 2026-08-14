@@ -46,7 +46,9 @@ test('the pipeline stats include the errors odometer', async () => {
 // class — but scoped to the rail's own `w-[88px]` labels, so it cannot drift onto some
 // other bold blue span on the page.
 function activeStageLabel(container: HTMLElement): string {
-  const labels = [...container.querySelectorAll<HTMLElement>('span[class*="w-[88px]"]')];
+  // The stage labels moved into the dot cells to stop the two rows drifting apart;
+  // `md:block` is what still marks them and nothing else on the page carries it.
+  const labels = [...container.querySelectorAll<HTMLElement>('span[class*="md:block"]')];
   return labels.find((el) => el.className.includes('font-semibold'))?.textContent ?? '';
 }
 
