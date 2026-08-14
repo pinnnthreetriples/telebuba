@@ -31,6 +31,7 @@ function routeApi(options: {
   page1: unknown;
   page2?: unknown;
   listStatus?: number;
+  checkStatus?: number;
   stats?: unknown;
 }) {
   vi.mocked(fetch).mockImplementation((input) => {
@@ -70,6 +71,9 @@ function routeApi(options: {
           ],
         }),
       );
+    }
+    if (url.pathname === '/api/v1/accounts/check' && options.checkStatus) {
+      return Promise.resolve(jsonResponse({ detail: 'boom' }, options.checkStatus));
     }
     return Promise.resolve(jsonResponse(account('acc-1')));
   });
@@ -180,6 +184,36 @@ test('runs the check action on a row', async () => {
       .mocked(fetch)
       .mock.calls.some(([input]) => (input as Request).url.includes('/accounts/check'));
     expect(checked).toBe(true);
+  });
+});
+
+// The spinner was the whole story before: a check that came back unauthorized
+// looked exactly like one that came back alive, so the operator learned nothing.
+test('a passing check leaves a green tick on the row button', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  const { container } = renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByTitle('Проверить'));
+
+  await waitFor(() => {
+    expect(container.querySelector('button.bg-success svg')).not.toBeNull();
+  });
+});
+
+test('a failed check leaves a red cross instead', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null }, checkStatus: 500 });
+  const { container } = renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByTitle('Проверить'));
+
+  await waitFor(() => {
+    expect(container.querySelector('button.bg-danger svg')).not.toBeNull();
   });
 });
 
