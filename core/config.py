@@ -30,7 +30,6 @@ from core._config_domains import (
     GeminiSettings,
     NeurocommentSettings,
     OpenAISettings,
-    TelemetrSettings,
     TrustSettings,
 )
 from core._config_warming import WarmingSettings
@@ -322,7 +321,6 @@ class Settings(BaseSettings):
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     openai: OpenAISettings = Field(default_factory=OpenAISettings)
     deepseek: DeepseekSettings = Field(default_factory=DeepseekSettings)
-    telemetr: TelemetrSettings = Field(default_factory=TelemetrSettings)
     trust: TrustSettings = Field(default_factory=TrustSettings)
     neurocomment: NeurocommentSettings = Field(default_factory=NeurocommentSettings)
 

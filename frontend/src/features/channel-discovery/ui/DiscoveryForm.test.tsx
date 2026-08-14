@@ -9,24 +9,14 @@ import { EMPTY_FORM, type DiscoveryFormState } from '../model/discovery';
 import { DiscoveryForm } from './DiscoveryForm';
 
 function Harness({
-  telemetrConfigured = false,
   onSubmit = vi.fn(),
   initial = EMPTY_FORM,
 }: {
-  telemetrConfigured?: boolean;
   onSubmit?: () => void;
   initial?: DiscoveryFormState;
 }) {
   const [form, setForm] = useState(initial);
-  return (
-    <DiscoveryForm
-      form={form}
-      telemetrConfigured={telemetrConfigured}
-      submitting={false}
-      onChange={setForm}
-      onSubmit={onSubmit}
-    />
-  );
+  return <DiscoveryForm form={form} submitting={false} onChange={setForm} onSubmit={onSubmit} />;
 }
 
 const submitButton = () => screen.getByRole('button', { name: 'Найти' });
@@ -53,15 +43,6 @@ describe('DiscoveryForm', () => {
     expect(screen.getByText(/Распознано: 2/)).toBeInTheDocument();
   });
 
-  it('keeps the Telemetr toggle disabled until a key is configured', () => {
-    const { unmount } = render(<Harness telemetrConfigured={false} />);
-    expect(screen.getByRole('checkbox', { name: /Telemetr\.io/ })).toBeDisabled();
-    unmount();
-
-    render(<Harness telemetrConfigured />);
-    expect(screen.getByRole('checkbox', { name: /Telemetr\.io/ })).toBeEnabled();
-  });
-
   it('submits on the button and on Enter', async () => {
     const onSubmit = vi.fn();
     render(<Harness onSubmit={onSubmit} initial={{ ...EMPTY_FORM, keywords: 'crypto' }} />);
@@ -80,73 +61,6 @@ describe('DiscoveryForm', () => {
     await userEvent.type(screen.getByPlaceholderText('крипта, трейдинг, новости'), '{Enter}');
 
     expect(onSubmit).not.toHaveBeenCalled();
-  });
-
-  it('defaults language and country to "any"', () => {
-    render(<Harness />);
-    const selects = screen.getAllByRole('combobox');
-    expect(selects[0]).toHaveValue('');
-    expect(selects[1]).toHaveValue('');
-  });
-
-  it('offers the targeted regions in both selects', async () => {
-    render(<Harness telemetrConfigured initial={{ ...EMPTY_FORM, useTelemetr: true }} />);
-    const [language, country] = screen.getAllByRole<HTMLSelectElement>('combobox');
-
-    await userEvent.selectOptions(language!, 'ar');
-    await userEvent.selectOptions(country!, 'AE');
-
-    expect(language).toHaveValue('ar');
-    expect(country).toHaveValue('AE');
-  });
-
-  it('clears the locale filters and "catalogue only" when the catalogue is switched off', async () => {
-    // A disabled select still DISPLAYS "Turkey" while the request omits it — the same
-    // "filter shown, not applied" the feature was fixed for.
-    render(
-      <Harness
-        telemetrConfigured
-        initial={{ ...EMPTY_FORM, useTelemetr: true, country: 'TR', catalogueOnly: true }}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('checkbox', { name: /Telemetr\.io/ }));
-
-    expect(screen.getAllByRole('combobox')[1]).toHaveValue('');
-    expect(screen.getByRole('checkbox', { name: /[Тт]олько каталог/ })).not.toBeChecked();
-  });
-
-  it('disables language and country until the Telemetr source is in play', async () => {
-    // Only the catalogue filters by locale, so with that source off the two selects
-    // would silently narrow nothing.
-    render(<Harness telemetrConfigured />);
-    expect(screen.getAllByRole('combobox')[0]).toBeDisabled();
-    expect(screen.getAllByRole('combobox')[1]).toBeDisabled();
-
-    await userEvent.click(screen.getByRole('checkbox', { name: /Telemetr\.io/ }));
-
-    expect(screen.getAllByRole('combobox')[0]).toBeEnabled();
-    expect(screen.getAllByRole('combobox')[1]).toBeEnabled();
-  });
-
-  it('says the two selects only reach the catalogue', () => {
-    render(<Harness />);
-    // The scope has to be stated where the fields are, not only on the checkbox — and
-    // it must not claim the subscriber bounds behave the same way.
-    const hints = screen.getAllByRole('note', { name: /только каталог Telemetr\.io/ });
-    expect(hints).toHaveLength(2);
-    expect(hints[0]).toHaveAccessibleName(/С подписчиками иначе/);
-  });
-
-  it('explains the Telemetr source without switching it on', async () => {
-    // On a phone a tap is the only way to open a hover hint; nested in the label it
-    // activated the checkbox instead.
-    render(<Harness telemetrConfigured />);
-    const checkbox = screen.getByRole('checkbox', { name: /Telemetr\.io/ });
-
-    await userEvent.click(screen.getByRole('note', { name: /Расходует квоту/ }));
-
-    expect(checkbox).not.toBeChecked();
   });
 
   it('keeps the hint prose out of the seed field name', () => {

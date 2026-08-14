@@ -19,17 +19,17 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchStageResult,
     DiscoverySourceReport,
 )
-from schemas.telemetr import TelemetrSearchRequest, TelemetrSearchResult
-from services.neurocomment import _seams
+from schemas.telegram_actions import LinkedDiscussionGroupResult
+from schemas.telegram_actions_discovery import GlobalPostsCursor
+from services.neurocomment import _discovery_waves, _seams
 from services.neurocomment._discovery_search import run_search
 from services.neurocomment._state import in_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
-    TelemetrRecorder,
     matches,
+    posts_page,
     read_error,
-    telemetr_ok,
 )
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
@@ -71,18 +71,15 @@ async def test_duplicate_keywords_are_searched_once(monkeypatch: pytest.MonkeyPa
     """Only the SPA deduped, so a direct caller spent ten RPCs on one keyword."""
     reader = ReadRecorder(search=matches(("alpha", "Alpha", 100)))
     monkeypatch.setattr(_seams, "execute_read", reader)
-    telemetr = TelemetrRecorder(telemetr_ok())
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
     await run_search(
         campaign_id,
         LISTENER_ID,
-        _request(keywords=[" Crypto ", "crypto", "CRYPTO"], use_telemetr=True),
+        _request(keywords=[" Crypto ", "crypto", "CRYPTO"]),
     )
 
     assert [action.query for action in reader.search_actions()] == ["Crypto"]
-    assert len(telemetr.requests) == 1
 
 
 @pytest.mark.asyncio
@@ -100,7 +97,8 @@ async def test_seed_channel_adds_a_similar_channels_pass(
 
     assert stage.found == 2
     # Normalized before it reaches the gateway, the same way every other channel is.
-    assert [action.seed for action in reader.similar_actions()] == ["durov"]
+    # The operator's seed is read first; the wave over the sweep's own hits follows it.
+    assert [action.seed for action in reader.similar_actions()] == ["durov", "fromsearch"]
 
 
 @pytest.mark.asyncio
@@ -114,55 +112,121 @@ async def test_an_unusable_seed_is_reported_instead_of_probed(
 
     stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="t.me/c/12345/1"))
 
-    assert reader.actions_of("get_similar_channels") == []
+    # The unusable seed itself was never sent; the wave's own seeds are the sweep's hits.
+    assert [action.seed for action in reader.similar_actions()] == ["alpha"]
     assert _report_of(stage, "telegram_similar").state == "skipped"
     assert stage.error == "seed_unusable"
 
 
 @pytest.mark.asyncio
-async def test_no_seed_means_no_recommendations_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    reader = ReadRecorder(search=matches(("alpha", "A", None)))
+async def test_the_seed_pass_and_the_wave_report_separately(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One row for both would let whichever ran mask the other's reason.
+
+    Folded together, a wave that answered flips the row to ``ran`` and the operator never
+    learns their own seed was unusable.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=matches(("alpha", "A", None)), similar=matches(("beta", "B", None))),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="t.me/c/12345/1"))
+
+    seed_pass = _report_of(stage, "telegram_similar")
+    assert (seed_pass.state, seed_pass.reason) == ("skipped", "seed_unusable")
+    assert _report_of(stage, "telegram_recommended").state == "ran"
+
+
+@pytest.mark.asyncio
+async def test_the_wave_asks_recommendations_for_the_sweeps_own_hits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram's recommendation graph reaches channels no keyword named.
+
+    It needs no seed from the operator: the keyword sweep's own hits are the seeds.
+    """
+    reader = ReadRecorder(
+        search=matches(("alpha", "A", None)),
+        similar=matches(("recommended", "R", None)),
+    )
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
     stage = await run_search(campaign_id, LISTENER_ID, _request())
 
-    assert reader.actions_of("get_similar_channels") == []
+    assert [action.seed for action in reader.similar_actions()] == ["alpha"]
+    rows = {row.channel: row.source for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert rows == {"alpha": "telegram_search", "recommended": "telegram_recommended"}
+    assert _report_of(stage, "telegram_recommended").exclusive == 1
     assert stage.error is None
 
 
 @pytest.mark.asyncio
-async def test_native_wins_a_cross_source_tie(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Telegram's spelling is canonical — adopt writes it into the campaign verbatim."""
-    reader = ReadRecorder(search=matches(("CryptoNews", "Native", 500)))
-    telemetr = TelemetrRecorder(telemetr_ok(("cryptonews", "Catalogue", 999)))
+async def test_the_wave_seeds_the_biggest_hits_first_and_stops_at_its_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One read per seed multiplies, so the wave is bounded — biggest channels first."""
+    monkeypatch.setattr(_discovery_waves, "_SIMILAR_FROM_TOP", 2)
+    reader = ReadRecorder(
+        search=matches(("small", "S", 10), ("biggest", "B", 900), ("middle", "M", 100)),
+    )
     monkeypatch.setattr(_seams, "execute_read", reader)
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert [action.seed for action in reader.similar_actions()] == ["biggest", "middle"]
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_stops_the_recommendation_wave(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The wave is cheap, not exempt: it obeys the same flood rule as the keyword sweep."""
+    reader = ReadRecorder(
+        search=matches(("alpha", "A", 30), ("bravo", "B", 20), ("charlie", "C", 10)),
+        similar=read_error("FloodWait(900s)"),
+    )
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert len(reader.similar_actions()) == 1
+    assert stage.flooded is True
+    assert in_cooldown(LISTENER_ID, datetime.now(UTC)) is True
+
+
+@pytest.mark.asyncio
+async def test_the_keyword_search_wins_a_cross_source_tie(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The higher-priority source's spelling is what adopt writes into the campaign."""
+    reader = ReadRecorder(
+        search=matches(("CryptoNews", "Search", 500)),
+        similar=matches(("cryptonews", "Similar", 999)),
+    )
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
 
     rows = (await list_discovery_candidates(campaign_id)).rows
     assert [row.channel for row in rows] == ["CryptoNews"]
     assert rows[0].source == "telegram_search"
-    assert rows[0].title == "Native"
-    # Both sources are credited for it: crediting only the dedup winner under-reported
-    # the catalogue, which is the very signal that made its starvation invisible.
-    assert stage.report.origins["CryptoNews"].sources == ["telegram_search", "telemetr"]
-    assert _report_of(stage, "telemetr").kept == 1
-
-
-@pytest.mark.asyncio
-async def test_telemetr_is_not_called_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    telemetr = TelemetrRecorder(telemetr_ok(("never", "N", None)))
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=False))
-
-    assert telemetr.requests == []
-    assert _report_of(stage, "telemetr").state == "skipped"
+    assert rows[0].title == "Search"
+    # Every source that returned it is credited: crediting only the dedup winner
+    # under-reported the losers, which is the very signal that made starvation invisible.
+    assert stage.report.origins["CryptoNews"].sources == [
+        "telegram_search",
+        "telegram_similar",
+        "telegram_recommended",
+    ]
+    assert _report_of(stage, "telegram_similar").kept == 1
 
 
 @pytest.mark.asyncio
@@ -171,198 +235,56 @@ async def test_a_source_reports_what_it_alone_contributed(
 ) -> None:
     """``kept`` credits every source that returned a row, which hid a starvation variant.
 
-    A catalogue whose rows were mostly duplicates of native hits reported a healthy
-    ``kept`` while every channel it found alone was cut by the cap.
+    A source whose rows were mostly duplicates of the other's reported a healthy ``kept``
+    while every channel it found alone was cut by the cap.
     """
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("shared", "S", 10))))
+    # Two sources only: the wave reads the same recommendation stub, so its rows would
+    # co-credit the seed pass's and this accounting has nothing to do with the wave.
+    monkeypatch.setattr(_discovery_waves, "_SIMILAR_FROM_TOP", 0)
     monkeypatch.setattr(
         _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("shared", "S", 10), ("mineonly", "M", 20))),
+        "execute_read",
+        ReadRecorder(
+            search=matches(("shared", "S", 10)),
+            similar=matches(("shared", "S", 10), ("mineonly", "M", 20)),
+        ),
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
 
-    catalogue = _report_of(stage, "telemetr")
-    assert catalogue.kept == 2
-    assert catalogue.exclusive == 1
+    similar = _report_of(stage, "telegram_similar")
+    assert similar.kept == 2
+    assert similar.exclusive == 1
     assert _report_of(stage, "telegram_search").exclusive == 0
 
 
 @pytest.mark.asyncio
-async def test_catalogue_only_drops_the_telegram_arm_and_says_so(
+async def test_lower_priority_rows_survive_a_sweep_that_fills_the_cap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Every stored row is then locale-verified, and the board names the missing sources.
+    """Sorting the union by source priority made the cap a keyword-search-only cut.
 
-    Measured on the real cap: with several keywords this costs no rows at all and takes
-    the verified share from about half to all of them. A skipped source that reported
-    nothing is what made the original bug invisible, so both Telegram arms still report.
-    """
-    reader = ReadRecorder(search=matches(("nativerow", "N", 500)))
-    monkeypatch.setattr(_seams, "execute_read", reader)
-    monkeypatch.setattr(
-        _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("turkishnews", "TR", 900), language="tr", country="TR")),
-    )
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(
-        campaign_id,
-        LISTENER_ID,
-        _request(use_telemetr=True, catalogue_only=True, language="tr", country="TR"),
-    )
-
-    assert reader.search_actions() == []
-    assert [row.channel for row in (await list_discovery_candidates(campaign_id)).rows] == [
-        "turkishnews",
-    ]
-    assert _report_of(stage, "telegram_search").state == "skipped"
-    assert _report_of(stage, "telegram_similar").state == "skipped"
-    assert _report_of(stage, "telemetr").kept == 1
-
-
-@pytest.mark.asyncio
-async def test_telemetr_filters_reach_the_stored_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The filters must change the *result*, not just the DTO handed to the gateway.
-
-    Asserting the request object alone passed identically whether the catalogue rows
-    reached the candidate table or were dropped on the floor.
-    """
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-
-    async def _by_language(request: TelemetrSearchRequest) -> TelemetrSearchResult:
-        if request.language == "tr":
-            return telemetr_ok(("turkishnews", "TR", 900), language="tr", country="TR")
-        return telemetr_ok(("russiannews", "RU", 900), language="ru", country="RU")
-
-    monkeypatch.setattr(_seams, "search_telemetr", _by_language)
-    filtered = await _new_campaign()
-    unfiltered = await _new_campaign()
-
-    await run_search(
-        filtered,
-        LISTENER_ID,
-        _request(use_telemetr=True, language="tr", country="TR"),
-    )
-    await run_search(unfiltered, LISTENER_ID, _request(use_telemetr=True))
-
-    assert [row.channel for row in (await list_discovery_candidates(filtered)).rows] == [
-        "turkishnews",
-    ]
-    assert [row.channel for row in (await list_discovery_candidates(unfiltered)).rows] == [
-        "russiannews",
-    ]
-
-
-@pytest.mark.asyncio
-async def test_the_catalogue_geo_rides_onto_the_run_report(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    monkeypatch.setattr(
-        _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("turkishnews", "TR", 900), language="tr", country="TR")),
-    )
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(
-        campaign_id,
-        LISTENER_ID,
-        _request(use_telemetr=True, language="tr", country="TR"),
-    )
-
-    origin = stage.report.origins["turkishnews"]
-    assert (origin.country, origin.language) == ("TR", "tr")
-
-
-@pytest.mark.asyncio
-async def test_catalogue_rows_survive_a_native_sweep_that_fills_the_cap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Sorting the union by source priority made the cap a native-only cut.
-
-    Telemetr sits last, so with 200 native rows against a cap of 100 it contributed
-    exactly zero and language/country influenced nothing at all.
+    The similar pass sits last, so with 10 keyword rows against a cap of 4 it contributed
+    exactly zero and the seed influenced nothing at all.
     """
     monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 4)
     monkeypatch.setattr(
         _seams,
         "execute_read",
-        ReadRecorder(search=matches(*((f"native{index}", "N", None) for index in range(10)))),
-    )
-    monkeypatch.setattr(
-        _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("catalogue1", "C", 900), ("catalogue2", "C", 900))),
+        ReadRecorder(
+            search=matches(*((f"native{index}", "N", None) for index in range(10))),
+            similar=matches(("lookalike1", "L", 900), ("lookalike2", "L", 900)),
+        ),
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
 
     stored = {row.channel for row in (await list_discovery_candidates(campaign_id)).rows}
     assert len(stored) == 4
-    assert stored & {"catalogue1", "catalogue2"}
-    assert _report_of(stage, "telemetr").kept
-
-
-@pytest.mark.asyncio
-async def test_missing_telemetr_key_is_a_skip_the_operator_is_told_about(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """An unconfigured catalogue is a skipped source, not a failure.
-
-    But a *silent* skip let the run reach "done" while the operator believed the filter
-    they ticked had applied, against a catalogue that was never queried.
-    """
-    telemetr = TelemetrRecorder(TelemetrSearchResult(status="not_configured"))
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("alpha1", "A", None))))
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
-
-    assert stage.found == 1
-    assert stage.error == "telemetr_not_configured"
-    assert _report_of(stage, "telemetr").state == "skipped"
-
-
-@pytest.mark.asyncio
-async def test_a_catalogue_failure_keeps_its_diagnostic_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``telemetr_auth_failed`` alone cannot tell a revoked key from a dead network."""
-    telemetr = TelemetrRecorder(
-        TelemetrSearchResult(status="auth_failed", error="HTTP 401: invalid api key"),
-    )
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("native", "N", 10))))
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
-
-    report = _report_of(stage, "telemetr")
-    assert report.state == "failed"
-    assert report.reason == "telemetr_auth_failed"
-    assert report.detail == "HTTP 401: invalid api key"
-
-
-@pytest.mark.asyncio
-async def test_telemetr_rate_limit_keeps_native_results_and_reports_the_reason(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    telemetr = TelemetrRecorder(TelemetrSearchResult(status="rate_limited", error="HTTP 429"))
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("native", "N", 10))))
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
-
-    assert stage.found == 1
-    assert stage.error == "telemetr_rate_limited"
+    assert stored & {"lookalike1", "lookalike2"}
+    assert _report_of(stage, "telegram_similar").kept
 
 
 @pytest.mark.asyncio
@@ -391,7 +313,7 @@ async def test_an_unexpected_gateway_shape_is_not_an_answer(
     monkeypatch.setattr(
         _seams,
         "execute_read",
-        ReadRecorder(search=TelemetrSearchResult(status="ok")),
+        ReadRecorder(search=LinkedDiscussionGroupResult(linked_chat_id=-1, comments_enabled=True)),
     )
     campaign_id = await _new_campaign()
 
@@ -399,6 +321,57 @@ async def test_an_unexpected_gateway_shape_is_not_an_answer(
 
     assert stage.replaced is False
     assert stage.error == "unexpected_result"
+
+
+@pytest.mark.asyncio
+async def test_an_empty_wave_cannot_overrule_a_failed_keyword_sweep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty replace needs the sweep that DEFINES the run to have answered.
+
+    The wider waves are consulted on every run now, so "somebody answered" alone stopped
+    protecting the stored set: a keyword sweep that merely timed out would hand the
+    delete-then-insert to an empty page from a narrower index, wiping candidates the
+    operator had already reviewed and qualified.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=read_error("RPC: Timeout"), posts=posts_page()),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert stage.replaced is False
+    assert stage.error == "RPC: Timeout"
+
+
+@pytest.mark.asyncio
+async def test_rows_from_a_wave_replace_even_when_the_sweep_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The counterpart: found channels ARE this run's findings, whoever found them.
+
+    Keeping the previous set beside them would present another keyword set's channels as
+    this run's, ticked and adoptable.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            search=read_error("RPC: Timeout"),
+            posts=posts_page(("fromposts", "P", 400)),
+        ),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert stage.replaced is True
+    assert [row.channel for row in (await list_discovery_candidates(campaign_id)).rows] == [
+        "fromposts",
+    ]
 
 
 @pytest.mark.asyncio
@@ -414,32 +387,21 @@ async def test_a_flood_wait_stops_the_keyword_sweep(monkeypatch: pytest.MonkeyPa
         _request(keywords=["alpha", "bravo", "charlie"], seed_channel="@durov"),
     )
 
-    # One attempt, then stop — not one per keyword, and the seed pass is skipped too.
+    # One attempt, then stop — not one per keyword, and every later wave is skipped too.
     assert len(reader.search_actions()) == 1
+    assert reader.posts_actions() == []
     assert reader.actions_of("get_similar_channels") == []
     assert stage.flooded is True
-
-
-@pytest.mark.asyncio
-async def test_a_flood_wait_still_queries_the_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
-    """HTTP to a third party spends no Telegram flood budget, and the slot is already spent.
-
-    Breaking out of the keyword loop cancelled every remaining catalogue query too, so a
-    single FloodWait removed the only filter-aware source from the run.
-    """
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=read_error("FloodWait(600s)")))
-    telemetr = TelemetrRecorder(telemetr_ok(("fromcatalogue", "C", 900)))
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
-    campaign_id = await _new_campaign()
-
-    stage = await run_search(
-        campaign_id,
-        LISTENER_ID,
-        _request(keywords=["alpha", "bravo"], use_telemetr=True),
-    )
-
-    assert [request.term for request in telemetr.requests] == ["alpha", "bravo"]
-    assert stage.found == 1
+    # EVERY unreached source is named on the board rather than silently absent from it —
+    # the post wave included, which used to vanish from the strip entirely.
+    unreached = [row for row in stage.report.sources if row.source != "telegram_search"]
+    assert [(row.source, row.state) for row in unreached] == [
+        ("telegram_posts", "skipped"),
+        ("telegram_similar", "skipped"),
+        ("telegram_recommended", "skipped"),
+    ]
+    # And a run cut short mid-sweep does not hand its fragment to the delete-then-insert.
+    assert stage.replaced is False
 
 
 @pytest.mark.asyncio
@@ -453,36 +415,6 @@ async def test_a_flood_wait_puts_the_account_on_cooldown(
     await run_search(campaign_id, LISTENER_ID, _request())
 
     assert in_cooldown(LISTENER_ID, datetime.now(UTC)) is True
-
-
-@pytest.mark.asyncio
-async def test_the_similar_pass_outranks_the_catalogue(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Priority, not arrival order: the similar pass runs last but still wins the tie."""
-    monkeypatch.setattr(
-        _seams,
-        "execute_read",
-        ReadRecorder(search=matches(), similar=matches(("LookAlike", "Native", None))),
-    )
-    monkeypatch.setattr(
-        _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("lookalike", "Catalogue", 900))),
-    )
-    campaign_id = await _new_campaign()
-
-    await run_search(
-        campaign_id,
-        LISTENER_ID,
-        _request(use_telemetr=True, seed_channel="@durov"),
-    )
-
-    rows = (await list_discovery_candidates(campaign_id)).rows
-    # Telegram's spelling and source label, with the count borrowed from the catalogue.
-    assert [row.channel for row in rows] == ["LookAlike"]
-    assert rows[0].source == "telegram_similar"
-    assert rows[0].subscribers == 900
 
 
 @pytest.mark.asyncio
@@ -544,23 +476,22 @@ async def test_unknown_member_count_is_kept_not_dropped(
 async def test_a_count_from_one_source_filters_the_same_channel_from_another(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Native outranks Telemetr but carries no count, so counts must pool before dedup.
+    """The dedup winner may carry no count, so counts must pool before dedup.
 
     Otherwise the preferred spelling shadows the only count anyone knew, and the
     channel slips through a filter it plainly fails.
     """
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("small", "S", None))))
     monkeypatch.setattr(
         _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("small", "S", 42))),
+        "execute_read",
+        ReadRecorder(search=matches(("small", "S", None)), similar=matches(("small", "S", 42))),
     )
     campaign_id = await _new_campaign()
 
     await run_search(
         campaign_id,
         LISTENER_ID,
-        _request(use_telemetr=True, members_min=10_000),
+        _request(seed_channel="@durov", members_min=10_000),
     )
 
     assert (await list_discovery_candidates(campaign_id)).rows == []
@@ -570,18 +501,18 @@ async def test_a_count_from_one_source_filters_the_same_channel_from_another(
 async def test_a_pooled_count_is_stored_on_the_surviving_row(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("big", "B", None))))
     monkeypatch.setattr(
         _seams,
-        "search_telemetr",
-        TelemetrRecorder(telemetr_ok(("big", "B", 50_000))),
+        "execute_read",
+        ReadRecorder(search=matches(("big", "B", None)), similar=matches(("big", "B", 50_000))),
     )
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
 
     rows = (await list_discovery_candidates(campaign_id)).rows
-    # Native still wins the spelling and the source label; only the count is borrowed.
+    # The keyword search still wins the spelling and the source label; only the count
+    # is borrowed.
     assert rows[0].source == "telegram_search"
     assert rows[0].subscribers == 50_000
 
@@ -617,7 +548,8 @@ async def test_unnormalizable_handles_are_dropped(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_pacing_sleeps_between_keywords_only(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_every_read_after_the_first_is_paced(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A burst is the freeze vector, so the wider waves are jittered like the sweep."""
     slept: list[float] = []
 
     async def _record(seconds: float) -> None:
@@ -631,31 +563,108 @@ async def test_pacing_sleeps_between_keywords_only(monkeypatch: pytest.MonkeyPat
 
     await run_search(campaign_id, LISTENER_ID, _request(keywords=["alpha", "beta", "gamma"]))
 
-    # Three keywords → two gaps; the first call is not preceded by a pause.
-    assert slept == [1.5, 1.5]
+    # Three keywords → two gaps (the first read is not preceded by a pause), then one
+    # global page per keyword, each paced. The sweep found nothing, so no wave seeds.
+    assert slept == [1.5] * 5
 
 
 @pytest.mark.asyncio
-async def test_the_catalogue_key_is_read_once_per_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """It was read per keyword: ten DB reads with secret decryption for one static key."""
-    from services.neurocomment import _discovery_search  # noqa: PLC0415
-
-    reads: list[int] = []
-    original = _discovery_search.load_warming_settings
-
-    async def _count() -> object:
-        reads.append(1)
-        return await original()
-
-    monkeypatch.setattr(_discovery_search, "load_warming_settings", _count)
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    monkeypatch.setattr(_seams, "search_telemetr", TelemetrRecorder(telemetr_ok()))
+async def test_the_post_search_contributes_its_own_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A different index: channels whose POSTS match, whatever their title says."""
+    reader = ReadRecorder(
+        search=matches(("namedcrypto", "Named", None)),
+        posts=posts_page(("quietchannel", "Quiet", 500)),
+    )
+    monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert [action.query for action in reader.posts_actions()] == ["crypto"]
+    rows = {row.channel: row.source for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert rows["quietchannel"] == "telegram_posts"
+    assert _report_of(stage, "telegram_posts").exclusive == 1
+
+
+@pytest.mark.asyncio
+async def test_the_post_search_pages_on_the_cursor_up_to_its_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The search never says "done" — only the page bound ends a keyword's paging.
+
+    ``limit`` counts messages, not channels, so a short page is not an end-of-results
+    signal either; the cursor is followed until the budget runs out.
+    """
+    monkeypatch.setattr(_discovery_waves, "_GLOBAL_MAX_PAGES", 2)
+    first = posts_page(
+        ("first", "1", None),
+        cursor=GlobalPostsCursor(offset_rate=7, peer="first"),
+    )
+    second = posts_page(
+        ("second", "2", None),
+        cursor=GlobalPostsCursor(offset_rate=9, peer="second"),
+    )
+    reader = ReadRecorder(posts=lambda action: first if action.cursor is None else second)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    await run_search(campaign_id, LISTENER_ID, _request())
+
+    cursors = [action.cursor for action in reader.posts_actions()]
+    # First page starts fresh; the second carries page one's cursor back verbatim.
+    assert cursors == [None, GlobalPostsCursor(offset_rate=7, peer="first")]
+    stored = {row.channel for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert stored == {"first", "second"}
+
+
+@pytest.mark.asyncio
+async def test_paging_stops_on_a_page_that_adds_no_new_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeat posts from the same channels are the only end signal Telegram gives us."""
+    monkeypatch.setattr(_discovery_waves, "_GLOBAL_MAX_PAGES", 5)
+    repeat = posts_page(("same", "S", None), cursor=GlobalPostsCursor(offset_rate=1, peer="same"))
+    reader = ReadRecorder(posts=repeat)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert len(reader.posts_actions()) == 2
+
+
+@pytest.mark.asyncio
+async def test_the_run_read_budget_truncates_the_wider_waves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One budget across every wave, spent cheapest-first — and reported when it runs out.
+
+    The waves multiply reads on a single account, so the run bounds the total. The cheap
+    keyword sweep is served first; what is left reaches the post pages and the wave.
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 2)
+    reader = ReadRecorder(search=matches(("alpha", "A", None)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(
         campaign_id,
         LISTENER_ID,
-        _request(keywords=["alpha", "beta", "gamma"], use_telemetr=True),
+        _request(keywords=["alpha", "bravo", "charlie"]),
     )
 
-    assert reads == [1]
+    assert len(reader.search_actions()) == 2
+    assert reader.posts_actions() == []
+    assert reader.actions_of("get_similar_channels") == []
+    # Truncated, not exhausted: the operator is told the run stopped asking.
+    search = _report_of(stage, "telegram_search")
+    assert (search.state, search.truncated) == ("ran", True)
+    assert _report_of(stage, "telegram_posts").truncated is True
+    assert _report_of(stage, "telegram_recommended").reason == "read_budget"
+    # NOT the run's error: a spent budget is truncation, and every source answered or
+    # said why it did not. Reporting it as the error painted the DEFAULT case — a full
+    # keyword list always outruns the budget — as a degraded, red run.
+    assert stage.error is None
+    assert stage.replaced is True

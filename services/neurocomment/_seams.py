@@ -3,7 +3,7 @@
 The neurocomment domain reaches Telegram (``execute`` / ``execute_read`` /
 ``download_post_image``), the LLMs (``generate_text`` for Gemini,
 ``generate_text_deepseek`` for the text generator, ``generate_text_openai`` for the
-alternative solver), Telemetr.io (``search_telemetr``),
+alternative solver),
 the spam probe (``refresh_spam_status``), randomness (``rng``) and sleeping (``sleep``) only
 through this module, so a test patches ``services.neurocomment._seams.<name>``
 once and every submodule observes it. Mirrors ``services.warming._seams``.
@@ -24,7 +24,6 @@ from core.openai import generate_text_deepseek as _generate_text_deepseek
 from core.telegram_client import download_post_image as _download_post_image
 from core.telegram_client import execute as _gateway_execute
 from core.telegram_client import execute_read as _gateway_execute_read
-from core.telemetr import search_catalog as search_telemetr
 from services.spam_status import refresh_spam_status as _refresh_spam_status
 
 if TYPE_CHECKING:
@@ -296,6 +295,5 @@ __all__ = [
     "generation_scope",
     "refresh_spam_status",
     "rng",
-    "search_telemetr",
     "sleep",
 ]

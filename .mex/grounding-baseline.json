@@ -1,12 +1,7 @@
 [
   {
-    "body_hash": "b49c7485bedb12b0c84a3d653d8e5d8f7ea8ab5607c2b6b2982ff9841f2c2094",
+    "body_hash": "df5645b44d207706c509fa55fd9f023efbbcd0b42cfcf7efd6c2e31c33befbb0",
     "node_id": "function:ba8f355bd012e2daedeea6b4da65becb",
-    "scaffold_file": ".mex/context/runtime-discovery.md"
-  },
-  {
-    "body_hash": "88d606a4cd238cef25d79e298440044a12f8ada72a4c0e430538e7ceceb8522c",
-    "node_id": "function:a7300fa722411d957b166677e0605ebb",
     "scaffold_file": ".mex/context/runtime-discovery.md"
   },
   {
@@ -75,7 +70,7 @@
     "scaffold_file": ".mex/patterns/add-auth.md"
   },
   {
-    "body_hash": "66bf72981985a3e3d8b827039e0efd8854eba9f240a1b5a96f08656f5a2516cb",
+    "body_hash": "991cb35d56309e292d270577a5e82c51642210078b024893c2e255d088b3a143",
     "node_id": "function:fd7aebfa2186e8d7f0da28e661677d85",
     "scaffold_file": ".mex/patterns/add-discovery-source.md"
   },
@@ -85,7 +80,7 @@
     "scaffold_file": ".mex/patterns/add-discovery-source.md"
   },
   {
-    "body_hash": "c02996a8c355d39555d99f2a7485daeafa12b723b704a5a18b55dfa32c71f68f",
+    "body_hash": "e283a7708936fde2f497b1eaf69d4078f3a01b17f735b3b6b4b6b96e4de3fc70",
     "node_id": "method:312a578607220cf0c909540b3589f078",
     "scaffold_file": ".mex/patterns/add-discovery-source.md"
   },

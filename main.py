@@ -34,7 +34,6 @@ from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.openai import close_openai_client
 from core.telegram_client import shutdown_telegram_pool
-from core.telemetr import close_telemetr_client
 from services.auth import seed_admin_if_empty
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
@@ -138,7 +137,6 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
             await maintenance_task
         await _shutdown_step("gemini", close_gemini_client)
         await _shutdown_step("openai", close_openai_client)
-        await _shutdown_step("telemetr", close_telemetr_client)
 
 
 def _safe_spa_file(path: str) -> Path | None:

@@ -1055,7 +1055,7 @@ export type DiscoveryAdoptOutcome = {
   /**
    * Status
    */
-  status: 'linked' | 'already_assigned' | 'failed';
+  status: 'linked' | 'already_assigned' | 'comments_off' | 'failed';
   /**
    * Channel
    */
@@ -1118,23 +1118,18 @@ export type DiscoveryCandidate = {
   /**
    * Source
    */
-  source: 'telegram_search' | 'telegram_similar' | 'telemetr';
+  source: 'telegram_search' | 'telegram_similar' | 'telegram_posts' | 'telegram_recommended';
   /**
    * Sources
    */
-  sources?: Array<'telegram_search' | 'telegram_similar' | 'telemetr'>;
-  /**
-   * Country
-   */
-  country?: string | null;
-  /**
-   * Language
-   */
-  language?: string | null;
+  sources?: Array<
+    'telegram_search' | 'telegram_similar' | 'telegram_posts' | 'telegram_recommended'
+  >;
   /**
    * Qualification
    */
   qualification: 'pending' | 'comments_on' | 'comments_off' | 'unknown';
+  verdict?: DiscoveryChannelVerdict | null;
   /**
    * In Campaign
    */
@@ -1143,6 +1138,59 @@ export type DiscoveryCandidate = {
    * Taken By Other Campaign
    */
   taken_by_other_campaign?: boolean;
+};
+
+/**
+ * DiscoveryChannelVerdict
+ *
+ * Why a candidate is (or is not) a place this campaign can comment in.
+ *
+ * Every field rides the SAME ``channels.getFullChannel`` reply the comments-enabled
+ * probe already spends, so learning any of it costs no extra RPC.
+ *
+ * Tri-state on purpose: ``None`` means the reply did not answer that field (no linked
+ * group, an older TL layer, a field Telegram omitted) and NEVER "no". The board must
+ * render an unanswered signal as unknown, and no caller may block a channel on
+ * anything but an explicit positive verdict — never on falsiness.
+ *
+ * Deliberately NOT persisted, exactly like :class:`DiscoveryCandidateOrigin`: the
+ * candidate table has no column for it, and a migration against the operator's live
+ * database needs their approval. A candidate read after a restart therefore carries no
+ * verdict at all, which reads as "unknown", not as "fine".
+ */
+export type DiscoveryChannelVerdict = {
+  /**
+   * Can Send Messages
+   */
+  can_send_messages?: boolean | null;
+  /**
+   * Join To Send
+   */
+  join_to_send?: boolean | null;
+  /**
+   * Join Request
+   */
+  join_request?: boolean | null;
+  /**
+   * Group Slowmode Enabled
+   */
+  group_slowmode_enabled?: boolean | null;
+  /**
+   * Broadcast Slowmode Seconds
+   */
+  broadcast_slowmode_seconds?: number | null;
+  /**
+   * Scam
+   */
+  scam?: boolean | null;
+  /**
+   * Fake
+   */
+  fake?: boolean | null;
+  /**
+   * Restricted
+   */
+  restricted?: boolean | null;
 };
 
 /**
@@ -1202,15 +1250,12 @@ export type DiscoverySearchOutcome = {
  *
  * Operator-supplied search parameters.
  *
- * ``language``/``country`` only reach Telemetr.io — Telegram's native search has
- * no such filters, so they are refused without ``use_telemetr``: accepting them
- * answered 202 for a run in which the filters reached nothing at all.
- * ``members_min``/``members_max`` are applied by Telemetr server-side and re-applied
- * client-side to native hits once the subscriber count is known.
+ * ``members_min``/``members_max`` are applied client-side to the hits whose subscriber
+ * count Telegram happens to return.
  *
  * ``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped
  * before, so a direct caller posting one keyword ten times spent ten identical Telegram
- * RPCs against the flood budget and ten identical requests against a 1000/month quota.
+ * RPCs against the flood budget.
  */
 export type DiscoverySearchRequest = {
   /**
@@ -1222,16 +1267,6 @@ export type DiscoverySearchRequest = {
    */
   seed_channel?: string | null;
   /**
-   * Language
-   */
-  language?:
-    'ru' | 'en' | 'ar' | 'de' | 'fr' | 'es' | 'tr' | 'uk' | 'kk' | 'uz' | 'fa' | 'hi' | null;
-  /**
-   * Country
-   */
-  country?:
-    'RU' | 'KZ' | 'UZ' | 'UA' | 'BY' | 'DE' | 'FR' | 'ES' | 'GB' | 'TR' | 'AE' | 'SA' | 'EG' | null;
-  /**
    * Members Min
    */
   members_min?: number | null;
@@ -1239,14 +1274,6 @@ export type DiscoverySearchRequest = {
    * Members Max
    */
   members_max?: number | null;
-  /**
-   * Use Telemetr
-   */
-  use_telemetr?: boolean;
-  /**
-   * Catalogue Only
-   */
-  catalogue_only?: boolean;
 };
 
 /**
@@ -1254,14 +1281,14 @@ export type DiscoverySearchRequest = {
  *
  * What one source contributed to the last run, as the board shows it.
  *
- * Without this nothing told the operator that a filter had not applied: the board
+ * Without this nothing told the operator that a source had not answered: the board
  * carried one ``last_error`` and a source that was skipped carried none at all.
  */
 export type DiscoverySourceReport = {
   /**
    * Source
    */
-  source: 'telegram_search' | 'telegram_similar' | 'telemetr';
+  source: 'telegram_search' | 'telegram_similar' | 'telegram_posts' | 'telegram_recommended';
   /**
    * State
    */
@@ -1279,17 +1306,13 @@ export type DiscoverySourceReport = {
    */
   exclusive?: number;
   /**
-   * Truncated
-   */
-  truncated?: boolean;
-  /**
    * Reason
    */
   reason?: string | null;
   /**
-   * Detail
+   * Truncated
    */
-  detail?: string | null;
+  truncated?: boolean;
 };
 
 /**
@@ -2819,10 +2842,6 @@ export type WarmingSettings = {
    */
   captcha_llm_provider?: 'gemini' | 'openai';
   /**
-   * Has Telemetr Key
-   */
-  has_telemetr_key?: boolean;
-  /**
    * Updated At
    */
   updated_at: string;
@@ -2892,14 +2911,6 @@ export type WarmingSettingsUpdate = {
    * Captcha Llm Provider
    */
   captcha_llm_provider?: 'gemini' | 'openai' | null;
-  /**
-   * Telemetr Api Key
-   */
-  telemetr_api_key?: string | null;
-  /**
-   * Clear Telemetr Key
-   */
-  clear_telemetr_key?: boolean;
 };
 
 /**

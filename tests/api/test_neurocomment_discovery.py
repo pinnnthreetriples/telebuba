@@ -19,6 +19,7 @@ from schemas.neurocomment_discovery import (
     DiscoveryAdoptResult,
     DiscoveryBoard,
     DiscoveryCandidate,
+    DiscoveryChannelVerdict,
     DiscoveryProgress,
     DiscoverySearchOutcome,
     DiscoverySearchRequest,
@@ -49,10 +50,9 @@ def _board() -> DiscoveryBoard:
             sources=[
                 DiscoverySourceReport(source="telegram_search", state="ran", hits=5, kept=1),
                 DiscoverySourceReport(
-                    source="telemetr",
-                    state="failed",
-                    reason="telemetr_quota_exhausted",
-                    detail="HTTP 426: quota reached",
+                    source="telegram_similar",
+                    state="skipped",
+                    reason="seed_unusable",
                 ),
             ],
         ),
@@ -62,15 +62,17 @@ def _board() -> DiscoveryBoard:
                 title="Crypto News",
                 subscribers=12345,
                 source="telegram_search",
-                sources=["telegram_search", "telemetr"],
-                country="TR",
-                language="tr",
+                sources=["telegram_search", "telegram_similar"],
                 qualification="comments_on",
+                verdict=DiscoveryChannelVerdict(
+                    join_to_send=True,
+                    broadcast_slowmode_seconds=30,
+                ),
             ),
             DiscoveryCandidate(
                 channel="altcoins",
                 title="Altcoins",
-                source="telemetr",
+                source="telegram_similar",
                 qualification="pending",
                 taken_by_other_campaign=True,
             ),
@@ -94,13 +96,12 @@ async def test_start_discovery_returns_202_and_the_outcome(
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": ["crypto", "trading"], "use_telemetr": True},
+            json={"keywords": ["crypto", "trading"]},
         )
 
     assert resp.status_code == 202
     assert resp.json() == {"status": "started"}
     assert seen[0].keywords == ["crypto", "trading"]
-    assert seen[0].use_telemetr is True
 
 
 @pytest.mark.parametrize(
@@ -197,37 +198,34 @@ async def test_duplicate_keywords_collapse_to_one(
     [
         {"keywords": ["crypto"], "language": "tr"},
         {"keywords": ["crypto"], "country": "TR"},
-        # Same shape: it removes every other source, so without the catalogue it removes
-        # them all and the run would report an empty success.
+        {"keywords": ["crypto"], "use_telemetr": True},
         {"keywords": ["crypto"], "catalogue_only": True},
     ],
 )
 @pytest.mark.asyncio
-async def test_filters_without_telemetr_are_rejected(app: FastAPI, body: dict[str, object]) -> None:
-    """Only the catalogue applies them, so 202 here promised a filter that reached nothing."""
+async def test_the_retired_catalogue_fields_are_refused(
+    app: FastAPI,
+    body: dict[str, object],
+) -> None:
+    """Nothing filters by locale any more, so accepting these would promise a no-op.
+
+    ``extra="forbid"`` is what makes an old client's request fail loudly instead of
+    running unfiltered and reporting success.
+    """
     async with _client(app) as client:
         resp = await client.post(f"{_BASE}/search", json=body)
 
     assert resp.status_code == 422
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        {"keywords": ["crypto"], "use_telemetr": True, "language": "klingon"},
-        {"keywords": ["crypto"], "use_telemetr": True, "country": "tr"},
-        {"keywords": ["crypto"], "seed_channel": " "},
-    ],
-)
 @pytest.mark.asyncio
-async def test_unusable_filter_values_are_rejected(app: FastAPI, body: dict[str, object]) -> None:
-    """Validated against the codes the UI offers: anything else reached nothing, quietly.
-
-    A blank seed is the same class of defect — truthy, so it survived into a pace sleep
-    and a peer resolution and yielded nothing.
-    """
+async def test_a_blank_seed_channel_is_rejected(app: FastAPI) -> None:
+    """Truthy, so it survived into a pace sleep and a peer resolution and yielded nothing."""
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/search", json=body)
+        resp = await client.post(
+            f"{_BASE}/search",
+            json={"keywords": ["crypto"], "seed_channel": " "},
+        )
 
     assert resp.status_code == 422
 
@@ -275,18 +273,24 @@ async def test_get_discovery_serializes_the_board(
     assert first["channel"] == "cryptonews"
     assert first["qualification"] == "comments_on"
     assert first["subscribers"] == 12345
-    assert first["sources"] == ["telegram_search", "telemetr"]
-    assert (first["country"], first["language"]) == ("TR", "tr")
+    assert first["sources"] == ["telegram_search", "telegram_similar"]
+    # The fitness verdict is what lets the board say WHY a channel is a dead end. An
+    # unmeasured gate crosses the wire as null — unknown, never a cleared gate — and a
+    # candidate with no verdict at all (run lost to a restart) carries null.
+    assert first["verdict"]["join_to_send"] is True
+    assert first["verdict"]["broadcast_slowmode_seconds"] == 30
+    assert first["verdict"]["can_send_messages"] is None
+    assert second["verdict"] is None
     assert second["qualification"] == "pending"
     assert second["taken_by_other_campaign"] is True
-    # Per-source reporting is the only thing that tells the operator a filter did not
-    # apply: a single ``last_error`` collapsed every source into one first-error-wins code.
+    # Per-source reporting is the only thing that tells the operator a source did not
+    # answer: a single ``last_error`` collapsed every source into one first-error-wins code.
     reported = body["progress"]["sources"]
     assert [(item["source"], item["state"], item["kept"]) for item in reported] == [
         ("telegram_search", "ran", 1),
-        ("telemetr", "failed", 0),
+        ("telegram_similar", "skipped", 0),
     ]
-    assert reported[1]["detail"] == "HTTP 426: quota reached"
+    assert reported[1]["reason"] == "seed_unusable"
 
 
 @pytest.mark.asyncio
@@ -319,6 +323,7 @@ async def test_adopt_returns_one_outcome_per_channel(
             outcomes=[
                 DiscoveryAdoptOutcome(status="linked", channel="alpha"),
                 DiscoveryAdoptOutcome(status="already_assigned", channel="beta"),
+                DiscoveryAdoptOutcome(status="comments_off", channel="delta"),
                 DiscoveryAdoptOutcome(status="failed", channel="gamma"),
             ],
         )
@@ -327,18 +332,20 @@ async def test_adopt_returns_one_outcome_per_channel(
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/adopt",
-            json={"channels": ["alpha", "beta", "gamma"]},
+            json={"channels": ["alpha", "beta", "delta", "gamma"]},
         )
 
     # A channel whose link attempt raised is part of the batch's report, not a 500:
-    # the ones that linked stay linked, so the operator has to be told which.
+    # the ones that linked stay linked, so the operator has to be told which. Same for
+    # ``comments_off`` — a server-side refusal, not a client mistake.
     assert resp.status_code == 200
     assert [item["status"] for item in resp.json()["outcomes"]] == [
         "linked",
         "already_assigned",
+        "comments_off",
         "failed",
     ]
-    assert seen == [["alpha", "beta", "gamma"]]
+    assert seen == [["alpha", "beta", "delta", "gamma"]]
 
 
 @pytest.mark.asyncio

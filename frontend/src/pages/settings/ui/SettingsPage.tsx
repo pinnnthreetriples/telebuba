@@ -51,12 +51,6 @@ function SettingsForm({
   const [openaiKey, setOpenaiKey] = useState('');
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
-  // Telemetr.io channel-catalogue key (neurocomment channel discovery). Same
-  // keep/clear/replace triple as the LLM keys — this row is the app's single home
-  // for provider keys.
-  const [telemetrKey, setTelemetrKey] = useState('');
-  const [showTelemetrKey, setShowTelemetrKey] = useState(false);
-  const [clearTelemetrKey, setClearTelemetrKey] = useState(false);
   // Gemini rate-limit knobs (see the "?" hints): retry count + min spacing between calls.
   const [geminiRetries, setGeminiRetries] = useState(String(settings.gemini_max_retries ?? 1));
   const [geminiInterval, setGeminiInterval] = useState(
@@ -94,12 +88,6 @@ function SettingsForm({
               clear_gemini_key: clearKey,
               openai_api_key: clearOpenaiKey ? null : openaiKey.trim() === '' ? null : openaiKey,
               clear_openai_key: clearOpenaiKey,
-              telemetr_api_key: clearTelemetrKey
-                ? null
-                : telemetrKey.trim() === ''
-                  ? null
-                  : telemetrKey,
-              clear_telemetr_key: clearTelemetrKey,
               openai_model: settings.openai_model,
               captcha_llm_provider: provider,
             },
@@ -110,8 +98,6 @@ function SettingsForm({
         setClearKey(false);
         setOpenaiKey('');
         setClearOpenaiKey(false);
-        setTelemetrKey('');
-        setClearTelemetrKey(false);
         setJustSaved(true);
         window.setTimeout(() => {
           setJustSaved(false);
@@ -142,15 +128,12 @@ function SettingsForm({
   // The stored key is present unless the operator just chose to clear it.
   const keySet = (settings.has_gemini_key ?? false) && !clearKey;
   const openaiKeySet = (settings.has_openai_key ?? false) && !clearOpenaiKey;
-  const telemetrKeySet = (settings.has_telemetr_key ?? false) && !clearTelemetrKey;
 
   const onCancel = () => {
     setGeminiKey('');
     setClearKey(false);
     setOpenaiKey('');
     setClearOpenaiKey(false);
-    setTelemetrKey('');
-    setClearTelemetrKey(false);
     setGeminiRetries(String(settings.gemini_max_retries ?? 1));
     setGeminiInterval(String(settings.gemini_min_interval_seconds ?? 0));
     setProvider(settings.captcha_llm_provider ?? 'gemini');
@@ -224,33 +207,6 @@ function SettingsForm({
               setOpenaiKey('');
             }}
           />
-          <ApiKeyField
-            label={t('settings.api.telemetrKey')}
-            value={telemetrKey}
-            show={showTelemetrKey}
-            keySet={telemetrKeySet}
-            placeholder={
-              clearTelemetrKey
-                ? t('settings.api.keyCleared')
-                : telemetrKeySet
-                  ? t('settings.api.keySet')
-                  : t('settings.api.keyUnset')
-            }
-            toggleLabel={t('settings.api.toggleVisibility')}
-            clearLabel={t('settings.api.clearKey')}
-            onChange={(value) => {
-              setTelemetrKey(value);
-              if (clearTelemetrKey) setClearTelemetrKey(false);
-            }}
-            onToggleShow={() => {
-              setShowTelemetrKey((value) => !value);
-            }}
-            onClear={() => {
-              setClearTelemetrKey(true);
-              setTelemetrKey('');
-            }}
-          />
-          <p className="text-[11.5px] text-ink-subtle">{t('settings.api.telemetrHint')}</p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
               <span className={`${FIELD_LABEL} flex items-center gap-[6px]`}>

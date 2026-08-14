@@ -42,12 +42,10 @@ function Harness({
   data,
   loading = false,
   errored = false,
-  localeFiltered = false,
 }: {
   data: DiscoveryBoard | undefined;
   loading?: boolean;
   errored?: boolean;
-  localeFiltered?: boolean;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   return (
@@ -55,7 +53,6 @@ function Harness({
       board={data}
       loading={loading}
       errored={errored}
-      localeFiltered={localeFiltered}
       selected={selected}
       onToggle={(channel) => {
         setSelected((current) => {
@@ -350,16 +347,12 @@ describe('DiscoveryResults', () => {
   });
 
   it('surfaces a degraded source once the run settles', () => {
-    render(
-      <Harness
-        data={board([candidate()], { phase: 'done', last_error: 'telemetr_rate_limited' })}
-      />,
-    );
+    render(<Harness data={board([candidate()], { phase: 'done', last_error: 'seed_unusable' })} />);
 
     // The code is translated, not printed: the operator used to read the literal string
-    // "telemetr_rate_limited" off the board.
-    expect(screen.getByText(/ограничил частоту запросов/)).toBeInTheDocument();
-    expect(screen.queryByText(/telemetr_rate_limited/)).not.toBeInTheDocument();
+    // "seed_unusable" off the board.
+    expect(screen.getByText(/не похож на корректный хэндл/)).toBeInTheDocument();
+    expect(screen.queryByText(/seed_unusable/)).not.toBeInTheDocument();
   });
 
   it('keeps a degraded source visible through the qualifying phase', () => {
@@ -370,28 +363,28 @@ describe('DiscoveryResults', () => {
         data={board([candidate()], {
           phase: 'qualifying',
           running: true,
-          last_error: 'telemetr_rate_limited',
+          last_error: 'seed_unusable',
         })}
       />,
     );
 
-    expect(screen.getByText(/ограничил частоту запросов/)).toBeInTheDocument();
+    expect(screen.getByText(/не похож на корректный хэндл/)).toBeInTheDocument();
   });
 
-  it('credits every source, so a filter that reached nothing is visible', () => {
-    // The reported bug: language and country were set, the run reached "done", and
-    // nothing said that the only source those filters reach had contributed zero rows.
+  it('credits every source, so one that reached nothing is visible', () => {
+    // The reported bug: a run reached "done" and nothing said that one of its sources
+    // had contributed zero rows.
     render(
       <Harness
         data={board([candidate()], {
           sources: [
             { source: 'telegram_search', state: 'ran', hits: 20, kept: 20 },
             {
-              source: 'telemetr',
+              source: 'telegram_similar',
               state: 'skipped',
               hits: 0,
               kept: 0,
-              reason: 'telemetr_not_configured',
+              reason: 'seed_unusable',
             },
           ],
         })}
@@ -399,8 +392,8 @@ describe('DiscoveryResults', () => {
     );
 
     expect(screen.getByText(/поиск Telegram: 20 из 20/)).toBeInTheDocument();
-    expect(screen.getByText(/Telemetr\.io: не запрашивался/)).toBeInTheDocument();
-    expect(screen.getByText(/нет ключа Telemetr\.io/)).toBeInTheDocument();
+    expect(screen.getByText(/похожие: не запрашивался/)).toBeInTheDocument();
+    expect(screen.getByText(/не похож на корректный хэндл/)).toBeInTheDocument();
   });
 
   it('names a source whose kept rows were all another source’s too', () => {
@@ -409,86 +402,12 @@ describe('DiscoveryResults', () => {
     render(
       <Harness
         data={board([candidate()], {
-          sources: [{ source: 'telemetr', state: 'ran', hits: 60, kept: 50, exclusive: 0 }],
+          sources: [{ source: 'telegram_similar', state: 'ran', hits: 60, kept: 50, exclusive: 0 }],
         })}
       />,
     );
 
     expect(screen.getByText(/уникальных 0/)).toBeInTheDocument();
-  });
-
-  it('says a source was truncated instead of passing a capped page off as the answer', () => {
-    render(
-      <Harness
-        data={board([candidate()], {
-          sources: [
-            {
-              source: 'telemetr',
-              state: 'ran',
-              hits: 30,
-              kept: 30,
-              exclusive: 30,
-              truncated: true,
-            },
-          ],
-        })}
-      />,
-    );
-
-    // A flag, not a count: the per-keyword totals cannot be summed without double
-    // counting, and the earlier wording read "30 из 30 из 1523 совпадений".
-    expect(screen.getByText(/30 из 30, страница обрезана/)).toBeInTheDocument();
-  });
-
-  it('names the way out when the catalogue is terminally down and a filter is set', () => {
-    // The dead end: a locale filter makes the catalogue the only source allowed to
-    // answer, so a spent quota blocks every run until the operator changes something.
-    render(
-      <Harness
-        localeFiltered
-        data={board([], {
-          phase: 'failed',
-          last_error: 'telemetr_quota_exhausted',
-          sources: [
-            {
-              source: 'telemetr',
-              state: 'failed',
-              hits: 0,
-              kept: 0,
-              exclusive: 0,
-              reason: 'telemetr_quota_exhausted',
-            },
-          ],
-        })}
-      />,
-    );
-
-    expect(screen.getByText(/снимите оба фильтра/)).toBeInTheDocument();
-  });
-
-  it('does not tell the operator to drop filters over a rate limit', () => {
-    // A retry fixes that one, so the advice would be wrong.
-    render(
-      <Harness
-        localeFiltered
-        data={board([], {
-          phase: 'failed',
-          last_error: 'telemetr_rate_limited',
-          sources: [
-            {
-              source: 'telemetr',
-              state: 'failed',
-              hits: 0,
-              kept: 0,
-              exclusive: 0,
-              reason: 'telemetr_rate_limited',
-            },
-          ],
-        })}
-      />,
-    );
-
-    expect(screen.queryByText(/снимите оба фильтра/)).not.toBeInTheDocument();
   });
 
   it('renders subscribers compactly and an em dash when unknown', () => {
@@ -505,43 +424,182 @@ describe('DiscoveryResults', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
-  it('names each source', () => {
+  it('names a source the run stopped early, and why', () => {
+    // "12 of 40" alone reads as a source read to the end; the budget cut it, so the
+    // counts are a floor and the operator can win more rows by narrowing the run.
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [
+            {
+              source: 'telegram_posts',
+              state: 'ran',
+              hits: 40,
+              kept: 12,
+              exclusive: 12,
+              reason: 'read_budget',
+              truncated: true,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/поиск по постам: 12 из 40/)).toBeInTheDocument();
+    expect(screen.getByText(/остановлен раньше времени/)).toBeInTheDocument();
+    expect(screen.getByText(/кончился лимит чтений/)).toBeInTheDocument();
+  });
+
+  it('keeps the operator’s seed and the sweep’s own recommendations apart', () => {
+    // One shared row would let the wave that ran mask the seed's own refusal.
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [
+            { source: 'telegram_similar', state: 'skipped', reason: 'seed_unusable' },
+            { source: 'telegram_recommended', state: 'ran', hits: 9, kept: 9, exclusive: 9 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/похожие: не запрашивался/)).toBeInTheDocument();
+    expect(screen.getByText(/не похож на корректный хэндл/)).toBeInTheDocument();
+    expect(screen.getByText(/похожие на находки: 9 из 9/)).toBeInTheDocument();
+  });
+
+  it('shows the whole path that found a channel, not just one label', () => {
+    // Two independent waves reaching the same channel is the stronger signal, and
+    // `source` names only the winner of the dedup.
     render(
       <Harness
         data={board([
-          candidate({ channel: 'native', source: 'telegram_search' }),
-          candidate({ channel: 'similar', source: 'telegram_similar' }),
-          candidate({ channel: 'catalogue', source: 'telemetr' }),
+          candidate({
+            channel: 'both',
+            source: 'telegram_search',
+            sources: ['telegram_search', 'telegram_recommended'],
+          }),
         ])}
       />,
     );
 
-    expect(screen.getByText('поиск Telegram')).toBeInTheDocument();
-    expect(screen.getByText('похожие')).toBeInTheDocument();
-    expect(screen.getByText('Telemetr.io')).toBeInTheDocument();
+    expect(screen.getByText('поиск Telegram + похожие на находки')).toBeInTheDocument();
   });
 
-  it('marks per row whether the locale filter reached it', () => {
-    // The operator's original complaint, answered row by row: only the catalogue files a
-    // channel under a country, so its geo is the proof, and its absence under an active
-    // filter is the proof of the opposite. Telegram's own search has no locale filter.
+  it('falls back to the single source when no provenance came through', () => {
+    render(<Harness data={board([candidate({ channel: 'lone', source: 'telegram_posts' })])} />);
+    expect(screen.getByText('поиск по постам')).toBeInTheDocument();
+  });
+
+  it('reads a missing verdict as unknown, not as a cleared channel', () => {
+    // The verdict is not persisted, so every row served after a restart carries none.
+    render(<Harness data={board([candidate({ qualification: 'comments_on' })])} />);
+
+    expect(screen.getByText('пригодность не проверена')).toBeInTheDocument();
+  });
+
+  it('marks a channel whose discussion group bans writing', () => {
+    render(<Harness data={board([candidate({ verdict: { can_send_messages: false } })])} />);
+
+    expect(screen.getByText(/запрещено писать/)).toBeInTheDocument();
+  });
+
+  it('never turns an unanswered field into a cleared gate', () => {
+    // Every field is tri-state: null means Telegram did not answer, never "no". A mark
+    // either way would be a claim nothing checked.
     render(
       <Harness
-        localeFiltered
         data={board([
-          candidate({ channel: 'turkish', source: 'telemetr', country: 'TR', language: 'tr' }),
-          candidate({ channel: 'russian', source: 'telegram_search' }),
+          candidate({
+            verdict: {
+              can_send_messages: null,
+              join_to_send: null,
+              join_request: null,
+              group_slowmode_enabled: null,
+              broadcast_slowmode_seconds: null,
+              scam: null,
+              fake: null,
+              restricted: null,
+            },
+          }),
         ])}
       />,
     );
 
-    expect(screen.getByText('TR · tr')).toBeInTheDocument();
-    expect(screen.getByText('фильтр не применялся')).toBeInTheDocument();
+    expect(screen.queryByText(/запрещено писать/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/нужно вступить/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/медленный режим/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/скам/)).not.toBeInTheDocument();
   });
 
-  it('does not flag an unvouched row when no locale filter was asked for', () => {
-    render(<Harness data={board([candidate({ source: 'telegram_search' })])} />);
-    expect(screen.queryByText('фильтр не применялся')).not.toBeInTheDocument();
+  it('spells out the gates the backend did answer', () => {
+    render(
+      <Harness
+        data={board([
+          candidate({
+            verdict: {
+              join_to_send: true,
+              join_request: true,
+              group_slowmode_enabled: true,
+              broadcast_slowmode_seconds: 30,
+              scam: true,
+              fake: true,
+              restricted: true,
+            },
+          }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText(/нужно вступить в чат обсуждения/)).toBeInTheDocument();
+    expect(screen.getByText(/по заявке с одобрением админа/)).toBeInTheDocument();
+    // Two different chats, so two marks — the group's flag carries no interval, and
+    // pairing it with the broadcast's number printed "медленный режим: — с".
+    expect(screen.getByText('в чате обсуждения включён медленный режим')).toBeInTheDocument();
+    expect(screen.getByText('собственный медленный режим канала: 30 с')).toBeInTheDocument();
+    expect(screen.getByText(/как скам/)).toBeInTheDocument();
+    expect(screen.getByText(/как фейк/)).toBeInTheDocument();
+    expect(screen.getByText(/ограничил канал/)).toBeInTheDocument();
+  });
+
+  it('states a group slow mode without inventing an interval for it', () => {
+    // The ordinary case: a 30s discussion group under a broadcast with no slow mode of
+    // its own. The two fields describe different chats, and the interval of the group's
+    // would cost a second getFullChannel — so the mark says so instead of printing "—".
+    render(
+      <Harness
+        data={board([
+          candidate({
+            verdict: { group_slowmode_enabled: true, broadcast_slowmode_seconds: null },
+          }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('в чате обсуждения включён медленный режим')).toBeInTheDocument();
+    expect(screen.queryByText(/медленный режим канала/)).not.toBeInTheDocument();
+  });
+
+  it('leaves an unknown verdict adoptable', () => {
+    // Only comments_off disables a row; a verdict nobody could read is not a refusal.
+    render(
+      <Harness
+        data={board([
+          candidate({ channel: 'opaque', verdict: null }),
+          candidate({ channel: 'gated', verdict: { join_to_send: true, scam: true } }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByRole('checkbox', { name: 'Выбрать канал opaque' })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: 'Выбрать канал gated' })).toBeEnabled();
+  });
+
+  it('does not repeat "not checked" as an unknown verdict', () => {
+    render(<Harness data={board([candidate({ qualification: 'pending' })], { phase: 'done' })} />);
+
+    expect(screen.getByText('не проверено')).toBeInTheDocument();
+    expect(screen.queryByText('пригодность не проверена')).not.toBeInTheDocument();
   });
 
   it('does not call back when a disabled checkbox is clicked', async () => {
@@ -551,7 +609,6 @@ describe('DiscoveryResults', () => {
         board={board([candidate({ channel: 'closed', qualification: 'comments_off' })])}
         loading={false}
         errored={false}
-        localeFiltered={false}
         selected={new Set()}
         onToggle={onToggle}
         onToggleAll={vi.fn()}

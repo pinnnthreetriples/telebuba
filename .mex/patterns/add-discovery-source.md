@@ -16,13 +16,14 @@ edges:
 
 # Add a Channel-Discovery Source
 
-1. Add a typed transport in core/: Telegram reads use gateway actions; HTTP catalogues use a provider gateway that converts HTTP failures to typed outcomes.
+1. Add a typed transport in core/: Telegram reads use gateway actions; anything else needs a gateway that converts transport failures to typed outcomes.
 2. Add the source literal/schema and RU/EN source label.
 3. Adapt the source in the discovery service to [SourceOutcome](mex://class:109b672126a8f3a2e7336dd5a507ff24); every skipped/failed source carries a reason instead of disappearing.
 4. Route the provider through the neurocomment seam.
-5. Merge by per-source rank/interleaving before the global cap. Source priority decides dedup spelling only; it must not starve a lower-priority source.
-6. State which filters the source actually honors. A requested filter must never be accepted and then silently ignored by every active source.
-7. Preserve the existing candidate set when no relevant source answered; an answered empty result may replace it.
-8. Test the gateway contract, source outcomes, filter coverage, dedup/interleaving and failure semantics.
+5. Take every read from the run's shared read budget, pace each one, stop the wave on FloodWait, and report `truncated` when the budget cut it short. A paged source must bound its own page count: Telegram sends no "done" flag and its `limit` counts messages, not channels.
+6. Merge by interleaving per OUTCOME (not per source) before the global cap. Source priority decides dedup spelling only; it must not starve a lower-priority source, and an automatic wave must not outrank a read the operator explicitly asked for.
+7. State which filters the source actually honors. A request field must never be accepted and then silently ignored by every active source.
+8. Preserve the existing candidate set when no relevant source answered, and whenever a FloodWait cut the run short. An empty result may replace it only when the keyword sweep is one of the sources that answered.
+9. Test the gateway contract, source outcomes, budget/pacing bounds, filter coverage, dedup/interleaving and failure semantics.
 
 Current source/filter policy lives in context/runtime-discovery.md; provider wire details live in gateway tests/code.

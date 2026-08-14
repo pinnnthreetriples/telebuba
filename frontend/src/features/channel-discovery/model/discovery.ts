@@ -11,33 +11,18 @@ export const MAX_KEYWORDS = 10;
 // everything a run can show must be adoptable in one go.
 export const MAX_ADOPT = 500;
 
-// Straight off the generated request type, so the option lists the form renders cannot
-// drift from the codes the API accepts — that drift is what sent country=TR to a
-// catalogue whose dictionary calls it "turkey", and it answered with an empty page.
-export type DiscoveryLanguage = NonNullable<DiscoverySearchRequest['language']>;
-export type DiscoveryCountry = NonNullable<DiscoverySearchRequest['country']>;
-
 export type DiscoveryFormState = {
   keywords: string;
   seedChannel: string;
-  // '' is the "any" option, which omits the filter entirely.
-  language: DiscoveryLanguage | '';
-  country: DiscoveryCountry | '';
   minSubscribers: string;
   maxSubscribers: string;
-  useTelemetr: boolean;
-  catalogueOnly: boolean;
 };
 
 export const EMPTY_FORM: DiscoveryFormState = {
   keywords: '',
   seedChannel: '',
-  language: '',
-  country: '',
   minSubscribers: '',
   maxSubscribers: '',
-  useTelemetr: false,
-  catalogueOnly: false,
 };
 
 /** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap.
@@ -89,20 +74,11 @@ function positiveInt(raw: string): number | undefined {
 export function buildSearchRequest(form: DiscoveryFormState): DiscoverySearchRequest {
   const request: DiscoverySearchRequest = {
     keywords: parseKeywords(form.keywords),
-    use_telemetr: form.useTelemetr,
   };
   // The placeholder invites a t.me link and the API caps this field at 32 chars, so a
   // pasted URL either 422s or resolves to nothing — strip the prefix instead.
   const seed = form.seedChannel.trim().replace(/^(?:https?:\/\/)?(?:t\.me\/)?@*/i, '');
   if (seed !== '') request.seed_channel = seed;
-  // Only the Telemetr.io catalogue filters by locale; Telegram's own search and its
-  // similar-channels feed have none, so without that source these reach nothing.
-  if (form.useTelemetr) {
-    if (form.language !== '') request.language = form.language;
-    if (form.country !== '') request.country = form.country;
-    // Only meaningful alongside the catalogue, and the API refuses it without.
-    if (form.catalogueOnly) request.catalogue_only = true;
-  }
   const min = positiveInt(form.minSubscribers);
   const max = positiveInt(form.maxSubscribers);
   if (min !== undefined) request.members_min = min;

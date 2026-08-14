@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from core._config_domains import TelemetrSettings
 from core._config_llm import DeepseekSettings, GeminiSettings, OpenAISettings
 
 __all__ = [
     "DeepseekSettings",
     "GeminiSettings",
     "OpenAISettings",
-    "TelemetrSettings",
 ]

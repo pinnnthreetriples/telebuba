@@ -17,9 +17,14 @@ from schemas.telegram_actions import (
     GetSimilarChannels,
     LinkedDiscussionGroupResult,
     SearchChannels,
+    SearchGlobalPosts,
 )
-from schemas.telegram_actions_discovery import TelegramChannelMatch, TelegramChannelMatches
-from schemas.telemetr import TelemetrChannel, TelemetrSearchResult
+from schemas.telegram_actions_discovery import (
+    GlobalPostsCursor,
+    TelegramChannelMatch,
+    TelegramChannelMatches,
+    TelegramGlobalPostMatches,
+)
 from services.neurocomment import _discovery_state, _seams, _state
 from services.neurocomment.discovery import start_discovery
 
@@ -30,7 +35,6 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from schemas.telegram_actions import TelegramReadAction
-    from schemas.telemetr import TelemetrSearchRequest
 
 _Scripted = "BaseModel | Callable[[TelegramReadAction], BaseModel]"
 
@@ -108,33 +112,21 @@ def matches(*rows: tuple[str, str, int | None]) -> TelegramChannelMatches:
     )
 
 
-def telemetr_ok(
+def posts_page(
     *rows: tuple[str, str, int | None],
-    country: str | None = None,
-    language: str | None = None,
-) -> TelemetrSearchResult:
-    """A catalogue page. ``country``/``language`` are what Telemetr filed every row under."""
-    return TelemetrSearchResult(
-        status="ok",
-        items=[
-            TelemetrChannel(
-                username=username,
-                title=title,
-                members_count=count,
-                country=country,
-                language=language,
-            )
-            for username, title, count in rows
-        ],
-    )
+    cursor: GlobalPostsCursor | None = None,
+) -> TelegramGlobalPostMatches:
+    """One page of the global post search. ``cursor=None`` = nothing to page on from."""
+    return TelegramGlobalPostMatches(items=matches(*rows).items, next_cursor=cursor)
 
 
 class ReadRecorder:
     """Stub for ``_seams.execute_read`` that scripts results per action type.
 
-    ``search`` / ``similar`` / ``linked`` are looked up by the action's discriminator,
-    so one recorder serves both discovery stages. A callable value is invoked with the
-    action (for per-channel verdicts or raising); anything else is returned as-is.
+    ``search`` / ``similar`` / ``posts`` / ``linked`` are looked up by the action's
+    discriminator, so one recorder serves both discovery stages. A callable value is
+    invoked with the action (for per-channel verdicts, per-page results or raising);
+    anything else is returned as-is.
     """
 
     def __init__(
@@ -142,11 +134,13 @@ class ReadRecorder:
         *,
         search: object = None,
         similar: object = None,
+        posts: object = None,
         linked: object = None,
     ) -> None:
         self._by_type: dict[str, object] = {  # heterogeneous by design (value or factory)
             "search_channels": search if search is not None else matches(),
             "get_similar_channels": similar if similar is not None else matches(),
+            "search_global_posts": posts if posts is not None else posts_page(),
             "get_linked_discussion_group": (
                 linked
                 if linked is not None
@@ -174,17 +168,9 @@ class ReadRecorder:
         """Recommendation actions, narrowed so tests can read ``.seed``."""
         return [call for call in self.calls if isinstance(call, GetSimilarChannels)]
 
-
-class TelemetrRecorder:
-    """Stub for ``_seams.search_telemetr``."""
-
-    def __init__(self, result: TelemetrSearchResult | None = None) -> None:
-        self._result = result or TelemetrSearchResult(status="ok")
-        self.requests: list[TelemetrSearchRequest] = []
-
-    async def __call__(self, request: TelemetrSearchRequest) -> TelemetrSearchResult:
-        self.requests.append(request)
-        return self._result
+    def posts_actions(self) -> list[SearchGlobalPosts]:
+        """Global post-search actions, narrowed so tests can read ``.query``/``.cursor``."""
+        return [call for call in self.calls if isinstance(call, SearchGlobalPosts)]
 
 
 def read_error(reason: str, only: str | None = None) -> Callable[[TelegramReadAction], BaseModel]:

@@ -1,4 +1,4 @@
-"""Discovery stage 2 — decide which candidates actually accept comments.
+"""Discovery stage 2 — decide which candidates this campaign can actually comment in.
 
 No channel catalogue in existence exposes this, so it is resolved from Telegram:
 ``channelFull.linked_chat_id`` is the signal, and the repo already caches every
@@ -8,7 +8,12 @@ only genuinely new (or stale) channels pay an RPC.
 
 Freshness is applied here, not in the repository: onboarding and the board want the
 raw cache, but a channel that switched comments on months ago must not stay
-filtered out of discovery forever. Same shape as ``services.spam_status._is_fresh``.
+filtered out of discovery forever. Same shape as ``services.spam_status._is_fresh``; it
+is module-public here because the adopt guard has to apply the identical window.
+
+That one reply answers more than comments on/off — writing rights, the join gates, slow
+mode, Telegram's scam/fake/restricted marks — so the whole verdict is kept (in memory,
+see ``_discovery_state``) instead of being thrown away for the sake of one bool.
 """
 
 from __future__ import annotations
@@ -24,8 +29,9 @@ from core.repositories.neurocomment import (
     upsert_linked_group,
 )
 from core.telegram_client import TelegramReadError
+from schemas.neurocomment_discovery import DiscoveryChannelVerdict
 from schemas.telegram_actions import GetLinkedDiscussionGroup, LinkedDiscussionGroupResult
-from services.neurocomment import _seams
+from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_providers import record_flood
 from services.neurocomment._signals import signal_discovery_progress
 
@@ -46,8 +52,13 @@ _PROGRESS_EVERY = 5
 _ERROR_RATE_MIN_PROBES = 20
 
 
-def _is_fresh(checked_at: str, now: datetime) -> bool:
-    """Is this cached verdict still trustworthy? A zero TTL falls out as never."""
+def is_fresh(checked_at: str, now: datetime) -> bool:
+    """Is this cached verdict still trustworthy? A zero TTL falls out as never.
+
+    Module-public: the adopt guard in ``discovery`` must apply the SAME window as this
+    probe loop, and reaching across a module boundary for a private name to do it said
+    the opposite.
+    """
     try:
         stamped = datetime.fromisoformat(checked_at)
     except ValueError:
@@ -60,7 +71,7 @@ def _is_fresh(checked_at: str, now: datetime) -> bool:
 
 
 def _fresh_cache(groups: list[LinkedDiscussionGroup], now: datetime) -> set[str]:
-    return {group.channel for group in groups if _is_fresh(group.checked_at, now)}
+    return {group.channel for group in groups if is_fresh(group.checked_at, now)}
 
 
 async def run_qualification(campaign_id: str, account_id: str) -> str | None:
@@ -123,6 +134,25 @@ async def _pace() -> None:
     )
 
 
+def _verdict_of(result: LinkedDiscussionGroupResult) -> DiscoveryChannelVerdict:
+    """Everything the one ``getFullChannel`` reply says about fitness, carried verbatim.
+
+    Copied field for field rather than folded into a summary: ``None`` means "the reply
+    did not answer", so collapsing any of these into a bool here would turn an
+    unanswered signal into a confident "no" for every reader downstream.
+    """
+    return DiscoveryChannelVerdict(
+        can_send_messages=result.can_send_messages,
+        join_to_send=result.join_to_send,
+        join_request=result.join_request,
+        group_slowmode_enabled=result.group_slowmode_enabled,
+        broadcast_slowmode_seconds=result.broadcast_slowmode_seconds,
+        scam=result.scam,
+        fake=result.fake,
+        restricted=result.restricted,
+    )
+
+
 async def _probe_one(campaign_id: str, account_id: str, channel: str) -> str | None:
     """One comments-enabled probe. Records the attempt either way."""
     try:
@@ -144,12 +174,15 @@ async def _probe_one(campaign_id: str, account_id: str, channel: str) -> str | N
         await mark_discovery_qualified(campaign_id, channel, error="unexpected_result")
         return "unexpected_result"
 
-    # Refresh the shared cache so every campaign (and onboarding) benefits.
+    # Refresh the shared cache so every campaign (and onboarding) benefits. Only the
+    # comments verdict has a column there; the rest of the reply rides the run's
+    # in-memory state, the same way per-row provenance does.
     await upsert_linked_group(
         channel,
         result.linked_chat_id,
         comments_enabled=result.comments_enabled,
     )
+    _discovery_state.record_verdict(campaign_id, channel, _verdict_of(result))
     await mark_discovery_qualified(
         campaign_id,
         channel,

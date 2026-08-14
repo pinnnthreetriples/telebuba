@@ -17,22 +17,25 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Where a candidate came from. Adding a source is one literal here plus one
 # adapter in services (see .mex/patterns/add-discovery-source.md).
-DiscoverySource = Literal["telegram_search", "telegram_similar", "telemetr"]
+#   telegram_search      — contacts.search per keyword (names and titles).
+#   telegram_similar     — recommendations for the operator's own seed channel.
+#   telegram_posts       — messages.searchGlobal per keyword, paged: channels whose
+#                          POSTS match, so ones whose title never carries the keyword.
+#   telegram_recommended — recommendations for the keyword sweep's own best hits, one
+#                          read per seed. Separate from ``telegram_similar`` so a wave
+#                          that ran cannot mask the seed pass's own reason.
+DiscoverySource = Literal[
+    "telegram_search",
+    "telegram_similar",
+    "telegram_posts",
+    "telegram_recommended",
+]
 
 # What one source did on a run. ``ran`` = it answered at least once, ``failed`` = every
-# attempt errored, ``skipped`` = it was never asked (disabled, no key, no seed). Nothing
-# else is producible: a source either answers, refuses or is not consulted.
+# attempt errored, ``skipped`` = it was never asked (no seed, or the run's read budget
+# was already spent). Nothing else is producible: a source either answers, refuses or is
+# not consulted.
 DiscoverySourceState = Literal["ran", "failed", "skipped"]
-
-# The filter values the UI offers (``LANGUAGES``/``COUNTRIES`` in DiscoveryForm.tsx),
-# which are also the ones ``core.telemetr`` can bridge to Telemetr.io's dictionaries.
-# Literals rather than a shared constant because ``schemas/`` may not import ``core``;
-# adding a region means editing all three lists. Accepting anything else was worse than
-# useless: the catalogue answered with an empty page and the operator was told nothing.
-DiscoveryLanguage = Literal["ru", "en", "ar", "de", "fr", "es", "tr", "uk", "kk", "uz", "fa", "hi"]
-DiscoveryCountry = Literal[
-    "RU", "KZ", "UZ", "UA", "BY", "DE", "FR", "ES", "GB", "TR", "AE", "SA", "EG"
-]
 
 # Whether the channel accepts comments. ``pending`` = not probed yet, ``unknown`` =
 # the probe failed (Telegram unreachable / channel gone), so the operator sees the
@@ -77,15 +80,12 @@ Keyword = Annotated[str, Field(min_length=1, max_length=KEYWORD_MAX_LENGTH)]
 class DiscoverySearchRequest(BaseModel):
     """Operator-supplied search parameters.
 
-    ``language``/``country`` only reach Telemetr.io — Telegram's native search has
-    no such filters, so they are refused without ``use_telemetr``: accepting them
-    answered 202 for a run in which the filters reached nothing at all.
-    ``members_min``/``members_max`` are applied by Telemetr server-side and re-applied
-    client-side to native hits once the subscriber count is known.
+    ``members_min``/``members_max`` are applied client-side to the hits whose subscriber
+    count Telegram happens to return.
 
     ``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped
     before, so a direct caller posting one keyword ten times spent ten identical Telegram
-    RPCs against the flood budget and ten identical requests against a 1000/month quota.
+    RPCs against the flood budget.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -96,18 +96,8 @@ class DiscoverySearchRequest(BaseModel):
         min_length=1,
         max_length=CHANNEL_HANDLE_MAX_LENGTH,
     )
-    language: DiscoveryLanguage | None = None
-    country: DiscoveryCountry | None = None
     members_min: int | None = Field(default=None, ge=0)
     members_max: int | None = Field(default=None, ge=0)
-    # Off by default: the external catalogue costs quota and needs an operator key.
-    use_telemetr: bool = False
-    # Drop Telegram's own search and keep only the source that honours the locale
-    # filters. Measured on the real cap: with four or more keywords and a productive
-    # catalogue this costs ZERO rows and takes the locale-verified share from ~50% to
-    # 100%. Off by default because a thin catalogue is the opposite case — a niche
-    # filter on one keyword is 3 rows this way against 23 with Telegram alongside.
-    catalogue_only: bool = False
 
     @model_validator(mode="after")
     def _check_bounds(self) -> DiscoverySearchRequest:
@@ -132,13 +122,6 @@ class DiscoverySearchRequest(BaseModel):
             # service's (``core.channel_tokens`` is off limits to ``schemas/``).
             msg = "seed_channel must not be blank"
             raise ValueError(msg)
-        if (self.language is not None or self.country is not None) and not self.use_telemetr:
-            msg = "language/country need use_telemetr: only the catalogue can apply them"
-            raise ValueError(msg)
-        if self.catalogue_only and not self.use_telemetr:
-            # Otherwise the run has no source at all and would report an empty success.
-            msg = "catalogue_only needs use_telemetr: it is the only source left"
-            raise ValueError(msg)
         if (
             self.members_min is not None
             and self.members_max is not None
@@ -158,7 +141,7 @@ class DiscoverySearchOutcome(BaseModel):
 class DiscoverySourceReport(BaseModel):
     """What one source contributed to the last run, as the board shows it.
 
-    Without this nothing told the operator that a filter had not applied: the board
+    Without this nothing told the operator that a source had not answered: the board
     carried one ``last_error`` and a source that was skipped carried none at all.
     """
 
@@ -170,32 +153,30 @@ class DiscoverySourceReport(BaseModel):
     # counts for both — crediting only the dedup winner is what hid the starvation.
     kept: int = Field(default=0, ge=0)
     # Of those, the ones NO other source found. ``kept`` alone still concealed a variant
-    # of the same starvation: a catalogue whose rows were mostly duplicates of native
-    # hits reported "50 of 60" while every one of its five own discoveries was cut.
+    # of the same starvation: a source whose rows were mostly duplicates of the other's
+    # reported "50 of 60" while every one of its five own discoveries was cut.
     exclusive: int = Field(default=0, ge=0)
-    # Did the source have more than it gave us? A flag, not a count: only the catalogue
-    # advertises a total, per keyword, and summing those double-counts every channel two
-    # keywords share — so the honest signal is that the page was capped, not a figure.
-    truncated: bool = False
-    # Short locale-neutral code (``telemetr_auth_failed``, ``FloodWait(120s)``), plus the
-    # gateway's own diagnostic text when it gave one: a revoked key, an expired
-    # subscription and a dead network are not the same problem to fix.
+    # Short locale-neutral code (``FloodWait(120s)``, ``seed_unusable``, ``read_budget``).
     reason: str | None = None
-    detail: str | None = None
+    # Did the run's shared read budget (``discovery_max_reads_per_run``) cut this source
+    # short? Filled by every Telegram wave — ``telegram_search`` mid-sweep,
+    # ``telegram_posts`` mid-paging, ``telegram_similar``/``telegram_recommended`` before
+    # a read they never got to make — because a wave stopped by the budget returns fewer
+    # channels than it could have, and the board must say so rather than let the operator
+    # read a truncated run as an exhausted one.
+    truncated: bool = False
 
 
 class DiscoveryCandidateOrigin(BaseModel):
-    """Per-row provenance and catalogue geo for the run in flight.
+    """Per-row provenance for the run in flight.
 
-    Deliberately NOT persisted: the candidate table has no column for either, and a
+    Deliberately NOT persisted: the candidate table has no column for it, and a
     migration against the operator's live database needs their approval. So this rides
     the board payload while the run's in-memory state lives, and a candidate read after
     a restart falls back to the stored single ``source``.
     """
 
     sources: list[DiscoverySource] = Field(default_factory=list)
-    country: str | None = None
-    language: str | None = None
 
 
 class DiscoveryRunReport(BaseModel):
@@ -220,6 +201,45 @@ class DiscoverySearchStageResult(BaseModel):
     report: DiscoveryRunReport = Field(default_factory=DiscoveryRunReport)
 
 
+class DiscoveryChannelVerdict(BaseModel):
+    """Why a candidate is (or is not) a place this campaign can comment in.
+
+    Every field rides the SAME ``channels.getFullChannel`` reply the comments-enabled
+    probe already spends, so learning any of it costs no extra RPC.
+
+    Tri-state on purpose: ``None`` means the reply did not answer that field (no linked
+    group, an older TL layer, a field Telegram omitted) and NEVER "no". The board must
+    render an unanswered signal as unknown, and no caller may block a channel on
+    anything but an explicit positive verdict — never on falsiness.
+
+    Deliberately NOT persisted, exactly like :class:`DiscoveryCandidateOrigin`: the
+    candidate table has no column for it, and a migration against the operator's live
+    database needs their approval. A candidate read after a restart therefore carries no
+    verdict at all, which reads as "unknown", not as "fine".
+    """
+
+    # May anyone write in the discussion group at all? Positive sense: the wire carries
+    # ``default_banned_rights.send_messages`` ("writing is banned for everyone").
+    can_send_messages: bool | None = None
+    # Commenting requires joining the discussion group first.
+    join_to_send: bool | None = None
+    # ...and that join needs an admin's approval — a dead end for an unattended campaign.
+    join_request: bool | None = None
+    # Slow mode is on in the DISCUSSION GROUP. Its interval is deliberately absent: it is
+    # not in the probe's reply and reading it would cost a second ``getFullChannel``, so
+    # the board says "slow mode" without a number rather than pairing this with the
+    # broadcast's interval below, which describes a different chat.
+    group_slowmode_enabled: bool | None = None
+    # The BROADCAST channel's own slow-mode interval. Unbounded here on purpose: it is
+    # copied verbatim from the gateway model, and a bound would turn odd Telegram data
+    # into a ValidationError inside a background probe.
+    broadcast_slowmode_seconds: int | None = None
+    # Telegram's own marks on the broadcast channel — the entity the operator adopts.
+    scam: bool | None = None
+    fake: bool | None = None
+    restricted: bool | None = None
+
+
 class DiscoveryCandidate(BaseModel):
     """One found channel as the operator sees it."""
 
@@ -229,11 +249,11 @@ class DiscoveryCandidate(BaseModel):
     source: DiscoverySource
     # Every source that returned this channel, not just the one whose spelling won.
     sources: list[DiscoverySource] = Field(default_factory=list)
-    # What the catalogue filed the channel under, so a filter can be verified rather
-    # than trusted. Only Telemetr.io supplies these, and only for the run in flight.
-    country: str | None = None
-    language: str | None = None
     qualification: DiscoveryQualification
+    # What the qualification probe learnt beyond comments on/off, while this process
+    # holds the run's state. ``None`` = no verdict available (never probed here, or lost
+    # to a restart), which is unknown — not fine.
+    verdict: DiscoveryChannelVerdict | None = None
     # Already an active link on THIS campaign.
     in_campaign: bool = False
     # Active on another campaign — the one-active-campaign-per-channel guard means
@@ -247,7 +267,7 @@ class DiscoveryProgress(BaseModel):
     total: int = Field(default=0, ge=0)
     qualified: int = Field(default=0, ge=0)
     comments_on: int = Field(default=0, ge=0)
-    # Locale-neutral short code (e.g. ``FloodWait(120s)``, ``telemetr_rate_limited``).
+    # Locale-neutral short code (e.g. ``FloodWait(120s)``, ``seed_unusable``).
     last_error: str | None = None
     # One entry per source the last run considered. Empty for a campaign that never
     # searched, or whose run predates this process.
@@ -284,11 +304,14 @@ class DiscoveryAdoptRequest(BaseModel):
         return self
 
 
-# Batch-only third status: ``failed`` is a channel whose link attempt raised (the DB was
-# locked, the campaign was deleted mid-batch). ``ChannelLinkOutcome`` is deliberately
-# left alone — the single-channel link route cannot produce this, and widening its
-# literal would advertise a status it never returns.
-DiscoveryAdoptStatus = Literal["linked", "already_assigned", "failed"]
+# Batch-only statuses: ``failed`` is a channel whose link attempt raised (the DB was
+# locked, the campaign was deleted mid-batch), and ``comments_off`` is one the server
+# refused because its cached qualification says the campaign could never comment there —
+# the check the UI's disabled checkbox used to be the only enforcement of.
+# ``ChannelLinkOutcome`` is deliberately left alone — the single-channel link route
+# cannot produce either, and widening its literal would advertise statuses it never
+# returns.
+DiscoveryAdoptStatus = Literal["linked", "already_assigned", "comments_off", "failed"]
 
 
 class DiscoveryAdoptOutcome(BaseModel):

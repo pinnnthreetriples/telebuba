@@ -17,7 +17,7 @@ from core.repositories.neurocomment import (
 from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions import LinkedDiscussionGroupResult
-from services.neurocomment import _seams
+from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_qualify import run_qualification
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
@@ -82,6 +82,116 @@ async def test_probe_records_the_verdict_and_refreshes_the_shared_cache(
     cached = await fetch_linked_group("alpha")
     assert cached is not None
     assert cached.comments_enabled == 1
+
+
+@pytest.mark.asyncio
+async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All of this rides the getFullChannel reply the probe already spends.
+
+    Throwing it away for one bool is what left the board unable to say WHY a channel is
+    unusable — and re-learning any of it would cost another RPC per candidate.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            linked=lambda _action: LinkedDiscussionGroupResult(
+                linked_chat_id=-100,
+                comments_enabled=True,
+                group_slowmode_enabled=True,
+                broadcast_slowmode_seconds=30,
+                join_to_send=True,
+                join_request=True,
+                can_send_messages=False,
+                scam=True,
+                fake=False,
+                restricted=True,
+            ),
+        ),
+    )
+    campaign_id = await _seed("gated")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    verdict = _discovery_state.verdicts(campaign_id)["gated"]
+    # ``comments_enabled`` is deliberately absent: it duplicated the candidate's own
+    # ``qualification`` field, which is what the board actually renders.
+    assert verdict.model_dump() == {
+        "can_send_messages": False,
+        "join_to_send": True,
+        "join_request": True,
+        "group_slowmode_enabled": True,
+        "broadcast_slowmode_seconds": 30,
+        "scam": True,
+        "fake": False,
+        "restricted": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_signal_the_reply_omits_stays_unknown_rather_than_a_no(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``None`` means "the reply did not answer", so nothing may flatten it to ``False``.
+
+    A channel blocked on a field Telegram simply omitted (older TL layer, no linked
+    group) would be refused for a gate that was never measured.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
+    )
+    campaign_id = await _seed("quiet")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    verdict = _discovery_state.verdicts(campaign_id)["quiet"]
+    assert verdict.can_send_messages is None
+    assert verdict.join_to_send is None
+    assert verdict.join_request is None
+    assert verdict.restricted is None
+
+
+@pytest.mark.asyncio
+async def test_an_unanswerable_probe_records_no_verdict_at_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed probe learnt nothing, so the board must read fitness as unknown."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=read_error("RPC: ChannelPrivateError")),
+    )
+    campaign_id = await _seed("broken")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    assert _discovery_state.verdicts(campaign_id) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_cache_hit_spends_no_rpc_and_so_carries_no_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fitness signals have no column, so a cached channel has none to report.
+
+    Deliberate: the cheap re-search is worth more than a full verdict, and the board
+    still knows from the cache whether comments are on.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
+    )
+    campaign_id = await _seed("known")
+    await upsert_linked_group("known", -100, comments_enabled=True)
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    assert _discovery_state.verdicts(campaign_id) == {}
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,12 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DiscoveryBoard, DiscoveryCandidate, DiscoverySourceReport } from '@/shared/api';
+import type {
+  DiscoveryBoard,
+  DiscoveryCandidate,
+  DiscoveryChannelVerdict,
+  DiscoverySourceReport,
+} from '@/shared/api';
 import { DataTable, StatusIcon, useWideContainer, type DataTableColumnMeta } from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
@@ -16,34 +21,24 @@ const SOURCE_STATE = {
 } as const;
 
 // Reasons are deliberately locale-neutral codes, and printing them raw put strings like
-// "telemetr_quota_exhausted" in front of the operator. Unmapped codes fall back to the
-// code itself, so a new one degrades to the old behaviour rather than to nothing.
+// "seed_unusable" in front of the operator. Unmapped codes fall back to the code itself,
+// so a new one degrades to the old behaviour rather than to nothing.
 const reasonKey = (reason: string) => `neurocomment.modal.discovery.results.reason.${reason}`;
-
-// Catalogue failures a retry cannot clear. While a locale filter is set the catalogue is
-// the only source allowed to answer, so these block every run until the operator acts —
-// and nothing used to name the way out.
-const TERMINAL_CATALOGUE_REASONS = new Set([
-  'telemetr_not_configured',
-  'telemetr_auth_failed',
-  'telemetr_subscription_inactive',
-  'telemetr_quota_exhausted',
-  'telemetr_forbidden',
-  'telemetr_unresolved_filter',
-]);
 
 /** One line per source: what it returned, and what survived into the table.
  *
- * The operator could set a language and a country, watch a run reach "done", and never
- * learn that the only source those two filters reach had contributed nothing — because
- * the board carried a single error string and a skipped source carried none at all. A
- * source crediting `0` here is that missing signal.
+ * The operator could watch a run reach "done" and never learn that one of its sources
+ * had contributed nothing — because the board carried a single error string and a
+ * skipped source carried none at all. A source crediting `0` here is that missing signal.
  */
 function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
   const { t } = useTranslation();
   if (sources.length === 0) return null;
+  // Its own line, not a cell of the toolbar row: four waves each carrying counts, a
+  // uniqueness note and a reason do not fit beside the found-count without collapsing
+  // into an ellipsis.
   return (
-    <span className="text-ink-subtle">
+    <p className="text-[11.5px] text-ink-subtle">
       {sources
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
@@ -59,35 +54,60 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
           if (exclusive !== kept) {
             line += ` ${t('neurocomment.modal.discovery.results.sourceExclusive', { exclusive })}`;
           }
-          // A capped page otherwise reads as the whole answer.
+          // The run's read budget stopped this wave, so its counts are a floor rather
+          // than a total — "20 of 20" would otherwise read as a source read to the end.
           if (report.truncated === true) {
-            line += `, ${t('neurocomment.modal.discovery.results.sourceTruncated')}`;
+            line += ` ${t('neurocomment.modal.discovery.results.sourceTruncated')}`;
           }
           // A skipped or failed source is the whole point of this strip, so it says why.
           if (report.reason == null) return line;
           return `${line} — ${t(reasonKey(report.reason), { defaultValue: report.reason })}`;
         })
         .join(' · ')}
-    </span>
+    </p>
   );
 }
 
-function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; settled: boolean }) {
+// A gate the campaign cannot pass at all, versus one it can pay its way through.
+const BLOCKING = new Set(['cantWrite', 'scam', 'fake', 'restricted']);
+
+/** The gates the backend explicitly answered — and only those.
+ *
+ * Every field is tri-state and `null` means Telegram did not answer it (no linked group,
+ * an older TL layer, a field omitted), NEVER "no". So a mark appears on an explicit
+ * signal only: an unanswered field produces no mark rather than a cleared gate, which
+ * would tell the operator a channel is writable when nothing ever checked it.
+ */
+function verdictMarks(verdict: DiscoveryChannelVerdict) {
+  const marks: { key: string; seconds?: number | null }[] = [];
+  if (verdict.can_send_messages === false) marks.push({ key: 'cantWrite' });
+  if (verdict.join_to_send === true) marks.push({ key: 'joinRequired' });
+  if (verdict.join_request === true) marks.push({ key: 'joinRequest' });
+  // Two different chats, so two different marks. The group's flag says slow mode is ON
+  // where the campaign would comment but carries no interval (that would cost a second
+  // getFullChannel), and pairing it with the broadcast's number printed "slow mode: —
+  // seconds" for the ordinary case of a 30s group under a channel with none.
+  if (verdict.group_slowmode_enabled === true) marks.push({ key: 'slowMode' });
+  if ((verdict.broadcast_slowmode_seconds ?? 0) > 0) {
+    marks.push({ key: 'channelSlowMode', seconds: verdict.broadcast_slowmode_seconds });
+  }
+  if (verdict.scam === true) marks.push({ key: 'scam' });
+  if (verdict.fake === true) marks.push({ key: 'fake' });
+  if (verdict.restricted === true) marks.push({ key: 'restricted' });
+  return marks;
+}
+
+function CommentsMark({ state }: { state: string }) {
   const { t } = useTranslation();
-  // 'pending' means never probed, which the backend keeps distinct from 'unknown'
-  // (probed, unanswerable). Once the run has stopped nothing will probe it, so it has
-  // to read as "not checked yet" — a re-run resolves those, unlike 'unknown'.
-  const state = candidate.qualification ?? 'pending';
-  const qualification = settled && state === 'pending' ? 'notChecked' : state;
-  const label = t(`neurocomment.modal.discovery.comments.${qualification}`);
-  if (qualification === 'comments_on') {
+  const label = t(`neurocomment.modal.discovery.comments.${state}`);
+  if (state === 'comments_on') {
     return (
       <span className="inline-flex text-success" role="img" title={label} aria-label={label}>
         <StatusIcon kind="ok" />
       </span>
     );
   }
-  if (qualification === 'comments_off') {
+  if (state === 'comments_off') {
     return (
       <span className="inline-flex text-ink-muted" role="img" title={label} aria-label={label}>
         <StatusIcon kind="err" />
@@ -101,7 +121,7 @@ function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; s
     <span className="inline-flex items-center gap-[5px] text-[11.5px] text-ink-subtle">
       <span
         className={`h-[6px] w-[6px] rounded-full bg-line-strong ${
-          qualification === 'pending' ? 'animate-pulse' : ''
+          state === 'pending' ? 'animate-pulse' : ''
         }`}
       />
       {label}
@@ -109,12 +129,44 @@ function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; s
   );
 }
 
+function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; settled: boolean }) {
+  const { t } = useTranslation();
+  // 'pending' means never probed, which the backend keeps distinct from 'unknown'
+  // (probed, unanswerable). Once the run has stopped nothing will probe it, so it has
+  // to read as "not checked yet" — a re-run resolves those, unlike 'unknown'.
+  const raw = candidate.qualification ?? 'pending';
+  const state = settled && raw === 'pending' ? 'notChecked' : raw;
+  const verdict = candidate.verdict;
+  // No verdict at all: never probed in this process, or lost to a restart — the backend
+  // does not persist it. Suppressed where the comments state already says "not checked",
+  // which would be the same sentence twice.
+  const unanswered = verdict == null && state !== 'pending' && state !== 'notChecked';
+  return (
+    <div className="flex flex-col items-start gap-[3px]">
+      <CommentsMark state={state} />
+      {unanswered ? (
+        <span className="text-[11px] text-ink-subtle">
+          {t('neurocomment.modal.discovery.verdict.unknown')}
+        </span>
+      ) : null}
+      {(verdict == null ? [] : verdictMarks(verdict)).map((mark) => (
+        <span
+          key={mark.key}
+          className={`text-[11px] ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning'}`}
+        >
+          {/* Only the marks that carry an interval interpolate one — no placeholder
+              stands in for a number the backend deliberately does not have. */}
+          {t(`neurocomment.modal.discovery.verdict.${mark.key}`, { seconds: mark.seconds })}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 type Props = {
   board: DiscoveryBoard | undefined;
   loading: boolean;
   errored: boolean;
-  /** Did this run ask for a language or country? Only then is a missing geo a finding. */
-  localeFiltered: boolean;
   selected: ReadonlySet<string>;
   onToggle: (channel: string) => void;
   onToggleAll: (channels: string[], next: boolean) => void;
@@ -124,7 +176,6 @@ export function DiscoveryResults({
   board,
   loading,
   errored,
-  localeFiltered,
   selected,
   onToggle,
   onToggleAll,
@@ -223,20 +274,16 @@ export function DiscoveryResults({
       id: 'source',
       header: () => t('neurocomment.modal.discovery.results.colSource'),
       cell: ({ row }) => {
-        // The catalogue is the only source that files a channel under a country and a
-        // language, so its geo is the per-row proof that the filter reached THIS row.
-        // Its absence, when a locale filter was asked for, is the proof that it did not:
-        // Telegram's own search has no such filter and its rows are simply unvouched.
-        const geo = [row.original.country, row.original.language].filter(Boolean).join(' · ');
+        // The whole path, not just `source`: that field names only the winner of the
+        // dedup, and a channel two independent waves both reached is a far stronger
+        // signal than one a single keyword turned up.
+        const found = row.original.sources ?? [];
+        const sources = found.length > 0 ? found : [row.original.source];
         return (
           <span className="text-[11.5px] text-ink-subtle">
-            {t(`neurocomment.modal.discovery.source.${row.original.source}`)}
-            {geo !== '' ? <span className="ml-[5px] text-ink-muted">{geo}</span> : null}
-            {geo === '' && localeFiltered ? (
-              <span className="ml-[5px] text-warning">
-                {t('neurocomment.modal.discovery.results.unfiltered')}
-              </span>
-            ) : null}
+            {sources
+              .map((source) => t(`neurocomment.modal.discovery.source.${source}`))
+              .join(' + ')}
           </span>
         );
       },
@@ -244,7 +291,7 @@ export function DiscoveryResults({
     {
       id: 'comments',
       header: () => t('neurocomment.modal.discovery.results.colComments'),
-      cell: ({ row }) => <CommentsCell candidate={row.original} settled={settled} />,
+      cell: ({ row }) => <VerdictCell candidate={row.original} settled={settled} />,
     },
     {
       id: 'state',
@@ -296,16 +343,6 @@ export function DiscoveryResults({
   }
 
   if (failed && candidates.length === 0) {
-    // A catalogue that is terminally down (revoked key, lapsed plan, spent quota) blocks
-    // EVERY run while a locale filter is set, because storing unfiltered rows over a
-    // filtered set is a downgrade. Nothing said so, and nothing named the way out.
-    // Only the reasons a retry cannot fix. A rate limit or a network blip is also
-    // `state: 'failed'`, but there the advice is "try again", not "drop your filters" —
-    // and a missing key is `skipped`, the same dead end with a different way out.
-    const catalogue = (board?.progress.sources ?? []).find(
-      (report) => report.source === 'telemetr',
-    );
-    const stuck = catalogue?.reason != null && TERMINAL_CATALOGUE_REASONS.has(catalogue.reason);
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
@@ -316,11 +353,6 @@ export function DiscoveryResults({
                   defaultValue: board.progress.last_error,
                 }),
         })}
-        {stuck && localeFiltered ? (
-          <span className="mt-[6px] block text-ink-subtle">
-            {t('neurocomment.modal.discovery.results.catalogueDown')}
-          </span>
-        ) : null}
       </p>
     );
   }
@@ -378,8 +410,8 @@ export function DiscoveryResults({
             })}
           </span>
         ) : null}
-        <SourceStrip sources={board?.progress.sources ?? []} />
       </div>
+      <SourceStrip sources={board?.progress.sources ?? []} />
       <div ref={results} className="tb-scroll overflow-x-auto">
         <DataTable
           data={candidates}

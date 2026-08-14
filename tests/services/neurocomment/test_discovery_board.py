@@ -18,6 +18,7 @@ from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import (
     DiscoveryCandidateOrigin,
     DiscoveryCandidateRow,
+    DiscoveryChannelVerdict,
     DiscoveryRunReport,
     DiscoverySourceReport,
 )
@@ -157,8 +158,8 @@ async def test_board_reports_phase_and_error_from_run_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_board_reports_per_source_outcomes_and_the_catalogue_geo() -> None:
-    """The one addition that turns a filter which never applied from silent into obvious."""
+async def test_board_reports_per_source_outcomes_and_provenance() -> None:
+    """The one addition that turns a source which never answered from silent into obvious."""
     campaign_id = await _campaign()
     await replace_discovery_candidates(campaign_id, [_row("shared", source="telegram_search")])
     _discovery_state.set_run_report(
@@ -167,17 +168,14 @@ async def test_board_reports_per_source_outcomes_and_the_catalogue_geo() -> None
             sources=[
                 DiscoverySourceReport(source="telegram_search", state="ran", hits=3, kept=1),
                 DiscoverySourceReport(
-                    source="telemetr",
-                    state="failed",
-                    reason="telemetr_quota_exhausted",
-                    detail="HTTP 426",
+                    source="telegram_similar",
+                    state="skipped",
+                    reason="seed_unusable",
                 ),
             ],
             origins={
                 "shared": DiscoveryCandidateOrigin(
-                    sources=["telegram_search", "telemetr"],
-                    country="TR",
-                    language="tr",
+                    sources=["telegram_search", "telegram_similar"],
                 ),
             },
         ),
@@ -188,25 +186,140 @@ async def test_board_reports_per_source_outcomes_and_the_catalogue_geo() -> None
     assert board is not None
     assert [(item.source, item.state) for item in board.progress.sources] == [
         ("telegram_search", "ran"),
-        ("telemetr", "failed"),
+        ("telegram_similar", "skipped"),
     ]
-    candidate = board.candidates[0]
-    assert candidate.sources == ["telegram_search", "telemetr"]
-    assert (candidate.country, candidate.language) == ("TR", "tr")
+    assert board.candidates[0].sources == ["telegram_search", "telegram_similar"]
 
 
 @pytest.mark.asyncio
 async def test_a_candidate_with_no_run_state_falls_back_to_its_stored_source() -> None:
-    """Geo and multi-source provenance are not persisted, so a restart loses them only."""
+    """Multi-source provenance is not persisted, so a restart loses that only."""
     campaign_id = await _campaign()
-    await replace_discovery_candidates(campaign_id, [_row("orphan", source="telemetr")])
+    await replace_discovery_candidates(campaign_id, [_row("orphan", source="telegram_similar")])
 
     board = await load_discovery(campaign_id)
 
     assert board is not None
-    assert board.candidates[0].sources == ["telemetr"]
-    assert board.candidates[0].country is None
+    assert board.candidates[0].sources == ["telegram_similar"]
     assert board.progress.sources == []
+
+
+@pytest.mark.asyncio
+async def test_the_board_carries_the_fitness_verdict_of_the_run_in_flight() -> None:
+    """Comments-on alone never told the operator WHY a channel is a dead end."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("gated")])
+    await upsert_linked_group("gated", -100, comments_enabled=True)
+    await mark_discovery_qualified(campaign_id, "gated")
+    _discovery_state.record_verdict(
+        campaign_id,
+        "gated",
+        DiscoveryChannelVerdict(join_request=True, broadcast_slowmode_seconds=60),
+    )
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    verdict = board.candidates[0].verdict
+    assert verdict is not None
+    assert verdict.join_request is True
+    assert verdict.broadcast_slowmode_seconds == 60
+    # Not measured by this run, and it must not read as a "no".
+    assert verdict.can_send_messages is None
+
+
+@pytest.mark.asyncio
+async def test_a_candidate_with_no_recorded_verdict_reads_as_unknown_not_fine() -> None:
+    """The verdict is not persisted, so a board read after a restart has none.
+
+    ``None`` is the only honest answer there — degrading to an empty (all-``False``)
+    verdict would advertise every gate as cleared for a channel nobody measured.
+    """
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("orphan")])
+    await upsert_linked_group("orphan", -100, comments_enabled=True)
+    await mark_discovery_qualified(campaign_id, "orphan")
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    assert board.candidates[0].qualification == "comments_on"
+    assert board.candidates[0].verdict is None
+
+
+@pytest.mark.asyncio
+async def test_adopt_refuses_a_channel_whose_cached_verdict_says_comments_are_off() -> None:
+    """The UI disabling the checkbox was the ONLY enforcement; a direct caller bypassed it.
+
+    A per-channel status, not an exception: the other picks must still link and still be
+    reported.
+    """
+    campaign_id = await _campaign()
+    await upsert_linked_group("silent", None, comments_enabled=False)
+    await upsert_linked_group("talkative", -100, comments_enabled=True)
+
+    result = await adopt_candidates(campaign_id, ["silent", "talkative"])
+
+    assert result is not None
+    assert [(o.channel, o.status) for o in result.outcomes] == [
+        ("silent", "comments_off"),
+        ("talkative", "linked"),
+    ]
+    from core.db import list_campaign_channels  # noqa: PLC0415
+
+    links = await list_campaign_channels(campaign_id)
+    assert [link.channel for link in links.links] == ["talkative"]
+
+
+@pytest.mark.asyncio
+async def test_adopt_does_not_refuse_a_channel_that_was_never_probed() -> None:
+    """A cold cache must not become a way to block adoption."""
+    campaign_id = await _campaign()
+
+    result = await adopt_candidates(campaign_id, ["unprobed"])
+
+    assert result is not None
+    assert [o.status for o in result.outcomes] == ["linked"]
+
+
+@pytest.mark.asyncio
+async def test_adopt_does_not_refuse_on_a_verdict_probed_long_ago(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel that switched comments on since the probe must still be adoptable.
+
+    The guard shares ``_discovery_qualify._is_fresh`` with the probe loop, whose own
+    tests pin the unit of the TTL; zeroing it here is the shortest way to say "every
+    cached verdict is past its window".
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_linked_group_ttl_hours", 0)
+    campaign_id = await _campaign()
+    await upsert_linked_group("reopened", None, comments_enabled=False)
+
+    result = await adopt_candidates(campaign_id, ["reopened"])
+
+    assert result is not None
+    assert [o.status for o in result.outcomes] == ["linked"]
+
+
+@pytest.mark.asyncio
+async def test_a_batch_of_only_refusals_links_nothing_and_skips_the_reconcile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+
+    async def _record() -> None:
+        calls.append(1)
+
+    monkeypatch.setattr(_runtime, "reconcile_if_running", _record)
+    campaign_id = await _campaign()
+    await upsert_linked_group("silent", None, comments_enabled=False)
+
+    result = await adopt_candidates(campaign_id, ["silent"])
+
+    assert result is not None
+    assert [o.status for o in result.outcomes] == ["comments_off"]
+    assert calls == []
 
 
 @pytest.mark.asyncio

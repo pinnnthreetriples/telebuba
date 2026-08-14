@@ -10471,6 +10471,7 @@
             "enum": [
               "linked",
               "already_assigned",
+              "comments_off",
               "failed"
             ],
             "title": "Status"
@@ -10576,7 +10577,8 @@
             "enum": [
               "telegram_search",
               "telegram_similar",
-              "telemetr"
+              "telegram_posts",
+              "telegram_recommended"
             ],
             "title": "Source"
           },
@@ -10586,33 +10588,12 @@
               "enum": [
                 "telegram_search",
                 "telegram_similar",
-                "telemetr"
+                "telegram_posts",
+                "telegram_recommended"
               ]
             },
             "type": "array",
             "title": "Sources"
-          },
-          "country": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Country"
-          },
-          "language": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Language"
           },
           "qualification": {
             "type": "string",
@@ -10623,6 +10604,16 @@
               "unknown"
             ],
             "title": "Qualification"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryChannelVerdict"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "in_campaign": {
             "type": "boolean",
@@ -10643,6 +10634,101 @@
         ],
         "title": "DiscoveryCandidate",
         "description": "One found channel as the operator sees it."
+      },
+      "DiscoveryChannelVerdict": {
+        "properties": {
+          "can_send_messages": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Can Send Messages"
+          },
+          "join_to_send": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join To Send"
+          },
+          "join_request": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Join Request"
+          },
+          "group_slowmode_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Slowmode Enabled"
+          },
+          "broadcast_slowmode_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Broadcast Slowmode Seconds"
+          },
+          "scam": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scam"
+          },
+          "fake": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fake"
+          },
+          "restricted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restricted"
+          }
+        },
+        "type": "object",
+        "title": "DiscoveryChannelVerdict",
+        "description": "Why a candidate is (or is not) a place this campaign can comment in.\n\nEvery field rides the SAME ``channels.getFullChannel`` reply the comments-enabled\nprobe already spends, so learning any of it costs no extra RPC.\n\nTri-state on purpose: ``None`` means the reply did not answer that field (no linked\ngroup, an older TL layer, a field Telegram omitted) and NEVER \"no\". The board must\nrender an unanswered signal as unknown, and no caller may block a channel on\nanything but an explicit positive verdict \u2014 never on falsiness.\n\nDeliberately NOT persisted, exactly like :class:`DiscoveryCandidateOrigin`: the\ncandidate table has no column for it, and a migration against the operator's live\ndatabase needs their approval. A candidate read after a restart therefore carries no\nverdict at all, which reads as \"unknown\", not as \"fine\"."
       },
       "DiscoveryProgress": {
         "properties": {
@@ -10753,57 +10839,6 @@
             ],
             "title": "Seed Channel"
           },
-          "language": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "ru",
-                  "en",
-                  "ar",
-                  "de",
-                  "fr",
-                  "es",
-                  "tr",
-                  "uk",
-                  "kk",
-                  "uz",
-                  "fa",
-                  "hi"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Language"
-          },
-          "country": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "RU",
-                  "KZ",
-                  "UZ",
-                  "UA",
-                  "BY",
-                  "DE",
-                  "FR",
-                  "ES",
-                  "GB",
-                  "TR",
-                  "AE",
-                  "SA",
-                  "EG"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Country"
-          },
           "members_min": {
             "anyOf": [
               {
@@ -10827,16 +10862,6 @@
               }
             ],
             "title": "Members Max"
-          },
-          "use_telemetr": {
-            "type": "boolean",
-            "title": "Use Telemetr",
-            "default": false
-          },
-          "catalogue_only": {
-            "type": "boolean",
-            "title": "Catalogue Only",
-            "default": false
           }
         },
         "additionalProperties": false,
@@ -10845,7 +10870,7 @@
           "keywords"
         ],
         "title": "DiscoverySearchRequest",
-        "description": "Operator-supplied search parameters.\n\n``language``/``country`` only reach Telemetr.io \u2014 Telegram's native search has\nno such filters, so they are refused without ``use_telemetr``: accepting them\nanswered 202 for a run in which the filters reached nothing at all.\n``members_min``/``members_max`` are applied by Telemetr server-side and re-applied\nclient-side to native hits once the subscriber count is known.\n\n``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped\nbefore, so a direct caller posting one keyword ten times spent ten identical Telegram\nRPCs against the flood budget and ten identical requests against a 1000/month quota."
+        "description": "Operator-supplied search parameters.\n\n``members_min``/``members_max`` are applied client-side to the hits whose subscriber\ncount Telegram happens to return.\n\n``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped\nbefore, so a direct caller posting one keyword ten times spent ten identical Telegram\nRPCs against the flood budget."
       },
       "DiscoverySourceReport": {
         "properties": {
@@ -10854,7 +10879,8 @@
             "enum": [
               "telegram_search",
               "telegram_similar",
-              "telemetr"
+              "telegram_posts",
+              "telegram_recommended"
             ],
             "title": "Source"
           },
@@ -10885,11 +10911,6 @@
             "title": "Exclusive",
             "default": 0
           },
-          "truncated": {
-            "type": "boolean",
-            "title": "Truncated",
-            "default": false
-          },
           "reason": {
             "anyOf": [
               {
@@ -10901,16 +10922,10 @@
             ],
             "title": "Reason"
           },
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Detail"
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           }
         },
         "type": "object",
@@ -10919,7 +10934,7 @@
           "state"
         ],
         "title": "DiscoverySourceReport",
-        "description": "What one source contributed to the last run, as the board shows it.\n\nWithout this nothing told the operator that a filter had not applied: the board\ncarried one ``last_error`` and a source that was skipped carried none at all."
+        "description": "What one source contributed to the last run, as the board shows it.\n\nWithout this nothing told the operator that a source had not answered: the board\ncarried one ``last_error`` and a source that was skipped carried none at all."
       },
       "ErrorDetail": {
         "properties": {
@@ -13565,11 +13580,6 @@
             "title": "Captcha Llm Provider",
             "default": "gemini"
           },
-          "has_telemetr_key": {
-            "type": "boolean",
-            "title": "Has Telemetr Key",
-            "default": false
-          },
           "updated_at": {
             "type": "string",
             "minLength": 1,
@@ -13724,22 +13734,6 @@
               }
             ],
             "title": "Captcha Llm Provider"
-          },
-          "telemetr_api_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Telemetr Api Key"
-          },
-          "clear_telemetr_key": {
-            "type": "boolean",
-            "title": "Clear Telemetr Key",
-            "default": false
           }
         },
         "additionalProperties": false,
