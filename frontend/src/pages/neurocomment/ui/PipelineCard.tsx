@@ -7,6 +7,8 @@ import { Odometer } from './Odometer';
 import { pipelineStage } from './pipelineStage';
 
 const STAGES = ['listen', 'detect', 'filter', 'generate', 'solve', 'comment'] as const;
+// Half a cell, in percent of the row: where the first and last dot centres sit.
+const railInset = 50 / STAGES.length;
 
 interface Stat {
   label: string;
@@ -83,11 +85,16 @@ export function PipelineCard({
       {/* Stepper with dual progress fill. Dot and label share ONE cell: as two rows
           they had different geometry — the dots sat in an `mx-2` box while the labels
           spread across the full width in 88px slots — and the ends drifted 29px apart.
-          Six equal cells put the first and last dot centres one half-cell (100%/12)
-          from the edges, which is where the rail has to start and stop for the
-          `activeCell / (STAGES.length - 1)` fill to land on a dot. */}
+          Equal cells put the first and last dot centres half a cell from the edges,
+          which is where the rail has to start and stop for the fill below to land on
+          a dot. Derived, not a literal: the fills two lines up already read
+          `STAGES.length`, and a seventh stage would leave a hardcoded inset behind
+          with nothing to fail. */}
       <div className="relative mb-3">
-        <div className="absolute inset-x-[8.3333%] top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]">
+        <div
+          className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]"
+          style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
+        >
           <div
             className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
             style={{ width: `${String(greenPct)}%` }}
