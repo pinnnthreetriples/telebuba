@@ -139,7 +139,7 @@ test('fires the row actions for the clicked account', async () => {
 });
 
 test('each row wears its own check verdict', () => {
-  const { container } = render(
+  render(
     <AccountsTable
       data={ACCOUNTS}
       onCheck={vi.fn()}
@@ -149,9 +149,26 @@ test('each row wears its own check verdict', () => {
     />,
   );
   // Keyed per row like busyIds: two checks can settle at different times, so the
-  // verdicts must not share one slot.
-  expect(container.querySelectorAll('button.bg-success')).toHaveLength(1);
-  expect(container.querySelectorAll('button.bg-danger')).toHaveLength(1);
+  // verdicts must not share one slot. Asserted by accessible name, which is also
+  // the thing a screen reader gets — the fill and the glyph alone say nothing.
+  expect(screen.getByLabelText('Аккаунт живой')).toBeInTheDocument();
+  expect(screen.getByLabelText('Аккаунт недоступен')).toBeInTheDocument();
+});
+
+test('a re-checked row drops its old verdict instead of spinning on top of it', () => {
+  const { container } = render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={new Set(['acc-1'])}
+      checkResults={{ 'acc-1': 'ok' }}
+    />,
+  );
+  // The button re-enables as soon as its spinner clears, so a second click inside
+  // the flash window would render the spinner over the previous answer's fill.
+  expect(container.querySelector('button.bg-success')).toBeNull();
+  expect(screen.queryByLabelText('Аккаунт живой')).not.toBeInTheDocument();
 });
 
 test('busy state is per row, and more than one row can be busy', () => {

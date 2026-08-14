@@ -30,7 +30,10 @@ const ACTION_BTN =
   'flex h-[30px] w-[30px] items-center justify-center rounded-full border border-line bg-white disabled:opacity-50';
 
 // The check button wears its own verdict (repo rule: every mutation ends in a
-// green check or a red cross), so the ✓/✗ lands where the click did.
+// green check or a red cross), so the ✓/✗ lands where the click did. A busy row
+// falls back to `idle`: the button re-enables the moment its spinner clears, so
+// a second click inside the flash window would otherwise spin on the previous
+// verdict's fill — the old answer asserted over an unresolved check.
 const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
   idle: 'text-ink-muted',
   ok: 'border-success bg-success text-white',
@@ -210,12 +213,20 @@ export function AccountsTable({
                 event.stopPropagation();
                 onCheck(account.account_id);
               }}
-              className={`${ACTION_BTN} transition-colors duration-300 ${CHECK_BTN[checked ?? 'idle']}`}
+              className={`${ACTION_BTN} transition-colors duration-300 ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
             >
               {busy ? (
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
               ) : checked ? (
-                <span className="tb-pop inline-flex">
+                // Named, not colour-only: the fill and the glyph say nothing to a
+                // screen reader, and `title` stays the constant action label.
+                <span
+                  className="tb-pop inline-flex"
+                  role="img"
+                  aria-label={t(
+                    checked === 'ok' ? 'accounts.edit.aliveOk' : 'accounts.edit.aliveErr',
+                  )}
+                >
                   <StatusIcon kind={checked} />
                 </span>
               ) : (
