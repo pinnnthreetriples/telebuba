@@ -62,6 +62,7 @@ from core.repositories.neurocomment._challenges import (
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
+    count_campaign_comments,
     fetch_comment,
     fetch_linked_group,
     list_linked_groups,
@@ -172,6 +173,7 @@ __all__ = [
     "count_account_comments_since",
     "count_account_joins_since",
     "count_by_outcome",
+    "count_campaign_comments",
     "count_channel_comments_per_account_since",
     "count_comments_per_account_since",
     "create_campaign",

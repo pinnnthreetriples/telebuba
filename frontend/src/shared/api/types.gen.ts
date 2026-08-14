@@ -1188,7 +1188,13 @@ export type DiscoverySearchOutcome = {
   /**
    * Status
    */
-  status: 'started' | 'already_running' | 'no_account' | 'account_cooling' | 'daily_limit_reached';
+  status:
+    | 'started'
+    | 'already_running'
+    | 'no_account'
+    | 'account_busy'
+    | 'account_cooling'
+    | 'daily_limit_reached';
 };
 
 /**

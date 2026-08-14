@@ -256,6 +256,35 @@ async def test_shutdown_clears_the_unwatched_report(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+async def test_reconcile_with_nothing_left_to_watch_reports_the_unsubscribe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty watch set is a reconcile outcome, so it is logged like every other one.
+
+    That branch stopped the listener, the sweep and the join pass and then returned BEFORE
+    either log line: the listener went silent with ``listener_running`` still set and
+    nothing said it. Deleting the last campaign is the path where an empty watch set is the
+    EXPECTED result — and since that delete now records itself, its consequence being the
+    silent half is the worse gap of the two.
+    """
+    logged: list[tuple[str, str, object]] = []
+
+    async def _fake_log(level: str, event: str, **kwargs: object) -> None:
+        logged.append((level, event, kwargs.get("extra")))
+
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+    monkeypatch.setattr(_runtime, "log_event", _fake_log)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    assert spy.stopped == ["listener-1"]  # behaviour unchanged: the listener still goes down
+    assert logged == [
+        ("INFO", "neurocomment_runtime_reconciled", {"channels": 0, "unwatched": 0}),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_cancel_bounded_gives_up_on_a_task_that_ignores_cancellation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -126,6 +126,18 @@ async def _reconcile_owned(  # noqa: C901, PLR0911 - staged generation-fenced co
             await _runtime._stop_sweep()  # noqa: SLF001 - peer module
             await _runtime._stop_join()  # noqa: SLF001 - peer module
             _publish_unwatched()  # unsubscribed → no channel is "requested but missing"
+            # Same code and fields as the tail below, because this IS a finished reconcile — it
+            # resolved to "watch nothing". It returned before either log line, so the listener
+            # went silent with ``listener_running`` still set and not a word about it. Deleting
+            # the last campaign is precisely how an operator reaches here, and that delete is
+            # now recorded, so its consequence must not be the missing half. Inside the
+            # lifecycle lock with the teardown it reports, so the two cannot be observed apart.
+            await _runtime.log_event(
+                "INFO",
+                "neurocomment_runtime_reconciled",
+                account_id=listener_account_id,
+                extra={"channels": 0, "unwatched": 0},
+            )
         return
     plans = await _runtime._inbox_runtime.prepare_backfill_plans(channels)  # noqa: SLF001
     if not _runtime._reconcile_owner_is_current(  # noqa: SLF001

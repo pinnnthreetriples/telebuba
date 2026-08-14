@@ -9,11 +9,13 @@ exception never crosses into the UI layer (#2 — boundaries return models, not 
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core import db
 from core.config import settings
+from core.logging import log_event
 from core.repositories.neurocomment import (
     set_campaign_account_channels,
     set_campaign_status,
@@ -34,6 +36,9 @@ if TYPE_CHECKING:
         NeurocommentCampaign,
     )
     from schemas.neurocomment_board import NeurocommentBoard
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 async def create_campaign(data: CampaignCreate) -> NeurocommentCampaign:
@@ -221,8 +226,75 @@ async def set_account_channels(
 
 
 async def delete_campaign(campaign_id: str) -> None:
-    """Delete a campaign and clear all its account serving links, channels, and comments."""
-    # First: a discovery run would otherwise keep probing the shared listener for
-    # minutes on behalf of rows this delete is about to remove, writing to nothing.
+    """Delete a campaign and clear all its account serving links, channels, and comments.
+
+    Idempotent: an id that is already gone returns quietly, because the operator's second
+    click means "make it gone", not "tell me whether it was there".
+    """
+    # Read before doing anything, and leave if there is nothing to destroy. The WARNING
+    # below is a RECORD of destruction, so writing it for a campaign that did not exist
+    # makes the journal lie — and a ``0/0`` line cannot be told apart from really deleting
+    # an empty campaign, so the double-click the UI allows read as two campaigns gone
+    # (``1/1`` then ``0/0``). Nothing below this line runs for an unknown id: no counting,
+    # no log line, no reconcile.
+    if await db.fetch_campaign(campaign_id) is None:
+        return
+    # Before the delete: a discovery run would otherwise keep probing the shared listener
+    # for minutes on behalf of rows this delete is about to remove, writing to nothing.
     _discovery_state.cancel_campaign_run(campaign_id)
+    # Counted while the rows are still there. This is the most destructive action in the
+    # domain and the only irreversible one — the comment history has no other copy — so the
+    # log line is the whole record of what went, and after the DELETE both numbers read
+    # zero. ``active_channels`` is deliberately narrower than what the DELETE removes: the
+    # statement drops every link row (deactivated ones too), plus account assignments and
+    # discovery candidates, while this counts only the ACTIVE links — the number the
+    # campaign card showed the operator a click earlier and the set the listener was
+    # watching. The key says ``active`` so it cannot be read as "everything that went".
+    #
+    # Both reads run on their own connections, OUTSIDE the delete's transaction, so a
+    # channel or comment created between a count and the DELETE is destroyed uncounted: an
+    # accepted approximation, not a race to fix. It can only under-report, never
+    # double-report or under-delete — the DELETE is a single transaction, so what goes is
+    # always whole.
+    active_channels = len((await db.list_campaign_channels(campaign_id)).links)
+    comments = await db.count_campaign_comments(campaign_id)
     await db.delete_campaign(campaign_id)
+    await log_event(
+        "WARNING",
+        "neurocomment_campaign_deleted",
+        extra={
+            "campaign_id": campaign_id,
+            "active_channels": active_channels,
+            "comments": comments,
+        },
+    )
+    # After the delete, never before: reconcile rebuilds the watch set by re-reading the DB,
+    # so running it first would resubscribe the listener to the very links about to vanish and
+    # leave it awaiting posts from channels the campaign no longer has — writing a miss for
+    # each one until the next restart. ``reconcile_if_running`` keeps its own gate on
+    # ``listener_running``, so a delete never wakes a stopped listener.
+    #
+    # Contained, never raised. By the time we get here the rows are gone and committed, and
+    # reconcile opens a Telegram client — no session, a flood wait — so letting the failure
+    # out answers 500 for a delete that SUCCEEDED, on a route with no handler for it; the
+    # operator's retry then lands on the guard above having already written the real line.
+    # The cost of containing it, stated plainly: the listener keeps the old channel set
+    # until the next campaign edit or a restart, awaiting posts from channels that no longer
+    # exist. That is worse than reconciling and better than reporting a failure for work
+    # that is done. ``extra`` carries the exception TYPE only (#7 — a gateway's text can
+    # carry a proxy URL or a session path); the full text goes to the stdlib sink, as
+    # ``main._shutdown_step`` and ``_watch._resubscribe_unwatched`` do.
+    #
+    # What this reconcile costs the request is measured and accepted, not a defect: it
+    # resolves a peer through Telegram for every surviving channel — 2.21s at 41 channels —
+    # and ``subscribe_posts`` stops the listener first, so it is down for that window. The
+    # same ceiling ``link_channel`` has carried since it was written.
+    try:
+        await _runtime.reconcile_if_running()
+    except Exception as exc:  # a committed delete must never answer an error
+        logger.exception("post-delete reconcile failed for campaign %s", campaign_id)
+        await log_event(
+            "WARNING",
+            "neurocomment_campaign_delete_reconcile_failed",
+            extra={"campaign_id": campaign_id, "error_type": type(exc).__name__},
+        )

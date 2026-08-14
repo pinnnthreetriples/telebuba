@@ -105,7 +105,7 @@ async def test_start_discovery_returns_202_and_the_outcome(
 
 @pytest.mark.parametrize(
     "status",
-    ["already_running", "no_account", "account_cooling", "daily_limit_reached"],
+    ["already_running", "no_account", "account_busy", "account_cooling", "daily_limit_reached"],
 )
 @pytest.mark.asyncio
 async def test_refusals_ride_the_outcome_not_an_error(
