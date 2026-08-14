@@ -45,11 +45,11 @@ async def maybe_watch_stories(
         and not tally.peer_flooded
     ):
         return False
+    tally.attempts += 1
     result = await _seams.execute(
         account_id,
         WatchPeerStories(peer=_seams.rng.choice(chosen).channel),
     )
-    tally.attempts += 1
     if result.status == "peer_flood":
         tally.peer_flooded = True
         tally.last_failed_action = "watch_peer_stories"

@@ -6,12 +6,12 @@ on, and the mode is refused when nothing could ever un-park it) and the sweep si
 waiting, and when to send nothing at all).
 
 The deadline is never slept through: a row is parked at real ``now`` and the pass is then
-handed a ``now`` minutes into the future, which is exactly how the deadline is computed in
-production (``created_at`` + ``reply_wait_minutes``, nothing stored).
+handed a ``now`` minutes into the future. The persisted deadline is frozen at park time.
 """
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -40,6 +40,7 @@ from tests.services.neurocomment.reply_wait_support import (
 
 if TYPE_CHECKING:
     from schemas.gemini import GeminiRequest
+    from schemas.neurocomment_pipeline import PipelineOutcome
     from schemas.telegram_actions_comments import PostCommentRecord
 
 pytestmark = pytest.mark.usefixtures("isolate_engine")
@@ -115,6 +116,46 @@ async def test_reply_mode_parks_and_sends_nothing(monkeypatch: pytest.MonkeyPatc
     assert comment.posts == []
     assert gen.calls == 0
     assert await _logged("neurocomment_post_parked") is not None
+
+
+@pytest.mark.asyncio
+async def test_settings_change_does_not_retime_an_already_parked_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    _reply_mode(monkeypatch, wait_minutes=10)
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
+    parked_at = await _park("@chan", 11, campaign_id, "acc-1")
+    thread = _ThreadStub()
+    monkeypatch.setattr(_seams, "execute_read", thread.execute_read)
+
+    monkeypatch.setattr(settings.neurocomment, "reply_wait_minutes", 120)
+    await _reply_wait.review_waiting_posts(parked_at + timedelta(minutes=11))
+
+    assert _reply_targets(comment) == [None]
+
+
+@pytest.mark.asyncio
+async def test_cancelled_pre_send_reply_returns_to_durable_waiting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    _reply_mode(monkeypatch, wait_minutes=10)
+    parked_at = await _park("@chan", 12, campaign_id, "acc-1")
+    monkeypatch.setattr(_seams, "execute_read", _ThreadStub().execute_read)
+
+    async def _cancel(*_args: object, **_kwargs: object) -> PipelineOutcome:
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(engine, "_generate_and_post", _cancel)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _reply_wait.review_waiting_posts(parked_at + timedelta(minutes=11))
+
+    row = await fetch_comment("@chan", 12)
+    assert row is not None
+    assert row.status == "waiting"
 
 
 @pytest.mark.asyncio

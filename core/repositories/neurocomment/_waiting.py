@@ -12,16 +12,49 @@ why every function here has to survive being called twice for the same post.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING, Literal
 
+from pydantic import BaseModel, Field
 from sqlalchemy import select, update
 
+from core.config import settings
 from core.db import _get_engine, _now_iso
-from core.repositories.neurocomment._comments import _claim_comment, _row_to_comment
-from core.repositories.neurocomment._tables import _neurocomment_comments
-from schemas.neurocomment import CommentList
+from core.repositories.neurocomment._comments import (
+    _claim_values,
+    _insert_comment,
+)
+from core.repositories.neurocomment._tables import _neurocomment_comments, _neurocomment_inbox
+from schemas.neurocomment import CommentRecord
+from schemas.neurocomment_pipeline import InboxStage
+
+if TYPE_CHECKING:
+    from schemas.telegram_actions import NewPostEvent
+
+ReplyStage = Literal["waiting", "pre_send", "dispatching", "dispatched"]
 
 
-async def park_comment(channel: str, post_id: int, campaign_id: str, account_id: str) -> bool:
+class WaitingReplyRecord(CommentRecord):
+    """Internal durable queue row; reply metadata is not part of the public API model."""
+
+    reply_deadline_at: str = Field(min_length=1)
+    reply_attempts: int = Field(ge=0)
+
+
+class WaitingReplyList(BaseModel):
+    """Fleet-wide durable reply work list."""
+
+    comments: list[WaitingReplyRecord] = Field(default_factory=list)
+
+
+async def park_comment(
+    channel: str,
+    post_id: int,
+    campaign_id: str,
+    account_id: str,
+    *,
+    wait_minutes: int | None = None,
+) -> bool:
     """Reserve ``(channel, post_id)`` as ``waiting`` instead of commenting now; ``True`` if won.
 
     Deliberately the SAME single conditional INSERT as :func:`claim_comment`, only the
@@ -30,30 +63,53 @@ async def park_comment(channel: str, post_id: int, campaign_id: str, account_id:
     whether the winner is sending now or parked. A second write path here would have to
     re-earn that guarantee, and any read-then-insert version would not have it at all.
 
-    No deadline column is needed: the INSERT stamps ``created_at``, so the wait expires at
-    ``created_at + N`` with N read from settings — nothing extra to persist, and a settings
-    change re-times the posts already parked instead of leaving them on a frozen deadline.
+    The deadline is frozen with the claim. A settings change affects later posts only;
+    an already parked post keeps the exact wait promised when it was accepted.
     """
     return await asyncio.to_thread(
-        _claim_comment,
+        _park_comment,
         channel,
         post_id,
         campaign_id,
         account_id,
-        "waiting",
+        settings.neurocomment.reply_wait_minutes if wait_minutes is None else wait_minutes,
     )
 
 
-def _list_waiting_comments() -> CommentList:
+def _park_comment(
+    channel: str,
+    post_id: int,
+    campaign_id: str,
+    account_id: str,
+    wait_minutes: int,
+) -> bool:
+    values = _claim_values(channel, post_id, campaign_id, account_id, "waiting")
+    deadline_at = (
+        datetime.fromisoformat(str(values["created_at"])) + timedelta(minutes=wait_minutes)
+    ).isoformat()
+    values.update(
+        reply_state="waiting",
+        reply_stage="waiting",
+        reply_outcome=None,
+        reply_attempts=0,
+        reply_deadline_at=deadline_at,
+    )
+    return _insert_comment(values)
+
+
+def _list_waiting_comments() -> WaitingReplyList:
     statement = select(_neurocomment_comments).where(
-        _neurocomment_comments.c.status == "waiting",
+        (_neurocomment_comments.c.status == "waiting")
+        & (_neurocomment_comments.c.reply_state == "waiting"),
     )
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
-    return CommentList(comments=[_row_to_comment(row) for row in rows])
+    return WaitingReplyList(
+        comments=[WaitingReplyRecord.model_validate(dict(row)) for row in rows],
+    )
 
 
-async def list_waiting_comments() -> CommentList:
+async def list_waiting_comments() -> WaitingReplyList:
     """Every parked post, fleet-wide — the sweep's whole work list.
 
     Unscoped by channel or campaign on purpose: nothing else revisits these rows, so a
@@ -70,9 +126,17 @@ def _promote_waiting_to_claimed(channel: str, post_id: int) -> bool:
             .where(
                 (_neurocomment_comments.c.channel == channel)
                 & (_neurocomment_comments.c.post_id == post_id)
-                & (_neurocomment_comments.c.status == "waiting"),
+                & (_neurocomment_comments.c.status == "waiting")
+                & (_neurocomment_comments.c.reply_state == "waiting"),
             )
-            .values(status="claimed", updated_at=_now_iso()),
+            .values(
+                status="claimed",
+                reply_state="reply_processing",
+                reply_stage="pre_send",
+                reply_outcome=None,
+                reply_attempts=_neurocomment_comments.c.reply_attempts + 1,
+                updated_at=_now_iso(),
+            ),
         )
     return result.rowcount > 0
 
@@ -86,8 +150,85 @@ async def promote_waiting_to_claimed(channel: str, post_id: int) -> bool:
     and without this only-one-wins UPDATE both would reply under one post. ``False`` means
     somebody else already took it — the caller must send nothing.
 
-    ``claimed`` and not straight to the send because that is what puts the row back under
-    ``reclaim_stale_claims``, and the ``updated_at`` bump starts that clock here: the
-    fifteen-minute backstop then measures the send, never the ten-minute wait.
+    Public ``status`` becomes ``claimed`` for quota/backward compatibility; durable
+    ``reply_state`` becomes ``reply_processing`` at the proven pre-send stage. The
+    ``updated_at`` bump starts crash recovery from the attempt, never the original wait.
     """
     return await asyncio.to_thread(_promote_waiting_to_claimed, channel, post_id)
+
+
+def _mark_reply_stage(channel: str, post_id: int, stage: ReplyStage) -> bool:
+    if stage not in ("dispatching", "dispatched"):
+        return False
+    prior = "pre_send" if stage == "dispatching" else "dispatching"
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_neurocomment_comments)
+            .where(
+                (_neurocomment_comments.c.channel == channel)
+                & (_neurocomment_comments.c.post_id == post_id)
+                & (_neurocomment_comments.c.status == "claimed")
+                & (_neurocomment_comments.c.reply_state == "reply_processing")
+                & (_neurocomment_comments.c.reply_stage == prior)
+            )
+            .values(reply_stage=stage, updated_at=_now_iso()),
+        )
+    return result.rowcount > 0
+
+
+async def mark_reply_stage(channel: str, post_id: int, stage: ReplyStage) -> bool:
+    """Advance a reply's durable send boundary; terminal/foreign rows never move."""
+    return await asyncio.to_thread(_mark_reply_stage, channel, post_id, stage)
+
+
+def _set_comment_dispatch_stage(event: NewPostEvent, stage: ReplyStage) -> bool:
+    """Atomically advance inbox and optional durable-reply dispatch ownership."""
+    if stage not in ("dispatching", "dispatched"):
+        return False
+    prior = "pre_send" if stage == "dispatching" else "dispatching"
+    with _get_engine().begin() as connection:
+        row = (
+            connection.execute(
+                select(
+                    _neurocomment_comments.c.status,
+                    _neurocomment_comments.c.reply_state,
+                    _neurocomment_comments.c.reply_stage,
+                ).where(
+                    (_neurocomment_comments.c.channel == event.channel)
+                    & (_neurocomment_comments.c.post_id == event.post_id),
+                ),
+            )
+            .mappings()
+            .first()
+        )
+        if row is None or row["status"] != "claimed":
+            return False
+        if row["reply_state"] is not None:
+            reply = connection.execute(
+                update(_neurocomment_comments)
+                .where(
+                    (_neurocomment_comments.c.channel == event.channel)
+                    & (_neurocomment_comments.c.post_id == event.post_id)
+                    & (_neurocomment_comments.c.status == "claimed")
+                    & (_neurocomment_comments.c.reply_state == "reply_processing")
+                    & (_neurocomment_comments.c.reply_stage == prior)
+                )
+                .values(reply_stage=stage, updated_at=_now_iso()),
+            )
+            if reply.rowcount == 0:
+                return False
+        connection.execute(
+            update(_neurocomment_inbox)
+            .where(
+                (_neurocomment_inbox.c.channel == event.channel)
+                & (_neurocomment_inbox.c.post_id == event.post_id)
+                & (_neurocomment_inbox.c.state == "processing")
+            )
+            .values(stage=InboxStage(stage), updated_at=_now_iso()),
+        )
+    return True
+
+
+async def set_comment_dispatch_stage(event: NewPostEvent, stage: ReplyStage) -> bool:
+    """Commit a send boundary only while the comment claim is still owned."""
+    return await asyncio.to_thread(_set_comment_dispatch_stage, event, stage)

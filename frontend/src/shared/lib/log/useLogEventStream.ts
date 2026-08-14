@@ -24,6 +24,12 @@ let source: EventSource | null = null;
 const subscribers = new Set<Subscriber>();
 let buffer: LogEntry[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+// Set once the server tells us the session behind this stream is gone. An
+// EventSource reconnects on its own after any close, so without this the stream
+// the backend just revoked would reopen every ~3s for as long as the tab lives —
+// and each attempt costs a session lookup. A dead session is not retryable; the
+// next API call redirects to /login, and until then we stay quiet.
+let sessionRevoked = false;
 
 function announce(status: SseStatus): void {
   for (const sub of subscribers) sub.onStatus?.(status);
@@ -39,6 +45,7 @@ function flush(): void {
 }
 
 function openSource(): void {
+  if (sessionRevoked) return;
   source = new EventSource(EVENTS_URL);
   announce('connecting');
   source.onopen = () => {
@@ -47,6 +54,13 @@ function openSource(): void {
   source.onerror = () => {
     announce('error');
   };
+  // The backend's named terminal frame: this stream ended because the session
+  // was revoked or expired, not because the connection dropped.
+  source.addEventListener('session-invalid', () => {
+    sessionRevoked = true;
+    closeSource();
+    announce('error');
+  });
   source.onmessage = (event) => {
     let entry: LogEntry;
     try {

@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -147,20 +147,34 @@ def _claim_comment(
     # instead of a second one that would have to re-earn its conflict guarantee.
     status: CommentStatus = "claimed",
 ) -> bool:
+    return _insert_comment(_claim_values(channel, post_id, campaign_id, account_id, status))
+
+
+def _claim_values(
+    channel: str,
+    post_id: int,
+    campaign_id: str,
+    account_id: str,
+    status: CommentStatus,
+) -> dict[str, object]:
     now = _now_iso()
+    return {
+        "channel": channel,
+        "post_id": post_id,
+        "campaign_id": campaign_id,
+        "account_id": account_id,
+        "status": status,
+        "comment_text": None,
+        "comment_msg_id": None,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def _insert_comment(values: dict[str, object]) -> bool:
     statement = (
         sqlite_insert(_neurocomment_comments)
-        .values(
-            channel=channel,
-            post_id=post_id,
-            campaign_id=campaign_id,
-            account_id=account_id,
-            status=status,
-            comment_text=None,
-            comment_msg_id=None,
-            created_at=now,
-            updated_at=now,
-        )
+        .values(**values)
         .on_conflict_do_nothing(
             index_elements=[
                 _neurocomment_comments.c.channel,
@@ -187,6 +201,30 @@ def _mark_comment(
     comment_msg_id: int | None = None,
 ) -> CommentRecord | None:
     values: dict[str, object] = {"status": status, "updated_at": _now_iso()}
+    if status in ("posted", "failed"):
+        is_reply = _neurocomment_comments.c.reply_state.is_not(None)
+        values["reply_state"] = case(
+            (is_reply, "terminal"),
+            else_=_neurocomment_comments.c.reply_state,
+        )
+        values["reply_outcome"] = case(
+            (
+                is_reply,
+                case(
+                    (
+                        _neurocomment_comments.c.reply_stage.in_(("dispatching", "dispatched")),
+                        "ambiguous" if status == "failed" else "terminal",
+                    ),
+                    else_="terminal",
+                ),
+            ),
+            else_=_neurocomment_comments.c.reply_outcome,
+        )
+        if status == "posted":
+            values["reply_stage"] = case(
+                (is_reply, "dispatched"),
+                else_=_neurocomment_comments.c.reply_stage,
+            )
     if comment_text is not None:
         values["comment_text"] = comment_text
     if comment_msg_id is not None:
@@ -236,7 +274,14 @@ def _record_comment_msg_id(channel: str, post_id: int, comment_msg_id: int) -> N
                 (_neurocomment_comments.c.channel == channel)
                 & (_neurocomment_comments.c.post_id == post_id),
             )
-            .values(comment_msg_id=comment_msg_id, updated_at=_now_iso()),
+            .values(
+                comment_msg_id=comment_msg_id,
+                reply_stage=case(
+                    (_neurocomment_comments.c.reply_state.is_not(None), "dispatched"),
+                    else_=_neurocomment_comments.c.reply_stage,
+                ),
+                updated_at=_now_iso(),
+            ),
         )
 
 
@@ -262,95 +307,6 @@ async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | Non
     return await asyncio.to_thread(_mark_comment, channel, post_id, status="failed")
 
 
-def _release_claim(channel: str, post_id: int) -> None:
-    with _get_engine().begin() as connection:
-        connection.execute(
-            delete(_neurocomment_comments).where(
-                (_neurocomment_comments.c.channel == channel)
-                & (_neurocomment_comments.c.post_id == post_id)
-                # Guarded, not blind: only a still-in-flight claim may be dropped, so a
-                # delivered ('posted') or already-terminal ('failed') row is untouchable
-                # even if a late caller aims this at the wrong post.
-                & (_neurocomment_comments.c.status == "claimed"),
-            ),
-        )
-
-
-async def release_claim(channel: str, post_id: int) -> None:
-    """Drop an in-flight claim for an attempt that provably sent nothing.
-
-    Callable ONLY when the caller knows no comment left the process: an undownloadable
-    post image and a Gemini 429 both fail before generation finishes, and a gateway
-    ``status="unavailable"`` qualifies only when it is NOT ``UNCONFIRMED_ERROR_TYPE``,
-    i.e. when the pool never connected. Those are nobody's fault, so they must not mark
-    the row ``failed`` — but leaving it ``claimed`` is not free either: ``_quota`` counts
-    ``claimed`` alongside ``posted``, and ``reclaim_stale_claims`` is a backstop that only
-    ages a claim out once it is 15 minutes old, so the slot stayed spent long after the
-    attempt was over. Deleting the row frees it at once.
-
-    A DELETE rather than a new status because the row records nothing worth keeping — and
-    that is also the whole danger: it makes ``(channel, post_id)`` claimable again, so a
-    caller that merely HOPES nothing was sent re-opens the double-comment window
-    ``claim_comment`` exists to close. Which is exactly what the periodic reclaim can NOT
-    infer from age, and why it marks ``failed`` instead of deleting.
-    """
-    return await asyncio.to_thread(_release_claim, channel, post_id)
-
-
-def _touch_comment_claim(channel: str, post_id: int) -> bool:
-    with _get_engine().begin() as connection:
-        result = connection.execute(
-            update(_neurocomment_comments)
-            .where(
-                (_neurocomment_comments.c.channel == channel)
-                & (_neurocomment_comments.c.post_id == post_id)
-                # Heartbeat an IN-FLIGHT claim only: a terminal row is settled, and
-                # bumping its stamp would just hide its real age from the reclaim.
-                & (_neurocomment_comments.c.status == "claimed"),
-            )
-            .values(updated_at=_now_iso()),
-        )
-    return result.rowcount > 0
-
-
-async def touch_comment_claim(channel: str, post_id: int) -> bool:
-    """Heartbeat a claim the worker is still holding; ``False`` if it is no longer ours.
-
-    ``reclaim_stale_claims`` can only judge a claim by its age, and between winning the
-    claim and resolving it the worker wrote nothing at all — so a slow-but-live attempt
-    was indistinguishable from a dead one and got failed underneath itself. This is the
-    beat that tells them apart.
-
-    The answer matters as much as the write: this used to return ``None`` whether or not it
-    matched, so a worker whose claim had been reclaimed out from under it could not tell
-    and sent anyway. ``False`` means the row is terminal or gone — the beat had no claim to
-    keep alive, and the caller must not send under it.
-    """
-    return await asyncio.to_thread(_touch_comment_claim, channel, post_id)
-
-
-def _reclaim_stale_claims(cutoff_iso: str) -> int:
-    with _get_engine().begin() as connection:
-        result = connection.execute(
-            update(_neurocomment_comments)
-            .where(
-                (_neurocomment_comments.c.status == "claimed")
-                # ``updated_at``, not ``created_at``: the claim stamps both, so an
-                # un-beaten row ages exactly as it used to, while a worker that beats
-                # (``touch_comment_claim``) is no longer failed out from under a send it
-                # is still making — the one thing age alone could never see.
-                & (_neurocomment_comments.c.updated_at < cutoff_iso),
-            )
-            .values(status="failed", updated_at=_now_iso()),
-        )
-    return result.rowcount
-
-
-async def reclaim_stale_claims(cutoff_iso: str) -> int:
-    """Release claims untouched since before cutoff_iso (mark 'failed'); returns count."""
-    return await asyncio.to_thread(_reclaim_stale_claims, cutoff_iso)
-
-
 def _list_posted_comments_since(campaign_id: str, since_iso: str) -> CommentList:
     statement = select(_neurocomment_comments).where(
         (_neurocomment_comments.c.campaign_id == campaign_id)
@@ -365,6 +321,14 @@ def _list_posted_comments_since(campaign_id: str, since_iso: str) -> CommentList
 async def list_posted_comments_since(campaign_id: str, since_iso: str) -> CommentList:
     """A campaign's ``posted`` comments with ``created_at >= since`` (bulk read for the board)."""
     return await asyncio.to_thread(_list_posted_comments_since, campaign_id, since_iso)
+
+
+# Compatibility facade: callers and package exports historically import these here.
+from core.repositories.neurocomment._comment_lifecycle import (  # noqa: E402, F401
+    reclaim_stale_claims,
+    release_claim,
+    touch_comment_claim,
+)
 
 
 def _list_posted_comments_page(campaign_id: str, offset: int, limit: int) -> CommentList:

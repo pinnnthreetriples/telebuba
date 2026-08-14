@@ -32,6 +32,8 @@ from core.db import (  # type: ignore[attr-defined]
     link_channel_to_campaign,
     list_captcha_blocked_readiness,
     list_recent_logs,
+    mark_nc_handed_off,
+    mark_promoted_to_nc,
     upsert_readiness,
 )
 from core.repositories.neurocomment import set_campaign_account_channels
@@ -339,6 +341,8 @@ async def test_a_delivered_comment_refunds_the_retry_for_the_next_episode(
     # The authorised re-solve passes: onboarding writes the ready row, and the pair gets a
     # comment past the bot. THAT is the recovery — the row alone would not be (see below).
     await upsert_readiness("acc-1", _CHANNEL, joined=True, captcha_passed=True, ready=True)
+    await mark_promoted_to_nc("acc-1")
+    await mark_nc_handed_off("acc-1")
     _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
     await engine.handle_new_post(NewPostEvent(channel=_CHANNEL, post_id=1, text="hello world"))
     delivered = await fetch_comment(_CHANNEL, 1)

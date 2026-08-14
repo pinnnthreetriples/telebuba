@@ -130,6 +130,29 @@ async def test_start_not_ready_is_400(app: FastAPI, monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+async def test_start_still_stopping_is_409_not_a_readiness_reason(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A previous task that has not unwound is a conflict, like promote and handoff.
+
+    Routed through ``WarmingNotReadyError`` it came back as 400 and the SPA listed
+    "previous warming task is still stopping" beside a missing proxy — telling the
+    operator the account is unfit to warm when the answer is "try again in a moment".
+    """
+    account_id = "acc-1"
+
+    async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
+        raise warming_service.WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.warming.start_warming", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.asyncio
 async def test_start_listener_account_is_409(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     account_id = "acc-1"
 
@@ -221,6 +244,21 @@ async def test_promote_graduates_account(app: FastAPI, monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_promote_refuses_an_account_whose_task_is_still_stopping(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(account_id: str) -> WarmingAccountState:
+        raise warming_service.WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.warming.promote_to_neurocomment", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/promote", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.asyncio
 async def test_handoff_moves_account_to_nc_pool(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -239,6 +277,21 @@ async def test_handoff_moves_account_to_nc_pool(
         resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
     assert resp.status_code == 200
     assert resp.json()["nc_handed_off"] is True
+
+
+@pytest.mark.asyncio
+async def test_handoff_refuses_an_account_whose_task_is_still_stopping(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(account_id: str) -> WarmingAccountState:
+        raise warming_service.WarmingTaskNotQuiescentError(account_id)
+
+    monkeypatch.setattr("services.warming.handoff_to_neurocomment", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
 
 
 @pytest.mark.asyncio

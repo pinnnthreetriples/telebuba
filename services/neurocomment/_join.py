@@ -30,7 +30,11 @@ from services.neurocomment._generate import _COOLDOWN_STATUSES
 from services.neurocomment.onboarding import _at_join_cap
 
 
-async def run_join_pass(listener_account_id: str) -> None:
+async def run_join_pass(  # noqa: C901 - anti-ban decision ladder
+    listener_account_id: str,
+    *,
+    generation: int | None = None,
+) -> None:
     """One paced join pass over the *current* active watch set.
 
     Re-reads the watch set on every pass so a coalesced rerun picks up channels
@@ -67,6 +71,11 @@ async def run_join_pass(listener_account_id: str) -> None:
     given_up = await list_exhausted_watch_channels(listener_account_id, max_attempts, since_iso)
     first_join = True
     for channel in channels:
+        if generation is not None and not _runtime._runtime_owner_is_current(  # noqa: SLF001
+            listener_account_id,
+            generation,
+        ):
+            return
         if (listener_account_id, channel) in _runtime._JOINED_CHANNELS:  # noqa: SLF001 - peer module
             continue
         if channel in given_up:
@@ -86,6 +95,11 @@ async def run_join_pass(listener_account_id: str) -> None:
             break
         if not first_join:
             await asyncio.sleep(_runtime._join_jitter_seconds())  # noqa: SLF001 - peer module
+            if generation is not None and not _runtime._runtime_owner_is_current(  # noqa: SLF001
+                listener_account_id,
+                generation,
+            ):
+                return
         first_join = False
         result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
         if result.status in {"ok", "already_participant"}:

@@ -100,7 +100,7 @@ async def _rollback_tdata_import(
     await log_event(
         "WARNING",
         "tdata_import_rolled_back",
-        extra={"accounts": account_ids, "files": [str(p.final_path) for p in placed]},
+        extra={"accounts": account_ids, "files": [p.final_path.name for p in placed]},
     )
 
 

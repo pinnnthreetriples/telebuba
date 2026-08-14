@@ -247,8 +247,9 @@ async def test_a_cancelled_cycle_hands_back_the_unspent_reservation(
     assert cancelled.actions == ["set_online", "join_channel"]
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    # The two actions really spent, not the whole reserved budget.
-    assert record.daily_actions == 2
+    # The third call crossed the gateway boundary before cancellation surfaced,
+    # so its outcome is ambiguous and is conservatively counted too.
+    assert record.daily_actions == 3
 
     # Same calendar day, restarted loop: the rest of the budget is still there.
     survivor = _Recorder()
@@ -275,7 +276,7 @@ async def test_a_raising_cycle_hands_back_the_unspent_reservation(
 
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.daily_actions == 2
+    assert record.daily_actions == 3
 
 
 @pytest.mark.asyncio
@@ -334,7 +335,7 @@ async def test_stop_then_start_on_the_same_day_keeps_the_remaining_budget(
     assert stopped.state == "idle"
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.daily_actions == 2
+    assert record.daily_actions == 3
 
     survivor = _Recorder()
     monkeypatch.setattr(_seams, "execute", survivor.execute)
@@ -371,7 +372,7 @@ async def test_restart_while_a_cycle_is_in_flight_keeps_the_remaining_budget(
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.run_id != "run-1"
-    assert record.daily_actions == 2
+    assert record.daily_actions == 3
 
 
 @pytest.mark.asyncio
@@ -447,7 +448,7 @@ async def test_a_cancelled_cycle_reconciles_on_top_of_a_mid_day_count(
     assert cancelled.actions == ["set_online", "join_channel"]
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.daily_actions == 10 + 2
+    assert record.daily_actions == 10 + 3
 
 
 @pytest.mark.asyncio
@@ -567,7 +568,7 @@ async def test_a_second_cancel_during_the_reconcile_keeps_the_original_exception
     assert "reservation reconcile failed" not in caplog.text
     record = await fetch_warming_state("acc-1")
     assert record is not None
-    assert record.daily_actions == 2
+    assert record.daily_actions == 3
 
 
 @pytest.mark.asyncio

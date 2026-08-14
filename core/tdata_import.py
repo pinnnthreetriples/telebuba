@@ -241,14 +241,19 @@ async def _load_tdesktop_from_zip(
     await log_event(
         "INFO",
         "tdata_convert_tdata_dir_found",
-        extra={"tdata_dir": str(tdata_dir)},
+        # The activity feed is API-visible; never publish credential locations.
+        extra={"directory": tdata_dir.name},
     )
 
     tdesktop_factory, use_current_session = _opentele2_runtime()
     try:
         td = await asyncio.to_thread(tdesktop_factory, basePath=str(tdata_dir))
     except Exception as exc:
-        # Full text to the STDLIB logger only (see ``_bounded_conversion_error``).
+        # The two sinks are deliberately unequal. The stdlib logger reaches stderr
+        # and ``debug.log`` and is on no HTTP route, so it gets the traceback — an
+        # opentele2 failure is otherwise undiagnosable. ``log_event`` below persists
+        # its ``extra`` and GET /logs and GET /events serve it back, so that one
+        # stays at the class name (see ``_bounded_conversion_error``).
         logger.exception("TDesktop load failed")
         await log_event(
             "ERROR",
@@ -286,13 +291,14 @@ async def _convert_one_account(
     await log_event(
         "INFO",
         "tdata_convert_account_starting",
-        extra={"index": index, "user_id": user_id, "session_path": str(session_path)},
+        extra={"index": index, "user_id": user_id, "session_file": session_path.name},
     )
 
     try:
         client = await account.ToTelethon(session=str(session_path), flag=use_current_session)
     except Exception as exc:
-        # Full text to the STDLIB logger only (see ``_bounded_conversion_error``).
+        # Traceback to the route-less stdlib logger, class name to the API-visible
+        # ``log_event`` — the same split as the TDesktop load above.
         logger.exception("ToTelethon failed for user_id=%s", user_id)
         await log_event(
             "ERROR",
@@ -345,7 +351,7 @@ async def convert_tdata_zip(
     await log_event(
         "INFO",
         "tdata_convert_started",
-        extra={"filename": req.filename, "tmp_dir": str(tmp_dir)},
+        extra={"filename": req.filename},
     )
     try:
         loaded = await _load_tdesktop_from_zip(req, tmp_dir)

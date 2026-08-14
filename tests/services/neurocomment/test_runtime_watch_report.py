@@ -103,15 +103,13 @@ async def test_status_read_mid_reconcile_is_not_torn(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_overlapping_reconciles_report_the_last_registered_filter(
+async def test_overlapping_reconciles_publish_only_latest_generation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With two passes in flight the set must match the last filter registered, not the union.
+    """Slow Telegram I/O overlaps, but only the newest pass may publish.
 
-    ``reconcile_if_running`` is called unlocked from four API-facing sites plus the boot
-    hook and nothing single-flights it. Union-updating a set cleared by whichever pass
-    started last left a channel the live filter *does* watch flagged as dead to the engine
-    — a false red alarm that persisted until the next reconcile.
+    Holding the lifecycle lock over peer resolution made Stop unbounded. A reconcile
+    generation now orders the await-free commit without serialising remote I/O.
     """
     await _seed_channels("@a", "@b")
     _patch_execute(monkeypatch, _ExecuteSpy())
@@ -142,14 +140,13 @@ async def test_overlapping_reconciles_report_the_last_registered_filter(
     second = asyncio.create_task(_runtime.reconcile_neurocomment_runtime("listener-1"))
     await asyncio.wait_for(entered[1].wait(), timeout=1.0)
 
-    plans[0][1].set()
-    await first
-    assert sorted(_runtime._UNWATCHED_CHANNELS) == ["@b"]
     plans[1][1].set()
     await second
-
-    # The healthy pass registered last, so it owns the live filter — and the report.
     assert not _runtime._UNWATCHED_CHANNELS
+
+    plans[0][1].set()
+    await first
+    assert not _runtime._UNWATCHED_CHANNELS  # stale first pass cannot overwrite it
     await _drain_joins()
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 

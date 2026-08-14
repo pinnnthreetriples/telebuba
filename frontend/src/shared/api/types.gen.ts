@@ -3568,6 +3568,10 @@ export type DeleteAccountErrors = {
    */
   404: ErrorEnvelope;
   /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -5285,6 +5289,10 @@ export type PromoteToNeurocommentErrors = {
    */
   401: ErrorEnvelope;
   /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -5323,6 +5331,10 @@ export type HandoffToNeurocommentErrors = {
    * Not authenticated
    */
   401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
   /**
    * Request validation failed
    */

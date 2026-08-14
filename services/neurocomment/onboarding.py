@@ -51,6 +51,7 @@ from services.neurocomment._onboard_pair import (  # noqa: F401 - re-exported pu
     _safe_resolve,
     onboard_account_channel,
 )
+from services.neurocomment._onboarding_owner import ensure_current
 
 
 async def onboard_campaign(
@@ -120,6 +121,7 @@ async def onboard_campaign(
     )
     joined_once = False
     for channel_link in channels:
+        ensure_current()
         joined_once = await onboard_channel(channel_link.channel, ctx, joined_once=joined_once)
     ready_count = sum(1 for o in ctx.outcomes if o.state == "ready")
     report(
@@ -150,7 +152,9 @@ async def _resolve_group_for_join(
         return None
     linked = None
     for account_id in accounts:
+        ensure_current()
         linked = await _safe_resolve(account_id, channel)
+        ensure_current()
         if linked is not None:
             break
     if linked is None:
@@ -245,6 +249,7 @@ async def _probe_account_spam(
     """
     run_start = datetime.now(UTC)
     for index, account_id in enumerate(accounts):
+        ensure_current()
         if report:
             report(OnboardingProgressEvent(code="spam_probe_started", account_id=account_id))
         try:
@@ -259,6 +264,7 @@ async def _probe_account_spam(
             if report:
                 report(OnboardingProgressEvent(code="spam_probe_failed", account_id=account_id))
         else:
+            ensure_current()
             if index + 1 < len(accounts) and _probed_this_run(verdict.checked_at, run_start):
                 await asyncio.sleep(_join_jitter_seconds())
 

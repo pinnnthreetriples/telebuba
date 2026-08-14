@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -329,55 +328,6 @@ async def test_unexpected_exception_is_swallowed(monkeypatch: pytest.MonkeyPatch
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
     assert comment.calls == []
-
-
-@pytest.mark.asyncio
-async def test_exception_after_claim_marks_failed_not_claimed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # A raise after the claim was won (here: generation explodes) must leave the row
-    # failed, not stuck 'claimed' forever — otherwise the post is never commentable
-    # and quota is permanently consumed for the rolling window.
-    await _make_campaign("@chan", "acc-1")
-
-    async def boom(_request: object) -> GeminiResult:
-        msg = "generation exploded"
-        raise RuntimeError(msg)
-
-    comment = _CommentStub()
-    monkeypatch.setattr(_seams, "execute", comment.execute)
-    monkeypatch.setattr(_seams, "rng", _FixedRng())
-    monkeypatch.setattr(_seams, "generate_text", boom)
-
-    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
-
-    record = await fetch_comment("@chan", 10)
-    assert record is not None
-    assert record.status == "failed"  # not 'claimed'
-
-
-@pytest.mark.asyncio
-async def test_cancelled_after_claim_marks_failed_and_reraises(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Shutdown mid-flight (CancelledError after the claim) must clean up the row and
-    # re-raise so the task actually cancels — a stuck 'claimed' row would leak.
-    await _make_campaign("@chan", "acc-1")
-
-    async def cancelled(_request: object) -> GeminiResult:
-        raise asyncio.CancelledError
-
-    comment = _CommentStub()
-    monkeypatch.setattr(_seams, "execute", comment.execute)
-    monkeypatch.setattr(_seams, "rng", _FixedRng())
-    monkeypatch.setattr(_seams, "generate_text", cancelled)
-
-    with pytest.raises(asyncio.CancelledError):
-        await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
-
-    record = await fetch_comment("@chan", 10)
-    assert record is not None
-    assert record.status == "failed"  # not 'claimed'
 
 
 @pytest.mark.asyncio

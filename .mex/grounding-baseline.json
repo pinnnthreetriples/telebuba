@@ -55,7 +55,7 @@
     "scaffold_file": ".mex/patterns/add-api-endpoint.md"
   },
   {
-    "body_hash": "73f034a467ef34565dbdac522a9211b9a157b3140ae37001f09152c25d6fe092",
+    "body_hash": "5a87c48a655164d923deb88a0bb1bbe9d6894b1134335ca04b5eac06a48bdc60",
     "node_id": "function:590865ce857c0ceca3af2805b8292dfc",
     "scaffold_file": ".mex/patterns/add-api-endpoint.md"
   },
@@ -70,7 +70,7 @@
     "scaffold_file": ".mex/patterns/add-auth.md"
   },
   {
-    "body_hash": "1b0d63c432e2d50358edaa4db6a838e6722bc3edbc9cea1ad948c02574c0747d",
+    "body_hash": "8006ee2847457b0b80e6ad9b07b66151c26c1e4e9930202cc085c76c4c995306",
     "node_id": "function:50e008c7469124b387d176c343aa29eb",
     "scaffold_file": ".mex/patterns/add-auth.md"
   },
@@ -120,12 +120,12 @@
     "scaffold_file": ".mex/patterns/add-telegram-task.md"
   },
   {
-    "body_hash": "9fe5b003c6cec4f11fb5f32d86aef04c019a6268ed4b62d6ecc1dd6098c414b9",
+    "body_hash": "1a9fae53d80ebb39b96f91b4d0038b1d1445b2c73b573ca8b0b4fa29851cc2fb",
     "node_id": "function:8b8474ae113110444a266c58ce43a25d",
     "scaffold_file": ".mex/patterns/add-warming-job.md"
   },
   {
-    "body_hash": "21708052f875c565089cb604bdd843381ddfb8145bdf7f962552d66c727a83de",
+    "body_hash": "b79ca8fe20df0740b41931dfb6478ca2df915ee281e592d376a615d2ac41d2e9",
     "node_id": "function:4d552bd3102e39ba3fbed9126fb2b80a",
     "scaffold_file": ".mex/patterns/add-warming-job.md"
   },

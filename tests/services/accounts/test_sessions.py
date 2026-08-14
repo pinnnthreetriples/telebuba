@@ -449,14 +449,16 @@ async def test_tdata_rollback_logs_an_unlink_it_could_not_perform(
     _stage_failing_import(monkeypatch, tmp_path)
 
     events: list[str] = []
+    payloads: dict[str, dict[str, object]] = {}
 
     async def fake_log(
         level: str,  # noqa: ARG001
         event: str,
         account_id: str | None = None,  # noqa: ARG001
-        extra: dict[str, object] | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
     ) -> None:
         events.append(event)
+        payloads[event] = extra or {}
 
     def refuse_unlink(_self: object, *, missing_ok: bool = False) -> None:  # noqa: ARG001
         # What Windows does when the pooled client still holds the handle.
@@ -471,6 +473,8 @@ async def test_tdata_rollback_logs_an_unlink_it_could_not_perform(
 
     assert "tdata_rollback_unlink_failed" in events
     assert "tdata_import_rolled_back" in events
+    assert payloads["tdata_import_rolled_back"]["files"] == ["111.session", "222.session"]
+    assert str(settings.telegram.session_dir) not in str(payloads)
 
 
 @pytest.mark.asyncio

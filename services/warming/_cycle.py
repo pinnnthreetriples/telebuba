@@ -61,9 +61,16 @@ async def _watch_stories_step(
 
 
 async def _set_offline(account_id: str) -> None:
-    """SetOnline(False), swallowing errors — cleanup must never raise."""
+    """SetOnline(False), swallowing errors — cleanup must never raise.
+
+    Runs inside ``cleanup_scope`` because Stop revokes the generation's lease
+    *before* cancelling it, so by the time this ``finally`` runs the fence would
+    refuse the very RPC that hands the account back — and ``except Exception``
+    below would swallow the refusal, leaving the account online after every Stop.
+    """
     try:
-        await _seams.execute(account_id, SetOnline(online=False))
+        with _seams.cleanup_scope():
+            await _seams.execute(account_id, SetOnline(online=False))
     except Exception as exc:  # cleanup must never raise.
         logger.exception("set_offline failed for %s", account_id)
         await log_event(
@@ -165,8 +172,10 @@ async def run_one_cycle(
         return await _build_cycle_result(account_id, tally, messages_sent)
 
     try:
-        online_result = await _seams.execute(account_id, SetOnline(online=True))
+        # Book before dispatch: cancellation can land while the RPC is already
+        # outside the process, so its outcome is ambiguous and must count spent.
         tally.attempts += 1
+        online_result = await _seams.execute(account_id, SetOnline(online=True))
         if online_result.status != "ok":
             if online_result.status in _WAIT_STATUSES:
                 flooded, seconds, until = _classify_flood(online_result)

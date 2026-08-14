@@ -36,7 +36,7 @@ from core.db import (
 from core.logging import log_event
 from schemas.telegram_actions import NewPostEvent, ReadPostComments
 from schemas.telegram_actions_comments import ReadPostCommentsResult
-from services.neurocomment import _gates, _seams
+from services.neurocomment import _gates, _reply_dispatch, _seams
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 
 if TYPE_CHECKING:
@@ -93,7 +93,13 @@ async def park_for_reply(
             extra={"channel": event.channel, "post_id": event.post_id},
         )
         return False
-    if await park_comment(event.channel, event.post_id, campaign.campaign_id, account_id):
+    if await park_comment(
+        event.channel,
+        event.post_id,
+        campaign.campaign_id,
+        account_id,
+        wait_minutes=limits.reply_wait_minutes,
+    ):
         await log_event(
             "INFO",
             "neurocomment_post_parked",
@@ -107,30 +113,14 @@ async def park_for_reply(
     return True
 
 
-class _Promoted(NamedTuple):
-    """Proof that a parked row is now OUR in-flight claim — the send's only ticket.
-
-    A value of this type comes out of :func:`_promote` and nowhere else, and
-    :func:`_reply_and_post` cannot run without one. That is the point: the
-    ``waiting -> claimed`` UPDATE is what keeps two overlapping ticks — a slow pass still
-    resolving rows when the next one starts, or the first pass after a restart re-reading a
-    row an interrupted one had already picked up — from replying twice under one post, and a
-    send reachable without it would re-open that window the first time somebody added a
-    branch above it.
-
-    ``mark_comment_posted`` is deliberately NOT tightened the same way. It is shared with
-    the immediate path, and one new caller is no reason to change what a delivered comment
-    means for every existing one.
-    """
-
-    row: CommentRecord
+_Promoted = _reply_dispatch.Promoted
+_Choice = _reply_dispatch.Choice
+_rebuild_event = _reply_dispatch.rebuild_event
 
 
 async def _promote(row: CommentRecord) -> _Promoted | None:
-    """Take the parked row out of the wait; ``None`` when somebody else already has it."""
-    if await promote_waiting_to_claimed(row.channel, row.post_id):
-        return _Promoted(row)
-    return None
+    """Compatibility seam around the dispatch module's ownership transition."""
+    return await _reply_dispatch.promote(row, promote_waiting_to_claimed)
 
 
 class _Tick(NamedTuple):
@@ -154,9 +144,8 @@ async def review_waiting_posts(now: datetime) -> None:
     rows = (await list_waiting_comments()).comments
     if not rows:
         return
-    # Read once per pass, not per row: ``reply_wait_minutes`` re-times every parked post at
-    # once (the deadline is computed from ``created_at``, never stored), so one tick has to
-    # judge every row against the same value — and the fleet's ids cannot change inside a tick.
+    # Read mutable admission/generation limits once per pass. Each row's wait deadline is
+    # frozen when it is parked, so later settings edits affect only later posts.
     limits = await load_neuro_settings()
     tick = _Tick(
         now=now,
@@ -164,10 +153,9 @@ async def review_waiting_posts(now: datetime) -> None:
         fleet={a.user_id for a in (await list_accounts()).accounts if a.user_id is not None},
         answered=set(),
     )
-    wait = timedelta(minutes=limits.reply_wait_minutes)
     for row in rows:
         try:
-            deadline = datetime.fromisoformat(row.created_at) + wait
+            deadline = datetime.fromisoformat(row.reply_deadline_at)
             await _resolve(row, tick, due=now >= deadline, stale=now > deadline + _MAX_OVERDUE)
         except Exception as exc:  # noqa: BLE001 - one parked post must not abort the pass.
             # The deletion pass's own per-channel code: this is a channel's step of the same
@@ -262,6 +250,8 @@ async def _read_thread(row: CommentRecord) -> ReadPostCommentsResult | None:
             row.account_id,
             ReadPostComments(channel=row.channel, post_id=row.post_id),
         )
+    except _seams.NeurocommentLeaseRevokedError:
+        raise
     except Exception:  # noqa: BLE001 - the caller decides what an unreadable thread means.
         return None
     # ``execute_read`` is typed to a bare ``BaseModel``, so the narrowing is the caller's
@@ -309,42 +299,6 @@ async def _stranger_comments(
     ]
 
 
-class _Choice(NamedTuple):
-    """Whose comment the wait settled on, and where they sat among the strangers.
-
-    ``target`` is ``None`` when the wait ran out with nobody to answer — the write-first
-    fallback — and ``index`` is then 0. The positions ride along only to be logged: they are
-    what shows an operator whether the "never the opener" rule landed where it was aimed,
-    without needing the thread itself.
-    """
-
-    target: PostCommentRecord | None
-    index: int  # 1-based position among the strangers, 0 when there is no target
-    total: int
-    # WHY there is no target, since the fallback has two causes that read alike from outside:
-    # a thread we read and found no readers in, or one that would not read at all. One code
-    # still counts "how often we wrote first"; this splits its reason, so an operator cutting
-    # ``reply_wait_minutes`` over "nobody comments there" is not really looking at a channel
-    # our accounts cannot read.
-    unread: bool = False
-
-
-def _rebuild_event(row: CommentRecord, read: ReadPostCommentsResult | None) -> NewPostEvent:
-    """The post as the listener would have delivered it, rebuilt from the thread read.
-
-    The database never stored the post, so this is the only source — ``post_media_kind``
-    comes from the same classifier the listener applies, run by the gateway. An unreadable
-    thread leaves nothing to rebuild from and the campaign prompt is then all the generator
-    has; that is the price of resolving the row anyway rather than parking it forever.
-    """
-    return NewPostEvent(
-        channel=row.channel,
-        post_id=row.post_id,
-        text=read.post_text if read is not None else "",
-        media_kind=read.post_media_kind if read is not None and read.post_media_kind else "none",
-    )
-
-
 async def _reply_and_post(
     promoted: _Promoted,
     campaign: NeurocommentCampaign,
@@ -352,55 +306,8 @@ async def _reply_and_post(
     choice: _Choice,
     limits: NeurocommentSettings,
 ) -> None:
-    """Record the decision and hand the send to the pipeline's normal back half.
-
-    Takes ``promoted`` rather than a row so it cannot be reached without the
-    ``waiting -> claimed`` transition (see :class:`_Promoted`).
-    """
-    row = promoted.row
-    if choice.target is None:
-        await log_event(
-            "INFO",
-            "neurocomment_reply_wait_expired",
-            account_id=row.account_id,
-            extra={
-                "channel": row.channel,
-                "post_id": row.post_id,
-                "waited_minutes": limits.reply_wait_minutes,
-                "reason": "thread_unread" if choice.unread else "no_readers",
-            },
-        )
-    else:
-        await log_event(
-            "INFO",
-            "neurocomment_reply_to_human",
-            account_id=row.account_id,
-            extra={
-                "channel": row.channel,
-                "post_id": row.post_id,
-                "stranger_index": choice.index,
-                "stranger_count": choice.total,
-            },
-        )
-    # Late import: ``engine`` imports this module for the park branch, so a top-level import
-    # cycles — and ``engine._generate_and_post`` is the seam the generation tests already
-    # patch, so reaching the back half through it keeps one path rather than two.
-    from services.neurocomment import engine  # noqa: PLC0415
-
-    try:
-        await engine._generate_and_post(  # noqa: SLF001 - this domain's own back half.
-            event,
-            campaign,
-            row.account_id,
-            limits,
-            target=choice.target,
-        )
-    except BaseException:
-        # The immediate path's rule, for its reason: any exit other than a delivered
-        # comment must not leave the row ``claimed``, or the post is never commentable
-        # again and the account keeps paying a quota slot for it.
-        await mark_comment_failed(row.channel, row.post_id)
-        raise
+    """Compatibility seam for callers that patch the former monolithic module."""
+    await _reply_dispatch.reply_and_post(promoted, campaign, event, choice, limits)
 
 
 async def _abandon(row: CommentRecord, event: str, *, reason: str | None = None) -> None:

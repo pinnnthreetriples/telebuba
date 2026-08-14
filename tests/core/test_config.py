@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -88,6 +89,33 @@ def test_cors_explicit_origins_with_credentials_is_accepted() -> None:
 def test_cors_wildcard_without_credentials_is_accepted() -> None:
     api = ApiSettings(cors_origins=["*"], cors_allow_credentials=False)
     assert api.cors_origins == ["*"]
+
+
+def test_security_concurrency_limits_have_safe_bounded_defaults() -> None:
+    assert ApiSettings().max_concurrent_uploads == 2
+    assert AuthSettings().argon2_max_concurrency == 2
+    with pytest.raises(ValidationError):
+        ApiSettings(max_concurrent_uploads=0)
+    with pytest.raises(ValidationError):
+        ApiSettings(max_concurrent_uploads=17)
+    with pytest.raises(ValidationError):
+        AuthSettings(argon2_max_concurrency=0)
+    with pytest.raises(ValidationError):
+        AuthSettings(argon2_max_concurrency=9)
+
+
+def test_upload_staging_has_private_cleanup_defaults_and_bounded_ttl() -> None:
+    api = ApiSettings()
+    # Compared as a Path, not a string: the default renders with a backslash on
+    # Windows, which is the operator's platform and says nothing about the setting.
+    assert api.upload_staging_dir == Path("runtime/uploads")
+    assert api.upload_staging_ttl_seconds == 86_400
+    with pytest.raises(ValidationError):
+        ApiSettings(upload_staging_ttl_seconds=59)
+
+
+def test_session_cookie_defaults_to_strict_same_site() -> None:
+    assert AuthSettings().cookie_samesite == "strict"
 
 
 def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:

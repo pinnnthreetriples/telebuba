@@ -1,4 +1,4 @@
-"""The two ASGI wrappers: the request-body ceiling and the security headers.
+"""Early ASGI security: body ceiling, origin validation, and response headers.
 
 The body ceiling is tested with STREAMED input on purpose. An earlier attempt at
 this guard only inspected ``Content-Length``, and a probe walked straight past it
@@ -11,6 +11,7 @@ tally below is the number of bytes the server genuinely pulled off the wire.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import httpx
@@ -19,6 +20,7 @@ import pytest
 from api import create_app
 from api._middleware import (
     ASGIApp,
+    BodyLimitPolicy,
     BodySizeLimitMiddleware,
     Message,
     Receive,
@@ -26,7 +28,10 @@ from api._middleware import (
     SecurityHeadersMiddleware,
     Send,
 )
+from core import auth as core_auth
 from core.config import settings
+from core.repositories.users import create_user
+from schemas.auth import UserRecord
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Callable
@@ -35,6 +40,7 @@ if TYPE_CHECKING:
 
 _BOUNDARY = "----telebubatest"
 _CONTENT_TYPE = f"multipart/form-data; boundary={_BOUNDARY}"
+_SAME_ORIGIN = "http://test"
 _CHUNK = b"z" * 65_536
 _CAP = 1_000_000
 _SECURITY_HEADER_NAMES = (
@@ -151,24 +157,99 @@ async def test_the_reported_case_is_cut_off_at_the_shipped_default() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_session_cookie_buys_the_upload_budget() -> None:
-    """The split is on cookie PRESENCE, so a real operator's upload still works.
-
-    The cookie here is forged, and that is the point: the middleware does not
-    validate it, so this request gets the 210 MB budget and is then refused by the
-    auth dependency on its merits (401, body drained). A forger buys back only the
-    budget they already had before this change — no reduction is lost, because the
-    caller who sends NO cookie is the one now held to 1 MB.
-    """
+async def test_a_forged_session_cookie_does_not_buy_the_upload_budget() -> None:
     body = _StreamedUpload(chunks=48)
     async with _client(create_app()) as client:
         resp = await client.post(
             "/api/v1/accounts/import-session",
             content=body,
-            headers={"Content-Type": _CONTENT_TYPE, "Cookie": "tb_session=forged"},
+            headers={
+                "Content-Type": _CONTENT_TYPE,
+                "Cookie": "tb_session=forged",
+                "Origin": _SAME_ORIGIN,
+            },
         )
-    assert resp.status_code == 401
+    assert resp.status_code == 413
+    assert not body.finished
+
+
+@pytest.mark.asyncio
+async def test_a_valid_non_revoked_session_buys_the_exact_upload_route_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "secret", "middleware-secret-0123456789abcdef-pad")
+    await create_user(
+        UserRecord(
+            id="upload-admin",
+            username="upload-admin",
+            password_hash="unused",
+            role="admin",
+        ),
+    )
+    token = core_auth.encode_session_token("upload-admin")
+    body = _StreamedUpload(chunks=48)
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={
+                "Content-Type": _CONTENT_TYPE,
+                "Cookie": f"tb_session={token}",
+                "Origin": _SAME_ORIGIN,
+            },
+        )
+    assert resp.status_code != 413
     assert body.finished
+
+
+@pytest.mark.asyncio
+async def test_duplicate_content_type_headers_never_buy_large_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "secret", "duplicate-header-0123456789abcdef-pad")
+    await create_user(
+        UserRecord(id="header-admin", username="header-admin", password_hash="x", role="admin"),
+    )
+    token = core_auth.encode_session_token("header-admin")
+    body = _StreamedUpload(chunks=48)
+    headers = [
+        ("Content-Type", _CONTENT_TYPE),
+        ("Content-Type", "application/json"),
+        ("Cookie", f"tb_session={token}"),
+        ("Origin", _SAME_ORIGIN),
+    ]
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers=headers,
+        )
+    assert resp.status_code == 413
+    assert not body.finished
+
+
+@pytest.mark.asyncio
+async def test_a_valid_session_does_not_buy_large_budget_on_a_non_upload_route(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.auth, "secret", "middleware-secret-0123456789abcdef-pad")
+    await create_user(
+        UserRecord(id="route-admin", username="route-admin", password_hash="x", role="admin"),
+    )
+    token = core_auth.encode_session_token("route-admin")
+    body = _StreamedUpload(chunks=48)
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/proxies",
+            content=body,
+            headers={
+                "Content-Type": _CONTENT_TYPE,
+                "Cookie": f"tb_session={token}",
+                "Origin": _SAME_ORIGIN,
+            },
+        )
+    assert resp.status_code == 413
+    assert not body.finished
 
 
 @pytest.mark.asyncio
@@ -196,6 +277,7 @@ async def test_the_cookie_is_found_among_others(app: FastAPI) -> None:
             headers={
                 "Content-Type": _CONTENT_TYPE,
                 "Cookie": "theme=dark; tb_session=forged; lang=ru",
+                "Origin": _SAME_ORIGIN,
             },
         )
     assert resp.status_code == 200
@@ -273,7 +355,11 @@ async def test_the_limit_itself_is_allowed_and_one_byte_over_is_not(
         resp = await client.post(
             "/api/v1/accounts/import-session",
             content=body,
-            headers={"Content-Type": _CONTENT_TYPE, "Cookie": "tb_session=forged"},
+            headers={
+                "Content-Type": _CONTENT_TYPE,
+                "Cookie": "tb_session=forged",
+                "Origin": _SAME_ORIGIN,
+            },
         )
     assert resp.status_code == status
 
@@ -284,6 +370,185 @@ async def test_a_get_with_no_body_is_untouched(capped: FastAPI) -> None:
         resp = await client.get("/api/v1/health")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_cross_origin_cookie_authenticated_write_is_rejected_before_body() -> None:
+    body = _StreamedUpload(chunks=1)
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={
+                "Content-Type": _CONTENT_TYPE,
+                "Cookie": "tb_session=forged",
+                "Origin": "https://evil.example",
+            },
+        )
+    assert resp.status_code == 403
+    assert not body.finished
+    assert resp.json()["error"]["message"] == "untrusted_origin"
+
+
+@pytest.mark.asyncio
+async def test_same_origin_cookie_authenticated_write_reaches_normal_auth_gate() -> None:
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/auth/logout",
+            headers={"Cookie": "tb_session=forged", "Origin": "http://test"},
+        )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_cookie_authenticated_write_without_origin_is_rejected_fail_closed() -> None:
+    body = _StreamedUpload(chunks=1)
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers={"Content-Type": _CONTENT_TYPE, "Cookie": "tb_session=forged"},
+        )
+    assert resp.status_code == 403
+    assert not body.finished
+
+
+@pytest.mark.asyncio
+async def test_duplicate_origin_headers_are_rejected_fail_closed() -> None:
+    body = _StreamedUpload(chunks=1)
+    headers = [
+        ("Content-Type", _CONTENT_TYPE),
+        ("Cookie", "tb_session=forged"),
+        ("Origin", _SAME_ORIGIN),
+        ("Origin", _SAME_ORIGIN),
+    ]
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers=headers,
+        )
+    assert resp.status_code == 403
+    assert not body.finished
+
+
+@pytest.mark.asyncio
+async def test_duplicate_session_cookies_are_rejected_fail_closed() -> None:
+    body = _StreamedUpload(chunks=1)
+    headers = [
+        ("Content-Type", _CONTENT_TYPE),
+        ("Cookie", "tb_session=first"),
+        ("Cookie", "tb_session=second"),
+        ("Origin", _SAME_ORIGIN),
+    ]
+    async with _client(create_app()) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            content=body,
+            headers=headers,
+        )
+    assert resp.status_code == 403
+    assert not body.finished
+
+
+@pytest.mark.asyncio
+async def test_upload_validator_failure_falls_back_to_small_budget() -> None:
+    sent: list[Message] = []
+
+    async def _app(_scope: Scope, receive: Receive, send: Send) -> None:
+        await receive()
+        await send({"type": "http.response.start", "status": 204, "headers": []})
+
+    async def _broken_validator(_token: str) -> bool:
+        message = "database unavailable"
+        raise RuntimeError(message)
+
+    async def _oversized_receive() -> Message:
+        return {"type": "http.request", "body": b"x" * 11, "more_body": False}
+
+    async def _capture(message: Message) -> None:
+        sent.append(message)
+
+    wrapped = SecurityHeadersMiddleware(
+        BodySizeLimitMiddleware(
+            _app,
+            BodyLimitPolicy(
+                max_bytes=100,
+                max_anonymous_bytes=10,
+                cookie_name="tb_session",
+                large_upload_path_patterns=(r"/upload",),
+            ),
+            validate_session=_broken_validator,
+        ),
+    )
+    await wrapped(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/upload",
+            "headers": [
+                (b"content-type", _CONTENT_TYPE.encode()),
+                (b"cookie", b"tb_session=valid"),
+            ],
+        },
+        _oversized_receive,
+        _capture,
+    )
+    start = next(message for message in sent if message["type"] == "http.response.start")
+    assert start["status"] == 413
+    headers = dict(start["headers"])
+    assert headers[b"x-content-type-options"] == b"nosniff"
+
+
+@pytest.mark.asyncio
+async def test_upload_admission_refuses_excess_before_body_read() -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    first_sent: list[Message] = []
+    second_sent: list[Message] = []
+
+    async def _app(_scope: Scope, _receive: Receive, _send: Send) -> None:
+        entered.set()
+        await release.wait()
+
+    async def _valid(_token: str) -> bool:
+        return True
+
+    async def _capture_first(message: Message) -> None:
+        first_sent.append(message)
+
+    async def _capture_second(message: Message) -> None:
+        second_sent.append(message)
+
+    wrapped = BodySizeLimitMiddleware(
+        _app,
+        BodyLimitPolicy(
+            max_bytes=100,
+            max_anonymous_bytes=10,
+            cookie_name="tb_session",
+            max_concurrent_uploads=1,
+            large_upload_path_patterns=(r"/upload",),
+        ),
+        validate_session=_valid,
+    )
+    scope: Scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/upload",
+        "headers": [
+            (b"cookie", b"tb_session=valid"),
+            (b"content-type", _CONTENT_TYPE.encode()),
+        ],
+    }
+    first = asyncio.create_task(wrapped(scope, _idle_receive, _capture_first))
+    await entered.wait()
+    await wrapped(scope, _idle_receive, _capture_second)
+    release.set()
+    await first
+
+    starts = [message for message in second_sent if message["type"] == "http.response.start"]
+    assert starts[0]["status"] == 429
+    assert dict(starts[0]["headers"])[b"retry-after"] == b"1"
 
 
 @pytest.mark.asyncio
@@ -374,9 +639,7 @@ async def test_a_started_response_is_never_followed_by_a_413() -> None:
 
     wrapped = BodySizeLimitMiddleware(
         _app,
-        max_bytes=150,
-        max_anonymous_bytes=150,
-        cookie_name="tb_session",
+        BodyLimitPolicy(max_bytes=150, max_anonymous_bytes=150, cookie_name="tb_session"),
     )
     await wrapped({"type": "http", "headers": []}, _receive, _capture)
     assert [m["status"] for m in sent if m["type"] == "http.response.start"] == [200]
@@ -388,9 +651,7 @@ async def test_a_started_response_is_never_followed_by_a_413() -> None:
         SecurityHeadersMiddleware,
         lambda app: BodySizeLimitMiddleware(
             app,
-            max_bytes=1,
-            max_anonymous_bytes=1,
-            cookie_name="tb_session",
+            BodyLimitPolicy(max_bytes=1, max_anonymous_bytes=1, cookie_name="tb_session"),
         ),
     ],
 )

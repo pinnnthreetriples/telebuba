@@ -1,8 +1,8 @@
 """Shared stubs for the ``comment_mode='reply'`` tests (parking, the wait, and its gates).
 
 Split out of ``test_reply_wait`` when the gate re-check grew its own file: both halves park a
-post at real ``now`` and then hand the pass a clock minutes into the future, which is exactly
-how production computes the deadline (``created_at`` + ``reply_wait_minutes``, never stored).
+post at real ``now`` and then hand the pass a clock minutes into the future. Production
+persists that deadline at park time so later settings edits cannot re-time accepted work.
 """
 
 from __future__ import annotations
@@ -67,11 +67,7 @@ def _reply_mode(monkeypatch: pytest.MonkeyPatch, *, wait_minutes: int = 10) -> N
 
 
 async def _park(channel: str, post_id: int, campaign_id: str, account_id: str) -> datetime:
-    """Park a post and hand back the ``created_at`` the deadline is measured from.
-
-    The row's own stamp, not a frozen constant: nothing persists a deadline, so the tests
-    have to anchor their clock exactly where production does.
-    """
+    """Park a post and hand back its creation clock for test-relative review times."""
     assert await park_comment(channel, post_id, campaign_id, account_id) is True
     record = await fetch_comment(channel, post_id)
     assert record is not None

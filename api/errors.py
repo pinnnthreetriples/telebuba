@@ -20,6 +20,8 @@ from schemas.api import ErrorDetail, ErrorEnvelope
 from services.accounts import AccountActionError
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from fastapi import FastAPI, Request
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
@@ -84,14 +86,24 @@ def _envelope(
     message: str,
     status_code: int,
     fields: dict[str, str] | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> JSONResponse:
     body = ErrorEnvelope(error=ErrorDetail(code=code, message=message, fields=fields))
-    return JSONResponse(status_code=status_code, content=body.model_dump(exclude_none=True))
+    return JSONResponse(
+        status_code=status_code,
+        content=body.model_dump(exclude_none=True),
+        headers=headers,
+    )
 
 
 async def _handle_http_exception(_request: Request, exc: HTTPException) -> JSONResponse:
     code = _HTTP_ERROR_CODES.get(exc.status_code, "http_error")
-    return _envelope(code=code, message=str(exc.detail), status_code=exc.status_code)
+    return _envelope(
+        code=code,
+        message=str(exc.detail),
+        status_code=exc.status_code,
+        headers=exc.headers,
+    )
 
 
 async def _handle_account_action_error(

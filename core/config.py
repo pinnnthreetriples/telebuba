@@ -107,6 +107,14 @@ class ApiSettings(BaseSettings):
     # unauthenticated posts a body worth more than this (login is a small JSON
     # object), so the split costs a legitimate operator nothing.
     max_anonymous_request_bytes: int = Field(default=1_000_000, ge=1)
+    # Hold the admission slot from the first body read through handler cleanup.
+    # This bounds simultaneous multipart spooling and large in-handler buffers.
+    max_concurrent_uploads: int = Field(default=2, ge=1, le=16)
+    # Credential-bearing uploads are streamed under this owner-only directory.
+    # Startup removes abandoned files older than the TTL (for example after
+    # SIGKILL, when a context-manager finally block cannot run).
+    upload_staging_dir: Path = Path("runtime/uploads")
+    upload_staging_ttl_seconds: int = Field(default=86_400, ge=60)
 
     @model_validator(mode="after")
     def _reject_credentialed_cors_wildcard(self) -> ApiSettings:
@@ -129,7 +137,7 @@ class AuthSettings(BaseSettings):
     # local http dev can relax Secure. Sliding TTL re-issued on each request.
     cookie_name: str = Field(default="tb_session", min_length=1)
     cookie_secure: bool = True
-    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    cookie_samesite: Literal["lax", "strict", "none"] = "strict"
     session_ttl_minutes: int = Field(default=720, ge=1)
     # First-admin seeding (no public signup): when no users exist and both are
     # set, an admin is created at startup.
@@ -138,6 +146,10 @@ class AuthSettings(BaseSettings):
     # Login brute-force guard (in-memory, per-process).
     login_rate_limit_max_attempts: int = Field(default=5, ge=1)
     login_rate_limit_window_seconds: float = Field(default=60.0, gt=0)
+    # Argon2 intentionally consumes substantial CPU/RAM. Keep it off the event
+    # loop and cap concurrent hashes/verifications so login bursts cannot exhaust
+    # the process. Raising this requires a matching memory-capacity review.
+    argon2_max_concurrency: int = Field(default=2, ge=1, le=8)
 
     @model_validator(mode="after")
     def _check_secret_strength(self) -> AuthSettings:

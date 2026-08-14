@@ -79,12 +79,20 @@ async def reconcile_if_running() -> None:
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a parent import cycle.
 
-    if not await get_listener_running():
-        return
-    listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await _runtime.reconcile_neurocomment_runtime(listener_account_id)
-        _runtime._ensure_onboarding_running(_signals.signal_onboarding_progress)  # noqa: SLF001 - peer module
+    async with _runtime.neurocomment_lifecycle():
+        if not await get_listener_running():
+            return
+        listener_account_id = await get_listener_account_id()
+        if listener_account_id is not None:
+            generation = _runtime._activate_runtime_owner(listener_account_id)  # noqa: SLF001
+        else:
+            return
+    await _runtime.reconcile_neurocomment_runtime(listener_account_id)
+    async with _runtime.neurocomment_lifecycle():
+        if _runtime._runtime_owner_is_current(listener_account_id, generation):  # noqa: SLF001
+            _runtime._ensure_onboarding_running(  # noqa: SLF001 - peer module
+                _signals.signal_onboarding_progress,
+            )
 
 
 async def reconcile_neurocomment_on_startup() -> None:
@@ -102,17 +110,26 @@ async def reconcile_neurocomment_on_startup() -> None:
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a parent import cycle.
 
     await _reclaim_stale_claims_on_startup()
+    await _runtime._inbox_runtime.recover_inbox()  # noqa: SLF001
     # Rehydrate cooldowns unconditionally (#34) — a just-flooded account stays parked
     # across a restart even for a runtime that boots paused.
     await _state.hydrate_cooldowns()
-    if not await get_listener_running():
-        return
-    listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await _runtime.reconcile_neurocomment_runtime(listener_account_id)
-        # Resume onboarding too: campaigns created since the last Start would
-        # otherwise boot with a live listener but zero readiness rows.
-        _runtime._ensure_onboarding_running(_signals.signal_onboarding_progress)  # noqa: SLF001 - peer module
+    async with _runtime.neurocomment_lifecycle():
+        if not await get_listener_running():
+            return
+        listener_account_id = await get_listener_account_id()
+        if listener_account_id is not None:
+            generation = _runtime._activate_runtime_owner(listener_account_id)  # noqa: SLF001
+        else:
+            return
+    await _runtime.reconcile_neurocomment_runtime(listener_account_id)
+    async with _runtime.neurocomment_lifecycle():
+        if _runtime._runtime_owner_is_current(listener_account_id, generation):  # noqa: SLF001
+            # Resume onboarding too: campaigns created since the last Start would
+            # otherwise boot with a live listener but zero readiness rows.
+            _runtime._ensure_onboarding_running(  # noqa: SLF001 - peer module
+                _signals.signal_onboarding_progress,
+            )
 
 
 async def _reclaim_stale_claims_on_startup() -> None:
@@ -136,6 +153,7 @@ async def shutdown_neurocomment_on_shutdown() -> None:
     # Unconditional: a discovery run can be serving a campaign account with no
     # listener configured, so it must not be gated on the listener branch below.
     await _discovery_state.shutdown_discovery_runs()
-    listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await _runtime.shutdown_neurocomment_runtime(listener_account_id)
+    async with _runtime.neurocomment_lifecycle():
+        listener_account_id = await get_listener_account_id()
+        if listener_account_id is not None:
+            await _runtime.shutdown_neurocomment_runtime(listener_account_id)

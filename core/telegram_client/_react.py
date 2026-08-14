@@ -32,6 +32,25 @@ _rng = random.SystemRandom()
 # transient error re-probes next time rather than sticking a bad "None".
 _WHITELIST_TTL_SECONDS = 3600.0
 _whitelist_cache: dict[str, tuple[float, set[str] | None]] = {}
+# A successful channel-management write can land while a warming reaction is
+# awaiting Telegram.  Clearing the dict alone is insufficient: an older
+# whitelist read could then finish and put its pre-write value back.  The
+# generation prevents that stale repopulation and lets the dispatcher abandon a
+# reaction whose permission decision predates the write.
+_whitelist_generation = 0
+
+
+def invalidate_reaction_whitelist_cache() -> None:
+    """Retire every cached channel-reaction decision.
+
+    Channel management addresses an owned channel by its numeric id, while
+    warming stores public usernames.  Without another Telegram lookup there is
+    no safe one-key mapping between those forms, so the rare management write
+    invalidates the small process-local cache as a whole.
+    """
+    global _whitelist_generation  # noqa: PLW0603 - the generation is process-local state.
+    _whitelist_generation += 1
+    _whitelist_cache.clear()
 
 
 async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> set[str] | None:
@@ -42,6 +61,7 @@ async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> s
     default set rather than regress). An empty set means reactions are off or the
     channel only permits emoji we don't use, so the caller should skip entirely.
     """
+    generation = _whitelist_generation
     now = time.monotonic()
     cached = _whitelist_cache.get(channel)
     if cached is not None and now - cached[0] < _WHITELIST_TTL_SECONDS:
@@ -58,7 +78,10 @@ async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> s
     else:
         # ChatReactionsAll / unknown → any emoji is accepted, so don't narrow.
         result = None
-    _whitelist_cache[channel] = (now, result)
+    # A settings mutation may have completed during GetFullChannelRequest.  Its
+    # invalidation wins: never resurrect the older availability for another TTL.
+    if generation == _whitelist_generation:
+        _whitelist_cache[channel] = (now, result)
     return result
 
 
@@ -114,12 +137,18 @@ async def dispatch_react_to_post(client: TelegramClient, action: ReactToPost) ->
         candidates = action.message_ids
     if not candidates:
         return _DispatchResult(log_extra={"reaction_skip": "no_posts"})
+    whitelist_generation = _whitelist_generation
     allowed = await _channel_reaction_whitelist(client, action.channel)
     emoji = _pick_reaction(action.reactions, allowed)
     if emoji is None:
         return _DispatchResult(log_extra={"reaction_skip": "no_emoji"})
     message_id = _rng.choice(candidates)
     peer = await client.get_input_entity(action.channel)
+    # The operator may have disabled/edited reactions while peer resolution was
+    # in flight.  Do not dispatch from a permission decision that the successful
+    # write has already invalidated.
+    if whitelist_generation != _whitelist_generation:
+        return _DispatchResult(log_extra={"reaction_skip": "reaction_settings_changed"})
     await client(
         SendReactionRequest(
             peer=peer,

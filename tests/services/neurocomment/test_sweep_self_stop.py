@@ -110,6 +110,7 @@ async def _start_sweep() -> asyncio.Task[None]:
     """Mark the listener running (so a drop reconciles) and start the real sweep task."""
     await set_listener_account_id("listener-1")
     await set_listener_running(running=True)
+    _runtime._activate_runtime_owner("listener-1")
     _runtime._ensure_sweep_running()
     task = _runtime._SWEEP_TASK
     assert task is not None

@@ -1389,6 +1389,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
@@ -5206,6 +5216,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
@@ -5289,6 +5309,16 @@
           },
           "400": {
             "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
             "content": {
               "application/json": {
                 "schema": {
@@ -11060,11 +11090,13 @@
         "properties": {
           "username": {
             "type": "string",
+            "maxLength": 128,
             "minLength": 1,
             "title": "Username"
           },
           "password": {
             "type": "string",
+            "maxLength": 1024,
             "minLength": 1,
             "title": "Password"
           }
@@ -12112,6 +12144,7 @@
           },
           "host": {
             "type": "string",
+            "maxLength": 253,
             "minLength": 1,
             "title": "Host"
           },

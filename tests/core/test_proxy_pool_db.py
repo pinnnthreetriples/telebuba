@@ -45,11 +45,42 @@ async def test_create_proxy_returns_masked_pool_entry(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_create_proxy_is_idempotent_on_identity(tmp_path) -> None:
     configure_database(tmp_path / "telebuba.db")
-    first = await create_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080, password="a"))
-    second = await create_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080, password="b"))
+    first = await create_proxy(
+        ProxyCreate(proxy_type="socks5", host="Example.COM.", port=1080, password="a"),
+    )
+    second = await create_proxy(
+        ProxyCreate(proxy_type="socks5", host="example.com", port=1080, password="b"),
+    )
     assert second.id == first.id
     pool = await list_proxies()
     assert len(pool.proxies) == 1
+
+
+@pytest.mark.asyncio
+async def test_create_proxy_rejects_constructed_blank_host_without_writing(tmp_path) -> None:
+    """The repository guard runs before its transaction, even for bypassed schemas."""
+    configure_database(tmp_path / "telebuba.db")
+    poisoned = ProxyCreate.model_construct(proxy_type="socks5", host="   ", port=1080)
+
+    with pytest.raises(ValueError, match="must not be blank"):
+        await create_proxy(poisoned)
+
+    assert (await list_proxies()).proxies == []
+
+
+@pytest.mark.asyncio
+async def test_repository_rejects_constructed_host_port_without_writing(tmp_path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    poisoned = ProxyCreate.model_construct(
+        proxy_type="socks5",
+        host="example.com:1080",
+        port=1080,
+    )
+
+    with pytest.raises(ValueError, match="must not include a port"):
+        await create_proxy(poisoned)
+
+    assert (await list_proxies()).proxies == []
 
 
 @pytest.mark.asyncio

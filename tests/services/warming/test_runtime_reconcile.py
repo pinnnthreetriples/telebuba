@@ -89,6 +89,76 @@ async def test_reconcile_warming_runtime_skips_error_state(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_finishes_a_stop_the_previous_process_was_killed_inside(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ``stopping-`` marker in a fresh process is a corpse, not a task to wait for.
+
+    ``_cancel_runtime_task`` parks the row in ``error`` with that marker before it
+    cancels, so no stale CAS can land while the coroutine unwinds; the stop path
+    rewrites the row as soon as the wait resolves. If the process dies in that window
+    the row keeps a state reconcile deliberately refuses to resurrect, telling the
+    operator a task is still stopping in a process that no longer exists — the account
+    quietly stops warming and the card explains it with a fiction. Settle it to idle
+    instead, where the operator's next Start is one click like any other.
+    """
+    started: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="error",
+            last_event="stop_stopping",
+            last_error="warming task is stopping",
+            run_id=f"{_runtime._STOPPING_MARKER_PREFIX}deadbeef",
+        ),
+    )
+
+    await warming.reconcile_warming_runtime()
+    await asyncio.sleep(0)
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "idle"
+    assert record.last_event == "stopped_after_restart"
+    assert record.last_error is None
+    assert record.run_id is None
+    # Settled, not resurrected: the operator had asked for a stop.
+    assert started == []
+
+
+@pytest.mark.asyncio
+async def test_reconcile_leaves_a_genuine_error_row_parked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the stop marker earns the heal — a real failure still waits for a human."""
+    monkeypatch.setattr(_runtime, "_warming_loop", _no_initial_delay)
+    await create_account(AccountCreate(account_id="acc-broken"))
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-broken",
+            state="error",
+            last_event="loop_crashed",
+            last_error="ProxyConnectionError",
+            run_id="run-1",
+        ),
+    )
+
+    await warming.reconcile_warming_runtime()
+
+    record = await fetch_warming_state("acc-broken")
+    assert record is not None
+    assert record.state == "error"
+    assert record.last_event == "loop_crashed"
+
+
+@pytest.mark.asyncio
 async def test_reconcile_warming_runtime_builds_dialogue_pairs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

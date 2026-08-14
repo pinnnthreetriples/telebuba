@@ -44,6 +44,9 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()
+    _runtime._STOPPING_MARKERS.clear()
+    _runtime._STOP_FINALIZERS.clear()
+    _seams.reset_leases_for_tests()
     # Module-level reaction-whitelist TTL cache — clear so channel reaction sets
     # never carry across tests.
     _whitelist_cache.clear()
@@ -58,6 +61,11 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     _loop._cycle_semaphore = asyncio.Semaphore(settings.warming.cycle_concurrency)
     yield
     warming._RUNTIME.clear()
+    _runtime._STOPPING_MARKERS.clear()
+    for task in _runtime._STOP_FINALIZERS:
+        task.cancel()
+    _runtime._STOP_FINALIZERS.clear()
+    _seams.reset_leases_for_tests()
     warming._ACCOUNT_LOCKS.clear()
     _fleet._AFFINITY_CACHE.clear()
     # Abandon the periodic purge task (reconcile starts one) like the per-account

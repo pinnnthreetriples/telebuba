@@ -50,6 +50,7 @@ export function mutationErrorText(error: unknown): string {
   const seconds = Number(detail?.fields?.retry_after_seconds ?? NaN);
   return i18n.t(
     [
+      `shell.code.${message}`,
       `accounts.profile.code.${message}`,
       `accounts.channel.code.${message}`,
       `accounts.addStory.code.${message}`,
