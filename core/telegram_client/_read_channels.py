@@ -24,6 +24,7 @@ from core.telegram_client._channels import _input_channel
 from core.telegram_client._read_discovery import (
     dispatch_get_similar_channels,
     dispatch_search_channels,
+    dispatch_search_global_posts,
 )
 
 # Runtime, not ``TYPE_CHECKING``: the dispatcher at the bottom pattern-matches on these
@@ -36,6 +37,7 @@ from schemas.telegram_actions import (
     ListChannelPosts,
     ListOwnChannels,
     SearchChannels,
+    SearchGlobalPosts,
 )
 from schemas.telegram_actions_activity import LastPostResult
 from schemas.telegram_actions_channels import (
@@ -273,6 +275,8 @@ async def _dispatch_channel_read_action(  # noqa: PLR0911 - one return per read-
             return await dispatch_search_channels(client, action)
         case GetSimilarChannels():
             return await dispatch_get_similar_channels(client, action)
+        case SearchGlobalPosts():
+            return await dispatch_search_global_posts(client, action)
         case GetLastPostAt():
             return await dispatch_get_last_post_at(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive

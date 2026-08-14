@@ -66,6 +66,97 @@ async def test_get_linked_discussion_group_absent(monkeypatch: pytest.MonkeyPatc
     assert result.comments_enabled is False
 
 
+def _full_channel_client(full_chat: object, chats: list[object]) -> object:
+    """A read client whose single RPC answers with one ``channels.getFullChannel`` reply."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(full_chat=full_chat, chats=chats)
+
+    return FakeClient()
+
+
+@pytest.mark.asyncio
+async def test_get_linked_discussion_group_reads_group_gates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The signals that decide whether a campaign can comment ride the same reply.
+
+    Each off the entity that actually carries it: the write gates off the discussion
+    GROUP, Telegram's scam/fake/restricted marks off the BROADCAST the operator would
+    adopt. Read off the group, a clean channel with a flagged chat was shown as a scam.
+    """
+    group = MagicMock(
+        id=999,
+        join_to_send=True,
+        join_request=True,
+        slowmode_enabled=True,
+        scam=False,
+        fake=None,
+        restricted=None,
+        default_banned_rights=MagicMock(send_messages=True),
+    )
+    broadcast = MagicMock(id=111, scam=True, fake=None, restricted=None)
+    full_chat = MagicMock(id=111, linked_chat_id=999, participants_count=4321, slowmode_seconds=30)
+    _patch_client(monkeypatch, _full_channel_client(full_chat, [broadcast, group]))
+
+    result = await execute_read("acc-gates", GetLinkedDiscussionGroup(channel="@news"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.participants_count == 4321
+    assert result.broadcast_slowmode_seconds == 30
+    assert (result.join_to_send, result.join_request) == (True, True)
+    assert result.can_send_messages is False  # banned for everyone, positive sense
+    assert result.group_slowmode_enabled is True
+    # The broadcast's own mark, not the discussion group's (which says False here).
+    assert result.scam is True
+    # An unset TL flag is not a "no" from Telegram, so it stays unknown.
+    assert (result.fake, result.restricted) == (None, None)
+
+
+@pytest.mark.asyncio
+async def test_get_linked_discussion_group_unbanned_group_can_be_written_to(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No chat-wide ban flag = everyone may write; the other gates stay unknown."""
+    group = MagicMock(id=999, default_banned_rights=MagicMock(send_messages=None))
+    _patch_client(monkeypatch, _full_channel_client(MagicMock(linked_chat_id=999), [group]))
+
+    result = await execute_read("acc-open", GetLinkedDiscussionGroup(channel="@news"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.can_send_messages is True
+
+
+@pytest.mark.asyncio
+async def test_get_linked_discussion_group_gates_unknown_without_group_entity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram omits the group entity for some channels — report unknown, don't guess."""
+    full_chat = MagicMock(id=111, linked_chat_id=999, slowmode_seconds=None)
+    _patch_client(monkeypatch, _full_channel_client(full_chat, [MagicMock(id=222)]))
+
+    result = await execute_read("acc-noentity", GetLinkedDiscussionGroup(channel="@news"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.comments_enabled is True
+    assert result.broadcast_slowmode_seconds is None
+    assert result.join_to_send is None
+    assert result.join_request is None
+    assert result.can_send_messages is None
+    # Neither entity was in the reply, so neither the group's gate nor the broadcast's
+    # marks may be guessed at.
+    assert (result.group_slowmode_enabled, result.scam, result.fake, result.restricted) == (
+        None,
+        None,
+        None,
+        None,
+    )
+
+
 @pytest.mark.asyncio
 async def test_check_messages_alive_reports_deleted_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     """A ``get_messages`` ``None`` for an id means that comment was deleted/gone."""

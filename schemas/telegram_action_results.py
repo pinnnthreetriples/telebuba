@@ -15,6 +15,11 @@ class LinkedDiscussionGroupResult(BaseModel):
 
     ``linked_chat_id`` is the discussion group's chat id, or ``None`` when the
     channel has comments disabled / no linked group.
+
+    Every optional field below rides the same ``channels.getFullChannel`` reply, so
+    ``None`` always means "the reply did not answer this" (no linked group, an older
+    TL layer, a field Telegram omitted) and never "no" — a caller that blocks a
+    campaign must test for the positive verdict, not for falsiness.
     """
 
     linked_chat_id: int | None = None
@@ -22,6 +27,29 @@ class LinkedDiscussionGroupResult(BaseModel):
     # Free ride: ``channels.getFullChannel`` already returns the subscriber count,
     # so discovery backfills it here instead of spending a second RPC.
     participants_count: int | None = None
+    # The BROADCAST channel's own slow mode (``ChannelFull.slowmode_seconds``). Named
+    # for its entity: the group's interval is NOT in this reply and would cost a second
+    # ``getFullChannel``, so no reader may pair this number with the group flag below.
+    broadcast_slowmode_seconds: int | None = None
+    # The next three come off the LINKED GROUP's ``Channel``: the signals that decide
+    # whether a campaign can actually comment, learnt at discovery instead of when
+    # the live campaign fails against the channel.
+    #
+    # Commenting requires joining the group first.
+    join_to_send: bool | None = None
+    # Joining needs an admin's approval — a dead end for an unattended campaign.
+    join_request: bool | None = None
+    # Positive sense on purpose: the wire carries ``default_banned_rights.send_messages``
+    # ("writing is banned for everyone"), and a caller should not have to unpick a
+    # double negative to answer "may we write here at all".
+    can_send_messages: bool | None = None
+    # Slow mode is ON in the discussion group — the interval is unknown here, see above.
+    group_slowmode_enabled: bool | None = None
+    # Telegram's marks on the BROADCAST channel itself, which is the entity the operator
+    # adopts. Read off the group they described the wrong channel in both directions.
+    scam: bool | None = None
+    fake: bool | None = None
+    restricted: bool | None = None
 
 
 class CheckMessagesAliveResult(BaseModel):

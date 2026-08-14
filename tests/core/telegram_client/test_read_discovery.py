@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -9,6 +10,8 @@ import pytest
 from telethon import errors
 from telethon.tl.functions.channels import GetChannelRecommendationsRequest
 from telethon.tl.functions.contacts import SearchRequest
+from telethon.tl.functions.messages import SearchGlobalRequest
+from telethon.tl.types import InputPeerEmpty
 
 from core.telegram_client import TelegramReadError, execute_read
 from schemas.telegram_actions import (
@@ -16,8 +19,13 @@ from schemas.telegram_actions import (
     GetSimilarChannels,
     LinkedDiscussionGroupResult,
     SearchChannels,
+    SearchGlobalPosts,
 )
-from schemas.telegram_actions_discovery import TelegramChannelMatches
+from schemas.telegram_actions_discovery import (
+    GlobalPostsCursor,
+    TelegramChannelMatches,
+    TelegramGlobalPostMatches,
+)
 from tests.core.telegram_client.helpers import patch_read_client as _patch_client
 
 
@@ -27,8 +35,10 @@ def _channel(
     title: str = "T",
     broadcast: bool = True,
     participants_count: int | None = None,
+    channel_id: int = 0,
 ) -> SimpleNamespace:
     return SimpleNamespace(
+        id=channel_id,
         username=username,
         title=title,
         broadcast=broadcast,
@@ -37,10 +47,18 @@ def _channel(
 
 
 class _FakeClient:
-    """Minimal ``client(Request)`` stub that records what it was asked for."""
+    """Records what it was asked for; ``messages``/``next_rate`` are searchGlobal's extras."""
 
-    def __init__(self, chats: list[object]) -> None:
+    def __init__(
+        self,
+        chats: list[object],
+        messages: list[object] | None = None,
+        *,
+        next_rate: int | None = None,
+    ) -> None:
         self.chats = chats
+        self.messages = messages
+        self.next_rate = next_rate
         self.requests: list[object] = []
         self.resolved: list[str] = []
 
@@ -55,7 +73,7 @@ class _FakeClient:
 
     async def __call__(self, request: object, /) -> object:
         self.requests.append(request)
-        return SimpleNamespace(chats=self.chats)
+        return SimpleNamespace(chats=self.chats, messages=self.messages, next_rate=self.next_rate)
 
 
 @pytest.mark.asyncio
@@ -152,6 +170,116 @@ async def test_missing_chats_vector_yields_no_items(monkeypatch: pytest.MonkeyPa
 
     assert isinstance(result, TelegramChannelMatches)
     assert result.items == []
+
+
+def _post(post_id: int, channel_id: int, *, date: datetime | None = None) -> SimpleNamespace:
+    return SimpleNamespace(id=post_id, peer_id=SimpleNamespace(channel_id=channel_id), date=date)
+
+
+@pytest.mark.asyncio
+async def test_global_post_search_returns_the_posting_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two matching posts from one channel are one candidate, not two."""
+    client = _FakeClient(
+        [_channel("cooking", title="Cooking", channel_id=7)],
+        [_post(11, 7), _post(12, 7)],
+        next_rate=777,
+    )
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchGlobalPosts(query="risotto", limit=25))
+
+    # Still a TelegramChannelMatches for every caller that only wants the items.
+    assert isinstance(result, TelegramChannelMatches)
+    assert isinstance(result, TelegramGlobalPostMatches)
+    assert [item.username for item in result.items] == ["cooking"]
+    request = client.requests[0]
+    assert isinstance(request, SearchGlobalRequest)
+    assert request.q == "risotto"
+    assert request.limit == 25
+    # broadcasts_only is what keeps groups and DMs out of the message index.
+    assert request.broadcasts_only is True
+    assert isinstance(request.offset_peer, InputPeerEmpty)
+    assert (request.offset_rate, request.offset_id) == (0, 0)
+    assert result.next_cursor == GlobalPostsCursor(offset_rate=777, peer="cooking", offset_id=12)
+
+
+@pytest.mark.asyncio
+async def test_global_post_search_continues_from_a_cursor(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient([_channel("cooking", channel_id=7)], [_post(13, 7)], next_rate=888)
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read(
+        "acc-1",
+        SearchGlobalPosts(
+            query="risotto",
+            cursor=GlobalPostsCursor(offset_rate=777, peer="cooking", offset_id=12),
+        ),
+    )
+
+    assert client.resolved == ["cooking"]
+    request = client.requests[0]
+    assert isinstance(request, SearchGlobalRequest)
+    assert (request.offset_rate, request.offset_id) == (777, 12)
+    assert request.offset_peer == SimpleNamespace(channel_id=1)
+    assert isinstance(result, TelegramGlobalPostMatches)
+    assert result.next_cursor == GlobalPostsCursor(offset_rate=888, peer="cooking", offset_id=13)
+
+
+@pytest.mark.asyncio
+async def test_global_post_search_cursor_falls_back_to_the_last_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No ``next_rate``: the method documents the last message's date instead.
+
+    That message's channel has no public handle, so the peer offset is dropped —
+    the same fallback Telethon's own global-search iterator makes.
+    """
+    posted_at = datetime(2026, 1, 2, tzinfo=UTC)
+    client = _FakeClient([_channel(None, channel_id=7)], [_post(14, 7, date=posted_at)])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchGlobalPosts(query="risotto"))
+
+    assert isinstance(result, TelegramGlobalPostMatches)
+    assert result.items == []
+    assert result.next_cursor == GlobalPostsCursor(
+        offset_rate=int(posted_at.timestamp()),
+        peer=None,
+        offset_id=14,
+    )
+
+
+@pytest.mark.asyncio
+async def test_global_post_search_short_query_pages_until_it_runs_dry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only an EMPTY query is rejected, so 3 chars earn the RPC; no message ends the walk."""
+    client = _FakeClient([_channel("abcnews", channel_id=7)], [])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchGlobalPosts(query="abc"))
+
+    assert isinstance(result, TelegramGlobalPostMatches)
+    assert [item.username for item in result.items] == ["abcnews"]
+    assert len(client.requests) == 1
+    assert result.next_cursor is None
+
+
+@pytest.mark.asyncio
+async def test_global_post_search_blank_query_short_circuits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient([_channel("never_seen", channel_id=7)], [_post(1, 7)])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchGlobalPosts(query="   "))
+
+    assert isinstance(result, TelegramGlobalPostMatches)
+    assert result.items == []
+    assert result.next_cursor is None
+    assert client.requests == []
 
 
 @pytest.mark.asyncio
