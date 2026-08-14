@@ -98,7 +98,8 @@ async def test_a_warming_account_is_refused(monkeypatch: pytest.MonkeyPatch) -> 
 
     refused = await start_run(campaign_id, search_request())
 
-    assert refused.status == "account_cooling"
+    # busy, not cooling: the account is healthy, its session is just taken.
+    assert refused.status == "account_busy"
 
 
 @pytest.mark.asyncio
@@ -115,7 +116,7 @@ async def test_a_running_listener_is_refused(monkeypatch: pytest.MonkeyPatch) ->
 
     refused = await start_run(campaign_id, search_request())
 
-    assert refused.status == "account_cooling"
+    assert refused.status == "account_busy"
 
 
 @pytest.mark.asyncio
@@ -165,6 +166,8 @@ async def test_start_discovery_refuses_an_account_in_warming_flood_wait(
 
     outcome = await start_run(campaign_id, search_request())
 
+    # ``flood_wait`` is an active warming state, so this account matches the busy
+    # branch too — the Telegram-limit reason must win, which pins the check order.
     assert outcome.status == "account_cooling"
 
 

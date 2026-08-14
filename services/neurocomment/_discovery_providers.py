@@ -102,8 +102,10 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     (it resolves peers and subscribes, never comments), so discovery traffic stays
     off the commenting accounts. Falls back to the campaign's first serving account.
 
-    Returns the status string ``"no_account"`` / ``"account_cooling"`` instead of
-    raising, so the API layer can report it without catching service internals.
+    Returns a status string instead of raising, so the API layer can report it
+    without catching service internals: ``"no_account"``, ``"account_busy"`` (the
+    session is held by a running listener or by warming) or ``"account_cooling"``
+    (Telegram is rate-limiting the account).
     """
     listener_id = await get_listener_account_id()
     account_id = listener_id
@@ -118,6 +120,18 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     # stream plus up to 100 probes on top of it is the same mutual-exclusion violation
     # the warming check below prevents, and the listener is routinely running.
     if account_id == listener_id and await get_listener_running():
+        return "account_busy"
+
+    now = datetime.now(UTC)
+    # Two independent health signals: the engine's in-memory cooldown (flood /
+    # peer-flood / slow-mode) and warming's persisted flood deadline. Searching on a
+    # cooling account would deepen the very limit it is serving out.
+    # Ahead of the warming check below: a warming account can also be flood-waiting,
+    # and both refuse, so the order only picks which reason the operator is told.
+    if in_cooldown(account_id, now):
+        return "account_cooling"
+    state = await fetch_warming_state(account_id)
+    if state is not None and flood_active(state.flood_wait_until, now):
         return "account_cooling"
 
     # Warming assumes it owns its accounts' traffic — that assumption is the whole
@@ -125,17 +139,7 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     # mutual exclusion; a paused listener can legally be warming, so without this a
     # multi-minute read stream would interleave with warming's own paced traffic.
     if account_id in await list_warming_account_ids():
-        return "account_cooling"
-
-    now = datetime.now(UTC)
-    # Two independent health signals: the engine's in-memory cooldown (flood /
-    # peer-flood / slow-mode) and warming's persisted flood deadline. Searching on a
-    # cooling account would deepen the very limit it is serving out.
-    if in_cooldown(account_id, now):
-        return "account_cooling"
-    state = await fetch_warming_state(account_id)
-    if state is not None and flood_active(state.flood_wait_until, now):
-        return "account_cooling"
+        return "account_busy"
     return SearchAccount(account_id=account_id)
 
 

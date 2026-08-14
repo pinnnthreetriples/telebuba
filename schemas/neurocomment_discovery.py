@@ -48,6 +48,10 @@ DiscoveryStartStatus = Literal[
     "started",
     "already_running",
     "no_account",
+    # Split on what the operator can do: ``account_busy`` = healthy account whose
+    # session is taken (running listener, warming), so stop that and retry;
+    # ``account_cooling`` = Telegram is rate-limiting it, so only waiting helps.
+    "account_busy",
     "account_cooling",
     "daily_limit_reached",
 ]

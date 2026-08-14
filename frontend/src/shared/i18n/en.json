@@ -1283,6 +1283,7 @@
         "refused": {
           "already_running": "A search for this campaign is already running — its results are below.",
           "no_account": "No account available for searching: assign a listener or a campaign account.",
+          "account_busy": "The search account is busy: stop the listener or warming, then retry.",
           "account_cooling": "The search account is waiting out a Telegram limit. Try again later.",
           "daily_limit_reached": "The daily search allowance is spent."
         },
