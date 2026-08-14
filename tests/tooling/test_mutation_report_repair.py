@@ -36,9 +36,11 @@ def _incomplete_results() -> str:
 
 
 def _repair_results(*, last_status: str = "timeout") -> str:
+    # mutmut_1 (killed) and mutmut_2 (a reviewed survivor) are not selected, so
+    # a targeted run leaves both reset to ``not checked``.
     return (
         "    services.a.x_f__mutmut_1: not checked\n"
-        "    services.a.x_f__mutmut_2: killed\n"
+        "    services.a.x_f__mutmut_2: not checked\n"
         "    services.a.x_f__mutmut_3: killed\n"
         f"    services.a.x_f__mutmut_4: {last_status}"
     )
@@ -175,6 +177,71 @@ def test_targeted_repair_overlays_a_completed_first_attempt_timeout() -> None:
             "repair_status": "killed",
         },
     ]
+
+
+def _contended_survivor_inputs() -> tuple[str, str, str]:
+    first_text = (
+        "    services.a.x_f__mutmut_1: killed\n"
+        "    services.a.x_f__mutmut_2: survived\n"
+        "    services.a.x_f__mutmut_3: survived"
+    )
+    # The workflow selected only the unreviewed mutmut_2; mutmut resets the
+    # non-selected rows, so the reviewed mutmut_3 survivor stays official.
+    repair_text = (
+        "    services.a.x_f__mutmut_1: not checked\n"
+        "    services.a.x_f__mutmut_2: {status}\n"
+        "    services.a.x_f__mutmut_3: not checked"
+    )
+    return first_text, repair_text, "services.a.x_f__mutmut_3"
+
+
+def test_serial_recheck_of_a_contended_survivor_restores_the_baseline_score() -> None:
+    first_text, repair_text, reviewed = _contended_survivor_inputs()
+    report = base._build_report(
+        base._stats(killed=1, survived=2, timeout=0, total=3),
+        base._result_objects(first_text),
+        base._baseline(
+            results_text=first_text,
+            reviewed_timeouts=[],
+            reviewed_survivors=[reviewed],
+            killed=2,
+            timeout=0,
+            total=3,
+        ),
+        base._result_objects(repair_text.format(status="killed")),
+    )
+
+    assert report["effective_stats"] == base._stats(killed=2, survived=1, timeout=0, total=3)
+    assert report["unexpected_survivors"] == []
+    assert report["meets_baseline"] is True
+    assert report["targeted_repairs"] == [
+        {
+            "name": "services.a.x_f__mutmut_2",
+            "first_status": "survived",
+            "repair_status": "killed",
+        },
+    ]
+
+
+def test_a_survivor_that_survives_the_serial_recheck_still_fails_the_gate() -> None:
+    first_text, repair_text, reviewed = _contended_survivor_inputs()
+    report = base._build_report(
+        base._stats(killed=1, survived=2, timeout=0, total=3),
+        base._result_objects(first_text),
+        base._baseline(
+            results_text=first_text,
+            reviewed_timeouts=[],
+            reviewed_survivors=[reviewed],
+            killed=2,
+            timeout=0,
+            total=3,
+        ),
+        base._result_objects(repair_text.format(status="survived")),
+    )
+
+    assert report["unexpected_survivors"] == ["services.a.x_f__mutmut_2"]
+    assert report["meets_baseline"] is False
+    assert "Unexpected survivor mutants" in mutation_report.render_markdown(report)
 
 
 @pytest.mark.parametrize("command", ["report", "gate"])

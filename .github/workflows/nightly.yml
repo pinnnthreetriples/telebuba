@@ -191,34 +191,44 @@ jobs:
           import json
           from pathlib import Path
 
-          from tools.mutation_report import load_results
+          from tools.mutation_report import load_results, mutant_catalog_sha256
 
           results = load_results(Path("mutation-report/attempt-1/results-all.txt"))
           baseline = json.loads(Path(".github/mutation-baseline.json").read_text(encoding="utf-8"))
-          reviewed_timeouts = set(baseline["reviewed_timeouts"])
+          reviewed = {"timeout": set(baseline["reviewed_timeouts"])}
+          # Survivor review is per identity, so it only means anything inside the
+          # reviewed catalog. On drift every survivor would look new and the
+          # serial recheck would try to rerun thousands of mutants one at a time;
+          # the reporter already declines to judge survivors there.
+          digest = mutant_catalog_sha256(results, Path(), baseline["mutmut_config"]["source_paths"])
+          if digest == baseline["mutant_catalog_sha256"]:
+              reviewed["survived"] = set(baseline["reviewed_survivors"])
+          else:
+              print(f"catalog drift ({digest}): skipping survivor recheck")
           repair = sorted(
               result.name
               for result in results
               if result.status in {"not checked", "check was interrupted by user"}
-              or (result.status == "timeout" and result.name not in reviewed_timeouts)
+              or (result.status in reviewed and result.name not in reviewed[result.status])
           )
           Path("mutation-report/repair-mutants.txt").write_text(
               "".join(f"{name}\n" for name in repair),
               encoding="utf-8",
           )
-          print(f"First attempt requests {len(repair)} incomplete/unreviewed-timeout repairs")
+          print(f"First attempt requests {len(repair)} incomplete/unreviewed repairs")
           PY
           if (( $? != 0 )); then collection_status=1; fi
 
           if [[ -s mutation-report/repair-mutants.txt ]]; then
             repair_requested=true
             mapfile -t repair_mutants < mutation-report/repair-mutants.txt
-            printf 'Repairing %d incomplete/unreviewed-timeout mutants serially\n' \
+            printf 'Repairing %d incomplete/unreviewed mutants serially\n' \
               "${#repair_mutants[@]}"
             mkdir -p mutation-report/repair
-            # A timeout seen under four-worker load is not yet evidence of an
-            # unbounded mutation. Recheck selected candidates one at a time so
-            # contention cannot manufacture new reviewed timeout identities.
+            # Neither verdict seen under four-worker load is evidence on its own:
+            # contention both stalls mutants into timeouts and lets slow tests
+            # pass with a mutant they would otherwise catch. Recheck selected
+            # candidates one at a time so load cannot invent new identities.
             uv run python tools/mutmut_cli.py run --max-children 1 \
               "${repair_mutants[@]}" 2>&1 | tee mutation-report/repair/run.log
             repair_status=${PIPESTATUS[0]}

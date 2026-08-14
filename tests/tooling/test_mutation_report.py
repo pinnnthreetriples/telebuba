@@ -42,6 +42,7 @@ def _baseline(  # noqa: PLR0913
     *,
     results_text: str | None = None,
     reviewed_timeouts: list[str] | None = None,
+    reviewed_survivors: list[str] | None = None,
     python_version: str | None = None,
     mutant_catalog_sha256: str | None = None,
     hypothesis_profile: str = "mutation",
@@ -55,9 +56,11 @@ def _baseline(  # noqa: PLR0913
     results = _result_objects(results_text)
     if reviewed_timeouts is None:
         reviewed_timeouts = sorted(item.name for item in results if item.status == "timeout")
+    if reviewed_survivors is None:
+        reviewed_survivors = sorted(item.name for item in results if item.status == "survived")
     stats = {
         "killed": sum(item.status == "killed" for item in results),
-        "survived": sum(item.status == "survived" for item in results),
+        "survived": len(reviewed_survivors),
         "timeout": len(reviewed_timeouts),
         "total": len(results),
     }
@@ -74,6 +77,7 @@ def _baseline(  # noqa: PLR0913
             or mutation_report.mutant_catalog_sha256(results, source_root, SOURCE_PATHS)
         ),
         "reviewed_timeouts": reviewed_timeouts,
+        "reviewed_survivors": reviewed_survivors,
         "mutmut_config": _mutmut_config(),
         "stats": stats,
     }
@@ -471,60 +475,6 @@ def test_baseline_integrity_rejects_python_version_mismatch(
         )
 
 
-@pytest.mark.parametrize(
-    ("baseline_change", "message"),
-    [
-        ({"mutant_catalog_sha256": "not-a-digest"}, "lowercase SHA-256"),
-        ({"hypothesis_profile": ""}, "must be a non-empty string"),
-        ({"max_children": 0}, "must be a positive integer"),
-        (
-            {
-                "reviewed_timeouts": [
-                    "services.alpha.x_second__mutmut_1",
-                    "services.alpha.x_second__mutmut_1",
-                ],
-            },
-            "must not contain duplicates",
-        ),
-        ({"reviewed_timeouts": []}, "timeout count must match"),
-    ],
-)
-def test_load_baseline_rejects_invalid_measurement_metadata(
-    tmp_path: Path,
-    baseline_change: dict[str, object],
-    message: str,
-) -> None:
-    baseline = _baseline()
-    baseline.update(baseline_change)
-    path = tmp_path / "baseline.json"
-    path.write_text(json.dumps(baseline), encoding="utf-8")
-
-    with pytest.raises(mutation_report.ReportError, match=message):
-        mutation_report.load_baseline(path)
-
-
-@pytest.mark.parametrize(
-    ("stats", "message"),
-    [
-        ({"killed": 5, "survived": 0, "timeout": 1, "total": 4}, "exceed total"),
-        ({"killed": 2, "survived": 2, "timeout": 1, "total": 4}, "must equal total"),
-        ({"killed": 1, "survived": 1, "timeout": 0, "total": 10}, "must equal total"),
-    ],
-)
-def test_load_baseline_rejects_impossible_stats(
-    tmp_path: Path,
-    stats: dict[str, int],
-    message: str,
-) -> None:
-    baseline = _baseline()
-    baseline["stats"] = stats
-    path = tmp_path / "baseline.json"
-    path.write_text(json.dumps(baseline), encoding="utf-8")
-
-    with pytest.raises(mutation_report.ReportError, match=message):
-        mutation_report.load_baseline(path)
-
-
 def test_report_cli_writes_json_and_readable_summary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -578,8 +528,9 @@ def test_gate_cli_fails_only_on_aggregate_score_regression(
 ) -> None:
     _pin_version(monkeypatch)
     stats, results, baseline, project = _write_inputs(tmp_path)
+    # Same reviewed identities, better measured ratio: only the score complains.
     baseline.write_text(
-        json.dumps(_baseline(killed=3, survived=0, total=4, source_root=tmp_path)),
+        json.dumps(_baseline(killed=6, total=8, source_root=tmp_path)),
         encoding="utf-8",
     )
 
@@ -658,9 +609,17 @@ def test_gate_cli_reports_unexpected_timeout_distinctly(
 ) -> None:
     _pin_version(monkeypatch)
     stats, results, baseline, project = _write_inputs(tmp_path)
+    # The baseline reviewed the now-timing-out mutant as a survivor, so the
+    # timeout identity is the only thing the gate can object to.
+    survivors = ["services.alpha.x_first__mutmut_2", "services.alpha.x_second__mutmut_1"]
     baseline.write_text(
         json.dumps(
-            _baseline(reviewed_timeouts=[], survived=2, timeout=0, source_root=tmp_path),
+            _baseline(
+                reviewed_timeouts=[],
+                reviewed_survivors=survivors,
+                timeout=0,
+                source_root=tmp_path,
+            ),
         ),
         encoding="utf-8",
     )

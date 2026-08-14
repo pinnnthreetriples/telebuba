@@ -81,6 +81,7 @@ BASELINE_KEYS = frozenset(
         "python_version",
         "mutant_catalog_sha256",
         "reviewed_timeouts",
+        "reviewed_survivors",
         "mutmut_config",
         "stats",
     },
@@ -183,22 +184,35 @@ def load_results(path: Path) -> list[Result]:
     return parsed
 
 
-def _validate_reviewed_timeouts(value: object) -> list[str]:
-    reviewed_timeouts = value
-    valid_names = isinstance(reviewed_timeouts, list) and all(
-        isinstance(name, str) and MUTANT_NAME_RE.fullmatch(name) is not None
-        for name in reviewed_timeouts
+def status_summary(
+    results: list[Result],
+    status: str,
+    reviewed_names: list[str],
+) -> tuple[list[str], list[str], list[str]]:
+    """Split mutants holding ``status`` into observed, unreviewed, and resolved."""
+    observed = [item.name for item in results if item.status == status]
+    observed_names = set(observed)
+    reviewed = set(reviewed_names)
+    unexpected = [name for name in observed if name not in reviewed]
+    resolved = [name for name in reviewed_names if name not in observed_names]
+    return observed, unexpected, resolved
+
+
+def _validate_reviewed_names(value: object, field: str) -> list[str]:
+    reviewed = value
+    valid_names = isinstance(reviewed, list) and all(
+        isinstance(name, str) and MUTANT_NAME_RE.fullmatch(name) is not None for name in reviewed
     )
     if not valid_names:
-        raise ReportError("baseline.reviewed_timeouts must be a list of mutant names")
-    if len(reviewed_timeouts) != len(set(reviewed_timeouts)):
-        raise ReportError("baseline.reviewed_timeouts must not contain duplicates")
-    if reviewed_timeouts != sorted(reviewed_timeouts):
-        raise ReportError("baseline.reviewed_timeouts must be sorted")
-    return cast("list[str]", reviewed_timeouts)
+        raise ReportError(f"baseline.{field} must be a list of mutant names")
+    if len(reviewed) != len(set(reviewed)):
+        raise ReportError(f"baseline.{field} must not contain duplicates")
+    if reviewed != sorted(reviewed):
+        raise ReportError(f"baseline.{field} must be sorted")
+    return cast("list[str]", reviewed)
 
 
-def _validate_measurement_identity(raw: dict[str, Any]) -> list[str]:
+def _validate_measurement_identity(raw: dict[str, Any]) -> tuple[list[str], list[str]]:
     invalid_string_keys = [
         key
         for key in (
@@ -217,10 +231,17 @@ def _validate_measurement_identity(raw: dict[str, Any]) -> list[str]:
     catalog_digest = raw["mutant_catalog_sha256"]
     if not isinstance(catalog_digest, str) or SHA256_RE.fullmatch(catalog_digest) is None:
         raise ReportError("baseline.mutant_catalog_sha256 must be a lowercase SHA-256 digest")
-    return _validate_reviewed_timeouts(raw["reviewed_timeouts"])
+    return (
+        _validate_reviewed_names(raw["reviewed_timeouts"], "reviewed_timeouts"),
+        _validate_reviewed_names(raw["reviewed_survivors"], "reviewed_survivors"),
+    )
 
 
-def _validate_baseline_stats(value: object, reviewed_timeouts: list[str]) -> None:
+def _validate_baseline_stats(
+    value: object,
+    reviewed_timeouts: list[str],
+    reviewed_survivors: list[str],
+) -> None:
     stats = value
     expected_stats = {"killed", "survived", "timeout", "total"}
     if not isinstance(stats, dict) or set(stats) != expected_stats:
@@ -237,6 +258,11 @@ def _validate_baseline_stats(value: object, reviewed_timeouts: list[str]) -> Non
         raise ReportError("baseline killed, survived, and timeout must equal total")
     if stats["timeout"] != len(reviewed_timeouts):
         raise ReportError("baseline timeout count must match reviewed_timeouts")
+    if stats["survived"] != len(reviewed_survivors):
+        raise ReportError("baseline survived count must match reviewed_survivors")
+    overlap = sorted(set(reviewed_timeouts) & set(reviewed_survivors))
+    if overlap:
+        raise ReportError(f"baseline reviews claim one mutant twice: {overlap[0]}")
 
 
 def load_baseline(path: Path) -> dict[str, Any]:
@@ -244,11 +270,11 @@ def load_baseline(path: Path) -> dict[str, Any]:
     raw = _load_object(path)
     if set(raw) != BASELINE_KEYS:
         raise ReportError(f"baseline must contain exactly {sorted(BASELINE_KEYS)!r}")
-    reviewed_timeouts = _validate_measurement_identity(raw)
+    reviewed_timeouts, reviewed_survivors = _validate_measurement_identity(raw)
     config = raw["mutmut_config"]
     if not isinstance(config, dict) or set(config) != set(SCOPE_KEYS):
         raise ReportError(f"baseline.mutmut_config must contain exactly {list(SCOPE_KEYS)!r}")
-    _validate_baseline_stats(raw["stats"], reviewed_timeouts)
+    _validate_baseline_stats(raw["stats"], reviewed_timeouts, reviewed_survivors)
     return raw
 
 

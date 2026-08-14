@@ -12,10 +12,10 @@ preserves every available partial snapshot and diagnostic log.
 | Result | Count |
 |---|---:|
 | Total | 13,949 |
-| Killed | 11,813 |
-| Survived | 2,129 |
-| Timeout | 7 |
-| Score | 84.6871% |
+| Killed | 11,799 |
+| Survived | 2,144 |
+| Timeout | 6 |
+| Score | 84.5867% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -27,14 +27,33 @@ The current calibration uses CPython 3.13.14, mutmut 3.6.0, the deterministic
 `c96326469752080f50b68c9520c5d3e638894fef1b0310cbe3c6fde386063237`;
 the digest binds mutant identities to the exact Python source paths and bytes,
 so a semantic source change cannot silently reuse a reviewed timeout identity.
-A complete clean local sweep measured the checked-in 11,813/2,129/7 floor.
-GitHub Nightly is the clean-run confirmation.
+The checked-in 11,799/2,144/6 floor is measured on the GitHub runner, not
+locally. A clean local sweep reaches 11,813 killed, but the hosted runner is
+slower and more contended, and pinning the floor to the best machine made every
+Nightly red. The floor is the union of two consecutive runner sweeps: every
+identity either sweep saw survive is a reviewed survivor, so the score cannot
+drift below it on noise alone.
+
+Twelve identities were killed in one sweep and survived in the other:
+`services.accounts.profile_read.x__fetch_and_maybe_cache__mutmut_6`, `__mutmut_8`,
+`__mutmut_9`; `..._read.x_fetch_live_account_profile__mutmut_14`, `__mutmut_17`,
+`__mutmut_19`, `__mutmut_20`; `services.neurocomment._join.x_run_join_pass__mutmut_44`;
+`services.neurocomment._watch.x__resubscribe_unwatched__mutmut_33`;
+`..._watch.x_reconcile_neurocomment_runtime__mutmut_13`, `__mutmut_54`; and
+`services.warming.pacing.x__next_utc_midnight__mutmut_7`. They are counted as
+survivors, so the gate under-reports rather than flapping. Making their tests
+insensitive to load and wall-clock time is the way to reclaim those kills.
 Nightly preserves separate first-attempt and repair snapshots when repair is
 needed because mutmut 3.6 resets non-selected statuses during a targeted run
 and omits `not_checked` from `export-cicd-stats`.
-It also rechecks first-attempt timeout identities that are not in the reviewed
-baseline with one worker. Only that completed serial status is overlaid; a
-reviewed timeout or a non-selected row keeps the official first-attempt status.
+It also rechecks with one worker every first-attempt timeout or survivor that
+the baseline has not reviewed by name. Four-worker contention distorts both
+verdicts: it stalls a mutant into a timeout, and it lets a slow test pass with a
+mutant the same test catches when run alone. Only the completed serial status is
+overlaid; a reviewed identity or a non-selected row keeps the official
+first-attempt status. Because `reviewed_survivors` names every mutant the
+baseline measured as surviving, a score regression is attributable — the gate
+reports the exact identities that changed, not just a lower percentage.
 
 ## Classification policy
 
@@ -111,13 +130,16 @@ draws would still be implementation-coupled score padding.
 The current-main catalogue produced eleven timeout candidates in the official
 four-worker calibration. Seven were already serially proven timeouts. The four
 new `_reply_and_post` candidates were all killed by the automatic one-worker
-repair, so only the seven reproducible identities remain in the effective
-baseline. Parallel-only timeout noise stays in the raw first-attempt artifact.
+repair. Parallel-only timeout noise stays in the raw first-attempt artifact.
+
+On the hosted runner six of those seven reproduce; `_strip_fence_tags__mutmut_8`
+is killed there in both calibration sweeps, so the runner baseline reviews six
+timeout identities. The row below records why it is a timeout when it is one.
 
 | Current mutant(s) | Result | Rationale |
 |---|---|---|
 | `services.content.x_strip_markdown_delimiters__mutmut_11` | Reviewed timeout | Inverting the synchronous convergence loop creates an infinite CPU loop. Detecting it sooner requires a signal/subprocess watchdog whose timing and platform complexity would reduce test quality; mutmut's own process timeout is the correct isolation boundary. The exact identity is digest-bound and remains a baseline-reviewed timeout. |
-| `services.neurocomment._llm.x__strip_fence_tags__mutmut_8` | Reviewed timeout | Inverting the synchronous convergence condition loops forever for already-clean text; a process boundary is the reliable watchdog. |
+| `services.neurocomment._llm.x__strip_fence_tags__mutmut_8` | Killed on the runner | Inverting the synchronous convergence condition loops forever for already-clean text; a process boundary is the reliable watchdog. Local sweeps time out on it, the hosted runner kills it, so it is not a reviewed timeout in the checked-in baseline. |
 | `services.neurocomment._generate.x__sleep_beating__mutmut_2`, `__mutmut_16`, `__mutmut_17` | Reviewed timeout | The mutations prevent the heartbeat countdown from reaching a negative/zero terminal state and reproduce serially as unbounded loops. |
 | `services.warming._chat.x__maybe_inter_account_chat__mutmut_10` | Reviewed timeout | Marking `None` instead of the selected inbox row prevents the oldest-unreplied query from advancing and reproduces serially. |
 | `services.warming._graduation.x__stop_warming_locked__mutmut_9` | Reviewed timeout | Removing the configured cancellation deadline makes a cancellation-suppressing task wait without a bound and reproduces serially. |

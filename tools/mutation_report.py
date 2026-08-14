@@ -26,7 +26,14 @@ load_baseline = _core.load_baseline
 load_results = _core.load_results
 load_stats = _core.load_stats
 mutant_catalog_sha256 = _core.mutant_catalog_sha256
+status_summary = _core.status_summary
 validate_baseline_integrity = _core.validate_baseline_integrity
+
+# Statuses Nightly rechecks serially before believing them. Four-worker
+# contention can both stall a mutant into a timeout and let a slow test pass
+# with a mutant it would otherwise catch, so neither verdict is final until it
+# survives an uncontended rerun.
+RECHECKED_STATUSES = frozenset({"timeout", "survived"})
 
 importlib = _core.importlib
 platform = _core.platform
@@ -86,14 +93,14 @@ def _overlay_targeted_repairs(
     for first in first_results:
         repair = repair_by_name[first.name]
         required = first.status in INCOMPLETE_STATUSES
-        # Nightly also rechecks first-attempt timeout candidates serially. A
-        # targeted mutmut run resets every non-selected identity to
-        # ``not checked``, so a completed timeout repair is self-identifying:
-        # only explicitly selected timeout rows can have a final status here.
-        optional_timeout_repair = (
-            first.status == "timeout" and repair.status not in INCOMPLETE_STATUSES
+        # Nightly also rechecks unreviewed timeout and survivor candidates
+        # serially. A targeted mutmut run resets every non-selected identity to
+        # ``not checked``, so a completed recheck is self-identifying: only
+        # explicitly selected rows can carry a final status here.
+        optional_recheck = (
+            first.status in RECHECKED_STATUSES and repair.status not in INCOMPLETE_STATUSES
         )
-        if not required and not optional_timeout_repair:
+        if not required and not optional_recheck:
             effective.append(first)
             continue
         if repair.status in INCOMPLETE_STATUSES:
@@ -164,18 +171,6 @@ def _effective_measurement(
     return effective_results, effective_stats, repairs
 
 
-def _timeout_summary(
-    results: list[Result],
-    reviewed_timeout_names: list[str],
-) -> tuple[list[str], list[str], list[str]]:
-    timeouts = [item.name for item in results if item.status == "timeout"]
-    timeout_names = set(timeouts)
-    reviewed = set(reviewed_timeout_names)
-    unexpected = [name for name in timeouts if name not in reviewed]
-    resolved = [name for name in reviewed_timeout_names if name not in timeout_names]
-    return timeouts, unexpected, resolved
-
-
 def build_report(
     stats: dict[str, int],
     results: list[Result],
@@ -200,11 +195,22 @@ def build_report(
     catalog_matches_baseline = catalog_digest == baseline["mutant_catalog_sha256"]
     # A mutmut identity is trustworthy only inside the exact reviewed catalog.
     # On drift, even an equal name may now identify different source bytes.
-    trusted_reviewed_timeouts = baseline["reviewed_timeouts"] if catalog_matches_baseline else []
-    timeouts, unexpected_timeouts, resolved_reviewed_timeouts = _timeout_summary(
+    timeouts, unexpected_timeouts, resolved_reviewed_timeouts = status_summary(
         effective_results,
-        trusted_reviewed_timeouts,
+        "timeout",
+        baseline["reviewed_timeouts"] if catalog_matches_baseline else [],
     )
+    # Survivors are reviewed by name too, but only a matching catalog makes that
+    # review meaningful: under drift every survivor would read as new, burying
+    # the drift failure under thousands of names that identify other source.
+    unexpected_survivors: list[str] = []
+    resolved_reviewed_survivors: list[str] = []
+    if catalog_matches_baseline:
+        _, unexpected_survivors, resolved_reviewed_survivors = status_summary(
+            effective_results,
+            "survived",
+            baseline["reviewed_survivors"],
+        )
     meets_score_baseline = (
         effective_stats["killed"] * base["total"] >= base["killed"] * effective_stats["total"]
     )
@@ -218,7 +224,10 @@ def build_report(
         ),
         "meets_score_baseline": meets_score_baseline,
         "meets_baseline": (
-            meets_score_baseline and catalog_matches_baseline and not unexpected_timeouts
+            meets_score_baseline
+            and catalog_matches_baseline
+            and not unexpected_timeouts
+            and not unexpected_survivors
         ),
         "mutant_catalog_sha256": catalog_digest,
         "catalog_matches_baseline": catalog_matches_baseline,
@@ -227,6 +236,8 @@ def build_report(
         "timeouts": timeouts,
         "unexpected_timeouts": unexpected_timeouts,
         "resolved_reviewed_timeouts": resolved_reviewed_timeouts,
+        "unexpected_survivors": unexpected_survivors,
+        "resolved_reviewed_survivors": resolved_reviewed_survivors,
     }
     if repairs is not None:
         report.update(
@@ -292,9 +303,14 @@ def render_markdown(report: dict[str, Any]) -> str:
     )
     _append_name_section(lines, "Timeout mutants", report["timeouts"])
     _append_name_section(lines, "Unexpected timeout mutants", report["unexpected_timeouts"])
-    if report["resolved_reviewed_timeouts"]:
-        lines.extend(["", "### Resolved reviewed timeout mutants", ""])
-        lines.extend(f"- `{name}`" for name in report["resolved_reviewed_timeouts"])
+    _append_name_section(lines, "Unexpected survivor mutants", report["unexpected_survivors"])
+    for title, names in (
+        ("Resolved reviewed timeout mutants", report["resolved_reviewed_timeouts"]),
+        ("Resolved reviewed survivor mutants", report["resolved_reviewed_survivors"]),
+    ):
+        if names:
+            lines.extend(["", f"### {title}", ""])
+            lines.extend(f"- `{name}`" for name in names)
     return "\n".join(lines) + "\n"
 
 
@@ -348,12 +364,13 @@ def gate_command(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         failed = True
-    if report["unexpected_timeouts"]:
-        print(
-            "unexpected timeout mutants: " + ", ".join(report["unexpected_timeouts"]),
-            file=sys.stderr,
-        )
-        failed = True
+    for label, names in (
+        ("timeout", report["unexpected_timeouts"]),
+        ("survivor", report["unexpected_survivors"]),
+    ):
+        if names:
+            print(f"unexpected {label} mutants: " + ", ".join(names), file=sys.stderr)
+            failed = True
     if not report["meets_score_baseline"]:
         print(
             f"mutation score regression: {report['score_percent']}% < "
