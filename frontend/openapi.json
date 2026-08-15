@@ -8733,6 +8733,450 @@
           }
         }
       }
+    },
+    "/api/v1/neuroshilling/campaigns": {
+      "get": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "List Campaigns",
+        "operationId": "listNeuroshillingCampaigns",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingCampaignList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Create Campaign",
+        "operationId": "createNeuroshillingCampaign",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingCampaignCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingCampaign"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}": {
+      "put": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Update Campaign",
+        "description": "Save the whole edited form: settings, targets and the account roster.",
+        "operationId": "updateNeuroshillingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingCampaignUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingCampaign"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Delete Campaign",
+        "description": "Delete a campaign and everything hanging off it. A live run refuses (409).",
+        "operationId": "deleteNeuroshillingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/board": {
+      "get": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Get Board",
+        "description": "The whole page in one read: campaign, roster, account pool, targets, run.",
+        "operationId": "getNeuroshillingBoard",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingBoard"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -11715,6 +12159,547 @@
         ],
         "title": "NeurocommentSettingsUpdate",
         "description": "Caller-supplied neurocomment-settings change from the Settings screen."
+      },
+      "NeuroshillingAccountAssignment": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "role_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Id"
+          },
+          "is_reserve": {
+            "type": "boolean",
+            "title": "Is Reserve",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "NeuroshillingAccountAssignment",
+        "description": "One account of a campaign's roster, as the operator arranged it."
+      },
+      "NeuroshillingBoard": {
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/NeuroshillingCampaign"
+          },
+          "available": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingBoardAccount"
+            },
+            "type": "array",
+            "title": "Available"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Targets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign"
+        ],
+        "title": "NeuroshillingBoard",
+        "description": "One composite read backing the whole page.\n\nThe account pool is ONE list, not a pool plus its rostered subset: the two\ncarried the same objects and left the client joining them by id. It also\ncarries no derived counters (role/step/account/target counts, dialogue length\nestimates) and no run block: every one of those is an ``arr.length``, a\n``reduce``, or a field of ``campaign`` already in this same payload, and a\nsecond copy could only drift from the first."
+      },
+      "NeuroshillingBoardAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Title"
+          },
+          "assigned": {
+            "type": "boolean",
+            "title": "Assigned",
+            "default": false
+          },
+          "role_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Id"
+          },
+          "is_reserve": {
+            "type": "boolean",
+            "title": "Is Reserve",
+            "default": false
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "banned",
+              "replaced"
+            ],
+            "title": "State",
+            "default": "active"
+          },
+          "busy_owner": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "warming",
+                  "neuroshilling",
+                  "neurocomment"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy Owner"
+          },
+          "busy_campaign_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy Campaign Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "title"
+        ],
+        "title": "NeuroshillingBoardAccount",
+        "description": "One account of the pool, with whatever this campaign's roster says about it.\n\n``assigned`` is what separates a rostered account from a merely offerable one;\n``role_id``, ``is_reserve`` and ``state`` are meaningful only when it is true.\n``busy_owner`` is what greys a row out in the picker, and\n``busy_campaign_name`` is what lets the UI say WHICH campaign holds it rather\nthan only that something does."
+      },
+      "NeuroshillingCampaign": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "campaign",
+              "revive"
+            ],
+            "title": "Mode"
+          },
+          "topic": {
+            "type": "string",
+            "title": "Topic",
+            "default": ""
+          },
+          "targets_raw": {
+            "type": "string",
+            "title": "Targets Raw",
+            "default": ""
+          },
+          "unique_messages": {
+            "type": "boolean",
+            "title": "Unique Messages",
+            "default": true
+          },
+          "use_chat_context": {
+            "type": "boolean",
+            "title": "Use Chat Context",
+            "default": false
+          },
+          "media_message_link": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Message Link"
+          },
+          "media_step_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Step Position"
+          },
+          "scenario_status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved"
+            ],
+            "title": "Scenario Status",
+            "default": "draft"
+          },
+          "run_mode": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Run Mode",
+            "default": "sequential"
+          },
+          "pause_min_seconds": {
+            "type": "integer",
+            "title": "Pause Min Seconds",
+            "default": 10
+          },
+          "pause_max_seconds": {
+            "type": "integer",
+            "title": "Pause Max Seconds",
+            "default": 20
+          },
+          "messages_per_hour": {
+            "type": "integer",
+            "title": "Messages Per Hour",
+            "default": 10
+          },
+          "messages_per_chat_per_day": {
+            "type": "integer",
+            "title": "Messages Per Chat Per Day",
+            "default": 3
+          },
+          "total_per_account": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Per Account"
+          },
+          "reserve_enabled": {
+            "type": "boolean",
+            "title": "Reserve Enabled",
+            "default": false
+          },
+          "autoresponder": {
+            "type": "string",
+            "enum": [
+              "off",
+              "neurodialog"
+            ],
+            "title": "Autoresponder",
+            "default": "off"
+          },
+          "reply_to_humans": {
+            "type": "boolean",
+            "title": "Reply To Humans",
+            "default": false
+          },
+          "reply_activity": {
+            "type": "string",
+            "enum": [
+              "calm",
+              "medium",
+              "active"
+            ],
+            "title": "Reply Activity",
+            "default": "medium"
+          },
+          "listen_minutes": {
+            "type": "integer",
+            "title": "Listen Minutes",
+            "default": 60
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "stopping",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "default": "idle"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "name",
+          "mode",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NeuroshillingCampaign",
+        "description": "One row of ``neuroshilling_campaigns``."
+      },
+      "NeuroshillingCampaignCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "campaign",
+              "revive"
+            ],
+            "title": "Mode",
+            "default": "campaign"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NeuroshillingCampaignCreate",
+        "description": "Opening a campaign asks for a name and nothing else \u2014 the rest has defaults."
+      },
+      "NeuroshillingCampaignList": {
+        "properties": {
+          "campaigns": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingCampaign"
+            },
+            "type": "array",
+            "title": "Campaigns"
+          }
+        },
+        "type": "object",
+        "title": "NeuroshillingCampaignList",
+        "description": "Wrapper so callers never receive a bare list."
+      },
+      "NeuroshillingCampaignUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "campaign",
+              "revive"
+            ],
+            "title": "Mode",
+            "default": "campaign"
+          },
+          "topic": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Topic",
+            "default": ""
+          },
+          "targets_raw": {
+            "type": "string",
+            "maxLength": 8000,
+            "title": "Targets Raw",
+            "default": ""
+          },
+          "unique_messages": {
+            "type": "boolean",
+            "title": "Unique Messages",
+            "default": true
+          },
+          "use_chat_context": {
+            "type": "boolean",
+            "title": "Use Chat Context",
+            "default": false
+          },
+          "media_message_link": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Message Link"
+          },
+          "media_step_position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Step Position"
+          },
+          "run_mode": {
+            "type": "string",
+            "enum": [
+              "sequential",
+              "parallel"
+            ],
+            "title": "Run Mode",
+            "default": "sequential"
+          },
+          "pause_min_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Pause Min Seconds",
+            "default": 10
+          },
+          "pause_max_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Pause Max Seconds",
+            "default": 20
+          },
+          "messages_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Messages Per Hour",
+            "default": 10
+          },
+          "messages_per_chat_per_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Messages Per Chat Per Day",
+            "default": 3
+          },
+          "total_per_account": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Per Account"
+          },
+          "reserve_enabled": {
+            "type": "boolean",
+            "title": "Reserve Enabled",
+            "default": false
+          },
+          "autoresponder": {
+            "type": "string",
+            "enum": [
+              "off",
+              "neurodialog"
+            ],
+            "title": "Autoresponder",
+            "default": "off"
+          },
+          "reply_to_humans": {
+            "type": "boolean",
+            "title": "Reply To Humans",
+            "default": false
+          },
+          "reply_activity": {
+            "type": "string",
+            "enum": [
+              "calm",
+              "medium",
+              "active"
+            ],
+            "title": "Reply Activity",
+            "default": "medium"
+          },
+          "listen_minutes": {
+            "type": "integer",
+            "maximum": 1440.0,
+            "minimum": 1.0,
+            "title": "Listen Minutes",
+            "default": 60
+          },
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingAccountAssignment"
+            },
+            "type": "array",
+            "title": "Accounts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NeuroshillingCampaignUpdate",
+        "description": "Whole-form replacement of everything the operator edits on the page.\n\nTargets and the account roster travel here rather than through endpoints of\ntheir own: both are edited as part of one card and saving them separately\nwould leave windows where the roster references a role the same save removed."
       },
       "Page_AccountRead_": {
         "properties": {

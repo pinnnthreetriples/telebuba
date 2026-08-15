@@ -18,6 +18,7 @@ from core.repositories.neurocomment._tables import (
     _neurocomment_campaign_account_channels,
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
+    _neurocomment_campaigns,
 )
 from schemas.neurocomment import CampaignAccountLink, CampaignAccountList
 
@@ -166,3 +167,34 @@ def _list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
 
 async def list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
     return await asyncio.to_thread(_list_campaign_accounts, campaign_id)
+
+
+def _list_active_campaign_account_names() -> dict[str, str]:
+    statement = (
+        select(
+            _neurocomment_campaign_accounts.c.account_id,
+            _neurocomment_campaigns.c.name,
+        )
+        .select_from(
+            _neurocomment_campaign_accounts.join(
+                _neurocomment_campaigns,
+                _neurocomment_campaign_accounts.c.campaign_id
+                == _neurocomment_campaigns.c.campaign_id,
+            ),
+        )
+        .where(_neurocomment_campaigns.c.status == "active")
+    )
+    with _get_engine().connect() as connection:
+        return {str(account_id): str(name) for account_id, name in connection.execute(statement)}
+
+
+async def list_active_campaign_account_names() -> dict[str, str]:
+    """``account_id -> campaign name`` for every account serving an ACTIVE campaign.
+
+    The one direction the in-memory ownership registry cannot answer: neurocomment
+    never writes to it (deliberately — a value no code writes cannot drift), so a
+    feature that needs to know whether an account is already commenting asks the
+    database instead. An account in two active campaigns reports one of them; the
+    caller only needs "held, and roughly by what".
+    """
+    return await asyncio.to_thread(_list_active_campaign_account_names)

@@ -1,0 +1,201 @@
+"""Campaign-side neuroshilling queries: create, read, whole-form update, delete."""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING
+from uuid import uuid4
+
+from sqlalchemy import delete, insert, select, update
+
+from core.db import _get_engine, _now_iso
+from core.repositories.neuroshilling._accounts import _replace_campaign_accounts
+from core.repositories.neuroshilling._tables import (
+    _neuroshilling_accounts,
+    _neuroshilling_campaigns,
+    _neuroshilling_messages,
+    _neuroshilling_presence,
+    _neuroshilling_roles,
+    _neuroshilling_steps,
+)
+from schemas.neuroshilling import NeuroshillingCampaign, NeuroshillingCampaignList
+
+if TYPE_CHECKING:
+    from sqlalchemy import RowMapping
+
+    from schemas.neuroshilling import (
+        NeuroshillingCampaignCreate,
+        NeuroshillingCampaignUpdate,
+    )
+
+# Editable through the whole-form update, in column order. Held as a tuple so the
+# update statement and the request model cannot drift apart silently: every name
+# here must exist on ``NeuroshillingCampaignUpdate``.
+_EDITABLE_COLUMNS = (
+    "name",
+    "mode",
+    "topic",
+    "targets_raw",
+    "unique_messages",
+    "use_chat_context",
+    "media_message_link",
+    "media_step_position",
+    "run_mode",
+    "pause_min_seconds",
+    "pause_max_seconds",
+    "messages_per_hour",
+    "messages_per_chat_per_day",
+    "total_per_account",
+    "reserve_enabled",
+    "autoresponder",
+    "reply_to_humans",
+    "reply_activity",
+    "listen_minutes",
+)
+
+
+def _row_to_campaign(row: RowMapping) -> NeuroshillingCampaign:
+    return NeuroshillingCampaign.model_validate(dict(row))
+
+
+def _create_campaign(data: NeuroshillingCampaignCreate) -> NeuroshillingCampaign:
+    now = _now_iso()
+    campaign_id = uuid4().hex
+    with _get_engine().begin() as connection:
+        connection.execute(
+            insert(_neuroshilling_campaigns).values(
+                campaign_id=campaign_id,
+                name=data.name,
+                mode=data.mode,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
+    campaign = _fetch_campaign(campaign_id)
+    if campaign is None:  # pragma: no cover - the insert above guarantees the row
+        msg = f"Campaign was not persisted: {campaign_id}"
+        raise RuntimeError(msg)
+    return campaign
+
+
+async def create_campaign(data: NeuroshillingCampaignCreate) -> NeuroshillingCampaign:
+    """Open a campaign with a generated id; every other column takes its default."""
+    return await asyncio.to_thread(_create_campaign, data)
+
+
+def _fetch_campaign(campaign_id: str) -> NeuroshillingCampaign | None:
+    statement = select(_neuroshilling_campaigns).where(
+        _neuroshilling_campaigns.c.campaign_id == campaign_id,
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    return None if row is None else _row_to_campaign(row)
+
+
+async def fetch_campaign(campaign_id: str) -> NeuroshillingCampaign | None:
+    return await asyncio.to_thread(_fetch_campaign, campaign_id)
+
+
+def _list_campaigns() -> NeuroshillingCampaignList:
+    statement = select(_neuroshilling_campaigns).order_by(
+        _neuroshilling_campaigns.c.created_at.asc(),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return NeuroshillingCampaignList(campaigns=[_row_to_campaign(row) for row in rows])
+
+
+async def list_campaigns() -> NeuroshillingCampaignList:
+    return await asyncio.to_thread(_list_campaigns)
+
+
+def _list_running_campaign_account_names() -> dict[str, tuple[str, str]]:
+    statement = (
+        select(
+            _neuroshilling_accounts.c.account_id,
+            _neuroshilling_campaigns.c.campaign_id,
+            _neuroshilling_campaigns.c.name,
+        )
+        .select_from(
+            _neuroshilling_accounts.join(
+                _neuroshilling_campaigns,
+                _neuroshilling_accounts.c.campaign_id == _neuroshilling_campaigns.c.campaign_id,
+            ),
+        )
+        .where(_neuroshilling_campaigns.c.status.in_(("running", "stopping")))
+    )
+    with _get_engine().connect() as connection:
+        return {
+            str(account_id): (str(campaign_id), str(name))
+            for account_id, campaign_id, name in connection.execute(statement)
+        }
+
+
+async def list_running_campaign_account_names() -> dict[str, tuple[str, str]]:
+    """``account_id -> (campaign_id, campaign name)`` for every account a live run holds.
+
+    The durable half of "this account is busy neuroshilling". The in-memory ownership
+    registry is authoritative while a run is actually in flight, but it is empty
+    in a process that has just started and has not reconciled yet, while these
+    rows still say ``running`` — so the board consults both.
+    """
+    return await asyncio.to_thread(_list_running_campaign_account_names)
+
+
+def _update_campaign(
+    campaign_id: str,
+    data: NeuroshillingCampaignUpdate,
+) -> NeuroshillingCampaign | None:
+    values = {name: getattr(data, name) for name in _EDITABLE_COLUMNS}
+    values["updated_at"] = _now_iso()
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_neuroshilling_campaigns)
+            .where(_neuroshilling_campaigns.c.campaign_id == campaign_id)
+            .values(**values),
+        )
+        if result.rowcount == 0:
+            return None
+        _replace_campaign_accounts(connection, campaign_id, data.accounts)
+    return _fetch_campaign(campaign_id)
+
+
+async def update_campaign(
+    campaign_id: str,
+    data: NeuroshillingCampaignUpdate,
+) -> NeuroshillingCampaign | None:
+    """Apply the whole edited form, roster included, in one transaction.
+
+    ``None`` means no such campaign. ``scenario_status``, ``status``, ``run_id``
+    and ``last_error`` are deliberately absent from the editable set: they are
+    engine state, and a request body must not be able to declare a draft approved
+    or a stopped run alive.
+    """
+    return await asyncio.to_thread(_update_campaign, campaign_id, data)
+
+
+def _delete_campaign(campaign_id: str) -> None:
+    # Children are deleted explicitly, innermost first, rather than left to the
+    # ON DELETE CASCADE chain: ``neuroshilling_messages`` references BOTH the
+    # campaign (cascading) and a step (not cascading), so the order SQLite happens
+    # to unwind the cascade in would decide whether the step rows still have
+    # journal rows pointing at them. Explicit order makes that not a question.
+    with _get_engine().begin() as connection:
+        for table in (
+            _neuroshilling_messages,
+            _neuroshilling_presence,
+            _neuroshilling_steps,
+            _neuroshilling_accounts,
+            _neuroshilling_roles,
+        ):
+            connection.execute(delete(table).where(table.c.campaign_id == campaign_id))
+        connection.execute(
+            delete(_neuroshilling_campaigns).where(
+                _neuroshilling_campaigns.c.campaign_id == campaign_id,
+            ),
+        )
+
+
+async def delete_campaign(campaign_id: str) -> None:
+    """Delete a campaign and everything hanging off it (idempotent)."""
+    await asyncio.to_thread(_delete_campaign, campaign_id)

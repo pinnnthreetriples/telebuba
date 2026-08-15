@@ -14,6 +14,7 @@ from __future__ import annotations
 from core.repositories.neurocomment._accounts import (
     ChannelNotInCampaignError,
     assign_account_to_campaign,
+    list_active_campaign_account_names,
     list_campaign_accounts,
     remove_account_from_campaign,
     set_campaign_account_channels,
@@ -195,6 +196,7 @@ __all__ = [
     "insert_challenge",
     "link_channel_to_campaign",
     "list_access_lost_readiness",
+    "list_active_campaign_account_names",
     "list_active_watch_channels",
     "list_campaign_accounts",
     "list_campaign_channels",

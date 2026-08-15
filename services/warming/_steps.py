@@ -20,6 +20,7 @@ from core.config import settings
 from core.db import is_channel_joined, record_channel_joined
 from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel
+from services.pacing import human_delay
 from services.warming import _seams
 from services.warming.pacing import (
     _FAILURE_STATUSES,
@@ -41,21 +42,20 @@ if TYPE_CHECKING:
 
 
 def _human_delay(min_seconds: float, max_seconds: float) -> float:
-    """A human-like pause in ``[min, max]`` from a clipped log-normal.
+    """Warming's human-like pause — the shared draw, bound to warming's seam and shape.
 
-    Real users are bursty: many short gaps with a heavy tail of long ones. We
-    draw a log-normal fraction (median below the midpoint, occasional spike to
-    the max) and map it onto the configured range — unlike a uniform draw, which
-    is the most obvious bot signature.
+    The arithmetic moved to :func:`services.pacing.human_delay` so it exists once
+    rather than once per feature; the ``_seams.rng`` indirection stays here, which
+    is what keeps every warming test patching the same place.
     """
-    lo, hi = sorted((min_seconds, max_seconds))
-    if hi <= lo:
-        return lo
     warm = settings.warming
-    fraction = min(1.0, _seams.rng.lognormvariate(warm.delay_lognorm_mu, warm.delay_lognorm_sigma))
-    # min(hi, ...) guards the float-rounding edge where fraction == 1.0 makes
-    # lo + (hi - lo) overshoot hi by an ULP — the result must stay within [lo, hi].
-    return min(hi, lo + fraction * (hi - lo))
+    return human_delay(
+        min_seconds,
+        max_seconds,
+        rng=_seams.rng,
+        mu=warm.delay_lognorm_mu,
+        sigma=warm.delay_lognorm_sigma,
+    )
 
 
 async def _human_pause(min_seconds: float, max_seconds: float) -> None:

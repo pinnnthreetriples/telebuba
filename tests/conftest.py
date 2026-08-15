@@ -14,8 +14,10 @@ import pytest
 from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
+from services import _account_owner, pacing
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 
@@ -99,3 +101,39 @@ def _no_ambient_deepseek_key(monkeypatch: pytest.MonkeyPatch) -> None:
     (``tests/services/neurocomment/test_llm_routing.py``).
     """
     monkeypatch.setattr(settings.deepseek, "api_key", "")
+
+
+@pytest.fixture(autouse=True)
+def _reset_pacing() -> Iterator[None]:
+    """Empty ``services.pacing`` around EVERY test, not just the ones that opt in.
+
+    Its per-key cache holds ``asyncio.Lock`` objects, and a lock is bound to the
+    loop that created it: one left behind by an async test makes the next test
+    that paces the same key raise ``RuntimeError`` about a different loop. Scoped
+    suite-wide rather than per-domain because the failure is order-dependent and
+    lands on whoever touches a paced seam next, not on whoever left the lock.
+
+    Chosen over keying the cache by running loop: that would put test-only
+    bookkeeping — and a map that grows one entry per loop ever created — into
+    production code to solve a problem only tests have.
+    """
+    pacing.reset_for_tests()
+    yield
+    pacing.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _reset_account_owner() -> Iterator[None]:
+    """Empty the account-ownership registry around EVERY test.
+
+    Suite-wide for the same reason as ``_reset_pacing``, and now more urgently: real
+    production code writes it. Every warming start and every restart-reconcile claims
+    its account through ``_spawn_runtime_task``, and a task the test abandoned without
+    letting its done-callback run leaves the claim behind. The next test to select a
+    neurocomment account, or to start warming on the same id, would then be refused by
+    a campaign that never existed — an order-dependent failure landing on an innocent
+    test, which is exactly what a suite-wide reset is for.
+    """
+    _account_owner.reset_for_tests()
+    yield
+    _account_owner.reset_for_tests()

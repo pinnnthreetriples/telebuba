@@ -18,9 +18,10 @@ from core.db import (
 )
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest, StopWarmingRequest
-from services import warming
+from services import _account_owner, warming
 from services.warming import _maintenance, _runtime, _seams
 from tests.services.warming._support import (
+    _fake_loop,
     _iteration,
     _no_quiet_days,
     _seed_channel,
@@ -515,3 +516,108 @@ async def test_cancel_during_start_publish_leaves_no_active_orphan(
     assert state.state == "idle"
     assert state.run_id is None
     assert "acc-1" not in warming._RUNTIME
+
+
+# --------------------------------------------------------------------------- #
+# The third ownership registry: services._account_owner
+# --------------------------------------------------------------------------- #
+#
+# The claim rides on ``_spawn_runtime_task`` / ``_runtime_task_done`` rather than on
+# ``start_warming``, because that pair is the only terminal one: restart reconciliation
+# spawns through it directly, and nothing between the claim and ``create_task`` can fail
+# and leak it. These tests drive that pair straight, the way the lease tests above do.
+
+
+async def _drain(task: asyncio.Task[None]) -> None:
+    """Cancel a spawned generation and let its done callback actually run."""
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+    await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
+async def test_a_generation_claims_the_account_and_gives_it_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both halves of the round trip.
+
+    Without the claim nothing else can see that warming has this session; without the
+    release the registry only ever fills up and warming never hands an account back.
+    """
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+
+    task = _runtime._spawn_runtime_task("acc-1", "run-1")
+
+    assert _account_owner.owners() == {"acc-1": "warming"}
+    assert _account_owner.holder_of("acc-1") == "run-1"
+
+    await _drain(task)
+
+    assert _account_owner.owner_of("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_a_superseded_generations_late_callback_leaves_the_live_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The identity check, on the registry as on the lease and on ``_RUNTIME``.
+
+    A retained task from a cancel-and-replace can finish at any moment, long after its
+    successor published itself. An unconditional release there hands the account to
+    neuroshilling while warming is still driving it — the exact overlap the registry
+    exists to prevent, arrived at through the registry itself.
+    """
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    superseded = _runtime._spawn_runtime_task("acc-1", "run-1")
+    live = _runtime._spawn_runtime_task("acc-1", "run-2")
+
+    await _drain(superseded)
+
+    assert _account_owner.holder_of("acc-1") == "run-2"
+    await _drain(live)
+    assert _account_owner.owner_of("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_a_respawn_under_a_new_run_id_takes_the_claim_over(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``_spawn_runtime_task`` is terminal, so it must not be refusable.
+
+    ``try_claim`` refuses a DIFFERENT holder of the same owner — that refusal is what
+    keeps two neuroshilling campaigns off one account. Routed through it, warming's own
+    re-spawn would be refused, the registry would keep naming ``run-1`` forever, and
+    ``run-2``'s identity-checked release would never match: the account would stay held
+    until the process died.
+    """
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    first = _runtime._spawn_runtime_task("acc-1", "run-1")
+    second = _runtime._spawn_runtime_task("acc-1", "run-2")
+
+    assert _account_owner.holder_of("acc-1") == "run-2"
+
+    await _drain(first)
+    await _drain(second)
+    assert _account_owner.owner_of("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_reconcile_claims_the_account_it_resurrects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reason the claim sits in ``_spawn_runtime_task`` and not in ``start_warming``.
+
+    ``_maintenance._reconcile_account`` spawns directly, so a claim published only by
+    the start path would leave every loop restored after a process restart invisible to
+    the registry — warming driving an account that reads as free.
+    """
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await _seed_warming_account()
+
+    await warming.reconcile_warming_runtime()
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert _account_owner.owner_of("acc-1") == "warming"
+    assert _account_owner.holder_of("acc-1") == record.run_id

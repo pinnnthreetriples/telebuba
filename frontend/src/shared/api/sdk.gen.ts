@@ -58,6 +58,9 @@ import type {
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
+  CreateNeuroshillingCampaignData,
+  CreateNeuroshillingCampaignErrors,
+  CreateNeuroshillingCampaignResponses,
   CreateProxyData,
   CreateProxyErrors,
   CreateProxyResponses,
@@ -73,6 +76,9 @@ import type {
   DeleteCampaignData,
   DeleteCampaignErrors,
   DeleteCampaignResponses,
+  DeleteNeuroshillingCampaignData,
+  DeleteNeuroshillingCampaignErrors,
+  DeleteNeuroshillingCampaignResponses,
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
@@ -109,6 +115,9 @@ import type {
   GetNeurocommentSettingsData,
   GetNeurocommentSettingsErrors,
   GetNeurocommentSettingsResponses,
+  GetNeuroshillingBoardData,
+  GetNeuroshillingBoardErrors,
+  GetNeuroshillingBoardResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -154,6 +163,9 @@ import type {
   ListNeurocommentCommentsData,
   ListNeurocommentCommentsErrors,
   ListNeurocommentCommentsResponses,
+  ListNeuroshillingCampaignsData,
+  ListNeuroshillingCampaignsErrors,
+  ListNeuroshillingCampaignsResponses,
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
@@ -286,6 +298,9 @@ import type {
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsErrors,
   UpdateNeurocommentSettingsResponses,
+  UpdateNeuroshillingCampaignData,
+  UpdateNeuroshillingCampaignErrors,
+  UpdateNeuroshillingCampaignResponses,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
@@ -1830,3 +1845,99 @@ export const countLogs = <ThrowOnError extends boolean = false>(
     url: '/api/v1/logs/count',
     ...options,
   });
+
+/**
+ * List Campaigns
+ */
+export const listNeuroshillingCampaigns = <ThrowOnError extends boolean = false>(
+  options?: Options<ListNeuroshillingCampaignsData, ThrowOnError>,
+): RequestResult<
+  ListNeuroshillingCampaignsResponses,
+  ListNeuroshillingCampaignsErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    ListNeuroshillingCampaignsResponses,
+    ListNeuroshillingCampaignsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns', ...options });
+
+/**
+ * Create Campaign
+ */
+export const createNeuroshillingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<CreateNeuroshillingCampaignData, ThrowOnError>,
+): RequestResult<
+  CreateNeuroshillingCampaignResponses,
+  CreateNeuroshillingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    CreateNeuroshillingCampaignResponses,
+    CreateNeuroshillingCampaignErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neuroshilling/campaigns',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign and everything hanging off it. A live run refuses (409).
+ */
+export const deleteNeuroshillingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteNeuroshillingCampaignData, ThrowOnError>,
+): RequestResult<
+  DeleteNeuroshillingCampaignResponses,
+  DeleteNeuroshillingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).delete<
+    DeleteNeuroshillingCampaignResponses,
+    DeleteNeuroshillingCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}', ...options });
+
+/**
+ * Update Campaign
+ *
+ * Save the whole edited form: settings, targets and the account roster.
+ */
+export const updateNeuroshillingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateNeuroshillingCampaignData, ThrowOnError>,
+): RequestResult<
+  UpdateNeuroshillingCampaignResponses,
+  UpdateNeuroshillingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    UpdateNeuroshillingCampaignResponses,
+    UpdateNeuroshillingCampaignErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neuroshilling/campaigns/{campaign_id}',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Board
+ *
+ * The whole page in one read: campaign, roster, account pool, targets, run.
+ */
+export const getNeuroshillingBoard = <ThrowOnError extends boolean = false>(
+  options: Options<GetNeuroshillingBoardData, ThrowOnError>,
+): RequestResult<GetNeuroshillingBoardResponses, GetNeuroshillingBoardErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetNeuroshillingBoardResponses,
+    GetNeuroshillingBoardErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/board', ...options });

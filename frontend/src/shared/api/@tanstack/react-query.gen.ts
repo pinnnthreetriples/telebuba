@@ -25,11 +25,13 @@ import {
   countLogs,
   createAccountChannel,
   createCampaign,
+  createNeuroshillingCampaign,
   createProxy,
   deleteAccount,
   deleteAccountChannel,
   deleteAccountChannelPost,
   deleteCampaign,
+  deleteNeuroshillingCampaign,
   deleteProxy,
   editAccountChannelPost,
   expandDiscoveryKeywords,
@@ -42,6 +44,7 @@ import {
   getNeurocommentBoard,
   getNeurocommentRuntime,
   getNeurocommentSettings,
+  getNeuroshillingBoard,
   getReadiness,
   getWarmingBoard,
   getWarmingSettings,
@@ -57,6 +60,7 @@ import {
   listChannelChallenges,
   listLogs,
   listNeurocommentComments,
+  listNeuroshillingCampaigns,
   listProxies,
   listWarmedAccounts,
   listWarmingChannels,
@@ -102,6 +106,7 @@ import {
   updateAccountProfile,
   updateCampaignPrompt,
   updateNeurocommentSettings,
+  updateNeuroshillingCampaign,
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
@@ -153,6 +158,9 @@ import type {
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
+  CreateNeuroshillingCampaignData,
+  CreateNeuroshillingCampaignError,
+  CreateNeuroshillingCampaignResponse,
   CreateProxyData,
   CreateProxyError,
   CreateProxyResponse,
@@ -168,6 +176,9 @@ import type {
   DeleteCampaignData,
   DeleteCampaignError,
   DeleteCampaignResponse,
+  DeleteNeuroshillingCampaignData,
+  DeleteNeuroshillingCampaignError,
+  DeleteNeuroshillingCampaignResponse,
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
@@ -204,6 +215,9 @@ import type {
   GetNeurocommentSettingsData,
   GetNeurocommentSettingsError,
   GetNeurocommentSettingsResponse,
+  GetNeuroshillingBoardData,
+  GetNeuroshillingBoardError,
+  GetNeuroshillingBoardResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -249,6 +263,9 @@ import type {
   ListNeurocommentCommentsData,
   ListNeurocommentCommentsError,
   ListNeurocommentCommentsResponse,
+  ListNeuroshillingCampaignsData,
+  ListNeuroshillingCampaignsError,
+  ListNeuroshillingCampaignsResponse,
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
@@ -381,6 +398,9 @@ import type {
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsError,
   UpdateNeurocommentSettingsResponse,
+  UpdateNeuroshillingCampaignData,
+  UpdateNeuroshillingCampaignError,
+  UpdateNeuroshillingCampaignResponse,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
@@ -3149,4 +3169,144 @@ export const countLogsOptions = (options?: Options<CountLogsData>) =>
       return data;
     },
     queryKey: countLogsQueryKey(options),
+  });
+
+export const listNeuroshillingCampaignsQueryKey = (
+  options?: Options<ListNeuroshillingCampaignsData>,
+) => createQueryKey('listNeuroshillingCampaigns', options);
+
+/**
+ * List Campaigns
+ */
+export const listNeuroshillingCampaignsOptions = (
+  options?: Options<ListNeuroshillingCampaignsData>,
+) =>
+  queryOptions<
+    ListNeuroshillingCampaignsResponse,
+    ListNeuroshillingCampaignsError,
+    ListNeuroshillingCampaignsResponse,
+    ReturnType<typeof listNeuroshillingCampaignsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listNeuroshillingCampaigns({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listNeuroshillingCampaignsQueryKey(options),
+  });
+
+/**
+ * Create Campaign
+ */
+export const createNeuroshillingCampaignMutation = (
+  options?: Partial<Options<CreateNeuroshillingCampaignData>>,
+): UseMutationOptions<
+  CreateNeuroshillingCampaignResponse,
+  CreateNeuroshillingCampaignError,
+  Options<CreateNeuroshillingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateNeuroshillingCampaignResponse,
+    CreateNeuroshillingCampaignError,
+    Options<CreateNeuroshillingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createNeuroshillingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign and everything hanging off it. A live run refuses (409).
+ */
+export const deleteNeuroshillingCampaignMutation = (
+  options?: Partial<Options<DeleteNeuroshillingCampaignData>>,
+): UseMutationOptions<
+  DeleteNeuroshillingCampaignResponse,
+  DeleteNeuroshillingCampaignError,
+  Options<DeleteNeuroshillingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteNeuroshillingCampaignResponse,
+    DeleteNeuroshillingCampaignError,
+    Options<DeleteNeuroshillingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteNeuroshillingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Update Campaign
+ *
+ * Save the whole edited form: settings, targets and the account roster.
+ */
+export const updateNeuroshillingCampaignMutation = (
+  options?: Partial<Options<UpdateNeuroshillingCampaignData>>,
+): UseMutationOptions<
+  UpdateNeuroshillingCampaignResponse,
+  UpdateNeuroshillingCampaignError,
+  Options<UpdateNeuroshillingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateNeuroshillingCampaignResponse,
+    UpdateNeuroshillingCampaignError,
+    Options<UpdateNeuroshillingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateNeuroshillingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNeuroshillingBoardQueryKey = (options: Options<GetNeuroshillingBoardData>) =>
+  createQueryKey('getNeuroshillingBoard', options);
+
+/**
+ * Get Board
+ *
+ * The whole page in one read: campaign, roster, account pool, targets, run.
+ */
+export const getNeuroshillingBoardOptions = (options: Options<GetNeuroshillingBoardData>) =>
+  queryOptions<
+    GetNeuroshillingBoardResponse,
+    GetNeuroshillingBoardError,
+    GetNeuroshillingBoardResponse,
+    ReturnType<typeof getNeuroshillingBoardQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeuroshillingBoard({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeuroshillingBoardQueryKey(options),
   });
