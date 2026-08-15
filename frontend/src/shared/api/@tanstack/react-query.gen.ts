@@ -32,6 +32,7 @@ import {
   deleteCampaign,
   deleteProxy,
   editAccountChannelPost,
+  expandDiscoveryKeywords,
   getAccountChannel,
   getAccountPrivacy,
   getAccountProfileSnapshot,
@@ -173,6 +174,9 @@ import type {
   EditAccountChannelPostData,
   EditAccountChannelPostError,
   EditAccountChannelPostResponse,
+  ExpandDiscoveryKeywordsData,
+  ExpandDiscoveryKeywordsError,
+  ExpandDiscoveryKeywordsResponse,
   GetAccountChannelData,
   GetAccountChannelError,
   GetAccountChannelResponse,
@@ -2248,6 +2252,39 @@ export const adoptCampaignDiscoveryMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await adoptCampaignDiscovery({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Expand Discovery Keywords
+ *
+ * Widen one typed topic into search keywords. Not campaign-scoped, hence no id.
+ *
+ * Never fails on the LLM's behalf: an unusable answer is a 200 carrying a short
+ * ``error`` code, because the operator's next move (type the keywords by hand) is
+ * the same either way and a toast-worthy 5xx would only imply the board is broken.
+ */
+export const expandDiscoveryKeywordsMutation = (
+  options?: Partial<Options<ExpandDiscoveryKeywordsData>>,
+): UseMutationOptions<
+  ExpandDiscoveryKeywordsResponse,
+  ExpandDiscoveryKeywordsError,
+  Options<ExpandDiscoveryKeywordsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ExpandDiscoveryKeywordsResponse,
+    ExpandDiscoveryKeywordsError,
+    Options<ExpandDiscoveryKeywordsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await expandDiscoveryKeywords({
         ...options,
         ...fnOptions,
         throwOnError: true,

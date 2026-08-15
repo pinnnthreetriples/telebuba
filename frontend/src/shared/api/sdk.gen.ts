@@ -79,6 +79,9 @@ import type {
   EditAccountChannelPostData,
   EditAccountChannelPostErrors,
   EditAccountChannelPostResponses,
+  ExpandDiscoveryKeywordsData,
+  ExpandDiscoveryKeywordsErrors,
+  ExpandDiscoveryKeywordsResponses,
   GetAccountChannelData,
   GetAccountChannelErrors,
   GetAccountChannelResponses,
@@ -1334,6 +1337,31 @@ export const adoptCampaignDiscovery = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery/adopt',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Expand Discovery Keywords
+ *
+ * Widen one typed topic into search keywords. Not campaign-scoped, hence no id.
+ *
+ * Never fails on the LLM's behalf: an unusable answer is a 200 carrying a short
+ * ``error`` code, because the operator's next move (type the keywords by hand) is
+ * the same either way and a toast-worthy 5xx would only imply the board is broken.
+ */
+export const expandDiscoveryKeywords = <ThrowOnError extends boolean = false>(
+  options: Options<ExpandDiscoveryKeywordsData, ThrowOnError>,
+): RequestResult<ExpandDiscoveryKeywordsResponses, ExpandDiscoveryKeywordsErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ExpandDiscoveryKeywordsResponses,
+    ExpandDiscoveryKeywordsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/discovery/keywords',
     ...options,
     headers: {
       'Content-Type': 'application/json',

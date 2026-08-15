@@ -1189,6 +1189,71 @@ export type DiscoveryChannelVerdict = {
 };
 
 /**
+ * DiscoveryKeywordRequest
+ *
+ * One operator-typed topic, to be expanded into a keyword list by the LLM.
+ *
+ * Deliberately NOT campaign-scoped: expanding a topic reads no campaign state and
+ * spends no Telegram budget, so taking a campaign id would only invite the caller
+ * to believe it changes the answer.
+ *
+ * ``topic`` is bounded by ``KEYWORD_MAX_LENGTH`` rather than by a length of its
+ * own: it is the same kind of string the operator would otherwise have typed into
+ * ``DiscoverySearchRequest.keywords`` by hand, and it is interpolated into a
+ * prompt — an unbounded topic would be an unbounded prompt. Only ``min_length=1``
+ * below, not the keyword floor: a 2-character topic ("MMA") is a perfectly good
+ * thing to expand even though it is too short to search Telegram with, which is
+ * exactly why the operator is asking for an expansion.
+ */
+export type DiscoveryKeywordRequest = {
+  /**
+   * Topic
+   */
+  topic: string;
+};
+
+/**
+ * DiscoveryKeywordResult
+ *
+ * The expanded keywords, or the short code saying why there are none.
+ *
+ * ``keywords`` come out ready to be posted straight back as
+ * ``DiscoverySearchRequest.keywords``: stripped, deduped case-insensitively,
+ * within ``KEYWORD_MIN_LENGTH``..``KEYWORD_MAX_LENGTH`` and capped at
+ * ``MAX_KEYWORDS``. The service applies those rules itself rather than trusting
+ * the model, so an answer the operator accepts wholesale cannot fail the search
+ * request's own validator.
+ *
+ * ``error`` is a short locale-neutral code, exactly like
+ * ``DiscoverySourceReport.reason`` — the SPA maps it to text and renders the raw
+ * code when it has no copy. Three values, and each names a different thing for the
+ * operator to do:
+ * llm_unavailable — ``settings.deepseek.api_key`` is empty, so nothing was asked
+ * at all; type the keywords by hand or set the key.
+ * llm_failed      — the gateway answered with an error, a rate limit, or no
+ * text; retrying may work.
+ * llm_empty       — the model answered but nothing in it survived validation;
+ * rephrasing the topic is what helps.
+ * ``str`` rather than a ``Literal`` for the same reason as ``reason``: the SPA
+ * already falls back to the raw code, so widening the set later must not be a
+ * breaking change to the generated client.
+ *
+ * A non-null ``error`` always carries an empty ``keywords`` list — there is no
+ * partial answer to report, since a model that produced anything usable is a
+ * success.
+ */
+export type DiscoveryKeywordResult = {
+  /**
+   * Keywords
+   */
+  keywords?: Array<string>;
+  /**
+   * Error
+   */
+  error?: string | null;
+};
+
+/**
  * DiscoveryProgress
  */
 export type DiscoveryProgress = {
@@ -5836,6 +5901,41 @@ export type AdoptCampaignDiscoveryResponses = {
 
 export type AdoptCampaignDiscoveryResponse =
   AdoptCampaignDiscoveryResponses[keyof AdoptCampaignDiscoveryResponses];
+
+export type ExpandDiscoveryKeywordsData = {
+  body: DiscoveryKeywordRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/discovery/keywords';
+};
+
+export type ExpandDiscoveryKeywordsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ExpandDiscoveryKeywordsError =
+  ExpandDiscoveryKeywordsErrors[keyof ExpandDiscoveryKeywordsErrors];
+
+export type ExpandDiscoveryKeywordsResponses = {
+  /**
+   * Successful Response
+   */
+  200: DiscoveryKeywordResult;
+};
+
+export type ExpandDiscoveryKeywordsResponse =
+  ExpandDiscoveryKeywordsResponses[keyof ExpandDiscoveryKeywordsResponses];
 
 export type ListCampaignsData = {
   body?: never;

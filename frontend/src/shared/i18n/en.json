@@ -1230,6 +1230,15 @@
           "seedChannel": "Similar to channel",
           "seedChannelHint": "Telegram suggests channels similar to this one based on overlapping audiences. It is the cheapest way to widen the sweep.",
           "seedChannelPlaceholder": "@channel",
+          "expand": "Suggest keywords",
+          "expanding": "Suggesting…",
+          "expandTooLong": "The topic is longer than {{max}} characters — shorten it, the suggester accepts no more.",
+          "expandFailed": "Couldn't request suggestions. Try again.",
+          "expandError": {
+            "llm_unavailable": "Suggestions are unavailable: no DeepSeek key is set. Type the keywords yourself.",
+            "llm_failed": "The model did not answer. Try again, or type the keywords yourself.",
+            "llm_empty": "Nothing usable came back from the model. Rephrase the topic."
+          },
           "reset": "Reset",
           "submit": "Search",
           "searching": "Starting…"
