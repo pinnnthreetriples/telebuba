@@ -79,6 +79,7 @@ def test_roll_daily_handles_missing_record() -> None:
 async def test_run_loop_iteration_parks_when_daily_cap_reached(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
@@ -121,6 +122,7 @@ async def test_phase_cap_governs_daily_limit(
     # the legacy fleet-wide override was removed). A fresh account is intro-capped
     # at the intro cap, so a daily_actions already at that cap parks the account.
     # enforce_readiness off so the daily gate is reached, not the П3 readiness gate.
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
@@ -152,6 +154,7 @@ async def test_phase_cap_governs_daily_limit(
 async def test_run_loop_iteration_increments_daily_counter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()

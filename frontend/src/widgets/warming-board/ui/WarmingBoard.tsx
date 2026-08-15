@@ -226,14 +226,21 @@ function WarmingCard({
     <div className="rounded-[14px] border border-[#e4ecfa] bg-[#f7faff] px-[17px] py-4">
       {/* header */}
       <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-[9px]">
+        <div className="flex min-w-0 items-center gap-[9px]">
           <AccountAvatar
             account={account}
             className="h-7 w-7 shrink-0 rounded-full"
             fallbackClassName="text-[11px] font-semibold bg-[#e8f0ff] text-[#0066ff]"
           />
-          <div>
-            <div className="text-[13px] font-semibold">{primaryId}</div>
+          <div className="min-w-0">
+            {/* Telegram supplies this name, so it can be one 90-char word with nowhere
+                to break: measured, it painted straight out through the card's right
+                border. The card's own grid track has a fixed 320px minimum, so the
+                name cannot widen the track — it can only spill. `title` keeps the
+                whole name reachable now that the card shows a prefix of it. */}
+            <div className="truncate text-[13px] font-semibold" title={primaryId}>
+              {primaryId}
+            </div>
             <div className="mt-[2px] flex items-center gap-[6px]">
               <span
                 className="inline-flex items-center gap-1 rounded-full px-[7px] py-px text-[10.5px] font-semibold"
@@ -254,7 +261,9 @@ function WarmingCard({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-[7px]">
+        {/* shrink-0: without it the truncating name above just pushes its cost onto
+            the actions instead, and the "Стоп" button loses its label. */}
+        <div className="flex shrink-0 items-center gap-[7px]">
           <span className="tb-tip inline-flex">
             <span className="inline-flex h-[18px] w-[18px] cursor-help items-center justify-center rounded-full border border-[#cbd7ec] bg-white text-[11px] font-bold text-[#7a8aa6]">
               ?
@@ -359,59 +368,64 @@ function WarmingCard({
       </div>
 
       <div className="px-[6px]">
-        {/* stepper */}
-        <div className="relative h-[16px]">
-          <div className="absolute inset-x-[7px] top-1/2 h-[2px] -translate-y-1/2 overflow-hidden rounded-[2px] bg-[#dce2ec]">
+        {/* Stepper. Dot and label share ONE cell: as two rows they had different
+            geometry — 14px dot cells against full-width label slots, both pinned
+            flush by `justify-between` — and the ends drifted 45px apart on a 571px
+            card. Equal cells put the first and last dot centres one half-cell
+            (50%/STAGES.length) from the edges, which is where the rail has to start
+            and stop for the `active / (STAGES.length - 1)` fill to land on a dot. */}
+        <div className="relative">
+          <div
+            className="absolute top-[7px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]"
+            style={{
+              left: `${String(50 / STAGES.length)}%`,
+              right: `${String(50 / STAGES.length)}%`,
+            }}
+          >
             <div
               className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-500"
               style={{ width: `${String(connectorPct)}%` }}
             />
           </div>
-          <div className="relative flex h-[16px] items-center justify-between">
+          <div className="relative flex">
             {STAGES.map((stage, index) => (
-              <div
-                key={stage}
-                className="relative flex h-[14px] w-[14px] shrink-0 items-center justify-center"
-              >
-                {index < active ? (
-                  <span className="tb-pop flex h-[14px] w-[14px] items-center justify-center rounded-full bg-success">
-                    <svg
-                      width="9"
-                      height="9"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="#fff"
-                      strokeWidth="3.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  </span>
-                ) : index === active ? (
-                  <span className="tb-livedot h-[10px] w-[10px] rounded-full bg-primary" />
-                ) : (
-                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-[#d2d0cc] bg-white" />
-                )}
+              <div key={stage} className="flex flex-1 flex-col items-center">
+                <div className="flex h-[16px] w-[14px] items-center justify-center">
+                  {index < active ? (
+                    <span className="tb-pop flex h-[14px] w-[14px] items-center justify-center rounded-full bg-success">
+                      <svg
+                        width="9"
+                        height="9"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#fff"
+                        strokeWidth="3.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </span>
+                  ) : index === active ? (
+                    <span className="tb-livedot h-[10px] w-[10px] rounded-full bg-primary" />
+                  ) : (
+                    <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-[#d2d0cc] bg-white" />
+                  )}
+                </div>
+                <span
+                  className={`mt-2 text-center text-[9px] ${
+                    index < active
+                      ? 'font-medium text-success'
+                      : index === active
+                        ? 'font-semibold text-primary'
+                        : 'text-ink-subtle'
+                  }`}
+                >
+                  {t(`warming.stage.${stage}`)}
+                </span>
               </div>
             ))}
           </div>
-        </div>
-        <div className="mt-2 flex justify-between">
-          {STAGES.map((stage, index) => (
-            <span
-              key={stage}
-              className={`flex-1 text-center text-[9px] ${
-                index < active
-                  ? 'font-medium text-success'
-                  : index === active
-                    ? 'font-semibold text-primary'
-                    : 'text-ink-subtle'
-              }`}
-            >
-              {t(`warming.stage.${stage}`)}
-            </span>
-          ))}
         </div>
       </div>
 

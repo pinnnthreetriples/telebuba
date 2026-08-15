@@ -456,7 +456,13 @@ export function NeurocommentPage() {
       {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
           one-column grid sprout an implicit second column and sit both children side
           by side. Below `lg`, DOM order puts the board before the config rail. */}
-      <div className="grid items-start gap-4 lg:grid-cols-[340px_1fr]">
+      {/* `minmax(0,1fr)`, not a bare `1fr`, for the reason index.css gives for
+          `.tb-subrow` in the row direction: an `fr` track keeps an automatic minimum.
+          The board's table pinned it open (measured 882px against a 605px share) —
+          `overflow-x-auto` on its card does not stop min-content propagating — and the
+          page picked up a horizontal scroll the viewport-wide sticky header can't follow,
+          which is every card hanging out past the top bar on the right. */}
+      <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
         <div className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1">
           <PipelineCard

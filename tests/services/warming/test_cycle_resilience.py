@@ -194,6 +194,7 @@ async def test_cycle_skipped_when_only_set_online_fits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """One slot below the cap → park, don't burn a sleep on a presence-only cycle (#100)."""
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()

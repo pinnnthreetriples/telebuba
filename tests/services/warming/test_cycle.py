@@ -20,6 +20,7 @@ from schemas.warming import (
 from services import warming
 from services.warming import _seams
 from tests.services.warming._support import (
+    _no_quiet_days,
     _Recorder,
     _seed_channel,
     _seed_two_warming_accounts,
@@ -409,6 +410,7 @@ async def test_cycle_dm_slow_mode_wait_folds_into_flood(monkeypatch: pytest.Monk
 async def test_run_loop_iteration_transitions_to_flood_on_flood_wait(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _no_quiet_days(monkeypatch)
     recorder = _StatusRecorder()
     recorder.status_by_type = {"join_channel": "flood_wait"}
     recorder.flood_seconds_by_type = {"join_channel": 17}

@@ -10,6 +10,7 @@ import {
   invalidateAccountViews,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
+import { useTransientFeedback } from '@/shared/lib';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
 import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
@@ -65,6 +66,9 @@ export function AccountsPage() {
   const invalidate = () => {
     invalidateAccountViews(queryClient);
   };
+  // Keyed by row for the same reason as `busyIds`: two checks can be in flight,
+  // and a single slot would flash the second row's verdict onto the first.
+  const { feedback: checkResults, mark: markChecked } = useTransientFeedback();
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
 
@@ -91,8 +95,22 @@ export function AccountsPage() {
       })
       .catch(() => undefined);
   };
+  // The spinner alone left the operator guessing: a check that answered
+  // "unauthorized" looked exactly like one that answered "alive".
   const onCheck = (accountId: string) => {
-    runOnRow(accountId, check.mutateAsync({ body: { account_id: accountId } }));
+    const call = check.mutateAsync({ body: { account_id: accountId } });
+    // A second subscription to the same promise, not a wrapper: `runOnRow` owns
+    // the busy flag and swallows the rejection, and threading the verdict
+    // through it would put check-only state in the delete path too.
+    void call.then(
+      (checked) => {
+        markChecked(accountId, checked.status === 'alive');
+      },
+      () => {
+        markChecked(accountId, false);
+      },
+    );
+    runOnRow(accountId, call);
   };
   const onDelete = (accountId: string) => {
     setDeletingId(accountId);
@@ -220,6 +238,7 @@ export function AccountsPage() {
                 setProfilingRow(account);
               }}
               busyIds={busyIds}
+              checkResults={checkResults}
             />
           )}
           {/* The pagination row lives outside the empty branch: deleting the
