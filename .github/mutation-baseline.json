@@ -54,6 +54,11 @@
     "services.neurocomment._inbox_runtime.x__backfill_is_current__mutmut_5",
     "services.neurocomment._inbox_runtime.x__backfill_is_current__mutmut_6",
     "services.neurocomment._inbox_runtime.x__dispatch_pending__mutmut_1",
+    "services.neurocomment._inbox_runtime.x__dispatch_pending__mutmut_11",
+    "services.neurocomment._inbox_runtime.x__dispatch_pending__mutmut_14",
+    "services.neurocomment._inbox_runtime.x__dispatch_pending__mutmut_15",
+    "services.neurocomment._inbox_runtime.x__dispatch_pending__mutmut_3",
+    "services.neurocomment._inbox_runtime.x__dispatch_pending__mutmut_8",
     "services.neurocomment._inbox_runtime.x__fetch_backfill_page__mutmut_1",
     "services.neurocomment._inbox_runtime.x__fetch_backfill_page__mutmut_10",
     "services.neurocomment._inbox_runtime.x__fetch_backfill_page__mutmut_11",
@@ -1361,6 +1366,7 @@
     "services.neurocomment._runtime_operations.x_stop_neurocomment__mutmut_6",
     "services.neurocomment._runtime_test_reset.x__cancel_tasks__mutmut_1",
     "services.neurocomment._runtime_test_reset.x__cancel_tasks__mutmut_3",
+    "services.neurocomment._runtime_test_reset.x__owned_tasks__mutmut_2",
     "services.neurocomment._runtime_test_reset.x__owned_tasks__mutmut_5",
     "services.neurocomment._runtime_test_reset.x_reset_for_tests__mutmut_14",
     "services.neurocomment._runtime_test_reset.x_reset_for_tests__mutmut_16",
@@ -2338,6 +2344,7 @@
     "services.warming._runner.x__warming_loop__mutmut_13",
     "services.warming._runner.x__warming_loop__mutmut_15",
     "services.warming._runner.x__warming_loop__mutmut_16",
+    "services.warming._runner.x__warming_loop__mutmut_17",
     "services.warming._runner.x__warming_loop__mutmut_18",
     "services.warming._runner.x__warming_loop__mutmut_19",
     "services.warming._runner.x__warming_loop__mutmut_2",
@@ -2742,9 +2749,9 @@
     ]
   },
   "stats": {
-    "killed": 12773,
-    "survived": 2503,
-    "timeout": 195,
+    "killed": 12766,
+    "survived": 2505,
+    "timeout": 200,
     "total": 15471
   }
 }

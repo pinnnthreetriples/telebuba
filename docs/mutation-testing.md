@@ -12,10 +12,10 @@ preserves every available partial snapshot and diagnostic log.
 | Result | Count |
 |---|---:|
 | Total | 15,471 |
-| Killed | 12,773 |
-| Survived | 2,503 |
-| Timeout | 195 |
-| Score | 82.5609% |
+| Killed | 12,766 |
+| Survived | 2,505 |
+| Timeout | 200 |
+| Score | 82.5157% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -31,7 +31,11 @@ The floor is measured on the GitHub runner, not locally. A clean local sweep
 scores higher, but the hosted runner is slower and more contended, and pinning
 the floor to the best machine made every Nightly red.
 
-The 12,773/2,503/195 floor is the merge of current `main` into this branch. The
+The 12,766/2,505/200 floor is the merge of current `main` into this branch, and
+it is again the union of two runner sweeps rather than one: seeding from a
+single sweep left seven identities unreviewed, and the second sweep flagged
+every one of them. One further survivor that sweep reported was killed by its
+own serial recheck — noise the mechanism absorbed instead of banking. The
 score dropped from 84.56% because the catalogue grew by over 1,500 mutants of
 code that arrived with main, not because anything regressed. Every timeout was
 individually rerun with one worker and every one reproduced, so each is a
