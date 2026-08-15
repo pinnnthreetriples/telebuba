@@ -32,9 +32,16 @@ jobs:
   # Unlike the other jobs here this one IS about gating, so it stays cheap: no
   # install, no sync beyond what the tools need.
   # ---------------------------------------------------------------------------
+  # Same reasoning as ci.yml: an absent `timeout-minutes` means GitHub's six-hour
+  # default. It bites harder here — nobody is watching a 03:00 run, so a hung job
+  # burns the full six hours unobserved. The mutation ceiling below is not
+  # theoretical: one sweep in this history ran 5h14m before failing.
   audit:
     name: CVE audit (pip + npm)
     runs-on: ubuntu-latest
+    # Observed 15-33s; the ci.yml copies of these two commands are capped at 5
+    # minutes each and this job runs both in sequence.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -70,6 +77,12 @@ jobs:
   extended-hypothesis:
     name: pytest (Hypothesis extended)
     runs-on: ubuntu-latest
+    # Observed 224-401s. Deliberately looser than ci.yml's 10 minutes on the same
+    # suite, for two reasons: this one stays serial (see the run step), and 2000
+    # examples per property is a genuinely variable workload — a shrink on a rare
+    # counterexample legitimately takes longer than any run seen so far. 30
+    # minutes is ~4.5x the slowest recorded run.
+    timeout-minutes: 30
     env:
       HYPOTHESIS_PROFILE: extended
     steps:
@@ -86,6 +99,12 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pytest (extended)
+        # Deliberately NOT parallelised, unlike ci.yml's `pytest (strict)` job.
+        # Nothing waits on a nightly, so there is no latency to buy; and keeping
+        # one unattended full-suite run on the serial path leaves a control that
+        # would notice a parallel-only isolation regression rather than hiding it
+        # everywhere at once. The 2000-example extended profile is also the part
+        # of the suite whose stability under xdist was not measured.
         run: uv run pytest
 
   # ---------------------------------------------------------------------------
@@ -95,6 +114,10 @@ jobs:
   semgrep-full:
     name: semgrep (full rulesets)
     runs-on: ubuntu-latest
+    # Observed 21-32s. The header calls this job slow, but the measurements do
+    # not agree — it is three registry rulesets over the same small tree, and it
+    # finishes as fast as ci.yml's auto config. Capped like that one.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -124,6 +147,14 @@ jobs:
   mutation:
     name: mutation testing
     runs-on: ubuntu-latest
+    # By far the longest job in either workflow, and the one with a real runaway
+    # tail: the two successful sweeps in recent history took 86 and 91 minutes,
+    # but failures have run 2h32m, 2h58m and once 5h14m — that last one was
+    # closing on GitHub's six-hour default with nothing to show for it. Those long
+    # runs are the pathology (disk exhaustion, a wedged mutant), not a slower
+    # sweep, so three hours caps them while still leaving 2x over a healthy run.
+    # Deliberately the highest ceiling here; do not fold it in with the others.
+    timeout-minutes: 180
     env:
       HYPOTHESIS_PROFILE: mutation
       MUTMUT_MAX_CHILDREN: "4"
