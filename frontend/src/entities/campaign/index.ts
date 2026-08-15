@@ -8,6 +8,7 @@ export {
   clearNeurocommentListenerMutation,
   createCampaignMutation,
   deleteCampaignMutation,
+  expandDiscoveryKeywordsMutation,
   linkCampaignChannelMutation,
   neurocommentBoardQueryOptions,
   neurocommentCommentsQueryOptions,

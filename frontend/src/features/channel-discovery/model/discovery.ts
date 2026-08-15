@@ -62,6 +62,33 @@ export function parseKeywords(raw: string): string[] {
   return splitKeywords(raw).keywords;
 }
 
+/** Append suggested keywords to what the operator typed, leaving their text alone.
+ *
+ * Re-parsing the whole blob and writing the result back would silently delete the
+ * tokens `splitKeywords` drops — and a topic too short to search with ("MMA") is
+ * exactly the sort of thing the operator asks the suggester about, so it must survive
+ * its own answer. Hence: keep the typed text verbatim and add only the suggestions
+ * that got past the dedup, the length bounds and `MAX_KEYWORDS`. The merged list
+ * always starts with the typed tokens, in order, so slicing past them leaves the new
+ * ones — and when the cap bites it is the operator's own words that keep the slots.
+ *
+ * A suggestion that is not exactly one token is dropped WHOLE, never taken apart. This
+ * field is separator-delimited and the search posts `parseKeywords` of it, so letting a
+ * phrase through would enter it as fragments: "бои без правил" would land as "правил"
+ * alone, which reads like a keyword the operator has no reason to doubt and then spends
+ * a real Telegram read out of the run's small per-run budget. One suggestion fewer is
+ * cheaper than one plausible-looking fragment nobody asked for.
+ */
+export function mergeKeywords(raw: string, suggested: string[]): string {
+  // The tokenizer's own separator class, so nothing suggested can ever be split.
+  const whole = suggested.filter((phrase) => !/[,\s]/u.test(phrase.trim()));
+  const before = parseKeywords(raw).length;
+  const added = parseKeywords(`${raw}, ${whole.join(', ')}`).slice(before);
+  if (added.length === 0) return raw;
+  // A field left mid-word ("crypto, ") would otherwise grow a doubled separator.
+  return [raw.trim().replace(/[,\s]+$/u, ''), ...added].filter(Boolean).join(', ');
+}
+
 function positiveInt(raw: string): number | undefined {
   const trimmed = raw.trim();
   if (trimmed === '') return undefined;

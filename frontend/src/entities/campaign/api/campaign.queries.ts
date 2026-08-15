@@ -7,6 +7,7 @@ export {
   clearNeurocommentListenerMutation,
   createCampaignMutation,
   deleteCampaignMutation,
+  expandDiscoveryKeywordsMutation,
   getCampaignDiscoveryOptions as campaignDiscoveryQueryOptions,
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
   getNeurocommentRuntimeOptions as neurocommentRuntimeQueryOptions,
