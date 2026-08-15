@@ -11,11 +11,52 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+
+@pytest.fixture(autouse=True)
+def _no_telegram_connection(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail any test that opens a real Telegram connection, for EVERY test.
+
+    Telethon's ``connect()`` is the one place a socket is opened, so a test that
+    stubs some domain seams but not all the ones its code path reaches dies here
+    instead of dialling Telegram. ``services.neurocomment.bans`` was the find:
+    ``tests/services/test_neurocomment_bans.py`` stubbed ``_seams.execute_read``
+    and not ``_seams.refresh_spam_status``, and four of its tests connected for
+    real.
+
+    The credentials are deliberately NOT blanked the way
+    ``_no_ambient_deepseek_key`` blanks its key. ``settings.telegram.api_id`` is
+    read as configuration as well as credential — ``check_telegram_session`` and
+    the session-check tests branch on ``api_id == 0`` — so emptying it suite-wide
+    would change what those tests exercise. It is also what made this escape
+    invisible on CI: with no credentials Telethon refuses to construct a client at
+    all, the gateway degrades the failure to ``unknown``, and the test passes
+    quietly. Blocking the CALL instead keeps construction paths live and makes the
+    escape loud on both machines.
+
+    ``pytest.fail`` raises ``Failed``, which derives from ``BaseException`` — that
+    is the point. Every path to the gateway degrades a failed probe behind
+    ``except Exception``, so a normal error would be swallowed and the escape would
+    stay silent, merely faster. A test that genuinely means to reach Telegram must
+    say so by overriding this fixture.
+    """
+
+    async def _fail(_self: TelegramBaseClient, *_args: object, **_kwargs: object) -> None:
+        pytest.fail(
+            f"{request.node.nodeid} opened a real Telegram connection — "
+            "a seam its code path reaches is not stubbed.",
+            pytrace=False,
+        )
+
+    monkeypatch.setattr(TelegramBaseClient, "connect", _fail)
 
 
 @pytest.fixture(autouse=True)
