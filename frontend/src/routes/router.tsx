@@ -77,6 +77,13 @@ const neurocommentRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/neurocomment'), 'NeurocommentPage'),
 });
 
+const neuroshillingRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/neuroshilling',
+  errorComponent: PageErrorPanel,
+  component: lazyRouteComponent(() => import('@/pages/neuroshilling'), 'NeuroshillingPage'),
+});
+
 const logsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/logs',
@@ -97,6 +104,7 @@ const routeTree = rootRoute.addChildren([
     indexRoute,
     warmingRoute,
     neurocommentRoute,
+    neuroshillingRoute,
     logsRoute,
     settingsRoute,
   ]),

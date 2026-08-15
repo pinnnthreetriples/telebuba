@@ -495,6 +495,7 @@
     "accounts": "Accounts",
     "warming": "Warming",
     "neurocomment": "Neurocomment",
+    "neuroshilling": "Neuroshilling",
     "logs": "Logs",
     "settings": "Settings"
   },
@@ -1350,6 +1351,65 @@
       "prev": "Previous",
       "next": "Next",
       "done": "Close"
+    }
+  },
+  "neuroshilling": {
+    "title": "Neuroshilling",
+    "campaigns": {
+      "title": "Campaigns",
+      "none": "No campaigns yet",
+      "create": "+ Create campaign",
+      "namePlaceholder": "Campaign name",
+      "confirm": "Create campaign",
+      "cancel": "Cancel creation"
+    },
+    "campaign": {
+      "delete": "Delete campaign",
+      "status": {
+        "idle": "Idle",
+        "running": "Running",
+        "stopping": "Stopping",
+        "done": "Done",
+        "failed": "Failed"
+      }
+    },
+    "accounts": {
+      "title": "Accounts",
+      "hint": "Every role in the dialogue speaks from its own account, so a campaign needs at least two. An account held by warming, by neurocomment or by another running campaign cannot be picked until it is free.",
+      "pick": "Pick accounts",
+      "selected": "Picked: {{count}}",
+      "none": "No accounts picked yet"
+    },
+    "howto": {
+      "title": "How it works",
+      "steps": {
+        "0": "Create a campaign — it holds the topic, the target chats, the roster and the dialogue.",
+        "1": "Pick the accounts that will play the roles. An account may belong to several campaigns, but only one running campaign holds it at a time.",
+        "2": "Describe the topic, let the model draft the dialogue, edit it and approve it.",
+        "3": "Start the run: the accounts join every target chat and act the dialogue out with human-like pauses."
+      }
+    },
+    "modal": {
+      "delete": {
+        "title": "Delete campaign “{{name}}”?",
+        "body": "The campaign, its targets and its account roster will be deleted. This cannot be undone.",
+        "confirm": "Delete",
+        "cancel": "Cancel"
+      },
+      "accounts": {
+        "title": "Accounts in the campaign",
+        "sub": "{{count}} accounts in the pool — pick the ones that will play the roles",
+        "empty": "No accounts yet. Add one on the Accounts page first.",
+        "add": "Add to campaign",
+        "remove": "Remove from campaign",
+        "done": "Done",
+        "busy": {
+          "warming": "held by warming",
+          "neuroshilling": "held by another neuroshilling campaign",
+          "neurocomment": "held by neurocomment"
+        },
+        "busyNamed": "{{owner}} — {{name}}"
+      }
     }
   },
   "warming": {

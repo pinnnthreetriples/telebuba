@@ -9,11 +9,11 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { FieldError, FormField, HelpHint } from '@/shared/ui';
+import { FieldError, FormField, HelpHint, Switch } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
-import { Card, Switch } from './SettingsPrimitives';
+import { Card } from './SettingsPrimitives';
 
 const INPUT =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
