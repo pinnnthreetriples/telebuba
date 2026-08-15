@@ -152,3 +152,18 @@ async def test_try_reserve_sent_zero_window_always_wins(monkeypatch: pytest.Monk
     monkeypatch.setattr(settings.warming, "content_dedup_window_days", 0)
     assert await content.try_reserve_sent("hi") is True
     assert await content.try_reserve_sent("hi") is True
+
+
+@pytest.mark.asyncio
+async def test_one_day_reservation_blocks_until_released(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The smallest enabled window still reserves, and failed sends can retry."""
+    monkeypatch.setattr(settings.warming, "content_dedup_window_days", 1)
+
+    assert await content.try_reserve_sent("retry me") is True
+    assert await content.try_reserve_sent("retry me") is False
+
+    await content.release_sent_text("retry me")
+
+    assert await content.try_reserve_sent("retry me") is True

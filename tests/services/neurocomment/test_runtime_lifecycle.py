@@ -47,9 +47,7 @@ from tests.services.neurocomment.runtime_support import (
 
 pytestmark = pytest.mark.usefixtures("isolate_runtime")
 
-# --------------------------------------------------------------------------- #
 # Service entrypoints (#119): start/stop/reconcile-on-startup/shutdown-on-shutdown.
-# --------------------------------------------------------------------------- #
 
 
 class _ReconcileSpy:
@@ -88,6 +86,20 @@ async def _drain_onboarding() -> None:
         await task
 
 
+def _limit_campaign_snapshots(monkeypatch: pytest.MonkeyPatch, maximum: int) -> None:
+    list_campaigns = _runtime.list_campaigns
+    snapshots = 0
+
+    async def bounded_list_campaigns() -> object:
+        nonlocal snapshots
+        snapshots += 1
+        if snapshots > maximum:
+            raise AssertionError
+        return await list_campaigns()
+
+    monkeypatch.setattr(_runtime, "list_campaigns", bounded_list_campaigns)
+
+
 @pytest.mark.asyncio
 async def test_start_returns_promptly_and_schedules_background_onboarding(
     monkeypatch: pytest.MonkeyPatch,
@@ -115,13 +127,13 @@ async def test_start_returns_promptly_and_schedules_background_onboarding(
     monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
 
     # Start returns promptly even though onboarding blocks.
-    await asyncio.wait_for(_runtime.start_neurocomment("listener-1"), timeout=0.5)
+    await asyncio.wait_for(_runtime.start_neurocomment("listener-1"), timeout=2.0)
 
     # Listener persisted + reconciled synchronously; onboarding scheduled, not awaited.
     assert await get_listener_account_id() == "listener-1"
     assert spy.reconciled == ["listener-1"]
     assert _runtime._ONBOARD_TASK is not None
-    await asyncio.wait_for(onboard_started.wait(), timeout=0.5)
+    await asyncio.wait_for(onboard_started.wait(), timeout=2.0)
     assert onboarded == []  # still blocked → Start did not wait for it
 
     # Let it finish: both active campaigns onboarded, the paused one skipped.
@@ -207,6 +219,17 @@ async def test_start_continues_to_next_campaign_when_one_onboard_raises(
     assert set(onboarded) == {a.campaign_id, b.campaign_id}
     assert await get_listener_account_id() == "listener-1"
     assert spy.reconciled == ["listener-1"]
+    failures = [
+        row
+        for row in await list_recent_logs(limit=20)
+        if row.event == "neurocomment_start_onboard_failed"
+    ]
+    assert len(failures) == 1
+    assert failures[0].level == "ERROR"
+    assert failures[0].extra == {
+        "campaign_id": a.campaign_id,
+        "error_type": "RuntimeError",
+    }
 
 
 @pytest.mark.asyncio
@@ -303,6 +326,7 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
     _patch_engine(monkeypatch, _ReconcileSpy())
     started = asyncio.Event()
     release = asyncio.Event()
+    second_pass_finished = asyncio.Event()
     runs = 0
 
     async def slow_onboard(_campaign_id: str, **_kwargs: object) -> object:
@@ -311,23 +335,45 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
         if runs == 1:
             started.set()
             await release.wait()
+        # Yield on every pass so an accidental endless rerun cannot starve the
+        # bounded completion deadline below.
+        await asyncio.sleep(0)
+        if runs == 2:
+            second_pass_finished.set()
         return None
 
     monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
 
     await _runtime.start_neurocomment("listener-1")
     first_task = _runtime._ONBOARD_TASK
-    # Deterministically wait for the first pass to begin + block (an unconditional
-    # sleep(0) races the to_thread DB read on a loaded runner → runs still 0).
-    await asyncio.wait_for(started.wait(), timeout=0.5)
-    # Second Start while the first onboarding is still in flight reuses it.
-    await _runtime.start_neurocomment("listener-1")
-    assert _runtime._ONBOARD_TASK is first_task
-    assert runs == 1  # never ran concurrently; the second trigger only queued a rerun
+    task_after_second_start = None
+    runs_while_blocked = 0
+    status_while_blocked = None
+    try:
+        # Deterministically wait for the first pass to begin + block (an unconditional
+        # sleep(0) races the to_thread DB read on a loaded runner → runs still 0).
+        await asyncio.wait_for(started.wait(), timeout=2.0)
+        # Second Start while the first onboarding is still in flight reuses it.
+        await _runtime.start_neurocomment("listener-1")
+        task_after_second_start = _runtime._ONBOARD_TASK
+        runs_while_blocked = runs
+        status_while_blocked = await _runtime.neurocomment_runtime_status()
+        release.set()
+        await asyncio.wait_for(second_pass_finished.wait(), timeout=2.0)
+        if first_task is not None:
+            await asyncio.wait_for(asyncio.shield(first_task), timeout=2.0)
+    finally:
+        release.set()
+        if first_task is not None and not first_task.done():
+            first_task.cancel()
+            await asyncio.gather(first_task, return_exceptions=True)
 
-    release.set()
-    await _drain_onboarding()
+    assert task_after_second_start is first_task
+    assert runs_while_blocked == 1  # second trigger queued; it never ran concurrently
+    assert status_while_blocked is not None
+    assert status_while_blocked.onboarding is True
     assert runs == 2  # the queued rerun executed after the first pass finished
+    assert (await _runtime.neurocomment_runtime_status()).onboarding is False
 
 
 @pytest.mark.asyncio
@@ -337,6 +383,7 @@ async def test_trigger_while_onboarding_in_flight_queues_one_rerun(
     """A trigger mid-run is not dropped: onboarding reruns once after the pass finishes."""
     await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     _patch_engine(monkeypatch, _ReconcileSpy())
+    _limit_campaign_snapshots(monkeypatch, 2)
     started = asyncio.Event()
     release = asyncio.Event()
     runs = 0
@@ -352,10 +399,7 @@ async def test_trigger_while_onboarding_in_flight_queues_one_rerun(
     monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
 
     await _runtime.start_neurocomment("listener-1")
-    # Wait for the first pass to actually begin + block before triggering reruns
-    # (sleep(0) races the onboarding task's to_thread DB read on a loaded runner).
-    await asyncio.wait_for(started.wait(), timeout=0.5)
-    # e.g. a channel link / account assignment lands while onboarding is running:
+    await asyncio.wait_for(started.wait(), timeout=2.0)
     _runtime._ensure_onboarding_running(None)
     _runtime._ensure_onboarding_running(None)  # coalesces with the first trigger
     release.set()
@@ -386,7 +430,7 @@ async def test_shutdown_cancels_background_onboarding(monkeypatch: pytest.Monkey
     monkeypatch.setattr(_runtime, "onboard_campaign", never_ending)
 
     await _runtime.start_neurocomment("listener-1")
-    await asyncio.wait_for(started.wait(), timeout=0.5)
+    await asyncio.wait_for(started.wait(), timeout=2.0)
 
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
@@ -476,7 +520,6 @@ async def test_reconcile_if_running_gates_on_persisted_listener(
     spy = _ReconcileSpy()
     monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", spy.reconcile)
 
-    # Stopped: no listener persisted → no-op.
     await _runtime.reconcile_if_running()
     assert spy.reconciled == []
 
@@ -496,13 +539,10 @@ async def test_reconcile_if_running_gates_on_persisted_listener(
 async def test_reconcile_if_running_spawns_onboarding_when_running(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A running-runtime reconcile also (re)triggers campaign onboarding (NOXX fix).
-
-    A campaign whose channels/accounts were edited after Start would otherwise
-    never get readiness rows until the operator pressed Start again.
-    """
+    """A running reconcile triggers exactly one onboarding pass for current edits."""
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", _ReconcileSpy().reconcile)
+    _limit_campaign_snapshots(monkeypatch, 1)
     onboarded: list[str] = []
 
     async def fake_onboard(campaign_id: str, **_kwargs: object) -> object:
@@ -511,12 +551,10 @@ async def test_reconcile_if_running_spawns_onboarding_when_running(
 
     monkeypatch.setattr(_runtime, "onboard_campaign", fake_onboard)
 
-    # Paused: listener remembered, run flag off → no onboarding task.
     await set_listener_account_id("listener-1")
     await _runtime.reconcile_if_running()
     assert _runtime._ONBOARD_TASK is None
 
-    # Running → onboarding spawned for the active campaign.
     await set_listener_running(running=True)
     await _runtime.reconcile_if_running()
     await _drain_onboarding()

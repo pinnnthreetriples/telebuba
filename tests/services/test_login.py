@@ -45,8 +45,16 @@ async def _account_with_phone(account_id: str, phone: str | None = "79990001122"
         )
 
 
-def _fake_request(monkeypatch: pytest.MonkeyPatch, *, hash_value: str, error: str | None) -> None:
+def _fake_request(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    hash_value: str,
+    error: str | None,
+    captured: list[PhoneCodeRequest] | None = None,
+) -> None:
     async def _request(request: PhoneCodeRequest) -> PhoneCodeChallenge:
+        if captured is not None:
+            captured.append(request)
         return PhoneCodeChallenge(
             account_id=request.account_id,
             phone=request.phone,
@@ -62,8 +70,11 @@ def _fake_submit(
     *,
     status: SessionCheckStatus,
     error: str | None = None,
+    captured: list[PhoneCodeSubmit] | None = None,
 ) -> None:
     async def _submit(request: PhoneCodeSubmit) -> TelegramSessionCheckResult:
+        if captured is not None:
+            captured.append(request)
         return TelegramSessionCheckResult(
             account_id=request.account_id,
             session_path="x",
@@ -77,13 +88,23 @@ def _fake_submit(
 
 
 @pytest.mark.asyncio
-async def test_start_phone_login_creates_account_with_phone() -> None:
-    account = await login_service.start_phone_login("+7 999 000-11-22")
+async def test_start_phone_login_creates_account_with_phone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[tuple[str, str, str | None]] = []
+
+    async def log(level: str, event: str, *, account_id: str | None = None) -> None:
+        events.append((level, event, account_id))
+
+    monkeypatch.setattr(login_service, "log_event", log)
+    account = await login_service.start_phone_login("+7 999 000-11-22", label="Primary")
 
     assert account.account_id == "79990001122"
     assert account.session_name == "79990001122"
     assert account.phone == "+7 999 000-11-22"
+    assert account.label == "Primary"
     assert account.status == "new"
+    assert events == [("INFO", "phone_login_started", "79990001122")]
 
 
 @pytest.mark.asyncio
@@ -96,7 +117,6 @@ async def test_start_phone_login_then_request_code_has_phone(
     result = await login_service.request_login_code(account.account_id)
 
     assert result.phone == "+79990001122"
-    assert _PENDING[account.account_id].phone_code_hash == "HASH"
 
 
 @pytest.mark.asyncio
@@ -116,12 +136,29 @@ async def test_start_phone_login_without_digits_errors() -> None:
 @pytest.mark.asyncio
 async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatch) -> None:
     await _account_with_phone("acc")
-    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    requested: list[PhoneCodeRequest] = []
+    submitted: list[PhoneCodeSubmit] = []
+    _fake_request(monkeypatch, hash_value="HASH", error=None, captured=requested)
+    _fake_submit(monkeypatch, status="alive", captured=submitted)
 
     result = await login_service.request_login_code("acc")
+    account = await login_service.submit_login_code("acc", "01234", password="2fa")
 
     assert result.phone == "79990001122"
-    assert _PENDING["acc"].phone_code_hash == "HASH"
+    assert account.status == "alive"
+    assert [request.model_dump() for request in requested] == [
+        {"account_id": "acc", "session_name": None, "phone": "79990001122"},
+    ]
+    assert [submission.model_dump() for submission in submitted] == [
+        {
+            "account_id": "acc",
+            "session_name": None,
+            "phone": "79990001122",
+            "phone_code_hash": "HASH",
+            "code": "01234",
+            "password": "2fa",
+        },
+    ]
 
 
 @pytest.mark.asyncio
@@ -145,9 +182,9 @@ async def test_request_login_code_surfaces_gateway_error(monkeypatch: pytest.Mon
     await _account_with_phone("acc")
     _fake_request(monkeypatch, hash_value="", error="flood wait 30s")
 
-    with pytest.raises(login_service.PhoneLoginError, match="flood wait"):
+    with pytest.raises(login_service.PhoneLoginError) as excinfo:
         await login_service.request_login_code("acc")
-    assert "acc" not in _PENDING
+    assert str(excinfo.value) == "flood wait 30s"
 
 
 @pytest.mark.asyncio
@@ -169,7 +206,8 @@ async def test_submit_login_code_signs_in_and_clears(monkeypatch: pytest.MonkeyP
     account = await login_service.submit_login_code("acc", "11111")
 
     assert account.status == "alive"
-    assert "acc" not in _PENDING
+    with pytest.raises(login_service.PhoneLoginError, match="request a new one"):
+        await login_service.submit_login_code("acc", "11111")
 
 
 @pytest.mark.asyncio
@@ -181,8 +219,25 @@ async def test_submit_login_code_bad_code_keeps_pending(monkeypatch: pytest.Monk
 
     with pytest.raises(login_service.PhoneLoginError, match="phone code invalid"):
         await login_service.submit_login_code("acc", "00000")
-    # the cached hash survives a wrong code so the operator can retry
-    assert "acc" in _PENDING
+    _fake_submit(monkeypatch, status="alive")
+    account = await login_service.submit_login_code("acc", "11111")
+    assert account.status == "alive", "a wrong code must leave the challenge retryable"
+
+
+@pytest.mark.asyncio
+async def test_pending_code_expires_at_exact_ttl_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _account_with_phone("acc")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+    _fake_submit(monkeypatch, status="alive")
+    monkeypatch.setattr(settings.telegram, "phone_code_ttl_seconds", 0.0)
+    monkeypatch.setattr(login_service.time, "monotonic", lambda: 1_000.0)
+
+    await login_service.request_login_code("acc")
+
+    with pytest.raises(login_service.PhoneLoginError, match="request a new one"):
+        await login_service.submit_login_code("acc", "11111")
 
 
 @pytest.mark.asyncio

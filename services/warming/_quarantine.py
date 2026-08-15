@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingStateRecord
 
 
-async def _recover_from_quarantine(
+async def _recover_from_quarantine(  # noqa: PLR0911 - CAS-guarded terminal outcomes.
     account_id: str,
     record: WarmingStateRecord,
     now: datetime,
@@ -66,7 +66,7 @@ async def _recover_from_quarantine(
     verdict = await _seams.refresh_spam_status(account_id, force=True)
     if verdict.status == "clean":
         next_run = (now + timedelta(seconds=warm.startup_jitter_max_seconds)).isoformat()
-        await _set_state(
+        write = await _set_state(
             account_id,
             "sleeping",
             last_event="quarantine_recovered",
@@ -76,6 +76,8 @@ async def _recover_from_quarantine(
             quarantine_count=0,
             expected_run_id=run_id,
         )
+        if run_id is not None and not write.applied:
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
         await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
 
@@ -104,7 +106,7 @@ async def _recover_from_quarantine(
     still_limited = verdict.status == "limited"
     count = record.quarantine_count + 1
     if count >= warm.quarantine_max_repeats:
-        await _set_state(
+        write = await _set_state(
             account_id,
             "error",
             last_event="quarantine_exhausted" if still_limited else "quarantine_unreadable",
@@ -117,6 +119,8 @@ async def _recover_from_quarantine(
             quarantine_count=count,
             expected_run_id=run_id,
         )
+        if run_id is not None and not write.applied:
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
         if still_limited:
             await log_event(
                 "ERROR",
@@ -138,7 +142,7 @@ async def _recover_from_quarantine(
         )
 
     next_run = (now + timedelta(hours=warm.quarantine_hours)).isoformat()
-    await _set_state(
+    write = await _set_state(
         account_id,
         "quarantine",
         last_event="quarantine_extended",
@@ -147,6 +151,8 @@ async def _recover_from_quarantine(
         quarantine_count=count,
         expected_run_id=run_id,
     )
+    if run_id is not None and not write.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
     await log_event(
         "WARNING",
         "warming_quarantine_extended",

@@ -9,7 +9,7 @@ edges:
 
 # Setup and Checks
 
-Requires Python 3.13, uv, Node 24/npm and Telegram API credentials.
+Requires Python 3.13.14, uv, Node 24/npm and Telegram API credentials.
 
 ```bash
 uv sync --frozen

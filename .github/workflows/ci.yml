@@ -24,8 +24,8 @@ concurrency:
 permissions: read-all
 
 env:
-  PYTHON_VERSION: "3.13"
-  UV_VERSION: "0.10.9"
+  PYTHON_VERSION: "3.13.14"
+  UV_VERSION: "0.11.29"
   AISLOP_NPM_PACKAGE: "aislop@0.14.0"
   # Node 24: steiger's web-tree-sitter (WASM) throws "bad export type for 'deleter'"
   # on Node 20. 24 is the dev target and runs the whole FE toolchain cleanly.
@@ -188,11 +188,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pip-audit
-        # PYSEC-2026-2132 (click < 8.3.3) is unfixable here: semgrep pins
-        # ``click~=8.1.8`` (< 8.2), so click cannot be bumped while semgrep is a
-        # dev dependency. click is dev-tooling / uvicorn-CLI only, not a runtime
-        # request path. Drop this ignore once semgrep loosens its click pin.
-        run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
+        run: uv run pip-audit --strict
 
   # ---------------------------------------------------------------------------
   # The npm half of the same gate. Its absence is why eighteen vulnerable packages

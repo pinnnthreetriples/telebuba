@@ -638,21 +638,23 @@ async def test_reconcile_records_channels_the_listener_cannot_watch(
     await link_channel_to_campaign(campaign.campaign_id, "@b")
     _patch_listener(monkeypatch, _ListenerSpy(unresolvable={"@b"}))
     _patch_execute(monkeypatch, _ExecuteSpy())
-    logged: list[tuple[str, str, object]] = []
+    logged: list[tuple[str, str, object, object]] = []
 
     async def _fake_log(level: str, event: str, **kwargs: object) -> None:
-        logged.append((level, event, kwargs.get("extra")))
+        logged.append((level, event, kwargs.get("account_id"), kwargs.get("extra")))
 
     monkeypatch.setattr(_runtime, "log_event", _fake_log)
 
     await _runtime.reconcile_neurocomment_runtime("listener-1")
 
     assert sorted(_runtime._UNWATCHED_CHANNELS) == ["@b"]
-    warned = ("WARNING", "neurocomment_channels_unwatched", {"count": 1, "channels": ["@b"]})
-    assert warned in logged
+    # ``account_id`` is what lets an operator tell WHICH listener is degraded
+    # once more than one runs; without it the warning names no subject.
+    unwatched_extra = {"count": 1, "channels": ["@b"]}
+    assert ("WARNING", "neurocomment_channels_unwatched", "listener-1", unwatched_extra) in logged
     # The reconciled event reports what is truly subscribed, not what was requested.
     reconciled = [
-        extra for _lvl, event, extra in logged if event == "neurocomment_runtime_reconciled"
+        extra for _lvl, event, _aid, extra in logged if event == "neurocomment_runtime_reconciled"
     ]
     assert reconciled == [{"channels": 1, "unwatched": 1}]
     await _runtime.shutdown_neurocomment_runtime("listener-1")

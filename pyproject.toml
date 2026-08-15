@@ -59,6 +59,8 @@ exclude-newer = "7 days"
 # Each entry must reference a CVE / advisory and be revisited when the
 # upstream chain catches up.
 override-dependencies = [
+    # PYSEC-2026-2132 in click <8.3.3 (pulled by uvicorn/semgrep/mutmut).
+    "click>=8.3.3",
     # CVE-2026-52870 in mcp <1.27.2 (semgrep pins mcp==1.23.3).
     "mcp>=1.27.2",
     # PYSEC-2026-175/177/178/179 in pyjwt 2.12.1 (pulled by semgrep -> mcp,
@@ -242,17 +244,17 @@ mutate_only_covered_lines = true
 #   - api/, core/, main.py — imported by the tests (tests/api uses api.create_app,
 #     test_main_spa imports main) but NOT in source_paths, so copied verbatim
 #     (present, never mutated);
-#   - tests/, the root conftest.py, pyproject.toml (pytest config), and the
-#     .env.example that tests/test_architecture.py reads.
-#   - frontend/src/shared/i18n/ — the locale JSON that
-#     tests/test_logevent_i18n_parity.py reads (frontend owns the log-event
-#     labels); only this leaf is copied, never the whole frontend/ tree (its
-#     node_modules/dist would balloon the per-mutant copy).
+#   - tests/, tools/ (reporter tests), the root conftest.py, pyproject.toml
+#     (pytest config), and the .env.example that tests/test_architecture.py reads.
+#   - frontend/src/shared/i18n/ and frontend/src/shared/lib/log/ — the locale
+#     JSON and reason ladder read by the i18n parity tests; only these leaves
+#     are copied, never the whole frontend/ tree (its node_modules/dist would
+#     balloon the mutation sandbox).
 # Without this, pytest hits ModuleNotFoundError / FileNotFoundError / collects
 # zero tests inside mutants/ and mutmut aborts before testing a single mutant.
 # RULE: any new test that reads a repo file outside services/ or schemas/ must
 # add that path here, or the nightly mutation sweep breaks on the baseline run.
-also_copy = ["api", "core", "main.py", "tests", "conftest.py", "pyproject.toml", ".env.example", "frontend/src/shared/i18n"]
+also_copy = ["api", "core", "main.py", "tests", "tools", "conftest.py", "pyproject.toml", ".env.example", "frontend/src/shared/i18n", "frontend/src/shared/lib/log"]
 # Drop the project addopts for the per-mutant runs: the strict --cov /
 # --cov-fail-under=90 gates would make every partial run exit non-zero and
 # corrupt mutmut's kill/survive signal. asyncio_mode / filterwarnings live in

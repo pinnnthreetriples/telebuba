@@ -238,6 +238,41 @@ async def test_a_stuck_retention_sweep_does_not_switch_retention_off_for_good(
 
 
 @pytest.mark.asyncio
+async def test_lease_fences_before_and_after_the_quarantine_spam_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The spam probe is the other fenced dispatch, and it needs the same two fences.
+
+    Quarantine recovery decides an account's fate on this verdict, so a probe issued
+    by a loop that has already lost the account is exactly as unsafe as a gateway
+    action. Every test patches this seam, which is why nothing had ever executed its
+    body: mutmut reported the whole function as having no tests.
+    """
+    from schemas.spam_status import SpamStatusVerdict  # noqa: PLC0415
+
+    calls: list[bool] = []
+
+    async def probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:
+        calls.append(force)
+        _seams.revoke_lease(account_id, "run-1")
+        return SpamStatusVerdict(account_id=account_id, status="clean", checked_at="t")
+
+    monkeypatch.setattr(_seams, "_refresh_spam_status", probe)
+    _seams.activate_lease("acc-1", "run-1")
+
+    with _seams.lease_scope("acc-1", "run-1"):
+        # Live going in, revoked by the time the probe returned: the verdict exists but
+        # belongs to nobody, so it must not be handed back as this run's answer.
+        with pytest.raises(_seams.WarmingLeaseLostMidDispatchError):
+            await _seams.refresh_spam_status("acc-1", force=True)
+        # Refused before the probe: no Telegram traffic, nothing in doubt.
+        with pytest.raises(_seams.WarmingLeaseRevokedError) as refused:
+            await _seams.refresh_spam_status("acc-1")
+    assert not isinstance(refused.value, _seams.WarmingLeaseLostMidDispatchError)
+    assert calls == [True], "the second call must never reach the probe"
+
+
+@pytest.mark.asyncio
 async def test_lease_fences_before_and_after_gateway_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

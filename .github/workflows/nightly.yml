@@ -10,14 +10,16 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  # Mutation runs are expensive and form a comparable time series; a manual
+  # dispatch must not silently cancel the scheduled run whose report we need.
+  cancel-in-progress: false
 
 # Supply-chain hardening: drop default write scopes.
 permissions: read-all
 
 env:
-  PYTHON_VERSION: "3.13"
-  UV_VERSION: "0.10.9"
+  PYTHON_VERSION: "3.13.14"
+  UV_VERSION: "0.11.29"
   NODE_VERSION: "24"
 
 jobs:
@@ -54,7 +56,7 @@ jobs:
       # `if: always()` on the npm step so one tree's finding does not hide the
       # other's -- a nightly run exists to enumerate, not to stop at the first hit.
       - name: Run pip-audit
-        run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
+        run: uv run pip-audit --strict
 
       - name: Run npm audit
         if: always()
@@ -122,6 +124,11 @@ jobs:
   mutation:
     name: mutation testing
     runs-on: ubuntu-latest
+    env:
+      HYPOTHESIS_PROFILE: mutation
+      MUTMUT_MAX_CHILDREN: "4"
+      PYTHONHASHSEED: "0"
+      TZ: UTC
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -145,18 +152,263 @@ jobs:
           df -h /
 
       - name: Run mutmut
-        run: uv run mutmut run
+        id: mutation_run
+        continue-on-error: true
+        shell: bash
+        run: |
+          # Keep collecting evidence after a failed sweep/repair, then expose one
+          # aggregate outcome. `continue-on-error` lets the artifact/report steps
+          # run; the final gate still rejects any collection failure.
+          set +e
+          collection_status=0
+          repair_requested=false
+          repair_status=0
+          mkdir -p mutation-report/attempt-1
+
+          uv run python tools/mutmut_cli.py run --max-children "$MUTMUT_MAX_CHILDREN" \
+            2>&1 | tee mutation-report/attempt-1/run.log
+          initial_status=${PIPESTATUS[0]}
+          if (( initial_status != 0 )); then
+            collection_status=1
+          fi
+
+          # Preserve the complete first attempt before any repair. mutmut 3.6
+          # resets non-selected statuses during a targeted run, so its raw
+          # output is evidence for only the explicitly requested mutants.
+          uv run mutmut results --all true > mutation-report/attempt-1/results-all.txt
+          if (( $? != 0 )); then collection_status=1; fi
+          uv run mutmut results > mutation-report/attempt-1/actionable.txt
+          if (( $? != 0 )); then collection_status=1; fi
+          uv run mutmut export-cicd-stats
+          if (( $? != 0 )); then collection_status=1; fi
+          if [[ -f mutants/mutmut-cicd-stats.json ]]; then
+            cp mutants/mutmut-cicd-stats.json mutation-report/attempt-1/stats.json
+          else
+            collection_status=1
+          fi
+
+          uv run python - <<'PY'
+          import json
+          from pathlib import Path
+
+          from tools.mutation_report import load_results, mutant_catalog_sha256
+
+          results = load_results(Path("mutation-report/attempt-1/results-all.txt"))
+          baseline = json.loads(Path(".github/mutation-baseline.json").read_text(encoding="utf-8"))
+          reviewed = {"timeout": set(baseline["reviewed_timeouts"])}
+          # Survivor review is per identity, so it only means anything inside the
+          # reviewed catalog. On drift every survivor would look new and the
+          # serial recheck would try to rerun thousands of mutants one at a time;
+          # the reporter already declines to judge survivors there.
+          digest = mutant_catalog_sha256(results, Path(), baseline["mutmut_config"]["source_paths"])
+          if digest == baseline["mutant_catalog_sha256"]:
+              reviewed["survived"] = set(baseline["reviewed_survivors"])
+          else:
+              print(f"catalog drift ({digest}): skipping survivor recheck")
+          repair = sorted(
+              result.name
+              for result in results
+              if result.status in {"not checked", "check was interrupted by user"}
+              or (result.status in reviewed and result.name not in reviewed[result.status])
+          )
+          Path("mutation-report/repair-mutants.txt").write_text(
+              "".join(f"{name}\n" for name in repair),
+              encoding="utf-8",
+          )
+          print(f"First attempt requests {len(repair)} incomplete/unreviewed repairs")
+          PY
+          if (( $? != 0 )); then collection_status=1; fi
+
+          if [[ -s mutation-report/repair-mutants.txt ]]; then
+            repair_requested=true
+            mapfile -t repair_mutants < mutation-report/repair-mutants.txt
+            printf 'Repairing %d incomplete/unreviewed mutants serially\n' \
+              "${#repair_mutants[@]}"
+            mkdir -p mutation-report/repair
+            # Neither verdict seen under four-worker load is evidence on its own:
+            # contention both stalls mutants into timeouts and lets slow tests
+            # pass with a mutant they would otherwise catch. Recheck selected
+            # candidates one at a time so load cannot invent new identities.
+            uv run python tools/mutmut_cli.py run --max-children 1 \
+              "${repair_mutants[@]}" 2>&1 | tee mutation-report/repair/run.log
+            repair_status=${PIPESTATUS[0]}
+            if (( repair_status != 0 )); then
+              collection_status=1
+            fi
+            uv run mutmut results --all true > mutation-report/repair/results-all.txt
+            if (( $? != 0 )); then collection_status=1; fi
+            uv run mutmut results > mutation-report/repair/actionable.txt
+            if (( $? != 0 )); then collection_status=1; fi
+            uv run mutmut export-cicd-stats
+            if (( $? != 0 )); then collection_status=1; fi
+            if [[ -f mutants/mutmut-cicd-stats.json ]]; then
+              cp mutants/mutmut-cicd-stats.json mutation-report/repair/stats.json
+            else
+              collection_status=1
+            fi
+          fi
+
+          if (( collection_status == 0 )); then
+            collection_complete=true
+          else
+            collection_complete=false
+          fi
+          {
+            printf 'collection_complete=%s\n' "$collection_complete"
+            printf 'initial_run_status=%d\n' "$initial_status"
+            printf 'repair_requested=%s\n' "$repair_requested"
+            printf 'repair_run_status=%d\n' "$repair_status"
+          } > mutation-report/collection-status.env
+          exit "$collection_status"
 
       # If the sweep fails again, show where the disk went — the runner dies too
       # hard to upload step logs, so this is the only signal that survives.
       - name: Disk usage diagnostics
-        if: failure()
+        if: steps.mutation_run.outcome == 'failure'
         run: |
           df -h /
           sudo du -h -d 2 /tmp "$GITHUB_WORKSPACE" 2>/dev/null | sort -rh | head -25
 
-      # Always surface the kill/survive breakdown — a bare `mutmut run` leaves no
-      # visible signal, so surviving mutants (the whole point) went unseen.
-      - name: Show mutation results
+      - name: Build mutation report
+        id: mutation_report
         if: always()
-        run: uv run mutmut results
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir -p mutation-report
+          cat > mutation-report/summary.md <<'EOF'
+          # Mutation testing report
+
+          The readable report could not be validated. Inspect `reporter.log`,
+          `collection-status.env`, and the raw mutmut snapshots in this artifact.
+          EOF
+          if [[ -f mutation-report/attempt-1/results-all.txt ]]; then
+            cp mutation-report/attempt-1/results-all.txt mutation-report/results-all.txt
+          fi
+          if [[ -f mutation-report/attempt-1/actionable.txt ]]; then
+            cp mutation-report/attempt-1/actionable.txt mutation-report/actionable.txt
+          fi
+          if [[ -f mutation-report/attempt-1/stats.json ]]; then
+            cp mutation-report/attempt-1/stats.json mutation-report/stats.json
+          fi
+          uv run python - <<'PY'
+          import importlib.metadata
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          metadata = {
+              "collection_outcome": "${{ steps.mutation_run.outcome }}",
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "github_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "github_run_id": os.environ["GITHUB_RUN_ID"],
+              "hypothesis_profile": os.environ["HYPOTHESIS_PROFILE"],
+              "max_children": int(os.environ["MUTMUT_MAX_CHILDREN"]),
+              "mutmut_version": importlib.metadata.version("mutmut"),
+              "python_hash_seed": os.environ["PYTHONHASHSEED"],
+              "python_version": platform.python_version(),
+              "timezone": os.environ["TZ"],
+          }
+          Path("mutation-report/metadata.json").write_text(
+              json.dumps(metadata, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          repair_args=()
+          if [[ -f mutation-report/repair/results-all.txt ]]; then
+            repair_args=(--repair-results mutation-report/repair/results-all.txt)
+          fi
+          set +e
+          uv run python tools/mutation_report.py report \
+            --stats mutation-report/stats.json \
+            --results mutation-report/results-all.txt \
+            "${repair_args[@]}" \
+            --hypothesis-profile "$HYPOTHESIS_PROFILE" \
+            --max-children "$MUTMUT_MAX_CHILDREN" \
+            --python-hash-seed "$PYTHONHASHSEED" \
+            --timezone "$TZ" \
+            --baseline .github/mutation-baseline.json \
+            --project pyproject.toml \
+            --output mutation-report/report.json \
+            --summary mutation-report/summary.md \
+            2>&1 | tee mutation-report/reporter.log
+          reporter_status=${PIPESTATUS[0]}
+          set -e
+          if (( reporter_status != 0 )); then
+            cat > mutation-report/summary.md <<EOF
+          # Mutation testing report
+
+          Reporter validation failed (exit status ${reporter_status}). Inspect
+          \`reporter.log\`, \`collection-status.env\`, and the raw mutmut snapshots
+          in this artifact.
+          EOF
+          fi
+          cat mutation-report/summary.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$reporter_status"
+
+      # Upload before the gate so a regression still leaves complete evidence.
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report-${{ github.run_id }}-${{ github.run_attempt }}
+          path: mutation-report/
+          if-no-files-found: error
+          retention-days: 30
+
+      # Survivors remain actionable signal, not individual CI failures. The gate
+      # protects the aggregate score and the reviewed measurement identity.
+      - name: Enforce mutation baseline
+        if: always()
+        shell: bash
+        run: |
+          gate_ready=true
+          if [[ "${{ steps.mutation_run.outcome }}" != "success" ]]; then
+            echo "::error::mutation collection step failed"
+            gate_ready=false
+          fi
+          if [[ ! -f mutation-report/collection-status.env ]]; then
+            echo "::error::mutation collection completion status is missing"
+            gate_ready=false
+          else
+            # The file contains only fixed boolean/integer assignments emitted by
+            # this workflow; it is an artifact status record, not mutmut output.
+            source mutation-report/collection-status.env
+            if [[ "$collection_complete" != "true" ]]; then
+              echo "::error::mutation collection or targeted repair did not complete"
+              gate_ready=false
+            fi
+          fi
+          if [[ "${{ steps.mutation_report.outcome }}" != "success" ]]; then
+            echo "::error::mutation report validation failed"
+            gate_ready=false
+          fi
+          for required in \
+            mutation-report/results-all.txt \
+            mutation-report/stats.json \
+            mutation-report/report.json \
+            mutation-report/summary.md \
+            mutation-report/metadata.json; do
+            if [[ ! -s "$required" ]]; then
+              echo "::error::required mutation artifact is missing or empty: $required"
+              gate_ready=false
+            fi
+          done
+          if [[ "$gate_ready" != "true" ]]; then
+            exit 1
+          fi
+          repair_args=()
+          if [[ -f mutation-report/repair/results-all.txt ]]; then
+            repair_args=(--repair-results mutation-report/repair/results-all.txt)
+          fi
+          uv run python tools/mutation_report.py gate \
+            --stats mutation-report/stats.json \
+            --results mutation-report/results-all.txt \
+            "${repair_args[@]}" \
+            --hypothesis-profile "$HYPOTHESIS_PROFILE" \
+            --max-children "$MUTMUT_MAX_CHILDREN" \
+            --python-hash-seed "$PYTHONHASHSEED" \
+            --timezone "$TZ" \
+            --baseline .github/mutation-baseline.json \
+            --project pyproject.toml
