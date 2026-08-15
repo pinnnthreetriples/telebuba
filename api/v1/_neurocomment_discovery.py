@@ -19,10 +19,12 @@ from schemas.neurocomment_discovery import (
     DiscoveryAdoptRequest,
     DiscoveryAdoptResult,
     DiscoveryBoard,
-    DiscoveryKeywordRequest,
-    DiscoveryKeywordResult,
     DiscoverySearchOutcome,
     DiscoverySearchRequest,
+)
+from schemas.neurocomment_discovery_keywords import (
+    DiscoveryKeywordRequest,
+    DiscoveryKeywordResult,
 )
 from services import neurocomment as nc_service
 

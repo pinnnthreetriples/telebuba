@@ -20,12 +20,14 @@ from schemas.neurocomment_discovery import (
     DiscoveryBoard,
     DiscoveryCandidate,
     DiscoveryChannelVerdict,
-    DiscoveryKeywordRequest,
-    DiscoveryKeywordResult,
     DiscoveryProgress,
     DiscoverySearchOutcome,
     DiscoverySearchRequest,
     DiscoverySourceReport,
+)
+from schemas.neurocomment_discovery_keywords import (
+    DiscoveryKeywordRequest,
+    DiscoveryKeywordResult,
 )
 
 if TYPE_CHECKING:

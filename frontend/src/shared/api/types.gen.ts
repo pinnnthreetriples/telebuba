@@ -1224,6 +1224,12 @@ export type DiscoveryKeywordRequest = {
  * the model, so an answer the operator accepts wholesale cannot fail the search
  * request's own validator.
  *
+ * They are also single words, which is a tighter rule than this schema's — the
+ * search request happily takes a keyword containing spaces, and a hand-typed one
+ * still may. The suggestions cannot, because the SPA's keywords field splits what
+ * it receives on whitespace as well as commas, so a multi-word suggestion would
+ * reach the search as fragments of itself.
+ *
  * ``error`` is a short locale-neutral code, exactly like
  * ``DiscoverySourceReport.reason`` — the SPA maps it to text and renders the raw
  * code when it has no copy. Three values, and each names a different thing for the

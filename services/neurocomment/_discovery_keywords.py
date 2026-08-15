@@ -28,6 +28,8 @@ from schemas.neurocomment_discovery import (
     KEYWORD_MAX_LENGTH,
     KEYWORD_MIN_LENGTH,
     MAX_KEYWORDS,
+)
+from schemas.neurocomment_discovery_keywords import (
     DiscoveryKeywordRequest,
     DiscoveryKeywordResult,
 )

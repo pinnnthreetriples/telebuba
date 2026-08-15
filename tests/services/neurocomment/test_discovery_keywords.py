@@ -28,9 +28,9 @@ from schemas.gemini import GeminiResult
 from schemas.neurocomment_discovery import (
     KEYWORD_MAX_LENGTH,
     MAX_KEYWORDS,
-    DiscoveryKeywordRequest,
     DiscoverySearchRequest,
 )
+from schemas.neurocomment_discovery_keywords import DiscoveryKeywordRequest
 from services.neurocomment import _seams
 from services.neurocomment._discovery_keywords import expand_discovery_keywords, parse_keywords
 
