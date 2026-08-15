@@ -195,7 +195,13 @@ jobs:
 
           results = load_results(Path("mutation-report/attempt-1/results-all.txt"))
           baseline = json.loads(Path(".github/mutation-baseline.json").read_text(encoding="utf-8"))
-          reviewed = {"timeout": set(baseline["reviewed_timeouts"])}
+          # Only survivors are rechecked. A timeout no longer gates and no longer
+          # counts against the score, so buying a second opinion on one buys
+          # nothing — and it cost hours: a drifted catalogue made every timeout
+          # look new and 191 of them were rerun one at a time, 5h14m against
+          # 2h31m. Leaving a load-induced timeout unrechecked only drops it from
+          # the scored population, which moves the score the safe way.
+          reviewed = {}
           # Survivor review is per identity, so it only means anything inside the
           # reviewed catalog. On drift every survivor would look new and the
           # serial recheck would try to rerun thousands of mutants one at a time;
