@@ -25,6 +25,7 @@ from schemas.telegram_actions_discovery import (
     TelegramChannelMatches,
     TelegramGlobalPostMatches,
 )
+from services import warming
 from services.neurocomment import _discovery_state, _seams, _state
 from services.neurocomment.discovery import start_discovery
 
@@ -55,9 +56,16 @@ def isolate_discovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
     monkeypatch.setattr(_seams.rng, "uniform", lambda low, _high: low)
     _state.reset_for_tests()
     _discovery_state.reset_for_tests()
+    # ``start_discovery`` claims the account under warming's per-account lifecycle lock,
+    # and that table is module-level and bound to the loop alive when each lock was
+    # created. Cleared for the reason warming's own conftest clears it: a lock built in
+    # an earlier test's loop raises "bound to a different event loop" the moment this
+    # one waits on it, which is an ordering-dependent failure, not a real race.
+    warming._ACCOUNT_LOCKS.clear()
     yield
     _discovery_state.reset_for_tests()
     _state.reset_for_tests()
+    warming._ACCOUNT_LOCKS.clear()
 
 
 async def _no_sleep(_seconds: float) -> None:

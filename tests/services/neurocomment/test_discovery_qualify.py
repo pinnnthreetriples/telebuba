@@ -19,6 +19,7 @@ from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions import LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_qualify import run_qualification
+from services.neurocomment._state import set_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
@@ -373,6 +374,84 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     assert rows["aaa"].qualified_at is None
     assert rows["bbb"].qualified_at is None
     assert rows["ccc"].qualified_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_cooldown_recorded_mid_pass_stops_the_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hundred probes is minutes; a limit landing at probe two must stop probe three.
+
+    The pass has two abort counters and neither can see this — nothing it asked for
+    failed. Stops like a FloodWait does: nothing extra is marked, the tail stays pending
+    and resumable, and the reason says the account is cooling rather than returning
+    ``None`` for "finished".
+    """
+    probes = 0
+
+    async def _probe(_account_id: str, _action: object) -> LinkedDiscussionGroupResult:
+        nonlocal probes
+        probes += 1
+        if probes == 2:
+            # The comment engine parking the same listener, mid-pass.
+            await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
+        return _verdict(enabled=True)
+
+    monkeypatch.setattr(_seams, "execute_read", _probe)
+    campaign_id = await _seed("aaa", "bbb", "ccc", "ddd")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason == "account_cooling"
+    assert probes == 2
+    rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert rows["aaa"].qualified_at is not None
+    assert rows["bbb"].qualified_at is not None
+    assert rows["ccc"].qualified_at is None
+    assert rows["ddd"].qualified_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_cooldown_landing_during_the_pace_sleep_costs_no_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The check belongs after the sleep, not before it.
+
+    Every probe but the first is preceded by a one-to-two second pace sleep — the widest
+    window in the pass, and the likeliest moment for somebody else's flood to land. Read
+    before the sleep, the check was answering about a moment that had already passed and
+    still bought one RPC into the live window.
+    """
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+
+    async def _flood_while_pacing(_seconds: float) -> None:
+        await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
+
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(_seams, "sleep", _flood_while_pacing)
+    campaign_id = await _seed("aaa", "bbb", "ccc")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason == "account_cooling"
+    # Only the first probe, which spends no pace sleep. The second never fires.
+    assert len(reader.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_channel_scoped_cooldown_does_not_stop_the_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pass reads with the account; a slow-mode window on one chat is not its limit."""
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1), channel="@chat")
+    campaign_id = await _seed("aaa", "bbb")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason is None
+    assert len(reader.calls) == 2
 
 
 @pytest.mark.asyncio

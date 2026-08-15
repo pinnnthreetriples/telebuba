@@ -59,6 +59,12 @@ DiscoveryStartStatus = Literal[
     "daily_limit_reached",
 ]
 
+# The refusal every OTHER runtime reports when a discovery run already holds the account:
+# warming's start and the listener's start both answer 409 with this. Here rather than in
+# either service because ``schemas`` is the one layer both may import without a cycle, and
+# two spellings of one code is two translations that drift apart.
+DISCOVERY_BUSY_CODE = "account_running_discovery"
+
 # Telegram rejects global searches under 4 characters outright.
 KEYWORD_MIN_LENGTH = 4
 KEYWORD_MAX_LENGTH = 64
@@ -211,8 +217,10 @@ class DiscoverySearchStageResult(BaseModel):
     # Was the stored candidate set actually replaced? A run that answered with nothing
     # usable leaves the previous, already-qualified set alone.
     replaced: bool = False
-    # Did a Telegram FloodWait land? Qualification must not read on this account until
-    # the window closes — the search stage has already written the cooldown.
+    # Is a Telegram rate limit in force on the search account? Either the stage caused
+    # one (and wrote the cooldown itself) or a wave boundary found one somebody else
+    # recorded. Qualification must not read on this account until the window closes, and
+    # a partial set of findings must not displace the stored candidates.
     flooded: bool = False
     report: DiscoveryRunReport = Field(default_factory=DiscoveryRunReport)
 

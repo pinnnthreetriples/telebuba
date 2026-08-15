@@ -167,6 +167,30 @@ async def test_start_listener_account_is_409(app: FastAPI, monkeypatch: pytest.M
 
 
 @pytest.mark.asyncio
+async def test_start_account_held_by_neurocomment_is_409_with_its_code(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal's stable code reaches the envelope, so the SPA can translate it.
+
+    Same 409 family as the listener conflict — a discovery run is reading with this
+    account, or Telegram is rate-limiting it — but the reason has to survive the hop:
+    a locale-neutral code, not prose the operator's language never reaches.
+    """
+    code = "account_running_discovery"
+
+    async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
+        raise warming_service.AccountUnavailableError(code, "acc-1")
+
+    monkeypatch.setattr("services.warming.start_warming", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    envelope = resp.json()["error"]
+    assert envelope["code"] == "conflict"
+    assert envelope["message"] == code
+
+
+@pytest.mark.asyncio
 async def test_add_channels(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake(body: object) -> WarmingChannelList:  # noqa: ARG001
         return WarmingChannelList()

@@ -7,16 +7,19 @@ statuses ``start_discovery`` answers instead of raising.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from core.config import settings
 from core.db import assign_account_to_campaign, create_account, upsert_warming_state
-from core.repositories.neurocomment import set_listener_running
+from core.repositories.neurocomment import get_listener_running, set_listener_running
 from schemas.accounts import AccountCreate
-from schemas.warming import WarmingStateWrite
+from schemas.warming import StartWarmingRequest, WarmingStateWrite
 from services.neurocomment import _discovery_state, _seams, _state
+from services.warming import _runtime
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
@@ -46,8 +49,6 @@ async def test_start_discovery_spawns_and_reports_started(
 
 @pytest.mark.asyncio
 async def test_start_discovery_is_single_flighted(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio  # noqa: PLC0415
-
     async def _slow(_account_id: str, _action: object) -> object:
         await asyncio.sleep(5)
         return matches()
@@ -203,6 +204,234 @@ async def test_daily_cap_does_not_count_a_refused_start(
 
     assert refused.status == "no_account"
     assert _discovery_state.at_daily_search_cap() is False
+
+
+async def _warmable_listener(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The listener account, ready for ``start_warming`` with its loop stubbed out."""
+    from core.db import save_warming_settings  # noqa: PLC0415
+    from services.warming import _runtime  # noqa: PLC0415
+
+    async def _fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+
+
+async def _noop_reconcile(_listener: str) -> None:
+    """Stub the listener start's post-commit network work; only its guard is under test."""
+    return
+
+
+async def _drop_warming_task(account_id: str) -> None:
+    from services import warming  # noqa: PLC0415
+
+    task = warming._RUNTIME.pop(account_id, None)
+    if task is not None:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_a_live_discovery_run_refuses_warming_on_the_same_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reciprocal guard, end to end through the run's real claim.
+
+    Discovery may only start while the listener is STOPPED, which is exactly the state
+    ``start_warming``'s listener check passes — so before this, the operator could stop
+    the listener, start a search and then start warming on the account the search was
+    reading with.
+    """
+    from services import warming  # noqa: PLC0415
+
+    async def _slow(_account_id: str, _action: object) -> object:
+        await asyncio.sleep(5)
+        return matches()
+
+    monkeypatch.setattr(_seams, "execute_read", _slow)
+    await seed_listener()
+    await _warmable_listener(monkeypatch)
+    campaign_id = await new_campaign()
+
+    started = await start_run(campaign_id, search_request())
+
+    assert started.status == "started"
+    with pytest.raises(warming.AccountUnavailableError) as refused:
+        await warming.start_warming(StartWarmingRequest(account_id=LISTENER_ID))
+    assert refused.value.code == "account_running_discovery"
+    assert LISTENER_ID not in warming._RUNTIME
+
+
+@pytest.mark.asyncio
+async def test_a_warming_start_between_resolution_and_the_claim_still_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The claim may not be made on a health verdict that has gone stale.
+
+    ``resolve_search_account`` answers several awaits before ``try_reserve`` runs, and
+    ``start_warming`` needs only that gap to commit. So the claim is made under warming's
+    own per-account lifecycle lock, re-checking warming inside it — the shape
+    ``start_neurocomment`` already uses for the listener. Held open here on purpose:
+    with only the resolve-time check, both starts commit and one account carries two
+    paced streams.
+    """
+    from services import warming  # noqa: PLC0415
+    from services.neurocomment import discovery as discovery_service  # noqa: PLC0415
+
+    resolved = asyncio.Event()
+    warming_committed = asyncio.Event()
+    real_resolve = discovery_service.resolve_search_account
+
+    async def _stalled_resolve(campaign_id: str) -> object:
+        account = await real_resolve(campaign_id)
+        resolved.set()
+        await warming_committed.wait()
+        return account
+
+    monkeypatch.setattr(discovery_service, "resolve_search_account", _stalled_resolve)
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    await seed_listener()
+    await _warmable_listener(monkeypatch)
+    campaign_id = await new_campaign()
+
+    pending = asyncio.create_task(start_run(campaign_id, search_request()))
+    await resolved.wait()
+    started = await warming.start_warming(StartWarmingRequest(account_id=LISTENER_ID))
+    warming_committed.set()
+    refused = await pending
+
+    assert started.state == "active"
+    assert refused.status == "account_busy"
+    await _drop_warming_task(LISTENER_ID)
+
+
+@pytest.mark.asyncio
+async def test_the_claim_waits_for_a_warming_start_that_is_mid_commit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The lock, not the re-check: discovery must not read state warming is still writing.
+
+    ``start_warming`` has five awaits between its own guard and the ``_set_state("active")``
+    commit. Suspended in that window it has decided to warm the account and nothing
+    persistent says so yet, so a re-check alone answers "not warming" and both starts
+    commit. The lock is what keeps discovery out of the window entirely: it blocks, and by
+    the time it looks the commit is done.
+
+    The previous test released warming BEFORE letting discovery through, so the two never
+    overlapped and it passed with the lock replaced by a fresh unlocked one.
+    """
+    from services import warming  # noqa: PLC0415
+
+    in_commit_window = asyncio.Event()
+    finish_warming = asyncio.Event()
+    real_fetch = _runtime.fetch_warming_state
+
+    async def _stalled_fetch(account_id: str) -> object:
+        # Called after the exclusion guard and before the state commit — the window.
+        in_commit_window.set()
+        await finish_warming.wait()
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_runtime, "fetch_warming_state", _stalled_fetch)
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    await seed_listener()
+    await _warmable_listener(monkeypatch)
+    campaign_id = await new_campaign()
+
+    warm = asyncio.create_task(warming.start_warming(StartWarmingRequest(account_id=LISTENER_ID)))
+    await in_commit_window.wait()
+    search = asyncio.create_task(start_run(campaign_id, search_request()))
+    # Long enough for the claim to be made if nothing were holding it back: the re-check
+    # it would pass through is a threaded DB read, so yielding the loop is not enough.
+    await asyncio.sleep(0.1)
+    assert _discovery_state.is_running(campaign_id) is False, "claimed while warming committed"
+
+    finish_warming.set()
+    started = await warm
+    refused = await search
+
+    assert started.state == "active"
+    assert refused.status == "account_busy"
+    await _drop_warming_task(LISTENER_ID)
+
+
+@pytest.mark.asyncio
+async def test_a_live_discovery_run_refuses_the_listener_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The likeliest sequence of all, because a run can only start while it is stopped.
+
+    Operator stops the listener, searches, then presses Start again while the run is
+    still going — and the post listener resolves peers and joins on the same session the
+    run is paced-reading with. The generation fence cannot catch it: it is a ContextVar
+    set inside the listener's task context, so a discovery task spawned from an API
+    request reads ``None`` and every assertion on it passes.
+    """
+    from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
+    from services.neurocomment._runtime_operations import (  # noqa: PLC0415
+        ListenerBusyDiscoveryError,
+    )
+
+    async def _slow(_account_id: str, _action: object) -> object:
+        await asyncio.sleep(5)
+        return matches()
+
+    monkeypatch.setattr(_seams, "execute_read", _slow)
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    started = await start_run(campaign_id, search_request())
+
+    assert started.status == "started"
+    with pytest.raises(ListenerBusyDiscoveryError):
+        await nc_runtime.start_neurocomment(LISTENER_ID)
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The listener half of the stale-resolution refusal, not only the warming half.
+
+    ``resolve_search_account``'s listener check sits outside the claim lock too, so the
+    account could be re-armed as the running listener in the same gap warming used.
+    """
+    from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
+    from services.neurocomment import discovery as discovery_service  # noqa: PLC0415
+
+    resolved = asyncio.Event()
+    listener_committed = asyncio.Event()
+    real_resolve = discovery_service.resolve_search_account
+
+    async def _stalled_resolve(campaign_id: str) -> object:
+        account = await real_resolve(campaign_id)
+        resolved.set()
+        await listener_committed.wait()
+        return account
+
+    monkeypatch.setattr(discovery_service, "resolve_search_account", _stalled_resolve)
+    monkeypatch.setattr(nc_runtime, "reconcile_neurocomment_runtime", _noop_reconcile)
+    monkeypatch.setattr(nc_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    pending = asyncio.create_task(start_run(campaign_id, search_request()))
+    await resolved.wait()
+    await nc_runtime.start_neurocomment(LISTENER_ID)
+    listener_committed.set()
+    refused = await pending
+
+    assert await get_listener_running() is True
+    assert refused.status == "account_busy"
 
 
 @pytest.mark.asyncio

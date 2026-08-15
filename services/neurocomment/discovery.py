@@ -34,7 +34,11 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchOutcome,
 )
 from services.neurocomment import _discovery_state, _runtime
-from services.neurocomment._discovery_providers import SearchAccount, resolve_search_account
+from services.neurocomment._discovery_providers import (
+    SearchAccount,
+    account_taken,
+    resolve_search_account,
+)
 from services.neurocomment._discovery_qualify import is_fresh, run_qualification
 from services.neurocomment._discovery_search import run_search
 from services.neurocomment._signals import signal_discovery_progress
@@ -73,7 +77,19 @@ async def start_discovery(
     # is await-free, so a second start cannot straddle it and no failure can strand a
     # claim. The claim covers the account too, not just the campaign — every campaign
     # resolves to the same listener.
-    refusal = _discovery_state.try_reserve(campaign_id, account.account_id)
+    #
+    # Under warming's own per-account lifecycle lock, re-asking BOTH owners inside it, for
+    # the reason ``start_neurocomment`` takes the same lock: ``resolve_search_account``
+    # answered several awaits ago, and ``start_warming`` and the listener start both read
+    # this claim under that lock before they commit. Without it their checks and this one
+    # all pass in the gap and the account ends up carrying two paced streams. Released
+    # before ``spawn``, so the lock never spans the multi-minute run itself.
+    from services.warming import account_lock  # noqa: PLC0415 - avoid a load-time cycle.
+
+    async with account_lock(account.account_id):
+        if await account_taken(account.account_id):
+            return DiscoverySearchOutcome(status="account_busy")
+        refusal = _discovery_state.try_reserve(campaign_id, account.account_id)
     if refusal is not None:
         return DiscoverySearchOutcome(status=refusal)
 
@@ -121,10 +137,10 @@ async def _run(
             # operator should read as done. Keyed off the write, not off ``(found,
             # error)``: a source that answered with zero hits, or a filter that removed
             # every hit, is an empty result — not a failure.
-            # Flooded: the search stage just wrote this account's cooldown and nothing
-            # between here and the first probe re-checks it, so qualifying would fire
-            # getFullChannel straight into the live window — which is how Telegram turns
-            # a soft limit into a hard one.
+            # Flooded: a rate limit is in force on the search account — the search stage
+            # either caused it and wrote the cooldown, or found one somebody else
+            # recorded. Qualifying would fire getFullChannel straight into the live
+            # window, which is how Telegram turns a soft limit into a hard one.
             _discovery_state.set_phase(campaign_id, "failed")
         else:
             _discovery_state.set_phase(campaign_id, "qualifying")

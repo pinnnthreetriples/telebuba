@@ -32,7 +32,12 @@ from core.telegram_client import TelegramReadError
 from schemas.neurocomment_discovery import DiscoveryChannelVerdict
 from schemas.telegram_actions import GetLinkedDiscussionGroup, LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_state, _seams
-from services.neurocomment._discovery_providers import flood_cooldown, record_flood
+from services.neurocomment._discovery_providers import (
+    COOLING_REASON,
+    account_cooling,
+    flood_cooldown,
+    record_flood,
+)
 from services.neurocomment._signals import signal_discovery_progress
 
 if TYPE_CHECKING:
@@ -91,7 +96,10 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
 
     A rate limit aborts the pass immediately and leaves the remainder pending —
     retrying into a rate limit is how a soft limit becomes a hard one, and
-    ``qualified_at`` makes the next run resume exactly where this one stopped.
+    ``qualified_at`` makes the next run resume exactly where this one stopped. That
+    holds for a limit this pass did not cause, too: the account's cooldown is re-read
+    before every probe, so a flood recorded elsewhere stops the pass at the next read
+    rather than at its last one.
     """
     pending = await list_pending_discovery_candidates(campaign_id)
     if not pending.rows:
@@ -114,6 +122,16 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
 
         if probed:
             await _pace()
+        if account_cooling(account_id):
+            # Re-read before every RPC this pass is about to spend, not once at the
+            # start: a hundred probes is minutes, and a limit the comment engine (or
+            # this run's own search stage) recorded meanwhile is invisible to the two
+            # error counters below. AFTER the pace sleep, because that sleep is one to
+            # two seconds long and a limit landing inside it would otherwise still buy
+            # one probe. Stops the same way a FloodWait does — the remainder stays
+            # pending, ``qualified_at`` resumes the next run where this one left off —
+            # and reports why rather than returning ``None`` for "finished".
+            return COOLING_REASON
         probed += 1
         probe = await _probe_one(campaign_id, account_id, row.channel)
         if probe.flooded:
@@ -124,17 +142,26 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
         else:
             consecutive_errors += 1
             total_errors += 1
-            if consecutive_errors >= settings.neurocomment.discovery_max_consecutive_errors:
-                # A dead session must not burn one RPC per remaining candidate.
-                return reason
-            if probed >= _ERROR_RATE_MIN_PROBES and total_errors * 2 >= probed:
-                # A half-dead one never trips the counter above; see _ERROR_RATE_MIN_PROBES.
+            if _dead_session(consecutive_errors, probed, total_errors):
                 return reason
 
         if (index + 1) % _PROGRESS_EVERY == 0:
             signal_discovery_progress()
 
     return None
+
+
+def _dead_session(consecutive: int, probed: int, total_errors: int) -> bool:
+    """Have this pass's failures stopped saying anything new about the candidates?
+
+    Two rules, both on the SESSION rather than on any one channel: a dead one must not
+    burn one RPC per remaining candidate, and a half-dead one never trips the
+    consecutive counter at all — see :data:`_ERROR_RATE_MIN_PROBES` for why the second
+    is a proportion and not a count.
+    """
+    if consecutive >= settings.neurocomment.discovery_max_consecutive_errors:
+        return True
+    return probed >= _ERROR_RATE_MIN_PROBES and total_errors * 2 >= probed
 
 
 async def _pace() -> None:

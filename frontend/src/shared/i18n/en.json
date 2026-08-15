@@ -511,7 +511,9 @@
     "mutationError": "Something went wrong. Please try again.",
     "code": {
       "upload_capacity_exceeded": "Too many uploads are running. Please try again shortly.",
-      "untrusted_origin": "This request came from an untrusted site. Reload the app and try again."
+      "untrusted_origin": "This request came from an untrusted site. Reload the app and try again.",
+      "account_running_discovery": "A channel-discovery run is reading with this account. Wait for it to finish, then start warming.",
+      "account_cooling": "Telegram is rate-limiting this account. Wait for the limit to pass, then try again."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -836,6 +838,7 @@
     "neurocomment_channel_activity_unknown": "Could not tell whether the channel still publishes"
   },
   "logEventReason": {
+    "account_cooling": "the account is waiting out a Telegram limit",
     "row_kept": "account row kept, session file left in place",
     "file_kept": "session file left on disk with no account",
     "chance": "chance didn't hit",
@@ -1261,6 +1264,7 @@
             "seed_unusable": "the seed channel is not a usable handle",
             "channel_not_found": "Telegram could not find that channel",
             "read_budget": "the read budget for one search ran out",
+            "account_cooling": "the search account is waiting out a Telegram limit",
             "unexpected_result": "Telegram returned an unexpected reply"
           },
           "sourceExclusive": "({{exclusive}} found only here)",

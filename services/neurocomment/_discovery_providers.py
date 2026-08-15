@@ -33,6 +33,29 @@ if TYPE_CHECKING:
     from schemas.telegram_actions_discovery import GlobalPostsCursor
 
 
+# Short locale-neutral reason for a run stopped mid-flight because the account is
+# serving a limit. Spelled like the start status it mirrors, so the operator reads the
+# same words whether the account was cooling before the run or became so during it.
+COOLING_REASON = "account_cooling"
+
+
+def account_cooling(account_id: str) -> bool:
+    """Is a live cooldown in force on this account right now?
+
+    The mid-run half of the health gate ``resolve_search_account`` applies once at the
+    start. A run is minutes long, and the comment engine (or the run's own later reads)
+    can park the account at any point in it; every read after that lands inside a live
+    window, which is how Telegram turns a soft limit into a hard one.
+
+    Two dict lookups, no Telegram RPC and no database round trip — asking Telegram
+    whether it is rate-limiting us costs exactly the read the check exists to prevent.
+    Warming's persisted flood deadline is deliberately NOT re-read here: warming cannot
+    start on this account while the run holds it (``services.warming._exclusion``), so
+    that deadline can no longer change under a run that already passed the start gate.
+    """
+    return in_cooldown(account_id, datetime.now(UTC))
+
+
 def flood_cooldown(exc: TelegramReadError) -> int | None:
     """How long this read failure must park the account, or ``None`` — it was no limit.
 
@@ -151,6 +174,21 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     if account_id in await list_warming_account_ids():
         return "account_busy"
     return SearchAccount(account_id=account_id)
+
+
+async def account_taken(account_id: str) -> bool:
+    """Is another runtime holding this session? The re-read for under the claim lock.
+
+    Both halves of ``resolve_search_account``'s ``account_busy`` verdict, asked again:
+    that verdict is several awaits old by the time the claim is made, and either runtime
+    can commit in the gap. Deliberately NOT reused inside ``resolve_search_account`` —
+    there the listener check runs before the health checks and the warming check after,
+    so a warming account that is also flood-waiting is reported as cooling rather than
+    busy. Folding the two into one call would silently reorder that.
+    """
+    if account_id in await list_warming_account_ids():
+        return True
+    return await get_listener_running() and await get_listener_account_id() == account_id
 
 
 async def record_flood(account_id: str, seconds: int | None) -> bool:
