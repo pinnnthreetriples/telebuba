@@ -84,7 +84,6 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         openai_api_key=_str_or(mapping.get("openai_api_key"), settings.openai.api_key),
         openai_model=_str_or(mapping.get("openai_model"), settings.openai.model),
         captcha_llm_provider=_captcha_provider(mapping.get("captcha_llm_provider")),
-        telemetr_api_key=_str_or(mapping.get("telemetr_api_key"), settings.telemetr.api_key),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -104,7 +103,6 @@ def _default_warming_settings_values() -> dict[str, object]:
         "openai_api_key": "",
         "openai_model": settings.openai.model,
         "captcha_llm_provider": settings.neurocomment.captcha_llm_provider,
-        "telemetr_api_key": "",
         "updated_at": _now_iso(),
     }
 
@@ -157,7 +155,6 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
-    telemetr_api_key: str | None = None,
 ) -> WarmingSettingsSecret:
     # Ensure the singleton row exists, then read it so a ``None`` key/model/provider
     # argument keeps the stored value (keep/clear/replace). Keys ARE persisted now
@@ -217,7 +214,6 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
                 cur.get("captcha_llm_provider"),
                 settings.neurocomment.captcha_llm_provider,
             ),
-            "telemetr_api_key": _keep(telemetr_api_key, cur.get("telemetr_api_key")),
             "updated_at": _now_iso(),
         }
         connection.execute(
@@ -242,7 +238,6 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
-    telemetr_api_key: str | None = None,
 ) -> WarmingSettingsSecret:
     """Persist warming settings.
 
@@ -263,5 +258,4 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         openai_api_key=openai_api_key,
         openai_model=openai_model,
         captcha_llm_provider=captcha_llm_provider,
-        telemetr_api_key=telemetr_api_key,
     )

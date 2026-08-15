@@ -13,6 +13,7 @@ cache makes the retry nearly free.
 from __future__ import annotations
 
 import contextlib
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core import db
@@ -29,11 +30,12 @@ from schemas.neurocomment_discovery import (
     DiscoveryBoard,
     DiscoveryCandidate,
     DiscoveryProgress,
+    DiscoveryRunReport,
     DiscoverySearchOutcome,
 )
 from services.neurocomment import _discovery_state, _runtime
 from services.neurocomment._discovery_providers import SearchAccount, resolve_search_account
-from services.neurocomment._discovery_qualify import run_qualification
+from services.neurocomment._discovery_qualify import is_fresh, run_qualification
 from services.neurocomment._discovery_search import run_search
 from services.neurocomment._signals import signal_discovery_progress
 
@@ -77,6 +79,15 @@ async def start_discovery(
 
     _discovery_state.set_phase(campaign_id, "searching")
     _discovery_state.set_last_error(campaign_id, None)
+    # Per-run state, so it is cleared where the rest of it is. A verdict describes the
+    # channel a PREVIOUS run probed, and the linked-group cache lets this run qualify a
+    # channel without probing it at all — so a kept verdict would be shown beside a row
+    # nothing measured this time, and the map would grow for the life of the process.
+    _discovery_state.clear_verdicts(campaign_id)
+    # The source strip is per-run for the same reason, and the exception path below never
+    # sets one: without this, a run that crashed published the PREVIOUS run's strip
+    # beside its own failure.
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
     _discovery_state.spawn(campaign_id, _run(campaign_id, account, request))
     await log_event(
         "INFO",
@@ -85,9 +96,6 @@ async def start_discovery(
             "campaign_id": campaign_id,
             "account_id": account.account_id,
             "keywords": len(request.keywords),
-            "use_telemetr": request.use_telemetr,
-            # Two very different run shapes — one spends Telegram RPCs, one spends none.
-            "catalogue_only": request.catalogue_only,
         },
     )
     return DiscoverySearchOutcome(status="started")
@@ -102,15 +110,10 @@ async def _run(
     try:
         stage = await run_search(campaign_id, account.account_id, request)
         _discovery_state.set_last_error(campaign_id, stage.error)
-        # Per-source outcomes ALWAYS: they describe what the sources did, which is true
-        # whether or not the rows were stored — and a run that stored nothing is exactly
-        # when the operator needs to see which source refused. The per-row origins are
-        # different: keyed by handle, they would staple this run's geo onto the previous
-        # run's rows, so they are dropped unless this run's set was actually written.
-        _discovery_state.set_run_report(
-            campaign_id,
-            stage.report if stage.replaced else stage.report.model_copy(update={"origins": {}}),
-        )
+        # Published whether or not the rows were stored: a run that stored nothing is
+        # exactly when the operator needs to see which source refused. The search stage
+        # has already stripped everything that would describe rows nobody can see.
+        _discovery_state.set_run_report(campaign_id, stage.report)
         qualify_error = None
         if not stage.replaced or stage.flooded:
             # Not replaced: no source answered (or the filter-aware one did not), so the
@@ -194,6 +197,7 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
     owners = await fetch_active_campaigns_for_channels(channels)
 
     report = _discovery_state.run_report(campaign_id)
+    verdicts = _discovery_state.verdicts(campaign_id)
     candidates: list[DiscoveryCandidate] = []
     comments_on = 0
     qualified = 0
@@ -203,8 +207,10 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
         comments_on += qualification == "comments_on"
         owner = owners.get(row.channel)
         owner_id = None if owner is None else owner.campaign_id
-        # Provenance and geo are only known while the run's state lives; a board read
-        # after a restart falls back to the one source the row itself stores.
+        # Provenance and the fitness verdict are only known while the run's state lives;
+        # a board read after a restart falls back to the one source the row itself stores
+        # — verbatim, whatever build wrote it — and to no verdict at all, which the wire
+        # model documents as unknown.
         origin = report.origins.get(row.channel)
         candidates.append(
             DiscoveryCandidate(
@@ -212,10 +218,10 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
                 title=row.title,
                 subscribers=row.subscribers,
                 source=row.source,
-                sources=[row.source] if origin is None else origin.sources,
-                country=None if origin is None else origin.country,
-                language=None if origin is None else origin.language,
+                sources=[row.source] if origin is None else list(origin.sources),
                 qualification=qualification,
+                uncounted=origin is not None and origin.uncounted,
+                verdict=verdicts.get(row.channel),
                 in_campaign=owner_id == campaign_id,
                 taken_by_other_campaign=owner_id is not None and owner_id != campaign_id,
             ),
@@ -231,19 +237,51 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
             comments_on=comments_on,
             last_error=_discovery_state.last_error(campaign_id),
             sources=report.sources,
+            # The rows below outlived the last run: it stored nothing, so they are the
+            # previous search's and the board must not present them as this one's find.
+            stale_candidates=not report.stored,
+            capped=report.capped,
         ),
         candidates=candidates,
     )
+
+
+async def _comments_off_channels(channels: list[str]) -> set[str]:
+    """Of these, the ones a CURRENT persisted verdict says have comments switched off.
+
+    The linked-group cache is the durable half of the qualification — the only half that
+    survives a restart — so it is the only half a server-side guard may act on. The
+    richer in-memory verdict deliberately does NOT feed this: gating on state that
+    evaporates with the process would make the same request succeed or fail depending on
+    the server's uptime.
+
+    Everything short of an explicit, still-fresh "off" adopts. A channel with no cache
+    row was never probed, and a stale row may well have switched comments on since — the
+    board itself re-probes those — so neither is a refusal. A cold cache must never
+    become a way to block adoption.
+    """
+    now = datetime.now(UTC)
+    cached = await list_linked_groups(channels)
+    return {
+        group.channel
+        for group in cached.groups
+        if not group.comments_enabled and is_fresh(group.checked_at, now)
+    }
 
 
 async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAdoptResult | None:
     """Link the operator's picks to the campaign, reporting one outcome per channel.
 
     Every refusal AND every failure is a per-channel status, never an exception:
-    ``already_assigned`` (the channel is another campaign's active target) and
+    ``already_assigned`` (the channel is another campaign's active target),
+    ``comments_off`` (its cached verdict says the campaign could never comment there) and
     ``failed`` (the attempt raised). One bad channel must not cost the report for the
     other 29 — those stay linked either way, so aborting the batch left the operator
     with an opaque 500 and no way to know what had already happened.
+
+    The comments check is here and not only in the SPA: the UI merely disables those
+    checkboxes, so any caller that skipped it linked a channel the campaign can never
+    comment in, and the two surfaces disagreed with only the client enforcing anything.
 
     A transient failure costs exactly one channel, because every link is its own
     transaction. A systemic one (campaign deleted mid-loop, DB wedged) stops the loop
@@ -261,8 +299,10 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
     outcomes: list[DiscoveryAdoptOutcome] = []
     linked = 0
     failures = 0
+    refused = 0
     reason: str | None = None
     consecutive = 0
+    comments_off = await _comments_off_channels(channels)
     for index, channel in enumerate(channels):
         if consecutive >= settings.neurocomment.discovery_max_consecutive_errors:
             # Nothing is working; stop writing. A refusal resets the counter, so only real
@@ -273,6 +313,12 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
                 DiscoveryAdoptOutcome(status="failed", channel=rest) for rest in remainder
             )
             break
+        if channel in comments_off:
+            # No write attempted, so the abort counter is left alone: this says nothing
+            # about whether the database is answering.
+            refused += 1
+            outcomes.append(DiscoveryAdoptOutcome(status="comments_off", channel=channel))
+            continue
         try:
             await db.link_channel_to_campaign(campaign_id, channel)
         except db.ChannelAlreadyAssignedError:
@@ -308,6 +354,8 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
             "linked": linked,
             "submitted": len(channels),
             "failed": failures,
+            # Refused on their cached qualification, not attempted.
+            "comments_off": refused,
             # First failure only: one short code, like the search stage's degraded reason.
             "reason": reason,
         },

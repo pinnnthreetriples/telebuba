@@ -52,6 +52,46 @@ async def test_execute_read_flood_wait_wraps_telethon_error(
         await execute_read("acc-flood", GetUserProfile())
 
     assert exc_info.value.reason == "FloodWait(42s)"
+    assert (exc_info.value.kind, exc_info.value.seconds) == ("flood_wait", 42)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("raised", "reason", "seconds"),
+    [
+        (errors.FloodPremiumWaitError(request=None, capture=60), "FloodPremiumWait(60s)", 60),
+        (errors.SlowModeWaitError(request=None, capture=30), "SlowModeWait(30s)", 30),
+        (errors.PeerFloodError(request=None), "PeerFlood", None),
+    ],
+)
+async def test_execute_read_classifies_the_whole_rate_limit_family(
+    monkeypatch: pytest.MonkeyPatch,
+    raised: Exception,
+    reason: str,
+    seconds: int | None,
+) -> None:
+    """None of these is a ``FloodWaitError`` subclass, so all three used to be ``RPC:``.
+
+    That left them ``kind="other"`` with no duration, and every read caller that stops on
+    a rate limit — channel discovery above all — treated a live limit as an ordinary
+    failure and kept reading into it. FLOOD_PREMIUM_WAIT is not hypothetical: it is what
+    Telegram answers an account without Premium.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            raise raised
+
+    _patch_client(monkeypatch, FakeClient())
+
+    with pytest.raises(TelegramReadError) as exc_info:
+        await execute_read("acc-limited", GetUserProfile())
+
+    assert exc_info.value.reason == reason
+    assert (exc_info.value.kind, exc_info.value.seconds) == ("flood_wait", seconds)
 
 
 @pytest.mark.asyncio

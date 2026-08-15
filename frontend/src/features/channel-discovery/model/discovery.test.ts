@@ -92,51 +92,24 @@ describe('splitKeywords dropped tokens', () => {
 describe('buildSearchRequest', () => {
   it('omits empty filters rather than sending nulls', () => {
     const request = buildSearchRequest(form({ keywords: 'crypto' }));
-    expect(request).toEqual({ keywords: ['crypto'], use_telemetr: false });
+    expect(request).toEqual({ keywords: ['crypto'] });
   });
 
-  it('carries filters and coerces subscriber bounds to integers', () => {
+  it('carries the seed and coerces subscriber bounds to integers', () => {
     const request = buildSearchRequest(
       form({
         keywords: 'crypto',
-        language: 'ar',
-        country: 'AE',
         minSubscribers: '500',
         maxSubscribers: '90000.7',
         seedChannel: '  @durov ',
-        useTelemetr: true,
       }),
     );
     expect(request).toEqual({
       keywords: ['crypto'],
-      use_telemetr: true,
       seed_channel: 'durov',
-      language: 'ar',
-      country: 'AE',
       members_min: 500,
       members_max: 90000,
     });
-  });
-
-  it('omits language and country when the catalogue is off', () => {
-    // They reach only Telemetr.io; on the native sources they would filter nothing.
-    const request = buildSearchRequest(
-      form({ keywords: 'crypto', language: 'tr', country: 'TR', useTelemetr: false }),
-    );
-    expect(request.language).toBeUndefined();
-    expect(request.country).toBeUndefined();
-  });
-
-  it('sends catalogue_only only alongside the catalogue', () => {
-    // It leaves the catalogue as the only source, and the API refuses it without one.
-    expect(
-      buildSearchRequest(form({ keywords: 'crypto', useTelemetr: true, catalogueOnly: true }))
-        .catalogue_only,
-    ).toBe(true);
-    expect(
-      buildSearchRequest(form({ keywords: 'crypto', useTelemetr: false, catalogueOnly: true }))
-        .catalogue_only,
-    ).toBeUndefined();
   });
 
   it('strips a pasted t.me link down to the username', () => {

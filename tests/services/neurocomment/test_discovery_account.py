@@ -229,4 +229,8 @@ async def test_listener_is_preferred_over_a_campaign_account(
     await start_run(campaign_id, search_request())
     await drain_discovery(campaign_id)
 
-    assert seen == [LISTENER_ID]
+    # WHICH account, not how many reads: a run is several waves (keyword sweep, global post
+    # pages, recommendations), and every one of them is deliberately spent on the same
+    # single account this policy picked.
+    assert set(seen) == {LISTENER_ID}
+    assert seen

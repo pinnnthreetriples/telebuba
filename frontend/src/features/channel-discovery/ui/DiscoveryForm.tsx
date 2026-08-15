@@ -10,9 +10,7 @@ import {
   KEYWORD_MIN_LENGTH,
   MAX_KEYWORDS,
   splitKeywords,
-  type DiscoveryCountry,
   type DiscoveryFormState,
-  type DiscoveryLanguage,
 } from '../model/discovery';
 
 // The project has no shared input primitive; this literal is the established
@@ -22,67 +20,22 @@ const FIELD =
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 // A HelpHint must sit OUTSIDE the <label>, so the label text needs its own row and the
 // control needs an id: a label click activates its control, and on a phone tapping the
-// badge is the only way to open a hover tooltip — which silently toggled the checkbox
-// and, on the text fields, joined the tooltip prose to the field's accessible name.
+// badge is the only way to open a hover tooltip — which silently joined the tooltip
+// prose to the field's accessible name.
 const LABEL_ROW = `${LABEL} flex items-center gap-[6px]`;
-const CHECKBOX = 'h-[14px] w-[14px] shrink-0 accent-primary disabled:opacity-40';
 const HINT = 'mt-[5px] block text-[11.5px] text-ink-subtle';
-
-// Curated against Telemetr.io's dictionaries: the regions this fleet targets
-// (CIS, Europe, MENA). Labels come from Intl.DisplayNames, so ru/en are free.
-const LANGUAGES: DiscoveryLanguage[] = [
-  'ru',
-  'en',
-  'ar',
-  'de',
-  'fr',
-  'es',
-  'tr',
-  'uk',
-  'kk',
-  'uz',
-  'fa',
-  'hi',
-];
-const COUNTRIES: DiscoveryCountry[] = [
-  'RU',
-  'KZ',
-  'UZ',
-  'UA',
-  'BY',
-  'DE',
-  'FR',
-  'ES',
-  'GB',
-  'TR',
-  'AE',
-  'SA',
-  'EG',
-];
 
 type Props = {
   form: DiscoveryFormState;
-  telemetrConfigured: boolean;
   submitting: boolean;
   onChange: (form: DiscoveryFormState) => void;
   onSubmit: () => void;
 };
 
-export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, onSubmit }: Props) {
-  const { t, i18n } = useTranslation();
-  // Intl.DisplayNames throws on an empty locale, which is what i18n.language is
-  // before init resolves; fall back to the app default rather than crashing.
-  const locale = i18n.language || 'ru';
-  const languageNames = new Intl.DisplayNames([locale], { type: 'language' });
-  const regionNames = new Intl.DisplayNames([locale], { type: 'region' });
+export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
+  const { t } = useTranslation();
   const { keywords: parsed, dropped } = splitKeywords(form.keywords);
   const inverted = boundsInverted(form);
-  // Language and country reach only the Telemetr.io catalogue, so with that source off
-  // they are inert — greyed out rather than quietly ignored.
-  const localeFilters = form.useTelemetr;
-  const localeHint = <HelpHint text={t('neurocomment.modal.discovery.form.localeScopeHint')} />;
-  const languageId = useId();
-  const countryId = useId();
   const seedId = useId();
 
   const set = <K extends keyof DiscoveryFormState>(key: K, value: DiscoveryFormState[K]) => {
@@ -129,52 +82,6 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
       </label>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-[13px]">
-        <div>
-          <span className={LABEL_ROW}>
-            <label htmlFor={languageId}>{t('neurocomment.modal.discovery.form.language')}</label>
-            {localeHint}
-          </span>
-          <select
-            id={languageId}
-            value={form.language}
-            disabled={!localeFilters}
-            onChange={(event) => {
-              // The options below are exactly this union, so the DOM's widened string is
-              // the only thing standing between the select and the API's own codes.
-              set('language', event.target.value as DiscoveryLanguage | '');
-            }}
-            className={`${FIELD} disabled:opacity-50`}
-          >
-            <option value="">{t('neurocomment.modal.discovery.form.anyLanguage')}</option>
-            {LANGUAGES.map((code) => (
-              <option key={code} value={code}>
-                {languageNames.of(code) ?? code}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <span className={LABEL_ROW}>
-            <label htmlFor={countryId}>{t('neurocomment.modal.discovery.form.country')}</label>
-            {localeHint}
-          </span>
-          <select
-            id={countryId}
-            value={form.country}
-            disabled={!localeFilters}
-            onChange={(event) => {
-              set('country', event.target.value as DiscoveryCountry | '');
-            }}
-            className={`${FIELD} disabled:opacity-50`}
-          >
-            <option value="">{t('neurocomment.modal.discovery.form.anyCountry')}</option>
-            {COUNTRIES.map((code) => (
-              <option key={code} value={code}>
-                {regionNames.of(code) ?? code}
-              </option>
-            ))}
-          </select>
-        </div>
         <label className="block">
           <span className={LABEL}>{t('neurocomment.modal.discovery.form.minSubscribers')}</span>
           <input
@@ -203,6 +110,12 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
         </label>
       </div>
 
+      {/* What the bounds actually do. Telegram's own search returns a subscriber count
+          for only some hits, and the rest enter the list unfiltered — with the number
+          arriving later, from the comment check. Unsaid, a row that plainly breaks the
+          filter looks like a bug in the filter. */}
+      <span className={HINT}>{t('neurocomment.modal.discovery.form.membersHint')}</span>
+
       {/* The API refuses members_min > members_max, and canSubmit blocks it — without
           this the Search button would just go dead naming no field. */}
       {inverted ? (
@@ -225,61 +138,6 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
           placeholder={t('neurocomment.modal.discovery.form.seedChannelPlaceholder')}
           className={FIELD}
         />
-      </div>
-
-      <div className="flex items-center gap-[8px]">
-        <label className="flex items-center gap-[8px] text-[12.5px] text-ink-muted">
-          <input
-            type="checkbox"
-            checked={form.useTelemetr}
-            disabled={!telemetrConfigured}
-            onChange={(event) => {
-              const useTelemetr = event.target.checked;
-              // Clear the locale filters rather than only grey them out: a disabled select
-              // still DISPLAYS "Turkey", and the request omits it — which is the same
-              // "filter shown, not applied" the whole feature just got fixed for.
-              onChange(
-                useTelemetr
-                  ? { ...form, useTelemetr }
-                  : {
-                      ...form,
-                      useTelemetr,
-                      language: '',
-                      country: '',
-                      // The catalogue is the only source it leaves, so it cannot outlive it.
-                      catalogueOnly: false,
-                    },
-              );
-            }}
-            aria-label={t('neurocomment.modal.discovery.form.useTelemetr')}
-            className={CHECKBOX}
-          />
-          {t('neurocomment.modal.discovery.form.useTelemetr')}
-        </label>
-        <HelpHint
-          text={t(
-            telemetrConfigured
-              ? 'neurocomment.modal.discovery.form.useTelemetrHint'
-              : 'neurocomment.modal.discovery.form.useTelemetrMissing',
-          )}
-        />
-      </div>
-
-      <div className="flex items-center gap-[8px]">
-        <label className="flex items-center gap-[8px] text-[12.5px] text-ink-muted">
-          <input
-            type="checkbox"
-            checked={form.catalogueOnly}
-            disabled={!form.useTelemetr}
-            onChange={(event) => {
-              set('catalogueOnly', event.target.checked);
-            }}
-            aria-label={t('neurocomment.modal.discovery.form.catalogueOnly')}
-            className={CHECKBOX}
-          />
-          {t('neurocomment.modal.discovery.form.catalogueOnly')}
-        </label>
-        <HelpHint text={t('neurocomment.modal.discovery.form.catalogueOnlyHint')} />
       </div>
 
       <div className="flex items-center justify-end gap-[9px] pt-[3px]">

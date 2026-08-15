@@ -1,17 +1,12 @@
-"""Channel-discovery sources: a protocol plus the two adapters behind it.
+"""Channel-discovery sources: the Telegram adapters plus the account choice.
 
-The abstraction lives here rather than in ``core/`` on purpose. ``core.gemini`` /
-``core.openai`` set the precedent: two dumb gateways over a shared contract, with
-the *choice* between them resolved as service policy. A core-level abstraction
-would have to know about the campaign, the operator's key, dedup order and merge
-policy — all business logic. So ``core`` exposes typed actions plus a typed HTTP
-result, and this module owns the protocol, the adapters and the account choice.
-``services/`` therefore never imports telethon or httpx.
+``core`` exposes typed read actions; dedup order, merge policy and which account
+does the reading are business logic and live here. ``services/`` therefore never
+imports telethon.
 """
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -24,22 +19,39 @@ from core.repositories.neurocomment import (
     list_campaign_accounts,
 )
 from core.telegram_client import TelegramReadError
-from schemas.telegram_actions import GetSimilarChannels, SearchChannels
-from schemas.telegram_actions_discovery import TelegramChannelMatches
-from schemas.telemetr import TelemetrSearchRequest
+from schemas.telegram_actions import GetSimilarChannels, SearchChannels, SearchGlobalPosts
+from schemas.telegram_actions_discovery import (
+    TelegramChannelMatches,
+    TelegramGlobalPostMatches,
+)
 from services.neurocomment import _seams
 from services.neurocomment._state import in_cooldown, set_cooldown
 from services.trust import flood_active
 
 if TYPE_CHECKING:
-    from schemas.neurocomment_discovery import (
-        DiscoverySearchRequest,
-        DiscoverySource,
-        DiscoverySourceState,
-    )
+    from schemas.neurocomment_discovery import DiscoverySource, DiscoverySourceState
+    from schemas.telegram_actions_discovery import GlobalPostsCursor
 
-# The gateway renders a flood wait as ``FloodWait(<seconds>s)`` (core.telegram_client).
-_FLOOD_SECONDS = re.compile(r"FloodWait\((\d+)s\)")
+
+def flood_cooldown(exc: TelegramReadError) -> int | None:
+    """How long this read failure must park the account, or ``None`` — it was no limit.
+
+    The gateway's own ``kind`` is the classification; re-reading the string it just
+    formatted is what made discovery narrower than the rest of the fleet. Only
+    ``FloodWaitError`` renders as ``FloodWait(<n>s)``, while ``FLOOD_PREMIUM_WAIT`` (the
+    reply a non-premium account genuinely gets), ``SLOW_MODE_WAIT`` and ``PEER_FLOOD``
+    are siblings of it — so they matched nothing, no cooldown was written, and every
+    remaining read of the run fired into a live limit. Same family
+    ``services.neurocomment._classify`` and the write gateway already treat as one.
+
+    A limit with no duration on the wire (peer flood) takes the config default the
+    comment engine's own cooldown already applies to exactly that case.
+    """
+    if exc.kind != "flood_wait":
+        return None
+    if exc.seconds is None:
+        return int(settings.neurocomment.peer_flood_cooldown_seconds)
+    return exc.seconds
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,10 +62,6 @@ class RawCandidate:
     title: str
     subscribers: int | None
     source: DiscoverySource
-    # Only the catalogue knows these; they ride through to the board so a filter can be
-    # verified rather than trusted.
-    country: str | None = None
-    language: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,18 +78,20 @@ class SourceOutcome:
     state: DiscoverySourceState = "ran"
     candidates: tuple[RawCandidate, ...] = ()
     error: str | None = None
-    # The gateway's own diagnostic text, kept apart from the short code above so the
-    # board can show one and the operator can act on the other.
-    detail: str | None = None
-    # What the source says it matched, when it knows. Only the catalogue does; without it
-    # a page capped at ``search_limit`` reads as the whole answer.
-    total: int | None = None
+    # Seconds this failure must park the account for, ``None`` when it was not a rate
+    # limit at all. Carried rather than re-derived from ``error``: only the gateway knows
+    # WHICH limit landed, and the whole family reads back as one opaque string.
+    flood_seconds: int | None = None
+    # Set on the placeholder outcome a wave appends when the run's shared read budget
+    # left it a read short, so the board can separate "this is all there was" from
+    # "we stopped asking".
+    truncated: bool = False
 
     @property
     def answered(self) -> bool:
         """Did this source actually return a result?
 
-        False for a skipped source (disabled, no key, no seed) and for a failed one. It
+        False for a skipped source (no seed) and for a failed one. It
         separates "nobody answered" from "the answers came back empty", which is what
         decides whether an empty merge may replace the stored candidate set.
         """
@@ -143,19 +153,28 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     return SearchAccount(account_id=account_id)
 
 
-async def record_flood(account_id: str, reason: str | None) -> bool:
-    """Register a discovery-caused FloodWait as a cooldown; says whether it was one.
+async def record_flood(account_id: str, seconds: int | None) -> bool:
+    """Register a discovery-caused rate limit as a cooldown; says whether it was one.
 
     Discovery reads both fleet flood signals but wrote neither, so its own limit was
     invisible to everyone else: the operator's immediate retry passed the health gate,
     and the reconcile that follows an adopt would run peer resolution and joins on a
     flooded account — leaving the engine deaf on the channels just added.
     """
-    match = _FLOOD_SECONDS.search(reason or "")
-    if match is None:
+    if seconds is None:
         return False
-    await set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=int(match.group(1))))
+    await set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds))
     return True
+
+
+def _failed(source: DiscoverySource, exc: TelegramReadError) -> SourceOutcome:
+    """A source the gateway refused, carrying the cooldown the refusal earns."""
+    return SourceOutcome(
+        source=source,
+        state="failed",
+        error=exc.reason,
+        flood_seconds=flood_cooldown(exc),
+    )
 
 
 def _matches_outcome(result: object, source: DiscoverySource) -> SourceOutcome:
@@ -188,67 +207,63 @@ async def search_native(account_id: str, keyword: str) -> SourceOutcome:
             SearchChannels(query=keyword),
         )
     except TelegramReadError as exc:
-        return SourceOutcome(source="telegram_search", state="failed", error=exc.reason)
+        return _failed("telegram_search", exc)
     return _matches_outcome(result, "telegram_search")
 
 
-async def search_similar(account_id: str, seed: str) -> SourceOutcome:
-    """Channels similar to a seed — the cheapest way to widen a sweep."""
+async def search_similar(
+    account_id: str,
+    seed: str,
+    source: DiscoverySource = "telegram_similar",
+) -> SourceOutcome:
+    """Channels similar to a seed — the cheapest way to widen a sweep.
+
+    ``source`` names which wave asked. The operator's own seed reports as
+    ``telegram_similar``; the wave that re-asks around the keyword sweep's best hits
+    reports as ``telegram_recommended``. Same RPC, two report rows on purpose: folded
+    into one, a wave that answered would flip the row to ``ran`` and bury the seed's
+    ``seed_unusable``.
+    """
     try:
         result = await _seams.execute_read(account_id, GetSimilarChannels(seed=seed))
     except TelegramReadError as exc:
-        return SourceOutcome(source="telegram_similar", state="failed", error=exc.reason)
-    return _matches_outcome(result, "telegram_similar")
+        return _failed(source, exc)
+    return _matches_outcome(result, source)
 
 
-async def search_telemetr(
-    keyword: str,
-    request: DiscoverySearchRequest,
-    api_key: str,
-) -> SourceOutcome:
-    """The external catalogue: country/language filters plus subscriber counts.
+@dataclass(frozen=True, slots=True)
+class GlobalPage:
+    """One page of the global post search, and where to continue it.
 
-    A missing key is a *skipped* source rather than a failure — but it is still
-    reported: the operator ticked the box and the catalogue was never queried, and
-    saying nothing let the run reach "done" as if the filter had applied.
-
-    ``api_key`` is passed in, not read here: the read decrypts a secret and this runs
-    once per keyword.
+    ``cursor`` is ``None`` when the page carried no message to continue from, or when
+    the read failed. It is NOT an end-of-results flag — Telegram never sends one, and
+    ``limit`` counts messages rather than channels — so the caller bounds its own paging.
     """
-    result = await _seams.search_telemetr(
-        TelemetrSearchRequest(
-            api_key=api_key,
-            term=keyword,
-            country=request.country,
-            language=request.language,
-            members_min=request.members_min,
-            members_max=request.members_max,
-            limit=settings.telemetr.search_limit,
-        ),
-    )
-    if result.status != "ok":
-        # ``detail`` is the gateway's own text, which distinguishes a revoked key from an
-        # expired subscription from a rejected filter value from a dead network — the
-        # short code cannot. It carries no part of the API key (core.telemetr scrubs it),
-        # so it is safe to show and to log, and the run's finish event logs it.
-        return SourceOutcome(
-            source="telemetr",
-            state="skipped" if result.status == "not_configured" else "failed",
-            error=f"telemetr_{result.status}",
-            detail=result.error,
+
+    outcome: SourceOutcome
+    cursor: GlobalPostsCursor | None = None
+
+
+async def search_global(
+    account_id: str,
+    keyword: str,
+    cursor: GlobalPostsCursor | None = None,
+) -> GlobalPage:
+    """One page of channels whose POSTS match a keyword (``messages.searchGlobal``).
+
+    A second index, not a replacement for the keyword search: core.telegram.org
+    documents this method only as "search for messages and peers globally", while
+    ``channels.searchPosts`` is the one documented as covering channels we are not a
+    member of. Treated as a useful extra source with a small page budget.
+    """
+    try:
+        result = await _seams.execute_read(
+            account_id,
+            SearchGlobalPosts(query=keyword, cursor=cursor),
         )
-    return SourceOutcome(
-        source="telemetr",
-        total=result.total_count,
-        candidates=tuple(
-            RawCandidate(
-                username=item.username,
-                title=item.title,
-                subscribers=item.members_count,
-                source="telemetr",
-                country=item.country,
-                language=item.language,
-            )
-            for item in result.items
-        ),
+    except TelegramReadError as exc:
+        return GlobalPage(_failed("telegram_posts", exc))
+    return GlobalPage(
+        _matches_outcome(result, "telegram_posts"),
+        result.next_cursor if isinstance(result, TelegramGlobalPostMatches) else None,
     )

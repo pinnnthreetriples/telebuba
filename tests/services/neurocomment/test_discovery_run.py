@@ -19,14 +19,18 @@ from core.repositories.neurocomment import (
     replace_discovery_candidates,
 )
 from core.telegram_client import TelegramReadError
-from schemas.neurocomment_discovery import DiscoveryCandidateRow, DiscoverySearchStageResult
-from schemas.telemetr import TelemetrSearchResult
+from schemas.neurocomment_discovery import (
+    DiscoveryCandidateRow,
+    DiscoveryChannelVerdict,
+    DiscoveryRunReport,
+    DiscoverySearchStageResult,
+    DiscoverySourceReport,
+)
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
 from services.neurocomment.discovery import start_discovery
 from tests.services.neurocomment.discovery_support import (
     ReadRecorder,
-    TelemetrRecorder,
     drain_discovery,
     matches,
     new_campaign,
@@ -45,7 +49,8 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
 _CONCURRENT_STARTS = 2
-_FLOOD_REASON = "FloodWait(900s)"
+_FLOOD_SECONDS = 900
+_FLOOD_REASON = f"FloodWait({_FLOOD_SECONDS}s)"
 
 
 async def _seed_candidates(campaign_id: str, *channels: str) -> None:
@@ -68,7 +73,7 @@ def _hit_then_flood() -> Callable[[TelegramReadAction], BaseModel]:
 
     def _search(_action: TelegramReadAction) -> BaseModel:
         if answered:
-            raise TelegramReadError(_FLOOD_REASON)
+            raise TelegramReadError(_FLOOD_REASON, kind="flood_wait", seconds=_FLOOD_SECONDS)
         answered.append("done")
         return matches(("found", "F", None))
 
@@ -269,66 +274,31 @@ async def test_a_partial_search_failure_still_qualifies_what_it_found(
 
 
 @pytest.mark.asyncio
-async def test_a_degraded_source_with_no_native_hits_still_replaces_the_set(
+async def test_a_degraded_source_with_no_hits_still_replaces_the_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Nobody-answered is the discriminator, not no-rows-plus-a-reason.
 
-    Native answering honestly with zero hits while the catalogue is rate-limited is an
+    The keyword search answering honestly with zero hits while the seed pass fails is an
     empty *result*: serving the previous run's rows here would present channels from a
     different keyword set as this run's findings, ticked and adoptable.
-
-    This holds only for an UNFILTERED request — see the test below, which is the case
-    that used to be swept in here and cost the operator their filtered set.
     """
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
     monkeypatch.setattr(
         _seams,
-        "search_telemetr",
-        TelemetrRecorder(TelemetrSearchResult(status="rate_limited", error="HTTP 429")),
+        "execute_read",
+        ReadRecorder(search=matches(), similar=read_error("RPC: Timeout")),
     )
     await seed_listener()
     campaign_id = await new_campaign()
     await _seed_candidates(campaign_id, "from_last_run")
 
-    await start_discovery(campaign_id, search_request(use_telemetr=True))
+    await start_discovery(campaign_id, search_request(seed_channel="@durov"))
     await drain_discovery(campaign_id)
 
     assert await _channels_of(campaign_id) == []
     assert _discovery_state.phase_of(campaign_id) == "done"
     # The degraded source is still reported, just not as a failed run.
-    assert _discovery_state.last_error(campaign_id) == "telemetr_rate_limited"
-
-
-@pytest.mark.asyncio
-async def test_a_failed_catalogue_with_filters_set_keeps_the_previous_set(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """One answering source must not authorise the replace when the filters never applied.
-
-    Run 1 leaves the operator a filtered, already-qualified Turkish set. On run 2 the
-    catalogue 429s while native answers with 20 unfiltered Russian channels — and the
-    all-or-nothing guard let those delete and replace the good set.
-    """
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("russian", "R", 10))))
-    monkeypatch.setattr(
-        _seams,
-        "search_telemetr",
-        TelemetrRecorder(TelemetrSearchResult(status="rate_limited", error="HTTP 429")),
-    )
-    await seed_listener()
-    campaign_id = await new_campaign()
-    await _seed_candidates(campaign_id, "turkish_one", "turkish_two")
-
-    await start_discovery(
-        campaign_id,
-        search_request(use_telemetr=True, language="tr", country="TR"),
-    )
-    await drain_discovery(campaign_id)
-
-    assert await _channels_of(campaign_id) == ["turkish_one", "turkish_two"]
-    assert _discovery_state.phase_of(campaign_id) == "failed"
-    assert _discovery_state.last_error(campaign_id) == "telemetr_rate_limited"
+    assert _discovery_state.last_error(campaign_id) == "RPC: Timeout"
 
 
 @pytest.mark.asyncio
@@ -348,11 +318,55 @@ async def test_a_flood_wait_does_not_enter_qualification(
     await start_discovery(campaign_id, search_request(keywords=["alpha", "bravo"]))
     await drain_discovery(campaign_id)
 
-    # The hit from the first keyword is stored — it is the probing that must not happen.
-    assert await _channels_of(campaign_id) == ["found"]
     assert reader.actions_of("get_linked_discussion_group") == []
     assert _discovery_state.phase_of(campaign_id) == "failed"
     assert _discovery_state.last_error(campaign_id) == _FLOOD_REASON
+    # The first keyword's hit is NOT stored: see the test below for why a run this run
+    # never finished must not become the campaign's candidate set.
+    assert await _channels_of(campaign_id) == []
+
+
+@pytest.mark.asyncio
+async def test_a_flood_mid_sweep_keeps_the_previous_candidate_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A run cut short trades nothing away: the reviewed set outranks a fragment.
+
+    Storing what the flooded run happened to reach deleted an already-qualified set,
+    put a handful of unqualified handles in its place, reported the run failed (a flood
+    skips qualification) and left the account on cooldown — so the operator could not
+    even search again to get their candidates back.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=_hit_then_flood()))
+    await seed_listener()
+    campaign_id = await new_campaign()
+    await _seed_candidates(campaign_id, "qualified_one", "qualified_two")
+
+    await start_discovery(campaign_id, search_request(keywords=["alpha", "bravo"]))
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["qualified_one", "qualified_two"]
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+
+
+@pytest.mark.asyncio
+async def test_a_new_run_does_not_serve_the_previous_run_s_verdicts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Verdicts are per-run, and a cached linked group makes this run spend no probe.
+
+    So a verdict left over from three runs ago would be shown against a row nothing
+    measured this time — and the map would grow for the life of the process.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("alpha", "A", 500))))
+    await seed_listener()
+    campaign_id = await new_campaign()
+    _discovery_state.record_verdict(campaign_id, "stale", DiscoveryChannelVerdict(scam=True))
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert "stale" not in _discovery_state.verdicts(campaign_id)
 
 
 @pytest.mark.asyncio
@@ -447,12 +461,22 @@ async def test_an_unexpected_error_fails_the_run_without_escaping(
     monkeypatch.setattr(discovery_module, "run_search", _boom)
     await seed_listener()
     campaign_id = await new_campaign()
+    _discovery_state.set_run_report(
+        campaign_id,
+        DiscoveryRunReport(
+            sources=[DiscoverySourceReport(source="telegram_search", state="ran", hits=9, kept=9)],
+        ),
+    )
 
     await start_discovery(campaign_id, search_request())
     await drain_discovery(campaign_id)
 
     assert _discovery_state.phase_of(campaign_id) == "failed"
     assert _discovery_state.last_error(campaign_id) == "RuntimeError"
+    # The strip is per-run like the phase and the error: a crash never sets one, so
+    # keeping the previous run's published a source report beside a run that made no
+    # reads at all.
+    assert _discovery_state.run_report(campaign_id).sources == []
 
 
 @pytest.mark.asyncio

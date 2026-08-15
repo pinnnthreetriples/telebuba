@@ -1,6 +1,6 @@
 """Overflow settings domains — split from ``core.config`` for the file-size budget.
 
-Holds the larger self-contained nested namespaces (telemetr, trust, neurocomment).
+Holds the larger self-contained nested namespaces (trust, neurocomment).
 They are re-exported from ``core.config`` so existing
 ``from core.config import WarmingSettings`` call sites keep working unchanged;
 the ``Settings`` aggregate and the ``settings`` instance stay in ``core.config``.
@@ -25,26 +25,6 @@ from core._config_llm import (  # noqa: F401 - re-export for existing call sites
     GeminiSettings,
     OpenAISettings,
 )
-
-
-class TelemetrSettings(BaseSettings):
-    """Telemetr.io channel catalogue — the external half of channel discovery.
-
-    Supplies keyword/country/language/subscriber filters and subscriber counts that
-    Telegram's own search does not return. The key is operator-set in the DB (falls
-    back to ``TELEMETR__API_KEY`` in .env); an empty key means the source is simply
-    skipped, never an error.
-    """
-
-    model_config = SettingsConfigDict(env_prefix="TELEMETR__", extra="ignore")
-
-    api_key: str = Field(default="", repr=False)
-    base_url: str = Field(default="https://api.telemetr.io/v1")
-    timeout_seconds: float = Field(default=20.0, ge=1.0)
-    # Rows requested per keyword (server max is 100).
-    search_limit: int = Field(default=30, ge=1, le=100)
-    max_retries: int = Field(default=1, ge=0, le=5)
-    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
 
 
 class TrustSettings(BaseSettings):
@@ -347,9 +327,27 @@ class NeurocommentSettings(BaseSettings):
     # repository itself keeps no TTL (onboarding wants the raw cache), but a channel
     # that switched comments on months ago must not stay filtered out forever.
     discovery_linked_group_ttl_hours: float = Field(default=168.0, ge=0.0)
-    # Consecutive gateway failures that abort a qualification pass — a dead session
-    # must not burn one RPC per candidate.
+    # Consecutive gateway failures that abort a qualification pass OR a search run — a
+    # dead session must not burn one RPC per candidate, nor one per remaining keyword.
     discovery_max_consecutive_errors: int = Field(default=3, ge=1)
+    # One ceiling on the Telegram reads a single search run may spend across ALL its
+    # waves (keyword sweep, operator seed, global post pages, recommendation wave). The
+    # waves multiply, so the run bounds the total instead of each wave bounding itself.
+    # Spent cheapest-first; a wave cut short says so in its source report rather than
+    # quietly returning less.
+    # The default is above what a run can actually want, so truncation means the operator
+    # lowered this — not that the settings shipped too small. The maximum is at the
+    # maximum keyword list: 10 sweep + 1 seed + 10 post pages + 5 recommendation seeds =
+    # 26 (the post wave caps its own total, see ``_discovery_waves``). At 24 the post
+    # pages ate every read the sweep and the seed left, so BOTH the post wave and the
+    # recommendation wave reported themselves truncated on an ordinary run and the
+    # recommendation wave — the one source that reaches channels this account is nowhere
+    # near — made no read at all, while the board still invited another search.
+    # The shape of the individual waves under it (pages per keyword, recommendation
+    # seeds) is NOT a knob: this ceiling already bounds the account's traffic, and the
+    # only thing the per-wave numbers could do that it cannot was switch a source off —
+    # which left the operator's board a source short instead of tuning anything.
+    discovery_max_reads_per_run: int = Field(default=30, ge=1, le=200)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:

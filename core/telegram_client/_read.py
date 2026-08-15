@@ -151,9 +151,20 @@ async def execute_read_many(
         results: list[BaseModel] = [
             await _dispatch_read_action(client, action) for action in actions
         ]
-    except errors.FloodWaitError as exc:
-        reason = f"FloodWait({exc.seconds}s)"
+    # Telegram's whole rate-limit family, not just FLOOD_WAIT. FLOOD_PREMIUM_WAIT (what a
+    # non-premium account is genuinely answered with) and SLOW_MODE_WAIT are SIBLINGS of
+    # FloodWaitError under FloodError, never subclasses, so naming only it collapsed them
+    # into the generic RPC arm below — kind "other", no seconds — and every caller that
+    # stops reading on a rate limit took them for ordinary failures and read on. Each
+    # keeps its own spelling so the operator is told which limit actually landed.
+    except (errors.FloodWaitError, errors.FloodPremiumWaitError, errors.SlowModeWaitError) as exc:
+        reason = f"{type(exc).__name__.removesuffix('Error')}({exc.seconds}s)"
         raise TelegramReadError(reason, kind="flood_wait", seconds=exc.seconds) from exc
+    except errors.PeerFloodError as exc:
+        # A 400, not a 420, and no duration on the wire: same verdict and the same
+        # spelling rule, but the wait is left to the caller's no-duration default.
+        reason = type(exc).__name__.removesuffix("Error")
+        raise TelegramReadError(reason, kind="flood_wait") from exc
     except errors.RPCError as exc:
         reason = f"RPC: {type(exc).__name__}"
         raise TelegramReadError(reason) from exc
@@ -217,6 +228,32 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await _dispatch_channel_read_action(client, action)
 
 
+def _flag(source: object, name: str) -> bool | None:
+    """Read one Telethon boolean flag, or ``None`` when nothing answered it.
+
+    An unset TL flag arrives as ``None`` and a test double answers every attribute
+    with another mock; neither is a verdict, so both stay unknown rather than being
+    coerced into a ``False`` a campaign would then act on.
+    """
+    value = getattr(source, name, None)
+    return value if isinstance(value, bool) else None
+
+
+def _chat_by_id(reply: object, chat_id: int | None) -> object | None:
+    """Pick one ``Channel`` entity out of the reply's ``chats``, or ``None``.
+
+    The reply carries BOTH entities this dispatch reads: the broadcast channel it was
+    asked about (Telegram's scam/fake/restricted marks live there) and the linked
+    discussion group (the write gates a campaign has to pass live there). Telegram
+    omits either entity for some channels; there is deliberately no fallback RPC, an
+    absent entity stays unknown.
+    """
+    if chat_id is None:
+        return None
+    chats = getattr(reply, "chats", None) or ()
+    return next((chat for chat in chats if getattr(chat, "id", None) == chat_id), None)
+
+
 async def _dispatch_get_linked_group(
     client: TelegramClient,
     action: GetLinkedDiscussionGroup,
@@ -233,10 +270,27 @@ async def _dispatch_get_linked_group(
     # Same RPC already carries the subscriber count, which channel search does not
     # return — discovery backfills it from here instead of spending a second read.
     participants = getattr(full_chat, "participants_count", None)
+    group = _chat_by_id(result, linked_id)
+    # The broadcast the operator would adopt, not its discussion group: its own
+    # scam/fake marks are the case discovery exists to catch, and a channel with no
+    # linked group carried none of them while a clean channel with a flagged group
+    # was reported as a scam.
+    broadcast = _chat_by_id(result, getattr(full_chat, "id", None))
+    # The RIGHTS object answers "may anyone write", not the group's presence: a linked
+    # ``ChannelForbidden``/``ChatEmpty`` carries none, and its absence is not a "no ban".
+    rights = getattr(group, "default_banned_rights", None)
     return LinkedDiscussionGroupResult(
         linked_chat_id=linked_id,
         comments_enabled=linked_id is not None,
         participants_count=participants if isinstance(participants, int) else None,
+        join_to_send=_flag(group, "join_to_send"),
+        join_request=_flag(group, "join_request"),
+        # Present, an unset ban flag genuinely means everyone may write; absent, unknown.
+        can_send_messages=None if rights is None else _flag(rights, "send_messages") is not True,
+        group_slowmode_enabled=_flag(group, "slowmode_enabled"),
+        scam=_flag(broadcast, "scam"),
+        fake=_flag(broadcast, "fake"),
+        restricted=_flag(broadcast, "restricted"),
     )
 
 
