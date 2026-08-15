@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-06
+last_updated: 2026-08-15
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -21,6 +21,7 @@ grounds_to:
 - Inter-account DMs resolve cold peers by phone through `contacts.resolvePhone`, never by saving them as contacts. A permanently unaddressable peer skips the turn without parking the healthy sender, but the attempt still consumes budget.
 - Quarantine releases only on a confirmed clean spam check. An unreadable/unknown check does not release the account and still advances the bounded recovery attempt counter.
 - Scheduling/de-correlation lives in pacing/fleet modules; cycle modules own one session; runtime modules own task state, sleep, bounded cancellation and recovery. A generation lease is checked around Telegram dispatch so a retired cycle cannot begin a later action. Keep injectable collaborators behind the warming seam.
+- Start refuses any account neurocomment already owns: the running listener, an in-flight channel-discovery run, or a live cooldown either runtime recorded. Both extra facts are read from neurocomment through deferred imports (a load-time one closes an import cycle) and answered synchronously inside the lifecycle lock. These are typed refusals carrying a stable code, never readiness reasons, and they change only whether warming starts — never its pacing.
 - Board/read paths stay bulk-loaded; loop failures are logged and persisted rather than silently killing a task.
 
 Exact caps, timings and implementation headroom belong to config/tests/code, not memory.

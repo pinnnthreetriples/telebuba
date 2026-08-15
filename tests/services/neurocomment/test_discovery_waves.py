@@ -7,7 +7,7 @@ run, and how the shared read budget is divided between the waves.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -17,7 +17,7 @@ from core.telegram_client import TelegramReadError
 from schemas.telegram_actions_discovery import GlobalPostsCursor
 from services.neurocomment import _seams
 from services.neurocomment._discovery_search import run_search
-from services.neurocomment._state import in_cooldown
+from services.neurocomment._state import in_cooldown, set_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
@@ -66,6 +66,82 @@ def _search_failing_on(fragment: str) -> Callable[[TelegramReadAction], BaseMode
         return _RICH_SWEEP
 
     return _search
+
+
+class _ParksTheAccountOnRead:
+    """A source that answers normally, and on its Nth read parks the account.
+
+    Stands in for the comment engine (or anything else) writing a cooldown against the
+    shared listener while a run is mid-flight — a fact this run's own error counters can
+    never see, because nothing it asked for failed.
+    """
+
+    def __init__(self, on_call: int) -> None:
+        self._on_call = on_call
+        self.calls = 0
+
+    async def __call__(self, _account_id: str, _action: object) -> object:
+        self.calls += 1
+        if self.calls == self._on_call:
+            await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
+        return _RICH_SWEEP
+
+
+@pytest.mark.asyncio
+async def test_a_cooldown_somebody_else_recorded_stops_the_next_wave(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Between waves is where a run notices a limit it did not cause.
+
+    Before this, only the run's OWN reads could stop it: a flood the comment engine
+    landed at read 3 left the remaining waves — and then up to a hundred qualification
+    probes — firing into a live window, which is how Telegram turns a soft limit hard.
+    """
+    reader = _ParksTheAccountOnRead(on_call=1)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id,
+        LISTENER_ID,
+        search_request(keywords=["crypto"], seed_channel="@durov"),
+    )
+
+    # One keyword read, then nothing: no seed, no post pages, no recommendations.
+    assert reader.calls == 1
+    # Reported as a rate limit so the coordinator skips qualification, and named so the
+    # operator is told the account is cooling rather than that the search "finished".
+    assert stage.flooded is True
+    assert stage.error == "account_cooling"
+    # A partial sweep must not displace the reviewed candidate set, exactly as a flood
+    # this run caused does not.
+    assert stage.replaced is False
+    assert stage.found == 0
+
+
+@pytest.mark.asyncio
+async def test_a_channel_scoped_cooldown_does_not_stop_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Slow mode in one discussion group is not a limit on the account's own reads.
+
+    The stop has to be as narrow as the start gate, or a single talkative chat ends every
+    search the fleet makes.
+    """
+    reader = ReadRecorder(search=_RICH_SWEEP)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1), channel="@chat")
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id,
+        LISTENER_ID,
+        search_request(keywords=["crypto"], seed_channel="@durov"),
+    )
+
+    assert reader.similar_actions() != []
+    assert stage.flooded is False
+    assert stage.replaced is True
 
 
 @pytest.mark.asyncio

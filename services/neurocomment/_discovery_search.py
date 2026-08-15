@@ -23,6 +23,7 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchStageResult,
     DiscoverySourceReport,
 )
+from services.neurocomment._discovery_providers import COOLING_REASON
 from services.neurocomment._discovery_waves import READ_BUDGET, SOURCE_PRIORITY, native_pass
 
 if TYPE_CHECKING:
@@ -228,9 +229,15 @@ async def run_search(
     # for them and reports the run failed, and the account is now on cooldown. Handing
     # that partial set to the delete-then-insert traded a reviewed, qualified candidate
     # list for a dozen unqualified handles the operator could not even re-search for.
+    # A limit found at a wave boundary is treated exactly like one this run caused: the
+    # run stopped early either way, so its findings are a fraction of the sweep and must
+    # not displace a reviewed set. It is reported under its own reason, because "we hit a
+    # flood" and "the account was already serving one" send the operator to different
+    # places.
     swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
     replaced = (
         not native.flooded
+        and not native.cooled
         and any(outcome.answered for outcome in outcomes)
         and (bool(merged.rows) or swept)
     )
@@ -246,9 +253,12 @@ async def run_search(
         # The stored count, so a run that kept the previous set does not report rows the
         # operator cannot see.
         found=len(merged.rows) if replaced else 0,
-        error=merged.error,
+        # The stop wins over a source's own reason: a keyword that failed while the
+        # account was being parked by something else explains nothing the operator can
+        # act on, and the cooldown does.
+        error=COOLING_REASON if native.cooled else merged.error,
         replaced=replaced,
-        flooded=native.flooded,
+        flooded=native.flooded or native.cooled,
         report=DiscoveryRunReport(
             sources=_source_reports(outcomes, merged.reach, origins),
             origins=origins,

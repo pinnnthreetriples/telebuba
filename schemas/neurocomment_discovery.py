@@ -211,8 +211,10 @@ class DiscoverySearchStageResult(BaseModel):
     # Was the stored candidate set actually replaced? A run that answered with nothing
     # usable leaves the previous, already-qualified set alone.
     replaced: bool = False
-    # Did a Telegram FloodWait land? Qualification must not read on this account until
-    # the window closes — the search stage has already written the cooldown.
+    # Is a Telegram rate limit in force on the search account? Either the stage caused
+    # one (and wrote the cooldown itself) or a wave boundary found one somebody else
+    # recorded. Qualification must not read on this account until the window closes, and
+    # a partial set of findings must not displace the stored candidates.
     flooded: bool = False
     report: DiscoveryRunReport = Field(default_factory=DiscoveryRunReport)
 

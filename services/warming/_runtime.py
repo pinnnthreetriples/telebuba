@@ -33,6 +33,7 @@ from core.logging import log_event
 from services.dialogues import assign_pairs
 from services.trust import account_trust_score
 from services.warming import _seams
+from services.warming._exclusion import assert_account_free
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
 from services.warming._start_state import carry_or_restamp
@@ -312,6 +313,10 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # that is the active listener, so the two runtimes never share a session.
         if await get_listener_running() and await get_listener_account_id() == data.account_id:
             raise AccountIsListenerError(data.account_id)
+        # The other two ways neurocomment can already own this session: an in-flight
+        # discovery run (which only starts while the listener is STOPPED, so the check
+        # above cannot see it) and a live flood cooldown either runtime recorded.
+        assert_account_free(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
         # Revoke + cancel first, and publish a fresh generation only after the old
         # coroutine is terminal. A task that suppresses cancellation remains owned
