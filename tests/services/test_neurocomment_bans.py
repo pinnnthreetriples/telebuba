@@ -1,12 +1,18 @@
 """Tests for ``services.neurocomment.bans`` — the live per-channel ban check.
 
-Seeds real campaign/account/channel rows and patches the Telegram read seam
-(``_seams.execute_read``) so no network is touched; asserts the per-channel
-aggregation and pin-aware account resolution.
+Seeds real campaign/account/channel rows and patches BOTH Telegram seams this check
+reaches, so no network is touched: the participant probe (``_seams.execute_read``) and
+the @SpamBot verdict (``_seams.refresh_spam_status``), which a ``restricted`` probe
+pulls in through the ban-confirmation ladder. Stubbing only the first left the second
+live — with ``TELEGRAM__API_ID`` / ``TELEGRAM__API_HASH`` in the environment four of
+these tests opened a real Telegram connection, and CI, which has no credentials, never
+saw it because Telethon refuses to construct a client without them. Asserts the
+per-channel aggregation and pin-aware account resolution.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Literal
 
 import pytest
@@ -27,6 +33,7 @@ from core.repositories.neurocomment import set_campaign_account_channels
 from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
+from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel
 from services.neurocomment import _seams
 from services.neurocomment.bans import check_campaign_channel_bans
@@ -49,7 +56,16 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def _patch_seam(
     monkeypatch: pytest.MonkeyPatch, mapping: dict[tuple[str, str], _State | Exception]
 ) -> None:
-    """Route each (account_id, channel) probe to a state string or a raised error."""
+    """Route each (account_id, channel) probe to a state string or a raised error.
+
+    Both Telegram seams, because both are reached: a ``restricted`` probe runs the
+    ban-confirmation ladder, and that asks @SpamBot. No test here asserts on the
+    verdict — they assert the aggregated per-channel status, which ``_aggregate``
+    reads off the probe states alone — so the stub answers ``unknown``, the status
+    that says nobody reached @SpamBot. It is also the answer the live call was
+    already degrading to, so the ladder still stops short of the sticky ban and the
+    group leave, and no test's outcome moves.
+    """
 
     async def fake_execute_read(account_id: str, action: CheckBannedInChannel) -> BanCheckResult:
         value = mapping.get((account_id, action.channel), "can_send")
@@ -57,7 +73,17 @@ def _patch_seam(
             raise value
         return BanCheckResult(state=value)
 
+    async def fake_refresh_spam_status(
+        account_id: str,
+        *,
+        force: bool = False,  # noqa: ARG001 - the seam's signature; the stub answers the same either way.
+    ) -> SpamStatusVerdict:
+        return SpamStatusVerdict(
+            account_id=account_id, status="unknown", checked_at=datetime.now(UTC).isoformat()
+        )
+
     monkeypatch.setattr(_seams, "execute_read", fake_execute_read)
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_refresh_spam_status)
 
 
 async def _seed(channels: list[str], accounts: list[str]) -> str:
