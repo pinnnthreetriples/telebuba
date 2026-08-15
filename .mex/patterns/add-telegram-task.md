@@ -19,7 +19,7 @@ edges:
 1. Decide write vs read first. Writes join TelegramAction and use [`execute()`](mex://function:c7b49927e6426ff0746a253f426555c3); reads join TelegramReadAction and use [`execute_read()`](mex://function:076202eb2f7db9da7184e67c4aba3636)/[`execute_read_many()`](mex://function:cc4a14399d709104c7b6f0e3856e631f).
 2. Define typed action/result contracts in the owning schemas/telegram_actions_*.py module and include them in the correct discriminated union. Re-export public classes from schemas.telegram_actions.
 3. Implement Telethon dispatch in the focused core/telegram_client/ module and wire its dispatcher. Unsupported actions must fail explicitly; do not leak SDK objects.
-4. Let the public gateway own shared Telegram error/rate-limit classification. Domain code consumes stable results rather than remapping raw Telethon exceptions.
+4. Let the public gateway own shared Telegram error/rate-limit classification, including the whole flood family — plain, premium and slow-mode waits plus peer flood, which are not one Telethon subclass. Domain code branches on the typed kind and its seconds; matching the rendered message is how a caller ends up honouring one member of the family and reading straight through the other three.
 5. Persist durable account/domain state in the service layer. Operator profile/media edits that intentionally make FloodWait sticky must be explicitly included in the profile-edit action set; automated warming/neurocomment traffic must not inherit that policy.
 6. Call the gateway through the domain seam where tests need substitution.
 7. Test success, rate-limit/special classification and generic failure. Patch the symbol on the module that owns it, not a re-exporting package facade.
