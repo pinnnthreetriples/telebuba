@@ -26,7 +26,18 @@ The current calibration uses CPython 3.13.14, mutmut 3.6.0, the deterministic
 `TZ=UTC`. Its catalogue digest is
 `6c88cb83ff9c1aaf3b3f7944d1acfdf09f699e383d44ab19d229ff7e3706b1db`;
 the digest binds mutant identities to the exact Python source paths and bytes,
-so a semantic source change cannot silently reuse a reviewed timeout identity.
+so a semantic source change cannot silently reuse a reviewed identity.
+
+Drift is reported, not gated. The measured source changes every day here, a sweep
+costs hours, and main took three merges during the 2h39m sweep that produced this
+floor — so the baseline is stale again before a reseed can land, and failing on
+that punished ordinary work rather than catching anything. What drift actually
+invalidates is per-identity comparison, and those checks already stand down for
+it: reviewed survivors and reviewed timeouts are only trusted inside a matching
+catalogue. The score survives because it is a RATIO over decided mutants — new
+code that is well tested holds it, new code that is not drops it and still fails
+below. Reseed when the drift grows large enough that the floor stops meaning
+much, not on a schedule.
 The floor is measured on the GitHub runner, not locally. A clean local sweep
 scores higher, but the hosted runner is slower and more contended, and pinning
 the floor to the best machine made every Nightly red.

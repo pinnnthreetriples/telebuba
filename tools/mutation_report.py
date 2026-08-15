@@ -232,12 +232,10 @@ def build_report(
             (current_score - baseline_score).quantize(Decimal("0.0001")),
         ),
         "meets_score_baseline": meets_score_baseline,
-        # Timeouts neither gate nor score: mutmut recalibrates each mutant's
-        # allowance from measured durations, so one unchanged catalogue yielded
-        # 124-224 of them across four sweeps. See docs/mutation-testing.md.
+        # Timeouts neither gate nor score; drift is reported, not gated. Both
+        # move with the runner, not with test quality. See the docs.
         "meets_baseline": (
             meets_score_baseline
-            and catalog_matches_baseline
             and not unexpected_survivors
             and not any(item.status == "no tests" for item in effective_results)
         ),
@@ -371,13 +369,15 @@ def gate_command(args: argparse.Namespace) -> int:
     )
     failed = False
     if not report["catalog_matches_baseline"]:
+        # Reported, not gated: the source changes daily and a sweep costs hours,
+        # so a baseline is stale before a reseed lands. The score is a ratio over
+        # decided mutants and stays comparable across catalogues. See the docs.
         print(
-            "mutant catalog drift: "
+            "mutant catalog drift (not gated, identity checks stand down): "
             f"{report['mutant_catalog_sha256']} != "
             f"{baseline['mutant_catalog_sha256']}",
             file=sys.stderr,
         )
-        failed = True
     if report["unexpected_timeouts"]:
         # Reported for review, not gated: see ``meets_baseline`` in build_report.
         print(

@@ -301,7 +301,13 @@ def test_catalog_digest_binds_stable_source_paths_and_bytes(tmp_path: Path) -> N
     assert first != mutation_report.mutant_catalog_sha256(results, second_root, SOURCE_PATHS)
 
 
-def test_build_report_flags_catalog_drift_even_when_total_is_unchanged(tmp_path: Path) -> None:
+def test_catalog_drift_is_reported_without_failing_the_gate(tmp_path: Path) -> None:
+    """Drift means the measured source changed, which on this repo is every day.
+
+    A sweep costs hours, so the baseline is stale again before a reseed can land;
+    failing on it punished ordinary work. The score is a ratio over decided
+    mutants and stays comparable, so untested new code still fails below.
+    """
     changed = _results().replace("x_first__mutmut_1", "x_first__mutmut_9")
     path = tmp_path / "results.txt"
     path.write_text(changed, encoding="utf-8")
@@ -314,7 +320,7 @@ def test_build_report_flags_catalog_drift_even_when_total_is_unchanged(tmp_path:
 
     assert report["catalog_matches_baseline"] is False
     assert report["meets_score_baseline"] is True
-    assert report["meets_baseline"] is False
+    assert report["meets_baseline"] is True
     assert report["unexpected_timeouts"] == ["services.alpha.x_second__mutmut_1"]
     assert report["resolved_reviewed_timeouts"] == []
 
@@ -592,7 +598,7 @@ def test_gate_cli_fails_only_on_aggregate_score_regression(
     assert "unexpected timeout" not in error
 
 
-def test_gate_cli_reports_catalog_drift_distinctly(
+def test_gate_cli_names_catalog_drift_without_failing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -624,7 +630,7 @@ def test_gate_cli_reports_catalog_drift_distinctly(
         ],
     )
 
-    assert exit_code == 1
+    assert exit_code == 0, "a changed source tree must not fail the build by itself"
     error = capsys.readouterr().err
     assert "mutant catalog drift" in error
     assert "mutation score regression" not in error
