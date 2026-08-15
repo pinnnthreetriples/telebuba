@@ -317,7 +317,14 @@ def test_build_report_flags_catalog_drift_even_when_total_is_unchanged(tmp_path:
     assert report["resolved_reviewed_timeouts"] == []
 
 
-def test_build_report_flags_only_unreviewed_timeout_identities(tmp_path: Path) -> None:
+def test_an_unreviewed_timeout_is_named_but_does_not_fail_the_gate(tmp_path: Path) -> None:
+    """The timeout threshold is recalibrated per run, so identities flap.
+
+    Three sweeps of one unchanged catalogue produced 195, 198 and 124 timeouts.
+    Failing on a new identity is a gate that is always red; the regression it
+    guards — a killed mutant going unbounded — drops ``killed`` and is caught by
+    the score floor instead.
+    """
     path = tmp_path / "results.txt"
     path.write_text(_results(), encoding="utf-8")
 
@@ -328,7 +335,7 @@ def test_build_report_flags_only_unreviewed_timeout_identities(tmp_path: Path) -
     )
 
     assert report["unexpected_timeouts"] == ["services.alpha.x_second__mutmut_1"]
-    assert report["meets_baseline"] is False
+    assert report["meets_baseline"] is True
 
 
 def test_disappearing_reviewed_timeout_is_an_allowed_improvement(tmp_path: Path) -> None:
@@ -619,10 +626,10 @@ def test_gate_cli_reports_catalog_drift_distinctly(
     error = capsys.readouterr().err
     assert "mutant catalog drift" in error
     assert "mutation score regression" not in error
-    assert "unexpected timeout mutants: services.alpha.x_second__mutmut_1" in error
+    assert "new timeout identities (not gated): services.alpha.x_second__mutmut_1" in error
 
 
-def test_gate_cli_reports_unexpected_timeout_distinctly(
+def test_gate_cli_names_a_new_timeout_identity_without_failing(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -666,8 +673,8 @@ def test_gate_cli_reports_unexpected_timeout_distinctly(
         ],
     )
 
-    assert exit_code == 1
+    assert exit_code == 0, "a flapping timeout identity must not fail the build"
     error = capsys.readouterr().err
-    assert "unexpected timeout mutants: services.alpha.x_second__mutmut_1" in error
+    assert "new timeout identities (not gated): services.alpha.x_second__mutmut_1" in error
     assert "mutation score regression" not in error
     assert "catalog drift" not in error

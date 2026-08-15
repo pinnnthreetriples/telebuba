@@ -12,10 +12,10 @@ preserves every available partial snapshot and diagnostic log.
 | Result | Count |
 |---|---:|
 | Total | 15,471 |
-| Killed | 12,766 |
+| Killed | 12,761 |
 | Survived | 2,505 |
-| Timeout | 200 |
-| Score | 82.5157% |
+| Timeout | 205 |
+| Score | 82.4834% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -31,11 +31,24 @@ The floor is measured on the GitHub runner, not locally. A clean local sweep
 scores higher, but the hosted runner is slower and more contended, and pinning
 the floor to the best machine made every Nightly red.
 
-The 12,766/2,505/200 floor is the merge of current `main` into this branch, and
-it is again the union of two runner sweeps rather than one: seeding from a
-single sweep left seven identities unreviewed, and the second sweep flagged
-every one of them. One further survivor that sweep reported was killed by its
-own serial recheck — noise the mechanism absorbed instead of banking. The
+The 12,761/2,505/205 floor is the merge of current `main` into this branch, and
+it is the union of three runner sweeps. Survivors converged quickly: the union
+is 2,505 and only thirteen identities ever moved.
+
+Timeouts did not converge, and that is a property of the measurement rather than
+of the code. mutmut allows each mutant `timeout_multiplier` times that test's
+MEASURED duration, so the threshold is recalibrated on every run: the same
+unchanged catalogue produced 195, 198 and 124 timeouts across three sweeps, and
+86 of the 205 identities involved flipped. A serial recheck cannot separate that
+out, because it recalibrates too.
+
+So a new timeout identity is reported by name but does not fail the gate. What
+that check was meant to catch — a killed mutant going unbounded — lowers
+`killed` and is caught by the score floor, which every one of the three sweeps
+clears (82.5609%, 82.5803%, 83.0392%). Survivors stay gated by name: they are
+stable, and a survivor seen under four-worker load is still rechecked serially
+before it can count. One did exactly that here, `start_neurocomment__mutmut_1`,
+killed on the uncontended rerun and never banked into the floor. The
 score dropped from 84.56% because the catalogue grew by over 1,500 mutants of
 code that arrived with main, not because anything regressed. Every timeout was
 individually rerun with one worker and every one reproduced, so each is a

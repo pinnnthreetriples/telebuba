@@ -228,10 +228,14 @@ def build_report(
             (current_score - baseline_score).quantize(Decimal("0.0001")),
         ),
         "meets_score_baseline": meets_score_baseline,
+        # A new timeout identity is named but does not gate: mutmut recalibrates
+        # the per-mutant allowance from measured test durations every run, so the
+        # same catalogue yielded 195/198/124 timeouts across three sweeps. A
+        # killed mutant going unbounded still lowers ``killed`` and trips the
+        # score floor. See docs/mutation-testing.md.
         "meets_baseline": (
             meets_score_baseline
             and catalog_matches_baseline
-            and not unexpected_timeouts
             and not unexpected_survivors
             and not any(item.status == "no tests" for item in effective_results)
         ),
@@ -372,8 +376,13 @@ def gate_command(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         failed = True
+    if report["unexpected_timeouts"]:
+        # Reported for review, not gated: see ``meets_baseline`` in build_report.
+        print(
+            "new timeout identities (not gated): " + ", ".join(report["unexpected_timeouts"]),
+            file=sys.stderr,
+        )
     for message, names in (
-        ("unexpected timeout mutants", report["unexpected_timeouts"]),
         ("unexpected survivor mutants", report["unexpected_survivors"]),
         ("mutants with no covering test", report["untested_mutants"]),
     ):

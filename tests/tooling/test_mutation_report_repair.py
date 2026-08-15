@@ -122,7 +122,7 @@ def test_targeted_repair_rejects_duplicate_identity() -> None:
         )
 
 
-def test_targeted_repair_preserves_unexpected_timeout_gate() -> None:
+def test_targeted_repair_still_names_a_new_timeout_identity() -> None:
     report = base._build_report(
         _incomplete_stats(),
         base._result_objects(_incomplete_results()),
@@ -131,7 +131,7 @@ def test_targeted_repair_preserves_unexpected_timeout_gate() -> None:
     )
 
     assert report["unexpected_timeouts"] == ["services.a.x_f__mutmut_4"]
-    assert report["meets_baseline"] is False
+    assert report["meets_baseline"] is True  # named for review, not gated
 
 
 def test_targeted_repair_overlays_a_completed_first_attempt_timeout() -> None:

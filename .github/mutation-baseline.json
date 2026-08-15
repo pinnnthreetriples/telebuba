@@ -118,6 +118,7 @@
     "services.neurocomment._join.x_run_join_pass__mutmut_67",
     "services.neurocomment._join.x_run_join_pass__mutmut_68",
     "services.neurocomment._join.x_run_join_pass__mutmut_7",
+    "services.neurocomment._llm.x__strip_fence_tags__mutmut_8",
     "services.neurocomment._onboarding_owner.x_ensure_current__mutmut_4",
     "services.neurocomment._runtime.x__activate_runtime_owner__mutmut_3",
     "services.neurocomment._runtime.x__activate_runtime_owner__mutmut_7",
@@ -160,6 +161,10 @@
     "services.neurocomment._runtime_test_reset.x_reset_for_tests__mutmut_11",
     "services.neurocomment._runtime_test_reset.x_reset_for_tests__mutmut_25",
     "services.neurocomment._seams.x__admit_write__mutmut_1",
+    "services.neurocomment._seams.x__admit_write__mutmut_2",
+    "services.neurocomment._seams.x__admit_write__mutmut_3",
+    "services.neurocomment._seams.x__admit_write__mutmut_6",
+    "services.neurocomment._seams.x__assert_live_generation__mutmut_2",
     "services.neurocomment._seams.x__assert_live_generation__mutmut_4",
     "services.neurocomment._seams.x_execute__mutmut_10",
     "services.neurocomment.onboarding.x__probe_account_spam__mutmut_14",
@@ -2749,9 +2754,9 @@
     ]
   },
   "stats": {
-    "killed": 12766,
+    "killed": 12761,
     "survived": 2505,
-    "timeout": 200,
+    "timeout": 205,
     "total": 15471
   }
 }
