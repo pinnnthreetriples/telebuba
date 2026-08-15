@@ -6355,6 +6355,86 @@
         }
       }
     },
+    "/api/v1/neurocomment/discovery/keywords": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Expand Discovery Keywords",
+        "description": "Widen one typed topic into search keywords. Not campaign-scoped, hence no id.\n\nNever fails on the LLM's behalf: an unusable answer is a 200 carrying a short\n``error`` code, because the operator's next move (type the keywords by hand) is\nthe same either way and a toast-worthy 5xx would only imply the board is broken.",
+        "operationId": "expandDiscoveryKeywords",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryKeywordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryKeywordResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns": {
       "get": {
         "tags": [
@@ -10712,6 +10792,49 @@
         "type": "object",
         "title": "DiscoveryChannelVerdict",
         "description": "Why a candidate is (or is not) a place this campaign can comment in.\n\nEvery field rides the SAME ``channels.getFullChannel`` reply the comments-enabled\nprobe already spends, so learning any of it costs no extra RPC \u2014 and every one of\nthem keeps the tri-state contract\n:class:`schemas.telegram_action_results.LinkedDiscussionGroupResult` states.\n\nDeliberately NOT persisted, exactly like :class:`DiscoveryCandidateOrigin`: the\ncandidate table has no column for it, and a migration against the operator's live\ndatabase needs their approval. A candidate read after a restart therefore carries no\nverdict at all, which reads as \"unknown\", not as \"fine\"."
+      },
+      "DiscoveryKeywordRequest": {
+        "properties": {
+          "topic": {
+            "type": "string",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Topic"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "topic"
+        ],
+        "title": "DiscoveryKeywordRequest",
+        "description": "One operator-typed topic, to be expanded into a keyword list by the LLM.\n\nDeliberately NOT campaign-scoped: expanding a topic reads no campaign state and\nspends no Telegram budget, so taking a campaign id would only invite the caller\nto believe it changes the answer.\n\n``topic`` is bounded by ``KEYWORD_MAX_LENGTH`` rather than by a length of its\nown: it is the same kind of string the operator would otherwise have typed into\n``DiscoverySearchRequest.keywords`` by hand, and it is interpolated into a\nprompt \u2014 an unbounded topic would be an unbounded prompt. Only ``min_length=1``\nbelow, not the keyword floor: a 2-character topic (\"MMA\") is a perfectly good\nthing to expand even though it is too short to search Telegram with, which is\nexactly why the operator is asking for an expansion."
+      },
+      "DiscoveryKeywordResult": {
+        "properties": {
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Keywords"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "title": "DiscoveryKeywordResult",
+        "description": "The expanded keywords, or the short code saying why there are none.\n\n``keywords`` come out ready to be posted straight back as\n``DiscoverySearchRequest.keywords``: stripped, deduped case-insensitively,\nwithin ``KEYWORD_MIN_LENGTH``..``KEYWORD_MAX_LENGTH`` and capped at\n``MAX_KEYWORDS``. The service applies those rules itself rather than trusting\nthe model, so an answer the operator accepts wholesale cannot fail the search\nrequest's own validator.\n\nThey are also single words, which is a tighter rule than that schema's \u2014 the\nsearch request happily takes a keyword containing spaces, and a hand-typed one\nstill may. The suggestions cannot, because the SPA's keywords field splits what\nit receives on whitespace as well as commas, so a multi-word suggestion would\nreach the search as fragments of itself.\n\n``error`` is a short locale-neutral code, exactly like\n``DiscoverySourceReport.reason`` \u2014 the SPA maps it to text and renders the raw\ncode when it has no copy. Three values, and each names a different thing for the\noperator to do:\n  llm_unavailable \u2014 ``settings.deepseek.api_key`` is empty, so nothing was asked\n                    at all; type the keywords by hand or set the key.\n  llm_failed      \u2014 the gateway answered with an error, a rate limit, or no\n                    text; retrying may work.\n  llm_empty       \u2014 the model answered but nothing in it survived validation;\n                    rephrasing the topic is what helps.\n``str`` rather than a ``Literal`` for the same reason as ``reason``: the SPA\nalready falls back to the raw code, so widening the set later must not be a\nbreaking change to the generated client.\n\nA non-null ``error`` always carries an empty ``keywords`` list \u2014 there is no\npartial answer to report, since a model that produced anything usable is a\nsuccess."
       },
       "DiscoveryProgress": {
         "properties": {

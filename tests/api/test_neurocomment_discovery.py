@@ -25,11 +25,17 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchRequest,
     DiscoverySourceReport,
 )
+from schemas.neurocomment_discovery_keywords import (
+    DiscoveryKeywordRequest,
+    DiscoveryKeywordResult,
+)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
 
 _BASE = "/api/v1/neurocomment/campaigns/c1/discovery"
+# Not under ``_BASE``: expanding a topic needs no campaign, so it takes no id.
+_KEYWORDS = "/api/v1/neurocomment/discovery/keywords"
 
 
 def _client(app: FastAPI) -> httpx.AsyncClient:
@@ -409,6 +415,68 @@ async def test_search_404s_for_an_unknown_campaign(
 
 
 @pytest.mark.asyncio
+async def test_expand_keywords_returns_the_service_result(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not campaign-scoped: the path carries no id and the service is handed none.
+
+    ``seen`` is asserted because the route's whole job is passing the typed body
+    through — a route that ignored it and expanded a constant would still answer 200.
+    """
+    seen: list[DiscoveryKeywordRequest] = []
+
+    async def _fake(body: DiscoveryKeywordRequest) -> DiscoveryKeywordResult:
+        seen.append(body)
+        return DiscoveryKeywordResult(keywords=["драки", "мордобой"])
+
+    monkeypatch.setattr("services.neurocomment.expand_discovery_keywords", _fake)
+    async with _client(app) as client:
+        resp = await client.post(_KEYWORDS, json={"topic": "уличные драки"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"keywords": ["драки", "мордобой"], "error": None}
+    assert [body.topic for body in seen] == ["уличные драки"]
+
+
+@pytest.mark.asyncio
+async def test_expand_keywords_reports_a_refusal_as_a_200_with_a_code(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unusable LLM is a locale-neutral code the SPA maps, not an HTTP error."""
+
+    async def _fake(_body: DiscoveryKeywordRequest) -> DiscoveryKeywordResult:
+        return DiscoveryKeywordResult(error="llm_unavailable")
+
+    monkeypatch.setattr("services.neurocomment.expand_discovery_keywords", _fake)
+    async with _client(app) as client:
+        resp = await client.post(_KEYWORDS, json={"topic": "уличные драки"})
+
+    assert resp.status_code == 200
+    assert resp.json() == {"keywords": [], "error": "llm_unavailable"}
+
+
+@pytest.mark.parametrize("body", [{}, {"topic": ""}, {"topic": "a" * (KEYWORD_MAX_LENGTH + 1)}])
+@pytest.mark.asyncio
+async def test_expand_keywords_rejects_an_unusable_topic(app: FastAPI, body: dict) -> None:
+    """The topic is interpolated into a prompt, so its bounds are the route's job."""
+    async with _client(app) as client:
+        resp = await client.post(_KEYWORDS, json=body)
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_expand_keywords_refuses_a_campaign_id_it_would_not_use(app: FastAPI) -> None:
+    """``extra="forbid"``: a caller passing one must be told it changes nothing."""
+    async with _client(app) as client:
+        resp = await client.post(_KEYWORDS, json={"topic": "драки", "campaign_id": "c1"})
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_discovery_routes_require_authentication() -> None:
     """The sibling router inherits the parent router's auth dependency."""
     unauthenticated = create_app()
@@ -416,7 +484,9 @@ async def test_discovery_routes_require_authentication() -> None:
         search = await client.post(f"{_BASE}/search", json={"keywords": ["crypto"]})
         board = await client.get(_BASE)
         adopt = await client.post(f"{_BASE}/adopt", json={"channels": ["alpha"]})
+        keywords = await client.post(_KEYWORDS, json={"topic": "драки"})
 
     assert search.status_code == 401
     assert board.status_code == 401
     assert adopt.status_code == 401
+    assert keywords.status_code == 401
