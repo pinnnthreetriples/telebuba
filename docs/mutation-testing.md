@@ -11,11 +11,11 @@ preserves every available partial snapshot and diagnostic log.
 
 | Result | Count |
 |---|---:|
-| Total | 15,471 |
-| Killed | 12,735 |
-| Survived | 2,506 |
-| Timeout | 230 |
-| Score | 83.5575% |
+| Total | 15,772 |
+| Killed | 13,057 |
+| Survived | 2,499 |
+| Timeout | 216 |
+| Score | 83.9355% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -24,7 +24,7 @@ cover additional production paths.
 The current calibration uses CPython 3.13.14, mutmut 3.6.0, the deterministic
 `mutation` Hypothesis profile, four mutmut workers, `PYTHONHASHSEED=0`, and
 `TZ=UTC`. Its catalogue digest is
-`da10806f3d12c1096547daaf9351f6dca43d077bf1cdd2a6a43b8ad165f45f73`;
+`6c88cb83ff9c1aaf3b3f7944d1acfdf09f699e383d44ab19d229ff7e3706b1db`;
 the digest binds mutant identities to the exact Python source paths and bytes,
 so a semantic source change cannot silently reuse a reviewed timeout identity.
 The floor is measured on the GitHub runner, not locally. A clean local sweep
@@ -50,8 +50,16 @@ serial recheck: one seen under four-worker load is rerun alone before it counts,
 which is how `start_neurocomment__mutmut_1` was caught as noise and kept out of
 the floor.
 
-The 12,735/2,506/230 floor is the union of all four sweeps, and every one of them
-clears it: 83.6148%, 83.6509%, 83.7102%, 83.5837%.
+The 13,057/2,499/216 floor is measured on `main` itself, not on a branch racing
+it. Every merge from `main` changes source bytes under the measured paths and so
+changes the digest, and a sweep costs hours — three reseeds on one branch were
+each invalidated by the next merge before they could be confirmed. Calibrate
+here, on the branch the schedule actually sweeps.
+
+Timeouts are not rechecked serially either. They neither gate nor score, so a
+second opinion buys nothing, and it was not free: a drifted catalogue makes every
+timeout look new, and 191 serial reruns turned a 2h31m sweep into 5h14m. This
+calibration requested zero repairs and took 2h39m.
 
 The first post-merge sweep also found one mutant mutmut could not run at all:
 `services.warming._seams.x_refresh_spam_status__mutmut_1`, reported as `no
