@@ -227,7 +227,9 @@ def test_build_report_has_exact_score_delta_hotspots_and_timeouts(tmp_path: Path
         _baseline(),
     )
 
-    assert report["score_percent"] == "50.0000"
+    # 2 killed of 3 DECIDED mutants: the one timeout is not a verdict, so it is
+    # neither killed nor counted against the score.
+    assert report["score_percent"] == "66.6667"
     assert report["delta_percentage_points"] == "0.0000"
     assert report["meets_score_baseline"] is True
     assert report["meets_baseline"] is True

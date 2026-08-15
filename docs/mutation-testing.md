@@ -12,10 +12,10 @@ preserves every available partial snapshot and diagnostic log.
 | Result | Count |
 |---|---:|
 | Total | 15,471 |
-| Killed | 12,761 |
-| Survived | 2,505 |
-| Timeout | 205 |
-| Score | 82.4834% |
+| Killed | 12,735 |
+| Survived | 2,506 |
+| Timeout | 230 |
+| Score | 83.5575% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
@@ -31,38 +31,27 @@ The floor is measured on the GitHub runner, not locally. A clean local sweep
 scores higher, but the hosted runner is slower and more contended, and pinning
 the floor to the best machine made every Nightly red.
 
-The 12,761/2,505/205 floor is the merge of current `main` into this branch, and
-it is the union of three runner sweeps. Survivors converged quickly: the union
-is 2,505 and only thirteen identities ever moved.
+The score is `killed / (total - timeout)`: the share of mutants mutmut reached a
+verdict on. A timeout is not a survivor, it is "no answer inside the allowance",
+and that allowance is `timeout_multiplier` times a duration MEASURED per run.
+Counting timeouts as unkilled therefore made the score track runner load rather
+than test quality.
 
-Timeouts did not converge, and that is a property of the measurement rather than
-of the code. mutmut allows each mutant `timeout_multiplier` times that test's
-MEASURED duration, so the threshold is recalibrated on every run: the same
-unchanged catalogue produced 195, 198 and 124 timeouts across three sweeps, and
-86 of the 205 identities involved flipped. A serial recheck cannot separate that
-out, because it recalibrates too.
+Four sweeps of one unchanged catalogue show it. Timeouts ranged 124-224 and
+never converged — their union grew 195, 200, 205, 230 — while survivors settled
+at 2,506 after the second sweep and moved by thirteen identities in total. Over
+the whole population those sweeps span 0.67pp of score; over the decided
+population they span 0.13pp.
 
-So a new timeout identity is reported by name but does not fail the gate. What
-that check was meant to catch — a killed mutant going unbounded — lowers
-`killed` and is caught by the score floor, which every one of the three sweeps
-clears (82.5609%, 82.5803%, 83.0392%). Survivors stay gated by name: they are
-stable, and a survivor seen under four-worker load is still rechecked serially
-before it can count. One did exactly that here, `start_neurocomment__mutmut_1`,
-killed on the uncontended rerun and never banked into the floor. The
-score dropped from 84.56% because the catalogue grew by over 1,500 mutants of
-code that arrived with main, not because anything regressed. Every timeout was
-individually rerun with one worker and every one reproduced, so each is a
-reviewed identity rather than contention noise. The first post-merge sweep took
-5h14m for exactly that reason — 191 serial timeout reruns, each paying the full
-mutmut timeout. Reviewed identities are not rechecked, and the next sweep took
-2h31m with five reruns.
+So the gate rests on what is stable. The catalogue digest, the reviewed survivor
+identities and the score over decided mutants all fail the build. A new timeout
+identity is named in the report for review and does not. Survivors keep their
+serial recheck: one seen under four-worker load is rerun alone before it counts,
+which is how `start_neurocomment__mutmut_1` was caught as noise and kept out of
+the floor.
 
-Because `mutate_only_covered_lines` is on, the catalogue is a function of test
-COVERAGE as well as of source bytes: a test that reaches production lines
-nothing reached before adds mutants and changes the digest. Adding the seam
-lease test below turned one unrunnable mutant into fourteen real ones and drifted
-the catalogue by itself. A test-only commit can therefore require a reseed —
-check the digest before assuming a green baseline still applies.
+The 12,735/2,506/230 floor is the union of all four sweeps, and every one of them
+clears it: 83.6148%, 83.6509%, 83.7102%, 83.5837%.
 
 The first post-merge sweep also found one mutant mutmut could not run at all:
 `services.warming._seams.x_refresh_spam_status__mutmut_1`, reported as `no

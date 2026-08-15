@@ -39,8 +39,13 @@ importlib = _core.importlib
 platform = _core.platform
 
 
-def _score(killed: int, total: int) -> Decimal:
-    return Decimal(killed) * Decimal(100) / Decimal(total)
+def _decided(stats: dict[str, int]) -> int:
+    """Mutants with a verdict. A timeout is "no answer yet", not a survivor."""
+    return stats["total"] - stats["timeout"]
+
+
+def _score(killed: int, decided: int) -> Decimal:
+    return Decimal(killed) * Decimal(100) / Decimal(decided)
 
 
 def _hotspots(results: list[Result], field: str, limit: int = 20) -> list[dict[str, Any]]:
@@ -189,9 +194,10 @@ def build_report(
         results,
         repair_results,
     )
-    current_score = _score(effective_stats["killed"], effective_stats["total"])
-    base = baseline["stats"]
-    baseline_score = _score(base["killed"], base["total"])
+    decided, base = _decided(effective_stats), baseline["stats"]
+    base_decided = _decided(base)
+    current_score = _score(effective_stats["killed"], decided)
+    baseline_score = _score(base["killed"], base_decided)
     catalog_digest = mutant_catalog_sha256(
         results,
         source_root,
@@ -216,9 +222,7 @@ def build_report(
             "survived",
             baseline["reviewed_survivors"],
         )
-    meets_score_baseline = (
-        effective_stats["killed"] * base["total"] >= base["killed"] * effective_stats["total"]
-    )
+    meets_score_baseline = effective_stats["killed"] * base_decided >= base["killed"] * decided
     report = {
         "stats": stats,
         "score_percent": str(current_score.quantize(Decimal("0.0001"))),
@@ -228,11 +232,9 @@ def build_report(
             (current_score - baseline_score).quantize(Decimal("0.0001")),
         ),
         "meets_score_baseline": meets_score_baseline,
-        # A new timeout identity is named but does not gate: mutmut recalibrates
-        # the per-mutant allowance from measured test durations every run, so the
-        # same catalogue yielded 195/198/124 timeouts across three sweeps. A
-        # killed mutant going unbounded still lowers ``killed`` and trips the
-        # score floor. See docs/mutation-testing.md.
+        # Timeouts neither gate nor score: mutmut recalibrates each mutant's
+        # allowance from measured durations, so one unchanged catalogue yielded
+        # 124-224 of them across four sweeps. See docs/mutation-testing.md.
         "meets_baseline": (
             meets_score_baseline
             and catalog_matches_baseline
