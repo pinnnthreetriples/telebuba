@@ -148,13 +148,17 @@ jobs:
     name: mutation testing
     runs-on: ubuntu-latest
     # By far the longest job in either workflow, and the one with a real runaway
-    # tail: the two successful sweeps in recent history took 86 and 91 minutes,
-    # but failures have run 2h32m, 2h58m and once 5h14m — that last one was
-    # closing on GitHub's six-hour default with nothing to show for it. Those long
-    # runs are the pathology (disk exhaustion, a wedged mutant), not a slower
-    # sweep, so three hours caps them while still leaving 2x over a healthy run.
+    # tail. The 86 and 91 minute sweeps this ceiling was first sized against are
+    # gone: they measured a 13,949-mutant catalogue, and the merged one is 15,772
+    # and still growing. Healthy sweeps now take 2h31m and 2h39m, so three hours
+    # left about fifteen minutes of headroom — and on 2026-08-15 a healthy sweep
+    # crossed it and was killed with nothing to show, which is the same silent
+    # nothing the ceiling exists to prevent. Four hours is ~1.5x a healthy run and
+    # still catches the pathology (disk exhaustion, a wedged mutant): the worst
+    # real runaway here was 5h14m, and that one was serial timeout reruns, which
+    # the workflow no longer does. Resize this when a healthy sweep passes 3h.
     # Deliberately the highest ceiling here; do not fold it in with the others.
-    timeout-minutes: 180
+    timeout-minutes: 240
     env:
       HYPOTHESIS_PROFILE: mutation
       MUTMUT_MAX_CHILDREN: "4"
