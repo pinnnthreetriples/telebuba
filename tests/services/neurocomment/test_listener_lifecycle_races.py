@@ -50,7 +50,14 @@ async def test_concurrent_listener_switches_publish_only_last_owner(
     first = asyncio.create_task(_runtime.start_neurocomment("a"))
     await entered.wait()
     second = asyncio.create_task(_runtime.start_neurocomment("b"))
-    await asyncio.wait_for(second, timeout=0.2)
+    # 5s rather than 0.2s: what is under test is that the second start does not
+    # WAIT for the first (which blocks on ``release``), and that is an infinite
+    # hang if it regresses — so any finite deadline proves it and a tight one only
+    # adds load sensitivity. The same 0.2s budget in
+    # tests/services/warming/test_runtime_ownership.py was measurably too tight
+    # under `pytest -n auto`, where one DB write through ``asyncio.to_thread``
+    # can outlast it while 16 workers contend for the disk.
+    await asyncio.wait_for(second, timeout=5)
     assert reconciled == ["a", "b"]
     release.set()
     await first
@@ -90,7 +97,10 @@ async def test_clear_invalidates_inflight_reconcile_without_waiting_for_io(
     reconcile = asyncio.create_task(_runtime.reconcile_neurocomment_runtime("a"))
     await entered.wait()
     clear = asyncio.create_task(_runtime.clear_neurocomment_listener())
-    await asyncio.wait_for(clear, timeout=0.2)
+    # 5s for the reason given on the sibling test above: "does not wait for the
+    # in-flight reconcile" is an infinite hang when it regresses, so the deadline
+    # only needs to be finite, and 0.2s made it a load test as well.
+    await asyncio.wait_for(clear, timeout=5)
     assert calls == ["subscribe", "stop"]
     release.set()
     await reconcile

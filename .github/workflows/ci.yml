@@ -36,9 +36,21 @@ jobs:
   # Lint + format + types + secrets + bandit, all via the same pre-commit
   # config developers run locally. One source of truth, no drift.
   # ---------------------------------------------------------------------------
+  # Every job below carries an explicit `timeout-minutes`. Without one GitHub
+  # applies its six-hour default, so a hung step burns six hours of runner time
+  # and blocks the PR until a human notices — which is not hypothetical: a
+  # `pytest (strict)` run sat stuck for 62 minutes on an unmodified suite and had
+  # to be cancelled by hand. The ceilings are fitted per job to the observed
+  # duration of recent successful runs, not pasted from one number: each is a
+  # tripwire for "this is hung", never a budget the job is expected to approach.
   lint:
     name: Lint, format, types, secrets
     runs-on: ubuntu-latest
+    # Observed 23-44s. The wide margin is for a COLD cache: these runs all reused
+    # the pre-commit env cache, and rebuilding every hook env from scratch (which
+    # any .pre-commit-config.yaml change forces) is minutes, not seconds. The
+    # gitleaks step also pulls a Docker image and scans full history.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -139,6 +151,13 @@ jobs:
   test:
     name: pytest (strict)
     runs-on: ubuntu-latest
+    # The job this exists for: it hung for 62 minutes on an unmodified suite and
+    # was cancelled by hand. Observed 231-317s serially, and `-n auto` below is
+    # measured at roughly a quarter of the serial wall clock, so a healthy run
+    # should land near two minutes. Ten minutes is ~5x that and still ~2x the
+    # slowest serial run ever recorded here, so it cannot go red on a slow runner
+    # while a genuine hang now surfaces in ten minutes instead of six hours.
+    timeout-minutes: 10
     env:
       HYPOTHESIS_PROFILE: ${{ github.event_name == 'pull_request' && 'dev' || 'strict' }}
     steps:
@@ -157,7 +176,20 @@ jobs:
       - name: Run pytest
         # --maxfail caps log noise when a single bad import cascades into
         # many warning-as-error failures. Diagnostic info is preserved.
-        run: uv run pytest --maxfail=10
+        #
+        # -n auto (pytest-xdist) is the only speed knob here: every quality gate
+        # in pyproject.toml's addopts — branch coverage, the 90% floor,
+        # filterwarnings=error, --strict-markers, xfail_strict — still applies,
+        # because addopts is untouched and xdist merges the workers' coverage.
+        # It lives in the CI invocation, not addopts, so a developer running
+        # plain `pytest` still gets the serial, readable, single-stream run.
+        #
+        # `auto` rather than a pinned worker count: xdist's auto is the runner's
+        # CPU count, so it tracks whatever size GitHub gives this job instead of
+        # oversubscribing a small runner or leaving a large one idle. Test-level
+        # isolation is what makes this safe (tests/conftest.py gives every test
+        # its own session dir); nothing here depends on the worker count.
+        run: uv run pytest --maxfail=10 -n auto
 
       - name: Upload coverage HTML report
         if: always()
@@ -174,6 +206,9 @@ jobs:
   audit:
     name: pip-audit (CVE)
     runs-on: ubuntu-latest
+    # Observed 11-23s. It resolves the dependency tree against the PyPI advisory
+    # service, so the only realistic overrun is a stalled network call.
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -208,6 +243,9 @@ jobs:
   npm-audit:
     name: npm audit (CVE)
     runs-on: ubuntu-latest
+    # Observed 5-11s, the cheapest job here: --package-lock-only means no install,
+    # just one registry round trip. Five minutes is already two orders of headroom.
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: frontend
@@ -243,6 +281,10 @@ jobs:
   semgrep:
     name: semgrep (SAST, auto)
     runs-on: ubuntu-latest
+    # Observed 24-31s. `--config auto` fetches its ruleset from the semgrep
+    # registry, so the headroom is for a slow or retrying registry rather than
+    # for the scan itself.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -270,6 +312,9 @@ jobs:
   aislop:
     name: aislop (quality gate, zero-tolerance)
     runs-on: ubuntu-latest
+    # Observed 22-35s. The gate npx-installs an npm package before it runs, so
+    # the headroom covers a slow npm registry, not the analysis.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -301,6 +346,9 @@ jobs:
   gen-api:
     name: gen-api (client drift)
     runs-on: ubuntu-latest
+    # Observed 21-35s, but that is with a warm npm cache; this job runs `npm ci`
+    # in frontend/ before regenerating, and a cold install is the slow case.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -339,6 +387,10 @@ jobs:
   frontend:
     name: frontend (lint/boundaries/tsc/vitest)
     runs-on: ubuntu-latest
+    # Observed 71-102s — the second-slowest job here, and the one with the most
+    # steps that can wedge (npm ci, Steiger, tsc, vitest, the production build).
+    # Ten minutes is ~6x its worst run.
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend

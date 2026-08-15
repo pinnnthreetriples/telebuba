@@ -220,19 +220,35 @@ async def test_a_stuck_retention_sweep_does_not_switch_retention_off_for_good(
     _runtime._PURGE_TASK = task
     await started.wait()
 
-    await asyncio.wait_for(warming.shutdown_warming_runtime(), timeout=0.2)
+    # ``release`` is set in a finally because ``stubborn_purge`` swallows
+    # CancelledError by design: nothing but this Event can end it, so a failure
+    # before the release below leaves an immortal task on the loop and the whole
+    # pytest worker hangs at teardown instead of just going red. Under -n auto
+    # that stalls the entire run behind one worker — measured at 17 minutes and
+    # still going before it was killed by hand.
+    try:
+        # 5s, not the 0.2s this used to carry. The deadline exists to prove
+        # shutdown is BOUNDED, and ``stubborn_purge`` never completes on its own,
+        # so the regression this guards against hangs forever — any finite
+        # timeout catches it and the exact value proves nothing extra. 0.2s did
+        # cost something, though: ``_stop_purge_task`` gives up after
+        # ``stop_cancel_timeout_seconds`` (0.01) and then awaits ``log_event``,
+        # which writes a row via ``asyncio.to_thread``. With 16 xdist workers
+        # contending for the disk that write alone can outlast the remaining
+        # ~190ms, so the test failed on load rather than on behaviour.
+        await asyncio.wait_for(warming.shutdown_warming_runtime(), timeout=5)
 
-    # Bounded: the stuck sweep is still alive and shutdown returned anyway.
-    assert not task.done()
-    assert _runtime._PURGE_TASK is None
+        # Bounded: the stuck sweep is still alive and shutdown returned anyway.
+        assert not task.done()
+        assert _runtime._PURGE_TASK is None
 
-    _maintenance._start_purge_task()
-    replacement = _runtime._PURGE_TASK
-    assert replacement is not None
-    assert replacement is not task
-
-    replacement.cancel()
-    release.set()
+        _maintenance._start_purge_task()
+        replacement = _runtime._PURGE_TASK
+        assert replacement is not None
+        assert replacement is not task
+        replacement.cancel()
+    finally:
+        release.set()
     await asyncio.wait_for(task, timeout=1)
     _runtime._PURGE_TASK = None
 
