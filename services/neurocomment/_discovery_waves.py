@@ -12,7 +12,9 @@ reads are held back before the post pages run, because pure wave order let the w
 source spend the last of the budget on itself. A wave the budget stops reports itself
 truncated; a rate limit in any wave ends every later one, and so does a session that
 answers nothing ``discovery_max_consecutive_errors`` reads in a row. A limit the run did
-not cause ends it too: the account's cooldown is re-read at each wave boundary.
+not cause ends it too: the account's cooldown is re-read before EVERY read, not once per
+wave — the keyword sweep alone can spend the whole budget, so a per-wave check left the
+rest of it firing into a live window.
 
 Pacing note: every RPC is jittered exactly like the qualification pass. Even a modest
 sweep is ~11 reads, and firing them as one burst is the freeze vector the whole
@@ -86,38 +88,14 @@ class Wave(NamedTuple):
     # run would only prove it again. Kept apart from ``flooded`` because only a flood
     # writes a cooldown and stops the run replacing its stored candidates.
     aborted: bool = False
-    # A limit this run did not cause: the account was cooling when a wave boundary
-    # re-read its health. Its own field because it is neither of the two above — nothing
+    # A limit this run did not cause: the account was already cooling when a read was
+    # about to be spent. Its own field because it is neither of the two above — nothing
     # failed and nothing was written — but it must stop the run exactly like a flood.
     cooled: bool = False
 
     @property
     def stopped(self) -> bool:
         return self.flooded or self.aborted or self.cooled
-
-
-class _Health:
-    """The account's cooldown, re-read at every wave boundary.
-
-    A run is minutes of paced reads and its own error counters cannot see a limit
-    somebody else recorded — the comment engine floods the same session and this run
-    would carry on to its last read. The boundary between waves is where the check is
-    both cheap (two dict lookups, no RPC) and honest: no wave is left half-read.
-
-    Sticky, so the answer that stopped one boundary is the one the run reports; it is
-    also what the ``_Budget``/``_Faults`` neighbours do — one rule, one object.
-    """
-
-    def __init__(self, account_id: str) -> None:
-        self._account_id = account_id
-        self.cooled = False
-
-    def may_continue(self, last: Wave) -> bool:
-        """Start the next wave? Not after a stop, and not into a live limit."""
-        if last.stopped or self.cooled:
-            return False
-        self.cooled = account_cooling(self._account_id)
-        return not self.cooled
 
 
 class _Budget:
@@ -204,6 +182,8 @@ async def _keyword_pass(
     """One paced search per keyword — the cheapest wave, so it is served first."""
     outcomes: list[SourceOutcome] = []
     for index, keyword in enumerate(keywords):
+        if account_cooling(account_id):
+            return Wave(outcomes, cooled=True)
         if not budget.take():
             outcomes.append(_skipped("telegram_search", READ_BUDGET, truncated=True))
             break
@@ -245,6 +225,8 @@ async def _global_pass(
         seen: set[str] = set()
         cursor: GlobalPostsCursor | None = None
         for _page in range(pages):
+            if account_cooling(account_id):
+                return Wave(outcomes, cooled=True)
             if not budget.take():
                 outcomes.append(_skipped("telegram_posts", READ_BUDGET, truncated=True))
                 return Wave(outcomes)
@@ -289,6 +271,10 @@ async def _seed_pass(
         # seed that was perfectly fine.
         unusable = "seed_unusable" if request.seed_channel is not None else None
         return Wave([_skipped("telegram_similar", unusable)])
+    if account_cooling(account_id):
+        # No outcome row: ``_unreached`` names every source the run never got to, and a
+        # reason here would compete with the run's own stop reason for the board's line.
+        return Wave([], cooled=True)
     if not budget.take():
         return Wave([_skipped("telegram_similar", READ_BUDGET, truncated=True)])
     await _pace()
@@ -340,6 +326,8 @@ async def _similar_wave(
     """
     outcomes: list[SourceOutcome] = []
     for seed in seeds:
+        if account_cooling(account_id):
+            return Wave(outcomes, cooled=True)
         if not budget.take():
             outcomes.append(_skipped("telegram_recommended", READ_BUDGET, truncated=True))
             return Wave(outcomes)
@@ -370,7 +358,6 @@ async def native_pass(account_id: str, request: DiscoverySearchRequest) -> Wave:
     """Every Telegram wave of one run, under one shared read budget."""
     budget = _Budget(settings.neurocomment.discovery_max_reads_per_run)
     faults = _Faults()
-    health = _Health(account_id)
     keywords = await _keyword_pass(account_id, request.keywords, budget, faults)
     outcomes = list(keywords.outcomes)
     last = keywords
@@ -381,7 +368,7 @@ async def native_pass(account_id: str, request: DiscoverySearchRequest) -> Wave:
     # seed the operator explicitly typed never got its turn and BOTH recommendation
     # sources reported themselves out of budget. An explicit input does not lose its
     # single read to an automatic wave; the post wave is what absorbs the squeeze.
-    if health.may_continue(last):
+    if not last.stopped:
         seed = await _seed_pass(account_id, request, budget, faults)
         outcomes.extend(seed.outcomes)
         last = seed
@@ -391,14 +378,14 @@ async def native_pass(account_id: str, request: DiscoverySearchRequest) -> Wave:
     # reserving the wave's literal ceiling instead would strand reads a short sweep is
     # never going to spend.
     seeds = _wave_seeds(keywords.outcomes, _SIMILAR_FROM_TOP, _seed_handle(request))
-    if health.may_continue(last):
+    if not last.stopped:
         budget.hold(len(seeds))
         posts = await _global_pass(account_id, request.keywords, budget, faults)
         outcomes.extend(posts.outcomes)
         last = posts
-    if health.may_continue(last):
+    if not last.stopped:
         budget.hold(0)
         wave = await _similar_wave(account_id, seeds, budget, faults)
         outcomes.extend(wave.outcomes)
         last = wave
-    return Wave(outcomes + _unreached(outcomes), last.flooded, cooled=health.cooled)
+    return Wave(outcomes + _unreached(outcomes), last.flooded, cooled=last.cooled)

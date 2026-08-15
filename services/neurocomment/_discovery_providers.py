@@ -176,6 +176,21 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     return SearchAccount(account_id=account_id)
 
 
+async def account_taken(account_id: str) -> bool:
+    """Is another runtime holding this session? The re-read for under the claim lock.
+
+    Both halves of ``resolve_search_account``'s ``account_busy`` verdict, asked again:
+    that verdict is several awaits old by the time the claim is made, and either runtime
+    can commit in the gap. Deliberately NOT reused inside ``resolve_search_account`` —
+    there the listener check runs before the health checks and the warming check after,
+    so a warming account that is also flood-waiting is reported as cooling rather than
+    busy. Folding the two into one call would silently reorder that.
+    """
+    if account_id in await list_warming_account_ids():
+        return True
+    return await get_listener_running() and await get_listener_account_id() == account_id
+
+
 async def record_flood(account_id: str, seconds: int | None) -> bool:
     """Register a discovery-caused rate limit as a cooldown; says whether it was one.
 

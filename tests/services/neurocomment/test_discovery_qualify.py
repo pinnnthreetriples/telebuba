@@ -412,6 +412,33 @@ async def test_a_cooldown_recorded_mid_pass_stops_the_probes(
 
 
 @pytest.mark.asyncio
+async def test_a_cooldown_landing_during_the_pace_sleep_costs_no_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The check belongs after the sleep, not before it.
+
+    Every probe but the first is preceded by a one-to-two second pace sleep — the widest
+    window in the pass, and the likeliest moment for somebody else's flood to land. Read
+    before the sleep, the check was answering about a moment that had already passed and
+    still bought one RPC into the live window.
+    """
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+
+    async def _flood_while_pacing(_seconds: float) -> None:
+        await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
+
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(_seams, "sleep", _flood_while_pacing)
+    campaign_id = await _seed("aaa", "bbb", "ccc")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason == "account_cooling"
+    # Only the first probe, which spends no pace sleep. The second never fires.
+    assert len(reader.calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_a_channel_scoped_cooldown_does_not_stop_the_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

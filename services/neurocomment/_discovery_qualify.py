@@ -120,16 +120,18 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
             await mark_discovery_qualified(campaign_id, row.channel)
             continue
 
+        if probed:
+            await _pace()
         if account_cooling(account_id):
             # Re-read before every RPC this pass is about to spend, not once at the
             # start: a hundred probes is minutes, and a limit the comment engine (or
             # this run's own search stage) recorded meanwhile is invisible to the two
-            # error counters below. Stops the same way a FloodWait does — the remainder
-            # stays pending, ``qualified_at`` resumes the next run where this one left
-            # off — and reports why rather than returning ``None`` for "finished".
+            # error counters below. AFTER the pace sleep, because that sleep is one to
+            # two seconds long and a limit landing inside it would otherwise still buy
+            # one probe. Stops the same way a FloodWait does — the remainder stays
+            # pending, ``qualified_at`` resumes the next run where this one left off —
+            # and reports why rather than returning ``None`` for "finished".
             return COOLING_REASON
-        if probed:
-            await _pace()
         probed += 1
         probe = await _probe_one(campaign_id, account_id, row.channel)
         if probe.flooded:

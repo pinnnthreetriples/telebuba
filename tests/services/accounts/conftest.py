@@ -10,6 +10,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from services import warming
 from services.accounts._import_locks import _IMPORT_LOCKS
 
 if TYPE_CHECKING:
@@ -40,11 +41,16 @@ def _isolate_runtime(
     # awaited; clear them so each function-scoped test gets fresh locks (mirrors
     # warming's _ACCOUNT_LOCKS reset).
     _IMPORT_LOCKS.clear()
+    # ``remove_account`` holds warming's per-account lifecycle lock across stop+delete,
+    # and that table is module-level and loop-bound, so a lock built in an earlier test's
+    # loop raises "bound to a different event loop" here under some orderings.
+    warming._ACCOUNT_LOCKS.clear()
     reset_logging_for_tests()
     setup_logging()
     before = _repo_session_files()
     yield
     _IMPORT_LOCKS.clear()
+    warming._ACCOUNT_LOCKS.clear()
     reset_logging_for_tests()
     # Isolation is not self-evident: ``monkeypatch`` is function-scoped and SHARED with
     # every test that requests it, so one ``monkeypatch.undo()`` reverts the redirect

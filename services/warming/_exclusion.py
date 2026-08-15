@@ -24,9 +24,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
+
 # Stable snake_case codes: the API reports them verbatim and the SPA owns the wording
-# (``shell.code.*``). Locale-neutral prose in a refusal would be untranslatable.
-DISCOVERY_CODE = "account_running_discovery"
+# (``shell.code.*``). Locale-neutral prose in a refusal would be untranslatable. The
+# discovery one comes from ``schemas`` because the listener's start reports the identical
+# refusal; a copy here would be a second string to translate and forget.
+DISCOVERY_CODE = DISCOVERY_BUSY_CODE
 COOLING_CODE = "account_cooling"
 
 
@@ -59,14 +63,31 @@ def _is_cooling(account_id: str) -> bool:
     return in_cooldown(account_id, datetime.now(UTC))
 
 
-def assert_account_free(account_id: str) -> None:
-    """Raise ``AccountUnavailableError`` when neurocomment already owns this account.
+def assert_no_discovery_run(account_id: str) -> None:
+    """Raise ``AccountUnavailableError`` while a discovery run reads with this account.
 
-    Synchronous by construction: both answers are in-process reads, so the caller can
-    make them inside its per-account lifecycle lock without adding an await for a
-    concurrent start to slip through.
+    Not escapable, exactly like the running-listener refusal it sits beside: two paced
+    streams on one session is not a health opinion the operator can overrule, it is the
+    thing warming exists to avoid.
+
+    Synchronous by construction: the answer is an in-process read, so the caller can make
+    it inside its per-account lifecycle lock without adding an await for a concurrent
+    start to slip through.
     """
     if _discovery_holds(account_id):
         raise AccountUnavailableError(DISCOVERY_CODE, account_id)
+
+
+def assert_not_cooling(account_id: str) -> None:
+    """Raise ``AccountUnavailableError`` while Telegram is rate-limiting this account.
+
+    Called only where ``enforce_readiness`` is on, because that is the switch the
+    operator already has for warming's own flood wait — which reaches the start path as a
+    trust penalty inside ``evaluate_readiness``. Ungated, the two disagreed: the operator
+    could override warming's own flood deadline but not neurocomment's cooldown, and the
+    cooldown window is whatever Telegram said (hours, on a premium wait) and survives a
+    restart. Nursing a just-flooded account back is warming's whole job, so the runtime
+    that exists to avoid freezes must not be the one runtime that cannot be told to try.
+    """
     if _is_cooling(account_id):
         raise AccountUnavailableError(COOLING_CODE, account_id)

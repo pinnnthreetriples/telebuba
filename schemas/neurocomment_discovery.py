@@ -59,6 +59,12 @@ DiscoveryStartStatus = Literal[
     "daily_limit_reached",
 ]
 
+# The refusal every OTHER runtime reports when a discovery run already holds the account:
+# warming's start and the listener's start both answer 409 with this. Here rather than in
+# either service because ``schemas`` is the one layer both may import without a cycle, and
+# two spellings of one code is two translations that drift apart.
+DISCOVERY_BUSY_CODE = "account_running_discovery"
+
 # Telegram rejects global searches under 4 characters outright.
 KEYWORD_MIN_LENGTH = 4
 KEYWORD_MAX_LENGTH = 64

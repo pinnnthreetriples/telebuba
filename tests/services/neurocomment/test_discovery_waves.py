@@ -88,27 +88,31 @@ class _ParksTheAccountOnRead:
 
 
 @pytest.mark.asyncio
-async def test_a_cooldown_somebody_else_recorded_stops_the_next_wave(
+async def test_a_cooldown_somebody_else_recorded_stops_the_next_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Between waves is where a run notices a limit it did not cause.
+    """Per read, not per wave — the keyword sweep alone can spend the whole budget.
 
     Before this, only the run's OWN reads could stop it: a flood the comment engine
-    landed at read 3 left the remaining waves — and then up to a hundred qualification
+    landed at read 2 left the rest of the sweep — and then up to a hundred qualification
     probes — firing into a live window, which is how Telegram turns a soft limit hard.
+    Checking only at wave boundaries left most of that gap in place: this keyword list
+    would have run to its end, roughly 45 further seconds of paced reads, before the
+    first boundary was reached.
     """
-    reader = _ParksTheAccountOnRead(on_call=1)
+    reader = _ParksTheAccountOnRead(on_call=2)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
     stage = await run_search(
         campaign_id,
         LISTENER_ID,
-        search_request(keywords=["crypto"], seed_channel="@durov"),
+        search_request(keywords=_keywords(6), seed_channel="@durov"),
     )
 
-    # One keyword read, then nothing: no seed, no post pages, no recommendations.
-    assert reader.calls == 1
+    # Two keyword reads, then nothing: not the four remaining keywords, not the seed, not
+    # the post pages, not the recommendations.
+    assert reader.calls == 2
     # Reported as a rate limit so the coordinator skips qualification, and named so the
     # operator is told the account is cooling rather than that the search "finished".
     assert stage.flooded is True

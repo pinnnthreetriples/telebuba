@@ -6,13 +6,29 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from core.db import set_listener_account_id, set_listener_running
-from services.neurocomment import _signals
+from services.neurocomment import _discovery_state, _signals
 from services.neurocomment._onboarding_owner import generation_fence
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from schemas.neurocomment_progress import OnboardingProgressEvent
+
+
+class ListenerBusyDiscoveryError(Exception):
+    """Raised when a channel-discovery run is already reading with the picked account.
+
+    The likeliest sequence of all, because a run can only START while the listener is
+    stopped: the operator stops the listener, searches, then presses Start again while
+    the run is still going — and the post listener resolves peers and joins on the very
+    session the run is paced-reading with. The generation fence does not help: it is a
+    ContextVar set inside the listener's own task context, so a discovery task spawned
+    from an API request reads ``None`` and every assertion on it passes.
+
+    Defined here, beside its only raise site, rather than next to
+    ``ListenerBusyWarmingError`` in ``_runtime``: that module is 11 lines under the size
+    gate's warn threshold and this class is 12 lines long.
+    """
 
 
 async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
@@ -41,6 +57,10 @@ async def start_neurocomment(
     async with _runtime.neurocomment_lifecycle(), account_lock(listener_account_id):
         if listener_account_id in await _runtime._list_warming_account_ids():  # noqa: SLF001
             raise _runtime.ListenerBusyWarmingError(listener_account_id)
+        # In-process and synchronous, so it cannot be straddled: a discovery run claims
+        # the account under this same lock, and the claim is the only record of it.
+        if _discovery_state.account_busy(listener_account_id):
+            raise ListenerBusyDiscoveryError(listener_account_id)
         previous = await _runtime._runtime_get_listener_account_id()  # noqa: SLF001
         if previous is not None and previous != listener_account_id:
             _runtime._invalidate_runtime_owner(previous)  # noqa: SLF001
