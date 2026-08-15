@@ -369,6 +369,7 @@ async def test_uncertain_dispatched_rpc_keeps_full_budget_reserved(
 ) -> None:
     from services.warming._loop import run_loop_iteration  # noqa: PLC0415
 
+    _no_quiet_days(monkeypatch)
     await _ready_account()
     await _seed_channel()
     await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
