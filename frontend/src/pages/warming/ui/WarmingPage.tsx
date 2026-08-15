@@ -257,7 +257,13 @@ export function WarmingPage() {
         </div>
       </div>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[340px_1fr]">
+      {/* `minmax(0,1fr)`, not a bare `1fr`: an `fr` track keeps an automatic minimum
+          (index.css says the same of `.tb-subrow` in the row direction). The board is
+          capped by its own 320px track, but the dialogue feed prints whatever the
+          accounts wrote — one unwrappable line measured the track open to 1227px and the
+          page to scrollWidth 1607 against clientWidth 1024, a scroll the viewport-wide
+          sticky header can't follow. With minmax the feed scrolls in its own card. */}
+      <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-line bg-white p-[14px]">
             <div className="mb-3 flex items-center justify-between">

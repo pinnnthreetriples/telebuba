@@ -12,10 +12,10 @@ from services.warming import settings_store
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    ("clear_keys", "expected_gemini_key", "expected_openai_key", "expected_telemetr_key"),
+    ("clear_keys", "expected_gemini_key", "expected_openai_key"),
     [
-        (False, "gemini-new", "openai-new", "telemetr-new"),
-        (True, "", "", ""),
+        (False, "gemini-new", "openai-new"),
+        (True, "", ""),
     ],
 )
 async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
@@ -23,7 +23,6 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
     clear_keys: bool,  # noqa: FBT001 - table input models the two flag states.
     expected_gemini_key: str,
     expected_openai_key: str,
-    expected_telemetr_key: str,
 ) -> None:
     stored = WarmingSettingsSecret(
         inter_account_chat=True,
@@ -37,7 +36,6 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         openai_api_key=expected_openai_key,
         openai_model="gpt-contract",
         captcha_llm_provider="openai",
-        telemetr_api_key=expected_telemetr_key,
         updated_at="2026-07-17T12:00:00+00:00",
     )
     persist = AsyncMock(return_value=stored)
@@ -60,8 +58,6 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
             openai_model="gpt-contract",
             clear_openai_key=clear_keys,
             captcha_llm_provider="openai",
-            telemetr_api_key="telemetr-new",
-            clear_telemetr_key=clear_keys,
         )
     )
 
@@ -77,7 +73,6 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         openai_api_key=expected_openai_key,
         openai_model="gpt-contract",
         captcha_llm_provider="openai",
-        telemetr_api_key=expected_telemetr_key,
     )
     assert result.model_dump() == {
         "inter_account_chat": True,
@@ -91,7 +86,6 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         "has_openai_key": bool(expected_openai_key),
         "openai_model": "gpt-contract",
         "captcha_llm_provider": "openai",
-        "has_telemetr_key": bool(expected_telemetr_key),
         "updated_at": "2026-07-17T12:00:00+00:00",
     }
     log.assert_awaited_once_with(
@@ -108,7 +102,6 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
             "gemini_min_interval_seconds": 2.5,
             "has_openai_key": bool(expected_openai_key),
             "captcha_llm_provider": "openai",
-            "has_telemetr_key": bool(expected_telemetr_key),
         },
     )
 
@@ -123,7 +116,6 @@ async def test_save_settings_preserves_keys_when_update_omits_them(
         gemini_api_key="kept-gemini",
         gemini_model="gemini-default",
         openai_api_key="kept-openai",
-        telemetr_api_key="kept-telemetr",
         updated_at="2026-07-17T12:00:00+00:00",
     )
     persist = AsyncMock(return_value=stored)
@@ -136,7 +128,5 @@ async def test_save_settings_preserves_keys_when_update_omits_them(
     assert call is not None
     assert call.kwargs["gemini_api_key"] is None
     assert call.kwargs["openai_api_key"] is None
-    assert call.kwargs["telemetr_api_key"] is None
     assert result.has_gemini_key is True
     assert result.has_openai_key is True
-    assert result.has_telemetr_key is True

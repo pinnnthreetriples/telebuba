@@ -85,6 +85,7 @@ async def remove_account(account_id: str) -> None:
         set_listener_running,
     )
     from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
+    from services.neurocomment._state import forget_account_cooldowns  # noqa: PLC0415
     from services.warming import (  # noqa: PLC0415
         WarmingTaskNotQuiescentError,
         _stop_warming_locked,
@@ -142,6 +143,10 @@ async def remove_account(account_id: str) -> None:
         # account id and nothing else ever drops those keys, so an app that outlives
         # many deletes accumulates one dead generation and one dead lock per account.
         await forget_post_listener(account_id)
+        # Same reason, other registry: ``_delete_account`` purges the account's
+        # ``neurocomment_cooldowns`` rows so a re-imported id is not born parked, but the
+        # live map those rows only back up is a service global core cannot reach.
+        forget_account_cooldowns(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

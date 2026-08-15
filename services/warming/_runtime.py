@@ -33,6 +33,7 @@ from core.logging import log_event
 from services.dialogues import assign_pairs
 from services.trust import account_trust_score
 from services.warming import _seams
+from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
 from services.warming._start_state import carry_or_restamp
@@ -263,6 +264,10 @@ async def _enforce_start_readiness(account_id: str, account: AccountRead) -> Non
     """Refuse a not-ready account at start, raising ``WarmingNotReadyError``."""
     if not (await load_warming_settings()).enforce_readiness:
         return
+    # Ahead of the last-known-state verdict, and typed differently: "Telegram is
+    # rate-limiting this account right now" is a wait, not a list of things wrong with the
+    # account, so it must not arrive among the readiness reasons beside a missing proxy.
+    assert_not_cooling(account_id)
     channel_count = len((await list_warming_channels()).channels)
     readiness = await _evaluate_account_readiness(account_id, account, channel_count)
     if readiness.ready:
@@ -312,6 +317,11 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # that is the active listener, so the two runtimes never share a session.
         if await get_listener_running() and await get_listener_account_id() == data.account_id:
             raise AccountIsListenerError(data.account_id)
+        # The other way neurocomment can already own this session: an in-flight discovery
+        # run, which only starts while the listener is STOPPED — so the check above cannot
+        # see it. The cooldown either runtime records is a health verdict instead, and is
+        # enforced with the rest of them below.
+        assert_no_discovery_run(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
         # Revoke + cancel first, and publish a fresh generation only after the old
         # coroutine is terminal. A task that suppresses cancellation remains owned

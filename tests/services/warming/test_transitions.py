@@ -21,6 +21,7 @@ from services.warming.pacing import (
     _seconds_until,
 )
 from tests.services.warming._support import (
+    _no_quiet_days,
     _Recorder,
     _seed_ready_account,
     _set_settings,
@@ -56,6 +57,7 @@ async def test_loop_auto_completes_at_target_days(monkeypatch: pytest.MonkeyPatc
 @pytest.mark.asyncio
 async def test_loop_keeps_warming_before_target(monkeypatch: pytest.MonkeyPatch) -> None:
     # Below the chosen target the account keeps cycling normally.
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_ready_account("acc-1")

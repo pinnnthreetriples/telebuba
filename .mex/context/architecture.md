@@ -14,7 +14,7 @@ edges:
 - `main.py` is the FastAPI composition root and lifespan owner.
 - `api/` handles HTTP validation/auth/error mapping/serialization only.
 - `services/` owns policy, orchestration and domain state transitions.
-- `core/` owns repositories/migrations and external adapters: Telegram, AI, Telemetr, logging/Sentry, SSE and proxy checks.
+- `core/` owns repositories/migrations and external adapters: Telegram, AI, logging/Sentry, SSE and proxy checks.
 - `schemas/` is pure contracts; no project-layer imports or I/O.
 - `frontend/` is React 19 + strict TypeScript/Vite/FSD and reaches Python only through `/api/v1`.
 

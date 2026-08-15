@@ -31,6 +31,7 @@ from schemas.neurocomment import (
 )
 from schemas.neurocomment_bans import ChannelBanCheckList
 from schemas.neurocomment_board import NeurocommentBoard
+from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
 from services import neurocomment as nc_service
 
 router = APIRouter(prefix="/neurocomment", tags=["neurocomment"])
@@ -274,6 +275,13 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail="listener account is currently warming",
+        ) from exc
+    except nc_service.ListenerBusyDiscoveryError as exc:
+        # The same stable code warming's start reports for the same condition, so one
+        # translation covers both buttons.
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=DISCOVERY_BUSY_CODE,
         ) from exc
     return await nc_service.neurocomment_runtime_status()
 

@@ -26,6 +26,7 @@ from schemas.warming import (
 from services import warming
 from services.warming import _loop, _runtime, _seams
 from tests.services.warming._support import (
+    _no_quiet_days,
     _Recorder,
     _seed_channel,
     _seed_ready_account,
@@ -50,6 +51,7 @@ async def test_cycle_reports_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.mark.asyncio
 async def test_loop_iteration_quarantines_on_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     recorder.peer_flood_on.add("join_channel")
     monkeypatch.setattr(_seams, "execute", recorder.execute)
@@ -66,6 +68,7 @@ async def test_loop_iteration_quarantines_on_peer_flood(monkeypatch: pytest.Monk
 
 @pytest.mark.asyncio
 async def test_loop_iteration_persists_live_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
@@ -98,6 +101,7 @@ async def test_loop_iteration_survives_progress_write_failure(
 ) -> None:
     # A raising progress write (e.g. a transient SQLite lock) must not abort the
     # cycle or park a healthy account in error — the hook is cosmetic, best-effort.
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
@@ -129,6 +133,7 @@ async def test_loop_iteration_clears_stale_channel(monkeypatch: pytest.MonkeyPat
     # The rail advances last_action live but never updates last_channel, so a
     # prior cycle's failed channel must be cleared at cycle start, not left to
     # surface stale under a fresh active step.
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
@@ -225,6 +230,7 @@ async def test_run_loop_iteration_runs_ready_account_under_enforcement(
 ) -> None:
     # The gate is a guard, not a blanket block: a still-ready account cycles
     # normally with enforce_readiness on (audit П3).
+    _no_quiet_days(monkeypatch)
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_ready_account("acc-1")

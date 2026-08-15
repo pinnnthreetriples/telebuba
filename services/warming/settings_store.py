@@ -33,7 +33,6 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         has_openai_key=bool(secret.openai_api_key),
         openai_model=secret.openai_model,
         captcha_llm_provider=secret.captcha_llm_provider,
-        has_telemetr_key=bool(secret.telemetr_api_key),
         updated_at=secret.updated_at,
     )
 
@@ -48,7 +47,6 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
     # also clears it; passing ``None`` (and no flag) preserves the existing key.
     api_key: str | None = "" if data.clear_gemini_key else data.gemini_api_key
     openai_key: str | None = "" if data.clear_openai_key else data.openai_api_key
-    telemetr_key: str | None = "" if data.clear_telemetr_key else data.telemetr_api_key
 
     secret = await save_warming_settings(
         inter_account_chat=data.inter_account_chat,
@@ -62,7 +60,6 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         openai_api_key=openai_key,
         openai_model=data.openai_model,
         captcha_llm_provider=data.captcha_llm_provider,
-        telemetr_api_key=telemetr_key,
     )
     await log_event(
         "INFO",
@@ -78,7 +75,6 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
             "gemini_min_interval_seconds": secret.gemini_min_interval_seconds,
             "has_openai_key": bool(secret.openai_api_key),
             "captcha_llm_provider": secret.captcha_llm_provider,
-            "has_telemetr_key": bool(secret.telemetr_api_key),
         },
     )
     return _mask_settings(secret)

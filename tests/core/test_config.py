@@ -348,7 +348,6 @@ def test_the_protected_field_set_is_pinned() -> None:
         ("proxy", "maxmind_license_key"),
         ("telegram", "api_hash"),
         ("telegram", "api_id"),
-        ("telemetr", "api_key"),
         ("warming", "fleet_hash_salt"),
     ]
 

@@ -50,7 +50,10 @@ function ChoiceCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex cursor-pointer items-center gap-[11px] rounded-[12px] border bg-white px-[14px] py-[13px] text-left transition-colors hover:border-[#bfd6ff] ${selected ? 'border-primary bg-primary-tint' : 'border-line-input'}`}
+      // Background lives in both branches, never in the base: two `bg-*` utilities in
+      // one class list are resolved by stylesheet order, where `bg-white` comes last
+      // and wins, so the picked method showed a blue border over a white row.
+      className={`flex cursor-pointer items-center gap-[11px] rounded-[12px] border px-[14px] py-[13px] text-left transition-colors hover:border-[#bfd6ff] ${selected ? 'border-primary bg-primary-tint' : 'border-line-input bg-white'}`}
     >
       <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
         {icon}

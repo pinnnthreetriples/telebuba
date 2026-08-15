@@ -17,9 +17,15 @@ from schemas.telegram_actions import (
     GetSimilarChannels,
     LinkedDiscussionGroupResult,
     SearchChannels,
+    SearchGlobalPosts,
 )
-from schemas.telegram_actions_discovery import TelegramChannelMatch, TelegramChannelMatches
-from schemas.telemetr import TelemetrChannel, TelemetrSearchResult
+from schemas.telegram_actions_discovery import (
+    GlobalPostsCursor,
+    TelegramChannelMatch,
+    TelegramChannelMatches,
+    TelegramGlobalPostMatches,
+)
+from services import warming
 from services.neurocomment import _discovery_state, _seams, _state
 from services.neurocomment.discovery import start_discovery
 
@@ -29,8 +35,8 @@ if TYPE_CHECKING:
 
     from pydantic import BaseModel
 
+    from core.telegram_client._read import ReadErrorKind
     from schemas.telegram_actions import TelegramReadAction
-    from schemas.telemetr import TelemetrSearchRequest
 
 _Scripted = "BaseModel | Callable[[TelegramReadAction], BaseModel]"
 
@@ -50,9 +56,16 @@ def isolate_discovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
     monkeypatch.setattr(_seams.rng, "uniform", lambda low, _high: low)
     _state.reset_for_tests()
     _discovery_state.reset_for_tests()
+    # ``start_discovery`` claims the account under warming's per-account lifecycle lock,
+    # and that table is module-level and bound to the loop alive when each lock was
+    # created. Cleared for the reason warming's own conftest clears it: a lock built in
+    # an earlier test's loop raises "bound to a different event loop" the moment this
+    # one waits on it, which is an ordering-dependent failure, not a real race.
+    warming._ACCOUNT_LOCKS.clear()
     yield
     _discovery_state.reset_for_tests()
     _state.reset_for_tests()
+    warming._ACCOUNT_LOCKS.clear()
 
 
 async def _no_sleep(_seconds: float) -> None:
@@ -108,33 +121,21 @@ def matches(*rows: tuple[str, str, int | None]) -> TelegramChannelMatches:
     )
 
 
-def telemetr_ok(
+def posts_page(
     *rows: tuple[str, str, int | None],
-    country: str | None = None,
-    language: str | None = None,
-) -> TelemetrSearchResult:
-    """A catalogue page. ``country``/``language`` are what Telemetr filed every row under."""
-    return TelemetrSearchResult(
-        status="ok",
-        items=[
-            TelemetrChannel(
-                username=username,
-                title=title,
-                members_count=count,
-                country=country,
-                language=language,
-            )
-            for username, title, count in rows
-        ],
-    )
+    cursor: GlobalPostsCursor | None = None,
+) -> TelegramGlobalPostMatches:
+    """One page of the global post search. ``cursor=None`` = nothing to page on from."""
+    return TelegramGlobalPostMatches(items=matches(*rows).items, next_cursor=cursor)
 
 
 class ReadRecorder:
     """Stub for ``_seams.execute_read`` that scripts results per action type.
 
-    ``search`` / ``similar`` / ``linked`` are looked up by the action's discriminator,
-    so one recorder serves both discovery stages. A callable value is invoked with the
-    action (for per-channel verdicts or raising); anything else is returned as-is.
+    ``search`` / ``similar`` / ``posts`` / ``linked`` are looked up by the action's
+    discriminator, so one recorder serves both discovery stages. A callable value is
+    invoked with the action (for per-channel verdicts, per-page results or raising);
+    anything else is returned as-is.
     """
 
     def __init__(
@@ -142,11 +143,13 @@ class ReadRecorder:
         *,
         search: object = None,
         similar: object = None,
+        posts: object = None,
         linked: object = None,
     ) -> None:
         self._by_type: dict[str, object] = {  # heterogeneous by design (value or factory)
             "search_channels": search if search is not None else matches(),
             "get_similar_channels": similar if similar is not None else matches(),
+            "search_global_posts": posts if posts is not None else posts_page(),
             "get_linked_discussion_group": (
                 linked
                 if linked is not None
@@ -174,30 +177,40 @@ class ReadRecorder:
         """Recommendation actions, narrowed so tests can read ``.seed``."""
         return [call for call in self.calls if isinstance(call, GetSimilarChannels)]
 
-
-class TelemetrRecorder:
-    """Stub for ``_seams.search_telemetr``."""
-
-    def __init__(self, result: TelemetrSearchResult | None = None) -> None:
-        self._result = result or TelemetrSearchResult(status="ok")
-        self.requests: list[TelemetrSearchRequest] = []
-
-    async def __call__(self, request: TelemetrSearchRequest) -> TelemetrSearchResult:
-        self.requests.append(request)
-        return self._result
+    def posts_actions(self) -> list[SearchGlobalPosts]:
+        """Global post-search actions, narrowed so tests can read ``.query``/``.cursor``."""
+        return [call for call in self.calls if isinstance(call, SearchGlobalPosts)]
 
 
-def read_error(reason: str, only: str | None = None) -> Callable[[TelegramReadAction], BaseModel]:
+def read_error(
+    reason: str,
+    only: str | None = None,
+    *,
+    kind: ReadErrorKind = "other",
+    seconds: int | None = None,
+) -> Callable[[TelegramReadAction], BaseModel]:
     """Scripted gateway failure for :class:`ReadRecorder`.
 
     Keeps the reason string out of the test body (ruff EM101/TRY003) and, with
-    ``only``, fails just the channels whose handle contains that fragment.
+    ``only``, fails just the channels whose handle contains that fragment. ``kind`` is
+    the gateway's own classification, which is what discovery reads — never the reason
+    text, since only one member of the rate-limit family spells itself "FloodWait".
     """
 
     def _raise(action: TelegramReadAction) -> BaseModel:
         channel = getattr(action, "channel", "")
         if only is None or only in channel:
-            raise TelegramReadError(reason)
+            raise TelegramReadError(reason, kind=kind, seconds=seconds)
         return LinkedDiscussionGroupResult(linked_chat_id=-100, comments_enabled=True)
 
     return _raise
+
+
+def flood_error(
+    seconds: int,
+    only: str | None = None,
+    *,
+    reason: str = "FloodWait",
+) -> Callable[[TelegramReadAction], BaseModel]:
+    """A rate limit exactly as ``core.telegram_client._read`` classifies one."""
+    return read_error(f"{reason}({seconds}s)", only, kind="flood_wait", seconds=seconds)

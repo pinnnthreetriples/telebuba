@@ -47,8 +47,12 @@ from schemas.telegram_actions_channels import (
 from schemas.telegram_actions_comments import CommentOnPost, ReadPostComments
 
 # The channel-discovery read cluster likewise lives in a sibling module; the read
-# union below references both names.
-from schemas.telegram_actions_discovery import GetSimilarChannels, SearchChannels
+# union below references every name.
+from schemas.telegram_actions_discovery import (
+    GetSimilarChannels,
+    SearchChannels,
+    SearchGlobalPosts,
+)
 
 # The profile-media / story action cluster lives in a sibling module (file-size
 # cap); the discriminated unions below reference every name, so importing them
@@ -314,6 +318,7 @@ TelegramReadAction = Annotated[
     | CheckChannelUsername
     | SearchChannels
     | GetSimilarChannels
+    | SearchGlobalPosts
     | GetLastPostAt,
     Field(discriminator="action_type"),
 ]

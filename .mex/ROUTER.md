@@ -15,7 +15,7 @@ edges:
   - target: context/runtime-neurocomment.md
     condition: neurocomment listener, comments, captcha, joins, cooldowns, or retention
   - target: context/runtime-discovery.md
-    condition: neurocomment campaign channel discovery or Telemetr
+    condition: neurocomment campaign channel discovery
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md

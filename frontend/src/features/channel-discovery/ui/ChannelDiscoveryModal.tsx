@@ -9,7 +9,6 @@ import {
   neurocommentBoardQueryOptions,
   startCampaignDiscoveryMutation,
 } from '@/entities/campaign';
-import { warmingSettingsQueryOptions } from '@/entities/warming';
 import { useLogEventStream } from '@/shared/lib';
 import { Modal, StatusIcon } from '@/shared/ui';
 
@@ -38,19 +37,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DiscoveryFormState>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
-  // Whether the run ON SCREEN asked for a locale filter, captured at submit.
-  const [ranLocaleFiltered, setRanLocaleFiltered] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [adopted, setAdopted] = useState<{
     linked: number;
     refused: number;
+    commentsOff: number;
     failed: number;
   } | null>(null);
-
-  // Whether the external catalogue is usable is server state; the modal owns its
-  // own I/O, so it reads the settings row rather than taking it as a prop.
-  const settings = useQuery(warmingSettingsQueryOptions());
-  const telemetrConfigured = settings.data?.has_telemetr_key ?? false;
 
   const discoveryOptions = campaignDiscoveryQueryOptions({ path: { campaign_id: campaignId } });
   const board = useQuery({
@@ -96,10 +89,6 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           }
           if (outcome.status !== 'started') return;
           setSubmitted(true);
-          // Snapshot, not live form state: the operator can go back and edit the form
-          // while this run's board is still on screen, and then every row would be judged
-          // against filters this run never asked for.
-          setRanLocaleFiltered(form.useTelemetr && (form.language !== '' || form.country !== ''));
           // reset, not invalidate: invalidate keeps the previous run's frame while it
           // refetches, and the cache would then hand this run the finished rows of the
           // last one — adoptable, and with a running:false that stops the poll.
@@ -144,10 +133,16 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         const outcomes = result.outcomes ?? [];
         const count = (status: string) =>
           outcomes.filter((outcome) => outcome.status === status).length;
-        // "Taken by another campaign" and "the link itself failed" need different
-        // copy: the first is final, the second is worth retrying.
+        // "Taken by another campaign", "comments are off there" and "the link itself
+        // failed" need different copy: the first two are final and for different
+        // reasons, the third is worth retrying.
         const linked = count('linked');
-        setAdopted({ linked, refused: count('already_assigned'), failed: count('failed') });
+        setAdopted({
+          linked,
+          refused: count('already_assigned'),
+          commentsOff: count('comments_off'),
+          failed: count('failed'),
+        });
         void queryClient.invalidateQueries({
           queryKey: neurocommentBoardQueryOptions({ path: { campaign_id: campaignId } }).queryKey,
         });
@@ -176,7 +171,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
 
   // Width only, no max-h/overflow-y: per Modal's contract a tall card scrolls via the
   // OVERLAY, because overflow-y on the card computes overflow-x to auto and clips the
-  // HelpHint tooltips — including the only place the filter scope is documented.
+  // HelpHint tooltips — including the only place the seed channel is documented.
   return (
     <Modal
       onClose={onClose}
@@ -196,7 +191,6 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               board={board.data}
               loading={board.isPending || (running && phase === 'searching')}
               errored={board.isError}
-              localeFiltered={ranLocaleFiltered}
               selected={selected}
               onToggle={toggle}
               onToggleAll={toggleAll}
@@ -204,7 +198,6 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           ) : (
             <DiscoveryForm
               form={form}
-              telemetrConfigured={telemetrConfigured}
               submitting={startSearch.isPending}
               onChange={setForm}
               onSubmit={runSearch}
@@ -230,6 +223,14 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {adopted !== null && adopted.refused > 0 ? (
           <p role="status" className="mt-[11px] text-[12px] text-warning">
             {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
+          </p>
+        ) : null}
+
+        {/* Its own line, not folded into "already taken": the operator's next move is
+            to drop the channel, not to look for the campaign holding it. */}
+        {adopted !== null && adopted.commentsOff > 0 ? (
+          <p role="status" className="mt-[11px] text-[12px] text-warning">
+            {t('neurocomment.modal.discovery.addedCommentsOff', { count: adopted.commentsOff })}
           </p>
         ) : null}
 

@@ -23,6 +23,7 @@ from services.neurocomment._runtime import (
     start_neurocomment,
     stop_neurocomment,
 )
+from services.neurocomment._runtime_operations import ListenerBusyDiscoveryError
 from services.neurocomment.bans import check_campaign_channel_bans
 from services.neurocomment.board import load_neurocomment_board
 from services.neurocomment.campaigns import (
@@ -64,6 +65,7 @@ from services.neurocomment.settings_store import (
 __all__ = [
     "ChannelNotInCampaignError",
     "InvalidCursorError",
+    "ListenerBusyDiscoveryError",
     "ListenerBusyWarmingError",
     "adopt_candidates",
     "assign_account_to_campaign",

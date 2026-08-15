@@ -250,6 +250,7 @@ export type {
   DiscoveryAdoptResult,
   DiscoveryBoard,
   DiscoveryCandidate,
+  DiscoveryChannelVerdict,
   DiscoveryProgress,
   DiscoverySearchOutcome,
   DiscoverySearchRequest,

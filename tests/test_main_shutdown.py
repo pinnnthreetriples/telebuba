@@ -2,8 +2,8 @@
 
 The lifespan's ``finally`` was a bare sequence of ``await``s, so the first one to
 raise skipped every later step — leaving the pooled Telethon clients connected
-(each holding a ``.session`` SQLite file open) and the Gemini / OpenAI / Telemetr
-HTTP clients unclosed. Each step is guarded now, and the sequence is preserved:
+(each holding a ``.session`` SQLite file open) and the Gemini / OpenAI HTTP
+clients unclosed. Each step is guarded now, and the sequence is preserved:
 warming drains BEFORE the pool is torn down, or live ``execute(...)`` calls blow up
 mid-handshake.
 """
@@ -26,7 +26,6 @@ _STEPS = (
     "shutdown_telegram_pool",
     "close_gemini_client",
     "close_openai_client",
-    "close_telemetr_client",
 )
 _EXPECTED_ORDER = [
     "shutdown_warming_runtime",
@@ -34,7 +33,6 @@ _EXPECTED_ORDER = [
     "shutdown_telegram_pool",
     "close_gemini_client",
     "close_openai_client",
-    "close_telemetr_client",
 ]
 _LEAK_CANARY = "socks5://operator:hunter2@198.51.100.7:1080"
 

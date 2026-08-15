@@ -55,7 +55,6 @@ type Routes = {
   boards?: DiscoveryBoard[];
   startStatus?: string;
   startFails?: boolean;
-  hasTelemetrKey?: boolean;
   // One status per requested channel, defaulting to all-linked. The server reports
   // per-channel outcomes, so a spec has to be able to mix them.
   adoptStatuses?: string[];
@@ -86,7 +85,6 @@ function route(routes: Routes = {}) {
         inter_account_chat: false,
         reactions_enabled: true,
         gemini_model: 'gemini-2.5-flash',
-        has_telemetr_key: routes.hasTelemetrKey ?? true,
         updated_at: 'now',
       });
     }
@@ -168,7 +166,7 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('@alpha')).toBeInTheDocument();
     });
     const search = calls.find((call) => call.path.endsWith('/discovery/search'));
-    expect(search?.body).toMatchObject({ keywords: ['crypto'], use_telemetr: false });
+    expect(search?.body).toMatchObject({ keywords: ['crypto'] });
   });
 
   it('stays on the form and explains a refusal', async () => {
@@ -218,15 +216,6 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText(/Не удалось запустить поиск/)).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: 'Найти' })).toBeEnabled();
-  });
-
-  it('disables the Telemetr toggle when no key is configured', async () => {
-    route({ hasTelemetrKey: false });
-    renderModal();
-
-    await waitFor(() => {
-      expect(screen.getByRole('checkbox', { name: /Telemetr\.io/ })).toBeDisabled();
-    });
   });
 
   it('refetches the board on a discovery SSE frame', async () => {
@@ -407,6 +396,35 @@ describe('ChannelDiscoveryModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('tells a comments-off refusal apart from a channel already taken', async () => {
+    // Different next moves: one channel is worth chasing in another campaign, the other
+    // simply cannot be commented in — so they cannot share the "already taken" line.
+    route({
+      board: boardPayload([candidate({ channel: 'good' }), candidate({ channel: 'quiet' })]),
+      adoptStatuses: ['linked', 'comments_off'],
+    });
+    const onClose = vi.fn();
+    renderModal(onClose);
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать все подходящие' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(2\)/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/отключены комментарии/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/уже заняты/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Добавлено: 1/ })).toBeInTheDocument();
+    // a partial result never auto-closes
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1000);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('reports a failed adopt and keeps the button retryable', async () => {
     route({ board: boardPayload([candidate({ channel: 'good' })]), adoptFails: true });
     const onClose = vi.fn();
@@ -566,7 +584,6 @@ describe('ChannelDiscoveryModal', () => {
             inter_account_chat: false,
             reactions_enabled: true,
             gemini_model: 'gemini-2.5-flash',
-            has_telemetr_key: true,
             updated_at: 'now',
           }),
         );

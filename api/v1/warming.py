@@ -113,6 +113,14 @@ async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
             status_code=http_status.HTTP_409_CONFLICT,
             detail="account is the neurocomment listener",
         ) from exc
+    except warming_service.AccountUnavailableError as exc:
+        # Same 409 family as the listener conflict — a discovery run is reading with this
+        # account, or Telegram is rate-limiting it. The detail is the service's stable
+        # code, reported verbatim so the SPA can translate it.
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=exc.code,
+        ) from exc
 
 
 @router.post(

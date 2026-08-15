@@ -83,6 +83,22 @@ def in_cooldown(account_id: str, now: datetime, channel: str | None = None) -> b
     return cooled
 
 
+def forget_account_cooldowns(account_id: str) -> None:
+    """Drop every in-memory cooldown of an account that is being deleted.
+
+    The one exception to "a cooldown is only ever removed by expiry", and it is not an
+    early clear: the account it parks is going away. ``_delete_account`` already purges
+    this account's ``neurocomment_cooldowns`` rows for exactly that reason — a
+    re-imported account reusing the id must not inherit a stranger's deadline — but
+    ``core`` may not reach into a service module, so the memory half is dropped by the
+    service that owns the delete. Without it the durable half ran backwards: a restart
+    CLEARED the stale park (the row is gone) while an uptime kept it, and it was the
+    live map that answered every guard.
+    """
+    for key in [key for key in _COOLDOWN_UNTIL if key[0] == account_id]:
+        del _COOLDOWN_UNTIL[key]
+
+
 async def hydrate_cooldowns() -> None:
     """Reload persisted cooldown deadlines into the in-memory map after a restart (#34).
 

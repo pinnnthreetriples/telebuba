@@ -17,11 +17,13 @@ from core.repositories.neurocomment import (
 from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions import LinkedDiscussionGroupResult
-from services.neurocomment import _seams
+from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_qualify import run_qualification
+from services.neurocomment._state import set_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
+    flood_error,
     read_error,
 )
 
@@ -82,6 +84,114 @@ async def test_probe_records_the_verdict_and_refreshes_the_shared_cache(
     cached = await fetch_linked_group("alpha")
     assert cached is not None
     assert cached.comments_enabled == 1
+
+
+@pytest.mark.asyncio
+async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All of this rides the getFullChannel reply the probe already spends.
+
+    Throwing it away for one bool is what left the board unable to say WHY a channel is
+    unusable — and re-learning any of it would cost another RPC per candidate.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            linked=lambda _action: LinkedDiscussionGroupResult(
+                linked_chat_id=-100,
+                comments_enabled=True,
+                group_slowmode_enabled=True,
+                join_to_send=True,
+                join_request=True,
+                can_send_messages=False,
+                scam=True,
+                fake=False,
+                restricted=True,
+            ),
+        ),
+    )
+    campaign_id = await _seed("gated")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    verdict = _discovery_state.verdicts(campaign_id)["gated"]
+    # ``comments_enabled`` is deliberately absent: it duplicated the candidate's own
+    # ``qualification`` field, which is what the board actually renders.
+    assert verdict.model_dump() == {
+        "can_send_messages": False,
+        "join_to_send": True,
+        "join_request": True,
+        "group_slowmode_enabled": True,
+        "scam": True,
+        "fake": False,
+        "restricted": True,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_signal_the_reply_omits_stays_unknown_rather_than_a_no(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``None`` means "the reply did not answer", so nothing may flatten it to ``False``.
+
+    A channel blocked on a field Telegram simply omitted (older TL layer, no linked
+    group) would be refused for a gate that was never measured.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
+    )
+    campaign_id = await _seed("quiet")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    verdict = _discovery_state.verdicts(campaign_id)["quiet"]
+    assert verdict.can_send_messages is None
+    assert verdict.join_to_send is None
+    assert verdict.join_request is None
+    assert verdict.restricted is None
+
+
+@pytest.mark.asyncio
+async def test_an_unanswerable_probe_records_no_verdict_at_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed probe learnt nothing, so the board must read fitness as unknown."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=read_error("RPC: ChannelPrivateError")),
+    )
+    campaign_id = await _seed("broken")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    assert _discovery_state.verdicts(campaign_id) == {}
+
+
+@pytest.mark.asyncio
+async def test_a_cache_hit_spends_no_rpc_and_so_carries_no_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fitness signals have no column, so a cached channel has none to report.
+
+    Deliberate: the cheap re-search is worth more than a full verdict, and the board
+    still knows from the cache whether comments are on.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
+    )
+    campaign_id = await _seed("known")
+    await upsert_linked_group("known", -100, comments_enabled=True)
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    assert _discovery_state.verdicts(campaign_id) == {}
 
 
 @pytest.mark.asyncio
@@ -249,7 +359,7 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Retrying into a rate limit is how a soft limit becomes a hard one."""
-    reader = ReadRecorder(linked=read_error("FloodWait(300s)"))
+    reader = ReadRecorder(linked=flood_error(300))
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("aaa", "bbb", "ccc")
 
@@ -264,6 +374,84 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     assert rows["aaa"].qualified_at is None
     assert rows["bbb"].qualified_at is None
     assert rows["ccc"].qualified_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_cooldown_recorded_mid_pass_stops_the_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hundred probes is minutes; a limit landing at probe two must stop probe three.
+
+    The pass has two abort counters and neither can see this — nothing it asked for
+    failed. Stops like a FloodWait does: nothing extra is marked, the tail stays pending
+    and resumable, and the reason says the account is cooling rather than returning
+    ``None`` for "finished".
+    """
+    probes = 0
+
+    async def _probe(_account_id: str, _action: object) -> LinkedDiscussionGroupResult:
+        nonlocal probes
+        probes += 1
+        if probes == 2:
+            # The comment engine parking the same listener, mid-pass.
+            await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
+        return _verdict(enabled=True)
+
+    monkeypatch.setattr(_seams, "execute_read", _probe)
+    campaign_id = await _seed("aaa", "bbb", "ccc", "ddd")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason == "account_cooling"
+    assert probes == 2
+    rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert rows["aaa"].qualified_at is not None
+    assert rows["bbb"].qualified_at is not None
+    assert rows["ccc"].qualified_at is None
+    assert rows["ddd"].qualified_at is None
+
+
+@pytest.mark.asyncio
+async def test_a_cooldown_landing_during_the_pace_sleep_costs_no_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The check belongs after the sleep, not before it.
+
+    Every probe but the first is preceded by a one-to-two second pace sleep — the widest
+    window in the pass, and the likeliest moment for somebody else's flood to land. Read
+    before the sleep, the check was answering about a moment that had already passed and
+    still bought one RPC into the live window.
+    """
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+
+    async def _flood_while_pacing(_seconds: float) -> None:
+        await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
+
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(_seams, "sleep", _flood_while_pacing)
+    campaign_id = await _seed("aaa", "bbb", "ccc")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason == "account_cooling"
+    # Only the first probe, which spends no pace sleep. The second never fires.
+    assert len(reader.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_channel_scoped_cooldown_does_not_stop_the_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pass reads with the account; a slow-mode window on one chat is not its limit."""
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1), channel="@chat")
+    campaign_id = await _seed("aaa", "bbb")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason is None
+    assert len(reader.calls) == 2
 
 
 @pytest.mark.asyncio

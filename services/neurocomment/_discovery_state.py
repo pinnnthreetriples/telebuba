@@ -25,7 +25,11 @@ from schemas.neurocomment_discovery import DiscoveryRunReport
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 
-    from schemas.neurocomment_discovery import DiscoveryPhase, DiscoveryStartStatus
+    from schemas.neurocomment_discovery import (
+        DiscoveryChannelVerdict,
+        DiscoveryPhase,
+        DiscoveryStartStatus,
+    )
 
 _SEARCH_WINDOW = timedelta(hours=24)
 
@@ -44,10 +48,16 @@ _RESERVED: dict[str, datetime] = {}
 _RUN_ACCOUNTS: dict[str, str] = {}
 _PHASES: dict[str, DiscoveryPhase] = {}
 _LAST_ERRORS: dict[str, str] = {}
-# Per-source outcome plus per-row provenance/geo of the last run. Not persisted, for the
-# same reason nothing else here is — and because the candidate table has no column for
-# the geo, which a migration against the live database would need operator approval for.
+# Per-source outcome plus per-row provenance of the last run. Not persisted, for the same
+# reason nothing else here is — and because the candidate table has no column for the
+# provenance, which a migration against the live database would need operator approval for.
 _REPORTS: dict[str, DiscoveryRunReport] = {}
+# Per-candidate fitness verdicts from the qualification pass, keyed campaign -> channel.
+# Ephemeral for the same reason as _REPORTS, and it degrades the same way: a board read
+# after a restart finds none and reports the candidate's fitness as unknown rather than
+# as fine. Written one channel at a time (unlike the report, which the search stage
+# hands over whole), so it is its own map instead of a field on DiscoveryRunReport.
+_VERDICTS: dict[str, dict[str, DiscoveryChannelVerdict]] = {}
 # Rolling-24h timestamps of started runs, fleet-wide.
 _SEARCH_TIMES: deque[datetime] = deque()
 
@@ -88,6 +98,29 @@ def run_report(campaign_id: str) -> DiscoveryRunReport:
 
 def set_run_report(campaign_id: str, report: DiscoveryRunReport) -> None:
     _REPORTS[campaign_id] = report
+
+
+def verdicts(campaign_id: str) -> dict[str, DiscoveryChannelVerdict]:
+    """Fitness verdicts this process's qualification passes recorded, keyed by channel.
+
+    Empty for a campaign whose run predates this process — the caller must read a
+    missing entry as "unknown", never as "fit".
+    """
+    return _VERDICTS.get(campaign_id, {})
+
+
+def record_verdict(campaign_id: str, channel: str, verdict: DiscoveryChannelVerdict) -> None:
+    _VERDICTS.setdefault(campaign_id, {})[channel] = verdict
+
+
+def clear_verdicts(campaign_id: str) -> None:
+    """Drop the previous run's verdicts. Called when a new run starts.
+
+    They are per-run: a channel this run qualifies straight from the linked-group cache
+    spends no probe and records nothing, so a verdict left behind would be shown as if
+    this run had measured it — and the map would never shrink.
+    """
+    _VERDICTS.pop(campaign_id, None)
 
 
 def _prune_search_times(now: datetime) -> None:
@@ -162,6 +195,7 @@ def cancel_campaign_run(campaign_id: str) -> None:
     _PHASES.pop(campaign_id, None)
     _LAST_ERRORS.pop(campaign_id, None)
     _REPORTS.pop(campaign_id, None)
+    _VERDICTS.pop(campaign_id, None)
 
 
 async def shutdown_discovery_runs() -> None:
@@ -174,6 +208,7 @@ async def shutdown_discovery_runs() -> None:
     _RUN_ACCOUNTS.clear()
     # The reports pin one origin model per stored candidate; nothing outlives the loop.
     _REPORTS.clear()
+    _VERDICTS.clear()
     for task in tasks:
         task.cancel()
     for task in tasks:
@@ -190,4 +225,5 @@ def reset_for_tests() -> None:
     _PHASES.clear()
     _LAST_ERRORS.clear()
     _REPORTS.clear()
+    _VERDICTS.clear()
     _SEARCH_TIMES.clear()

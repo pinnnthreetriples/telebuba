@@ -8,7 +8,6 @@ from core.config import settings
 from core.db import (
     _get_engine,
     create_account,
-    load_warming_settings,
     save_warming_settings,
 )
 from schemas.accounts import AccountCreate
@@ -192,77 +191,6 @@ async def test_save_settings_persists_openai_key_and_captcha_provider() -> None:
     assert masked.has_openai_key is True
     assert masked.openai_model == "gpt-4o"
     assert masked.captcha_llm_provider == "openai"
-
-
-@pytest.mark.asyncio
-async def test_save_settings_persists_telemetr_key_as_presence_only(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The discovery key surfaces as a flag; the raw value never leaves the secret model."""
-    monkeypatch.setattr(settings.telemetr, "api_key", "")
-    masked = await warming.save_settings(
-        WarmingSettingsUpdate(
-            inter_account_chat=False,
-            reactions_enabled=False,
-            telemetr_api_key="tm-secret",
-        ),
-    )
-
-    assert masked.has_telemetr_key is True
-    assert "tm-secret" not in masked.model_dump_json()
-    secret = await load_warming_settings()
-    assert secret.telemetr_api_key == "tm-secret"
-
-
-@pytest.mark.asyncio
-async def test_save_settings_telemetr_key_keep_clear_replace(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """``None`` keeps the stored key, ``""``/the flag clears it, a value replaces it."""
-    monkeypatch.setattr(settings.telemetr, "api_key", "")
-    await warming.save_settings(
-        WarmingSettingsUpdate(
-            inter_account_chat=False, reactions_enabled=False, telemetr_api_key="first"
-        ),
-    )
-
-    # None keeps
-    await warming.save_settings(
-        WarmingSettingsUpdate(inter_account_chat=False, reactions_enabled=False),
-    )
-    assert (await load_warming_settings()).telemetr_api_key == "first"
-
-    # a value replaces
-    await warming.save_settings(
-        WarmingSettingsUpdate(
-            inter_account_chat=False, reactions_enabled=False, telemetr_api_key="second"
-        ),
-    )
-    assert (await load_warming_settings()).telemetr_api_key == "second"
-
-    # the explicit flag clears
-    masked = await warming.save_settings(
-        WarmingSettingsUpdate(
-            inter_account_chat=False, reactions_enabled=False, clear_telemetr_key=True
-        ),
-    )
-    assert (await load_warming_settings()).telemetr_api_key == ""
-    assert masked.has_telemetr_key is False
-
-
-@pytest.mark.asyncio
-async def test_telemetr_key_falls_back_to_env_when_the_column_is_blank(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings.telemetr, "api_key", "env-telemetr")
-    masked = await warming.save_settings(
-        WarmingSettingsUpdate(
-            inter_account_chat=False, reactions_enabled=False, clear_telemetr_key=True
-        ),
-    )
-
-    assert masked.has_telemetr_key is True
-    assert (await load_warming_settings()).telemetr_api_key == "env-telemetr"
 
 
 @pytest.mark.asyncio

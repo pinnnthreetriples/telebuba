@@ -23,6 +23,7 @@ from services import warming
 from services.warming import _loop, _runner, _runtime, _seams
 from tests.services.warming._support import (
     _no_initial_delay,
+    _no_quiet_days,
     _Recorder,
     _seed_channel,
     _set_settings,
@@ -36,6 +37,7 @@ async def test_stop_does_not_get_overwritten_by_inflight_cycle(
     """F1: a stop fired while ``run_one_cycle`` is in flight must stick."""
     from services.warming._loop import run_loop_iteration  # noqa: PLC0415
 
+    _no_quiet_days(monkeypatch)
     await create_account(AccountCreate(account_id="acc-1"))
     await _seed_channel()
     # enforce_readiness off: this is a stop/CAS race test, not the П3 gate.
@@ -109,6 +111,7 @@ async def test_old_cycle_cannot_overwrite_new_manual_start(
     """
     from services.warming._loop import run_loop_iteration  # noqa: PLC0415
 
+    _no_quiet_days(monkeypatch)
     await create_account(AccountCreate(account_id="acc-1"))
     await _seed_channel()
     # enforce_readiness off: this is a run_id/CAS race test, not the П3 gate.

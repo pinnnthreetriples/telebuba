@@ -19,9 +19,11 @@ from schemas.neurocomment import (
 )
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.neurocomment_board import NeurocommentBoard
+from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
 from services.neurocomment import (
     ChannelNotInCampaignError,
     InvalidCursorError,
+    ListenerBusyDiscoveryError,
     ListenerBusyWarmingError,
 )
 
@@ -368,6 +370,27 @@ async def test_start_runtime_warming_listener_is_409(
         )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.asyncio
+async def test_start_runtime_while_discovery_reads_is_409_with_its_code(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same stable code warming's Start reports, so one translation covers both."""
+
+    async def _start(listener_account_id: str) -> None:
+        raise ListenerBusyDiscoveryError(listener_account_id)
+
+    monkeypatch.setattr("services.neurocomment.start_neurocomment", _start)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/start",
+            json={"listener_account_id": "acc-1"},
+        )
+    assert resp.status_code == 409
+    envelope = resp.json()["error"]
+    assert envelope["code"] == "conflict"
+    assert envelope["message"] == DISCOVERY_BUSY_CODE
 
 
 @pytest.mark.asyncio
