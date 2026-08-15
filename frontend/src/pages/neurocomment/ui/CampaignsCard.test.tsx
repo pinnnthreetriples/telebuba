@@ -74,3 +74,34 @@ test('with no verdicts the chips stay the default gray', () => {
   renderCard();
   expect(chipFor('@a').className).toContain('bg-[#f4f3f0]');
 });
+
+const CAMPAIGN = {
+  campaign_id: 'c1',
+  name: 'tabacum',
+  prompt: '',
+  status: 'active' as const,
+  created_at: '',
+  updated_at: '',
+};
+
+function campaignCard(): HTMLElement {
+  return screen.getByText('tabacum').closest('[role="button"]')!;
+}
+
+// Naming the two colours rather than counting `bg-*` utilities: jsdom has no
+// cascade, so the tint that actually wins is unobservable, but the defect was
+// `bg-white` sitting in the base list beside it — and a count also reddens on
+// `bg-clip-padding` and friends, which carry no colour at all.
+test('the selected campaign card carries the tint and not the white it lost to', () => {
+  renderCard({ campaignList: [CAMPAIGN], campaignId: 'c1' });
+  expect(campaignCard().className).toContain('bg-primary/[0.06]');
+  expect(campaignCard().className).not.toContain('bg-white');
+});
+
+test('an unselected campaign card still carries a background of its own', () => {
+  // The other branch: with the colour only asserted on the selected card,
+  // deleting `bg-white` from this one goes unnoticed.
+  renderCard({ campaignList: [CAMPAIGN], campaignId: null });
+  expect(campaignCard().className).toContain('bg-white');
+  expect(campaignCard().className).not.toContain('bg-primary/[0.06]');
+});
