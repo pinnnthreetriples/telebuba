@@ -145,9 +145,16 @@ async def list_running_campaign_account_names() -> dict[str, tuple[str, str]]:
 def _update_campaign(
     campaign_id: str,
     data: NeuroshillingCampaignUpdate,
+    *,
+    reset_approval: bool,
 ) -> NeuroshillingCampaign | None:
-    values = {name: getattr(data, name) for name in _EDITABLE_COLUMNS}
+    values: dict[str, object] = {name: getattr(data, name) for name in _EDITABLE_COLUMNS}
     values["updated_at"] = _now_iso()
+    if reset_approval:
+        # Not an editable column — the CALLER decides, from which fields moved, and
+        # the only value it can ask for is ``draft``. Nothing outside
+        # ``_scenario.approve_scenario`` may write ``approved``.
+        values["scenario_status"] = "draft"
     with _get_engine().begin() as connection:
         result = connection.execute(
             update(_neuroshilling_campaigns)
@@ -163,6 +170,8 @@ def _update_campaign(
 async def update_campaign(
     campaign_id: str,
     data: NeuroshillingCampaignUpdate,
+    *,
+    reset_approval: bool = False,
 ) -> NeuroshillingCampaign | None:
     """Apply the whole edited form, roster included, in one transaction.
 
@@ -170,8 +179,18 @@ async def update_campaign(
     and ``last_error`` are deliberately absent from the editable set: they are
     engine state, and a request body must not be able to declare a draft approved
     or a stopped run alive.
+
+    ``reset_approval`` is the one exception and it is a boolean, not a value: the
+    service works out whether the edit changed WHAT gets said, and the write drops
+    the campaign back to ``draft`` in the same transaction so no window exists in
+    which an approval vouches for a topic that has already changed.
     """
-    return await asyncio.to_thread(_update_campaign, campaign_id, data)
+    return await asyncio.to_thread(
+        _update_campaign,
+        campaign_id,
+        data,
+        reset_approval=reset_approval,
+    )
 
 
 def _delete_campaign(campaign_id: str) -> None:

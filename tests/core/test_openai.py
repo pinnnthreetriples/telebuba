@@ -22,6 +22,7 @@ def _request(
     image_b64: str | None = None,
     image_mime: str = "image/jpeg",
     response_schema_json: dict[str, object] | None = None,
+    response_json_object: bool = False,
 ) -> GeminiRequest:
     return GeminiRequest(
         api_key="sk-test",
@@ -32,6 +33,7 @@ def _request(
         image_b64=image_b64,
         image_mime=image_mime,
         response_schema_json=response_schema_json,
+        response_json_object=response_json_object,
     )
 
 
@@ -145,6 +147,38 @@ async def test_response_schema_becomes_json_schema_format() -> None:
 
 
 @pytest.mark.asyncio
+async def test_json_object_is_the_mode_deepseek_actually_accepts() -> None:
+    """DeepSeek documents ``response_format.type`` as only ``text`` or ``json_object``."""
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("{}"))
+        await generate_text(_request(response_json_object=True))
+    body = json.loads(route.calls.last.request.content)
+    assert body["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.asyncio
+async def test_json_object_wins_over_a_schema_carried_for_another_provider() -> None:
+    """A caller may hold a schema for Gemini and still need DeepSeek's schema-less mode."""
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("{}"))
+        await generate_text(
+            _request(response_schema_json={"type": "object"}, response_json_object=True),
+        )
+    body = json.loads(route.calls.last.request.content)
+    assert body["response_format"] == {"type": "json_object"}
+
+
+@pytest.mark.asyncio
+async def test_the_new_field_leaves_every_existing_payload_untouched() -> None:
+    """Default ``False`` must mean the request is byte-identical to before."""
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text(_request())
+    body = json.loads(route.calls.last.request.content)
+    assert "response_format" not in body
+
+
+@pytest.mark.asyncio
 async def test_no_image_part_when_unset() -> None:
     with respx.mock:
         route = respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
@@ -186,11 +220,14 @@ async def test_transport_error_is_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_length_finish_reason_is_error_not_partial_text() -> None:
+async def test_length_finish_reason_is_its_own_failure_not_partial_text() -> None:
     """A max_tokens cut is a failure, never a short success.
 
     Mirrors the Gemini gateway: the solver runs here whenever the operator picks the
-    openai provider, and truncated JSON must not read as an undecidable captcha.
+    openai provider, and truncated JSON must not read as an undecidable captcha. It
+    carries its OWN status because re-asking unchanged truncates identically — a
+    caller that can shrink its ask needs to tell it from a transport error, and one
+    that cannot still sees a non-``ok`` status and gives up exactly as before.
     """
     with respx.mock:
         respx.post(url__regex=_ENDPOINT).mock(
@@ -208,7 +245,7 @@ async def test_length_finish_reason_is_error_not_partial_text() -> None:
         )
         result = await generate_text(_request())
 
-    assert result.status == "error"
+    assert result.status == "truncated"
     assert result.text is None
     assert "max_tokens" in (result.error or "")
 

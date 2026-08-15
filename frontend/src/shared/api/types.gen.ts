@@ -2156,6 +2156,215 @@ export type NeuroshillingCampaignUpdate = {
 };
 
 /**
+ * NeuroshillingGenerateRequest
+ *
+ * Inputs to ONE generation. None of them is stored — they describe the ask.
+ *
+ * ``persona_count`` is the stepper on the scenario card; it never reached a
+ * column because it says nothing about a campaign once the dialogue exists.
+ */
+export type NeuroshillingGenerateRequest = {
+  /**
+   * Persona Count
+   */
+  persona_count?: number;
+  /**
+   * Step Count
+   */
+  step_count?: number;
+};
+
+/**
+ * NeuroshillingRole
+ *
+ * One row of ``neuroshilling_roles``.
+ */
+export type NeuroshillingRole = {
+  /**
+   * Role Id
+   */
+  role_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Description
+   */
+  description?: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+};
+
+/**
+ * NeuroshillingRoleInput
+ *
+ * One role as the form declares it.
+ *
+ * ``role_id`` is how a step says WHICH role speaks, and it is matched against the
+ * campaign's stored roles: a value that is already one of them updates that row
+ * in place — which is what keeps the account roster's ``role_id`` pointing
+ * somewhere after a save — and anything else (including ``None``) mints a new
+ * role. So a client may invent keys for roles that do not exist yet, and the
+ * server rewires the steps to the real ids it mints.
+ */
+export type NeuroshillingRoleInput = {
+  /**
+   * Role Id
+   */
+  role_id?: string | null;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Description
+   */
+  description?: string;
+};
+
+/**
+ * NeuroshillingScenario
+ *
+ * The scenario card's whole read: the dialogue plus whether it is approved.
+ *
+ * Carries no derived counters and no duration estimate — every one of those is
+ * an ``arr.length`` or a ``reduce`` over the two lists in this same payload.
+ */
+export type NeuroshillingScenario = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Scenario Status
+   */
+  scenario_status?: 'draft' | 'approved';
+  /**
+   * Roles
+   */
+  roles?: Array<NeuroshillingRole>;
+  /**
+   * Steps
+   */
+  steps?: Array<NeuroshillingStep>;
+};
+
+/**
+ * NeuroshillingScenarioUpdate
+ *
+ * Roles and steps in ONE body, because they must be written in one transaction.
+ *
+ * Two endpoints would leave a window in which a step's ``role_id`` points at a
+ * role the other call has already deleted, and no amount of client ordering
+ * closes it.
+ */
+export type NeuroshillingScenarioUpdate = {
+  /**
+   * Roles
+   */
+  roles?: Array<NeuroshillingRoleInput>;
+  /**
+   * Steps
+   */
+  steps?: Array<NeuroshillingStepInput>;
+};
+
+/**
+ * NeuroshillingStep
+ *
+ * One row of ``neuroshilling_steps``.
+ *
+ * ``emoji`` is a plain ``str`` here rather than the input's ``Literal``: the
+ * column is free text and a row written before the set was narrowed must still
+ * read back instead of failing validation on the way out.
+ */
+export type NeuroshillingStep = {
+  /**
+   * Step Id
+   */
+  step_id: string;
+  /**
+   * Position
+   */
+  position: number;
+  /**
+   * Kind
+   */
+  kind: 'message' | 'reaction';
+  /**
+   * Role Id
+   */
+  role_id?: string | null;
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * Reply To Position
+   */
+  reply_to_position?: number | null;
+  /**
+   * Target Position
+   */
+  target_position?: number | null;
+  /**
+   * Emoji
+   */
+  emoji?: string | null;
+  /**
+   * Delay Min Seconds
+   */
+  delay_min_seconds?: number;
+  /**
+   * Delay Max Seconds
+   */
+  delay_max_seconds?: number;
+};
+
+/**
+ * NeuroshillingStepInput
+ *
+ * One dialogue step as the form declares it — no ``position``, see the module docstring.
+ */
+export type NeuroshillingStepInput = {
+  /**
+   * Kind
+   */
+  kind?: 'message' | 'reaction';
+  /**
+   * Role Id
+   */
+  role_id?: string | null;
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * Reply To Position
+   */
+  reply_to_position?: number | null;
+  /**
+   * Target Position
+   */
+  target_position?: number | null;
+  /**
+   * Emoji
+   */
+  emoji?: '👍' | '❤️' | '🔥' | '👏' | '🤔' | '💯' | '✨' | '🙌' | null;
+  /**
+   * Delay Min Seconds
+   */
+  delay_min_seconds?: number;
+  /**
+   * Delay Max Seconds
+   */
+  delay_max_seconds?: number;
+};
+
+/**
  * Page[AccountRead]
  */
 export type PageAccountRead = {
@@ -7566,3 +7775,207 @@ export type GetNeuroshillingBoardResponses = {
 
 export type GetNeuroshillingBoardResponse =
   GetNeuroshillingBoardResponses[keyof GetNeuroshillingBoardResponses];
+
+export type GetNeuroshillingScenarioData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/scenario';
+};
+
+export type GetNeuroshillingScenarioErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetNeuroshillingScenarioError =
+  GetNeuroshillingScenarioErrors[keyof GetNeuroshillingScenarioErrors];
+
+export type GetNeuroshillingScenarioResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingScenario;
+};
+
+export type GetNeuroshillingScenarioResponse =
+  GetNeuroshillingScenarioResponses[keyof GetNeuroshillingScenarioResponses];
+
+export type SetNeuroshillingScenarioData = {
+  body: NeuroshillingScenarioUpdate;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/scenario';
+};
+
+export type SetNeuroshillingScenarioErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SetNeuroshillingScenarioError =
+  SetNeuroshillingScenarioErrors[keyof SetNeuroshillingScenarioErrors];
+
+export type SetNeuroshillingScenarioResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingScenario;
+};
+
+export type SetNeuroshillingScenarioResponse =
+  SetNeuroshillingScenarioResponses[keyof SetNeuroshillingScenarioResponses];
+
+export type GenerateNeuroshillingScenarioData = {
+  body: NeuroshillingGenerateRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/generate';
+};
+
+export type GenerateNeuroshillingScenarioErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GenerateNeuroshillingScenarioError =
+  GenerateNeuroshillingScenarioErrors[keyof GenerateNeuroshillingScenarioErrors];
+
+export type GenerateNeuroshillingScenarioResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingScenario;
+};
+
+export type GenerateNeuroshillingScenarioResponse =
+  GenerateNeuroshillingScenarioResponses[keyof GenerateNeuroshillingScenarioResponses];
+
+export type ApproveNeuroshillingScenarioData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/approve';
+};
+
+export type ApproveNeuroshillingScenarioErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ApproveNeuroshillingScenarioError =
+  ApproveNeuroshillingScenarioErrors[keyof ApproveNeuroshillingScenarioErrors];
+
+export type ApproveNeuroshillingScenarioResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingScenario;
+};
+
+export type ApproveNeuroshillingScenarioResponse =
+  ApproveNeuroshillingScenarioResponses[keyof ApproveNeuroshillingScenarioResponses];

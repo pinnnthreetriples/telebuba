@@ -51,6 +51,11 @@ class NeuroshillingSettings(BaseSettings):
     # the provider also returns an empty body often enough to need a retry at all.
     llm_max_attempts: int = Field(default=3, ge=1, le=5)
     llm_max_output_tokens: int = Field(default=2048, ge=1, le=_GEMINI_OUTPUT_CEILING)
+    # Wall clock on ONE generation, all attempts together. Their worst case is
+    # attempts x (max_retries + 1) x the DeepSeek timeout — half an hour with both
+    # budgets maxed — and the campaign answers 409 to every click for as long as it
+    # runs, so the bound is on the clock rather than on the arithmetic.
+    llm_deadline_seconds: float = Field(default=180.0, gt=0.0)
     # Per-MESSAGE ceiling on quoted chat context. Bounding the message COUNT alone
     # is not enough: Telegram allows 4096 characters each, so twenty of them would
     # crowd out the instruction by sheer volume.

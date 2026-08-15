@@ -12,9 +12,22 @@ than two because DeepSeek publishes this exact format — a second module would 
 this one with a different base URL.
 
 Endpoint: ``POST {base_url}/chat/completions`` with a ``Bearer`` key. Images ride
-as a base64 ``image_url`` data-URI content part; structured output uses
-``response_format: json_schema``. DeepSeek's models are text-only, so the image
-part must never reach it — the routing that guarantees that lives in the callers.
+as a base64 ``image_url`` data-URI content part. DeepSeek's models are text-only,
+so the image part must never reach it — the routing that guarantees that lives in
+the callers.
+
+Structured output has TWO modes and they are not interchangeable. OpenAI takes
+``response_format: json_schema`` and the solver uses it. DeepSeek does not: it
+documents ``response_format.type`` as "one of ``text`` or ``json_object``" and
+answers a schema request with an error, so its callers set
+``response_json_object`` and validate the parsed body themselves — syntactic
+validity is all that mode guarantees. Two further consequences are the CALLER's
+to honour, because nothing here can: the literal word "json" must appear in the
+prompt, which is what DeepSeek documents as the condition for the mode working at
+all, and thinking should be off, because DeepSeek bills the reasoning to
+``max_tokens`` — it arrives in ``reasoning_content`` beside a populated
+``content``, so nothing is lost, but the budget and the latency are spent on
+thoughts no JSON caller reads.
 
 The one place the two providers' payloads differ is ``thinking``: DeepSeek accepts
 it and reasons by default, OpenAI rejects the field outright. ``sends_thinking`` on
@@ -91,7 +104,15 @@ def _payload(request: GeminiRequest, provider: OpenAISettings) -> dict[str, obje
         # the provider's own default effort stand — nothing here invents a mapping
         # from a token count to "low"/"high"/"max".
         payload["thinking"] = {"type": "enabled" if request.thinking_budget else "disabled"}
-    if request.response_schema_json is not None:
+    if request.response_json_object:
+        # DeepSeek's only JSON mode. Checked BEFORE the schema branch so a caller
+        # that carries a schema for the Gemini fallback still gets the mode DeepSeek
+        # actually accepts. DeepSeek documents that the prompt must contain the word
+        # "json"; without it the request is not rejected — the model is liable to
+        # answer with an empty or endless-whitespace body instead, which is far
+        # harder to read as a mistake. The caller's contract to keep either way.
+        payload["response_format"] = {"type": "json_object"}
+    elif request.response_schema_json is not None:
         # Server-side structured output: the model must return JSON matching the schema.
         payload["response_format"] = {
             "type": "json_schema",
@@ -137,11 +158,13 @@ def _classify_response(response: httpx.Response) -> GeminiResult:
     first = choices[0] if isinstance(choices, list) and choices else None
     if isinstance(first, dict) and first.get("finish_reason") == "length":
         # Same contract as the Gemini gateway: a max_tokens cut yields a mid-word
-        # fragment — invalid JSON under response_format — so it is an error, not a
-        # short success. The solver runs on this path whenever the operator picks
-        # the openai provider, and a truncated decision reads as an undecidable
-        # captcha rather than a budget that needs raising.
-        return GeminiResult(status="error", error="Truncated: hit max_tokens")
+        # fragment — invalid JSON under response_format — so it is a failure, not a
+        # short success. It carries its OWN status because the retry that answers it
+        # is a different one: re-asking the same question under the same cap runs
+        # out of tokens in the same place, so only a caller that can shrink its ask
+        # has anything to gain. A caller that cannot (the captcha solver) sees a
+        # non-``ok`` status and treats it as any other error, exactly as before.
+        return GeminiResult(status="truncated", error="Truncated: hit max_tokens")
     text = _extract_text(body) if isinstance(body, dict) else None
     if text is None:
         return GeminiResult(status="error", error="No text in OpenAI response")

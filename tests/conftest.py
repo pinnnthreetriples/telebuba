@@ -15,6 +15,7 @@ from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
 from services import _account_owner, pacing
+from services.neuroshilling import _state as neuroshilling_state
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -137,3 +138,18 @@ def _reset_account_owner() -> Iterator[None]:
     _account_owner.reset_for_tests()
     yield
     _account_owner.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _reset_neuroshilling_generation() -> Iterator[None]:
+    """Empty the neuroshilling LLM budget and single-flight set around EVERY test.
+
+    Suite-wide for the same reason as the two above: the budget is a fleet-wide
+    rolling window, so a test that generates leaves a call behind and the next one
+    to check the cap sees a number nobody in it produced. With
+    ``max_llm_calls_per_day`` deliberately small in a test, that is an
+    order-dependent refusal landing on an innocent test.
+    """
+    neuroshilling_state.reset_for_tests()
+    yield
+    neuroshilling_state.reset_for_tests()

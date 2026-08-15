@@ -13,6 +13,7 @@ from services.neuroshilling.campaigns import (
     NeuroshillingConflictError,
     NeuroshillingInvalidError,
     NeuroshillingRefusedError,
+    NeuroshillingUnavailableError,
     create_campaign,
     delete_campaign,
     list_campaigns,
@@ -20,15 +21,26 @@ from services.neuroshilling.campaigns import (
     parse_targets,
     update_campaign,
 )
+from services.neuroshilling.scenario import (
+    approve_scenario,
+    generate_scenario,
+    load_scenario,
+    set_scenario,
+)
 
 __all__ = [
     "NeuroshillingConflictError",
     "NeuroshillingInvalidError",
     "NeuroshillingRefusedError",
+    "NeuroshillingUnavailableError",
+    "approve_scenario",
     "create_campaign",
     "delete_campaign",
+    "generate_scenario",
     "list_campaigns",
     "load_board",
+    "load_scenario",
     "parse_targets",
+    "set_scenario",
     "update_campaign",
 ]

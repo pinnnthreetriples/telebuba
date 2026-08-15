@@ -22,6 +22,9 @@ import type {
   AdoptCampaignDiscoveryData,
   AdoptCampaignDiscoveryErrors,
   AdoptCampaignDiscoveryResponses,
+  ApproveNeuroshillingScenarioData,
+  ApproveNeuroshillingScenarioErrors,
+  ApproveNeuroshillingScenarioResponses,
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
@@ -88,6 +91,9 @@ import type {
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsErrors,
   ExpandDiscoveryKeywordsResponses,
+  GenerateNeuroshillingScenarioData,
+  GenerateNeuroshillingScenarioErrors,
+  GenerateNeuroshillingScenarioResponses,
   GetAccountChannelData,
   GetAccountChannelErrors,
   GetAccountChannelResponses,
@@ -118,6 +124,9 @@ import type {
   GetNeuroshillingBoardData,
   GetNeuroshillingBoardErrors,
   GetNeuroshillingBoardResponses,
+  GetNeuroshillingScenarioData,
+  GetNeuroshillingScenarioErrors,
+  GetNeuroshillingScenarioResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -253,6 +262,9 @@ import type {
   SetCampaignStatusData,
   SetCampaignStatusErrors,
   SetCampaignStatusResponses,
+  SetNeuroshillingScenarioData,
+  SetNeuroshillingScenarioErrors,
+  SetNeuroshillingScenarioResponses,
   SkipNeurocommentPairData,
   SkipNeurocommentPairErrors,
   SkipNeurocommentPairResponses,
@@ -1941,3 +1953,89 @@ export const getNeuroshillingBoard = <ThrowOnError extends boolean = false>(
     GetNeuroshillingBoardErrors,
     ThrowOnError
   >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/board', ...options });
+
+/**
+ * Get Scenario
+ *
+ * Roles, steps and the approval status — a read of its own, not a board field.
+ *
+ * Separate so the SPA can keep it OUT of the log-stream invalidation set: the
+ * stream fires on every log line, and a scenario form refetched under the
+ * operator's typing would lose what they were writing.
+ */
+export const getNeuroshillingScenario = <ThrowOnError extends boolean = false>(
+  options: Options<GetNeuroshillingScenarioData, ThrowOnError>,
+): RequestResult<GetNeuroshillingScenarioResponses, GetNeuroshillingScenarioErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetNeuroshillingScenarioResponses,
+    GetNeuroshillingScenarioErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/scenario', ...options });
+
+/**
+ * Set Scenario
+ *
+ * Save the whole dialogue. ALWAYS returns the campaign to ``draft``.
+ */
+export const setNeuroshillingScenario = <ThrowOnError extends boolean = false>(
+  options: Options<SetNeuroshillingScenarioData, ThrowOnError>,
+): RequestResult<SetNeuroshillingScenarioResponses, SetNeuroshillingScenarioErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    SetNeuroshillingScenarioResponses,
+    SetNeuroshillingScenarioErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neuroshilling/campaigns/{campaign_id}/scenario',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Generate Scenario
+ *
+ * Write a fresh dialogue with the LLM, replacing whatever the campaign had.
+ *
+ * 409 is a second click (``generation_in_progress``) or the rolling daily budget
+ * (``llm_daily_limit_reached``); 503 is the provider having produced nothing
+ * usable within its retry budget, or no key being configured at all.
+ */
+export const generateNeuroshillingScenario = <ThrowOnError extends boolean = false>(
+  options: Options<GenerateNeuroshillingScenarioData, ThrowOnError>,
+): RequestResult<
+  GenerateNeuroshillingScenarioResponses,
+  GenerateNeuroshillingScenarioErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    GenerateNeuroshillingScenarioResponses,
+    GenerateNeuroshillingScenarioErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neuroshilling/campaigns/{campaign_id}/generate',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Approve Scenario
+ *
+ * The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.
+ */
+export const approveNeuroshillingScenario = <ThrowOnError extends boolean = false>(
+  options: Options<ApproveNeuroshillingScenarioData, ThrowOnError>,
+): RequestResult<
+  ApproveNeuroshillingScenarioResponses,
+  ApproveNeuroshillingScenarioErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    ApproveNeuroshillingScenarioResponses,
+    ApproveNeuroshillingScenarioErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/approve', ...options });

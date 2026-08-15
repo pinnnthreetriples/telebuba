@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
 from api.errors import error_responses
+from api.v1._neuroshilling_scenario import scenario_router
 from schemas.neuroshilling import (
     NeuroshillingBoard,
     NeuroshillingCampaign,
@@ -98,3 +99,7 @@ async def get_board(campaign_id: str) -> NeuroshillingBoard:
     if board is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
     return board
+
+
+# Mounted last so the campaign paths keep their place in the generated document.
+router.include_router(scenario_router)
