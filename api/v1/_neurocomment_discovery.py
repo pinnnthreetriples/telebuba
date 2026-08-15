@@ -1,4 +1,4 @@
-"""Channel-discovery endpoints — start a search, read the board, adopt candidates.
+"""Channel-discovery endpoints — expand a topic, start a search, read the board, adopt.
 
 Split-sibling of ``neurocomment.py`` (same pattern as ``_accounts_channels.py``);
 mounted onto the neurocomment router via ``include_router``.
@@ -19,15 +19,20 @@ from schemas.neurocomment_discovery import (
     DiscoveryAdoptRequest,
     DiscoveryAdoptResult,
     DiscoveryBoard,
+    DiscoveryKeywordRequest,
+    DiscoveryKeywordResult,
     DiscoverySearchOutcome,
     DiscoverySearchRequest,
 )
 from services import neurocomment as nc_service
 
 # No tags: mounted onto the neurocomment router (already tagged "neurocomment").
-# Every route here is campaign-scoped and answers 404 for an unknown campaign, so
-# the fragment is declared once for the router.
-discovery_router = APIRouter(responses=error_responses(404))
+discovery_router = APIRouter()
+# The campaign-scoped routes answer 404 for an unknown campaign. Declared per route
+# rather than once on the router since ``expandDiscoveryKeywords`` joined: it takes
+# no campaign and so cannot answer 404, and ``tests/test_api_error_contract.py``
+# fails an operation that declares a status it cannot reach.
+_CAMPAIGN_ERRORS = error_responses(404)
 
 
 @discovery_router.post(
@@ -35,6 +40,7 @@ discovery_router = APIRouter(responses=error_responses(404))
     response_model=DiscoverySearchOutcome,
     status_code=http_status.HTTP_202_ACCEPTED,
     operation_id="startCampaignDiscovery",
+    responses=_CAMPAIGN_ERRORS,
 )
 async def start_discovery(
     campaign_id: str,
@@ -50,6 +56,7 @@ async def start_discovery(
     "/campaigns/{campaign_id}/discovery",
     response_model=DiscoveryBoard,
     operation_id="getCampaignDiscovery",
+    responses=_CAMPAIGN_ERRORS,
 )
 async def get_discovery(campaign_id: str) -> DiscoveryBoard:
     board = await nc_service.load_discovery(campaign_id)
@@ -62,6 +69,7 @@ async def get_discovery(campaign_id: str) -> DiscoveryBoard:
     "/campaigns/{campaign_id}/discovery/adopt",
     response_model=DiscoveryAdoptResult,
     operation_id="adoptCampaignDiscovery",
+    responses=_CAMPAIGN_ERRORS,
 )
 async def adopt_discovery(
     campaign_id: str,
@@ -71,3 +79,18 @@ async def adopt_discovery(
     if result is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
     return result
+
+
+@discovery_router.post(
+    "/discovery/keywords",
+    response_model=DiscoveryKeywordResult,
+    operation_id="expandDiscoveryKeywords",
+)
+async def expand_discovery_keywords(body: DiscoveryKeywordRequest) -> DiscoveryKeywordResult:
+    """Widen one typed topic into search keywords. Not campaign-scoped, hence no id.
+
+    Never fails on the LLM's behalf: an unusable answer is a 200 carrying a short
+    ``error`` code, because the operator's next move (type the keywords by hand) is
+    the same either way and a toast-worthy 5xx would only imply the board is broken.
+    """
+    return await nc_service.expand_discovery_keywords(body)

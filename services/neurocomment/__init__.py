@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from core.repositories.neurocomment import ChannelNotInCampaignError
 from services.logs import InvalidCursorError
+from services.neurocomment._discovery_keywords import expand_discovery_keywords
 from services.neurocomment._runtime import (
     ListenerBusyWarmingError,
     clear_neurocomment_listener,
@@ -73,6 +74,7 @@ __all__ = [
     "create_campaign",
     "deactivate_channel",
     "delete_campaign",
+    "expand_discovery_keywords",
     "handle_new_post",
     "link_channel",
     "list_campaign_accounts",
