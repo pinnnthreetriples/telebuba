@@ -20,9 +20,15 @@ export function SurfHover({
       <div className="absolute inset-0 flex items-stretch justify-end rounded-[11px] bg-[#f1efed]">
         {actions}
       </div>
+      {/* `bg-white` on the surface, not just on what the caller puts inside it: the
+          actions above are always rendered and only ever hidden by being covered, so
+          a caller with a translucent surface leaks them. The selected campaign card
+          is exactly that — the design tints it `bg-primary/[0.06]`, 6% over white —
+          and pause/edit/delete showed through it unhovered. The tint composites over
+          this and keeps its intended colour. */}
       <div
         id={surfaceId}
-        className={`relative rounded-[11px] transition-transform duration-[440ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
+        className={`relative rounded-[11px] bg-white transition-transform duration-[440ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
         style={{ ['--shift' as string]: `${String(shift)}px` }}
       >
         {surface}

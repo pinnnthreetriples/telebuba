@@ -96,6 +96,10 @@ test('the selected campaign card carries the tint and not the white it lost to',
   renderCard({ campaignList: [CAMPAIGN], campaignId: 'c1' });
   expect(campaignCard().className).toContain('bg-primary/[0.06]');
   expect(campaignCard().className).not.toContain('bg-white');
+  // That tint is 6% opaque and the row's actions sit UNDER it, hidden only by being
+  // covered — so the sliding surface has to bring its own opaque backdrop or
+  // pause/edit/delete show through an unhovered card.
+  expect(document.getElementById('camp-surf-c1')?.className).toContain('bg-white');
 });
 
 test('an unselected campaign card still carries a background of its own', () => {
