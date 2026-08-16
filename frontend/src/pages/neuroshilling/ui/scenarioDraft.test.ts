@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 
-import type { NeuroshillingCampaign, NeuroshillingScenario } from '@/shared/api';
+import type { NeuroshillingCampaign, NeuroshillingScenario, NeuroshillingStep } from '@/shared/api';
 
 import {
   asReaction,
@@ -100,6 +100,27 @@ test('the media step is cleared together with the link it points from', () => {
     media_message_link: 'https://t.me/c/1',
     media_step_position: 1,
   });
+});
+
+test('a stored media slot survives on a message step and is dropped on a reaction', () => {
+  const reaction: NeuroshillingStep = {
+    step_id: 's2',
+    position: 2,
+    kind: 'reaction',
+    role_id: 'r1',
+    emoji: '🔥',
+    target_position: 1,
+    delay_min_seconds: 30,
+    delay_max_seconds: 90,
+  };
+  const scenario = { ...SCENARIO, steps: [...SCENARIO.steps!, reaction] };
+  const linked = { ...CAMPAIGN, media_message_link: 'https://t.me/c/1/2' };
+
+  // The card's picker offers message steps only, so a slot on the reaction matches
+  // no option: the `<select>` shows "no media step" while the draft keeps writing 2
+  // back, and approval refuses a field the operator reads as empty.
+  expect(draftOf({ ...linked, media_step_position: 2 }, scenario).mediaStepPosition).toBeNull();
+  expect(draftOf({ ...linked, media_step_position: 1 }, scenario).mediaStepPosition).toBe(1);
 });
 
 test('a minted key is unique and cannot look like a stored id', () => {

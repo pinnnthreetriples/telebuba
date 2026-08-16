@@ -323,8 +323,13 @@ export function NeuroshillingPage() {
         generateScenario
           .mutateAsync({ path, body: { persona_count: personaCount, step_count: stepCount } })
           .then((generated) => {
-            // Overwriting the form IS what the button means.
-            adopt(draftOf(updated, generated));
+            // Overwriting the form IS what the button means, and the media slot goes
+            // with it: the generation cleared `media_step_position` in the write that
+            // stored these steps, while `updated` is the echo of the PUT above, which
+            // ran BEFORE that and answered with the position the form had sent it.
+            // The draft is seeded from the server once per campaign, so adopting the
+            // echo whole would keep the stale position on screen and save it back.
+            adopt(draftOf({ ...updated, media_step_position: null }, generated));
           }),
       )
       .finally(refresh);

@@ -202,6 +202,43 @@ async def test_writing_the_scenario_returns_an_approved_campaign_to_draft() -> N
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("clear", "expected"), [(False, 2), (True, None)])
+async def test_the_media_slot_is_cleared_only_when_the_write_asks_for_it(
+    *,
+    clear: bool,
+    expected: int | None,
+) -> None:
+    """Off by default, because a hand-edited scenario keeps the slot the operator chose.
+
+    Both saves and generations reach this one function, and only the generation —
+    which replaces every line with text nobody has read — turns the flag on.
+    """
+    campaign = await _campaign()
+    await repository.update_campaign(
+        campaign.campaign_id,
+        NeuroshillingCampaignUpdate(
+            name="Promo",
+            media_message_link="https://t.me/chan/7",
+            media_step_position=2,
+        ),
+    )
+
+    await repository.replace_scenario(
+        campaign.campaign_id,
+        [_role("A", "a")],
+        [_step("a", "one"), _step("a", "two")],
+        clear_media_step=clear,
+    )
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+
+    assert stored is not None
+    assert stored.media_step_position == expected
+    # The link is left where it is either way: it names a message in some other chat
+    # and has nothing to do with which step of THIS dialogue carries it.
+    assert stored.media_message_link == "https://t.me/chan/7"
+
+
+@pytest.mark.asyncio
 async def test_approve_is_the_only_writer_of_approved() -> None:
     campaign = await _campaign()
 

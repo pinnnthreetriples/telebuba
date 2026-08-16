@@ -59,13 +59,14 @@ _MEDIA_UNREACHABLE: NeuroshillingRefusalCode = "media_source_unreachable"
 _MEDIA_CHECK_UNAVAILABLE: NeuroshillingRefusalCode = "media_check_unavailable"
 # The approval problems specific enough to name on the wire. Everything else answers
 # ``scenario_invalid``: the page holds the same roles and steps and can point at the
-# offending row itself, whereas a refused LINE is not visibly wrong at all — and a
-# media slot aimed at a reaction is a scenario whose every row is legal, so "check
-# the roles, steps and delays" would point away from the one field that is wrong.
+# offending row itself, whereas a refused LINE is not visibly wrong at all — and the
+# two media ones name a scenario whose every row is legal, so "check the roles, steps
+# and delays" would point away from the one field that is wrong.
 _PROBLEM_CODES: dict[str, NeuroshillingRefusalCode] = {
     "text_has_link": "scenario_text_has_link",
     "text_forbidden_word": "scenario_text_forbidden_word",
     "media_step_not_message": "media_step_not_message",
+    "media_step_missing": "media_step_missing",
 }
 # Read kinds that say nothing about what the account can SEE. A flood is Telegram
 # pacing us and an ``unavailable`` is our own socket; both are over in minutes, and
@@ -175,8 +176,8 @@ def _approval_problem(
     """The first reason this scenario may not be approved, or ``None``.
 
     Most reasons are for the test suite and the reader and answer the same
-    ``scenario_invalid`` on the wire; the two text ones are translated through
-    ``_PROBLEM_CODES`` into refusals of their own.
+    ``scenario_invalid`` on the wire; the ones listed in ``_PROBLEM_CODES`` are
+    translated into refusals of their own.
     """
     if not roles:
         return "no_roles"
@@ -221,10 +222,10 @@ def _media_problem(
     and logs nothing while doing it, so the run reaches ``done`` with the media never
     sent and no trace of why.
 
-    The slot reaches a reaction without anyone choosing one: the card's picker offers
-    message steps only, but :func:`generate_scenario` replaces every step and leaves
-    the slot on the position it already held, so a position that named a message can
-    come back naming a reaction. The field is also writable by any API client.
+    Neither half needs anyone to choose it. The card's picker offers message steps
+    only and its remove button moves the slot along with the steps, but the field is
+    writable by any API client — and ``media_step_missing`` is the ordinary state
+    right after a generation, which clears the slot.
 
     Whether the accounts playing that step can actually SEE the source message is
     a Telegram question, answered by :func:`_refuse_unreachable_media` against live
@@ -371,7 +372,16 @@ async def generate_scenario(
         # than the operator's ceiling would otherwise be written straight past the
         # check the PUT makes, and the form could never save the campaign again.
         _check_size(draft)
-        await repository.replace_scenario(campaign_id, draft.roles, draft.steps)
+        # The media slot is cleared by the same write. Every line is replaced, so
+        # the position the operator picked now names text they have never read, and
+        # :func:`_media_problem` cannot notice: it reads the KIND of the step there,
+        # and a slot left on a step that is still a message passes.
+        await repository.replace_scenario(
+            campaign_id,
+            draft.roles,
+            draft.steps,
+            clear_media_step=True,
+        )
         # Re-read rather than composing from the row above: the write just moved
         # ``scenario_status`` back to ``draft`` and the stale copy still says
         # whatever it said before.

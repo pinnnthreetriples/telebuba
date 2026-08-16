@@ -87,6 +87,10 @@ NeuroshillingRefusalCode = Literal[
     # because the scenario is not what is wrong: every row of it is legal, and the
     # field to change is the media slot on the same card.
     "media_step_not_message",
+    # There is a media link but the slot names no step, or names one past the end of
+    # the dialogue. Apart from the code above for the same reason, and it is the
+    # ordinary state right after a generation, which clears the slot.
+    "media_step_missing",
 ]
 
 _MAX_NAME = 120
