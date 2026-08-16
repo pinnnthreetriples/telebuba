@@ -38,9 +38,10 @@ async def test_execute_post_comment_returns_message_id(
         async def connect(self) -> None:
             return None
 
-        async def send_message(self, chat_id: int, text: str) -> object:
+        async def send_message(self, chat_id: int, text: str, *, reply_to: int | None) -> object:
             assert chat_id == 12345
             assert text == "hi"
+            assert reply_to is None
             return sent_message
 
     _patch_client(monkeypatch, FakeClient())
@@ -540,7 +541,13 @@ async def test_execute_flood_wait_on_non_edit_action_leaves_status_alone(
         async def connect(self) -> None:
             return None
 
-        async def send_message(self, _chat_id: int, _text: str) -> object:
+        async def send_message(
+            self,
+            _chat_id: int,
+            _text: str,
+            *,
+            reply_to: int | None,  # noqa: ARG002 - signature parity with the dispatcher
+        ) -> object:
             raise errors.FloodWaitError(request=None, capture=30)
 
     _patch_client(monkeypatch, FakeClient())

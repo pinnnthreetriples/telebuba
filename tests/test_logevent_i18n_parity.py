@@ -349,8 +349,19 @@ def _i18n(locale: str) -> dict:
 
 
 def _action_types() -> set[str]:
-    src = (_ROOT / "schemas" / "telegram_actions.py").read_text(encoding="utf-8")
-    return set(_ACTION_TYPE.findall(src))
+    """Every ``action_type`` literal, across the whole ``telegram_actions*`` family.
+
+    The glob is the point. This read used to name ``schemas/telegram_actions.py``
+    alone, but that module has been a re-export hub since the file-size splits — the
+    channel, media, comment, privacy, rights, discovery, activity and chat clusters
+    all declare their literals in siblings. Twenty-five actions were therefore
+    invisible to the parity check, and ten of them were shipping with no label in
+    either locale.
+    """
+    actions: set[str] = set()
+    for path in sorted((_ROOT / "schemas").glob("telegram_actions*.py")):
+        actions.update(_ACTION_TYPE.findall(path.read_text(encoding="utf-8")))
+    return actions
 
 
 def test_every_backend_log_event_has_ru_and_en_translation() -> None:

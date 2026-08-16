@@ -44,11 +44,11 @@ def _refusals() -> Iterator[None]:
     and a refusal has no per-field payload to add.
 
     The statuses are written as literals rather than looked up in a map, and the
-    provider refusal is deliberately not here. ``tests/test_api_error_contract``
+    unavailable refusal is deliberately not here. ``tests/test_api_error_contract``
     derives what an operation can answer by reading the literal ``status_code`` of
     every raise reachable from it: a mapping lookup is invisible to that scan and
     would silently drop 400/409 from all three declarations, while folding 503 in
-    here would credit the PUT and the approval with a status only generation can
+    here would credit the PUT with a status only the generation and the approval can
     answer. Registering a handler in ``api.errors`` instead would do the same to
     every route in the app.
     """
@@ -118,8 +118,8 @@ async def generate_scenario(
         with _refusals():
             scenario = await ns_service.generate_scenario(campaign_id, body)
     except ns_service.NeuroshillingUnavailableError as exc:
-        # The one refusal only THIS route can answer, so it is declared and raised
-        # only here — see :func:`_refusals`.
+        # Raised at the route rather than in ``_refusals`` so the two routes that can
+        # answer 503 declare it and the PUT does not — see :func:`_refusals`.
         raise HTTPException(
             status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=exc.code,
@@ -131,10 +131,22 @@ async def generate_scenario(
     "/campaigns/{campaign_id}/approve",
     response_model=NeuroshillingScenario,
     operation_id="approveNeuroshillingScenario",
-    responses=error_responses(400, 404, 409),
+    responses=error_responses(400, 404, 409, 503),
 )
 async def approve_scenario(campaign_id: str) -> NeuroshillingScenario:
-    """The ONLY way ``scenario_status`` becomes ``approved``, and it validates first."""
-    with _refusals():
-        scenario = await ns_service.approve_scenario(campaign_id)
+    """The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.
+
+    503 is the media check itself failing to happen — Telegram rate-limited the read
+    or the socket died. Not 400: nothing about the scenario was found wanting, and
+    answering "some accounts cannot see the media" would send the operator to edit a
+    link that is fine.
+    """
+    try:
+        with _refusals():
+            scenario = await ns_service.approve_scenario(campaign_id)
+    except ns_service.NeuroshillingUnavailableError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.code,
+        ) from exc
     return _found(scenario)

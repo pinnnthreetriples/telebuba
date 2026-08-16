@@ -2026,6 +2026,11 @@ export const generateNeuroshillingScenario = <ThrowOnError extends boolean = fal
  * Approve Scenario
  *
  * The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.
+ *
+ * 503 is the media check itself failing to happen — Telegram rate-limited the read
+ * or the socket died. Not 400: nothing about the scenario was found wanting, and
+ * answering "some accounts cannot see the media" would send the operator to edit a
+ * link that is fine.
  */
 export const approveNeuroshillingScenario = <ThrowOnError extends boolean = false>(
   options: Options<ApproveNeuroshillingScenarioData, ThrowOnError>,

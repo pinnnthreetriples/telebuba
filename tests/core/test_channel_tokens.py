@@ -17,6 +17,7 @@ from core.channel_tokens import (
     extract_invite_hash,
     normalize_channel,
     parse_channels,
+    parse_message_link,
 )
 
 # Telegram's own username ceiling — what discovery passes.
@@ -178,3 +179,43 @@ def test_parse_channels_empty_input() -> None:
 def test_parse_channels_keeps_distinct_invite_hashes() -> None:
     raw = "https://t.me/+AbCdEfGhIjK https://t.me/+abcdefghijk"
     assert parse_channels(raw, max_length=HANDLE_MAX) == ["+AbCdEfGhIjK", "+abcdefghijk"]
+
+
+@pytest.mark.parametrize(
+    ("link", "expected"),
+    [
+        ("https://t.me/durov/42", ("durov", 42)),
+        ("t.me/durov/42", ("durov", 42)),
+        ("https://t.me/@durov/42/", ("durov", 42)),
+        ("https://t.me/durov/42?single", ("durov", 42)),
+        # The private form: ``<internal>`` is the chat's RAW POSITIVE id, the same
+        # unmarked convention the chat actions pin, so it rides back as digits.
+        ("https://t.me/c/1234567890/42", ("1234567890", 42)),
+        # A forum thread names its message LAST, the topic in between.
+        ("https://t.me/c/1234567890/7/42", ("1234567890", 42)),
+    ],
+)
+def test_parse_message_link_reads_both_public_and_private_forms(
+    link: str,
+    expected: tuple[str, int],
+) -> None:
+    assert parse_message_link(link) == expected
+
+
+@pytest.mark.parametrize(
+    "link",
+    [
+        # A channel link with no message on it — the whole point is the message id.
+        "https://t.me/durov",
+        "https://t.me/c/1234567890",
+        "https://t.me/durov/abc",
+        "https://t.me/c/notanid/42",
+        "https://t.me/durov/0",
+        # Not a t.me link at all.
+        "https://example.com/durov/42",
+        "durov/42",
+        "",
+    ],
+)
+def test_parse_message_link_refuses_anything_that_is_not_one(link: str) -> None:
+    assert parse_message_link(link) is None

@@ -7965,6 +7965,10 @@ export type ApproveNeuroshillingScenarioErrors = {
    * Internal server error
    */
   500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ApproveNeuroshillingScenarioError =

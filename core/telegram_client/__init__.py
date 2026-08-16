@@ -10,6 +10,9 @@ to keep each file small:
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
+- ``_read_chat`` — chat resolve + read-by-id (the per-account chat id lives here)
+- ``_read_rights`` — the write-rights read, split out of ``_read`` for its size
+- ``_copy_media`` — media copy (never a forward) with one stale-reference retry
 - ``_read_post_image`` — in-memory fetch of a channel post's photo (vision path)
 - ``_listener``— standing NewMessage subscription → typed NewPostEvent callback
 - ``_media``   — profile photo / story / music actions

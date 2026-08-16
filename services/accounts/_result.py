@@ -70,6 +70,11 @@ class AccountActionError(ValueError):
 _STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
     {
         "ChannelGatewayError",
+        # The media-copy refusals (source invisible / not copyable / reference still
+        # stale after one refetch). No accounts action reaches them today — the copy
+        # belongs to a campaign — but the class is one of ours and is constructed
+        # with its code, so it belongs on the allowlist rather than in the prose half.
+        "CopyMediaError",
         "ProfileGatewayError",
         "StoryCollageLayoutError",
         "StoryImageNormalisationError",
