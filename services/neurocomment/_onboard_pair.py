@@ -32,6 +32,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
+from services._join_lock import join_lock
 from services.neurocomment import _comments_off, _rejoin, _seams, _state
 
 # The join ActionResult → OnboardingState mapping + solver recording live in
@@ -70,15 +71,7 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
     # its jitter sleep. At cap: skip the join RPC (no record), retry once the window rolls.
     # Non-terminal "joining" so the pair is reconsidered, not stuck.
     if await _at_join_cap(account_id):
-        await log_event(
-            "WARNING",
-            "neurocomment_join_daily_cap",
-            account_id=account_id,
-            extra={"channel": channel},
-        )
-        return AccountChannelOnboarding(
-            account_id=account_id, channel=channel, state="joining", reason="daily_join_cap"
-        )
+        return await _daily_cap_outcome(account_id, channel)
     campaign = await fetch_active_campaign_for_channel(channel)
     solver_enabled = _effective_solver_enabled(campaign.solver_enabled if campaign else None)
     return await _join_and_classify(
@@ -113,6 +106,12 @@ async def _join_and_classify(
     A pair with an approval request still in flight is left alone the same way, and sits
     next to those guards for the same reason: both must cost zero join RPCs. An admin
     reads a re-request as spam, and every pass used to send one.
+
+    Past the guards, the join runs under ``services._join_lock``, the mutex neuroshilling's
+    ``join_target`` takes over the same rolling-24h log. Nothing on this path reads the
+    ownership registry — the ``busy_neuroshilling`` gate belongs to the engine's per-post
+    account selection — so an account a campaign is already driving arrives here like any
+    other, and the shared mutex is the whole of what keeps their joins apart.
     """
     existing = await fetch_readiness(account_id, channel)
     if existing is not None and (
@@ -181,15 +180,24 @@ async def _join_and_classify(
             state="joining",
             reason="rejoin_backoff",
         )
-    ensure_current()
-    result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
-    ensure_current()
-    if result.status == "ok":
-        # A real join RPC landed → count it against the account's rolling-24h cap.
-        # ``already_participant`` is a no-op re-join (still a success below) and must
-        # NOT be recorded, else a re-onboard would inflate the cap with joins that
-        # never happened.
-        await record_join(account_id)
+    async with join_lock(account_id):
+        # Re-read the cap here and not only in the two callers: the count they read is
+        # spent by whoever charges first, and a neuroshilling campaign holding the same
+        # account charges the very same log. Between their read and this join there are
+        # several awaits, so without this one a join that had gone over the budget while
+        # it waited still went out. Same outcome the callers produce for a full budget —
+        # a non-terminal "joining", reconsidered once the 24h window rolls.
+        if await _at_join_cap(account_id):
+            return await _daily_cap_outcome(account_id, channel)
+        ensure_current()
+        result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
+        ensure_current()
+        if result.status == "ok":
+            # A real join RPC landed → count it against the account's rolling-24h cap.
+            # ``already_participant`` is a no-op re-join (still a success below) and must
+            # NOT be recorded, else a re-onboard would inflate the cap with joins that
+            # never happened.
+            await record_join(account_id)
     outcome = await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
     )
@@ -325,3 +333,22 @@ async def _at_join_cap(account_id: str) -> bool:
         return False
     since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
     return await count_account_joins_since(account_id, since) >= cap
+
+
+async def _daily_cap_outcome(account_id: str, channel: str) -> AccountChannelOnboarding:
+    """Log the skipped join and hand back the non-terminal outcome for a full budget.
+
+    One copy for the two places that refuse a join on the cap — the single-pair
+    entrypoint above and the re-read inside the join mutex — so the board and the log
+    cannot come to describe the same refusal differently. The campaign loop keeps its
+    own copy in ``_onboard_channel``, where the same verdict also feeds a progress event.
+    """
+    await log_event(
+        "WARNING",
+        "neurocomment_join_daily_cap",
+        account_id=account_id,
+        extra={"channel": channel},
+    )
+    return AccountChannelOnboarding(
+        account_id=account_id, channel=channel, state="joining", reason="daily_join_cap"
+    )

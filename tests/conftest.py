@@ -14,7 +14,7 @@ import pytest
 from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
-from services import _account_owner, pacing
+from services import _account_owner, _join_lock, pacing
 from services.neuroshilling import _state as neuroshilling_state
 
 if TYPE_CHECKING:
@@ -121,6 +121,20 @@ def _reset_pacing() -> Iterator[None]:
     pacing.reset_for_tests()
     yield
     pacing.reset_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def _reset_join_locks() -> Iterator[None]:
+    """Empty the per-account join mutexes around EVERY test.
+
+    Same failure as ``_reset_pacing`` and the same reach: the map holds
+    ``asyncio.Lock`` objects, a lock belongs to the loop that first waited on it, and
+    both features join under these — so one left behind by a neuroshilling test lands
+    on the next neurocomment test to onboard the same account id.
+    """
+    _join_lock.reset_for_tests()
+    yield
+    _join_lock.reset_for_tests()
 
 
 @pytest.fixture(autouse=True)

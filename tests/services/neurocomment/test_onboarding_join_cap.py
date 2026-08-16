@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING
+
 import pytest
 
 from core.config import settings
@@ -13,11 +16,19 @@ from core.db import (
     link_channel_to_campaign,
     record_join,
 )
+from core.repositories.neuroshilling import create_campaign as create_neuroshilling_campaign
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
+from schemas.neuroshilling import NeuroshillingCampaignCreate
+from schemas.telegram_actions import ActionResult
 from services import neurocomment
 from services.neurocomment import _seams, onboarding
+from services.neuroshilling import _seams as neuroshilling_seams
+from services.neuroshilling import _telegram
 from tests.services.neurocomment.onboarding_support import _JoinStub, _no_sleep, _ReadStub
+
+if TYPE_CHECKING:
+    from schemas.telegram_actions import TelegramAction
 
 pytestmark = pytest.mark.usefixtures("isolate_onboarding")
 
@@ -171,3 +182,50 @@ async def test_operator_single_pair_respects_join_cap(monkeypatch: pytest.Monkey
     # No join RPC fired; the pair is a non-terminal retry-later outcome.
     assert join.calls == []
     assert (result.state, result.reason) == ("joining", "daily_join_cap")
+
+
+@pytest.mark.asyncio
+async def test_onboarding_cannot_spend_a_slot_a_running_campaign_is_taking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One log, one budget — so the mutex over it has to be one too.
+
+    Nothing else keeps these two apart: onboarding reads no ownership registry, the
+    ``busy_neuroshilling`` gate belongs to the engine's per-post selection, and onboarding
+    goes through no pacer at all — it spaces its joins with a plain jitter sleep, so the
+    campaign's join queue is not one it ever waits in. The campaign is deliberately still
+    inside its join RPC when onboarding reads the count — the window that let both of them
+    pass a cap of one and charge it twice.
+    """
+    monkeypatch.setattr(settings.neurocomment, "max_joins_per_account_per_day", 1)
+    monkeypatch.setattr(settings.neuroshilling, "max_joins_per_account_per_day", 1)
+    # 0 disables the pacer outright, so the campaign's join is held up by nothing but
+    # its own RPC — and that is what the assertions are about.
+    monkeypatch.setattr(_telegram, "_join_gap_seconds", lambda: 0.0)
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_neuroshilling_campaign(NeuroshillingCampaignCreate(name="Promo"))
+    dispatched = asyncio.Event()
+
+    async def campaign_join(account_id: str, action: TelegramAction) -> ActionResult:
+        dispatched.set()
+        # Long enough to still be in flight while onboarding does its handful of reads
+        # and reaches the mutex, and no charge has landed for it yet.
+        await asyncio.sleep(0.3)
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(neuroshilling_seams, "execute", campaign_join)
+
+    playing = asyncio.create_task(_telegram.join_target(campaign.campaign_id, "acc-1", "@target"))
+    await dispatched.wait()
+    onboarded = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert await playing == "joined"
+    assert await count_account_joins_since("acc-1", _EPOCH) == 1
+    # Refused on the re-read inside the mutex: the check onboarding made before it saw
+    # a budget the campaign had not spent yet.
+    assert (onboarded.state, onboarded.reason) == ("joining", "daily_join_cap")
+    assert join.calls == []

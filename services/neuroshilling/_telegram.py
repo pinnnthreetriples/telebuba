@@ -42,11 +42,13 @@ from typing import TYPE_CHECKING, Final, Literal
 from core.config import settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
-from core.repositories.neurocomment import count_account_joins_since, record_join
+from core.repositories.neurocomment import record_join
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, TelegramReadError
 from schemas.telegram_actions import JoinChannel, ResolveChat, ResolveChatResult
 from services import pacing
+from services._join_lock import join_lock
 from services.neuroshilling import _seams
+from services.neuroshilling._join_cap import at_join_cap, daily_cap_reached
 
 if TYPE_CHECKING:
     from schemas.neuroshilling import NeuroshillingPresenceState
@@ -232,39 +234,6 @@ def settle_pause() -> float:
     )
 
 
-async def at_join_cap(account_id: str) -> bool:
-    """True when ``account_id`` has spent its rolling-24h join budget (0 = no cap).
-
-    Counted out of ``neurocomment_join_log``, the SAME table neurocomment gates on,
-    and that is deliberate: Telegram freezes an account somewhere north of 20-50
-    joins a day and does not care which of our features spent them. A private
-    counter would have let one account join forty times with both features certain
-    they had stayed under twenty. The price is that neurocomment reaches its own cap
-    sooner when a campaign is running, which is the point rather than a side effect.
-    """
-    cap = settings.neuroshilling.max_joins_per_account_per_day
-    if cap <= 0:
-        return False
-    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
-    return await count_account_joins_since(account_id, since) >= cap
-
-
-async def _daily_cap_reached(account_id: str, target: str) -> NeuroshillingPresenceState:
-    """Log the refusal and leave the pair as it was.
-
-    ``pending`` without touching the stored row: nothing was learnt about the pair,
-    and overwriting a previous refusal with "pending" would erase the only record of
-    why it failed.
-    """
-    await log_event(
-        "WARNING",
-        "neuroshilling_join_daily_cap",
-        account_id=account_id,
-        extra={"target": target},
-    )
-    return "pending"
-
-
 async def join_target(
     campaign_id: str,
     account_id: str,
@@ -275,6 +244,10 @@ async def join_target(
     The stored presence is READ first, which is what the table is for: a pair already
     inside is not re-joined after a restart, and an account halted account-wide does
     not walk on to the next target as if nothing had happened.
+
+    Reading the daily budget, spending it and charging it happen under one mutex
+    (``services._join_lock``), which neurocomment's onboarding takes as well because
+    the budget the two of them count is one.
     """
     settled = await repository.fetch_presence_state(
         campaign_id,
@@ -285,24 +258,27 @@ async def join_target(
     if settled is not None and settled in _SETTLED_STATES:
         return settled
     if await at_join_cap(account_id):
-        return await _daily_cap_reached(account_id, target)
+        return await daily_cap_reached(account_id, target)
     await pacing.await_send_slot(f"join:{account_id}", _join_gap_seconds())
-    # The check that counts, and the reason there are two: the pacer is a queue, not
-    # a mutex over the cap. Every join of this account waiting in it had passed the
-    # check above before any of them recorded anything, so forty targets meant forty
-    # joins — spaced, and uncapped. Inside the granted slot the joins that went first
-    # have been charged, so this one reads a true count.
-    if await at_join_cap(account_id):
-        return await _daily_cap_reached(account_id, target)
-    result = await _seams.execute(account_id, JoinChannel(channel=target))
-    state = classify_join(result)
-    if result.status == "ok" or state == "pending_approval":
-        # A real join and a queued REQUEST are both charged: Telegram rate-limits the
-        # requests too, and a spray of them at gated chats is a recognised freeze
-        # trigger. An ``already_participant`` no-op is charged to neither, or the
-        # counter would pin near the cap and starve the joins that matter — the same
-        # rule the neurocomment listener pass applies to the same table.
-        await record_join(account_id)
+    async with join_lock(account_id):
+        # The check that counts, and the reason there are two: the one above only saves
+        # the pause, and the pacer between them is a queue rather than a mutex — it
+        # releases its own lock as it grants the slot. So every join of this account
+        # waiting in it had passed that first check before any of them charged anything,
+        # and forty targets meant forty joins: spaced, and uncapped. Under this mutex the
+        # joins that went first have charged theirs, so the count read here is true and
+        # stays true until this join has charged its own.
+        if await at_join_cap(account_id):
+            return await daily_cap_reached(account_id, target)
+        result = await _seams.execute(account_id, JoinChannel(channel=target))
+        state = classify_join(result)
+        if result.status == "ok" or state == "pending_approval":
+            # A real join and a queued REQUEST are both charged: Telegram rate-limits the
+            # requests too, and a spray of them at gated chats is a recognised freeze
+            # trigger. An ``already_participant`` no-op is charged to neither, or the
+            # counter would pin near the cap and starve the joins that matter — the same
+            # rule the neurocomment listener pass applies to the same table.
+            await record_join(account_id)
     await repository.record_presence(
         campaign_id,
         account_id,
