@@ -25,6 +25,7 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.telegram_actions import JoinChannel
+from services._join_lock import join_lock
 from services.neurocomment import _seams
 from services.neurocomment._generate import _COOLDOWN_STATUSES
 from services.neurocomment.onboarding import _at_join_cap
@@ -43,6 +44,11 @@ async def run_join_pass(  # noqa: C901 - anti-ban decision ladder
     rolling-24h cap or a flood/cooldown status. Jittered pause runs *between* actual
     joins only (cache-hits skip it, none before the first) so a large watch set never
     fires as one join burst — the freeze vector.
+
+    That cap is counted twice before a join goes out: once before the pause, and again under
+    ``services._join_lock`` — the per-account mutex neuroshilling's ``join_target`` and
+    neurocomment's pair onboarding take over this same log — which covers the join and
+    the charge as well. The pause itself is left outside that mutex.
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
@@ -86,13 +92,11 @@ async def run_join_pass(  # noqa: C901 - anti-ban decision ladder
         # Rolling-24h join cap (anti-freeze): once the listener hits its cap, stop the
         # burst — remaining channels retry on the next reconcile as the window rolls.
         if await _at_join_cap(listener_account_id):
-            await log_event(
-                "WARNING",
-                "neurocomment_join_daily_cap",
-                account_id=listener_account_id,
-                extra={"channel": channel},
-            )
+            await _log_daily_cap(listener_account_id, channel)
             break
+        # Paced OUTSIDE the mutex below, and that placement is the point: this pause is
+        # 30-120s by default, and holding the join mutex across it would stop a
+        # neuroshilling campaign from joining anything on this same account for minutes.
         if not first_join:
             await asyncio.sleep(_runtime._join_jitter_seconds())  # noqa: SLF001 - peer module
             if generation is not None and not _runtime._runtime_owner_is_current(  # noqa: SLF001
@@ -101,16 +105,27 @@ async def run_join_pass(  # noqa: C901 - anti-ban decision ladder
             ):
                 return
         first_join = False
-        result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
-        if result.status in {"ok", "already_participant"}:
-            # Either way the account IS in the channel → cache it so we stop re-joining.
-            # Only a real join counts against the rolling-24h cap; an already-participant
-            # no-op (e.g. every channel on a restart) must not, else the count pins near
-            # the cap and starves genuine joins.
-            _runtime._JOINED_CHANNELS.add((listener_account_id, channel))  # noqa: SLF001 - peer module
-            if result.status == "ok":
-                await record_join(listener_account_id, watch_channel=channel)
-            continue
+        async with join_lock(listener_account_id):
+            # Counted a second time, because the count above is spent by whoever charges
+            # first and the pause that can sit between them is minutes long:
+            # neuroshilling's ``join_target`` charges the same log for the same account,
+            # and nothing refuses the listener account a campaign roster. Without this
+            # count the mutex would only queue the joins that had already passed the
+            # first one, and every one of them would still go out. Ends the burst the
+            # same way and with the same event, so the refusals cannot be told apart.
+            if await _at_join_cap(listener_account_id):
+                await _log_daily_cap(listener_account_id, channel)
+                break
+            result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
+            if result.status in {"ok", "already_participant"}:
+                # Either way the account IS in the channel → cache it so we stop
+                # re-joining. Only a real join counts against the rolling-24h cap; an
+                # already-participant no-op (e.g. every channel on a restart) must not,
+                # else the count pins near the cap and starves genuine joins.
+                _runtime._JOINED_CHANNELS.add((listener_account_id, channel))  # noqa: SLF001
+                if result.status == "ok":
+                    await record_join(listener_account_id, watch_channel=channel)
+                continue
         # ``error_type`` (the Telegram exception class) is what turns a bare status="failed"
         # into an actionable line; absent rather than null when the gateway set none, which
         # is always the case for the flood family below.
@@ -134,6 +149,22 @@ async def run_join_pass(  # noqa: C901 - anti-ban decision ladder
             account_id=listener_account_id,
             extra=extra,
         )
+
+
+async def _log_daily_cap(listener_account_id: str, channel: str) -> None:
+    """Log the join this pass did not send, because the rolling-24h budget is gone.
+
+    One copy for the two counts that can refuse it — the one before the jittered pause
+    and the one under the join mutex — so a refusal cannot reach the log worded two ways
+    depending on which count caught it. The ``break`` stays at both call sites: the whole
+    burst ends on either.
+    """
+    await log_event(
+        "WARNING",
+        "neurocomment_join_daily_cap",
+        account_id=listener_account_id,
+        extra={"channel": channel},
+    )
 
 
 async def _mark_lost_channels(

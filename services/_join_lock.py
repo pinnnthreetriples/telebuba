@@ -16,10 +16,19 @@ one covers spans a paced Telegram write, which is the exact thing ``services.pac
 documents must never be awaited inside it. The nesting is therefore one-way: this
 lock is taken OUTSIDE ``account_lock``, which the gateway seams take beneath it.
 
-**Two chargers of three take it.** ``services.neurocomment._join.run_join_pass``
-charges the same log with the listener account and stays outside, so the cap can still
-slip by one join while that pass overlaps a campaign holding that account — and nothing
-refuses a listener account a neuroshilling roster.
+**All three chargers take it.** ``services.neuroshilling._telegram.join_target``,
+``services.neurocomment._onboard_pair._join_and_classify`` and
+``services.neurocomment._join.run_join_pass`` — the listener's channel-join pass — each
+count the log, join and charge it under this mutex, and each counts it a second time
+once it holds it: the count taken before the mutex is spent by whoever charges first.
+
+**It closes the cap, not the exclusion.** Nothing refuses the listener account a
+neuroshilling roster: ``_claim_accounts`` in ``services.neuroshilling._runtime`` asks
+``list_active_campaign_account_names()`` and the ownership registry, and the listener —
+``neurocomment_runtime.listener_account_id`` — is in neither, so an operator can put it
+in a campaign and have both join passes running on it. What this lock changes is that
+the two then spend one budget between them, instead of each charging against a count
+the other has not spent yet.
 
 ponytail: one uvicorn worker, so an in-process ``asyncio.Lock`` reaches every join that
 takes it. A second worker would not share the map, and the cap would then need the count
