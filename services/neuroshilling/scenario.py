@@ -175,9 +175,9 @@ def _approval_problem(
 ) -> str | None:
     """The first reason this scenario may not be approved, or ``None``.
 
-    Most reasons are for the test suite and the reader and answer the same
-    ``scenario_invalid`` on the wire; the ones listed in ``_PROBLEM_CODES`` are
-    translated into refusals of their own.
+    The reasons ``_PROBLEM_CODES`` does not list are for the test suite and the
+    reader and answer the same ``scenario_invalid`` on the wire; the ones it lists
+    are translated into refusals of their own.
     """
     if not roles:
         return "no_roles"
@@ -223,9 +223,10 @@ def _media_problem(
     sent and no trace of why.
 
     Neither half needs anyone to choose it. The card's picker offers message steps
-    only and its remove button moves the slot along with the steps, but the field is
-    writable by any API client — and ``media_step_missing`` is the ordinary state
-    right after a generation, which clears the slot.
+    only and its remove button moves the slot along with them, but no save endpoint
+    reads the KIND under it, so an operator who turns that step into a reaction stores
+    ``media_step_not_message`` — and ``media_step_missing`` is the ordinary state right
+    after a generation, which clears the slot.
 
     Whether the accounts playing that step can actually SEE the source message is
     a Telegram question, answered by :func:`_refuse_unreachable_media` against live
