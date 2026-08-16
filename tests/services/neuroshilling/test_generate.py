@@ -14,7 +14,7 @@ import pytest
 
 from core.config import settings
 from schemas.gemini import GeminiResult
-from services.neuroshilling import _generate, _seams, _state
+from services.neuroshilling import _generate, _seams, _state, scenario
 from services.neuroshilling._prompt import DialogueAsk
 
 if TYPE_CHECKING:
@@ -342,6 +342,34 @@ async def test_a_reaction_with_nothing_to_react_to_is_dropped(
 
     assert draft is not None
     assert [step.kind for step in draft.steps] == ["message"]
+
+
+@pytest.mark.asyncio
+async def test_no_generated_step_is_one_the_save_would_refuse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Generation writes past ``set_scenario``, so ``_to_update`` is these steps' only gate.
+
+    ``generate_scenario`` hands its draft to ``replace_scenario`` directly and
+    ``_kind_field_problem`` never sees it. What keeps the rows well formed is
+    ``_to_update`` dropping an unaimed reaction and filling only the fields each
+    kind owns. Asserted over one answer carrying every shape the model can send,
+    so the two stay coupled.
+    """
+    mixed = _answer(
+        steps=[
+            {"speaker_id": 1, "text": "first", "reply_to_index": None, "reaction": None},
+            {"speaker_id": 2, "text": "second", "reply_to_index": 0, "reaction": None},
+            {"speaker_id": 1, "text": "", "reply_to_index": 1, "reaction": "\U0001f525"},
+            {"speaker_id": 2, "text": "", "reply_to_index": None, "reaction": "\U0001f44d"},
+        ],
+    )
+
+    draft = await _generate_with(monkeypatch, _Gateway(mixed))
+
+    assert draft is not None
+    assert [step.kind for step in draft.steps] == ["message", "message", "reaction"]
+    assert scenario._kind_field_problem(draft.steps) is False
 
 
 @pytest.mark.asyncio

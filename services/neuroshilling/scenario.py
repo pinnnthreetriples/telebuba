@@ -110,6 +110,39 @@ def _backward_link_problem(steps: Sequence[NeuroshillingStepInput]) -> bool:
     )
 
 
+def _kind_field_problem(steps: Sequence[NeuroshillingStepInput]) -> bool:
+    """True when some step misses what its kind needs or carries the other kind's POSITION.
+
+    ``_steps._play_reaction`` aims through ``target_position`` and fires ``emoji``,
+    and when either is missing it logs INFO and returns success — the step is
+    dropped and the run reports nothing wrong. ``_steps._play_message`` reads
+    ``reply_to_position`` and never ``target_position``. So a reaction with no
+    target or no emoji is a line the operator staged and the run silently skips,
+    and a position filed under the other kind's name is one nothing reads back.
+
+    The two POSITIONS are what is cross-checked, not every field. ``scenarioBody``
+    files ``emoji`` and each link under its owning kind, and the one mismatch it
+    does forward — ``text`` on a reaction — no control on the card can write, the
+    text box being drawn for a message step only. Both are ignored where they land.
+
+    Refused here rather than by the schema because the form reaches the first case
+    on its own: ``addStep`` starts a reaction with no target and the target picker
+    keeps a "none" entry. So it is an ordinary operator mistake, and it answers
+    ``scenario_invalid`` beside the other save-time refusals rather than the
+    generic ``validation_error`` ``api.errors`` returns for a schema rule.
+
+    Generation never reaches this: :func:`generate_scenario` writes through
+    ``repository.replace_scenario``. ``_generate._to_update`` is what keeps those
+    rows inside this rule, and a test pins the two together.
+    """
+    return any(
+        (step.target_position is None or step.emoji is None or step.reply_to_position is not None)
+        if step.kind == "reaction"
+        else step.target_position is not None
+        for step in steps
+    )
+
+
 async def set_scenario(
     campaign_id: str,
     data: NeuroshillingScenarioUpdate,
@@ -124,7 +157,7 @@ async def set_scenario(
         return None
     refuse_while_live(campaign)
     _check_size(data)
-    if _backward_link_problem(data.steps):
+    if _backward_link_problem(data.steps) or _kind_field_problem(data.steps):
         raise NeuroshillingInvalidError(_SCENARIO_INVALID)
     if not await repository.replace_scenario(campaign_id, data.roles, data.steps):
         return None
