@@ -19,6 +19,10 @@ Resuming is the same code path: the run is handed the STORED ``run_id``, reads w
 ``(target, step)`` pairs already have a journal row, and skips them. Minting a fresh id
 on resume would face an empty unique index and replay the whole dialogue into chats
 that already have it.
+
+Reading the chat is part of acting in it. When the campaign asks for it, the target
+is polled after the last line for ``listen_minutes`` — the pass is sequential, so that
+window is paid per target and a long one on a long list is a long run.
 """
 
 from __future__ import annotations
@@ -28,8 +32,9 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
+from core.repositories.accounts import list_accounts_by_ids
 from services import pacing
-from services.neuroshilling import _seams, _steps, _telegram
+from services.neuroshilling import _listen, _seams, _steps, _telegram
 from services.neuroshilling._context import RunContext
 from services.neuroshilling.campaigns import parse_targets
 
@@ -91,6 +96,9 @@ async def _load_context(
         if account.role_id is None or account.state != "active" or account.is_reserve:
             continue
         by_role.setdefault(account.role_id, []).append(account.account_id)
+    # The whole roster and not just the speakers: a reserve promoted mid-run is one of
+    # ours from the moment it says anything, and this set is read once and never again.
+    rostered = await list_accounts_by_ids([account.account_id for account in accounts])
     context = RunContext(
         campaign=campaign,
         run_id=run_id,
@@ -100,6 +108,9 @@ async def _load_context(
         halted=set(),
         banned={},
         banned_in={},
+        our_user_ids=frozenset(
+            account.user_id for account in rostered.accounts if account.user_id is not None
+        ),
     )
     played = await repository.list_journalled_steps(run_id)
     return context, parse_targets(campaign.targets_raw), played
@@ -121,7 +132,12 @@ async def _play_target(
     target: str,
     steps: Sequence[NeuroshillingStep],
 ) -> None:
-    """Get the cast into one chat and act the dialogue out in it."""
+    """Get the cast into one chat, act the dialogue out, then read what it said back.
+
+    The listening window comes last and only when the campaign asked for it; on a
+    campaign that did not, ``_listen.listen`` returns without a single request and
+    the target ends the moment its last line lands.
+    """
     chats = await _enter(context, target)
     if not chats:
         await log_event(
@@ -134,6 +150,7 @@ async def _play_target(
     for step in steps:
         if not await _steps.play_step(context, target, step, chats):
             break
+    await _listen.listen(context, target, chats)
 
 
 async def _enter(context: RunContext, target: str) -> dict[str, int]:

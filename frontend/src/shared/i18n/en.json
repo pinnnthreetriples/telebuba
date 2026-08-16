@@ -890,7 +890,12 @@
     "db_maintenance_failed": "Database maintenance failed",
     "neurocomment_channel_inactive_dropped": "Channel dropped: it stopped publishing",
     "neurocomment_channel_posts_missed": "Channel publishes, but its posts never reached us",
-    "neurocomment_channel_activity_unknown": "Could not tell whether the channel still publishes"
+    "neurocomment_channel_activity_unknown": "Could not tell whether the channel still publishes",
+    "neuroshilling_chat_polled": "Listening: new messages in the chat",
+    "neuroshilling_chat_poll_failed": "Listening: could not read the chat",
+    "neuroshilling_human_reply_sent": "Reply to a real person sent",
+    "neuroshilling_human_reply_rejected": "Reply to a real person refused by the gate",
+    "neuroshilling_human_reply_failed": "Reply to a real person was not delivered"
   },
   "logEventReason": {
     "account_cooling": "the account is waiting out a Telegram limit",
@@ -945,7 +950,15 @@
     "all_accounts_banned": "every account banned",
     "no_readers": "nobody commented on the post",
     "thread_unread": "the discussion could not be read",
-    "too_old": "the post is stale — waited too long"
+    "too_old": "the post is stale — waited too long",
+    "banned_pattern": "banned fragment in the reply",
+    "bad_charset": "invisible characters in the reply",
+    "mixed_script": "mixed alphabets inside a word",
+    "echo": "the reply echoes the message",
+    "no_account": "no account available in the chat",
+    "llm_unavailable": "the model is unavailable",
+    "generation_in_progress": "a generation is already running",
+    "llm_daily_limit_reached": "daily model budget spent"
   },
   "logEventHint": {
     "neurocomment_no_account_available": "No account in the campaign can post in this channel right now. The exact reason is written next to the row. \"Per-account hourly limit reached\" is raised by the \"Comments per hour (per account)\" setting, \"per-channel daily limit reached\" by \"Comments per day per channel\". \"The account is not warmed up, or its Trust-score is below the threshold\" — let the account warm up, or lower \"Min. trust-score to run\". \"No accounts linked\" and \"the account is not cleared for this channel\" are fixed by linking an account, linking the channel again, or adding another account. \"Account paused\" clears on its own.",
@@ -1578,18 +1591,15 @@
         "hint": "Accounts marked as reserve play no role. When Telegram bans a playing account, the oldest reserve takes its role, joins the chat and carries on. A chat that refuses everyone spends no reserve.",
         "count": "In reserve: {{n}}"
       },
-      "soon": {
-        "title": "Chat listening",
-        "badge": "soon",
-        "hint": "Replying to real people in the target chat. The campaign already carries these columns, but nothing reads them yet — so the fields are shown and switched off."
-      },
       "autoresponder": {
         "label": "Autoresponder",
         "off": "Off",
         "neurodialog": "Neurodialogue"
       },
       "replyToHumans": {
-        "label": "Reply to real people"
+        "label": "Reply to real people",
+        "hint": "The one place where a stranger's text influences what the accounts publish. Both settings are required: «Autoresponder: Neurodialog» and this switch.",
+        "warning": "Replies to real people are on. Chat text is written by strangers; the campaign brief never reaches the model call, and every answer is parsed for links, mentions, phone numbers and wallet addresses. An answer that echoes the message is dropped."
       },
       "replyActivity": {
         "label": "Reply activity",
@@ -1598,9 +1608,14 @@
         "active": "Active"
       },
       "listen": {
-        "label": "Listen to chat, min"
+        "label": "Listen to chat, min",
+        "hint": "How many minutes the accounts keep reading the chat after the dialogue has played out. Counted per target, and the targets are walked one at a time."
       },
-      "save": "Save settings"
+      "save": "Save settings",
+      "listening": {
+        "title": "Chat listening",
+        "hint": "Accounts read the target chat by polling it every half minute — one account per chat, no subscription. On its own this only fills the chat counters below; what is read becomes the context for replies once the autoresponder is answering too. Switched off, not a single extra request is made."
+      }
     },
     "launch": {
       "title": "Run the campaign",
@@ -1631,7 +1646,10 @@
       },
       "start": "Start",
       "stop": "Stop",
-      "log": "Campaign log"
+      "log": "Campaign log",
+      "listening": "Listening",
+      "chatSeen": "read: {{n}}",
+      "humanReplies": "replies to people: {{n}}"
     },
     "howto": {
       "title": "How it works",

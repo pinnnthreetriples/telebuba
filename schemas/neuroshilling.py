@@ -296,6 +296,42 @@ class NeuroshillingQuotaUsage(BaseModel):
     campaign_total: int = Field(default=0, ge=0)
 
 
+class NeuroshillingChatMessage(BaseModel):
+    """One message the poller observed in a target chat.
+
+    ``text`` is the only attacker-controlled string in the domain. It never reaches
+    a log event's ``extra`` (which is an HTTP response body) and it reaches a model
+    only through the fenced, per-message-trimmed block
+    ``services.neuroshilling._prompt`` builds.
+
+    ``is_ours`` is wider than the gateway's ``outgoing`` flag, which answers only
+    "did the READING account write this". A sibling account's line is incoming to the
+    reader, and it is recognised three ways: a scenario step by its journalled message
+    id, a published autoreply by the row ``_autoreply`` writes here itself (it has no
+    journal row to be found by), and a send whose id never came back by its sender.
+    The distinction is what stops the fleet quoting itself back into its own context
+    and answering its own lines.
+    """
+
+    message_id: int = Field(gt=0)
+    # Recorded so a chat can be read back by author. Nothing acts on it today: the
+    # reply decision is per MESSAGE, not per person.
+    sender_id: int | None = None
+    text: str = ""
+    is_ours: bool = False
+
+
+class NeuroshillingChatActivity(BaseModel):
+    """What the listener has done in one campaign, for the launch card.
+
+    ``seen`` counts observed messages including our own, because that is what the
+    operator can check against the chat itself.
+    """
+
+    seen: int = Field(default=0, ge=0)
+    replied: int = Field(default=0, ge=0)
+
+
 class NeuroshillingRunStatus(BaseModel):
     """What the launch card shows: where the run is and how far it has got.
 
@@ -311,6 +347,10 @@ class NeuroshillingRunStatus(BaseModel):
     here rather than derived on the client because the board's roster carries
     ``state`` but not ``replaced_by_account_id``, and a ban with an empty reserve pool
     writes the first without the second.
+
+    ``listening`` says the run is reading its target chats as well as writing to
+    them. Not derivable on the client from the campaign row alone: the three switches
+    that turn it on are stored, but whether a run is actually in flight is not.
     """
 
     status: NeuroshillingStatus = "idle"
@@ -318,6 +358,9 @@ class NeuroshillingRunStatus(BaseModel):
     sent: int = Field(default=0, ge=0)
     total: int = Field(default=0, ge=0)
     substitutions: int = Field(default=0, ge=0)
+    listening: bool = False
+    chat_messages_seen: int = Field(default=0, ge=0)
+    human_replies_sent: int = Field(default=0, ge=0)
     # Exception CLASS NAME of whatever ended the last run, never its text.
     last_error_type: str | None = None
     halted_accounts: list[str] = Field(default_factory=list)

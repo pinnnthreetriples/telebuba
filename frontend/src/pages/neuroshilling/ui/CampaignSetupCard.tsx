@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { NeuroshillingCampaign } from '@/shared/api';
 import { CollapsibleCard, HelpHint, Switch } from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
@@ -9,6 +8,7 @@ import {
   advancedChangeCount,
   clampInt,
   countTargets,
+  MAX_LISTEN_MINUTES,
   MAX_MESSAGES_PER_CHAT_PER_DAY,
   MAX_MESSAGES_PER_HOUR,
   MAX_PAUSE_SECONDS,
@@ -74,7 +74,6 @@ function NumberField({
 // them is refetched by the log stream and a card that seeded itself from props
 // would be emptied under the operator's hands.
 export function CampaignSetupCard({
-  campaign,
   draft,
   onDraft,
   dirty,
@@ -83,7 +82,6 @@ export function CampaignSetupCard({
   onSave,
   busy,
 }: {
-  campaign: NeuroshillingCampaign;
   draft: SetupDraft;
   onDraft: (draft: SetupDraft) => void;
   dirty: boolean;
@@ -312,26 +310,21 @@ export function CampaignSetupCard({
             </span>
           </div>
 
-          {/* Stage 6. Shown because the campaign row already carries these columns
-              and the operator will look for them, disabled because nothing reads
-              them yet. They are also absent from `setupFieldsOf`, so the page's
-              echo of the stored campaign is what carries them through a save. */}
+          {/* The listening block: the three switches that let the run READ its
+              target chats, and the window it keeps reading for. */}
           <div className="mt-[2px] flex items-center gap-[7px] border-t border-line pt-[11px] text-[12px] font-semibold">
-            {t('neuroshilling.setup.soon.title')}
-            <span className="rounded-full bg-[#f4f3f0] px-[8px] py-[1px] text-[10.5px] font-medium text-ink-muted">
-              {t('neuroshilling.setup.soon.badge')}
-            </span>
-            <HelpHint text={t('neuroshilling.setup.soon.hint')} />
+            {t('neuroshilling.setup.listening.title')}
+            <HelpHint text={t('neuroshilling.setup.listening.hint')} />
           </div>
 
           {(
             [
-              ['autoresponder', ['off', 'neurodialog'], campaign.autoresponder ?? 'off'],
-              ['replyActivity', ['calm', 'medium', 'active'], campaign.reply_activity ?? 'medium'],
+              ['autoresponder', ['off', 'neurodialog'], draft.autoresponder],
+              ['replyActivity', ['calm', 'medium', 'active'], draft.replyActivity],
             ] as const
           ).map(([field, options, current]) => (
             <div key={field} className="flex flex-wrap items-center gap-[7px]">
-              <span className="min-w-0 flex-1 text-[12.5px] text-ink-subtle">
+              <span className="min-w-0 flex-1 text-[12.5px]">
                 {t(`neuroshilling.setup.${field}.label`)}
               </span>
               <div
@@ -345,7 +338,14 @@ export function CampaignSetupCard({
                     type="button"
                     role="radio"
                     aria-checked={current === option}
-                    disabled
+                    disabled={live}
+                    onClick={() => {
+                      onDraft(
+                        field === 'autoresponder'
+                          ? { ...draft, autoresponder: option as SetupDraft['autoresponder'] }
+                          : { ...draft, replyActivity: option as SetupDraft['replyActivity'] },
+                      );
+                    }}
                     className={`${SEGMENT} ${current === option ? 'bg-white text-ink' : 'text-ink-subtle'}`}
                   >
                     {t(`neuroshilling.setup.${field}.${option}`)}
@@ -357,23 +357,36 @@ export function CampaignSetupCard({
 
           <div className="flex items-center gap-[8px]">
             <Switch
-              disabled
-              checked={campaign.reply_to_humans ?? false}
+              disabled={live}
+              checked={draft.replyToHumans}
               label={t('neuroshilling.setup.replyToHumans.label')}
-              onChange={() => undefined}
+              onChange={(value) => {
+                onDraft({ ...draft, replyToHumans: value });
+              }}
             />
-            <span className="text-[12.5px] text-ink-subtle">
-              {t('neuroshilling.setup.replyToHumans.label')}
-            </span>
+            <span className="text-[12.5px]">{t('neuroshilling.setup.replyToHumans.label')}</span>
+            <HelpHint text={t('neuroshilling.setup.replyToHumans.hint')} />
           </div>
 
+          {/* Shown only once BOTH switches are on, because that is the only
+              combination that publishes anything a stranger's message provoked —
+              and it is the one thing on this page an outsider gets a say in. */}
+          {draft.replyToHumans && draft.autoresponder === 'neurodialog' ? (
+            <div className="rounded-[10px] bg-[#fdf4e3] px-[11px] py-[7px] text-[11.5px] leading-snug text-warning">
+              {t('neuroshilling.setup.replyToHumans.warning')}
+            </div>
+          ) : null}
+
           <NumberField
-            disabled
             label={t('neuroshilling.setup.listen.label')}
-            value={String(campaign.listen_minutes ?? 60)}
+            hint={t('neuroshilling.setup.listen.hint')}
+            value={String(draft.listenMinutes)}
             min={1}
-            max={1440}
-            onChange={() => undefined}
+            max={MAX_LISTEN_MINUTES}
+            disabled={live}
+            onChange={(value) => {
+              onDraft({ ...draft, listenMinutes: clampInt(Number(value), 1, MAX_LISTEN_MINUTES) });
+            }}
           />
         </div>
       ) : null}

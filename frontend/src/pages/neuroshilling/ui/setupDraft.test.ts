@@ -31,6 +31,10 @@ test('a campaign carrying only its required fields still yields a complete draft
     messagesPerChatPerDay: 3,
     totalPerAccount: null,
     reserveEnabled: false,
+    autoresponder: 'off',
+    replyToHumans: false,
+    replyActivity: 'medium',
+    listenMinutes: 60,
   });
 });
 
@@ -48,14 +52,16 @@ test('the body carries only the columns this card owns', () => {
     messages_per_chat_per_day: 3,
     total_per_account: null,
     reserve_enabled: true,
+    autoresponder: 'off',
+    reply_to_humans: false,
+    reply_activity: 'medium',
+    listen_minutes: 60,
   });
-  // The stage-6 columns are absent BY NAME: the card shows them disabled, and the
-  // page's echo of the stored campaign is what carries them through a save. A key
-  // here would let a control nothing reads yet write the column.
-  expect(Object.keys(body)).not.toContain('autoresponder');
-  expect(Object.keys(body)).not.toContain('reply_to_humans');
-  expect(Object.keys(body)).not.toContain('reply_activity');
-  expect(Object.keys(body)).not.toContain('listen_minutes');
+  // Every column the card edits and no others: the rest of the PUT is the page's
+  // echo of the stored campaign, and a key here that the card cannot change would
+  // overwrite a column with a default the operator never chose.
+  expect(Object.keys(body)).not.toContain('topic');
+  expect(Object.keys(body)).not.toContain('accounts');
 });
 
 test('a zero total means no ceiling only when it arrives as null', () => {
@@ -92,6 +98,16 @@ test('the advanced badge counts what was changed, not how many controls there ar
       messagesPerChatPerDay: 1,
       totalPerAccount: 100,
       reserveEnabled: true,
+      autoresponder: 'neurodialog',
+      replyToHumans: true,
+      replyActivity: 'active',
     }),
-  ).toBe(4);
+  ).toBe(7);
+});
+
+test('a changed listening window alone does not raise the badge', () => {
+  // The window only means anything once one of the three switches above it is on,
+  // so counting it would put a badge on a campaign nothing is listening for.
+  const base = setupDraftOf(CAMPAIGN);
+  expect(advancedChangeCount({ ...base, listenMinutes: 5 })).toBe(0);
 });

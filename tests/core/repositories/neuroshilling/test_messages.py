@@ -14,6 +14,7 @@ from core.repositories.neuroshilling import (
     fail_pending_messages,
     fetch_message_id,
     list_journalled_steps,
+    list_sent_message_ids,
     read_quota_usage,
     replace_scenario,
     settle_message,
@@ -213,3 +214,24 @@ async def test_progress_counts_delivered_messages_and_not_reactions() -> None:
     await _claim(campaign_id, "alpha", steps[1].step_id, "acc-1", "b")
 
     assert await count_sent_message_steps(_RUN) == 1
+
+
+@pytest.mark.asyncio
+async def test_our_own_message_ids_are_read_back_across_every_run_of_a_campaign() -> None:
+    """What the chat poller answers "is this ours?" with.
+
+    Telethon's ``out`` flag only covers the account doing the reading, so a line
+    said by a sibling account looks like a stranger's without this. Not scoped to
+    the current run either: an earlier run's messages are still in that chat and
+    are just as much ours.
+    """
+    campaign_id, steps = await _campaign()
+    for run_id, step in ((_RUN, steps[0]), (f"{_RUN}#2", steps[1])):
+        key = NeuroshillingStepKey(run_id=run_id, target="alpha", step_id=step.step_id)
+        await claim_message(key, campaign_id=campaign_id, account_id="acc-1", text="a")
+        await settle_message(key, status="sent", message_id=100 + step.position)
+    # A claimed but unsettled row has no id in the chat, so it is not one of ours.
+    await _claim(campaign_id, "beta", steps[0].step_id, "acc-1", "a")
+
+    assert await list_sent_message_ids(campaign_id, "alpha") == {101, 102}
+    assert await list_sent_message_ids(campaign_id, "beta") == set()

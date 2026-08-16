@@ -82,19 +82,30 @@ class ResolveChatResult(BaseModel):
 
 
 class ChatMessagePreview(BaseModel):
-    """One message as ``ReadChatMessages`` reports it — no media bytes, only its kind."""
+    """One message as ``ReadChatMessages`` reports it — no media bytes, only its kind.
+
+    ``sender_id`` and ``outgoing`` are filled by the cursor mode and left at their
+    defaults by the by-id mode, whose callers ask only whether a message is readable.
+    ``outgoing`` is Telethon's ``out`` flag and so answers "did the READING account
+    write this", which is narrower than "did our fleet write this": a sibling
+    account posting in the same chat is incoming to the reader. A caller that needs
+    the wider question has to answer it from its own send journal.
+    """
 
     message_id: int
     text: str = ""
     media_kind: ChatMediaKind = "none"
+    sender_id: int | None = None
+    outgoing: bool = False
 
 
 class ReadChatMessagesResult(BaseModel):
     """Gateway output for ``ReadChatMessages``.
 
-    ``missing_ids`` is the half that matters most: ``get_messages`` answers ``None``
-    for a message this account cannot see, and "cannot see it" is the verdict a
-    media source has to pass before a campaign is approved on it.
+    ``missing_ids`` is the half that matters most for the by-id mode: ``get_messages``
+    answers ``None`` for a message this account cannot see, and "cannot see it" is the
+    verdict a media source has to pass before a campaign is approved on it. The cursor
+    mode names no ids, so nothing can be missing and the list stays empty.
     """
 
     messages: list[ChatMessagePreview] = Field(default_factory=list)

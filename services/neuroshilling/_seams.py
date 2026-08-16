@@ -26,6 +26,7 @@ import random
 from asyncio import sleep
 from contextlib import contextmanager
 from contextvars import ContextVar
+from time import monotonic
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -121,6 +122,10 @@ __all__ = [
     "execute_read",
     "generate_text",
     "generate_text_deepseek",
+    # Beside ``sleep`` because the two are one seam: the listening window is a
+    # deadline measured against this clock and closed by those pauses, so a test
+    # that stubs one without the other is measuring a window nothing advances.
+    "monotonic",
     "rng",
     "run_scope",
     "sleep",

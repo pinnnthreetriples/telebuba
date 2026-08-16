@@ -36,6 +36,14 @@ class RunContext(NamedTuple):
     map for a later step to act on: every entry is answered by the step that put it
     there.
 
+    ``our_user_ids`` are the Telegram user ids of the campaign's own accounts, read
+    once here because they never change during a run. They are the poller's last
+    answer to "is this one of ours?" when neither of the other two can be: Telethon's
+    ``out`` flag only speaks for the reading account, and the id-based answers need a
+    message id we did not always get back. An account the operator has never checked
+    has no stored user id and is simply absent — the set narrows the question, it does
+    not pretend to settle it.
+
     ``banned_in`` is what keeps ONE hostile chat from costing one reserve per player
     of the role. Keyed by target and holding the accounts Telegram BANNED while acting
     in that target — a logged-out session is not evidence about a chat and is left out
@@ -56,3 +64,5 @@ class RunContext(NamedTuple):
     banned: dict[str, str]
     # target -> the accounts Telegram banned while they were acting in that target.
     banned_in: dict[str, set[str]]
+    # The Telegram user ids of this campaign's own accounts, for the poller.
+    our_user_ids: frozenset[int] = frozenset()

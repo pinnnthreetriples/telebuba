@@ -16,6 +16,7 @@ export const MAX_MESSAGES_PER_HOUR = 60;
 export const MAX_MESSAGES_PER_CHAT_PER_DAY = 50;
 export const MAX_TOTAL_PER_ACCOUNT = 1000;
 export const MAX_TARGETS_RAW = 8000;
+export const MAX_LISTEN_MINUTES = 1440;
 
 export interface SetupDraft {
   // Which campaign this draft belongs to, so the page can tell "the operator
@@ -31,6 +32,13 @@ export interface SetupDraft {
   // the wire rejects (`ge=1`), and an empty box must not read as "none allowed".
   totalPerAccount: number | null;
   reserveEnabled: boolean;
+  // The listening block. `autoresponder` picks WHICH engine writes an answer and
+  // `replyToHumans` says whether a real person's message may provoke one; the
+  // server requires BOTH before anything is published, so the card says so.
+  autoresponder: NonNullable<NeuroshillingCampaign['autoresponder']>;
+  replyToHumans: boolean;
+  replyActivity: NonNullable<NeuroshillingCampaign['reply_activity']>;
+  listenMinutes: number;
 }
 
 /** A whole number inside `[min, max]`, or `min` for anything unparseable. */
@@ -62,16 +70,14 @@ export function setupDraftOf(campaign: NeuroshillingCampaign): SetupDraft {
     messagesPerChatPerDay: campaign.messages_per_chat_per_day ?? 3,
     totalPerAccount: campaign.total_per_account ?? null,
     reserveEnabled: campaign.reserve_enabled ?? false,
+    autoresponder: campaign.autoresponder ?? 'off',
+    replyToHumans: campaign.reply_to_humans ?? false,
+    replyActivity: campaign.reply_activity ?? 'medium',
+    listenMinutes: campaign.listen_minutes ?? 60,
   };
 }
 
-/** The campaign columns this card owns — the rest of the PUT is echoed by the page.
- *
- * The stage-6 fields (`autoresponder`, `reply_to_humans`, `reply_activity`,
- * `listen_minutes`) are deliberately absent: the card shows them disabled, and
- * the page's echo of the stored campaign is what carries them through the save
- * unchanged. Naming them here would let a disabled control write a column.
- */
+/** The campaign columns this card owns — the rest of the PUT is echoed by the page. */
 export function setupFieldsOf(draft: SetupDraft): Partial<NeuroshillingCampaignUpdate> {
   return {
     targets_raw: draft.targetsRaw,
@@ -82,14 +88,22 @@ export function setupFieldsOf(draft: SetupDraft): Partial<NeuroshillingCampaignU
     messages_per_chat_per_day: draft.messagesPerChatPerDay,
     total_per_account: draft.totalPerAccount,
     reserve_enabled: draft.reserveEnabled,
+    autoresponder: draft.autoresponder,
+    reply_to_humans: draft.replyToHumans,
+    reply_activity: draft.replyActivity,
+    listen_minutes: draft.listenMinutes,
   };
 }
 
 /** How many advanced settings differ from the schema defaults — the collapse's badge.
  *
  * Counts what the operator has CHANGED rather than how many controls the panel
- * holds: a constant would say "5" on a campaign that has never been touched, and
+ * holds: a constant would say "9" on a campaign that has never been touched, and
  * the badge exists to say whether anything is hiding in there.
+ *
+ * `listenMinutes` is deliberately absent: it only means anything once one of the
+ * three switches above it is on, and a campaign that never touched any of them
+ * would otherwise carry a badge for a number nothing reads.
  */
 export function advancedChangeCount(draft: SetupDraft): number {
   return [
@@ -97,5 +111,8 @@ export function advancedChangeCount(draft: SetupDraft): number {
     draft.messagesPerChatPerDay !== 3,
     draft.totalPerAccount !== null,
     draft.reserveEnabled,
+    draft.autoresponder !== 'off',
+    draft.replyToHumans,
+    draft.replyActivity !== 'medium',
   ].filter(Boolean).length;
 }

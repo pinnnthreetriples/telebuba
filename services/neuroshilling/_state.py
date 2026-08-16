@@ -1,4 +1,4 @@
-"""In-memory state: the LLM budget, generation single-flight, and the run fences.
+"""In-memory state: the LLM budgets, generation single-flight, and the run fences.
 
 Shape copied from :mod:`services.neurocomment._discovery_state` — one module of
 synchronous functions, nothing persisted, and the claim taken inside an await-free
@@ -42,6 +42,25 @@ _GENERATING: set[str] = set()
 # of a double click straddle that gap.
 _STARTING: set[str] = set()
 
+# account_id -> the rolling hour of autoreply ATTEMPTS that account has paid for.
+# The budget above bounds the fleet's day; this bounds one account's hour, and the
+# difference is what one hostile chat costs. A busy group hands the poller a full page
+# every thirty seconds, and every message on it that wins the dice is a draft the
+# provider charges for whether or not the gate lets the answer out — so without this
+# a single chat spent the whole day's allowance in minutes and starved every other
+# campaign in the process for twenty-four hours. Counted per ACCOUNT because that is
+# what the operator's "messages per hour" already describes, and the ceiling reused is
+# that same number: an account may not pay for more answers in an hour than it is
+# allowed to publish messages in one.
+_REPLY_ATTEMPTS: dict[str, deque[datetime]] = {}
+_ATTEMPT_WINDOW = timedelta(hours=1)
+
+# Campaigns already told once that their key is missing. A configuration fault is one
+# fact about the campaign, not one fact per observed message, and the alternative was
+# a WARNING row per message a busy chat produced — four figures an hour, in the log
+# the operator has to read to find anything else.
+_KEY_WARNED: set[str] = set()
+
 # campaign_id -> the newest run generation. Bumped by BOTH Start and Stop, and every
 # external call of a run checks it before and after itself, so a coroutine parked in a
 # step delay when Stop was pressed wakes up fenced. A ``status='stopping'`` flip cannot
@@ -81,6 +100,41 @@ def record_llm_call(now: datetime | None = None, *, calls: int = 1) -> None:
     requests and the caller charges that.
     """
     _LLM_CALLS.extend([now or datetime.now(UTC)] * calls)
+
+
+def at_reply_attempt_cap(account_id: str, cap: int, now: datetime | None = None) -> bool:
+    """Has this account paid for ``cap`` autoreply drafts in the last rolling hour?
+
+    Read before the claim and charged by :func:`record_reply_attempt` after it, so
+    what is counted is the ATTEMPT — the thing the provider bills for — and not the
+    published reply the chat log already counts.
+    """
+    moment = now or datetime.now(UTC)
+    attempts = _REPLY_ATTEMPTS.get(account_id)
+    if attempts is None:
+        return False
+    cutoff = moment - _ATTEMPT_WINDOW
+    while attempts and attempts[0] < cutoff:
+        attempts.popleft()
+    return len(attempts) >= cap
+
+
+def record_reply_attempt(account_id: str, now: datetime | None = None) -> None:
+    """Charge one autoreply draft to ``account_id``'s rolling hour."""
+    _REPLY_ATTEMPTS.setdefault(account_id, deque()).append(now or datetime.now(UTC))
+
+
+def first_key_warning(campaign_id: str) -> bool:
+    """True the first time this process refuses ``campaign_id`` for a missing key.
+
+    The refusal is worth exactly one log line: the key is a setting, it does not
+    change between two messages of the same chat, and the operator reading the log is
+    looking for the fault rather than for a count of how often it was met.
+    """
+    if campaign_id in _KEY_WARNED:
+        return False
+    _KEY_WARNED.add(campaign_id)
+    return True
 
 
 def try_start_generation(
@@ -193,6 +247,8 @@ def claim_settlement(campaign_id: str, run_id: str) -> bool:
 
 def reset_for_tests() -> None:
     _LLM_CALLS.clear()
+    _REPLY_ATTEMPTS.clear()
+    _KEY_WARNED.clear()
     _GENERATING.clear()
     _STARTING.clear()
     _RUN_GENERATIONS.clear()

@@ -2246,6 +2246,10 @@ export type NeuroshillingRoleInput = {
  * here rather than derived on the client because the board's roster carries
  * ``state`` but not ``replaced_by_account_id``, and a ban with an empty reserve pool
  * writes the first without the second.
+ *
+ * ``listening`` says the run is reading its target chats as well as writing to
+ * them. Not derivable on the client from the campaign row alone: the three switches
+ * that turn it on are stored, but whether a run is actually in flight is not.
  */
 export type NeuroshillingRunStatus = {
   /**
@@ -2268,6 +2272,18 @@ export type NeuroshillingRunStatus = {
    * Substitutions
    */
   substitutions?: number;
+  /**
+   * Listening
+   */
+  listening?: boolean;
+  /**
+   * Chat Messages Seen
+   */
+  chat_messages_seen?: number;
+  /**
+   * Human Replies Sent
+   */
+  human_replies_sent?: number;
   /**
    * Last Error Type
    */

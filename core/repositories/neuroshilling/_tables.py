@@ -205,3 +205,37 @@ _neuroshilling_messages = Table(
     Index("ix_ns_messages_account_created", "account_id", "created_at"),
     Index("ix_ns_messages_chat_day", "account_id", "target", "created_at"),
 )
+
+
+# Every message the poller has seen in a target chat — the only table in the
+# domain whose ``text`` column is written by strangers. See
+# ``core.migration_steps_neuroshilling_chat`` for what each column means; the two
+# spellings mirror each other for the reason in this module's docstring.
+_neuroshilling_chat_log = Table(
+    "neuroshilling_chat_log",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neuroshilling_campaigns.campaign_id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    Column("target", String, nullable=False),
+    Column("message_id", Integer, nullable=False),
+    # SQLite's INTEGER is already 64-bit, so a BigInteger spelling would only be a
+    # second name for the same affinity and the two schemas have to match exactly.
+    Column("sender_id", Integer, nullable=True),
+    Column("text", String, nullable=False, server_default=text("''")),
+    Column("is_ours", Integer, nullable=False, server_default=text("0")),
+    # A DECISION, not an outcome: set when a message is picked for an answer,
+    # whatever becomes of that answer, so nothing is ever answered twice.
+    Column("replied", Integer, nullable=False, server_default=text("0")),
+    Column("reply_account_id", String, nullable=True),
+    Column("replied_at", String, nullable=True),
+    Column("seen_at", String, nullable=False),
+    # Idempotent re-polling AND the poll cursor: ``MAX(message_id)`` for a
+    # (campaign, target) is a prefix scan of this index, so there is no cursor table.
+    Index("ux_ns_chat_log_msg", "campaign_id", "target", "message_id", unique=True),
+    Index("ix_ns_chat_log_reply", "reply_account_id", "replied_at"),
+)

@@ -454,7 +454,6 @@ export function NeuroshillingPage() {
 
         {campaign === undefined || setup === null || setup.campaignId !== campaignId ? null : (
           <CampaignSetupCard
-            campaign={campaign}
             draft={setup}
             onDraft={setSetup}
             dirty={setupDirty}

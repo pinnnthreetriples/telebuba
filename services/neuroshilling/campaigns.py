@@ -21,8 +21,10 @@ from schemas.neuroshilling import (
 )
 from services import _account_owner
 
-# From the module that owns the flood verdict, so the launch card and the join gate
-# cannot answer "is this account still halted?" out of two different windows.
+# From the modules that own the answers, so the launch card and the engine cannot
+# disagree: one owns "is this account still halted?", the other owns "does this
+# campaign read its target chats?".
+from services.neuroshilling._listen import enabled as listening_enabled
 from services.neuroshilling._telegram import flood_since
 
 if TYPE_CHECKING:
@@ -259,17 +261,25 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
     ``substitutions`` needs its own read because the board's roster carries ``state``
     but not ``replaced_by_account_id``, and those two disagree exactly when the reserve
     pool ran out.
+
+    ``listening`` is the campaign's three switches AND a run being in flight. Either
+    half alone answers the wrong question — the switches are visible on the campaign
+    row already, and a run being live says nothing about whether it reads.
     """
     _roles, steps = await repository.load_scenario(campaign.campaign_id)
     message_steps = sum(1 for step in steps if step.kind == "message")
     sent = (
         0 if campaign.run_id is None else await repository.count_sent_message_steps(campaign.run_id)
     )
+    activity = await repository.count_chat_activity(campaign.campaign_id)
     return NeuroshillingRunStatus(
         status=campaign.status,
         run_id=campaign.run_id,
         sent=sent,
         total=len(parse_targets(campaign.targets_raw)) * message_steps,
+        listening=campaign.status in _LIVE_STATUSES and listening_enabled(campaign),
+        chat_messages_seen=activity.seen,
+        human_replies_sent=activity.replied,
         # Counted over the whole campaign rather than the current run: the roster row a
         # substitution writes is the campaign's, and nothing clears it when a run ends.
         substitutions=await repository.count_substitutions(campaign.campaign_id),
