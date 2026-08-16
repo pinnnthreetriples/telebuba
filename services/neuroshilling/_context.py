@@ -48,8 +48,10 @@ class RunContext(NamedTuple):
     of the role. Keyed by target and holding the accounts Telegram BANNED while acting
     in that target — a logged-out session is not evidence about a chat and is left out
     — it is the evidence ``_steps`` weighs: a single ban is about the account, a second
-    one in the same chat is about the chat, and the chat is abandoned rather than fed
-    another reserve.
+    one in the same chat is about the chat, and the chat is abandoned rather
+    than fed another reserve. It outlives a revive cycle on purpose —
+    ``_revive._cycle_context`` only ``_replace``s the run id, so the dict is shared —
+    because a chat that banned two accounts last cycle bans them this cycle too.
     """
 
     campaign: NeuroshillingCampaign

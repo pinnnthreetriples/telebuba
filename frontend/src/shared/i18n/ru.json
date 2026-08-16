@@ -896,7 +896,8 @@
     "neuroshilling_chat_poll_failed": "Прослушка: не удалось прочитать чат",
     "neuroshilling_human_reply_sent": "Ответ живому человеку отправлен",
     "neuroshilling_human_reply_rejected": "Ответ живому человеку отклонён проверкой",
-    "neuroshilling_human_reply_failed": "Ответ живому человеку не доставлен"
+    "neuroshilling_human_reply_failed": "Ответ живому человеку не доставлен",
+    "neuroshilling_revive_cycle": "Оживление чата: новый цикл"
   },
   "logEventReason": {
     "account_cooling": "аккаунт пережидает лимит Telegram",
@@ -1648,6 +1649,7 @@
       "start": "Запустить",
       "stop": "Остановить",
       "log": "Лог кампании",
+      "sentTotal": "Отправлено: {{sent}}",
       "listening": "Прослушка",
       "chatSeen": "прочитано: {{n}}",
       "humanReplies": "ответов людям: {{n}}"

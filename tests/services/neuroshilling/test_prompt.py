@@ -17,27 +17,17 @@ from schemas.neuroshilling import NeuroshillingChatMessage
 from schemas.neuroshilling_scenario import NeuroshillingReaction
 from services.neuroshilling._prompt import (
     _FENCE_TAG,
+    DialogueAsk,
     build_prompt,
     build_reply_prompt,
     strip_fence_tags,
 )
 
+_ASK = DialogueAsk(persona_count=3, step_count=6)
 
-def _prompt(
-    topic: str,
-    *,
-    persona_count: int = 3,
-    step_count: int = 6,
-    unique_messages: bool = True,
-    complaint: str | None = None,
-) -> str:
-    return build_prompt(
-        topic,
-        persona_count=persona_count,
-        step_count=step_count,
-        unique_messages=unique_messages,
-        complaint=complaint,
-    )
+
+def _prompt(topic: str, ask: DialogueAsk = _ASK, *, complaint: str | None = None) -> str:
+    return build_prompt(topic, ask, complaint=complaint)
 
 
 @pytest.mark.parametrize(
@@ -81,7 +71,7 @@ def test_the_literal_word_json_is_in_the_prompt() -> None:
 
 
 def test_the_prompt_carries_the_shape_and_the_numbers_it_asked_for() -> None:
-    built = _prompt("delivery", persona_count=2, step_count=4)
+    built = _prompt("delivery", DialogueAsk(persona_count=2, step_count=4))
 
     assert "speaker_id" in built
     assert "reply_to_index" in built
@@ -97,14 +87,23 @@ def test_the_reaction_rule_lists_the_emoji_a_step_may_store() -> None:
 
 
 def test_the_variety_rule_is_only_asked_for_when_the_campaign_wants_it() -> None:
-    assert "own vocabulary" in _prompt("delivery", unique_messages=True)
-    assert "own vocabulary" not in _prompt("delivery", unique_messages=False)
+    assert "own vocabulary" in _prompt("delivery", _ASK._replace(unique_messages=True))
+    assert "own vocabulary" not in _prompt("delivery", _ASK._replace(unique_messages=False))
 
 
 def test_a_complaint_is_fed_back_verbatim() -> None:
     built = _prompt("delivery", complaint="steps.0.text: field required")
 
     assert "Your previous answer was rejected: steps.0.text: field required" in built
+
+
+def test_a_revive_brief_forbids_the_product_instead_of_asking_for_restraint() -> None:
+    """That mode plays in a chat the operator owns, so there is nothing being sold."""
+    revive = _prompt("доставка", _ASK._replace(revive=True))
+
+    assert "must not mention, recommend or promote any product" in revive
+    assert "Nobody names the product like an advertisement" not in revive
+    assert "Nobody names the product like an advertisement" in _prompt("доставка")
 
 
 def _chat(text: str, *, is_ours: bool = False, message_id: int = 1) -> NeuroshillingChatMessage:

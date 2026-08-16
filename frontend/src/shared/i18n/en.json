@@ -895,7 +895,8 @@
     "neuroshilling_chat_poll_failed": "Listening: could not read the chat",
     "neuroshilling_human_reply_sent": "Reply to a real person sent",
     "neuroshilling_human_reply_rejected": "Reply to a real person refused by the gate",
-    "neuroshilling_human_reply_failed": "Reply to a real person was not delivered"
+    "neuroshilling_human_reply_failed": "Reply to a real person was not delivered",
+    "neuroshilling_revive_cycle": "Chat revival: new cycle"
   },
   "logEventReason": {
     "account_cooling": "the account is waiting out a Telegram limit",
@@ -1647,6 +1648,7 @@
       "start": "Start",
       "stop": "Stop",
       "log": "Campaign log",
+      "sentTotal": "Sent: {{sent}}",
       "listening": "Listening",
       "chatSeen": "read: {{n}}",
       "humanReplies": "replies to people: {{n}}"

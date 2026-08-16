@@ -262,6 +262,10 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
     but not ``replaced_by_account_id``, and those two disagree exactly when the reserve
     pool ran out.
 
+    ``total`` is zero in ``revive`` mode because that run loops until it is stopped:
+    there is no amount of work it is a fraction of, and a denominator describing one
+    cycle would make a bar that fills up and then keeps going.
+
     ``listening`` is the campaign's three switches AND a run being in flight. Either
     half alone answers the wrong question — the switches are visible on the campaign
     row already, and a run being live says nothing about whether it reads.
@@ -276,7 +280,11 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
         status=campaign.status,
         run_id=campaign.run_id,
         sent=sent,
-        total=len(parse_targets(campaign.targets_raw)) * message_steps,
+        total=(
+            0
+            if campaign.mode == "revive"
+            else len(parse_targets(campaign.targets_raw)) * message_steps
+        ),
         listening=campaign.status in _LIVE_STATUSES and listening_enabled(campaign),
         chat_messages_seen=activity.seen,
         human_replies_sent=activity.replied,

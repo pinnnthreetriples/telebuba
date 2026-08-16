@@ -15,6 +15,7 @@ import pytest
 from core.config import settings
 from schemas.gemini import GeminiResult
 from services.neuroshilling import _generate, _seams, _state
+from services.neuroshilling._prompt import DialogueAsk
 
 if TYPE_CHECKING:
     from schemas.gemini import GeminiRequest
@@ -59,14 +60,18 @@ async def _generate_with(
     **overrides: Any,
 ) -> Any:
     monkeypatch.setattr(_seams, "generate_text_deepseek", gateway)
-    kwargs: dict[str, Any] = {
+    fields: dict[str, Any] = {
         "persona_count": 2,
         "step_count": 2,
         "unique_messages": True,
-        "role_ids": (),
         **overrides,
     }
-    return await _generate.generate_dialogue("delivery", **kwargs)
+    role_ids = fields.pop("role_ids", ())
+    return await _generate.generate_dialogue(
+        "delivery",
+        DialogueAsk(**fields),
+        role_ids=role_ids,
+    )
 
 
 @pytest.mark.asyncio

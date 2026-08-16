@@ -33,6 +33,7 @@ from schemas.telegram_actions import ReadChatMessages, ReadChatMessagesResult
 from schemas.telegram_actions_chat import COPYABLE_MEDIA_KINDS
 from services.content import has_link, is_acceptable
 from services.neuroshilling import _generate, _seams, _state
+from services.neuroshilling._prompt import DialogueAsk
 from services.neuroshilling.campaigns import (
     NeuroshillingConflictError,
     NeuroshillingInvalidError,
@@ -346,9 +347,15 @@ async def _ask(
         async with asyncio.timeout(settings.neuroshilling.llm_deadline_seconds):
             return await _generate.generate_dialogue(
                 campaign.topic,
-                persona_count=request.persona_count,
-                step_count=request.step_count,
-                unique_messages=campaign.unique_messages,
+                DialogueAsk(
+                    persona_count=request.persona_count,
+                    step_count=request.step_count,
+                    unique_messages=campaign.unique_messages,
+                    # A revive campaign is briefed on the same topic but must
+                    # sell nothing in it, so the mode reaches the prompt rather
+                    # than only the engine.
+                    revive=campaign.mode == "revive",
+                ),
                 role_ids=[role.role_id for role in roles],
             )
     except TimeoutError:

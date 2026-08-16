@@ -36,7 +36,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from typing import TYPE_CHECKING, Final, get_args
+from typing import TYPE_CHECKING, Final, NamedTuple, get_args
 
 from core.config import settings
 from schemas.neuroshilling_scenario import NeuroshillingReaction
@@ -157,16 +157,45 @@ def _fenced_line(text: str) -> str:
     return cleaned[: settings.neuroshilling.max_chat_context_chars]
 
 
-def _rules(persona_count: int, step_count: int, *, unique_messages: bool) -> str:
+class DialogueAsk(NamedTuple):
+    """What ONE generation asks for: the dialogue's shape and the framing it sits in.
+
+    One parameter rather than four, because all four travel together everywhere
+    below and the composer was already at this project's argument ceiling. The same
+    reason ``services.neurocomment._llm._Subject`` exists — reaching that ceiling is
+    a fair hint that the arguments wanted a name.
+
+    ``step_count`` is the only field the retry loop rewrites: a truncated answer is
+    re-asked with a shorter dialogue, because re-asking the identical question under
+    the identical token cap runs out of tokens in the identical place.
+    """
+
+    persona_count: int
+    step_count: int
+    unique_messages: bool = True
+    revive: bool = False
+
+
+def _rules(ask: DialogueAsk) -> str:
     variety = (
         "Give every persona its own vocabulary and sentence length; no two lines "
         "may read as written by the same person.\n"
-        if unique_messages
+        if ask.unique_messages
         else ""
     )
+    # A revive campaign runs in the operator's OWN chat to make it look alive, so
+    # there is nothing being sold and the rule says so outright rather than merely
+    # asking for restraint about a product the prompt then never names.
+    subject_rule = (
+        "The conversation must not mention, recommend or promote any product, "
+        "service, channel or link at all — it is small talk and nothing else.\n"
+        if ask.revive
+        else "Nobody names the product like an advertisement, nobody thanks the "
+        "group, and no line contains a link.\n"
+    )
     return (
-        f"Write exactly {persona_count} personas and exactly {step_count} steps.\n"
-        f"speaker_id is 1..{persona_count} and indexes the roles array.\n"
+        f"Write exactly {ask.persona_count} personas and exactly {ask.step_count} steps.\n"
+        f"speaker_id is 1..{ask.persona_count} and indexes the roles array.\n"
         "reply_to_index is the 0-based index of an EARLIER step, or null. It may "
         "never point at this step or a later one.\n"
         "A step is either a reply or a reaction. For a reply set reaction to null "
@@ -175,20 +204,11 @@ def _rules(persona_count: int, step_count: int, *, unique_messages: bool) -> str
         f"{' '.join(get_args(NeuroshillingReaction))} and nothing else. At most one "
         "in four steps may be a reaction.\n"
         f"Every text is at most {_MAX_LINE_CHARS} characters.\n"
-        "Write in the same language the topic is written in.\n"
-        "Nobody names the product like an advertisement, nobody thanks the group, "
-        "and no line contains a link.\n" + variety
+        "Write in the same language the topic is written in.\n" + subject_rule + variety
     )
 
 
-def build_prompt(
-    topic: str,
-    *,
-    persona_count: int,
-    step_count: int,
-    unique_messages: bool,
-    complaint: str | None = None,
-) -> str:
+def build_prompt(topic: str, ask: DialogueAsk, *, complaint: str | None = None) -> str:
     """Compose the generation prompt.
 
     ``complaint`` is what the previous attempt got wrong, fed back verbatim so the
@@ -196,17 +216,26 @@ def build_prompt(
     It is OUR validator's wording — never a provider or third-party exception
     string, which is why it is safe to interpolate.
 
+    ``ask.revive`` swaps the framing and the subject rule: that mode plays in a chat
+    the operator owns, to make it look alive, so the dialogue must sell nothing.
+
     The literal word "json" appears below and must keep appearing: DeepSeek's JSON
     mode is documented as needing it in the prompt.
     """
     fenced = strip_fence_tags(topic).strip() or "(no topic given)"
     retry = "" if complaint is None else f"\nYour previous answer was rejected: {complaint}\n"
+    opening = (
+        "You script a short, natural-sounding conversation that brings a quiet "
+        "Telegram group back to life."
+        if ask.revive
+        else "You script a short, natural-sounding group chat that several "
+        "different people could plausibly have had in a Telegram group."
+    )
     return (
-        "You script a short, natural-sounding group chat that several different "
-        "people could plausibly have had in a Telegram group.\n\n"
+        f"{opening}\n\n"
         "The subject is the operator's own brief, between the <topic> markers:\n"
         f"<topic>\n{fenced}\n</topic>\n\n"
-        f"{_rules(persona_count, step_count, unique_messages=unique_messages)}\n"
+        f"{_rules(ask)}\n"
         "Answer with json and nothing else: no prose before or after it, no code "
         "fence. Two keys, roles and steps, exactly as in this example of the shape "
         f"(not the content):\n{_EXAMPLE}\n"

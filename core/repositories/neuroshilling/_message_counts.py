@@ -31,6 +31,7 @@ from core.db import _get_engine
 from core.repositories.neuroshilling._tables import (
     _neuroshilling_messages,
     _neuroshilling_steps,
+    run_scope,
 )
 from schemas.neuroshilling import NeuroshillingQuotaUsage
 
@@ -155,7 +156,7 @@ def _count_sent_message_steps(run_id: str) -> int:
     statement = (
         select(func.count())
         .select_from(_MESSAGE_ROWS)
-        .where((_TABLE.c.run_id == run_id) & (_TABLE.c.status == "sent") & _IS_MESSAGE)
+        .where(run_scope(run_id) & (_TABLE.c.status == "sent") & _IS_MESSAGE)
     )
     with _get_engine().connect() as connection:
         return int(connection.execute(statement).scalar_one())
@@ -167,5 +168,9 @@ async def count_sent_message_steps(run_id: str) -> int:
     Reactions are journalled like everything else but excluded here, because the
     denominator is targets x message steps — counting a reaction in one and not the
     other is how a progress bar ends up past its own total.
+
+    ``run_scope`` folds a revive campaign's per-cycle keys in, so its counter keeps
+    climbing across cycles instead of resetting to zero every time round. That run
+    has no denominator to be measured against — the card shows the count itself.
     """
     return await asyncio.to_thread(_count_sent_message_steps, run_id)

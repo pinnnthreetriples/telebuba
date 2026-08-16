@@ -194,6 +194,20 @@ test('progress counts delivered MESSAGE steps against targets x message steps', 
   expect(bar).toHaveAttribute('aria-valuemax', '4');
 });
 
+test('a revive run shows a counter instead of a bar', () => {
+  // It loops until it is stopped, so the server sends no total and there is
+  // nothing for a percentage to be a percentage OF.
+  renderCard({
+    campaign: { ...CAMPAIGN, mode: 'revive' },
+    run: { status: 'running', sent: 7, total: 0 },
+  });
+
+  expect(screen.getByText('Отправлено: 7')).toBeInTheDocument();
+  expect(
+    screen.queryByRole('progressbar', { name: 'Прогресс прогона: отправленные реплики' }),
+  ).toBeNull();
+});
+
 test('the listening counters appear only while a run is really reading', () => {
   // The three switches are on the campaign row already; what the operator cannot
   // see from there is whether anything is acting on them right now.

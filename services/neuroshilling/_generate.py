@@ -46,7 +46,7 @@ from schemas.neuroshilling_scenario import (
     NeuroshillingStepInput,
 )
 from services.neuroshilling import _seams, _state
-from services.neuroshilling._prompt import build_prompt
+from services.neuroshilling._prompt import DialogueAsk, build_prompt
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -189,10 +189,8 @@ def _request(prompt: str) -> GeminiRequest:
 
 async def generate_dialogue(
     topic: str,
+    ask: DialogueAsk,
     *,
-    persona_count: int,
-    step_count: int,
-    unique_messages: bool,
     role_ids: Sequence[str],
 ) -> NeuroshillingScenarioUpdate | None:
     """Ask for a dialogue, up to ``llm_max_attempts`` times. ``None`` = nothing usable.
@@ -200,11 +198,14 @@ async def generate_dialogue(
     ``None`` covers an unset key, an exhausted retry budget and a budget that ran
     out mid-loop: the caller answers 503 for all of them, because in every case no
     dialogue exists and the operator's next move is the same.
+
+    ``ask.revive`` reaches the prompt and nothing else here: it swaps the framing
+    and forbids the dialogue from naming any product, because that mode plays in a
+    chat the operator owns to make it look alive rather than to sell anything.
     """
     if not settings.deepseek.api_key:
         return None
     complaint: str | None = None
-    ask = step_count
     for _attempt in range(settings.neuroshilling.llm_max_attempts):
         if _state.at_daily_llm_cap():
             # Re-read every pass rather than trusted from the door: the claim in
@@ -212,13 +213,7 @@ async def generate_dialogue(
             # against it, so two campaigns clicked together at cap-1 both pass —
             # and a long retry chain can cross the line by itself.
             break
-        prompt = build_prompt(
-            topic,
-            persona_count=persona_count,
-            step_count=ask,
-            unique_messages=unique_messages,
-            complaint=complaint,
-        )
+        prompt = build_prompt(topic, ask, complaint=complaint)
         # One attempt is ``max_retries + 1`` HTTP requests: ``core.openai`` retries a
         # transient failure INSIDE the call, and charging one would undercount a
         # maxed-out configuration six-fold. Charged at the worst case, before the
@@ -230,9 +225,10 @@ async def generate_dialogue(
             # Re-asking the identical question under the identical token cap runs
             # out of tokens in exactly the same place. Shrinking the ask is the only
             # thing that changes the answer, so the retry is worth paying for.
-            ask, complaint = max(_MIN_STEPS, ask // 2), _CUT_OFF_COMPLAINT
+            ask = ask._replace(step_count=max(_MIN_STEPS, ask.step_count // 2))
+            complaint = _CUT_OFF_COMPLAINT
             continue
-        draft, complaint = _read(result, persona_count)
+        draft, complaint = _read(result, ask.persona_count)
         if draft is not None:
             return _to_update(draft, role_ids)
     return None

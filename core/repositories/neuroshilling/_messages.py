@@ -32,7 +32,7 @@ from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
-from core.repositories.neuroshilling._tables import _neuroshilling_messages
+from core.repositories.neuroshilling._tables import _neuroshilling_messages, run_scope
 
 if TYPE_CHECKING:
     from schemas.neuroshilling import NeuroshillingMessageStatus, NeuroshillingStepKey
@@ -202,7 +202,7 @@ async def list_journalled_steps(run_id: str) -> set[tuple[str, str]]:
 def _fail_pending_messages(run_id: str) -> int:
     statement = (
         update(_TABLE)
-        .where((_TABLE.c.run_id == run_id) & (_TABLE.c.status == "pending"))
+        .where(run_scope(run_id) & (_TABLE.c.status == "pending"))
         .values(status="failed", error_type=_INTERRUPTED)
     )
     with _get_engine().begin() as connection:
@@ -215,6 +215,11 @@ async def fail_pending_messages(run_id: str) -> int:
     Updated rather than deleted, and that is the entire point: a ``pending`` row is
     either a dispatch that never finished or one whose outcome is unknown, and both
     must go on occupying their key so the resumed run does not play the step again.
+
+    Scoped with ``run_scope``, so a revive campaign's per-cycle keys are swept too.
+    Matching the plain id alone left every interrupted cycle ``pending`` for ever,
+    and a ``pending`` row counts against the account's quota until something settles
+    it — a campaign that loops all day would have throttled itself to a stop.
     """
     return await asyncio.to_thread(_fail_pending_messages, run_id)
 

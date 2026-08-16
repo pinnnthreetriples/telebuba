@@ -20,8 +20,13 @@ Resuming is the same code path: the run is handed the STORED ``run_id``, reads w
 on resume would face an empty unique index and replay the whole dialogue into chats
 that already have it.
 
-Reading the chat is part of acting in it. When the campaign asks for it, the target
-is polled after the last line for ``listen_minutes`` — the pass is sequential, so that
+**Two modes leave this module by different doors.** A ``campaign`` walks the target
+list once and finishes; a ``revive`` plays one chat the operator owns round and round
+until it is stopped, and ``_revive`` owns that shape. Both share ``_enter`` and
+``_act``, which is why those two are separated at all.
+
+Reading the chat is part of acting in it. When the campaign asks for it, ``_act`` polls
+the target after the last line for ``listen_minutes`` — the pass is sequential, so that
 window is paid per target and a long one on a long list is a long run.
 """
 
@@ -34,7 +39,7 @@ from core.logging import log_event
 from core.repositories import neuroshilling as repository
 from core.repositories.accounts import list_accounts_by_ids
 from services import pacing
-from services.neuroshilling import _listen, _seams, _steps, _telegram
+from services.neuroshilling import _listen, _revive, _seams, _steps, _telegram
 from services.neuroshilling._context import RunContext
 from services.neuroshilling.campaigns import parse_targets
 
@@ -55,12 +60,19 @@ async def run_campaign(campaign_id: str, run_id: str) -> None:
         # Vacuously "everyone is halted" otherwise, which returned a run that had done
         # nothing and settled it ``done`` without a line anywhere. A roster edited
         # between two runs reaches here: the launch gate checks the roles, and a resumed
-        # run never passes through it.
+        # run never passes through it. Read before the mode split, because a revive
+        # with nobody in its cast is the same silence on a loop.
         await log_event(
             "WARNING",
             "neuroshilling_no_speakers",
             extra={"campaign_id": campaign_id},
         )
+    if context.campaign.mode == "revive":
+        # A different shape entirely: no joins, no target list to get through, no
+        # end. ``played`` is not consulted — a revive cycle is meant to say the
+        # same lines again, and each one journals under a key of its own.
+        await _revive.run(context, targets, _enter, _act)
+        return
     entered = False
     for target in targets:
         pending = [step for step in context.steps if (target, step.step_id) not in played]
@@ -132,12 +144,7 @@ async def _play_target(
     target: str,
     steps: Sequence[NeuroshillingStep],
 ) -> None:
-    """Get the cast into one chat, act the dialogue out, then read what it said back.
-
-    The listening window comes last and only when the campaign asked for it; on a
-    campaign that did not, ``_listen.listen`` returns without a single request and
-    the target ends the moment its last line lands.
-    """
+    """Get the cast into one chat and act the dialogue out in it."""
     chats = await _enter(context, target)
     if not chats:
         await log_event(
@@ -146,6 +153,24 @@ async def _play_target(
             extra={"campaign_id": context.campaign.campaign_id, "target": target},
         )
         return
+    await _act(context, target, steps, chats)
+
+
+async def _act(
+    context: RunContext,
+    target: str,
+    steps: Sequence[NeuroshillingStep],
+    chats: dict[str, int],
+) -> None:
+    """Settle in, say the lines, then read what the room said back.
+
+    Split from :func:`_play_target` because a revive cycle acts in a chat it entered
+    once, several cycles ago, so "get in" and "act" cannot be one step there.
+
+    The listening window comes last and only when the campaign asked for it; on a
+    campaign that did not, ``_listen.listen`` returns without a single request and
+    the target ends the moment its last line lands.
+    """
     await _seams.sleep(_telegram.settle_pause())
     for step in steps:
         if not await _steps.play_step(context, target, step, chats):
@@ -163,20 +188,27 @@ async def _enter(context: RunContext, target: str) -> dict[str, int]:
     Sequential rather than gathered: a volley of joins from one fleet at one chat is
     the shape Telegram freezes accounts over, and ``_telegram.join_target`` paces each
     of them through the join slot anyway.
+
+    A ``revive`` campaign skips the join half outright. Its one chat belongs to the
+    operator and the accounts are already in it, so a join would spend the shared
+    daily budget — the same counter neurocomment's onboarding draws on — on a request
+    that can only answer ``already_participant``.
     """
     campaign_id = context.campaign.campaign_id
+    joining = context.campaign.mode != "revive"
     chats: dict[str, int] = {}
     for account_id in _speakers(context):
         if account_id in context.halted:
             continue
-        state = await _telegram.join_target(campaign_id, account_id, target)
-        if state in _telegram.ACCOUNT_HALTED:
-            # An account verdict, not this target's: it plays nothing for the rest of
-            # the run, and ``_telegram`` has already written that across its presence.
-            context.halted.add(account_id)
-            continue
-        if state != "joined":
-            continue
+        if joining:
+            state = await _telegram.join_target(campaign_id, account_id, target)
+            if state in _telegram.ACCOUNT_HALTED:
+                # An account verdict, not this target's: it plays nothing for the rest
+                # of the run, and ``_telegram`` has written that across its presence.
+                context.halted.add(account_id)
+                continue
+            if state != "joined":
+                continue
         resolved = await _telegram.resolve_target(campaign_id, account_id, target)
         if resolved is not None:
             chats[account_id] = resolved.chat_id
