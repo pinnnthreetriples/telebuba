@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -280,12 +280,33 @@ test('the campaign fields of the brief are editable and switch together', async 
   expect(screen.getByLabelText('Тема')).toHaveValue('про сервис доставки!');
 });
 
-test('the media slot offers every step by position', async () => {
+test('the media slot offers a message step by position', async () => {
   renderCard();
 
   await userEvent.type(screen.getByLabelText('Ссылка на сообщение с медиа'), 'https://t.me/c/1');
   await userEvent.selectOptions(screen.getByLabelText('Шаг с медиа'), '2');
   expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('2');
+});
+
+test('the media slot skips a reaction step without renumbering the rest', async () => {
+  renderCard({
+    draft: {
+      ...DRAFT,
+      steps: [step('s1'), step('s2', { kind: 'reaction', emoji: '🔥' }), step('s3')],
+    },
+  });
+
+  await userEvent.type(screen.getByLabelText('Ссылка на сообщение с медиа'), 'https://t.me/c/1');
+
+  // The media rides along with the step's own send, so a reaction has nothing to
+  // carry it and position 2 is not offered — the same filter the reaction target
+  // picker applies. The third step stays "#3": a position is an index into the
+  // whole list, so filtering must not renumber what is left.
+  const options = within(screen.getByLabelText('Шаг с медиа')).getAllByRole('option');
+  expect(options.map((option) => option.textContent)).toEqual(['Без медиа', '#1', '#3']);
+
+  await userEvent.selectOptions(screen.getByLabelText('Шаг с медиа'), '3');
+  expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('3');
 });
 
 test('an empty scenario says so rather than showing an empty list', () => {

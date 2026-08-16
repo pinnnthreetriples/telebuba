@@ -59,10 +59,13 @@ _MEDIA_UNREACHABLE: NeuroshillingRefusalCode = "media_source_unreachable"
 _MEDIA_CHECK_UNAVAILABLE: NeuroshillingRefusalCode = "media_check_unavailable"
 # The approval problems specific enough to name on the wire. Everything else answers
 # ``scenario_invalid``: the page holds the same roles and steps and can point at the
-# offending row itself, whereas a refused LINE is not visibly wrong at all.
+# offending row itself, whereas a refused LINE is not visibly wrong at all — and a
+# media slot aimed at a reaction is a scenario whose every row is legal, so "check
+# the roles, steps and delays" would point away from the one field that is wrong.
 _PROBLEM_CODES: dict[str, NeuroshillingRefusalCode] = {
     "text_has_link": "scenario_text_has_link",
     "text_forbidden_word": "scenario_text_forbidden_word",
+    "media_step_not_message": "media_step_not_message",
 }
 # Read kinds that say nothing about what the account can SEE. A flood is Telegram
 # pacing us and an ``unavailable`` is our own socket; both are over in minutes, and
@@ -181,7 +184,7 @@ def _approval_problem(
         return "no_message_step"
     if any(step.role_id is None for step in steps):
         return "step_without_role"
-    return _text_problem(steps) or _media_problem(campaign, len(steps))
+    return _text_problem(steps) or _media_problem(campaign, steps)
 
 
 def _text_problem(steps: Sequence[NeuroshillingStep]) -> str | None:
@@ -206,17 +209,35 @@ def _text_problem(steps: Sequence[NeuroshillingStep]) -> str | None:
     return None
 
 
-def _media_problem(campaign: NeuroshillingCampaign, step_count: int) -> str | None:
-    """The media slot must name a step that exists, or name nothing at all.
+def _media_problem(
+    campaign: NeuroshillingCampaign,
+    steps: Sequence[NeuroshillingStep],
+) -> str | None:
+    """The media slot must name a MESSAGE step that exists, or name nothing at all.
+
+    The media travels as the message step's own send — ``_dispatch.media_source`` is
+    consulted only where a MESSAGE goes out: ``_steps._play_message``, and the replay
+    a stand-in makes of one. A reaction step under the slot therefore posts no media
+    and logs nothing while doing it, so the run reaches ``done`` with the media never
+    sent and no trace of why.
+
+    The slot reaches a reaction without anyone choosing one: the card's picker offers
+    message steps only, but :func:`generate_scenario` replaces every step and leaves
+    the slot on the position it already held, so a position that named a message can
+    come back naming a reaction. The field is also writable by any API client.
 
     Whether the accounts playing that step can actually SEE the source message is
-    a Telegram question and belongs to the stage that adds the read; this is the
-    half that can be answered from the rows alone.
+    a Telegram question, answered by :func:`_refuse_unreachable_media` against live
+    reads; this is the half that can be answered from the rows alone, so it runs
+    first and a slot pointing at a reaction costs no reads to refuse.
     """
+    position = campaign.media_step_position
     if campaign.media_message_link:
-        if campaign.media_step_position is None or campaign.media_step_position > step_count:
+        if position is None or position > len(steps):
             return "media_step_missing"
-    elif campaign.media_step_position is not None:
+        if steps[position - 1].kind != "message":
+            return "media_step_not_message"
+    elif position is not None:
         return "media_step_without_link"
     return None
 

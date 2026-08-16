@@ -37,15 +37,19 @@ if TYPE_CHECKING:
 _LINK = "https://t.me/c/1234567890/42"
 
 
-async def _campaign_with_media(**fields: Any) -> NeuroshillingCampaign:
-    """A one-step campaign whose only role is played by ``acc-1``."""
+async def _campaign_with_media(
+    *,
+    steps: list[NeuroshillingStepInput] | None = None,
+    **fields: Any,
+) -> NeuroshillingCampaign:
+    """A campaign whose only role is played by ``acc-1``. One message step by default."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     campaign = await repository.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     stored_scenario = await ns_service.set_scenario(
         campaign.campaign_id,
         NeuroshillingScenarioUpdate(
             roles=[NeuroshillingRoleInput(role_id="a", name="Skeptic")],
-            steps=[NeuroshillingStepInput(role_id="a", text="look")],
+            steps=steps or [NeuroshillingStepInput(role_id="a", text="look")],
         ),
     )
     assert stored_scenario is not None
@@ -188,6 +192,59 @@ async def test_a_campaign_without_media_never_touches_telegram(
     approved = await ns_service.approve_scenario(campaign.campaign_id)
 
     assert approved is not None
+    assert reader.calls == []
+
+
+def _reaction_at_step_two() -> list[NeuroshillingStepInput]:
+    """A message, then a reaction aimed at it — the media slot will name the reaction."""
+    return [
+        NeuroshillingStepInput(role_id="a", text="look"),
+        NeuroshillingStepInput(role_id="a", kind="reaction", target_position=1, emoji="🔥"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_media_pinned_to_a_reaction_step_refuses_the_approval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reaction cannot carry the media, and the run does not say so.
+
+    ``_dispatch.media_source`` is consulted only where a MESSAGE goes out, so a slot
+    aimed at a reaction posts no media and writes no log line while not posting it —
+    the campaign reaches ``done`` and the operator is left with nothing to read. The
+    card's picker now offers message steps only, so the state this refuses is the one
+    nobody chose: a generation that replaced the steps under a slot still pointing at
+    position 2.
+    """
+    campaign = await _campaign_with_media(steps=_reaction_at_step_two(), media_step_position=2)
+    monkeypatch.setattr(_seams, "execute_read", _read(_visible("photo")))
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError) as refusal:
+        await ns_service.approve_scenario(campaign.campaign_id)
+
+    assert refusal.value.code == "media_step_not_message"
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+    assert stored is not None
+    assert stored.scenario_status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_the_step_kind_is_judged_before_telegram_is_asked_anything(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rows answer this one, so it must not cost a live read per account.
+
+    ``_refuse_unreachable_media`` spends one Telegram read for every active account
+    of the media step's role. A slot that is wrong on the rows alone is refused by
+    ``_approval_problem`` first, which is what keeps those reads unspent.
+    """
+    campaign = await _campaign_with_media(steps=_reaction_at_step_two(), media_step_position=2)
+    reader = _read(_visible("photo"))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError):
+        await ns_service.approve_scenario(campaign.campaign_id)
+
     assert reader.calls == []
 
 
