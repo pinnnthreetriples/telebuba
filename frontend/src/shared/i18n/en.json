@@ -1687,7 +1687,7 @@
       },
       "regenerate": {
         "title": "Generate a new dialogue?",
-        "body": "The model writes a fresh dialogue and it replaces the stored one — every role, every step and every edit made by hand. This cannot be undone.",
+        "body": "The model writes a fresh dialogue and it replaces the stored one — every role, every step and every edit made by hand. The chosen media step is let go too: the lines will be different ones, and the old step number would point at the wrong line. This cannot be undone.",
         "confirm": "Generate",
         "cancel": "Cancel"
       },
