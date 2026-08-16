@@ -40,6 +40,26 @@ class NeuroshillingSettings(BaseSettings):
     # ``services.pacing``. Independent of the per-step delays, which are a
     # property of the dialogue rather than of the account.
     send_min_gap_seconds: float = Field(default=30.0, ge=0.0)
+    # How long an account sits in a chat it has just entered before it says anything.
+    # Separate from the step delays, which describe the DIALOGUE's rhythm and are the
+    # operator's to shorten; this one describes joining a room and immediately
+    # broadcasting, which is the single most reportable thing the engine does. Hence a
+    # floor that no configuration can take to zero — unlike every other delay here.
+    post_join_settle_min_seconds: float = Field(default=45.0, ge=10.0)
+    post_join_settle_max_seconds: float = Field(default=120.0, ge=10.0)
+    # How long a recorded flood keeps an account out of neuroshilling, measured from
+    # the moment it was written. The presence row carries no expiry of its own — it has
+    # ``updated_at`` and nothing else — so the window is a fixed cooldown rather than
+    # Telegram's own timer, which means an account that is still inside a longer wait
+    # simply earns a fresh ``flooded`` row on its next attempt. Without a window at all
+    # a thirty-second FloodWait retired the account from every campaign for good:
+    # nothing ever wrote the verdict back.
+    flood_cooldown_seconds: float = Field(default=3600.0, ge=0.0)
+    # How long Stop waits for a cancelled run to unwind before it writes the terminal
+    # row itself. Bounded because the operator's button must answer either way: the
+    # generation fence has already stopped the run from publishing anything more, so a
+    # slow unwind is a reporting delay rather than an unsafe one.
+    stop_drain_seconds: float = Field(default=20.0, gt=0.0)
     # Same clipped log-normal shape warming draws its human pauses from.
     delay_lognorm_mu: float = -0.8
     delay_lognorm_sigma: float = Field(default=0.6, gt=0.0)
@@ -74,6 +94,9 @@ class NeuroshillingSettings(BaseSettings):
     def _check_delay_bounds(self) -> NeuroshillingSettings:
         if self.join_delay_min_seconds > self.join_delay_max_seconds:
             msg = "join_delay_min_seconds must not exceed join_delay_max_seconds"
+            raise ValueError(msg)
+        if self.post_join_settle_min_seconds > self.post_join_settle_max_seconds:
+            msg = "post_join_settle_min_seconds must not exceed post_join_settle_max_seconds"
             raise ValueError(msg)
         if self.poll_min_seconds > self.poll_max_seconds:
             msg = "poll_min_seconds must not exceed poll_max_seconds"

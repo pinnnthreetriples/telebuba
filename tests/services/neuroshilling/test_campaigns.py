@@ -12,6 +12,7 @@ from sqlalchemy import update as sql_update
 from core.config import settings
 from core.db import _get_engine, _now_iso, create_account, upsert_warming_state
 from core.repositories.neuroshilling import create_campaign as repo_create_campaign
+from core.repositories.neuroshilling import record_presence
 from core.repositories.neuroshilling._tables import (
     _neuroshilling_campaigns,
     _neuroshilling_roles,
@@ -402,3 +403,33 @@ async def test_the_registry_overrules_the_durable_rows() -> None:
 
     assert board is not None
     assert [item.busy_owner for item in board.available] == ["neuroshilling"]
+
+
+@pytest.mark.asyncio
+async def test_the_launch_card_reports_a_halt_another_campaign_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The card and the join gate must answer out of the same rows and the same window.
+
+    A flood is a verdict on the ACCOUNT and binds every campaign that account is on,
+    so a card reading only its own presence rows stayed quiet about exactly the
+    accounts its next run would refuse to play. An expired flood binds neither.
+    """
+    await _account("acc-1")
+    elsewhere = await repo_create_campaign(NeuroshillingCampaignCreate(name="Other"))
+    mine = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
+    await campaigns.update_campaign(
+        mine.campaign_id,
+        _update(name="Mine", accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+    )
+    await record_presence(elsewhere.campaign_id, "acc-1", "@a", "flooded")
+
+    status = await campaigns.run_status(mine.campaign_id)
+
+    assert status is not None
+    assert status.halted_accounts == ["acc-1"]
+    # A cooldown of zero puts the cutoff at "now", which every stored row predates.
+    monkeypatch.setattr(settings.neuroshilling, "flood_cooldown_seconds", 0.0)
+    expired = await campaigns.run_status(mine.campaign_id)
+    assert expired is not None
+    assert expired.halted_accounts == []

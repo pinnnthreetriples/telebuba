@@ -277,6 +277,9 @@ import type {
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
+  StartNeuroshillingCampaignData,
+  StartNeuroshillingCampaignErrors,
+  StartNeuroshillingCampaignResponses,
   StartPhoneLoginData,
   StartPhoneLoginErrors,
   StartPhoneLoginResponses,
@@ -286,6 +289,9 @@ import type {
   StopNeurocommentData,
   StopNeurocommentErrors,
   StopNeurocommentResponses,
+  StopNeuroshillingCampaignData,
+  StopNeuroshillingCampaignErrors,
+  StopNeuroshillingCampaignResponses,
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
@@ -2044,3 +2050,49 @@ export const approveNeuroshillingScenario = <ThrowOnError extends boolean = fals
     ApproveNeuroshillingScenarioErrors,
     ThrowOnError
   >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/approve', ...options });
+
+/**
+ * Start Campaign
+ *
+ * Begin playing the approved dialogue into the campaign's targets.
+ *
+ * 409 covers every reason a run cannot begin: the scenario is still a draft, the
+ * roster is short or leaves a role unstaffed, there are no targets, an account is
+ * held by another feature, the campaign is already running, or ``run_mode`` is
+ * ``parallel`` — which this build refuses on the server rather than merely hiding,
+ * because the generated client types the field.
+ */
+export const startNeuroshillingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<StartNeuroshillingCampaignData, ThrowOnError>,
+): RequestResult<
+  StartNeuroshillingCampaignResponses,
+  StartNeuroshillingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StartNeuroshillingCampaignResponses,
+    StartNeuroshillingCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/start', ...options });
+
+/**
+ * Stop Campaign
+ *
+ * Fence the run, cancel it, and answer with where it ended up.
+ *
+ * Idempotent: stopping a campaign that is already idle answers its current status
+ * rather than a conflict. By the time a click lands the run may have finished a
+ * second ago, and "conflict" is noise rather than information about that.
+ */
+export const stopNeuroshillingCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<StopNeuroshillingCampaignData, ThrowOnError>,
+): RequestResult<
+  StopNeuroshillingCampaignResponses,
+  StopNeuroshillingCampaignErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).post<
+    StopNeuroshillingCampaignResponses,
+    StopNeuroshillingCampaignErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/stop', ...options });

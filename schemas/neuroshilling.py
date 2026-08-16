@@ -47,6 +47,15 @@ NeuroshillingPresenceState = Literal[
 ]
 # Who is holding an account right now, as the accounts modal reports it.
 NeuroshillingBusyOwner = Literal["warming", "neuroshilling", "neurocomment"]
+# One row of the send journal. ``pending`` is written BEFORE the dispatch and is the
+# only state that consumes a quota slot without anything having been published yet —
+# which is exactly why the quota predicate counts it. A row left ``pending`` after the
+# dispatch returned means the request was already on the wire when the connection died
+# and Telegram may have applied it, so it is never retried, and nothing the run does
+# deletes it. Shortening the scenario does: ``_scenario._drop_steps_beyond`` removes the
+# journal rows of steps that no longer exist, which a live run cannot reach because
+# every scenario write is refused while the campaign is running.
+NeuroshillingMessageStatus = Literal["pending", "sent", "failed", "skipped"]
 
 NeuroshillingRefusalCode = Literal[
     "campaign_running",
@@ -59,6 +68,12 @@ NeuroshillingRefusalCode = Literal[
     "run_mode_not_supported",
     "scenario_not_approved",
     "scenario_invalid",
+    # The two halves of the outbound content filter, named apart because the operator's
+    # edit differs: one line carries a link, the other carries a word the configured
+    # list forbids. Folded into ``scenario_invalid`` they would send the operator
+    # hunting through roles and delays for a fault that is in the text.
+    "scenario_text_has_link",
+    "scenario_text_forbidden_word",
     "llm_daily_limit_reached",
     "llm_unavailable",
     "generation_in_progress",
@@ -248,18 +263,76 @@ class NeuroshillingBoardAccount(BaseModel):
     busy_campaign_name: str | None = None
 
 
+class NeuroshillingStepKey(BaseModel):
+    """The journal's unique key: ONE step of ONE target in ONE run.
+
+    A model rather than three loose arguments, because the triple IS the unique index
+    and every lookup that drops a part of it goes silently wrong rather than failing.
+    Aiming a reply by ``step_id`` alone is the example that matters: the link belongs
+    to the campaign and the message id belongs to one send into one chat, so the
+    dialogue in target two would answer target one's messages.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    run_id: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+    step_id: str = Field(min_length=1)
+
+
+class NeuroshillingQuotaUsage(BaseModel):
+    """What one account has already spent, against the campaign's three ceilings.
+
+    Read as one object because the three counts are always asked together, inside the
+    account's quota lock, and they are only meaningful as a set.
+    """
+
+    # Rolling hour, whole history of the account — Telegram limits the account, and a
+    # fresh run is not a fresh account.
+    hour: int = Field(default=0, ge=0)
+    # Rolling day, for THIS chat.
+    chat_day: int = Field(default=0, ge=0)
+    # Lifetime, for this campaign.
+    campaign_total: int = Field(default=0, ge=0)
+
+
+class NeuroshillingRunStatus(BaseModel):
+    """What the launch card shows: where the run is and how far it has got.
+
+    ``sent`` counts delivered MESSAGE steps of the current run and ``total`` is
+    targets x message steps. Reactions are journalled but counted in neither, because
+    a skipped reaction is not lost progress.
+
+    ``halted_accounts`` are the accounts Telegram has taken out of the run — a flood
+    wait, a peer flood, or the 500-chat ceiling. They are read back from the durable
+    presence rows rather than from a run-local set, so a restart does not forget them.
+    """
+
+    status: NeuroshillingStatus = "idle"
+    run_id: str | None = None
+    sent: int = Field(default=0, ge=0)
+    total: int = Field(default=0, ge=0)
+    # Exception CLASS NAME of whatever ended the last run, never its text.
+    last_error_type: str | None = None
+    halted_accounts: list[str] = Field(default_factory=list)
+
+
 class NeuroshillingBoard(BaseModel):
     """One composite read backing the whole page.
 
     The account pool is ONE list, not a pool plus its rostered subset: the two
-    carried the same objects and left the client joining them by id. It also
-    carries no derived counters (role/step/account/target counts, dialogue length
-    estimates) and no run block: every one of those is an ``arr.length``, a
-    ``reduce``, or a field of ``campaign`` already in this same payload, and a
-    second copy could only drift from the first.
+    carried the same objects and left the client joining them by id. It carries no
+    derived counters either (role/step/account/target counts, dialogue length
+    estimates): every one of those is an ``arr.length``, a ``reduce``, or a field of
+    ``campaign`` already in this same payload, and a second copy could only drift.
+
+    ``run`` is the exception and is here because it is NOT derivable: how many steps
+    actually reached their chats and which accounts Telegram has halted are answers
+    only the journal and the presence table hold.
     """
 
     campaign: NeuroshillingCampaign
     available: list[NeuroshillingBoardAccount] = Field(default_factory=list)
     # ``targets_raw`` parsed and normalised, in traversal order.
     targets: list[str] = Field(default_factory=list)
+    run: NeuroshillingRunStatus = Field(default_factory=NeuroshillingRunStatus)

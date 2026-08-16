@@ -526,6 +526,8 @@
       "run_mode_not_supported": "Parallel runs are not available yet.",
       "scenario_not_approved": "Approve the scenario before starting the campaign.",
       "scenario_invalid": "The scenario is incomplete. Check the roles, steps and delays.",
+      "scenario_text_has_link": "A step contains a link, which the outbound content filter blocks. Remove it and approve again.",
+      "scenario_text_forbidden_word": "A step uses a word the outbound content filter forbids. Reword it and approve again.",
       "llm_daily_limit_reached": "The daily generation limit has been reached. Try again tomorrow.",
       "llm_unavailable": "The text provider did not return a usable answer. Try again.",
       "generation_in_progress": "A generation is already running for this campaign.",
@@ -607,6 +609,13 @@
         "desc": "Allow accounts to message each other"
       }
     }
+  },
+  "logTerminal": {
+    "empty": "No events yet",
+    "clear": "Clear log",
+    "filterByAccount": "This account only",
+    "filteredBy": "{{name}} only ×",
+    "showAll": "Show all"
   },
   "logs": {
     "title": "Logs",
@@ -693,6 +702,23 @@
     "neuroshilling_media_unreachable": "Some accounts cannot see the linked media message",
     "neuroshilling_resolve_failed": "The account cannot reach the target chat",
     "neuroshilling_target_unusable": "The target is a basic group or a private chat",
+    "neuroshilling_run_started": "The campaign has started",
+    "neuroshilling_run_resumed": "The campaign resumed after a restart and skipped what it had already posted",
+    "neuroshilling_run_stopped": "The campaign has finished",
+    "neuroshilling_run_failed": "The campaign stopped with an error",
+    "neuroshilling_message_sent": "A dialogue line was posted",
+    "neuroshilling_message_failed": "A dialogue line was not posted",
+    "neuroshilling_message_unconfirmed": "The connection died mid-send: the line will not be repeated, because Telegram may already have it",
+    "neuroshilling_step_skipped_quota": "The step was skipped: the account has reached a limit",
+    "neuroshilling_step_skipped_slow_mode": "The step was skipped: the chat is in slow mode",
+    "neuroshilling_step_skipped_reaction": "The reaction was skipped: there is no message to place it on",
+    "neuroshilling_text_rejected": "The text was refused by the outbound content filter",
+    "neuroshilling_text_duplicate": "The text has already been posted in this chat",
+    "neuroshilling_reply_anchor_lost": "The line was posted without a reply: the message it answers never got through",
+    "neuroshilling_account_halted": "The account is out of this run: Telegram refused it",
+    "neuroshilling_role_exhausted": "The role has no account left that can post here",
+    "neuroshilling_no_speakers": "No account on the roster has a role with a line to say",
+    "neuroshilling_target_failed": "The target was skipped",
     "neurocomment_listener_access_lost": "Listener lost access to channel, will re-join",
     "neurocomment_listener_access_lost_untracked": "The listener fell out of a channel and will not return on its own — the app needs a restart",
     "neurocomment_listener_rejoin_exhausted": "Listener gave up re-joining channel",
@@ -879,6 +905,7 @@
     "busy_neuroshilling": "the account is held by a running neuroshilling campaign",
     "quota_hour": "per-account hourly limit reached",
     "quota_day": "per-channel daily limit reached",
+    "quota_total": "the account has used up its whole allowance for this campaign",
     "cooldown": "account paused",
     "not_ready": "the account is not cleared for this channel: not admitted to the chat, skipped by the operator, or banned",
     "unhealthy": "the account is not warmed up, or its Trust-score is below the threshold",
@@ -1068,12 +1095,7 @@
       "errors": "errors"
     },
     "log": {
-      "title": "Event log",
-      "empty": "No events yet",
-      "clear": "Clear log",
-      "filterByAccount": "This account only",
-      "filteredBy": "{{name}} only ×",
-      "showAll": "Show all"
+      "title": "Event log"
     },
     "feed": {
       "title": "Published comments",
@@ -1500,6 +1522,109 @@
       "play": "Play",
       "regenerate": "Regenerate"
     },
+    "setup": {
+      "title": "Campaign setup",
+      "unsaved": "Unsaved changes",
+      "liveLocked": "The campaign is running — settings cannot change. Stop the run first.",
+      "targets": {
+        "label": "Target chats",
+        "hint": "One chat per line: @name, a t.me link, or a t.me/+HASH invite. The accounts join each of them and play the dialogue once.",
+        "placeholder": "@chat\nhttps://t.me/another_chat",
+        "count": "Targets: {{n}}"
+      },
+      "runMode": {
+        "label": "Run mode",
+        "sequential": {
+          "title": "Sequential",
+          "body": "Targets are visited one after another, with a pause between them."
+        },
+        "parallel": {
+          "title": "Parallel",
+          "unavailable": "Not available yet: a burst of joins into every chat at once is the most visible way to work there is."
+        }
+      },
+      "pause": {
+        "label": "Pause between targets, sec",
+        "hint": "A minimum and a maximum, in SECONDS. Before each next target a random pause from that range is drawn.",
+        "min": "min",
+        "max": "max",
+        "minLabel": "Minimum pause between targets, seconds",
+        "maxLabel": "Maximum pause between targets, seconds"
+      },
+      "advanced": {
+        "title": "Advanced settings"
+      },
+      "perHour": {
+        "label": "Messages per hour",
+        "hint": "Per account, over a sliding hour of its whole neuroshilling history. A step past the cap is skipped and the dialogue moves on."
+      },
+      "perChat": {
+        "label": "Messages per chat per day",
+        "hint": "Per account-and-chat pair. 0 means no ceiling."
+      },
+      "total": {
+        "label": "Total per account",
+        "hint": "A ceiling for the whole life of the campaign. Empty means no limit.",
+        "unlimited": "no limit"
+      },
+      "reserve": {
+        "label": "Reserve accounts",
+        "hint": "Accounts marked as reserve play no role and wait to replace a banned one. Substitution comes later — for now the flag is only stored."
+      },
+      "soon": {
+        "title": "Chat listening",
+        "badge": "soon",
+        "hint": "Replying to real people in the target chat. The campaign already carries these columns, but nothing reads them yet — so the fields are shown and switched off."
+      },
+      "autoresponder": {
+        "label": "Autoresponder",
+        "off": "Off",
+        "neurodialog": "Neurodialogue"
+      },
+      "replyToHumans": {
+        "label": "Reply to real people"
+      },
+      "replyActivity": {
+        "label": "Reply activity",
+        "calm": "Calm",
+        "medium": "Medium",
+        "active": "Active"
+      },
+      "listen": {
+        "label": "Listen to chat, min"
+      },
+      "save": "Save settings"
+    },
+    "launch": {
+      "title": "Run the campaign",
+      "scenario": {
+        "draft": "Scenario: draft",
+        "approved": "✓ Scenario approved"
+      },
+      "tile": {
+        "accounts": "Accounts",
+        "targets": "Targets",
+        "roles": "Roles",
+        "messages": "Messages",
+        "dialogue": "Dialogue"
+      },
+      "progress": "{{sent}} of {{total}} messages",
+      "progressLabel": "Run progress: messages delivered",
+      "failed": "The run ended on an error: {{type}}",
+      "halted": "Telegram took these out of the run: {{names}}",
+      "blocked": {
+        "parallel": "Parallel mode is not available yet — pick sequential in the campaign setup.",
+        "notApproved": "The scenario is not approved — approve it on the scenario card.",
+        "noTargets": "No saved targets — add chats in the campaign setup and save.",
+        "fewAccounts": "Too few accounts: {{n}} right now. Two is the minimum — every role is played by its own account.",
+        "roleWithoutAccount": "Role “{{name}}” has no account — assign roles in the roster.",
+        "stepWithoutRole": "Step #{{position}} has no role picked.",
+        "accountBusy": "Account “{{title}}” is busy: {{owner}}."
+      },
+      "start": "Start",
+      "stop": "Stop",
+      "log": "Campaign log"
+    },
     "howto": {
       "title": "How it works",
       "steps": {
@@ -1534,6 +1659,12 @@
         "title": "Generate a new dialogue?",
         "body": "The model writes a fresh dialogue and it replaces the stored one — every role, every step and every edit made by hand. This cannot be undone.",
         "confirm": "Generate",
+        "cancel": "Cancel"
+      },
+      "clearLogs": {
+        "title": "Clear the neuroshilling log?",
+        "body": "{{count}} entries will be deleted. That is the whole neuroshilling history, not just the page you can see. Other sections are untouched. This cannot be undone.",
+        "confirm": "Clear",
         "cancel": "Cancel"
       }
     }

@@ -189,4 +189,6 @@ def test_the_operation_ids_the_generated_client_is_named_after(app: FastAPI) -> 
         "put /campaigns/{campaign_id}/scenario": "setNeuroshillingScenario",
         "post /campaigns/{campaign_id}/generate": "generateNeuroshillingScenario",
         "post /campaigns/{campaign_id}/approve": "approveNeuroshillingScenario",
+        "post /campaigns/{campaign_id}/start": "startNeuroshillingCampaign",
+        "post /campaigns/{campaign_id}/stop": "stopNeuroshillingCampaign",
     }

@@ -31,6 +31,10 @@ if TYPE_CHECKING:
 # Editable through the whole-form update, in column order. Held as a tuple so the
 # update statement and the request model cannot drift apart silently: every name
 # here must exist on ``NeuroshillingCampaignUpdate``.
+# The two statuses that mean "a run is attached to this row". Named once because three
+# queries key off it and a fourth spelling would drift.
+_LIVE_STATUSES = ("running", "stopping")
+
 _EDITABLE_COLUMNS = (
     "name",
     "mode",
@@ -122,7 +126,7 @@ def _list_running_campaign_account_names() -> dict[str, tuple[str, str]]:
                 _neuroshilling_accounts.c.campaign_id == _neuroshilling_campaigns.c.campaign_id,
             ),
         )
-        .where(_neuroshilling_campaigns.c.status.in_(("running", "stopping")))
+        .where(_neuroshilling_campaigns.c.status.in_(_LIVE_STATUSES))
     )
     with _get_engine().connect() as connection:
         return {
@@ -140,6 +144,67 @@ async def list_running_campaign_account_names() -> dict[str, tuple[str, str]]:
     rows still say ``running`` — so the board consults both.
     """
     return await asyncio.to_thread(_list_running_campaign_account_names)
+
+
+def _list_live_campaigns() -> list[NeuroshillingCampaign]:
+    statement = (
+        select(_neuroshilling_campaigns)
+        .where(_neuroshilling_campaigns.c.status.in_(_LIVE_STATUSES))
+        .order_by(_neuroshilling_campaigns.c.created_at.asc())
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [_row_to_campaign(row) for row in rows]
+
+
+async def list_live_campaigns() -> list[NeuroshillingCampaign]:
+    """Campaigns whose row still claims a run — what startup reconciliation works from.
+
+    A row in either state means the previous process was playing this campaign when it
+    died: nothing else writes them, and the engine clears them the moment a run reaches
+    a terminal state.
+    """
+    return await asyncio.to_thread(_list_live_campaigns)
+
+
+def _set_run_state(
+    campaign_id: str,
+    status: str,
+    run_id: str | None,
+    last_error: str | None,
+) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neuroshilling_campaigns)
+            .where(_neuroshilling_campaigns.c.campaign_id == campaign_id)
+            .values(
+                status=status,
+                run_id=run_id,
+                last_error=last_error,
+                updated_at=_now_iso(),
+            ),
+        )
+
+
+async def set_run_state(
+    campaign_id: str,
+    status: str,
+    *,
+    run_id: str | None,
+    last_error: str | None = None,
+) -> None:
+    """Write the engine-owned half of the campaign row: status, run id, last error.
+
+    ``run_id`` is written on EVERY call rather than left alone, so the caller has to
+    say what happens to it. That is deliberate: a resumed run must carry the STORED id
+    forward — a fresh one would face an empty unique index and replay the whole
+    dialogue into chats that already have it — and only a terminal state may clear it.
+
+    ``last_error`` is an exception CLASS NAME. The column is served back by
+    ``GET /neuroshilling/campaigns``, and a third-party ``str(exc)`` carries proxy
+    credentials and session paths.
+    """
+    await asyncio.to_thread(_set_run_state, campaign_id, status, run_id, last_error)
 
 
 def _update_campaign(

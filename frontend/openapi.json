@@ -9631,6 +9631,194 @@
           }
         }
       }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/start": {
+      "post": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Start Campaign",
+        "description": "Begin playing the approved dialogue into the campaign's targets.\n\n409 covers every reason a run cannot begin: the scenario is still a draft, the\nroster is short or leaves a role unstaffed, there are no targets, an account is\nheld by another feature, the campaign is already running, or ``run_mode`` is\n``parallel`` \u2014 which this build refuses on the server rather than merely hiding,\nbecause the generated client types the field.",
+        "operationId": "startNeuroshillingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingRunStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/stop": {
+      "post": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Stop Campaign",
+        "description": "Fence the run, cancel it, and answer with where it ended up.\n\nIdempotent: stopping a campaign that is already idle answers its current status\nrather than a conflict. By the time a click lands the run may have finished a\nsecond ago, and \"conflict\" is noise rather than information about that.",
+        "operationId": "stopNeuroshillingCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingRunStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12664,6 +12852,9 @@
             },
             "type": "array",
             "title": "Targets"
+          },
+          "run": {
+            "$ref": "#/components/schemas/NeuroshillingRunStatus"
           }
         },
         "type": "object",
@@ -12671,7 +12862,7 @@
           "campaign"
         ],
         "title": "NeuroshillingBoard",
-        "description": "One composite read backing the whole page.\n\nThe account pool is ONE list, not a pool plus its rostered subset: the two\ncarried the same objects and left the client joining them by id. It also\ncarries no derived counters (role/step/account/target counts, dialogue length\nestimates) and no run block: every one of those is an ``arr.length``, a\n``reduce``, or a field of ``campaign`` already in this same payload, and a\nsecond copy could only drift from the first."
+        "description": "One composite read backing the whole page.\n\nThe account pool is ONE list, not a pool plus its rostered subset: the two\ncarried the same objects and left the client joining them by id. It carries no\nderived counters either (role/step/account/target counts, dialogue length\nestimates): every one of those is an ``arr.length``, a ``reduce``, or a field of\n``campaign`` already in this same payload, and a second copy could only drift.\n\n``run`` is the exception and is here because it is NOT derivable: how many steps\nactually reached their chats and which accounts Telegram has halted are answers\nonly the journal and the presence table hold."
       },
       "NeuroshillingBoardAccount": {
         "properties": {
@@ -13247,6 +13438,66 @@
         ],
         "title": "NeuroshillingRoleInput",
         "description": "One role as the form declares it.\n\n``role_id`` is how a step says WHICH role speaks, and it is matched against the\ncampaign's stored roles: a value that is already one of them updates that row\nin place \u2014 which is what keeps the account roster's ``role_id`` pointing\nsomewhere after a save \u2014 and anything else (including ``None``) mints a new\nrole. So a client may invent keys for roles that do not exist yet, and the\nserver rewires the steps to the real ids it mints."
+      },
+      "NeuroshillingRunStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "running",
+              "stopping",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "default": "idle"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "sent": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Sent",
+            "default": 0
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "default": 0
+          },
+          "last_error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Type"
+          },
+          "halted_accounts": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Halted Accounts"
+          }
+        },
+        "type": "object",
+        "title": "NeuroshillingRunStatus",
+        "description": "What the launch card shows: where the run is and how far it has got.\n\n``sent`` counts delivered MESSAGE steps of the current run and ``total`` is\ntargets x message steps. Reactions are journalled but counted in neither, because\na skipped reaction is not lost progress.\n\n``halted_accounts`` are the accounts Telegram has taken out of the run \u2014 a flood\nwait, a peer flood, or the 500-chat ceiling. They are read back from the durable\npresence rows rather than from a run-local set, so a restart does not forget them."
       },
       "NeuroshillingScenario": {
         "properties": {

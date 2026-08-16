@@ -99,9 +99,11 @@ import {
   spamCheckAccount,
   startCampaignDiscovery,
   startNeurocomment,
+  startNeuroshillingCampaign,
   startPhoneLogin,
   startWarming,
   stopNeurocomment,
+  stopNeuroshillingCampaign,
   stopWarming,
   submitLoginCode,
   unassignProxy,
@@ -381,6 +383,9 @@ import type {
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
+  StartNeuroshillingCampaignData,
+  StartNeuroshillingCampaignError,
+  StartNeuroshillingCampaignResponse,
   StartPhoneLoginData,
   StartPhoneLoginError,
   StartPhoneLoginResponse,
@@ -390,6 +395,9 @@ import type {
   StopNeurocommentData,
   StopNeurocommentError,
   StopNeurocommentResponse,
+  StopNeuroshillingCampaignData,
+  StopNeuroshillingCampaignError,
+  StopNeuroshillingCampaignResponse,
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
@@ -3444,6 +3452,74 @@ export const approveNeuroshillingScenarioMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await approveNeuroshillingScenario({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Start Campaign
+ *
+ * Begin playing the approved dialogue into the campaign's targets.
+ *
+ * 409 covers every reason a run cannot begin: the scenario is still a draft, the
+ * roster is short or leaves a role unstaffed, there are no targets, an account is
+ * held by another feature, the campaign is already running, or ``run_mode`` is
+ * ``parallel`` — which this build refuses on the server rather than merely hiding,
+ * because the generated client types the field.
+ */
+export const startNeuroshillingCampaignMutation = (
+  options?: Partial<Options<StartNeuroshillingCampaignData>>,
+): UseMutationOptions<
+  StartNeuroshillingCampaignResponse,
+  StartNeuroshillingCampaignError,
+  Options<StartNeuroshillingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartNeuroshillingCampaignResponse,
+    StartNeuroshillingCampaignError,
+    Options<StartNeuroshillingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startNeuroshillingCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop Campaign
+ *
+ * Fence the run, cancel it, and answer with where it ended up.
+ *
+ * Idempotent: stopping a campaign that is already idle answers its current status
+ * rather than a conflict. By the time a click lands the run may have finished a
+ * second ago, and "conflict" is noise rather than information about that.
+ */
+export const stopNeuroshillingCampaignMutation = (
+  options?: Partial<Options<StopNeuroshillingCampaignData>>,
+): UseMutationOptions<
+  StopNeuroshillingCampaignResponse,
+  StopNeuroshillingCampaignError,
+  Options<StopNeuroshillingCampaignData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopNeuroshillingCampaignResponse,
+    StopNeuroshillingCampaignError,
+    Options<StopNeuroshillingCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopNeuroshillingCampaign({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -129,10 +129,28 @@ _ERROR_VERDICTS: Final[dict[str, SendVerdict]] = {
 # one of them: it is the pair's verdict on ONE attempt (an expired invite, a chat
 # that said no), and the next pass is entitled to try again. These four are either
 # already true, already queued, or a verdict on the ACCOUNT that another join would
-# only make worse.
+# only make worse. ``flooded`` says so only while it is still in force — see
+# :func:`flood_since`.
 _SETTLED_STATES: Final = frozenset({"joined", "pending_approval", "flooded", "retired"})
 # Account-wide verdicts, in the sense ``retire_account_presence`` writes them.
 _ACCOUNT_HALTED: Final = frozenset({"flooded", "retired"})
+# Send verdicts that end the account's participation for good rather than for a wait:
+# a logged-out, deactivated or frozen session, and the one ban Telegram reports as
+# itself. They are persisted as ``retired`` because that is what the state means — out
+# of the campaign as an ACCOUNT — and because nothing here can undo any of them.
+_RETIRING_VERDICTS: Final = frozenset({"account_dead", "account_banned"})
+
+
+def flood_since() -> str:
+    """The timestamp a stored ``flooded`` row must be at least as new as to still bind.
+
+    Telegram's own wait is not stored — the presence row carries ``updated_at`` and no
+    expiry column — so the window is the configured cooldown applied from the moment
+    the flood was written. An account still inside a longer wait simply meets the limit
+    again and gets a fresh row; one that met a thirty-second wait comes back.
+    """
+    cooldown = timedelta(seconds=settings.neuroshilling.flood_cooldown_seconds)
+    return (datetime.now(UTC) - cooldown).isoformat()
 
 
 def classify_send(result: ActionResult) -> SendVerdict:
@@ -233,7 +251,12 @@ async def join_target(
     inside is not re-joined after a restart, and an account halted account-wide does
     not walk on to the next target as if nothing had happened.
     """
-    settled = await repository.fetch_presence_state(campaign_id, account_id, target)
+    settled = await repository.fetch_presence_state(
+        campaign_id,
+        account_id,
+        target,
+        flood_since=flood_since(),
+    )
     if settled is not None and settled in _SETTLED_STATES:
         return settled
     if await at_join_cap(account_id):
@@ -290,17 +313,27 @@ async def record_send_verdict(
     join is, and it was the only one of the two nothing wrote down: the run halted,
     the process restarted, and the account resumed posting inside its own flood
     window with a presence table that still said ``joined``.
+
+    A dead session and a ban are written down for the same reason and with the same
+    reach. The run's halt set held them and nothing else did, so a restart offered a
+    deactivated account the very next target — the one case where the durable copy
+    matters most, since neither verdict is something waiting fixes.
     """
     verdict = classify_send(result)
+    state: NeuroshillingPresenceState | None = None
     if verdict == "halt":
+        state = "flooded"
+    elif verdict in _RETIRING_VERDICTS:
+        state = "retired"
+    if state is not None:
         await repository.record_presence(
             campaign_id,
             account_id,
             target,
-            "flooded",
+            state,
             error_type=result.error_type,
         )
-        await repository.retire_account_presence(account_id, "flooded")
+        await repository.retire_account_presence(account_id, state)
     return verdict
 
 

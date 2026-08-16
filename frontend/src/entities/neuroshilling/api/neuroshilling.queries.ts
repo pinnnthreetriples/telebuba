@@ -13,5 +13,7 @@ export {
   getNeuroshillingScenarioOptions as neuroshillingScenarioQueryOptions,
   listNeuroshillingCampaignsOptions as neuroshillingCampaignsQueryOptions,
   setNeuroshillingScenarioMutation,
+  startNeuroshillingCampaignMutation,
+  stopNeuroshillingCampaignMutation,
   updateNeuroshillingCampaignMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

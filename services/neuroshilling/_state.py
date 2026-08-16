@@ -1,4 +1,4 @@
-"""In-memory state for neuroshilling generation: the LLM budget and single-flight.
+"""In-memory state: the LLM budget, generation single-flight, and the run fences.
 
 Shape copied from :mod:`services.neurocomment._discovery_state` — one module of
 synchronous functions, nothing persisted, and the claim taken inside an await-free
@@ -37,6 +37,22 @@ _LLM_CALLS: deque[datetime] = deque()
 # Campaigns with a generation in flight. A second click would otherwise spend the
 # budget twice and race two writes over the same rows.
 _GENERATING: set[str] = set()
+# Campaigns with a START in flight. The status column cannot answer this on its own:
+# ``running`` is written several awaits after the check that reads it, and both halves
+# of a double click straddle that gap.
+_STARTING: set[str] = set()
+
+# campaign_id -> the newest run generation. Bumped by BOTH Start and Stop, and every
+# external call of a run checks it before and after itself, so a coroutine parked in a
+# step delay when Stop was pressed wakes up fenced. A ``status='stopping'`` flip cannot
+# do this: it is a row, and nothing reads a row on the way out of a sleep.
+_RUN_GENERATIONS: dict[str, int] = {}
+# campaign_id -> the run_id currently entitled to write this campaign's terminal row.
+# A SECOND map and not a re-use of the counter above, because the two answer different
+# questions: Stop bumps the generation (so the old run stops acting) but the run it
+# stopped is still the one that must settle. Only a NEWER run displaces that right,
+# which is what stops a late finisher writing ``done`` over its successor's ``running``.
+_RUN_OWNER: dict[str, str] = {}
 
 
 def _prune(now: datetime) -> None:
@@ -93,6 +109,91 @@ def finish_generation(campaign_id: str) -> None:
     _GENERATING.discard(campaign_id)
 
 
+def try_claim_start(campaign_id: str) -> bool:
+    """Claim this campaign's start slot; ``False`` means a start is already in flight.
+
+    Same shape as :func:`try_start_generation` and for the same reason: the caller's
+    "is this campaign already live?" test reads a column that ``start_campaign`` only
+    writes several awaits later — the roster reads and the account claim sit in between
+    — so two requests both pass that test. Taking this claim in the SAME synchronous
+    section as the test is what makes the pair atomic. The caller must release with
+    :func:`finish_start` in a ``finally``.
+    """
+    if campaign_id in _STARTING:
+        return False
+    _STARTING.add(campaign_id)
+    return True
+
+
+def finish_start(campaign_id: str) -> None:
+    _STARTING.discard(campaign_id)
+
+
+def start_in_flight(campaign_id: str) -> bool:
+    """Is a start of this campaign between its claim and its spawn right now?
+
+    Read by the run task's done callback, which hands a stopped run's roster back: a
+    start that has already claimed those accounts but not yet published its task would
+    otherwise have them taken from under it.
+    """
+    return campaign_id in _STARTING
+
+
+def begin_run(campaign_id: str, run_id: str) -> int:
+    """Publish a new run generation for ``campaign_id`` and return it.
+
+    The counter only ever rises, and it is never removed on settle: a reused value
+    would let a coroutine from two runs ago pass the fence.
+    """
+    generation = _RUN_GENERATIONS[campaign_id] = _RUN_GENERATIONS.get(campaign_id, 0) + 1
+    _RUN_OWNER[campaign_id] = run_id
+    return generation
+
+
+def revoke_run(campaign_id: str) -> None:
+    """Fence every coroutine of the current run without naming a successor.
+
+    Stop and shutdown both call this. The settlement right is deliberately left where
+    it was: the run being stopped is still the one that owns its terminal row.
+    """
+    _RUN_GENERATIONS[campaign_id] = _RUN_GENERATIONS.get(campaign_id, 0) + 1
+
+
+def run_is_current(campaign_id: str, generation: int) -> bool:
+    """Is ``generation`` still the live run of this campaign?
+
+    The predicate ``_seams.run_scope`` is handed, checked before and after every
+    external call.
+    """
+    return _RUN_GENERATIONS.get(campaign_id, 0) == generation
+
+
+def claim_settlement(campaign_id: str, run_id: str) -> bool:
+    """Take the right to write this campaign's terminal row.
+
+    Refused in exactly one case: a DIFFERENT run owns the campaign. That is the late
+    finisher trying to write ``done`` over its successor's ``running``.
+
+    No entry at all is granted, not refused, and that is what unwedges the Stop race:
+    Stop reads a live campaign, the run task settles in the gap before Stop writes
+    ``stopping``, and that write resurrects a terminal row. The task took the entry
+    away when it settled, so Stop's fallback finds nothing — and it is precisely the
+    run whose settlement is being repeated, so repeating it (the same terminal row,
+    the same release) is what the campaign needs rather than a refusal that would
+    leave it ``stopping`` until a restart.
+
+    Contains no ``await``, so the check and the take cannot be straddled.
+    """
+    owner = _RUN_OWNER.get(campaign_id)
+    if owner is not None and owner != run_id:
+        return False
+    _RUN_OWNER.pop(campaign_id, None)
+    return True
+
+
 def reset_for_tests() -> None:
     _LLM_CALLS.clear()
     _GENERATING.clear()
+    _STARTING.clear()
+    _RUN_GENERATIONS.clear()
+    _RUN_OWNER.clear()

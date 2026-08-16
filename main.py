@@ -39,6 +39,10 @@ from services.neurocomment import (
     reconcile_neurocomment_on_startup,
     shutdown_neurocomment_on_shutdown,
 )
+from services.neuroshilling import (
+    reconcile_neuroshilling_on_startup,
+    shutdown_neuroshilling_on_shutdown,
+)
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 
 # Stdlib sink for full text — see ``core.proxy_check._failed_result``.
@@ -114,7 +118,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     Shutdown order matters: drain warming's in-flight Telegram calls FIRST so
     they finish on the pooled client, THEN tear the pool down — the other way
     blows up live ``execute(...)`` calls mid-handshake and may corrupt the
-    ``.session`` SQLite file.
+    ``.session`` SQLite file. Neuroshilling drains for the same reason and for the
+    same pool, which is why it goes before the teardown too.
+
+    Startup order matters for one pair: neuroshilling reconciles after WARMING,
+    because warming writes the ownership registry as it restores and neuroshilling
+    claims accounts out of it. Neurocomment is not part of that ordering — it only
+    ever reads the registry, and the "is this account serving a campaign?" question
+    is answered from the database whether its reconcile has run or not.
     """
     setup_logging()
     await cleanup_stale_uploads()
@@ -126,11 +137,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     maintenance_task = asyncio.create_task(run_db_maintenance_loop())
     await reconcile_warming_runtime()
     await reconcile_neurocomment_on_startup()
+    await reconcile_neuroshilling_on_startup()
     try:
         yield
     finally:
         await _shutdown_step("warming", shutdown_warming_runtime)
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
+        await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("telegram_pool", shutdown_telegram_pool)
         maintenance_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):

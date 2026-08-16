@@ -11,6 +11,7 @@ import type {
   NeuroshillingCampaignUpdate,
   NeuroshillingScenario,
   NeuroshillingScenarioUpdate,
+  NeuroshillingStep,
   NeuroshillingStepInput,
 } from '@/shared/api';
 
@@ -85,6 +86,27 @@ export function mintKey(prefix: string): string {
 export function clampDelay(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.min(MAX_STEP_DELAY_SECONDS, Math.max(0, Math.trunc(value)));
+}
+
+/** mm:ss, so a dialogue that runs for minutes reads as minutes rather than as a
+ * four-digit number of seconds. */
+export function clock(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return `${String(minutes)}:${rest < 10 ? '0' : ''}${String(rest)}`;
+}
+
+/** The midpoint of one step's delay range — the only honest single number for a
+ * pause the engine draws at random. */
+export function stepMeanSeconds(step: NeuroshillingStep): number {
+  return ((step.delay_min_seconds ?? 60) + (step.delay_max_seconds ?? 180)) / 2;
+}
+
+/** How long ONE playthrough of the dialogue takes. The preview prints it per
+ * bubble and as a total; the launch card prints the total again on its "dialogue"
+ * tile, so the arithmetic lives here rather than in two cards that could drift. */
+export function dialogueSeconds(steps: NeuroshillingStep[]): number {
+  return steps.reduce((sum, step) => sum + stepMeanSeconds(step), 0);
 }
 
 /** A stored emoji narrowed back to the eight the picker offers, or nothing.
