@@ -38,10 +38,6 @@ if TYPE_CHECKING:
 
     from schemas.neuroshilling_scenario import NeuroshillingStep
 
-# Presence verdicts that are about the ACCOUNT rather than about this target, so the
-# account stops being offered for the rest of the run.
-_ACCOUNT_HALTED = frozenset({"flooded", "retired"})
-
 
 async def run_campaign(campaign_id: str, run_id: str) -> None:
     """Play the whole campaign once. Raises only what the runtime is meant to catch."""
@@ -90,7 +86,8 @@ async def _load_context(
     accounts = await repository.list_campaign_accounts(campaign_id)
     by_role: dict[str, list[str]] = {}
     for account in accounts:
-        # Reserve accounts are the substitution pool of a later stage, not speakers.
+        # Reserve accounts are the substitution pool, not speakers, and a banned one is
+        # finished for good — the row outlives the run-local halt set on purpose.
         if account.role_id is None or account.state != "active" or account.is_reserve:
             continue
         by_role.setdefault(account.role_id, []).append(account.account_id)
@@ -101,6 +98,8 @@ async def _load_context(
         by_position={step.position: step for step in steps},
         by_role=by_role,
         halted=set(),
+        banned={},
+        banned_in={},
     )
     played = await repository.list_journalled_steps(run_id)
     return context, parse_targets(campaign.targets_raw), played
@@ -111,28 +110,6 @@ def _target_pause(context: RunContext) -> float:
     return pacing.human_delay(
         context.campaign.pause_min_seconds,
         context.campaign.pause_max_seconds,
-        rng=_seams.rng,
-        mu=limits.delay_lognorm_mu,
-        sigma=limits.delay_lognorm_sigma,
-    )
-
-
-def _settle_pause() -> float:
-    """The wait between entering a chat and saying the first word in it.
-
-    Separate from the step delays, and floored by the settings model rather than by
-    the operator: joining a group and broadcasting into it in the same second is the
-    single most reportable thing this engine does.
-
-    Applied on every entry into a target, including one that found its accounts
-    already inside from an earlier pass. The alternative is a second presence read per
-    (account, target) pair to learn which joins were fresh, and the cost of being
-    wrong is one short sleep.
-    """
-    limits = settings.neuroshilling
-    return pacing.human_delay(
-        limits.post_join_settle_min_seconds,
-        limits.post_join_settle_max_seconds,
         rng=_seams.rng,
         mu=limits.delay_lognorm_mu,
         sigma=limits.delay_lognorm_sigma,
@@ -153,7 +130,7 @@ async def _play_target(
             extra={"campaign_id": context.campaign.campaign_id, "target": target},
         )
         return
-    await _seams.sleep(_settle_pause())
+    await _seams.sleep(_telegram.settle_pause())
     for step in steps:
         if not await _steps.play_step(context, target, step, chats):
             break
@@ -176,7 +153,7 @@ async def _enter(context: RunContext, target: str) -> dict[str, int]:
         if account_id in context.halted:
             continue
         state = await _telegram.join_target(campaign_id, account_id, target)
-        if state in _ACCOUNT_HALTED:
+        if state in _telegram.ACCOUNT_HALTED:
             # An account verdict, not this target's: it plays nothing for the rest of
             # the run, and ``_telegram`` has already written that across its presence.
             context.halted.add(account_id)

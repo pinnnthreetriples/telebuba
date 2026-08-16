@@ -22,6 +22,26 @@ class RunContext(NamedTuple):
     verdict that puts an account in it is written down at the same moment by
     ``_telegram.record_send_verdict`` — a flood as ``flooded``, a dead session or a ban
     as ``retired`` — so a restart does not lose what this set is a cache of.
+
+    ``by_role`` is mutable for one caller only: ``_substitution.substitute`` swaps a
+    banned account for a reserve one in place, so the very next step is dealt to the
+    stand-in instead of finding the role a voice short.
+
+    ``banned`` is the narrower half of ``halted`` — the verdicts a substitute can
+    actually help with — and it maps the account to WHICH of them it was. A flood is a
+    wait and a chat refusal meets the substitute identically, so neither belongs here;
+    the two that do are told apart because only one of them is evidence about the chat.
+    ``_steps`` reads it for the account that just spoke and takes that one out, and
+    takes a stand-in banned on its own replay out too, so nothing is ever left in the
+    map for a later step to act on: every entry is answered by the step that put it
+    there.
+
+    ``banned_in`` is what keeps ONE hostile chat from costing one reserve per player
+    of the role. Keyed by target and holding the accounts Telegram BANNED while acting
+    in that target — a logged-out session is not evidence about a chat and is left out
+    — it is the evidence ``_steps`` weighs: a single ban is about the account, a second
+    one in the same chat is about the chat, and the chat is abandoned rather than fed
+    another reserve.
     """
 
     campaign: NeuroshillingCampaign
@@ -32,3 +52,7 @@ class RunContext(NamedTuple):
     # role_id -> the accounts that may speak that part.
     by_role: dict[str, list[str]]
     halted: set[str]
+    # account_id -> the verdict that finished it: ``account_banned`` or ``account_dead``.
+    banned: dict[str, str]
+    # target -> the accounts Telegram banned while they were acting in that target.
+    banned_in: dict[str, set[str]]

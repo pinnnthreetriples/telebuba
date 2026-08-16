@@ -255,6 +255,10 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
     about the ACCOUNT counts whichever campaign recorded it, and a flood counts only
     while it is still in force. Asking this campaign's presence rows alone left the
     card silent about accounts the engine will refuse to play.
+
+    ``substitutions`` needs its own read because the board's roster carries ``state``
+    but not ``replaced_by_account_id``, and those two disagree exactly when the reserve
+    pool ran out.
     """
     _roles, steps = await repository.load_scenario(campaign.campaign_id)
     message_steps = sum(1 for step in steps if step.kind == "message")
@@ -266,6 +270,9 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
         run_id=campaign.run_id,
         sent=sent,
         total=len(parse_targets(campaign.targets_raw)) * message_steps,
+        # Counted over the whole campaign rather than the current run: the roster row a
+        # substitution writes is the campaign's, and nothing clears it when a run ends.
+        substitutions=await repository.count_substitutions(campaign.campaign_id),
         last_error_type=campaign.last_error,
         halted_accounts=await repository.list_halted_accounts(
             campaign.campaign_id,

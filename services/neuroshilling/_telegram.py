@@ -132,13 +132,19 @@ _ERROR_VERDICTS: Final[dict[str, SendVerdict]] = {
 # only make worse. ``flooded`` says so only while it is still in force — see
 # :func:`flood_since`.
 _SETTLED_STATES: Final = frozenset({"joined", "pending_approval", "flooded", "retired"})
-# Account-wide verdicts, in the sense ``retire_account_presence`` writes them.
-_ACCOUNT_HALTED: Final = frozenset({"flooded", "retired"})
+# Account-wide verdicts, in the sense ``retire_account_presence`` writes them. Public
+# because every join answer is read here, in ``engine._enter`` and in ``_substitution``.
+ACCOUNT_HALTED: Final = frozenset({"flooded", "retired"})
 # Send verdicts that end the account's participation for good rather than for a wait:
 # a logged-out, deactivated or frozen session, and the one ban Telegram reports as
 # itself. They are persisted as ``retired`` because that is what the state means — out
 # of the campaign as an ACCOUNT — and because nothing here can undo any of them.
 _RETIRING_VERDICTS: Final = frozenset({"account_dead", "account_banned"})
+# Every verdict that takes the account out of the run rather than merely delaying
+# it: the two above, plus a rate limit it must sit out. Public because BOTH
+# publishing paths act on it — the scenario steps and the autoreply — and a second
+# copy would let the two disagree about what a flood means for the same session.
+HALTS_ACCOUNT: Final = _RETIRING_VERDICTS | {"halt"}
 
 
 def flood_since() -> str:
@@ -201,6 +207,25 @@ def _join_gap_seconds() -> float:
     return pacing.human_delay(
         limits.join_delay_min_seconds,
         limits.join_delay_max_seconds,
+        rng=_seams.rng,
+        mu=limits.delay_lognorm_mu,
+        sigma=limits.delay_lognorm_sigma,
+    )
+
+
+def settle_pause() -> float:
+    """The wait between entering a chat and saying the first word in it.
+
+    Floored by the settings model, not by the operator: joining a group and broadcasting
+    into it in the same second is the most reportable thing this engine does. Beside
+    :func:`join_target` because both ways in owe it — ``engine._act``'s opening pass and
+    the stand-in ``_substitution._enter`` walks in after a ban — and paid on every entry,
+    already-inside ones included, because telling those apart costs a presence read.
+    """
+    limits = settings.neuroshilling
+    return pacing.human_delay(
+        limits.post_join_settle_min_seconds,
+        limits.post_join_settle_max_seconds,
         rng=_seams.rng,
         mu=limits.delay_lognorm_mu,
         sigma=limits.delay_lognorm_sigma,
@@ -285,7 +310,7 @@ async def join_target(
         state,
         error_type=result.error_type,
     )
-    if state in _ACCOUNT_HALTED:
+    if state in ACCOUNT_HALTED:
         # Both verdicts are about the ACCOUNT, so they apply to every target it was
         # going to play — and they are persisted, not held in a run-local halt set,
         # because the gate at the top of this function is what reads them back.

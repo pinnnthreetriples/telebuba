@@ -78,6 +78,7 @@ export function CampaignSetupCard({
   draft,
   onDraft,
   dirty,
+  reserveCount,
   live,
   onSave,
   busy,
@@ -86,6 +87,9 @@ export function CampaignSetupCard({
   draft: SetupDraft;
   onDraft: (draft: SetupDraft) => void;
   dirty: boolean;
+  // Rostered accounts still waiting in the pool. A number rather than the roster,
+  // because the card takes no server data of its own.
+  reserveCount: number;
   // A run in flight: the server refuses the whole PUT with `campaign_running`,
   // so the card says so instead of letting the operator collect a 409.
   live: boolean;
@@ -300,6 +304,12 @@ export function CampaignSetupCard({
             />
             <span className="text-[12.5px]">{t('neuroshilling.setup.reserve.label')}</span>
             <HelpHint text={t('neuroshilling.setup.reserve.hint')} />
+            {/* The pool as it stands NOW, not as the roster was arranged: a promoted
+                account has its reserve flag cleared, so this drops by one on every
+                substitution and reaching zero is the warning the operator needs. */}
+            <span className="ml-auto rounded-full bg-[#f4f3f0] px-[9px] py-[2px] text-[11px] font-medium tabular-nums text-ink-muted">
+              {t('neuroshilling.setup.reserve.count', { n: reserveCount })}
+            </span>
           </div>
 
           {/* Stage 6. Shown because the campaign row already carries these columns

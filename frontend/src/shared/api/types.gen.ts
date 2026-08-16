@@ -2241,6 +2241,11 @@ export type NeuroshillingRoleInput = {
  * ``halted_accounts`` are the accounts Telegram has taken out of the run — a flood
  * wait, a peer flood, or the 500-chat ceiling. They are read back from the durable
  * presence rows rather than from a run-local set, so a restart does not forget them.
+ *
+ * ``substitutions`` is how many accounts a reserve one has taken over from. It is
+ * here rather than derived on the client because the board's roster carries
+ * ``state`` but not ``replaced_by_account_id``, and a ban with an empty reserve pool
+ * writes the first without the second.
  */
 export type NeuroshillingRunStatus = {
   /**
@@ -2259,6 +2264,10 @@ export type NeuroshillingRunStatus = {
    * Total
    */
   total?: number;
+  /**
+   * Substitutions
+   */
+  substitutions?: number;
   /**
    * Last Error Type
    */

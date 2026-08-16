@@ -716,6 +716,12 @@
     "neuroshilling_text_duplicate": "The text has already been posted in this chat",
     "neuroshilling_reply_anchor_lost": "The line was posted without a reply: the message it answers never got through",
     "neuroshilling_account_halted": "The account is out of this run: Telegram refused it",
+    "neuroshilling_account_substituted": "A reserve account has taken over the banned account's role",
+    "neuroshilling_no_reserve": "The banned account was not replaced: the reserve pool is empty",
+    "neuroshilling_ban_already_claimed": "The banned account had already been handled: no second reserve was spent",
+    "neuroshilling_substitute_locked_out": "The reserve account took the role but could not get into this chat",
+    "neuroshilling_chat_bans_the_fleet": "The chat is banning the accounts, not Telegram: it is abandoned and costs no more reserves",
+    "neuroshilling_replay_dropped": "The reserve account joined, but the line was already settled and will not be repeated",
     "neuroshilling_role_exhausted": "The role has no account left that can post here",
     "neuroshilling_no_speakers": "No account on the roster has a role with a line to say",
     "neuroshilling_target_failed": "The target was skipped",
@@ -1569,7 +1575,8 @@
       },
       "reserve": {
         "label": "Reserve accounts",
-        "hint": "Accounts marked as reserve play no role and wait to replace a banned one. Substitution comes later — for now the flag is only stored."
+        "hint": "Accounts marked as reserve play no role. When Telegram bans a playing account, the oldest reserve takes its role, joins the chat and carries on. A chat that refuses everyone spends no reserve.",
+        "count": "In reserve: {{n}}"
       },
       "soon": {
         "title": "Chat listening",
@@ -1612,6 +1619,7 @@
       "progressLabel": "Run progress: messages delivered",
       "failed": "The run ended on an error: {{type}}",
       "halted": "Telegram took these out of the run: {{names}}",
+      "substitutions": "Replaced: {{n}}",
       "blocked": {
         "parallel": "Parallel mode is not available yet — pick sequential in the campaign setup.",
         "notApproved": "The scenario is not approved — approve it on the scenario card.",

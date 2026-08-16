@@ -88,6 +88,16 @@ test('a launchable campaign offers Start with no reasons listed', async () => {
   expect(onStart).toHaveBeenCalledTimes(1);
 });
 
+test('the substitution counter is shown at zero as well as after a replacement', () => {
+  // Zero is an answer, not an absence: "has Telegram eaten any of my accounts" is
+  // the question this number is on the card to settle.
+  renderCard();
+  expect(screen.getByText('Замен: 0')).toBeInTheDocument();
+
+  renderCard({ run: { status: 'running', sent: 1, total: 4, substitutions: 2 } });
+  expect(screen.getByText('Замен: 2')).toBeInTheDocument();
+});
+
 test('a draft scenario disables Start and names the reason on THIS card', () => {
   // The approval dies three cards up, on any role or step edit; the consequence
   // only surfaces here.
