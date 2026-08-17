@@ -38,9 +38,10 @@ one thing that would defeat is the ``us`` label ``_prompt`` documents as its rea
 for tracking ownership at all.
 
 The daily LLM budget and the per-campaign single-flight from the scenario generator
-apply unchanged, and a per-account hourly ceiling on ATTEMPTS is added to them: an
-autoresponder fires once per human message, so one busy chat is otherwise a page of
-paid drafts every thirty seconds against a budget the whole fleet shares.
+apply unchanged, and two ceilings on ATTEMPTS are added to them — one on the account's
+hour, one on the chat's day. An autoresponder fires once per human message, so one busy
+chat is otherwise a page of paid drafts every thirty seconds against a budget the whole
+fleet shares, and the account's hour alone only spread that spend across the roster.
 """
 
 from __future__ import annotations
@@ -124,7 +125,7 @@ async def _pick_account(context: RunContext, chats: dict[str, int]) -> str | Non
 
 
 async def _over_quota(campaign: NeuroshillingCampaign, account_id: str, target: str) -> bool:
-    """Has this account reached any of the campaign's ceilings, counting BOTH sends?
+    """Has this account, or this chat, reached a ceiling? Counting BOTH kinds of send.
 
     An autoreply has no journal row — the journal is keyed on a scenario step and an
     autoreply answers none — so the two counts are read separately and added. The
@@ -135,14 +136,18 @@ async def _over_quota(campaign: NeuroshillingCampaign, account_id: str, target: 
     spent that allowance, or "total per account" would be a ceiling the account went
     on talking past for the rest of the run.
 
-    The attempt ceiling comes first and costs no query: it is about what has already
-    been PAID for rather than what has been published, and the two diverge exactly
-    when a chat is hostile — every draft the gate refuses is billed and publishes
-    nothing. Reusing ``messages_per_hour`` for it keeps the number the operator typed
-    the only number in play: an account may not buy more answers in an hour than it is
-    allowed to say things in one.
+    The two ATTEMPT ceilings come first and cost no query: they are about what has
+    already been PAID for rather than what has been published, and the two diverge
+    exactly when a chat is hostile — every draft the gate refuses is billed and
+    publishes nothing, so none of the three counted ceilings below ever sees it. Neither
+    costs a query, so the order between the two is arbitrary; what each bounds is not —
+    one is this account's hour, the other this chat's day, whichever of our accounts and
+    campaigns paid for the drafts in it.
     """
-    if _state.at_reply_attempt_cap(account_id, campaign.messages_per_hour):
+    if _state.at_chat_attempt_cap(target) or _state.at_reply_attempt_cap(
+        account_id,
+        campaign.messages_per_hour,
+    ):
         return True
     now = datetime.now(UTC)
     hour_since = (now - timedelta(hours=1)).isoformat()
@@ -319,7 +324,7 @@ async def consider(
         return
     # Charged where the claim is taken and not where the request is made: everything
     # from here on is paid for, including the drafts the gate throws away.
-    _state.record_reply_attempt(account_id)
+    _state.record_reply_attempt(account_id, target)
     await _answer(context, target, _Speaker(account_id, chats[account_id]), message)
 
 

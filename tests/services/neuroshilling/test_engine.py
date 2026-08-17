@@ -13,15 +13,23 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from sqlalchemy import select
 
-from core.db import _get_engine
-from core.repositories.neuroshilling import update_campaign
+from core.db import _get_engine, create_account, update_account_from_session_check
+from core.repositories.neuroshilling import list_recent_chat, update_campaign
 from core.repositories.neuroshilling._tables import _neuroshilling_messages
+from schemas.accounts import AccountCreate
 from schemas.neuroshilling import (
     NeuroshillingAccountAssignment,
     NeuroshillingCampaignUpdate,
 )
 from schemas.neuroshilling_scenario import NeuroshillingStepInput
-from schemas.telegram_actions import CopyMessageMedia, PostComment, ResolveChatResult
+from schemas.telegram_action_results import ChatMessagePreview, ReadChatMessagesResult
+from schemas.telegram_actions import (
+    CopyMessageMedia,
+    PostComment,
+    ReadChatMessages,
+    ResolveChatResult,
+)
+from schemas.telegram_session import TelegramSessionCheckResult
 from services.neuroshilling import _seams, _telegram, engine
 from tests.services.neuroshilling.helpers import refused, seed_campaign, sent
 
@@ -332,6 +340,68 @@ async def _put_both_accounts_on_one_role(seeded: Seeded) -> None:
                 )
                 for account_id in seeded.accounts
             ],
+        ),
+    )
+
+
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.asyncio
+async def test_the_poller_is_handed_every_account_we_own_not_just_the_cast(
+    monkeypatch: pytest.MonkeyPatch,
+    gateway: _Gateway,
+) -> None:
+    """A line by an account of ours outside THIS campaign is still one of ours.
+
+    An autoreply gets no journal row anywhere, so the only thing that can give a second
+    campaign's published answer away is its author. Read from this campaign's roster,
+    the set left every other fleet's answers looking like strangers': two campaigns in
+    one group answered each other, each hop entering the other's prompt as ``them``.
+
+    Driven through the whole pass, because the set is read in ``_load_context`` and the
+    poller only ever sees what that put in the context. The clock and the pauses are
+    stubbed together, as in the listener's own tests, so the window is a controlled
+    minute rather than a real one.
+    """
+    elapsed = 0.0
+
+    def _clock() -> float:
+        return elapsed
+
+    async def _pause(_seconds: float) -> None:
+        nonlocal elapsed
+        elapsed += 31.0
+
+    # One message, written by an account of ours this campaign has never heard of.
+    pages = [[ChatMessagePreview(message_id=900, text="и почём?", sender_id=4242)]]
+
+    async def _read(_account_id: str, action: TelegramAction) -> object:
+        if isinstance(action, ReadChatMessages):
+            return ReadChatMessagesResult(messages=pages.pop(0) if pages else [])
+        return ResolveChatResult(chat_id=555, kind="megagroup")
+
+    monkeypatch.setattr(_seams, "execute_read", _read)
+    monkeypatch.setattr(_seams, "monotonic", _clock)
+    monkeypatch.setattr(_seams, "sleep", _pause)
+    await _account_with_user_id("outsider", 4242)
+    seeded = await seed_campaign(use_chat_context=True, listen_minutes=1)
+
+    await engine.run_campaign(seeded.campaign_id, _RUN)
+    log = await list_recent_chat(seeded.campaign_id, "alpha", limit=10)
+
+    assert gateway.actions
+    assert [(line.message_id, line.is_ours) for line in log] == [(900, True)]
+
+
+async def _account_with_user_id(account_id: str, user_id: int) -> None:
+    """An account of ours with a Telegram id stored, and no campaign to its name."""
+    await create_account(AccountCreate(account_id=account_id, session_name=account_id))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=f"sessions/{account_id}",
+            status="alive",
+            is_temporary=False,
+            user_id=user_id,
         ),
     )
 

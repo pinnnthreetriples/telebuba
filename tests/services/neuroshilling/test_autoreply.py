@@ -427,6 +427,55 @@ async def test_a_refused_draft_still_spends_the_accounts_hourly_attempts(
     assert (len(model.prompts), gateway.actions) == (1, [])
 
 
+@pytest.mark.asyncio
+async def test_one_chat_cannot_pay_for_more_than_its_day_of_drafts(
+    monkeypatch: pytest.MonkeyPatch,
+    wired: tuple[_Model, _Gateway],
+) -> None:
+    """The account's hour only spread a hostile chat's spend across the roster.
+
+    Ten accounts at ten attempts an hour is the whole ``max_llm_calls_per_day`` inside
+    the first hour, after which every campaign in the process is refused for the rest of
+    the day — so the chat, which is the unit that turns hostile, has a ceiling of its
+    own. Both accounts are offered here, and the second message is refused anyway.
+    """
+    model, gateway = wired
+    monkeypatch.setattr(model, "text", "жми https://evil.example/win")
+    monkeypatch.setattr(settings.neuroshilling, "max_reply_attempts_per_chat_per_day", 1)
+    context = await _context()
+    first = await _observe(context, "а доставка быстрая?")
+    second = await _observe(context, "и сколько стоит?", message_id=_PROVOKING + 1)
+
+    await _autoreply.consider(context, _TARGET, _CHATS, first)
+    await _autoreply.consider(context, _TARGET, _CHATS, second)
+
+    assert (len(model.prompts), gateway.actions) == (1, [])
+
+
+@pytest.mark.asyncio
+async def test_the_chat_ceiling_is_the_chats_and_not_one_campaigns(
+    monkeypatch: pytest.MonkeyPatch,
+    wired: tuple[_Model, _Gateway],
+) -> None:
+    """Two campaigns aimed at one chat are charged to that chat, not one each.
+
+    The bill is one bill and the chat is one chat, so a per-campaign ceiling would let
+    two campaigns watching a hostile group spend twice the day on it — the same reading
+    ``claim_chat_reply`` already takes of the same question.
+    """
+    model, _gateway = wired
+    monkeypatch.setattr(model, "text", "жми https://evil.example/win")
+    monkeypatch.setattr(settings.neuroshilling, "max_reply_attempts_per_chat_per_day", 1)
+    spender, second_fleet = await _context(), await _context()
+    spent = await _observe(spender, "а доставка быстрая?")
+    refused = await _observe(second_fleet, "и сколько стоит?", message_id=_PROVOKING + 1)
+
+    await _autoreply.consider(spender, _TARGET, _CHATS, spent)
+    await _autoreply.consider(second_fleet, _TARGET, _CHATS, refused)
+
+    assert len(model.prompts) == 1
+
+
 @pytest.mark.usefixtures("wired")
 @pytest.mark.asyncio
 async def test_a_missing_key_is_reported_once_and_not_once_per_message(

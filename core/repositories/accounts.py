@@ -304,6 +304,21 @@ async def list_accounts_by_ids(account_ids: list[str]) -> AccountList:
     return await asyncio.to_thread(_list_accounts_by_ids, account_ids)
 
 
+def _list_account_user_ids() -> frozenset[int]:
+    statement = select(_accounts.c.user_id).where(_accounts.c.user_id.is_not(None))
+    with _get_engine().connect() as connection:
+        return frozenset(int(row[0]) for row in connection.execute(statement))
+
+
+async def list_account_user_ids() -> frozenset[int]:
+    """Every Telegram user id stored for an account this deployment owns.
+
+    Read by the neuroshilling chat poller to tell our own lines from a stranger's: who
+    wrote a message is a fact about the ACCOUNT, never about one campaign's roster.
+    """
+    return await asyncio.to_thread(_list_account_user_ids)
+
+
 def _account_summary_counts() -> dict[str, int]:
     statement = select(_accounts.c.status, func.count()).group_by(_accounts.c.status)
     with _get_engine().connect() as connection:

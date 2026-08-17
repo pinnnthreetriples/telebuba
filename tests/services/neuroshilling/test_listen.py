@@ -246,6 +246,70 @@ async def test_a_line_our_own_account_wrote_is_recognised_by_its_sender(
 
 
 @pytest.mark.asyncio
+async def test_another_campaigns_line_in_this_chat_is_recognised_as_ours(
+    monkeypatch: pytest.MonkeyPatch,
+    considered: list[NeuroshillingChatMessage],
+) -> None:
+    """Two campaigns in one group are not two fleets of strangers.
+
+    Scoped to the campaign, the journal read handed campaign B every line campaign A
+    had scripted in that chat as a stranger's — and the reply claim reaches ACROSS
+    campaigns, so nothing downstream refused it. B answered, and A read B's answer the
+    same way: a ping-pong in which each fleet's line enters the other's prompt under
+    the ``them`` label, which is the re-entry the ``us`` label exists to close.
+    """
+    reader = _Reader([_preview(7), _preview(8)])
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    context = await _context()
+    await _already_arrived(context)
+    other = await seed_campaign(targets=_TARGET)
+    key = NeuroshillingStepKey(run_id="run-2", target=_TARGET, step_id=other.steps[0].step_id)
+    await repository.claim_message(
+        key,
+        campaign_id=other.campaign_id,
+        account_id="acc-2",
+        text="line",
+    )
+    await repository.settle_message(key, status="sent", message_id=7)
+
+    await _listen.poll_once(context, _TARGET, _CHATS)
+
+    assert [(message.message_id, message.is_ours) for message in considered] == [
+        (7, True),
+        (8, False),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_line_of_ours_in_another_chat_says_nothing_about_this_one(
+    monkeypatch: pytest.MonkeyPatch,
+    considered: list[NeuroshillingChatMessage],
+) -> None:
+    """The journal read lost its campaign, not its target.
+
+    Message ids are only unique inside one chat, so an id we sent into another group
+    would otherwise make an unrelated stranger's message ours — and a single-campaign
+    run, which is the ordinary one, is exactly where that would land.
+    """
+    reader = _Reader([_preview(7)])
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    context = await _context()
+    await _already_arrived(context)
+    key = NeuroshillingStepKey(run_id="run-1", target="@beta", step_id=context.steps[0].step_id)
+    await repository.claim_message(
+        key,
+        campaign_id=context.campaign.campaign_id,
+        account_id="acc-1",
+        text="line",
+    )
+    await repository.settle_message(key, status="sent", message_id=7)
+
+    await _listen.poll_once(context, _TARGET, _CHATS)
+
+    assert [(message.message_id, message.is_ours) for message in considered] == [(7, False)]
+
+
+@pytest.mark.asyncio
 async def test_a_poll_stops_answering_when_the_window_closes_under_it(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

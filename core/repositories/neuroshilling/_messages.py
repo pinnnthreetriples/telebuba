@@ -255,10 +255,9 @@ async def fail_pending_messages(run_id: str) -> int:
     return await asyncio.to_thread(_fail_pending_messages, run_id)
 
 
-def _list_sent_message_ids(campaign_id: str, target: str) -> set[int]:
+def _list_sent_message_ids(target: str) -> set[int]:
     statement = select(_TABLE.c.message_id).where(
-        (_TABLE.c.campaign_id == campaign_id)
-        & (_TABLE.c.target == target)
+        (_TABLE.c.target == target)
         & (_TABLE.c.status == "sent")
         & _TABLE.c.message_id.is_not(None),
     )
@@ -266,19 +265,25 @@ def _list_sent_message_ids(campaign_id: str, target: str) -> set[int]:
         return {int(row[0]) for row in connection.execute(statement)}
 
 
-async def list_sent_message_ids(campaign_id: str, target: str) -> set[int]:
-    """Every message id THIS CAMPAIGN put into ``target``, across all its runs.
+async def list_sent_message_ids(target: str) -> set[int]:
+    """Every message id OUR FLEET put into ``target``, whichever campaign said it.
 
     Half of what the chat poller needs to answer "is this one of ours?" honestly.
     Telethon's ``out`` flag only answers it for the account doing the reading, so a
-    line said by a sibling account of the same campaign looks like a stranger's — and
-    the fleet would then quote its own scripted dialogue back into its own prompt and
-    offer to answer it. Only half, because this table holds SCENARIO steps: an
-    autoreply answers no step and has no row here at all, which is why
+    line said by any other account looks like a stranger's — and the fleet would then
+    quote its own scripted dialogue back into its own prompt and offer to answer it.
+    Only half, because this table holds SCENARIO steps: an autoreply answers no step
+    and has no row here at all, which is why
     ``services.neuroshilling._autoreply`` records its own published answers straight
     into the chat log instead.
 
-    Not scoped to the current run: the earlier runs' messages are still sitting in
-    that chat, and they are just as much ours.
+    Keyed on the target and not on the pair with a campaign: authorship is a fact
+    about the chat and the account that wrote in it, and two campaigns aimed at one
+    group are an arrangement the operator can make in the picker. Scoped, the query
+    handed campaign B every line campaign A had scripted there as a stranger's, B
+    answered them, and A read B's answers the same way.
+
+    Not scoped to the current run either: the earlier runs' messages are still sitting
+    in that chat, and they are just as much ours.
     """
-    return await asyncio.to_thread(_list_sent_message_ids, campaign_id, target)
+    return await asyncio.to_thread(_list_sent_message_ids, target)

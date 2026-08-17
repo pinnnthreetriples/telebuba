@@ -177,3 +177,23 @@ async def test_published_replies_are_counted_against_the_account_and_the_chat() 
     assert (mine.hour, mine.chat_day) == (1, 1)
     assert (elsewhere.hour, elsewhere.chat_day) == (1, 0)
     assert (stale.hour, stale.chat_day) == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_the_reply_count_follows_the_account_into_a_second_campaign() -> None:
+    """Neither window names a campaign, and the journal half the caller adds does not.
+
+    ``messages_per_hour`` and "messages per chat per day" describe the SESSION, which is
+    what Telegram rate-limits, so an account two campaigns share carries both campaigns'
+    answers into both counts. Narrowing this half alone would make the sum the caller
+    scores against those numbers a quantity neither of them describes.
+    """
+    first, second = await _campaign(), await _campaign()
+    await record_chat_messages(first, _TARGET, [_message(7)])
+    await record_chat_messages(second, _TARGET, [_message(8)])
+    await record_chat_reply(first, _TARGET, 7, account_id="acc-1")
+    await record_chat_reply(second, _TARGET, 8, account_id="acc-1")
+
+    usage = await count_chat_reply_usage("acc-1", _TARGET, hour_since=_PAST, day_since=_PAST)
+
+    assert (usage.hour, usage.chat_day) == (2, 2)

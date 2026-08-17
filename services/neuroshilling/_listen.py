@@ -14,8 +14,8 @@ reads go through ``_seams.execute_read`` — the account lifecycle lock and the 
 generation fence — like every other call this domain makes.
 
 **Ownership is decided here, not by the gateway.** Telethon's ``out`` flag answers
-"did the READING account write this", so a line said by a sibling account of the
-same campaign arrives looking like a stranger's. Left at that, the fleet would
+"did the READING account write this", so a line said by any other account of ours
+arrives looking like a stranger's. Left at that, the fleet would
 quote its own scripted dialogue back into its own prompt and offer to answer it —
 and an injection that once induced reproduction would keep re-entering the context
 from our own side.
@@ -29,6 +29,15 @@ writes its own published line straight into this log as ours, which the unique i
 turns into a no-op when the next poll reads the same message back. The third answer
 is the sender: an ``unconfirmed`` send comes back with no message id at all, so the
 only thing left to recognise it by is the account that wrote it.
+
+**Neither id answer is scoped to the campaign**, and that is what stops two fleets
+answering each other. Both are facts about the chat and the accounts in it: the
+journal is asked for every id OUR fleet put in this target, and the sender set holds
+every account the deployment owns. Scoped to the campaign, a second campaign aimed at
+the same group saw the first one's autoreplies as a stranger's, took the reply claim
+(which reaches across campaigns, so nothing else refused it), answered — and the first
+campaign read that answer exactly the same way, each fleet's line entering the other's
+prompt labelled ``them``.
 
 The window is the campaign's ``listen_minutes``, measured from the end of the
 dialogue in that target. It is per target and the pass is sequential, so a long
@@ -168,15 +177,16 @@ async def poll_once(
             extra={"target": target, "kind": exc.kind},
         )
         return 0
-    ours = await repository.list_sent_message_ids(campaign_id, target)
+    ours = await repository.list_sent_message_ids(target)
     observed = [
         NeuroshillingChatMessage(
             message_id=preview.message_id,
             sender_id=preview.sender_id,
             text=preview.text,
-            # Every half of "ours": what this reader sent, what a sibling account
-            # journalled as a scenario step, and — for the autoreply that never got a
-            # message id back — who wrote it. Only the first is on the wire.
+            # Every third of "ours": what this reader sent, what any of our accounts
+            # journalled as a scenario step in this chat, and — for the autoreply that
+            # never got a message id back — who wrote it. Only the first is on the wire,
+            # and only the first is about the campaign doing the reading.
             is_ours=(
                 preview.outgoing
                 or preview.message_id in ours
