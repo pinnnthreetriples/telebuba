@@ -8,13 +8,17 @@ stop holding at once.
   spend. ``engine._enter`` skips straight to the per-account resolve.
 * **There is no denominator.** The run loops until it is stopped, so "sent out of
   total" has no total; the launch card shows the count itself.
-* **Every cycle is a different conversation.** The journal is unique on
-  ``(run_id, target, step_id)`` — which is exactly right for a campaign, whose
-  whole safety property is never playing a step into a chat twice — so a second
-  cycle under the same id would insert nothing and post nothing. Each cycle
-  therefore writes under ``f"{run_id}#{n}"``, and ``_tables.run_scope`` is what
-  keeps the run-wide questions (what did it deliver, what did it leave mid-flight)
-  seeing those rows.
+* **Every cycle is a different conversation.** Two gates key on the very thing a
+  cycle repeats. The journal is unique on ``(run_id, target, step_id)`` — exactly
+  right for a campaign, whose whole safety property is never playing a step into a
+  chat twice — and the dedup store holds a chat's texts for
+  ``warming.content_dedup_window_days``. A second cycle under the first one's keys
+  would insert nothing and reserve nothing, and so post nothing. Each cycle
+  therefore writes under ``f"{run_id}#{n}"`` and reserves its text under that same
+  suffix (``_dispatch._step_dedup_key``); ``_tables.run_scope`` is what keeps the
+  run-wide questions (what did it deliver, what did it leave mid-flight) seeing
+  those rows, and ``repository.last_revive_cycle`` is what keeps ``n`` climbing
+  across a restart.
 
 The campaign's ``run_id`` itself is NOT re-minted per cycle, and that is
 deliberate: it is the identity Stop settles against, boot reconciliation resumes,
@@ -33,6 +37,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.logging import log_event
+from core.repositories import neuroshilling as repository
 from services import pacing
 from services.neuroshilling import _seams
 
@@ -111,12 +116,20 @@ async def run(
     act in one — and nothing about how either is done belongs here.
 
     The loop ends by cancellation (Stop, or shutdown) or when every account that
-    could speak has been halted. It does not end by itself, which is the mode.
+    resolved a chat is in ``context.halted`` — which only a verdict about the SESSION
+    puts it there for. A verdict about the CHAT is not an exit: ``chat_blocked`` and
+    ``chat_unavailable`` end the step loop for that one cycle and halt nobody, so a
+    target the fleet lost is acted in again on the next cycle, and on every cycle
+    after it. Nothing else ends the run, which is the mode.
+
+    The cycle number continues from the journal rather than from zero, so a run that
+    is resumed writes under keys nothing holds — see ``repository.last_revive_cycle``
+    for what starting over costs.
     """
     entered = await _resolve_all(context, targets, enter)
     if not entered:
         return
-    cycle = 0
+    cycle = await repository.last_revive_cycle(context.run_id)
     while any(
         account_id not in context.halted for _target, chats in entered for account_id in chats
     ):

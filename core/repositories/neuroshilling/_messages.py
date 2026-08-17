@@ -199,6 +199,33 @@ async def list_journalled_steps(run_id: str) -> set[tuple[str, str]]:
     return await asyncio.to_thread(_list_journalled_steps, run_id)
 
 
+def _last_revive_cycle(run_id: str) -> int:
+    statement = select(_TABLE.c.run_id).where(_TABLE.c.run_id.like(f"{run_id}#%")).distinct()
+    with _get_engine().connect() as connection:
+        rows = [str(row[0]) for row in connection.execute(statement)]
+    return max((int(row.removeprefix(f"{run_id}#")) for row in rows), default=0)
+
+
+async def last_revive_cycle(run_id: str) -> int:
+    """The highest cycle number ``run_id`` has journalled under; 0 if it has none.
+
+    A revive cycle writes its rows under ``f"{run_id}#{n}"``. A resumed run that
+    counted from zero again would therefore aim cycle 1 at keys cycle 1 already
+    filled: :func:`claim_message` refuses every one of them, the cycle publishes
+    nothing, and it still pays each step's delay, the listening window and the
+    pause before the next one — for as many cycles as the killed process managed.
+    Counting on from here is what gives the resumed run keys nothing holds.
+
+    A cycle that journalled no row at all leaves no number behind and is handed out
+    a second time, which costs nothing: none of its keys is held.
+
+    The suffix parses because ``_revive._cycle_context`` is the only writer of a
+    ``#`` into this column, and it writes an ``int``. The ``LIKE`` needs no escaping
+    for the reason ``_tables.run_scope`` gives.
+    """
+    return await asyncio.to_thread(_last_revive_cycle, run_id)
+
+
 def _fail_pending_messages(run_id: str) -> int:
     statement = (
         update(_TABLE)
