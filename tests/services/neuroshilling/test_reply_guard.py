@@ -93,7 +93,7 @@ def test_a_link_or_a_payload_in_any_spelling_is_refused(candidate: str) -> None:
     That is why this is a parser and not a line in the prompt: the model was told
     not to write these, and a model told not to do something is not a control.
     """
-    verdict = clean_reply(candidate, _PROVOKING)
+    verdict = clean_reply(candidate, [_PROVOKING])
 
     assert verdict.text is None
     assert verdict.reason == "banned_pattern"
@@ -105,7 +105,7 @@ def test_a_markdown_link_cannot_launder_its_target_past_the_scan() -> None:
     Scanning only what would be sent would pass this, and scanning only the raw
     would miss a payload the strip introduces. Both are scanned.
     """
-    verdict = clean_reply("[жми сюда](https://evil.example)", _PROVOKING)
+    verdict = clean_reply("[жми сюда](https://evil.example)", [_PROVOKING])
 
     assert verdict.text is None
     assert verdict.reason == "banned_pattern"
@@ -113,7 +113,7 @@ def test_a_markdown_link_cannot_launder_its_target_past_the_scan() -> None:
 
 def test_a_price_is_not_a_phone_number() -> None:
     """The rule counts DIGITS, and a price has fewer of them than a number to call."""
-    verdict = clean_reply("вышло тысяч 1 000 000 за год, дороговато", _PROVOKING)
+    verdict = clean_reply("вышло тысяч 1 000 000 за год, дороговато", [_PROVOKING])
 
     assert verdict.reason is None
 
@@ -145,7 +145,7 @@ def test_ordinary_prose_is_still_published(candidate: str) -> None:
     Every rule above errs toward refusal on purpose, which is only defensible while
     the answers a real chat would produce still go out.
     """
-    assert clean_reply(candidate, _PROVOKING).text is not None
+    assert clean_reply(candidate, [_PROVOKING]).text is not None
 
 
 @pytest.mark.parametrize(
@@ -166,7 +166,7 @@ def test_ordinary_prose_is_still_published(candidate: str) -> None:
 )
 def test_an_invisible_character_is_refused(extra: str) -> None:
     """Characters that render as nothing hide a payload inside what reads as prose."""
-    verdict = clean_reply(f"норм{extra}ально, беру", _PROVOKING)
+    verdict = clean_reply(f"норм{extra}ально, беру", [_PROVOKING])
 
     assert verdict.text is None
     assert verdict.reason == "bad_charset"
@@ -179,9 +179,9 @@ def test_a_word_mixing_alphabets_is_refused() -> None:
     are read off the letters rather than named in a pair, because naming Latin and
     Cyrillic leaves every other alphabet's lookalikes — here Greek upsilon — clean.
     """
-    assert clean_reply("зашёл на раypal вчера", _PROVOKING).reason == "mixed_script"
-    assert clean_reply("зашёл на paυpal вчера", _PROVOKING).reason == "mixed_script"
-    assert clean_reply("взял iPhone, доволен", _PROVOKING).reason is None
+    assert clean_reply("зашёл на раypal вчера", [_PROVOKING]).reason == "mixed_script"
+    assert clean_reply("зашёл на paυpal вчера", [_PROVOKING]).reason == "mixed_script"
+    assert clean_reply("взял iPhone, доволен", [_PROVOKING]).reason is None
 
 
 def test_an_answer_that_echoes_the_message_is_dropped() -> None:
@@ -190,7 +190,7 @@ def test_an_answer_that_echoes_the_message_is_dropped() -> None:
     It is also how a payload re-enters our own context: the reply lands in the same
     chat the next poll reads, this time flagged as ours.
     """
-    verdict = clean_reply(_PROVOKING, _PROVOKING)
+    verdict = clean_reply(_PROVOKING, [_PROVOKING])
 
     assert verdict.text is None
     assert verdict.reason == "echo"
@@ -205,7 +205,7 @@ def test_a_short_lift_out_of_a_long_message_is_dropped_too() -> None:
     long_message = " ".join(f"слово{index}" for index in range(40))
     lift = " ".join(f"слово{index}" for index in range(8))
 
-    assert clean_reply(lift, long_message).reason == "echo"
+    assert clean_reply(lift, [long_message]).reason == "echo"
 
 
 def test_a_short_answer_made_of_the_message_s_own_words_is_not_a_lift() -> None:
@@ -214,17 +214,17 @@ def test_a_short_answer_made_of_the_message_s_own_words_is_not_a_lift() -> None:
     Two words that both appear in the message are 100% contained in it and are also
     what half the real answers in a chat look like.
     """
-    assert clean_reply("пробовал доставку", _PROVOKING).text is not None
+    assert clean_reply("пробовал доставку", [_PROVOKING]).text is not None
 
 
 @pytest.mark.parametrize(("candidate", "reason"), [("", "empty"), ("   \n  ", "empty")])
 def test_an_empty_answer_is_refused(candidate: str, reason: str) -> None:
-    assert clean_reply(candidate, _PROVOKING).reason == reason
+    assert clean_reply(candidate, [_PROVOKING]).reason == reason
 
 
 def test_a_long_answer_is_refused_rather_than_truncated() -> None:
     """A cut sentence reads as a broken bot, and a payload can survive the cut."""
-    verdict = clean_reply("а" * (settings.neuroshilling.reply_max_chars + 1), _PROVOKING)
+    verdict = clean_reply("а" * (settings.neuroshilling.reply_max_chars + 1), [_PROVOKING])
 
     assert verdict.text is None
     assert verdict.reason == "too_long"
@@ -233,11 +233,11 @@ def test_a_long_answer_is_refused_rather_than_truncated() -> None:
 def test_a_wordy_answer_is_refused_even_when_it_is_short_enough() -> None:
     words = " ".join(["да"] * (settings.neuroshilling.reply_max_words + 1))
 
-    assert clean_reply(words, _PROVOKING).reason == "too_long"
+    assert clean_reply(words, [_PROVOKING]).reason == "too_long"
 
 
 def test_a_clean_answer_comes_back_flattened_to_one_line() -> None:
     """A multi-line answer can forge a quote or a system notice; one line cannot."""
-    verdict = clean_reply("  да,\n  вполне  норм **сойдёт**  ", _PROVOKING)
+    verdict = clean_reply("  да,\n  вполне  норм **сойдёт**  ", [_PROVOKING])
 
     assert verdict == ("да, вполне норм сойдёт", None)

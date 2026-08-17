@@ -59,6 +59,8 @@ from services.content import is_acceptable, release_sent_text, try_reserve_sent
 from services.neuroshilling import _dispatch, _prompt, _reply_guard, _seams, _state, _telegram
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from schemas.neuroshilling import NeuroshillingCampaign
     from services.neuroshilling._context import RunContext
 
@@ -189,17 +191,16 @@ async def _refuse(account_id: str | None, target: str, reason: str) -> None:
     )
 
 
-async def _draft(context: RunContext, target: str, message: NeuroshillingChatMessage) -> str | None:
+async def _draft(
+    history: Sequence[NeuroshillingChatMessage],
+    message: NeuroshillingChatMessage,
+) -> str | None:
     """Ask the model for one answer. ``None`` means nothing usable came back.
 
-    The context read happens HERE and not at the poll, so the conversation quoted
-    is the one as it stands at the moment of answering.
+    Takes the conversation rather than reading it, because the caller needs the very
+    same messages afterwards: the echo gate weighs the answer against everything that
+    went into this prompt, and a second read could return a different set.
     """
-    history = await repository.list_recent_chat(
-        context.campaign.campaign_id,
-        target,
-        limit=settings.neuroshilling.chat_context_messages,
-    )
     prompt = _prompt.build_reply_prompt(history, message)
     # Charged at the worst case and before the call, exactly as the scenario
     # generator charges it: the gateway retries a transient failure inside one call,
@@ -343,14 +344,23 @@ async def _answer(
         # construction and needs the same ceiling a click-driven generation has.
         await _refuse(account_id, target, refusal)
         return
+    # Read here and not at the poll, so the conversation quoted is the one as it stands
+    # at the moment of answering.
+    history = await repository.list_recent_chat(
+        context.campaign.campaign_id,
+        target,
+        limit=settings.neuroshilling.chat_context_messages,
+    )
     try:
-        candidate = await _draft(context, target, message)
+        candidate = await _draft(history, message)
     finally:
         _state.finish_generation(context.campaign.campaign_id)
     if candidate is None:
         await _refuse(account_id, target, _LLM_UNAVAILABLE)
         return
-    verdict = _reply_guard.clean_reply(candidate, message.text)
+    # Every text the prompt carried, in the order it carried them: the conversation and
+    # then the provoking message, which the prompt repeats as a block of its own.
+    verdict = _reply_guard.clean_reply(candidate, [*(item.text for item in history), message.text])
     if verdict.text is None:
         await _refuse(account_id, target, verdict.reason or _LLM_UNAVAILABLE)
         return
