@@ -242,12 +242,16 @@ async def test_listener_join_pass_cannot_spend_a_slot_a_running_campaign_is_taki
 ) -> None:
     """The listener's channel-join pass is the third charger of that one budget.
 
-    It charges the log with the listener account, and an operator can put that account
-    in a neuroshilling roster: ``_claim_accounts`` asks the neurocomment campaign
-    membership and the ownership registry, and the listener is in neither. Two join
-    passes then run on one account — and this one is deliberately reading the count
-    while the campaign's join is still in flight, the window that let both of them pass
-    a cap of one and charge it twice.
+    It charges the log with the listener account, and it is deliberately reading the
+    count while another charger's join is still in flight — the window that let both of
+    them pass a cap of one and charge it twice.
+
+    The other charger here is a neuroshilling campaign, which since the listener
+    exclusion can no longer hold the listener's account: ``_claim_accounts`` refuses a
+    roster carrying it. It is kept as the counterparty because it drives the same log
+    through the fewest moving parts; what is under test is the mutex's ordering, which
+    pair onboarding — an overlap that IS still reachable on this account — depends on in
+    exactly the same way.
 
     The campaign's RPC waits on the pass's counts instead of sleeping through them, so
     which of the two charges first is settled by the mutex rather than by the machine.

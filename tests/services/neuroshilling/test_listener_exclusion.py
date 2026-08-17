@@ -20,7 +20,7 @@ from core.repositories.neurocomment import set_listener_account_id, set_listener
 from services import _account_owner
 from services.neurocomment import _runtime as nc_runtime
 from services.neurocomment import _runtime_operations as nc_operations
-from services.neuroshilling import _runtime, engine
+from services.neuroshilling import _runtime, campaigns, engine
 from services.neuroshilling.campaigns import NeuroshillingConflictError
 from tests.services.neuroshilling.helpers import seed_campaign
 
@@ -139,6 +139,39 @@ async def test_a_campaign_starts_on_the_account_the_listener_moved_off(
     assert status.status == "running"
     assert _account_owner.owner_of("acc-2") == "neuroshilling"
     await _runtime.stop_campaign(seeded.campaign_id)
+
+
+@pytest.mark.asyncio
+async def test_the_board_marks_the_account_the_listener_is_running_on() -> None:
+    """The refusal must be readable BEFORE Start, or it is a late silent one.
+
+    ``busy_owner`` greys the row out in the picker and the launch card turns it into a
+    blocking reason, so this is where the operator learns the roster cannot run — rather
+    than from a 409 after pressing the button.
+    """
+    seeded = await seed_campaign()
+    await nc_runtime.start_neurocomment("acc-2")
+
+    board = await campaigns.load_board(seeded.campaign_id)
+
+    assert board is not None
+    # ``neurocomment``, the owner the picker already knows, because that is the feature
+    # holding the session; no campaign name, because a listener is not one.
+    held = {item.account_id: (item.busy_owner, item.busy_campaign_name) for item in board.available}
+    assert held == {"acc-1": (None, None), "acc-2": ("neurocomment", None)}
+
+
+@pytest.mark.asyncio
+async def test_the_board_leaves_the_account_of_a_paused_listener_free() -> None:
+    """Same reading the refusal takes, so the card cannot say busy where Start says go."""
+    seeded = await seed_campaign()
+    await set_listener_account_id("acc-2")
+    await set_listener_running(running=False)
+
+    board = await campaigns.load_board(seeded.campaign_id)
+
+    assert board is not None
+    assert [item.busy_owner for item in board.available] == [None, None]
 
 
 @pytest.mark.asyncio
