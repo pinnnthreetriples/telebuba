@@ -73,9 +73,18 @@ async def test_join_failure_persists_complete_audit_contract(
     await _runtime.reconcile_neurocomment_runtime("listener-1")
     await _drain_joins()
 
+    # Sorted by event name rather than read in journal order: nothing orders these two
+    # rows. ``_reconcile_owned`` hands the paced join pass to a background task via
+    # ``_ensure_join_running`` and writes ``neurocomment_runtime_reconciled`` after that,
+    # while ``run_join_pass`` writes ``neurocomment_listener_join_failed`` from the task
+    # and takes no lifecycle lock; ``log_event`` then hands each insert to a worker
+    # thread, which is where SQLite assigns the id — so the call that submits its insert
+    # first can still lose the autoincrement. The rest stays exact: the whole list is
+    # compared, so a missing row, a duplicate, or one altered
+    # level/status/account_id/extra field still fails.
     relevant = [
         (row.level, row.status, row.account_id, row.event, row.extra)
-        for row in await list_recent_logs(limit=20)
+        for row in sorted(await list_recent_logs(limit=20), key=lambda row: row.event)
         if row.event
         in {
             "neurocomment_listener_join_failed",
