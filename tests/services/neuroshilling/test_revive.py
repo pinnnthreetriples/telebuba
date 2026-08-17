@@ -9,10 +9,10 @@ from sqlalchemy import select
 
 from core.db import _get_engine
 from core.repositories.neuroshilling._tables import _neuroshilling_messages
-from schemas.telegram_actions import ResolveChatResult
+from schemas.telegram_actions import PostComment, ResolveChatResult
 from services.neuroshilling import _revive, _seams, _telegram, engine
 from services.neuroshilling.campaigns import run_status
-from tests.services.neuroshilling.helpers import seed_campaign, sent
+from tests.services.neuroshilling.helpers import refused, seed_campaign, sent
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult, TelegramAction, TelegramReadAction
@@ -31,10 +31,13 @@ class _Wiring:
         self.cycles = cycles
         self.joins: list[tuple[str, str]] = []
         self.sends: list[tuple[str, TelegramAction]] = []
+        self.answers: list[ActionResult] = []
         self.cycle_pauses = 0
 
     async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
         self.sends.append((account_id, action))
+        if self.answers:
+            return self.answers.pop(0)
         return sent(100 + len(self.sends))
 
     async def execute_read(
@@ -61,6 +64,11 @@ class _Wiring:
         if self.cycle_pauses >= self.cycles:
             raise _StoppedError
         return 0.0
+
+
+def _published(wiring: _Wiring) -> list[str]:
+    """The text of every message that actually reached the gateway, in order."""
+    return [action.text for _account_id, action in wiring.sends if isinstance(action, PostComment)]
 
 
 async def _journal_run_ids() -> list[str]:
@@ -110,23 +118,74 @@ async def test_a_revive_run_never_joins_the_chat(wiring: _Wiring) -> None:
 
 
 @pytest.mark.asyncio
-async def test_each_cycle_journals_under_a_key_of_its_own(wiring: _Wiring) -> None:
-    """The unique index is what makes a campaign safe and what makes revive loop.
+async def test_every_cycle_says_the_whole_dialogue_again(wiring: _Wiring) -> None:
+    """Two gates key on the very thing a cycle repeats, and neither may swallow it.
 
-    ``(run_id, target, step_id)`` is exactly right for a campaign — a step is never
-    played into a chat twice — so a second cycle under the same id would insert
-    nothing and post nothing. The cycle number is a suffix on the journal key and
-    NOT on the campaign's ``run_id``, which stays the identity Stop settles against.
+    The journal is unique on ``(run_id, target, step_id)`` — exactly right for a
+    campaign, which must never play a step into a chat twice — and the dedup store
+    holds a chat's texts for a week. A cycle reusing either key posts nothing. So the
+    cycle number is a suffix on the journal key AND on the dedup reservation, and on
+    neither the campaign's ``run_id``, which stays the identity Stop settles against.
+
+    Asserted on what went OUT and not on the rows: ``claim_message`` writes its row
+    before the content gate is consulted at all, so a cycle that published nothing
+    still leaves a full set of rows behind and a row count cannot tell the two apart.
     """
     seeded = await seed_campaign(mode="revive", targets="@mychat")
 
     with pytest.raises(_StoppedError):
         await engine.run_campaign(seeded.campaign_id, _RUN)
 
-    run_ids = await _journal_run_ids()
+    dialogue = [step.text for step in seeded.steps]
+    assert _published(wiring) == dialogue * wiring.cycles
+    assert set(await _journal_run_ids()) == {f"{_RUN}#1", f"{_RUN}#2"}
 
-    assert set(run_ids) == {f"{_RUN}#1", f"{_RUN}#2"}
-    assert len(run_ids) == wiring.cycles * len(seeded.steps)
+
+@pytest.mark.asyncio
+async def test_a_resumed_run_counts_its_cycles_on_from_the_journal(wiring: _Wiring) -> None:
+    """A cycle number that restarted at zero would replay into keys already taken.
+
+    ``claim_message`` refuses each of them and the step counts as played, so every
+    cycle the killed process had got through is paid for again in step delays, the
+    listening window and the pause between cycles — and says nothing.
+    """
+    # The per-chat daily ceiling is a campaign's, and this run puts four cycles into
+    # one chat; 0 is the mode's own answer to a dialogue that repeats all day.
+    seeded = await seed_campaign(
+        mode="revive",
+        targets="@mychat",
+        messages_per_chat_per_day=0,
+    )
+    with pytest.raises(_StoppedError):
+        await engine.run_campaign(seeded.campaign_id, _RUN)
+    # The loop's stop condition lives on the fixture, not in the run's own state.
+    wiring.cycle_pauses = 0
+
+    with pytest.raises(_StoppedError):
+        await engine.run_campaign(seeded.campaign_id, _RUN)
+
+    dialogue = [step.text for step in seeded.steps]
+    assert _published(wiring) == dialogue * wiring.cycles * 2
+    assert set(await _journal_run_ids()) == {f"{_RUN}#{cycle}" for cycle in (1, 2, 3, 4)}
+
+
+@pytest.mark.asyncio
+async def test_the_loop_ends_when_every_speaker_has_been_halted(wiring: _Wiring) -> None:
+    """The one exit that is not cancellation — asserted by NOT needing the fixture.
+
+    Every other case here has to raise its way out of a loop that never ends. A
+    flood is a verdict on the SESSION, so it takes the account out of the run for
+    good; once the last one holding a resolved chat has gone, nobody is left to say
+    a line and the loop stops on its own. ``chat_blocked`` is deliberately not this
+    — it ends the step loop for one cycle and halts nobody — so a target the fleet
+    lost keeps being acted in, which is what ``_revive.run`` now says it does.
+    """
+    seeded = await seed_campaign(mode="revive", targets="@mychat")
+    wiring.answers = [refused("flood_wait", flood_wait_seconds=60) for _ in seeded.steps]
+
+    await engine.run_campaign(seeded.campaign_id, _RUN)
+
+    assert len(wiring.sends) == len(seeded.steps)
 
 
 @pytest.mark.asyncio

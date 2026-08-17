@@ -13,6 +13,11 @@ on purpose — global dedup would let the first target through and refuse every 
 a duplicate of it. Scoped, the gate still fires on what really is a signal: the same
 words twice in the same chat, including a re-run of a dialogue that chat already has.
 
+A SCENARIO step of a ``revive`` run is scoped narrower still — :func:`_step_dedup_key`
+adds the cycle — because saying the same lines into the same chat again is that mode
+rather than an accident of it. The autoreply path keeps the plain target key: it
+publishes a freshly generated sentence every time, so a repeat there really is one.
+
 **One outcome is never settled.** A dispatch already on the wire when the connection
 died answers ``unconfirmed``; Telegram may have applied it, so the row stays ``pending``
 and nothing ever retries it. The boot sweep turns those into ``failed`` without deleting
@@ -66,6 +71,35 @@ def dedup_key(target: str, text: str) -> str:
     return f"{target}\n{text}"
 
 
+def _step_dedup_key(context: RunContext, target: str, text: str) -> str:
+    """:func:`dedup_key` for a scenario step, carrying the cycle on a revive run.
+
+    ``context.run_id`` is ``f"{run}#{n}"`` inside a cycle and the plain run id
+    everywhere else — ``_revive._cycle_context`` is the only writer of the suffix —
+    so naming it here scopes the reservation to ONE cycle. Without that, cycle 1's
+    reservation stands for the whole ``content_dedup_window_days`` (7 by default) and
+    every later cycle is refused as a repeat of it: the step settles ``skipped`` with
+    ``neuroshilling_text_duplicate`` and a run whose entire shape is repetition
+    publishes exactly one round and then nothing for a week.
+
+    The gate is scoped rather than dropped for two reasons. One cycle is still one
+    pass of the dialogue, so the same line twice inside it is refused exactly as it is
+    inside a campaign's pass — the mode changes how often a dialogue restarts, not
+    what a single round of it may contain. And the reservation and the release in
+    :func:`_record` both come through here, so a failed revive send cannot delete a
+    hash some other campaign is holding for the same words.
+
+    What it costs: a revive run's SCENARIO steps stop sharing the dedup namespace with
+    anything else — its autoreplies keep the plain target key — so an ordinary campaign
+    posting the same wording into the same chat is no longer refused as a duplicate of
+    a revive line, nor a revive line of it. Both are the operator asking for that chat
+    to receive those words, and only one of them is the signal the gate exists for.
+    """
+    if context.campaign.mode != "revive":
+        return dedup_key(target, text)
+    return f"{context.run_id}\n{dedup_key(target, text)}"
+
+
 def _key(context: RunContext, target: str, step: NeuroshillingStep) -> NeuroshillingStepKey:
     return NeuroshillingStepKey(run_id=context.run_id, target=target, step_id=step.step_id)
 
@@ -81,7 +115,7 @@ async def vet_text(
     if not is_acceptable(text):
         await skip(context, target, step, "neuroshilling_text_rejected", account_id)
         return False
-    if not await try_reserve_sent(dedup_key(target, text)):
+    if not await try_reserve_sent(_step_dedup_key(context, target, text)):
         await skip(context, target, step, "neuroshilling_text_duplicate", account_id)
         return False
     return True
@@ -220,7 +254,7 @@ async def _record(
         # media step with no caption reserved the bare target's hash, so one failed
         # media send held it for the whole 7-day window and blocked every other
         # captionless media step into that chat.
-        await release_sent_text(dedup_key(target, step.text.strip()))
+        await release_sent_text(_step_dedup_key(context, target, step.text.strip()))
     if verdict == "sent":
         await repository.settle_message(
             _key(context, target, step),
