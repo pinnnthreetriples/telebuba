@@ -346,14 +346,17 @@ async def _answer(
         # construction and needs the same ceiling a click-driven generation has.
         await _refuse(account_id, target, refusal)
         return
-    # Read here and not at the poll, so the conversation quoted is the one as it stands
-    # at the moment of answering.
-    history = await repository.list_recent_chat(
-        context.campaign.campaign_id,
-        target,
-        limit=settings.neuroshilling.chat_context_messages,
-    )
     try:
+        # Read here and not at the poll, so the conversation quoted is the one as it
+        # stands at the moment of answering — and INSIDE the ``finally``, because a read
+        # that raises outside it would leave the campaign's generation slot claimed for
+        # the life of the process: every later autoreply and every click on Generate
+        # would answer ``generation_in_progress``.
+        history = await repository.list_recent_chat(
+            context.campaign.campaign_id,
+            target,
+            limit=settings.neuroshilling.chat_context_messages,
+        )
         candidate = await _draft(history, message)
     finally:
         _state.finish_generation(context.campaign.campaign_id)

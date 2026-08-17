@@ -17,7 +17,7 @@ from core.repositories import neuroshilling as repository
 from schemas.gemini import GeminiResult
 from schemas.neuroshilling import NeuroshillingChatMessage, NeuroshillingStepKey
 from schemas.telegram_actions import PostComment
-from services.neuroshilling import _autoreply, _seams
+from services.neuroshilling import _autoreply, _seams, _state
 from services.neuroshilling._context import RunContext
 from tests.services.neuroshilling.helpers import seed_campaign, sent
 
@@ -499,6 +499,32 @@ async def test_the_chat_ceiling_is_the_chats_and_not_one_campaigns(
     await _autoreply.consider(second_fleet, _TARGET, _CHATS, refused)
 
     assert len(model.prompts) == 1
+
+
+@pytest.mark.usefixtures("wired")
+@pytest.mark.asyncio
+async def test_a_failed_context_read_hands_the_generation_slot_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The slot is claimed before the conversation is read, so the read owes the release.
+
+    The single-flight is a process-lifetime set rather than a lock with an owner, so a
+    read that escaped the ``finally`` left this campaign claimed for the life of the
+    process: every later autoreply and every click on Generate would answer
+    ``generation_in_progress``.
+    """
+    context = await _context()
+    message = await _observe(context, "а доставка быстрая?")
+
+    async def _unreadable(*_args: object, **_kwargs: object) -> None:
+        raise TimeoutError
+
+    monkeypatch.setattr(repository, "list_recent_chat", _unreadable)
+
+    with pytest.raises(TimeoutError):
+        await _autoreply.consider(context, _TARGET, _CHATS, message)
+
+    assert _state.try_start_generation(context.campaign.campaign_id) is None
 
 
 @pytest.mark.usefixtures("wired")
