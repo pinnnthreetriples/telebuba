@@ -141,6 +141,10 @@ export function LaunchCard({
   const sent = run.sent ?? 0;
   const total = run.total ?? 0;
   const percent = total === 0 ? 0 : Math.min(100, Math.round((sent / total) * 100));
+  // A revive campaign loops until it is stopped, so the server sends no total and
+  // there is nothing to be a fraction of. The counter replaces the bar rather than
+  // sitting beside an empty one.
+  const looping = campaign.mode === 'revive';
   const titleOf = (accountId: string) =>
     pool.find((account) => account.account_id === accountId)?.title ?? accountId;
   const halted = run.halted_accounts ?? [];
@@ -206,22 +210,27 @@ export function LaunchCard({
             a skipped reaction is not lost progress, so presenting the bar as
             counting every step would make it lie downward. */}
         <span className="ml-auto text-[11.5px] tabular-nums text-ink-subtle">
-          {t('neuroshilling.launch.progress', { sent, total })}
+          {t(looping ? 'neuroshilling.launch.sentTotal' : 'neuroshilling.launch.progress', {
+            sent,
+            total,
+          })}
         </span>
       </div>
-      <div
-        role="progressbar"
-        aria-label={t('neuroshilling.launch.progressLabel')}
-        aria-valuemin={0}
-        aria-valuemax={total}
-        aria-valuenow={sent}
-        className="mb-[12px] h-[7px] w-full overflow-hidden rounded-full bg-[#eceae6]"
-      >
+      {looping ? null : (
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-500"
-          style={{ width: `${String(percent)}%` }}
-        />
-      </div>
+          role="progressbar"
+          aria-label={t('neuroshilling.launch.progressLabel')}
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={sent}
+          className="mb-[12px] h-[7px] w-full overflow-hidden rounded-full bg-[#eceae6]"
+        >
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-500"
+            style={{ width: `${String(percent)}%` }}
+          />
+        </div>
+      )}
 
       {/* Shown only while the run is really reading: the three switches are on the
           campaign row already, and what the operator cannot see from there is

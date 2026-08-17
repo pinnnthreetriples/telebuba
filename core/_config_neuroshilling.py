@@ -89,7 +89,6 @@ class NeuroshillingSettings(BaseSettings):
     reply_chance_calm: float = Field(default=0.1, ge=0.0, le=1.0)
     reply_chance_medium: float = Field(default=0.3, ge=0.0, le=1.0)
     reply_chance_active: float = Field(default=0.6, ge=0.0, le=1.0)
-
     # Ceilings on ONE published autoreply, enforced by a parser and not by asking the
     # model. Both are here rather than in the prompt because the text that provoked
     # the answer is written by a stranger: an instruction can be talked out of, a
@@ -101,6 +100,9 @@ class NeuroshillingSettings(BaseSettings):
     # dropped as an echo. Jaccard over token sets (``services.content.similarity``),
     # so 1.0 would disable the check and 0.0 would refuse everything.
     reply_echo_threshold: float = Field(default=0.6, gt=0.0, le=1.0)
+    # Pause between two cycles of a ``revive`` campaign, which loops until stopped.
+    revive_cycle_min_seconds: float = Field(default=600.0, ge=0.0)
+    revive_cycle_max_seconds: float = Field(default=1800.0, ge=0.0)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeuroshillingSettings:
@@ -112,5 +114,8 @@ class NeuroshillingSettings(BaseSettings):
             raise ValueError(msg)
         if self.poll_min_seconds > self.poll_max_seconds:
             msg = "poll_min_seconds must not exceed poll_max_seconds"
+            raise ValueError(msg)
+        if self.revive_cycle_min_seconds > self.revive_cycle_max_seconds:
+            msg = "revive_cycle_min_seconds must not exceed revive_cycle_max_seconds"
             raise ValueError(msg)
         return self

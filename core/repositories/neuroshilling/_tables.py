@@ -21,6 +21,7 @@ from __future__ import annotations
 from sqlalchemy import (
     CheckConstraint,
     Column,
+    ColumnElement,
     ForeignKey,
     Index,
     Integer,
@@ -206,7 +207,6 @@ _neuroshilling_messages = Table(
     Index("ix_ns_messages_chat_day", "account_id", "target", "created_at"),
 )
 
-
 # Every message the poller has seen in a target chat — the only table in the
 # domain whose ``text`` column is written by strangers. See
 # ``core.migration_steps_neuroshilling_chat`` for what each column means; the two
@@ -239,3 +239,22 @@ _neuroshilling_chat_log = Table(
     Index("ux_ns_chat_log_msg", "campaign_id", "target", "message_id", unique=True),
     Index("ix_ns_chat_log_reply", "reply_account_id", "replied_at"),
 )
+
+
+def run_scope(run_id: str) -> ColumnElement[bool]:
+    """Journal rows belonging to ``run_id``, INCLUDING its revive cycles.
+
+    A revive campaign loops for ever, replaying the same dialogue into the same
+    chat on purpose, so every cycle needs a journal key of its own —
+    ``ux_ns_messages_step`` is unique on ``(run_id, target, step_id)`` and would
+    turn the second cycle into a silent no-op otherwise. The cycles therefore write
+    ``f"{run_id}#{n}"``, and the two questions asked about a whole RUN — what did it
+    deliver, and what did it leave mid-flight when the process died — have to see
+    those rows as well as the plain ones.
+
+    Safe as a bare ``LIKE`` because a run id is ``uuid4().hex``: no ``%`` and no
+    ``_`` can appear in one, so nothing in the prefix is a wildcard.
+    """
+    return (_neuroshilling_messages.c.run_id == run_id) | _neuroshilling_messages.c.run_id.like(
+        f"{run_id}#%",
+    )

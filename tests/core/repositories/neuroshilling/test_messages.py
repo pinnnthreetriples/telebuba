@@ -13,13 +13,18 @@ from core.repositories.neuroshilling import (
     create_campaign,
     fail_pending_messages,
     fetch_message_id,
+    hand_over_message,
     list_journalled_steps,
     list_sent_message_ids,
     read_quota_usage,
     replace_scenario,
     settle_message,
 )
-from schemas.neuroshilling import NeuroshillingCampaignCreate, NeuroshillingStepKey
+from schemas.neuroshilling import (
+    NeuroshillingCampaignCreate,
+    NeuroshillingMessageStatus,
+    NeuroshillingStepKey,
+)
 from schemas.neuroshilling_scenario import NeuroshillingRoleInput, NeuroshillingStepInput
 
 if TYPE_CHECKING:
@@ -28,6 +33,9 @@ if TYPE_CHECKING:
 _PAST = "1970-01-01T00:00:00+00:00"
 _FUTURE = "2999-01-01T00:00:00+00:00"
 _RUN = "run-1"
+# Typed rather than a bare list of strings, so the parametrised call type-checks
+# against ``settle_message``'s literal instead of being silenced at the call site.
+_NOT_FAILED: list[NeuroshillingMessageStatus] = ["pending", "sent", "skipped"]
 
 
 def _key(target: str, step_id: str) -> NeuroshillingStepKey:
@@ -115,6 +123,36 @@ async def test_the_boot_sweep_keeps_the_row_so_the_key_stays_taken() -> None:
     assert swept == 1
     assert ("alpha", steps[0].step_id) in await list_journalled_steps(_RUN)
     assert await _claim(campaign_id, "alpha", steps[0].step_id, "acc-1", "a") is False
+
+
+@pytest.mark.asyncio
+async def test_a_failed_row_is_handed_to_the_substitute_over_its_own_key() -> None:
+    """The substitution's whole storage move: one UPDATE, no second key.
+
+    A fresh insert would collide with the row the banned account left, and a delete
+    followed by an insert would open a window in which the step looks unplayed.
+    """
+    campaign_id, steps = await _campaign()
+    await _claim(campaign_id, "alpha", steps[0].step_id, "acc-1", "a")
+    await settle_message(_key("alpha", steps[0].step_id), status="failed", error_type="Banned")
+
+    assert await hand_over_message(_key("alpha", steps[0].step_id), account_id="res-1")
+
+    assert await settle_message(_key("alpha", steps[0].step_id), status="sent", message_id=9)
+    assert await fetch_message_id(_key("alpha", steps[0].step_id)) == 9
+    assert await list_journalled_steps(_RUN) == {("alpha", steps[0].step_id)}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", _NOT_FAILED)
+async def test_only_a_failed_row_may_be_handed_over(status: NeuroshillingMessageStatus) -> None:
+    """``pending`` may still be in flight, ``sent`` is published, ``skipped`` was refused."""
+    campaign_id, steps = await _campaign()
+    await _claim(campaign_id, "alpha", steps[0].step_id, "acc-1", "a")
+    if status != "pending":
+        await settle_message(_key("alpha", steps[0].step_id), status=status)
+
+    assert await hand_over_message(_key("alpha", steps[0].step_id), account_id="res-1") is False
 
 
 @pytest.mark.asyncio
@@ -214,6 +252,28 @@ async def test_progress_counts_delivered_messages_and_not_reactions() -> None:
     await _claim(campaign_id, "alpha", steps[1].step_id, "acc-1", "b")
 
     assert await count_sent_message_steps(_RUN) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_revive_cycles_rows_belong_to_the_run_that_spawned_them() -> None:
+    """``run_scope`` folds ``{run_id}#{n}`` in, and both run-wide questions need it.
+
+    A revive campaign replays the same dialogue for ever, so each cycle journals
+    under a key of its own — otherwise the unique index turns the second cycle into
+    a silent no-op. The progress counter then has to keep climbing across cycles,
+    and the boot sweep has to settle a cycle's interrupted rows: an unswept
+    ``pending`` row goes on consuming the account's quota for good.
+    """
+    campaign_id, steps = await _campaign()
+    cycle = NeuroshillingStepKey(run_id=f"{_RUN}#2", target="alpha", step_id=steps[0].step_id)
+    await claim_message(cycle, campaign_id=campaign_id, account_id="acc-1", text="a")
+    await settle_message(cycle, status="sent", message_id=9)
+    await _claim(campaign_id, "alpha", steps[1].step_id, "acc-1", "b")
+
+    assert await count_sent_message_steps(_RUN) == 1
+    assert await fail_pending_messages(_RUN) == 1
+    # The plain key is not a prefix of another run's, so nothing else is swept.
+    assert await fail_pending_messages("run") == 0
 
 
 @pytest.mark.asyncio

@@ -2250,6 +2250,10 @@ export type NeuroshillingRoleInput = {
  * ``listening`` says the run is reading its target chats as well as writing to
  * them. Not derivable on the client from the campaign row alone: the three switches
  * that turn it on are stored, but whether a run is actually in flight is not.
+ *
+ * ``total`` is zero in ``revive`` mode and that is a value rather than a gap: a
+ * revive campaign loops until it is stopped, so there is no denominator to divide
+ * by and the card shows a counter instead of a bar.
  */
 export type NeuroshillingRunStatus = {
   /**
