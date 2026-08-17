@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import type { NeuroshillingBoardAccount } from '@/shared/api';
 import { Modal } from '@/shared/ui';
 
-// The picker edits a DRAFT and saves it once, on close. The obvious alternative —
-// one request per click, the way the neurocomment picker works — cannot be used
-// here: the roster travels inside the whole-form `updateNeuroshillingCampaign`
-// body, so two quick clicks would send two bodies both derived from the same
-// pre-click board and the second would silently undo the first.
+// The picker edits a DRAFT and saves it once, when the operator says so. The
+// obvious alternative — one request per click, the way the neurocomment picker
+// works — cannot be used here: the roster travels inside the whole-form
+// `updateNeuroshillingCampaign` body, so two quick clicks would send two bodies
+// both derived from the same pre-click board and the second would silently undo
+// the first.
 export function NeuroshillingAccountsModal({
   accounts,
   onClose,
@@ -19,12 +20,17 @@ export function NeuroshillingAccountsModal({
   onSave: (accountIds: string[]) => void;
 }) {
   const { t } = useTranslation();
+  // Seeded from the pool ONCE, at mount, and the operator's from then on: a later
+  // `accounts` (the board is refetched on every log frame) must not move rows they
+  // have already clicked. The page mounts this dialog only after the board has
+  // landed, so there is no earlier pool for the seed to miss.
   const [picked, setPicked] = useState(
     () => new Set(accounts.filter((account) => account.assigned).map((a) => a.account_id)),
   );
 
-  // Every way out of this dialog is a save (backdrop, Escape, the button): the
-  // card announces "saved on close", so a discarding exit would be a trap.
+  // Only «done» reaches this. The backdrop, Escape and «cancel» drop the draft,
+  // which is the dialog's only undo: the save replaces the WHOLE roster, and a
+  // held account taken off it cannot be picked up again here.
   const commit = () => {
     onSave([...picked]);
     onClose();
@@ -50,7 +56,7 @@ export function NeuroshillingAccountsModal({
 
   return (
     <Modal
-      onClose={commit}
+      onClose={onClose}
       z={72}
       className="w-[560px]"
       label={t('neuroshilling.modal.accounts.title')}
@@ -104,7 +110,14 @@ export function NeuroshillingAccountsModal({
         ) : null}
       </div>
 
-      <div className="flex justify-end border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
+      <div className="flex justify-end gap-2 border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+        >
+          {t('neuroshilling.modal.accounts.cancel')}
+        </button>
         <button
           type="button"
           onClick={commit}

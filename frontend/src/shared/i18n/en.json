@@ -1675,11 +1675,13 @@
       },
       "accounts": {
         "title": "Accounts in the campaign",
-        "sub": "{{count}} accounts in the pool — pick the ones that will play the roles",
+        "sub_one": "{{count}} account in the pool — pick the ones that will play the roles",
+        "sub_other": "{{count}} accounts in the pool — pick the ones that will play the roles",
         "empty": "No accounts yet. Add one on the Accounts page first.",
         "add": "Add to campaign",
         "remove": "Remove from campaign",
         "done": "Done",
+        "cancel": "Cancel",
         "busy": {
           "warming": "held by warming",
           "neuroshilling": "held by another neuroshilling campaign",

@@ -20,7 +20,7 @@ const POOL: NeuroshillingBoardAccount[] = [
   },
 ];
 
-test('picks and drops accounts, then saves the whole roster once on close', async () => {
+test('picks and drops accounts, then saves the whole roster once on «done»', async () => {
   const onSave = vi.fn();
   const onClose = vi.fn();
   render(<NeuroshillingAccountsModal accounts={POOL} onClose={onClose} onSave={onSave} />);
@@ -50,6 +50,40 @@ test('an account another feature holds is disabled and says who holds it', () =>
 
   expect(screen.getByText('занят прогревом')).toBeInTheDocument();
   expect(screen.getByText('занят другой кампанией нейрошиллинга — Вторая')).toBeInTheDocument();
+});
+
+test('leaving without «done» writes nothing, so a wrong click can be taken back', async () => {
+  const onSave = vi.fn();
+  const onClose = vi.fn();
+  render(
+    // Held elsewhere AND on this roster: dropping it greys the row out, and this
+    // dialog offers no way to pick it up again — leaving is the whole undo.
+    <NeuroshillingAccountsModal
+      accounts={[{ account_id: 'a1', title: 'Алиса', assigned: true, busy_owner: 'warming' }]}
+      onClose={onClose}
+      onSave={onSave}
+    />,
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Убрать из кампании' }));
+
+  await userEvent.click(screen.getByText('Отмена'));
+
+  // The roster is replaced whole by the save, so an exit that wrote would turn a
+  // look at the list — or one stray click — into the loss of the campaign's cast.
+  expect(onSave).not.toHaveBeenCalled();
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('escape leaves the picker without writing the draft', async () => {
+  const onSave = vi.fn();
+  const onClose = vi.fn();
+  render(<NeuroshillingAccountsModal accounts={POOL} onClose={onClose} onSave={onSave} />);
+  await userEvent.click(screen.getAllByRole('button', { name: 'Добавить в кампанию' })[0]!);
+
+  await userEvent.keyboard('{Escape}');
+
+  expect(onSave).not.toHaveBeenCalled();
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 test('dropping an account that is already on the roster is always allowed', async () => {

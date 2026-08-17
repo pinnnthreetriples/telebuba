@@ -3,7 +3,8 @@
 // Lives in shared/ui rather than beside the settings form it started in: steiger's
 // `fsd/forbidden-imports` bars page→page imports, so every other screen that wants
 // this control would otherwise hand-roll its own copy — and the app already carries
-// one such copy (widgets/warming-board/ui/WarmConfigModal).
+// two such copies (widgets/warming-board/ui/WarmConfigModal and
+// pages/neurocomment/ui/CaptchaSolverCard).
 export function Switch({
   checked,
   onChange,
