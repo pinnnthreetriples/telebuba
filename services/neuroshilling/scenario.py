@@ -325,6 +325,9 @@ async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
     Validates what is STORED rather than what a body claims: approval is a verdict
     on the rows the engine will read, and taking the client's word for their
     contents is exactly the gate this is.
+
+    The write is conditional on the ``updated_at`` this verdict read — a save landing in
+    the media-read window must not be stamped ``approved`` — so the row is read back.
     """
     campaign = await repository.fetch_campaign(campaign_id)
     if campaign is None:
@@ -338,8 +341,7 @@ async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
     # and a scenario that is broken on its own terms should not cost N live reads to
     # find out.
     await _refuse_unreachable_media(campaign, steps)
-    if not await repository.approve_scenario(campaign_id):
-        return None
+    await repository.approve_scenario(campaign_id, expected_updated_at=campaign.updated_at)
     return await load_scenario(campaign_id)
 
 

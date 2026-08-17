@@ -43,6 +43,16 @@ def _step(role_key: str | None, text: str, **overrides: Any) -> NeuroshillingSte
     return NeuroshillingStepInput(role_id=role_key, text=text, **overrides)
 
 
+async def _approve(campaign_id: str) -> bool:
+    """Approve at whatever stamp the row carries now — the caller's own read of it."""
+    stored = await repository.fetch_campaign(campaign_id)
+    assert stored is not None
+    return await repository.approve_scenario(
+        campaign_id,
+        expected_updated_at=stored.updated_at,
+    )
+
+
 @pytest.mark.asyncio
 async def test_roles_and_steps_round_trip_in_order() -> None:
     campaign = await _campaign()
@@ -192,7 +202,7 @@ async def test_a_step_kept_at_its_position_keeps_its_id() -> None:
 async def test_writing_the_scenario_returns_an_approved_campaign_to_draft() -> None:
     campaign = await _campaign()
     await repository.replace_scenario(campaign.campaign_id, [_role("A", "a")], [_step("a", "hi")])
-    await repository.approve_scenario(campaign.campaign_id)
+    await _approve(campaign.campaign_id)
 
     await repository.replace_scenario(campaign.campaign_id, [_role("A", "a")], [_step("a", "hi")])
     stored = await repository.fetch_campaign(campaign.campaign_id)
@@ -242,19 +252,42 @@ async def test_the_media_slot_is_cleared_only_when_the_write_asks_for_it(
 async def test_approve_is_the_only_writer_of_approved() -> None:
     campaign = await _campaign()
 
-    approved = await repository.approve_scenario(campaign.campaign_id)
+    approved = await _approve(campaign.campaign_id)
     stored = await repository.fetch_campaign(campaign.campaign_id)
 
     assert approved is True
     assert stored is not None
     assert stored.scenario_status == "approved"
-    assert await repository.approve_scenario("nope") is False
+    assert await repository.approve_scenario("nope", expected_updated_at=_now_iso()) is False
+
+
+@pytest.mark.asyncio
+async def test_an_approval_naming_a_stamp_the_row_has_left_writes_nothing() -> None:
+    """The condition the service's gate rests on: a moved row refuses the approval.
+
+    Every write that changes what the gate validated moves ``updated_at`` in the same
+    transaction, so naming the stamp the verdict was reached on is what keeps ``approved``
+    off a scenario nobody approved.
+    """
+    campaign = await _campaign()
+    stale = campaign.updated_at
+    await repository.replace_scenario(campaign.campaign_id, [_role("A", "a")], [_step("a", "hi")])
+
+    approved = await repository.approve_scenario(
+        campaign.campaign_id,
+        expected_updated_at=stale,
+    )
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+
+    assert approved is False
+    assert stored is not None
+    assert stored.scenario_status == "draft"
 
 
 @pytest.mark.asyncio
 async def test_a_campaign_edit_can_ask_for_the_approval_to_be_dropped() -> None:
     campaign = await _campaign()
-    await repository.approve_scenario(campaign.campaign_id)
+    await _approve(campaign.campaign_id)
 
     kept = await repository.update_campaign(
         campaign.campaign_id,

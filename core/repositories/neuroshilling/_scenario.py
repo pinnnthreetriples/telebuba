@@ -237,15 +237,20 @@ def _set_scenario_status(
     status: str,
     *,
     clear_media_step: bool = False,
-) -> None:
+    expected_updated_at: str | None = None,
+) -> bool:
+    """Write the status; ``False`` = no row matched, so it is missing or has moved on."""
     values: dict[str, object] = {"scenario_status": status, "updated_at": _now_iso()}
     if clear_media_step:
         values["media_step_position"] = None
-    connection.execute(
-        update(_neuroshilling_campaigns)
-        .where(_neuroshilling_campaigns.c.campaign_id == campaign_id)
-        .values(**values),
+    statement = update(_neuroshilling_campaigns).where(
+        _neuroshilling_campaigns.c.campaign_id == campaign_id,
     )
+    if expected_updated_at is not None:
+        statement = statement.where(
+            _neuroshilling_campaigns.c.updated_at == expected_updated_at,
+        )
+    return connection.execute(statement.values(**values)).rowcount > 0
 
 
 def _replace_scenario(
@@ -295,15 +300,17 @@ async def replace_scenario(
     )
 
 
-def _approve_scenario(campaign_id: str) -> bool:
+def _approve_scenario(campaign_id: str, expected_updated_at: str) -> bool:
     with _get_engine().begin() as connection:
-        if not _campaign_exists(connection, campaign_id):
-            return False
-        _set_scenario_status(connection, campaign_id, "approved")
-    return True
+        return _set_scenario_status(
+            connection,
+            campaign_id,
+            "approved",
+            expected_updated_at=expected_updated_at,
+        )
 
 
-async def approve_scenario(campaign_id: str) -> bool:
+async def approve_scenario(campaign_id: str, *, expected_updated_at: str) -> bool:
     """Mark the campaign approved. The ONLY writer of ``scenario_status='approved'``.
 
     Validation is the service's, deliberately: the rule is about roles pointing at
@@ -311,5 +318,14 @@ async def approve_scenario(campaign_id: str) -> bool:
     constraint. What is enforced HERE is that no other write path can set it —
     ``update_campaign``'s editable-column tuple excludes ``scenario_status``, and
     ``replace_scenario`` only ever writes ``draft``.
+
+    ``expected_updated_at`` is the campaign's stamp as the validating read saw it, and
+    the write lands only while the row still carries it. The stamp moves in the same
+    transaction as each write the gate reads from: the roles and steps here, the topic,
+    the media slot and the roster in ``_campaigns._update_campaign``, the run state in
+    ``_campaigns._set_run_state``. So an edit — or a launch — that arrived while the
+    service was validating leaves nothing for this to match. ``False`` therefore means
+    one of two things, no campaign or a moved one, and the caller reads the row back
+    rather than being told which.
     """
-    return await asyncio.to_thread(_approve_scenario, campaign_id)
+    return await asyncio.to_thread(_approve_scenario, campaign_id, expected_updated_at)

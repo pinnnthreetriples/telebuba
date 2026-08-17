@@ -462,6 +462,118 @@ async def test_a_run_that_settles_mid_stop_does_not_wedge_the_campaign(
 
 @pytest.mark.usefixtures("no_sleep", "gateway")
 @pytest.mark.asyncio
+async def test_stopping_inside_a_step_gives_the_reserved_slot_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row reserved before a dispatch nobody made must not spend a slot for ever.
+
+    The journal row goes in BEFORE the send, and ``pending`` counts against the caps —
+    that is what makes an in-flight send visible. A Stop landing between the two leaves
+    the row behind and then clears ``run_id``, so no later boot sweep can even find it,
+    while the per-campaign total for that account has no window to forget it: ten such
+    stops are ten messages the account may never send again.
+    """
+    dispatching = asyncio.Event()
+
+    async def _parks(_account_id: str, _action: TelegramAction) -> ActionResult:
+        dispatching.set()
+        await asyncio.Event().wait()
+        raise AssertionError  # unreachable: the wait above only ends in cancellation
+
+    monkeypatch.setattr(_seams, "execute", _parks)
+    seeded = await seed_campaign()
+    await _runtime.start_campaign(seeded.campaign_id)
+    await asyncio.wait_for(dispatching.wait(), timeout=1)
+    live = await repository.fetch_campaign(seeded.campaign_id)
+    assert live is not None
+    assert live.run_id is not None
+
+    await _runtime.stop_campaign(seeded.campaign_id)
+
+    # The row stays, because its key must go on being occupied — nothing may replay a
+    # step whose dispatch might have reached Telegram after all.
+    assert ("alpha", seeded.steps[0].step_id) in await repository.list_journalled_steps(
+        live.run_id,
+    )
+    # And it is settled, so the slot it reserved is back in the account's allowance.
+    usage = await repository.read_quota_usage(
+        seeded.campaign_id,
+        "acc-1",
+        "alpha",
+        hour_since="2000-01-01T00:00:00+00:00",
+        day_since="2000-01-01T00:00:00+00:00",
+    )
+    assert usage.campaign_total == 0
+
+
+@pytest.mark.usefixtures("no_sleep", "gateway")
+@pytest.mark.asyncio
+async def test_a_stop_overtaken_by_a_start_leaves_the_new_run_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stop acts on a row a thread hop old; a whole new run can fit in that hop.
+
+    Driven by hand at the one point that produces it — the row is read, and before Stop
+    can act on it the run settles and the operator starts another. A ``gather`` cannot
+    arrange that: it would have to land the Start inside a single ``to_thread`` of Stop.
+
+    Unconditionally, Stop then fenced the NEW run, wrote its own ``stopping`` over the new
+    run id and cancelled the new task — and its settle was refused, because the successor
+    owned the settlement. The campaign stayed ``stopping`` with nothing playing it: Start
+    answered ``campaign_running``, another Stop took the same path to the same refusal,
+    and only a restart cleared it.
+    """
+    first_finished = asyncio.Event()
+    runs = 0
+
+    async def _first_ends_on_demand(_campaign_id: str, _run_id: str) -> None:
+        nonlocal runs
+        runs += 1
+        if runs == 1:
+            await first_finished.wait()
+            return
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(engine, "run_campaign", _first_ends_on_demand)
+    seeded = await seed_campaign()
+    await _runtime.start_campaign(seeded.campaign_id)
+    stopped = await repository.fetch_campaign(seeded.campaign_id)
+    assert stopped is not None
+    real_fetch = repository.fetch_campaign
+    overtake = True
+
+    async def _let_a_whole_run_turn_over(campaign_id: str) -> object:
+        nonlocal overtake
+        row = await real_fetch(campaign_id)
+        if overtake:
+            # Everything below happens while Stop is still holding this row: the run it
+            # names settles, and the operator's next Start mints a successor.
+            overtake = False
+            first_finished.set()
+            await _drain()
+            await _runtime.start_campaign(campaign_id)
+        return row
+
+    monkeypatch.setattr(repository, "fetch_campaign", _let_a_whole_run_turn_over)
+
+    await _runtime.stop_campaign(seeded.campaign_id)
+
+    monkeypatch.setattr(repository, "fetch_campaign", real_fetch)
+    successor = await repository.fetch_campaign(seeded.campaign_id)
+    assert successor is not None
+    assert successor.status == "running"
+    assert successor.run_id not in (None, stopped.run_id)
+    task = _runtime._TASKS.get(seeded.campaign_id)
+    assert task is not None
+    assert not task.done()
+    # And the operator is not locked out: a Stop of the run that IS live still works.
+    ended = await _runtime.stop_campaign(seeded.campaign_id)
+    assert ended is not None
+    assert ended.status == "done"
+
+
+@pytest.mark.usefixtures("no_sleep", "gateway")
+@pytest.mark.asyncio
 async def test_stop_keeps_the_roster_until_a_slow_run_has_unwound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

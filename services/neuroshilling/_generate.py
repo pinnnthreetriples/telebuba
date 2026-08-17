@@ -21,7 +21,9 @@ Three properties this module is responsible for, none of which the provider give
   steps that survive, a line spoken by nobody in the cast is dropped, and a
   ``reply_to_index`` that points forwards, at itself, or at a dropped step simply
   resolves to nothing. Repairing beats re-asking for all of these: they cost one
-  line each, and burning a paid call on a line is worse than losing it.
+  line each, and burning a paid call on a line is worse than losing it — unless
+  the repair leaves no line at all, which is re-asked, because storing that would
+  overwrite the operator's dialogue with an empty one and call it a success.
 
 Thinking is off. ``thinking_budget`` defaults to ``0``, which ``core.openai``
 renders as ``{"type": "disabled"}`` — for cost and latency, not for correctness:
@@ -59,6 +61,11 @@ _CODE_FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
 
 _EMPTY_COMPLAINT = "it was empty or unparseable; answer with json and nothing else"
 _CUT_OFF_COMPLAINT = "it was cut off mid-answer; write fewer and shorter steps"
+# Every step was dropped one at a time, so the fault is per line rather than in the
+# shape of the answer — which is why it is worded as the two things a line needs.
+_ALL_DROPPED_COMPLAINT = (
+    "every step was unusable; give each reply some text, and point each reaction at an earlier step"
+)
 # Enough to point the model at the field, short enough not to crowd the prompt out.
 _MAX_COMPLAINT_CHARS = 300
 # The floor ``NeuroshillingGenerateRequest.step_count`` already declares: below two
@@ -230,5 +237,14 @@ async def generate_dialogue(
             continue
         draft, complaint = _read(result, ask.persona_count)
         if draft is not None:
-            return _to_update(draft, role_ids)
+            update = _to_update(draft, role_ids)
+            if update.steps:
+                return update
+            # An answer every one of whose steps was repaired away. ``_draft_problem``
+            # cannot see this: it reads the ANSWER, and each of these faults — a reply
+            # with no text, a reaction whose anchor was itself dropped — is legal there
+            # and only disappears in the renumbering. Returned, it would replace the
+            # dialogue with no dialogue and report success, so it is re-asked like any
+            # other answer nothing can be built from.
+            complaint = _ALL_DROPPED_COMPLAINT
     return None

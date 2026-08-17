@@ -20,8 +20,9 @@ publishes a freshly generated sentence every time, so a repeat there really is o
 
 **One outcome is never settled.** A dispatch already on the wire when the connection
 died answers ``unconfirmed``; Telegram may have applied it, so the row stays ``pending``
-and nothing ever retries it. The boot sweep turns those into ``failed`` without deleting
-them, so the unique key stays occupied either way.
+and nothing ever retries it. The run's own settle — or the next boot, for a process that
+never got one — turns those into ``failed`` without deleting them, so the unique key
+stays occupied either way.
 """
 
 from __future__ import annotations
@@ -221,9 +222,10 @@ async def dispatch(
     try:
         result = await _seams.execute(account_id, action)
     except (_seams.NeuroshillingRunRevokedError, asyncio.CancelledError):
-        # Stop, or shutdown. The row stays ``pending`` and the boot sweep settles it,
-        # exactly like a dispatch whose outcome we never learnt — because that is what
-        # this is.
+        # Stop, or shutdown. The row stays ``pending`` and a sweep settles it — Stop's own
+        # for the first, the next boot for a shutdown that leaves the campaign running —
+        # exactly like a dispatch whose outcome we never learnt, because that is what this
+        # is: the fence also fires AFTER the call, when Telegram may already have it.
         raise
     except Exception as exc:
         logger.exception("neuroshilling step failed for %s", account_id)
