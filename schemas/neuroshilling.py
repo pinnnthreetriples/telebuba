@@ -25,6 +25,26 @@ NeuroshillingAutoresponder = Literal["off", "neurodialog"]
 NeuroshillingReplyActivity = Literal["calm", "medium", "active"]
 NeuroshillingStatus = Literal["idle", "running", "stopping", "done", "failed"]
 NeuroshillingAccountState = Literal["active", "banned", "replaced"]
+# Where ONE account stands with ONE target. Not a property of the target: a chat id
+# is resolved out of the account's own session entity cache, and that cache is a
+# separate file per account, so "we are in this chat" is only ever true of an
+# account that itself joined. The five non-``pending`` states are the five outcomes
+# Telegram answers a join with, and only two of them mean "play the dialogue here".
+NeuroshillingPresenceState = Literal[
+    "pending",
+    "joined",
+    # The chat gates entry and our request is queued: the account is NOT inside, so
+    # running the steps here would fail every one of them.
+    "pending_approval",
+    # An expired or revoked invite, a chat that refuses us, or a peer shape whose
+    # message ids are not shared between accounts.
+    "refused",
+    # Telegram rate-limited this account; it stops for the whole run.
+    "flooded",
+    # The account is out of the campaign entirely (e.g. at Telegram's 500-chat
+    # ceiling), which is an ACCOUNT condition rather than a fault of this target.
+    "retired",
+]
 # Who is holding an account right now, as the accounts modal reports it.
 NeuroshillingBusyOwner = Literal["warming", "neuroshilling", "neurocomment"]
 
@@ -44,6 +64,10 @@ NeuroshillingRefusalCode = Literal[
     "generation_in_progress",
     "target_is_basic_group",
     "media_source_unreachable",
+    # Distinct from the one above, because the operator's next move is opposite: the
+    # media check never got an answer (a flood wait, a dead socket), so the link is
+    # not the problem and editing it fixes nothing.
+    "media_check_unavailable",
 ]
 
 _MAX_NAME = 120
@@ -92,6 +116,26 @@ class NeuroshillingCampaignAccount(BaseModel):
     role_id: str | None = None
     is_reserve: bool = False
     state: NeuroshillingAccountState = "active"
+
+
+class NeuroshillingPresence(BaseModel):
+    """One row of ``neuroshilling_presence`` — an (account, target) membership record.
+
+    ``chat_id`` is deliberately absent: it is per-account state that the run keeps in
+    memory and re-resolves after a restart for one RPC, whereas a stored id would go
+    stale the moment the account is replaced. What IS worth persisting is the
+    invite-bearing ``target`` and the outcome, so a cold account can join later
+    without re-deriving either.
+    """
+
+    account_id: str = Field(min_length=1)
+    target: str = Field(min_length=1)
+    state: NeuroshillingPresenceState = "pending"
+    # Exception CLASS NAME, never its text — this travels over HTTP like every
+    # other error field in the domain.
+    last_error_type: str | None = None
+    joined_at: str | None = None
+    updated_at: str = Field(min_length=1)
 
 
 class NeuroshillingCampaignCreate(BaseModel):

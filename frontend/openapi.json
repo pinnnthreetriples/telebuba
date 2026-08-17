@@ -9519,7 +9519,7 @@
           "neuroshilling"
         ],
         "summary": "Approve Scenario",
-        "description": "The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.",
+        "description": "The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.\n\n503 is the media check itself failing to happen \u2014 Telegram rate-limited the read\nor the socket died. Not 400: nothing about the scenario was found wanting, and\nanswering \"some accounts cannot see the media\" would send the operator to edit a\nlink that is fine.",
         "operationId": "approveNeuroshillingScenario",
         "parameters": [
           {
@@ -9611,6 +9611,16 @@
           },
           "409": {
             "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
             "content": {
               "application/json": {
                 "schema": {

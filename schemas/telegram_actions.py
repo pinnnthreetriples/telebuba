@@ -42,6 +42,15 @@ from schemas.telegram_actions_channels import (
     SetChannelPhoto,
 )
 
+# The chat-scoped cluster (resolve / react-in-place / copy media / read back) is a
+# sibling module too; the unions below reference every name.
+from schemas.telegram_actions_chat import (
+    CopyMessageMedia,
+    ReactToMessage,
+    ReadChatMessages,
+    ResolveChat,
+)
+
 # The comment cluster (the write action and the thread read) is a sibling module too;
 # ``PostMediaKind`` went with it, being a classification of what a comment could use.
 from schemas.telegram_actions_comments import CommentOnPost, ReadPostComments
@@ -78,11 +87,14 @@ ActionResult = _telegram_results.ActionResult
 ActionStatus = _telegram_results.ActionStatus
 BanCheckResult = _telegram_results.BanCheckResult
 BotChallengeWaitResult = _telegram_results.BotChallengeWaitResult
+ChatMessagePreview = _telegram_results.ChatMessagePreview
 CheckMessagesAliveResult = _telegram_results.CheckMessagesAliveResult
 LinkedDiscussionGroupResult = _telegram_results.LinkedDiscussionGroupResult
 NewPostEvent = _telegram_results.NewPostEvent
 PostImageResult = _telegram_results.PostImageResult
 PostMediaKind = _telegram_results.PostMediaKind
+ReadChatMessagesResult = _telegram_results.ReadChatMessagesResult
+ResolveChatResult = _telegram_results.ResolveChatResult
 
 
 class JoinChannel(BaseModel):
@@ -121,9 +133,20 @@ class LeaveDiscussionGroup(BaseModel):
 
 
 class PostComment(BaseModel):
+    """Send a message into a chat this account is already inside.
+
+    ``chat_id`` is the raw positive id — see ``schemas.telegram_actions_chat`` for
+    the pinned convention and for why one account's id is useless to another.
+    """
+
     action_type: Literal["post_comment"] = "post_comment"
     chat_id: int
     text: str = Field(min_length=1)
+    # Aims the message at an existing one in the SAME chat, which is what turns a
+    # list of sends into a staged conversation. ``CommentOnPost.reply_to`` is a
+    # different action with a different peer (a channel's linked group); the two are
+    # not interchangeable.
+    reply_to: int | None = None
 
 
 class ClickButton(BaseModel):
@@ -278,6 +301,8 @@ TelegramAction = Annotated[
     | SetOnline
     | ReadChannel
     | ReactToPost
+    | ReactToMessage
+    | CopyMessageMedia
     | SendDirectMessage
     | MarkDirectMessageRead
     | SetProfilePhoto
@@ -305,6 +330,8 @@ TelegramReadAction = Annotated[
     | CheckBannedInChannel
     | CheckWriteRights
     | ReadPostComments
+    | ResolveChat
+    | ReadChatMessages
     | GetUserProfile
     | GetPrivacySettings
     | ListPinnedStories

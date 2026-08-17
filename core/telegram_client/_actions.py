@@ -19,6 +19,7 @@ from core.telegram_client._action_results import (
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
+from core.telegram_client._copy_media import dispatch_copy_message_media
 from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
 from core.telegram_client._groups import (
     dispatch_join_channel,
@@ -35,7 +36,7 @@ from core.telegram_client._profile import (
     _dispatch_update_profile,
     _mark_account_status,
 )
-from core.telegram_client._react import dispatch_react_to_post
+from core.telegram_client._react import dispatch_react_to_message, dispatch_react_to_post
 from core.telegram_client._read_comments import _resolve_linked_group_entity
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._util import event_name
@@ -44,6 +45,7 @@ from schemas.telegram_actions import (
     AddProfileMusic,
     ClickButton,
     CommentOnPost,
+    CopyMessageMedia,
     JoinChannel,
     JoinDiscussionGroup,
     LeaveChannel,
@@ -51,6 +53,7 @@ from schemas.telegram_actions import (
     MarkDirectMessageRead,
     PostComment,
     PostStory,
+    ReactToMessage,
     ReactToPost,
     ReadChannel,
     RemoveProfileMusic,
@@ -210,7 +213,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
     )
 
 
-async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0912
+async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0911, PLR0912
     """Run one action against an already-connected client.
 
     Pattern-matches on the concrete action model so ty narrows ``action`` inside
@@ -233,7 +236,11 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case LeaveDiscussionGroup():
             return await dispatch_leave_discussion_group(client, action)
         case PostComment():
-            message = await client.send_message(action.chat_id, action.text)
+            message = await client.send_message(
+                action.chat_id,
+                action.text,
+                reply_to=action.reply_to,  # ty: ignore[invalid-argument-type]
+            )
             message_id = int(getattr(message, "id", 0)) or None
         case CommentOnPost():
             message_id = await _dispatch_comment_on_post(client, action)
@@ -251,6 +258,10 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             log_extra = {"stories_seen": await dispatch_watch_peer_stories(client, action)}
         case ReactToPost():
             return await dispatch_react_to_post(client, action)
+        case ReactToMessage():
+            return await dispatch_react_to_message(client, action)
+        case CopyMessageMedia():
+            return await dispatch_copy_message_media(client, action)
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
         case MarkDirectMessageRead():
@@ -351,7 +362,20 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
         case WatchPeerStories():
             extra = {"peer": action.peer}
         case PostComment():
-            extra = {"chat_id": action.chat_id}
+            # ``reply_to`` for the same reason ``CommentOnPost`` carries it: aiming a
+            # message at another one is invisible in the action_type, and the staged
+            # dialogue the neuroshilling engine plays is nothing but those aims.
+            extra = {"chat_id": action.chat_id, "reply_to": action.reply_to}
+        case ReactToMessage():
+            extra = {"chat_id": action.chat_id, "message_id": action.message_id}
+        case CopyMessageMedia():
+            # The source is a chat the operator named, so it rides along like a
+            # channel does; the caption is content and stays out, as everywhere else.
+            extra = {
+                "chat_id": action.chat_id,
+                "source_chat": action.source_chat,
+                "reply_to": action.reply_to,
+            }
         case CommentOnPost():
             # ``reply_to`` too: a reply and a top-level comment are the same action_type,
             # and the log is the only place the difference survives.

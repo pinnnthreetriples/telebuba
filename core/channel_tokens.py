@@ -79,6 +79,41 @@ def normalize_channel(token: str, *, max_length: int) -> str | None:  # noqa: PL
     return cleaned if _CHANNEL_TOKEN_RE.match(cleaned) else None
 
 
+def parse_message_link(link: str) -> tuple[str, int] | None:
+    """Split a ``t.me`` message link into ``(peer_reference, message_id)``.
+
+    Two shapes exist and both are accepted: ``t.me/<username>/<id>`` for a public
+    chat, and ``t.me/c/<internal>/<id>`` for a private one. The private form's
+    ``<internal>`` is the chat's RAW POSITIVE id — the same unmarked convention
+    ``schemas.telegram_actions_chat`` pins — so it is handed back as a decimal
+    string and the gateway feeds an all-digit reference to Telethon as an int.
+
+    A thread link (``t.me/c/<internal>/<topic>/<id>``) names its message LAST, so
+    the final segment is the id and the first is the peer. ``None`` for anything
+    else, including a bare channel link with no message on it.
+    """
+    cleaned = link.strip().strip("<>").rstrip("/").split("?", 1)[0]
+    lowered = cleaned.lower()
+    for prefix in _LINK_PREFIXES:
+        if lowered.startswith(prefix):
+            cleaned = cleaned[len(prefix) :]
+            break
+    else:
+        return None
+    parts = [part for part in cleaned.split("/") if part]
+    private = bool(parts) and parts[0].lower() == "c"
+    # A private link spends its first segment on the ``c`` marker, so it needs one
+    # more than the public form before it names a message at all.
+    minimum = 3 if private else 2
+    if len(parts) < minimum or not parts[-1].isdigit():
+        return None
+    message_id = int(parts[-1])
+    peer = parts[1] if private else parts[0].lstrip("@")
+    if message_id <= 0 or not (peer.isdigit() if private else _CHANNEL_TOKEN_RE.match(peer)):
+        return None
+    return peer, message_id
+
+
 def dedup_key(channel: str) -> str:
     """Case-folding key for dedup.
 

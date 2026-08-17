@@ -23,10 +23,15 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from core.channel_tokens import parse_message_link
 from core.config import settings
+from core.logging import log_event
 from core.repositories import neuroshilling as repository
+from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.neuroshilling_scenario import NeuroshillingScenario
-from services.neuroshilling import _generate, _state
+from schemas.telegram_actions import ReadChatMessages, ReadChatMessagesResult
+from schemas.telegram_actions_chat import COPYABLE_MEDIA_KINDS
+from services.neuroshilling import _generate, _seams, _state
 from services.neuroshilling.campaigns import (
     NeuroshillingConflictError,
     NeuroshillingInvalidError,
@@ -48,6 +53,12 @@ if TYPE_CHECKING:
 
 _SCENARIO_INVALID: NeuroshillingRefusalCode = "scenario_invalid"
 _LLM_UNAVAILABLE: NeuroshillingRefusalCode = "llm_unavailable"
+_MEDIA_UNREACHABLE: NeuroshillingRefusalCode = "media_source_unreachable"
+_MEDIA_CHECK_UNAVAILABLE: NeuroshillingRefusalCode = "media_check_unavailable"
+# Read kinds that say nothing about what the account can SEE. A flood is Telegram
+# pacing us and an ``unavailable`` is our own socket; both are over in minutes, and
+# neither is evidence about the link.
+_TRANSIENT_READ_KINDS = frozenset({"flood_wait", "unavailable"})
 
 
 async def load_scenario(campaign_id: str) -> NeuroshillingScenario | None:
@@ -145,6 +156,81 @@ def _media_problem(campaign: NeuroshillingCampaign, step_count: int) -> str | No
     return None
 
 
+async def _sees_media(account_id: str, chat: str, message_id: int) -> bool:
+    """Whether ``account_id`` can read that message AND copy what it carries.
+
+    Almost every failure is a "no". The account may be unknown, the chat unreachable,
+    the message deleted or invisible, or the media a kind ``send_file`` cannot
+    re-send — and the operator's next move is the same in all of them: point the
+    campaign at a message its accounts can actually see.
+
+    A flood wait or a dead socket is the exception, and it is not a "no" at all: the
+    account was never asked. Answering ``False`` there told the operator to fix a
+    link that was fine, so those two are raised as their own refusal — try again —
+    rather than folded into a verdict on the link.
+    """
+    try:
+        result = await _seams.execute_read(
+            account_id,
+            ReadChatMessages(chat=chat, message_ids=[message_id]),
+        )
+    except TelegramReadError as exc:
+        if exc.kind in _TRANSIENT_READ_KINDS:
+            raise NeuroshillingUnavailableError(_MEDIA_CHECK_UNAVAILABLE) from exc
+        return False
+    except TelegramAccountNotFoundError:
+        return False
+    if not isinstance(result, ReadChatMessagesResult) or not result.messages:
+        return False
+    return result.messages[0].media_kind in COPYABLE_MEDIA_KINDS
+
+
+async def _refuse_unreachable_media(
+    campaign: NeuroshillingCampaign,
+    steps: Sequence[NeuroshillingStep],
+) -> None:
+    """Refuse approval when an account that must post the media cannot see it.
+
+    The copy is made by the account playing the media step, not by some designated
+    carrier: a message that arrives from an account with no part in the scene is
+    exactly the tell the whole staging exists to avoid. So every account of that
+    role has to be able to read the source, and that is a live Telegram question —
+    which is why it is asked here, once, at approval, rather than discovered by the
+    run in a stranger's chat.
+
+    A link that cannot even be parsed is the same verdict: unreachable is
+    unreachable, and a second code would only ask the operator to tell two versions
+    of "fix this link" apart.
+    """
+    if not campaign.media_message_link or campaign.media_step_position is None:
+        return
+    link = parse_message_link(campaign.media_message_link)
+    step = steps[campaign.media_step_position - 1]
+    accounts = await repository.list_campaign_accounts(campaign.campaign_id)
+    role_accounts = [
+        account
+        for account in accounts
+        if account.role_id == step.role_id and account.state == "active"
+    ]
+    blind = (
+        [account.account_id for account in role_accounts]
+        if link is None
+        else [
+            account.account_id
+            for account in role_accounts
+            if not await _sees_media(account.account_id, link[0], link[1])
+        ]
+    )
+    if not blind:
+        return
+    await log_event(
+        "WARNING",
+        "neuroshilling_media_unreachable",
+        extra={"campaign_id": campaign.campaign_id, "accounts": len(blind)},
+    )
+    raise NeuroshillingInvalidError(_MEDIA_UNREACHABLE)
+
+
 async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
     """Validate the stored scenario and mark it approved. ``None`` = no such campaign.
 
@@ -159,6 +245,10 @@ async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
     roles, steps = await repository.load_scenario(campaign_id)
     if _approval_problem(campaign, roles, steps) is not None:
         raise NeuroshillingInvalidError(_SCENARIO_INVALID)
+    # After the row-only checks and never before them: this one talks to Telegram,
+    # and a scenario that is broken on its own terms should not cost N live reads to
+    # find out.
+    await _refuse_unreachable_media(campaign, steps)
     if not await repository.approve_scenario(campaign_id):
         return None
     return await load_scenario(campaign_id)

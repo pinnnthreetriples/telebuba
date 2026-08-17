@@ -10,6 +10,7 @@ import random
 import time
 from typing import TYPE_CHECKING
 
+from telethon import errors
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, ReactionEmoji
@@ -21,6 +22,7 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
     from schemas.telegram_actions import ReactToPost
+    from schemas.telegram_actions_chat import ReactToMessage
 
 # SystemRandom: non-cryptographic selection, but avoids the module-level
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
@@ -53,21 +55,36 @@ def invalidate_reaction_whitelist_cache() -> None:
     _whitelist_cache.clear()
 
 
-async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> set[str] | None:
+async def _channel_reaction_whitelist(
+    client: TelegramClient,
+    channel: str | int,
+) -> set[str] | None:
     """Emoticons the channel permits as reactions.
 
     ``None`` means "don't filter" — the channel allows all emoji (or the
     availability couldn't be read, in which case we fall back to the caller's
     default set rather than regress). An empty set means reactions are off or the
     channel only permits emoji we don't use, so the caller should skip entirely.
+
+    ``channel`` is a username for warming and a raw positive chat id for the
+    chat-scoped reactor; the cache key is its string form either way, while the RPC
+    gets the value itself — Telethon reads an int out of the session entity cache
+    and would send the same digits down the username resolver as a string.
     """
     generation = _whitelist_generation
     now = time.monotonic()
-    cached = _whitelist_cache.get(channel)
+    key = str(channel)
+    cached = _whitelist_cache.get(key)
     if cached is not None and now - cached[0] < _WHITELIST_TTL_SECONDS:
         return cached[1]
     try:
         full = await client(GetFullChannelRequest(channel=channel))  # ty: ignore[invalid-argument-type]
+    except errors.FloodError:
+        # The one failure that must NOT degrade to "don't filter": swallowing it sent
+        # the reaction itself into an active flood, spending the very budget Telegram
+        # had just refused. Re-raised so ``execute``'s rate-limit ladder classifies it
+        # and the caller waits.
+        raise
     except Exception:  # noqa: BLE001 - availability is best-effort; don't fail the react over it.
         return None  # transient — don't cache the failure.
     available = getattr(getattr(full, "full_chat", None), "available_reactions", None)
@@ -81,7 +98,7 @@ async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> s
     # A settings mutation may have completed during GetFullChannelRequest.  Its
     # invalidation wins: never resurrect the older availability for another TTL.
     if generation == _whitelist_generation:
-        _whitelist_cache[channel] = (now, result)
+        _whitelist_cache[key] = (now, result)
     return result
 
 
@@ -157,3 +174,43 @@ async def dispatch_react_to_post(client: TelegramClient, action: ReactToPost) ->
         ),
     )
     return _DispatchResult(message_id=message_id, log_extra={"reaction": emoji})
+
+
+async def dispatch_react_to_message(
+    client: TelegramClient,
+    action: ReactToMessage,
+) -> _DispatchResult:
+    """Place ONE named emoji on ONE named message — or skip, never fail.
+
+    Shares the per-chat allowed-emoji cache with :func:`dispatch_react_to_post`,
+    because a blind send is what trips ``ReactionInvalidError`` on chats that
+    restrict reactions. What differs is the remedy: there the emoji is ours to pick,
+    so a restricted chat gets a substitute; here the operator chose it, and a
+    substitute would publish a reaction they did not write. So a chat that does not
+    permit this emoji — or permits none at all (``ChatReactionsNone``) — SKIPS the
+    step. A reaction the chat forbids is not a failure of the campaign, and marking
+    it one would spend a reserve account on a chat setting.
+
+    ``ReactionInvalidError`` / ``ReactionsTooManyError` are the same verdict arriving
+    late: the whitelist can be stale, absent (unreadable) or simply not cover custom
+    limits, and a non-Premium account may hold exactly one reaction per message.
+    """
+    whitelist_generation = _whitelist_generation
+    allowed = await _channel_reaction_whitelist(client, action.chat_id)
+    emoji = _bare_emoji(action.emoji)
+    if allowed is not None and emoji not in {_bare_emoji(e) for e in allowed}:
+        return _DispatchResult(log_extra={"reaction_skip": "not_allowed"})
+    peer = await client.get_input_entity(action.chat_id)
+    if whitelist_generation != _whitelist_generation:
+        return _DispatchResult(log_extra={"reaction_skip": "reaction_settings_changed"})
+    try:
+        await client(
+            SendReactionRequest(
+                peer=peer,
+                msg_id=action.message_id,
+                reaction=[ReactionEmoji(emoticon=emoji)],
+            ),
+        )
+    except (errors.ReactionInvalidError, errors.ReactionsTooManyError):
+        return _DispatchResult(log_extra={"reaction_skip": "not_allowed"})
+    return _DispatchResult(message_id=action.message_id, log_extra={"reaction": emoji})

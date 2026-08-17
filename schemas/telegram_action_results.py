@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 from schemas.challenge import BotChallengeMessage  # noqa: TC001
+from schemas.telegram_actions_chat import ChatKind, ChatMediaKind  # noqa: TC001
 from schemas.telegram_actions_comments import PostMediaKind  # noqa: TC001
 
 
@@ -64,6 +65,40 @@ class BanCheckResult(BaseModel):
     """
 
     state: Literal["can_send", "restricted", "not_member", "comments_disabled"]
+
+
+class ResolveChatResult(BaseModel):
+    """Gateway output for ``ResolveChat`` — what this ACCOUNT sees behind a target.
+
+    ``chat_id`` is the raw positive id (see ``schemas.telegram_actions_chat`` for the
+    pinned convention) and is only meaningful to the account that produced it.
+    ``kind`` is what decides whether the target is usable at all: a ``basic_group``
+    or a ``user`` numbers its messages per-user, so a scripted reply chain played by
+    several accounts cannot work there.
+    """
+
+    chat_id: int = Field(gt=0)
+    kind: ChatKind
+
+
+class ChatMessagePreview(BaseModel):
+    """One message as ``ReadChatMessages`` reports it — no media bytes, only its kind."""
+
+    message_id: int
+    text: str = ""
+    media_kind: ChatMediaKind = "none"
+
+
+class ReadChatMessagesResult(BaseModel):
+    """Gateway output for ``ReadChatMessages``.
+
+    ``missing_ids`` is the half that matters most: ``get_messages`` answers ``None``
+    for a message this account cannot see, and "cannot see it" is the verdict a
+    media source has to pass before a campaign is approved on it.
+    """
+
+    messages: list[ChatMessagePreview] = Field(default_factory=list)
+    missing_ids: list[int] = Field(default_factory=list)
 
 
 class BotChallengeWaitResult(BaseModel):
