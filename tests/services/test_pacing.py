@@ -141,10 +141,29 @@ def test_human_delay_passes_the_shape_through_to_the_injected_rng() -> None:
     assert seen == [(-1.5, 0.9)]
 
 
-@pytest.mark.parametrize("draw", [0.0, 0.1, 0.5, 0.99, 1.0])
-def test_human_delay_never_leaves_the_bounds(draw: float) -> None:
+@pytest.mark.parametrize(
+    ("low", "high", "draw"),
+    [
+        (10.0, 30.0, 0.0),
+        (10.0, 30.0, 0.1),
+        (10.0, 30.0, 0.5),
+        (10.0, 30.0, 0.99),
+        (10.0, 30.0, 1.0),
+        # A log-normal has no upper bound, so a draw above 1 is an ordinary outcome
+        # rather than a pathology, and the mapping has to survive it.
+        (10.0, 30.0, 1.5),
+        (10.0, 30.0, 10.0**6),
+        # ``0.3 + 1.0 * (0.9 - 0.3)`` is 0.9000000000000001 in binary floating point,
+        # which is the rounding edge the mapping's ceiling exists for: on this pair
+        # every draw at or above 1 lands OUTSIDE the range without it, while the
+        # 10.0/30.0 pair above happens to come out exact and cannot show it.
+        (0.3, 0.9, 1.0),
+        (0.3, 0.9, 4.0),
+    ],
+)
+def test_human_delay_never_leaves_the_bounds(low: float, high: float, draw: float) -> None:
     class _Fixed(random.Random):
         def lognormvariate(self, mu: float, sigma: float) -> float:  # noqa: ARG002
             return draw
 
-    assert 10.0 <= pacing.human_delay(10.0, 30.0, rng=_Fixed(), mu=-0.8, sigma=0.6) <= 30.0
+    assert low <= pacing.human_delay(low, high, rng=_Fixed(), mu=-0.8, sigma=0.6) <= high

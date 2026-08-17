@@ -9095,7 +9095,7 @@
           "neuroshilling"
         ],
         "summary": "Get Board",
-        "description": "The whole page in one read: campaign, roster, account pool, targets, run.",
+        "description": "The whole page in one read: campaign, account pool, targets, run status.\n\nThe roster is not a list of its own: ``available`` carries every offerable account\nwith the rostered ones flagged ``assigned``, for the reason\n:class:`schemas.neuroshilling.NeuroshillingBoard` gives.",
         "operationId": "getNeuroshillingBoard",
         "parameters": [
           {

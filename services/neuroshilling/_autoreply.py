@@ -19,23 +19,28 @@ which is not, was never in the request to begin with.
 **The answer is parsed before it is published**, by ``_reply_guard``, and then run
 through the same ``is_acceptable`` / ``try_reserve_sent`` pair every other
 publishing path in this project uses. The dedup reservation is scoped to the
-target exactly as ``_dispatch`` scopes it, and it earns its place here for a
-reason the scenario steps do not have: five accounts answering the same provoking
-message would otherwise post five near-identical lines into one chat, which is
-the cross-account duplicate signal ``services.content`` exists to suppress.
+target and to nothing else — ``_dispatch._step_dedup_key`` adds the cycle for a
+``revive`` run's SCENARIO steps and this path never does, because an autoreply
+writes a fresh sentence every time, so a repeat here really is one. It earns its
+place for a reason the scenario steps do not have: five accounts answering the
+same provoking message would otherwise post five near-identical lines into one
+chat, which is the cross-account duplicate signal ``services.content`` exists to
+suppress.
 
 **A message is decided about once.** ``claim_chat_reply`` flips the row before the
 model is asked and nothing gives it back, so a refused, filtered or failed answer
 is never retried — a retry would pay for a second call on the same attacker text
 and could publish on the second roll what the first one caught.
 
-**A published answer is written into the chat log as ours, immediately.** It has no
+**An answer Telegram CONFIRMED is written into the chat log as ours.** It has no
 journal row — the journal is keyed on a scenario step — so the id-based half of
 ``_listen``'s ownership test cannot see it, and a sibling account reading the chat
 thirty seconds later would find our own reply looking exactly like a stranger's:
 answered again, charged again, and re-entering the prompt labelled ``them``. The
 one thing that would defeat is the ``us`` label ``_prompt`` documents as its reason
-for tracking ownership at all.
+for tracking ownership at all. The row is keyed on the message id the send answered
+with, so an ``unconfirmed`` send leaves none — Telegram may have published that line
+and we cannot name it, which is the one case this does not cover.
 
 The daily LLM budget and the per-campaign single-flight from the scenario generator
 apply unchanged, and two ceilings on ATTEMPTS are added to them — one on the account's
@@ -59,6 +64,8 @@ from services.content import is_acceptable, release_sent_text, try_reserve_sent
 from services.neuroshilling import _dispatch, _prompt, _reply_guard, _seams, _state, _telegram
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from schemas.neuroshilling import NeuroshillingCampaign
     from services.neuroshilling._context import RunContext
 
@@ -189,17 +196,16 @@ async def _refuse(account_id: str | None, target: str, reason: str) -> None:
     )
 
 
-async def _draft(context: RunContext, target: str, message: NeuroshillingChatMessage) -> str | None:
+async def _draft(
+    history: Sequence[NeuroshillingChatMessage],
+    message: NeuroshillingChatMessage,
+) -> str | None:
     """Ask the model for one answer. ``None`` means nothing usable came back.
 
-    The context read happens HERE and not at the poll, so the conversation quoted
-    is the one as it stands at the moment of answering.
+    Takes the conversation rather than reading it, because the caller needs the very
+    same messages afterwards: the echo gate weighs the answer against everything that
+    went into this prompt, and a second read could return a different set.
     """
-    history = await repository.list_recent_chat(
-        context.campaign.campaign_id,
-        target,
-        limit=settings.neuroshilling.chat_context_messages,
-    )
     prompt = _prompt.build_reply_prompt(history, message)
     # Charged at the worst case and before the call, exactly as the scenario
     # generator charges it: the gateway retries a transient failure inside one call,
@@ -344,13 +350,25 @@ async def _answer(
         await _refuse(account_id, target, refusal)
         return
     try:
-        candidate = await _draft(context, target, message)
+        # Read here and not at the poll, so the conversation quoted is the one as it
+        # stands at the moment of answering — and INSIDE the ``finally``, because a read
+        # that raises outside it would leave the campaign's generation slot claimed for
+        # the life of the process: every later autoreply and every click on Generate
+        # would answer ``generation_in_progress``.
+        history = await repository.list_recent_chat(
+            context.campaign.campaign_id,
+            target,
+            limit=settings.neuroshilling.chat_context_messages,
+        )
+        candidate = await _draft(history, message)
     finally:
         _state.finish_generation(context.campaign.campaign_id)
     if candidate is None:
         await _refuse(account_id, target, _LLM_UNAVAILABLE)
         return
-    verdict = _reply_guard.clean_reply(candidate, message.text)
+    # Every text the prompt carried, in the order it carried them: the conversation and
+    # then the provoking message, which the prompt repeats as a block of its own.
+    verdict = _reply_guard.clean_reply(candidate, [*(item.text for item in history), message.text])
     if verdict.text is None:
         await _refuse(account_id, target, verdict.reason or _LLM_UNAVAILABLE)
         return

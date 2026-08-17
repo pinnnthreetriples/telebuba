@@ -129,7 +129,7 @@ async def _enter(
 
     The settle pause is the last thing awaited and only on the path that succeeded:
     the stand-in has just joined and is about to publish, which is precisely the
-    entry ``engine._act`` pauses after, and this path had been skipping it.
+    entry ``engine._act`` pauses after.
     """
     campaign_id = context.campaign.campaign_id
     state = await _telegram.join_target(campaign_id, account_id, target)

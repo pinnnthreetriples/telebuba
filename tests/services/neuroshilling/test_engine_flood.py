@@ -132,15 +132,24 @@ async def test_an_account_flooded_on_the_join_never_speaks(
     monkeypatch: pytest.MonkeyPatch,
     answers: list[ActionResult],
 ) -> None:
+    """Nothing reaches the gateway, so the queued delivery is still queued.
+
+    Asserted on what the queue kept rather than on what it holds: the fixture serves
+    an answer by POPPING it, so a queue the test filled and finds full is a queue
+    nothing asked. Empty either way, it would have said nothing at all.
+    """
+
     async def _flooded(_campaign_id: str, _account_id: str, _target: str) -> str:
         return "flooded"
 
     monkeypatch.setattr(_telegram, "join_target", _flooded)
     seeded = await seed_campaign(accounts=("acc-1",), steps=_solo_steps(2))
+    queued = sent(777)
+    answers.append(queued)
 
     await engine.run_campaign(seeded.campaign_id, _RUN)
 
-    assert answers == []
+    assert answers == [queued]
     assert await _rows() == []
 
 

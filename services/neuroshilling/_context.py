@@ -37,16 +37,18 @@ class RunContext(NamedTuple):
     there.
 
     ``our_user_ids`` are the Telegram user ids of EVERY account the deployment owns —
-    not of this campaign's roster — read once here because that answer does not change
-    during a run. They are the poller's last answer to "is this one of ours?" when
-    neither of the other two can be: Telethon's ``out`` flag only speaks for the reading
-    account, and the id-based answer needs a message id we did not always get back. The
-    whole table rather than the roster, because an autoreply gets no journal row at all:
-    scoped to the campaign, two campaigns watching one chat each read the other's
-    answers as a stranger's and answered them, both fleets talking to each other under
-    the ``them`` label. An account the operator has never checked has no stored user id
-    and is simply absent — the set narrows the question, it does not pretend to settle
-    it.
+    not of this campaign's roster — read once here and never again, which is a snapshot
+    rather than the whole answer: an account ADDED to the deployment mid-run is absent
+    from it until the next run, and a poll would otherwise pay a table read per page for
+    a set that only changes while the operator is on another page. They are the poller's
+    last answer to "is this one of ours?" when neither of the other two can be:
+    Telethon's ``out`` flag only speaks for the reading account, and the id-based answer
+    needs a message id we did not always get back. The whole table rather than the
+    roster, because an autoreply gets no journal row at all: scoped to the campaign, two
+    campaigns watching one chat each read the other's answers as a stranger's and
+    answered them, both fleets talking to each other under the ``them`` label. An account
+    the operator has never checked has no stored user id and is simply absent — the set
+    narrows the question, it does not pretend to settle it.
 
     ``banned_in`` is what keeps ONE hostile chat from costing one reserve per player
     of the role. Keyed by target and holding the accounts Telegram BANNED while acting

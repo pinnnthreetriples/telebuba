@@ -95,7 +95,12 @@ async def delete_campaign(campaign_id: str) -> None:
     responses=error_responses(404),
 )
 async def get_board(campaign_id: str) -> NeuroshillingBoard:
-    """The whole page in one read: campaign, roster, account pool, targets, run."""
+    """The whole page in one read: campaign, account pool, targets, run status.
+
+    The roster is not a list of its own: ``available`` carries every offerable account
+    with the rostered ones flagged ``assigned``, for the reason
+    :class:`schemas.neuroshilling.NeuroshillingBoard` gives.
+    """
     board = await ns_service.load_board(campaign_id)
     if board is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)

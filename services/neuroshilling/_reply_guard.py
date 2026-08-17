@@ -30,11 +30,15 @@ Why the shapes it refuses are the shapes it refuses:
   that reads as ``paypal`` is not the one anybody typed. The scripts are read off
   each letter rather than compared against a pair of alphabets: naming Latin and
   Cyrillic leaves the same disguise spelled with a Greek upsilon perfectly clean.
-* **Echoes.** An answer too close to the message that provoked it is the model
-  doing what the message told it to; reproducing attacker text verbatim is the
-  cheapest injection there is, and it is also how a payload re-enters our own
-  context on the next poll. Measured two ways, because one of them has a blind
-  spot: Jaccard divides by the union, so a short lift out of a long message
+* **Echoes.** An answer too close to a message that went INTO the prompt is the
+  model doing what that message told it to; reproducing attacker text verbatim is
+  the cheapest injection there is, and it is also how a payload re-enters our own
+  context on the next poll. Weighed against every quoted message and not only the
+  provoking one: a stranger puts the payload in message N and something bland in
+  N+1, and a verbatim reproduction of N is exactly the same attack — the shapes
+  above would still refuse a link or a mention inside it, so what is left to leak is
+  prose, which is what an instruction is. Measured two ways, because one of them has
+  a blind spot: Jaccard divides by the union, so a short lift out of a long message
   scores near zero, and containment divides by the ANSWER instead.
 
 Every rule runs over three spellings of the same answer: what the model returned,
@@ -51,10 +55,13 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Final, NamedTuple
+from typing import TYPE_CHECKING, Final, NamedTuple
 
 from core.config import settings
 from services.content import normalize_text, similarity, strip_markdown_delimiters
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # Reason codes. ``empty`` and ``too_long`` are the vocabulary's existing spellings
 # and are reused deliberately; the rest are this gate's own.
@@ -286,8 +293,12 @@ def _shape_reason(candidate: str, cleaned: str) -> str | None:
     return None
 
 
-def clean_reply(candidate: str, provoking: str) -> ReplyVerdict:
-    """Vet one model answer against the message it answers. ``text=None`` refuses.
+def clean_reply(candidate: str, quoted: Sequence[str]) -> ReplyVerdict:
+    """Vet one model answer against everything the prompt quoted. ``text=None`` refuses.
+
+    ``quoted`` is every message text that went INTO the request, oldest first, and the
+    provoking one last. The whole conversation and not just the last line: the model was
+    shown all of it, so any of it is text the answer can be reproducing.
 
     The whitespace collapse comes first and is not cosmetic: a multi-line answer
     can forge the layout of a Telegram conversation — a fake quote, a fake system
@@ -298,8 +309,8 @@ def clean_reply(candidate: str, provoking: str) -> ReplyVerdict:
     client in this project: markers the model writes would otherwise be published
     literally, which is the machine tell this whole feature exists to avoid.
 
-    The echo test is last of the content rules because it is the only one that
-    needs the provoking message, and the cheapest way to fail is not to reach it.
+    The echo test is last of the content rules because it is the only one that grows
+    with the conversation, and the cheapest way to fail is not to reach it.
     """
     limits = settings.neuroshilling
     collapsed = " ".join(candidate.split())
@@ -313,6 +324,9 @@ def clean_reply(candidate: str, provoking: str) -> ReplyVerdict:
     reason = _shape_reason(collapsed, cleaned)
     if reason is not None:
         return ReplyVerdict(None, reason)
-    if similarity(cleaned, provoking) >= limits.reply_echo_threshold or _lifted(cleaned, provoking):
+    if any(
+        similarity(cleaned, source) >= limits.reply_echo_threshold or _lifted(cleaned, source)
+        for source in quoted
+    ):
         return ReplyVerdict(None, _ECHO)
     return ReplyVerdict(cleaned, None)

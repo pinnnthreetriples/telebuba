@@ -200,9 +200,10 @@ async def set_run_state(
     forward — a fresh one would face an empty unique index and replay the whole
     dialogue into chats that already have it — and only a terminal state may clear it.
 
-    ``last_error`` is an exception CLASS NAME. The column is served back by
-    ``GET /neuroshilling/campaigns``, and a third-party ``str(exc)`` carries proxy
-    credentials and session paths.
+    ``last_error`` is an exception CLASS NAME, or one of the stable codes the runtime
+    writes where it raised no exception at all. Never an exception's TEXT: the column is
+    served back by ``GET /neuroshilling/campaigns``, and a third-party ``str(exc)``
+    carries proxy credentials and session paths.
     """
     await asyncio.to_thread(_set_run_state, campaign_id, status, run_id, last_error)
 

@@ -53,7 +53,7 @@ from services.neuroshilling import _seams
 from services.neuroshilling._join_cap import at_join_cap, daily_cap_reached
 
 if TYPE_CHECKING:
-    from schemas.neuroshilling import NeuroshillingPresenceState
+    from schemas.neuroshilling import NeuroshillingPresenceState, NeuroshillingRefusalCode
     from schemas.telegram_actions import ActionResult
 
 # The account is rate-limited: it stops for the rest of the run. ``peer_flood`` is a
@@ -81,10 +81,16 @@ _ACCOUNT_DEAD_MESSAGES: Final = frozenset(
 _ACCOUNT_FULL_ERROR: Final = "ChannelsTooMuchError"
 _JOIN_REQUEST_ERROR: Final = "InviteRequestSentError"
 
-# Peer shapes a staged multi-account dialogue cannot run in. Basic groups and private
-# chats share ONE message-id sequence PER USER, so the id account A must reply to is
-# not the id account B was given, and the chain misfires without ever erroring.
-_UNUSABLE_KINDS: Final = frozenset({"basic_group", "user"})
+# Peer shapes a staged multi-account dialogue cannot run in, each mapped to the reason
+# the operator reads off the presence row. Basic groups and private chats share ONE
+# message-id sequence PER USER, so the id account A must reply to is not the id account
+# B was given, and the chain misfires without ever erroring. Two codes rather than one
+# for the pair, because the operator's next move differs and a private chat told it was
+# "a basic group" sends them looking for a group that is not there.
+_UNUSABLE_KINDS: Final[dict[str, NeuroshillingRefusalCode]] = {
+    "basic_group": "target_is_basic_group",
+    "user": "target_is_private_chat",
+}
 
 SendVerdict = Literal[
     "sent",
@@ -370,13 +376,14 @@ async def resolve_target(
     if not isinstance(resolved, ResolveChatResult):  # pragma: no cover - union is exhaustive
         message = f"resolve_chat answered {type(resolved).__name__}"
         raise TypeError(message)
-    if resolved.kind in _UNUSABLE_KINDS:
+    unusable = _UNUSABLE_KINDS.get(resolved.kind)
+    if unusable is not None:
         await repository.record_presence(
             campaign_id,
             account_id,
             target,
             "refused",
-            error_type="target_is_basic_group",
+            error_type=unusable,
         )
         await log_event(
             "WARNING",
