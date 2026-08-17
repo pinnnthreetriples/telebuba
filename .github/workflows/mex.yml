@@ -170,7 +170,15 @@ jobs:
         run: |
           set -euo pipefail
           report="$RUNNER_TEMP/mex-check.json"
-          npx --yes mex-agent@0.7.1 check --json > "$report"
+          # `|| true` because `mex check` exits 1 as soon as ANY finding reaches
+          # error severity -- STALE_FILE included. Under `set -e` that killed the
+          # step right here, so the filter below never ran and the whole
+          # "STALE_FILE is a note, not a gate" rule was unreachable in exactly the
+          # case it was written for: the step failed with an empty log. The verdict
+          # belongs to the filter, which is the only thing that knows which codes
+          # block. A real mex failure still fails the step -- it leaves no valid
+          # JSON, so the JSON.parse below throws.
+          npx --yes mex-agent@0.7.1 check --json > "$report" || true
           node -e '
             const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
             const issues = r.issues ?? [];
