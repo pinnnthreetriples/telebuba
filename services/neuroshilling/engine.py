@@ -55,8 +55,7 @@ async def run_campaign(campaign_id: str, run_id: str) -> None:
     if loaded is None:
         return
     context, targets, played = loaded
-    speakers = _speakers(context)
-    if not speakers:
+    if not _speakers(context):
         # Vacuously "everyone is halted" otherwise, which returned a run that had done
         # nothing and settled it ``done`` without a line anywhere. A roster edited
         # between two runs reaches here: the launch gate checks the roles, and a resumed
@@ -80,10 +79,19 @@ async def run_campaign(campaign_id: str, run_id: str) -> None:
             # Fully journalled on an earlier pass: no pause, no join, no resolve. This
             # is what keeps a resumed run from sleeping its way through finished work.
             continue
-        if speakers and all(account_id in context.halted for account_id in speakers):
+        playing = _speakers(context)
+        if playing and all(account_id in context.halted for account_id in playing):
             # Nobody is left to say a line. Walking the rest of the target list would
             # pay the pause between each one to reach the same answer — a quarter of an
             # hour of nothing on a fifty-target campaign.
+            #
+            # Re-read per target, not once before the walk: ``_substitution._swap_roster``
+            # rewrites ``context.by_role`` in place, so a list taken up front goes on
+            # naming the banned accounts — every one of them in ``halted`` — while the
+            # stand-ins that replaced them are missing from it. Once every name left in
+            # that list had been replaced, the run stopped at the very next target
+            # BECAUSE the reserves had worked. One walk over the steps per target is the
+            # price, against a pause measured in minutes.
             return
         if entered:
             await _seams.sleep(_target_pause(context))

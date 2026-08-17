@@ -385,6 +385,32 @@ async def test_a_flooded_substitute_leaves_the_run(
 
 @pytest.mark.usefixtures("no_sleep")
 @pytest.mark.asyncio
+async def test_the_stand_in_plays_the_targets_after_the_one_it_was_bought_for(
+    answers: list[ActionResult],
+) -> None:
+    """A substitution that WORKED must not be what ends the run.
+
+    ``_swap_roster`` puts the stand-in into ``context.by_role``, so the cast has to be
+    read from there per target: taken once before the walk, the list went on naming the
+    banned account it had replaced — which is halted — so "everybody is halted" came
+    true at the next target and the walk stopped. One healthy role, one ban, and every
+    remaining chat was abandoned.
+    """
+    answers.append(_BANNED)
+    seeded = await seed_campaign(
+        targets="@alpha @beta",
+        accounts=("acc-1",),
+        reserves=("res-1",),
+        steps=_solo_steps(1),
+    )
+
+    await engine.run_campaign(seeded.campaign_id, _RUN)
+
+    assert await _rows() == [("alpha", "res-1", "sent"), ("beta", "res-1", "sent")]
+
+
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.asyncio
 async def test_run_continues_when_the_pool_is_empty(answers: list[ActionResult]) -> None:
     """No reserve loses the target the ban happened in, and nothing beyond it."""
     answers.extend([sent(101), _BANNED])
