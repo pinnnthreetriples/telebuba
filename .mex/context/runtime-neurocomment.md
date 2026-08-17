@@ -1,8 +1,10 @@
 ---
-last_updated: 2026-08-11
+last_updated: 2026-08-17
 edges:
   - target: context/runtime-discovery.md
     condition: where the campaign's channels came from
+  - target: context/runtime-neuroshilling.md
+    condition: the other feature spending this join budget
   - target: patterns/add-log-event.md
     condition: adding or renaming an operator-facing event
 grounds_to:
@@ -18,9 +20,9 @@ grounds_to:
 
 # Neurocomment Runtime
 
-- One persisted listener watches active campaign channels; warming and listener roles are mutually exclusive. Selection is candidate-scoped, least-busy with randomized ties, and hot paths never scan the fleet.
+- One persisted listener watches active campaign channels; warming, neuroshilling and the listener role are mutually exclusive on one account. Neurocomment's own start asks the shared in-memory ownership registry, but nothing asks that registry about the LISTENER — it is deliberately not a holder there, so each runtime that must not share its session reads the listener's durable state itself. Selection is candidate-scoped, least-busy with randomized ties, and hot paths never scan the fleet.
 - Pipeline: filter → eligible account → atomic claim → generate/deduplicate → delay → comment → persist. Durable cooldown/ban/access/challenge state gates later selection. Unknown delivery fails closed.
-- Joins are paced against a persisted rolling budget; already-participant no-ops do not spend it and warming uses another domain. Reconcile publishes watched gaps atomically; one background join pass re-subscribes after late joins resolve.
+- Joins are paced against a persisted rolling per-account budget; already-participant no-ops do not spend it and warming uses another domain. Neuroshilling charges this same log deliberately, because Telegram counts joins per account and not per feature, so a running campaign brings this cap nearer. Read-cap, join and charge is one critical section under a per-account join mutex shared with neuroshilling, re-counting once held; the pacer cannot serve as that mutex because it releases its own lock the moment it grants a slot. Reconcile publishes watched gaps atomically; one background join pass re-subscribes after late joins resolve.
 - Captcha queue membership means the automatic rule still owns the pair, not that an operator controls it. Apply exclusions in the SQL before `LIMIT`. Chat restrictions and bot challenges remain distinct.
 - Terminal marks are one-way until a deliberate operator action: one authorised captcha retry, bounded re-join attempts, and comments-off retirement. Readers use the terminal mark, never counter freshness; readiness rows are not deleted.
 - Leave only when durable state says the account remains in the chat. Lost challenges and retired authors leave; the listener does not. Re-link restores attempt budgets except sticky bans and operator skips.

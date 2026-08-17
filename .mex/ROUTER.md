@@ -16,11 +16,13 @@ edges:
     condition: neurocomment listener, comments, captcha, joins, cooldowns, or retention
   - target: context/runtime-discovery.md
     condition: neurocomment campaign channel discovery
+  - target: context/runtime-neuroshilling.md
+    condition: neuroshilling campaigns, scenarios, dialogue runs, or chat revival
   - target: context/setup.md
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-08-06
+last_updated: 2026-08-17
 ---
 
 # Telebuba Router

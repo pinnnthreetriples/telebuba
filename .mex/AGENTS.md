@@ -1,12 +1,12 @@
 ---
 name: agents
 description: Small always-loaded Telebuba anchor: hard rules, commands, and memory routing.
-last_updated: 2026-08-06
+last_updated: 2026-08-17
 ---
 
 # Telebuba
 
-Telegram operations dashboard for accounts, proxies, warming, neurocomment, profiles, and channels.
+Telegram operations dashboard for accounts, proxies, warming, neurocomment, neuroshilling, profiles, and channels.
 
 ## Hard rules
 - Preserve `api → services → core` and typed Pydantic boundaries; external I/O stays in `core/`.

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-15
+last_updated: 2026-08-17
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -22,6 +22,7 @@ grounds_to:
 - Quarantine releases only on a confirmed clean spam check. An unreadable/unknown check does not release the account and still advances the bounded recovery attempt counter. Recovery, extension and exhaustion publish their outcome only after the final generation-guarded write applies, so a concurrent stop/restart cannot emit a stale result.
 - Scheduling/de-correlation lives in pacing/fleet modules; cycle modules own one session; runtime modules own task state, sleep, bounded cancellation and recovery. A generation lease is checked around Telegram dispatch so a retired cycle cannot begin a later action. Keep injectable collaborators behind the warming seam.
 - Start refuses any account neurocomment already owns: the running listener and an in-flight channel-discovery run are hard exclusions; a live cooldown either runtime recorded is a health verdict and obeys the operator's `enforce_readiness` switch, like warming's own flood deadline does through trust. Both facts are read from neurocomment through deferred imports (a load-time one closes an import cycle) and answered synchronously inside the lifecycle lock. Typed refusals carrying a stable code, never readiness reasons; they change only whether warming starts, never its pacing.
+- A running neuroshilling campaign is refused the same ungated way, but through the shared in-memory ownership registry rather than a point check — warming is the registry's other writer, claiming each account it spawns and releasing only on an identity match. That claim is the half neuroshilling's own start refuses against, so weakening either side puts two paced streams on one session. Warming's re-spawn of an account it already holds must bypass the registry's refusal, which is safe only because the refusal and the eviction sit under one per-account lifecycle lock that every neuroshilling claim also takes.
 - Board/read paths stay bulk-loaded; loop failures are logged and persisted rather than silently killing a task.
 
 Exact caps, timings and implementation headroom belong to config/tests/code, not memory.
