@@ -510,15 +510,23 @@ async def test_a_usable_target_hands_back_this_accounts_own_chat_id(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["basic_group", "user"])
+@pytest.mark.parametrize(
+    ("kind", "reason"),
+    [("basic_group", "target_is_basic_group"), ("user", "target_is_private_chat")],
+)
 async def test_a_shared_id_sequence_target_is_refused(
     monkeypatch: pytest.MonkeyPatch,
     kind: str,
+    reason: str,
 ) -> None:
     """Basic groups and private chats number messages PER USER.
 
     Account A's ``msg_id`` is not account B's, so the scripted reply chain would aim
     at the wrong messages without a single error to show for it.
+
+    Each kind writes its OWN reason: the row is what the operator reads, and being
+    told a private chat is "a basic group" sends them upgrading a group that does not
+    exist instead of picking a different target.
     """
     campaign_id = await _campaign()
     monkeypatch.setattr(
@@ -529,7 +537,7 @@ async def test_a_shared_id_sequence_target_is_refused(
 
     assert await _telegram.resolve_target(campaign_id, "acc-1", "@group") is None
     row = (await list_presence(campaign_id))[0]
-    assert (row.state, row.last_error_type) == ("refused", "target_is_basic_group")
+    assert (row.state, row.last_error_type) == ("refused", reason)
 
 
 @pytest.mark.asyncio

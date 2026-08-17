@@ -78,6 +78,10 @@ NeuroshillingRefusalCode = Literal[
     "llm_unavailable",
     "generation_in_progress",
     "target_is_basic_group",
+    # The same shared-id-sequence fault as the code above, named apart because the
+    # operator's next move differs: a basic group can be upgraded to a supergroup,
+    # while a private chat is not a group at all and has to be replaced.
+    "target_is_private_chat",
     "media_source_unreachable",
     # Distinct from the one above, because the operator's next move is opposite: the
     # media check never got an answer (a flood wait, a dead socket), so the link is
