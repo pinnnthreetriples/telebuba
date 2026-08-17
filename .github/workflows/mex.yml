@@ -193,6 +193,14 @@ jobs:
             }
           ' "$report"
 
+      # `continue-on-error` because `doctor` exits 1 on any error-severity finding,
+      # STALE_FILE included, and it has no filter -- so it gated on the very verdict
+      # the step above deliberately does not gate on. This step prints a summary;
+      # the gate is the check above, which is the only place that knows which codes
+      # block. Without this, "kept strict BECAUSE it only nags" was false: staleness
+      # failed the job here, and the day thresholds would keep doing it on a calendar
+      # even if the commit ones were raised.
       - name: MEX diagnostics
         if: always()
+        continue-on-error: true
         run: npx --yes mex-agent@0.7.1 doctor
