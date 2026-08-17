@@ -23,13 +23,14 @@ from schemas.neuroshilling import (
     NeuroshillingCampaignUpdate,
 )
 from schemas.neuroshilling_scenario import (
+    NeuroshillingGenerateRequest,
     NeuroshillingRoleInput,
     NeuroshillingScenarioUpdate,
     NeuroshillingStepInput,
 )
 from schemas.telegram_actions import ChatMessagePreview, ReadChatMessagesResult
 from services import neuroshilling as ns_service
-from services.neuroshilling import _seams
+from services.neuroshilling import _generate, _seams
 
 if TYPE_CHECKING:
     from schemas.neuroshilling import NeuroshillingCampaign
@@ -37,15 +38,19 @@ if TYPE_CHECKING:
 _LINK = "https://t.me/c/1234567890/42"
 
 
-async def _campaign_with_media(**fields: Any) -> NeuroshillingCampaign:
-    """A one-step campaign whose only role is played by ``acc-1``."""
+async def _campaign_with_media(
+    *,
+    steps: list[NeuroshillingStepInput] | None = None,
+    **fields: Any,
+) -> NeuroshillingCampaign:
+    """A campaign whose only role is played by ``acc-1``. One message step by default."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     campaign = await repository.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     stored_scenario = await ns_service.set_scenario(
         campaign.campaign_id,
         NeuroshillingScenarioUpdate(
             roles=[NeuroshillingRoleInput(role_id="a", name="Skeptic")],
-            steps=[NeuroshillingStepInput(role_id="a", text="look")],
+            steps=steps or [NeuroshillingStepInput(role_id="a", text="look")],
         ),
     )
     assert stored_scenario is not None
@@ -188,6 +193,143 @@ async def test_a_campaign_without_media_never_touches_telegram(
     approved = await ns_service.approve_scenario(campaign.campaign_id)
 
     assert approved is not None
+    assert reader.calls == []
+
+
+def _reaction_at_step_two() -> list[NeuroshillingStepInput]:
+    """A message, then a reaction aimed at it — the media slot will name the reaction."""
+    return [
+        NeuroshillingStepInput(role_id="a", text="look"),
+        NeuroshillingStepInput(role_id="a", kind="reaction", target_position=1, emoji="🔥"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_media_pinned_to_a_reaction_step_refuses_the_approval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reaction cannot carry the media, and the run does not say so.
+
+    ``_dispatch.media_source`` is consulted only where a MESSAGE goes out, so a slot
+    aimed at a reaction posts no media and writes no log line while not posting it —
+    the campaign reaches ``done`` and the operator is left with nothing to read. The
+    card's picker now offers message steps only, so the state this refuses is the one
+    nobody chose: a generation that replaced the steps under a slot still pointing at
+    position 2.
+    """
+    campaign = await _campaign_with_media(steps=_reaction_at_step_two(), media_step_position=2)
+    monkeypatch.setattr(_seams, "execute_read", _read(_visible("photo")))
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError) as refusal:
+        await ns_service.approve_scenario(campaign.campaign_id)
+
+    assert refusal.value.code == "media_step_not_message"
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+    assert stored is not None
+    assert stored.scenario_status == "draft"
+
+
+@pytest.mark.asyncio
+async def test_the_step_kind_is_judged_before_telegram_is_asked_anything(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The rows answer this one, so it must not cost a live read per account.
+
+    ``_refuse_unreachable_media`` spends one Telegram read for every active account
+    of the media step's role. A slot that is wrong on the rows alone is refused by
+    ``_approval_problem`` first, which is what keeps those reads unspent.
+    """
+    campaign = await _campaign_with_media(steps=_reaction_at_step_two(), media_step_position=2)
+    reader = _read(_visible("photo"))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError):
+        await ns_service.approve_scenario(campaign.campaign_id)
+
+    assert reader.calls == []
+
+
+def _two_messages() -> list[NeuroshillingStepInput]:
+    return [
+        NeuroshillingStepInput(role_id="a", text="look"),
+        NeuroshillingStepInput(role_id="a", text="does it work"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_generated_dialogue_lets_go_of_the_media_step(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Generation replaces every line, so the slot no longer names what it was aimed at.
+
+    The kind check cannot catch this — step 2 of the new dialogue is a message like
+    the old one — so the position is dropped and the operator picks it again against
+    text they have now read.
+    """
+    campaign = await _campaign_with_media(steps=_two_messages(), media_step_position=2)
+
+    async def _fresh(*_args: Any, **_kwargs: Any) -> NeuroshillingScenarioUpdate:
+        return NeuroshillingScenarioUpdate(
+            roles=[NeuroshillingRoleInput(role_id="a", name="Skeptic")],
+            steps=[
+                NeuroshillingStepInput(role_id="a", text="new one"),
+                NeuroshillingStepInput(role_id="a", text="new two"),
+            ],
+        )
+
+    monkeypatch.setattr(_generate, "generate_dialogue", _fresh)
+    await ns_service.generate_scenario(campaign.campaign_id, NeuroshillingGenerateRequest())
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+
+    assert stored is not None
+    assert stored.media_step_position is None
+    # The link names a message in another chat and says nothing about this dialogue,
+    # so the half the generation did not invalidate is left alone.
+    assert stored.media_message_link == _LINK
+
+
+@pytest.mark.asyncio
+async def test_saving_the_dialogue_by_hand_keeps_the_step_the_operator_chose() -> None:
+    """Both paths write through ``replace_scenario``; only generation asks it to clear.
+
+    An operator editing the lines themselves reads every one of them, so the slot is
+    still aimed where they aimed it and clearing it would be work handed back for no
+    reason.
+    """
+    campaign = await _campaign_with_media(steps=_two_messages(), media_step_position=2)
+
+    saved = await ns_service.set_scenario(
+        campaign.campaign_id,
+        NeuroshillingScenarioUpdate(
+            roles=[NeuroshillingRoleInput(role_id="a", name="Skeptic")],
+            steps=_two_messages(),
+        ),
+    )
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+
+    assert saved is not None
+    assert stored is not None
+    assert stored.media_step_position == 2
+
+
+@pytest.mark.asyncio
+async def test_a_link_with_no_step_under_it_is_refused_by_its_own_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The state every generation leaves behind, so it must not read as a broken scenario.
+
+    Folded into ``scenario_invalid`` it answered "check the roles, steps and delays"
+    for a dialogue whose every row is fine and one empty field on the same card.
+    """
+    campaign = await _campaign_with_media(media_step_position=None)
+    reader = _read(_visible("photo"))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError) as refusal:
+        await ns_service.approve_scenario(campaign.campaign_id)
+
+    assert refusal.value.code == "media_step_missing"
+    # A row-only verdict, so it costs none of the live reads the link check spends.
     assert reader.calls == []
 
 

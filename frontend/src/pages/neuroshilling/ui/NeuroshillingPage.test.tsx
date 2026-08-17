@@ -141,7 +141,9 @@ function routeApi(
       return Promise.resolve(jsonResponse({ ...scenario, scenario_status: 'approved' }));
     }
     if (request.method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }));
-    return Promise.resolve(jsonResponse(CAMPAIGN));
+    // The PUT echo is the campaign under test, not the module-level default: the page
+    // adopts this answer, so a fixed echo would hide what a save carries back.
+    return Promise.resolve(jsonResponse(board.campaign ?? CAMPAIGN));
   });
 }
 
@@ -382,6 +384,34 @@ test('regenerating over an existing dialogue confirms before it overwrites', asy
   await waitFor(() => {
     expect(screen.getByLabelText('Текст шага 1')).toHaveValue('придуманная реплика');
   });
+});
+
+test('generating drops the media step the operator picked for the old dialogue', async () => {
+  const campaign: NeuroshillingCampaign = {
+    ...CAMPAIGN,
+    media_message_link: 'https://t.me/c/1/2',
+    media_step_position: 1,
+  };
+  routeApi([campaign], SCENARIO, { ...BOARD, campaign });
+  renderPage();
+  await waitFor(() => {
+    expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('1');
+  });
+
+  await userEvent.click(screen.getByText('Перегенерировать'));
+  await userEvent.click(screen.getByText('Сгенерировать'));
+
+  // The generation cleared the slot server-side, and the form is seeded from the
+  // server once per campaign — so the answer has to be adopted without it, or the
+  // stale position stays on screen over a line nobody chose it for. Position 1 of
+  // the generated dialogue is a message, so it is still an offered option: only the
+  // adoption tells the two apart.
+  await waitFor(() => {
+    expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('');
+  });
+  // Only the position went: the link names a message in another chat and is still
+  // the one the operator pasted.
+  expect(screen.getByLabelText('Ссылка на сообщение с медиа')).toHaveValue('https://t.me/c/1/2');
 });
 
 test('a campaign with no dialogue generates without asking, and stores the topic first', async () => {

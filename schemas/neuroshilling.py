@@ -83,6 +83,14 @@ NeuroshillingRefusalCode = Literal[
     # media check never got an answer (a flood wait, a dead socket), so the link is
     # not the problem and editing it fixes nothing.
     "media_check_unavailable",
+    # The media slot names a reaction step. Named apart from ``scenario_invalid``
+    # because the scenario is not what is wrong: every row of it is legal, and the
+    # field to change is the media slot on the same card.
+    "media_step_not_message",
+    # There is a media link but the slot names no step, or names one past the end of
+    # the dialogue. Apart from the code above for the same reason, and it is the
+    # ordinary state right after a generation, which clears the slot.
+    "media_step_missing",
 ]
 
 _MAX_NAME = 120

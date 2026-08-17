@@ -455,11 +455,20 @@ export function ScenarioCard({
           className={PICK}
         >
           <option value="">{t('neuroshilling.scenario.media.stepNone')}</option>
-          {draft.steps.map((step, index) => (
-            <option key={step.key} value={String(index + 1)}>
-              {t('neuroshilling.scenario.steps.position', { position: index + 1 })}
-            </option>
-          ))}
+          {/* Messages only: the media rides along with the step's own send, and a
+              reaction sends nothing to carry it. Approval refuses such a slot with
+              `media_step_not_message`, read off the KIND of the step at that position
+              and never off its identity — which is why a generation drops the slot
+              rather than leaving it over a line the operator has never read. */}
+          {draft.steps.flatMap((step, index) =>
+            step.kind === 'message'
+              ? [
+                  <option key={step.key} value={String(index + 1)}>
+                    {t('neuroshilling.scenario.steps.position', { position: index + 1 })}
+                  </option>,
+                ]
+              : [],
+          )}
         </select>
       </div>
 

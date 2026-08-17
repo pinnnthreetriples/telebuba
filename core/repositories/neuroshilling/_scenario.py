@@ -231,11 +231,20 @@ def _write_steps(
             )
 
 
-def _set_scenario_status(connection: Connection, campaign_id: str, status: str) -> None:
+def _set_scenario_status(
+    connection: Connection,
+    campaign_id: str,
+    status: str,
+    *,
+    clear_media_step: bool = False,
+) -> None:
+    values: dict[str, object] = {"scenario_status": status, "updated_at": _now_iso()}
+    if clear_media_step:
+        values["media_step_position"] = None
     connection.execute(
         update(_neuroshilling_campaigns)
         .where(_neuroshilling_campaigns.c.campaign_id == campaign_id)
-        .values(scenario_status=status, updated_at=_now_iso()),
+        .values(**values),
     )
 
 
@@ -243,6 +252,8 @@ def _replace_scenario(
     campaign_id: str,
     roles: Sequence[NeuroshillingRoleInput],
     steps: Sequence[NeuroshillingStepInput],
+    *,
+    clear_media_step: bool,
 ) -> bool:
     with _get_engine().begin() as connection:
         if not _campaign_exists(connection, campaign_id):
@@ -252,7 +263,7 @@ def _replace_scenario(
         _write_steps(connection, campaign_id, steps, role_ids, now)
         # In the SAME transaction as the rows it invalidates: an approval that
         # outlived the dialogue it vouched for is exactly what the gate is for.
-        _set_scenario_status(connection, campaign_id, "draft")
+        _set_scenario_status(connection, campaign_id, "draft", clear_media_step=clear_media_step)
     return True
 
 
@@ -260,14 +271,28 @@ async def replace_scenario(
     campaign_id: str,
     roles: Sequence[NeuroshillingRoleInput],
     steps: Sequence[NeuroshillingStepInput],
+    *,
+    clear_media_step: bool = False,
 ) -> bool:
     """Write the whole scenario atomically and return it to ``draft``.
+
+    ``clear_media_step`` also writes ``media_step_position=NULL``, in the same
+    UPDATE as the status. It is off by default because a hand-edited scenario
+    keeps the slot the operator chose; only a caller that replaces every line with
+    text the operator has never read turns it on, since the position would
+    otherwise survive onto a step nobody aimed it at.
 
     ``False`` means there is no such campaign — checked inside the transaction, so
     a campaign deleted between the caller's read and this write cannot leave
     orphan roles behind.
     """
-    return await asyncio.to_thread(_replace_scenario, campaign_id, roles, steps)
+    return await asyncio.to_thread(
+        _replace_scenario,
+        campaign_id,
+        roles,
+        steps,
+        clear_media_step=clear_media_step,
+    )
 
 
 def _approve_scenario(campaign_id: str) -> bool:

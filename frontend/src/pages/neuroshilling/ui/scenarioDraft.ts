@@ -124,6 +124,8 @@ export function draftOf(
   campaign: NeuroshillingCampaign,
   scenario: NeuroshillingScenario,
 ): ScenarioDraft {
+  const steps = scenario.steps ?? [];
+  const mediaStep = campaign.media_step_position ?? null;
   return {
     campaignId: campaign.campaign_id,
     mode: campaign.mode,
@@ -131,13 +133,21 @@ export function draftOf(
     uniqueMessages: campaign.unique_messages ?? true,
     useChatContext: campaign.use_chat_context ?? false,
     mediaMessageLink: campaign.media_message_link ?? '',
-    mediaStepPosition: campaign.media_step_position ?? null,
+    // A stored slot on anything but a message is dropped on the way in. The card's
+    // picker offers message steps only, so such a value matches no option and the
+    // `<select>` falls back to its first one: "no media step" on screen while the
+    // draft still holds the position and writes it back on the next save, where
+    // approval refuses it as `media_step_not_message` — naming a field that reads
+    // empty. Neither save endpoint reads the kind under the slot, so an operator
+    // who turns that step into a reaction and saves lands exactly here.
+    mediaStepPosition:
+      mediaStep !== null && steps[mediaStep - 1]?.kind === 'message' ? mediaStep : null,
     roles: (scenario.roles ?? []).map((role) => ({
       roleId: role.role_id,
       name: role.name,
       description: role.description ?? '',
     })),
-    steps: (scenario.steps ?? []).map((step) => ({
+    steps: steps.map((step) => ({
       // The stored id doubles as the list key: it is stable across a refetch and
       // it is already unique.
       key: step.step_id,

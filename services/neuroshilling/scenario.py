@@ -59,10 +59,14 @@ _MEDIA_UNREACHABLE: NeuroshillingRefusalCode = "media_source_unreachable"
 _MEDIA_CHECK_UNAVAILABLE: NeuroshillingRefusalCode = "media_check_unavailable"
 # The approval problems specific enough to name on the wire. Everything else answers
 # ``scenario_invalid``: the page holds the same roles and steps and can point at the
-# offending row itself, whereas a refused LINE is not visibly wrong at all.
+# offending row itself, whereas a refused LINE is not visibly wrong at all — and the
+# two media ones name a scenario whose every row is legal, so "check the roles, steps
+# and delays" would point away from the one field that is wrong.
 _PROBLEM_CODES: dict[str, NeuroshillingRefusalCode] = {
     "text_has_link": "scenario_text_has_link",
     "text_forbidden_word": "scenario_text_forbidden_word",
+    "media_step_not_message": "media_step_not_message",
+    "media_step_missing": "media_step_missing",
 }
 # Read kinds that say nothing about what the account can SEE. A flood is Telegram
 # pacing us and an ``unavailable`` is our own socket; both are over in minutes, and
@@ -171,9 +175,9 @@ def _approval_problem(
 ) -> str | None:
     """The first reason this scenario may not be approved, or ``None``.
 
-    Most reasons are for the test suite and the reader and answer the same
-    ``scenario_invalid`` on the wire; the two text ones are translated through
-    ``_PROBLEM_CODES`` into refusals of their own.
+    The reasons ``_PROBLEM_CODES`` does not list are for the test suite and the
+    reader and answer the same ``scenario_invalid`` on the wire; the ones it lists
+    are translated into refusals of their own.
     """
     if not roles:
         return "no_roles"
@@ -181,7 +185,7 @@ def _approval_problem(
         return "no_message_step"
     if any(step.role_id is None for step in steps):
         return "step_without_role"
-    return _text_problem(steps) or _media_problem(campaign, len(steps))
+    return _text_problem(steps) or _media_problem(campaign, steps)
 
 
 def _text_problem(steps: Sequence[NeuroshillingStep]) -> str | None:
@@ -206,17 +210,36 @@ def _text_problem(steps: Sequence[NeuroshillingStep]) -> str | None:
     return None
 
 
-def _media_problem(campaign: NeuroshillingCampaign, step_count: int) -> str | None:
-    """The media slot must name a step that exists, or name nothing at all.
+def _media_problem(
+    campaign: NeuroshillingCampaign,
+    steps: Sequence[NeuroshillingStep],
+) -> str | None:
+    """The media slot must name a MESSAGE step that exists, or name nothing at all.
+
+    The media travels as the message step's own send — ``_dispatch.media_source`` is
+    consulted only where a MESSAGE goes out: ``_steps._play_message``, and the replay
+    a stand-in makes of one. A reaction step under the slot therefore posts no media
+    and logs nothing while doing it, so the run reaches ``done`` with the media never
+    sent and no trace of why.
+
+    Neither half needs anyone to choose it. The card's picker offers message steps
+    only and its remove button moves the slot along with them, but no save endpoint
+    reads the KIND under it, so an operator who turns that step into a reaction stores
+    ``media_step_not_message`` — and ``media_step_missing`` is the ordinary state right
+    after a generation, which clears the slot.
 
     Whether the accounts playing that step can actually SEE the source message is
-    a Telegram question and belongs to the stage that adds the read; this is the
-    half that can be answered from the rows alone.
+    a Telegram question, answered by :func:`_refuse_unreachable_media` against live
+    reads; this is the half that can be answered from the rows alone, so it runs
+    first and a slot pointing at a reaction costs no reads to refuse.
     """
+    position = campaign.media_step_position
     if campaign.media_message_link:
-        if campaign.media_step_position is None or campaign.media_step_position > step_count:
+        if position is None or position > len(steps):
             return "media_step_missing"
-    elif campaign.media_step_position is not None:
+        if steps[position - 1].kind != "message":
+            return "media_step_not_message"
+    elif position is not None:
         return "media_step_without_link"
     return None
 
@@ -350,7 +373,16 @@ async def generate_scenario(
         # than the operator's ceiling would otherwise be written straight past the
         # check the PUT makes, and the form could never save the campaign again.
         _check_size(draft)
-        await repository.replace_scenario(campaign_id, draft.roles, draft.steps)
+        # The media slot is cleared by the same write. Every line is replaced, so
+        # the position the operator picked now names text they have never read, and
+        # :func:`_media_problem` cannot notice: it reads the KIND of the step there,
+        # and a slot left on a step that is still a message passes.
+        await repository.replace_scenario(
+            campaign_id,
+            draft.roles,
+            draft.steps,
+            clear_media_step=True,
+        )
         # Re-read rather than composing from the row above: the write just moved
         # ``scenario_status`` back to ``draft`` and the stale copy still says
         # whatever it said before.

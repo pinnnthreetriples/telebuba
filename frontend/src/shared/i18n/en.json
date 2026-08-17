@@ -533,7 +533,9 @@
       "generation_in_progress": "A generation is already running for this campaign.",
       "target_is_basic_group": "That target is a basic group or a private chat, which cannot be used.",
       "media_source_unreachable": "Some accounts cannot see the linked media message.",
-      "media_check_unavailable": "Telegram did not answer the media check. Wait a minute and approve again."
+      "media_check_unavailable": "Telegram did not answer the media check. Wait a minute and approve again.",
+      "media_step_not_message": "The step carrying the media is a reaction step, and a reaction sends no media. Pick a message step and approve again.",
+      "media_step_missing": "Nothing is carrying the media: “Step carrying the media” is empty, or names a step the dialogue no longer has. Pick a message step and approve again."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",
@@ -1685,7 +1687,7 @@
       },
       "regenerate": {
         "title": "Generate a new dialogue?",
-        "body": "The model writes a fresh dialogue and it replaces the stored one — every role, every step and every edit made by hand. This cannot be undone.",
+        "body": "The model writes a fresh dialogue and it replaces the stored one — every role, every step and every edit made by hand. The chosen media step is let go too: the lines will be different ones, and the old step number would point at the wrong line. This cannot be undone.",
         "confirm": "Generate",
         "cancel": "Cancel"
       },
