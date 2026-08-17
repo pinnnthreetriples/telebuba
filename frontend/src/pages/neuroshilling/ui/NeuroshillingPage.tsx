@@ -458,6 +458,12 @@ export function NeuroshillingPage() {
             draft={setup}
             onDraft={setSetup}
             dirty={setupDirty}
+            reserveCount={
+              roster.filter(
+                (account) =>
+                  account.is_reserve === true && (account.state ?? 'active') === 'active',
+              ).length
+            }
             live={campaign.status === 'running' || campaign.status === 'stopping'}
             onSave={saveSetup}
             busy={busy}

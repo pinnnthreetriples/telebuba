@@ -157,6 +157,33 @@ async def fetch_message_id(key: NeuroshillingStepKey) -> int | None:
     return await asyncio.to_thread(_fetch_message_id, key)
 
 
+def _hand_over_message(key: NeuroshillingStepKey, account_id: str) -> bool:
+    statement = (
+        update(_TABLE)
+        .where(_at(key) & (_TABLE.c.status == "failed"))
+        .values(account_id=account_id, status="pending", error_type=None)
+    )
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount > 0
+
+
+async def hand_over_message(key: NeuroshillingStepKey, *, account_id: str) -> bool:
+    """Give one FAILED row to another account so the step can be sent again.
+
+    An UPDATE and never a delete-then-insert: ``(run_id, target, step_id)`` is unique
+    and this row already holds that key, so handing it over never opens a window in
+    which the step looks unplayed. Only a ``failed`` row moves — a ``pending`` one is
+    a dispatch whose outcome is unknown, a ``sent`` one is published, and a
+    ``skipped`` one was refused before anything reached Telegram.
+
+    Back to ``pending`` because that is what the row means again: reserved, not yet
+    settled. Whatever happens next settles it exactly as the first attempt would
+    have, and a process that dies in between is swept into ``failed`` by
+    :func:`fail_pending_messages` like any other interrupted dispatch.
+    """
+    return await asyncio.to_thread(_hand_over_message, key, account_id)
+
+
 def _list_journalled_steps(run_id: str) -> set[tuple[str, str]]:
     statement = select(_TABLE.c.target, _TABLE.c.step_id).where(_TABLE.c.run_id == run_id)
     with _get_engine().connect() as connection:

@@ -112,6 +112,12 @@ _neuroshilling_accounts = Table(
     Column("state", String, nullable=False, server_default=text("'active'")),
     Column("replaced_by_account_id", String, nullable=True),
     Column("created_at", String, nullable=False),
+    # Only two of the three are ever written: ``ban_campaign_account`` sets ``banned``
+    # and nothing else moves the column. A promoted reserve is not a third state — it
+    # keeps ``active`` and loses its ``is_reserve`` flag — so ``replaced`` is dead
+    # vocabulary, and it stays anyway: migration 55 is stamped on deployed databases
+    # with this list in it, and narrowing the spelling here would leave the two schemas
+    # disagreeing on every database that has already run it.
     CheckConstraint("state IN ('active','banned','replaced')"),
     Index("ix_ns_accounts_role", "campaign_id", "role_id"),
 )

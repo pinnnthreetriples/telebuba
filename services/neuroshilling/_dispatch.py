@@ -42,10 +42,17 @@ if TYPE_CHECKING:
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
 
+# Verdicts that finish the ACCOUNT rather than delay it: a session that cannot act at
+# all, and the one ban Telegram reports as itself. Only these two are worth a reserve
+# account — a flood is a wait, and the chat-scoped refusals below meet a substitute
+# identically. Which of the two it was is carried on into ``RunContext.banned``,
+# because only ``account_banned`` says anything about the chat it happened in.
+_BANS_ACCOUNT: Final = frozenset({"account_dead", "account_banned"})
 # Verdicts that take the ACCOUNT out of the run: Telegram is rate-limiting it, or it
 # cannot act at all. ``_telegram.record_send_verdict`` has already persisted the first
-# kind onto every presence row, so the halt outlives this process too.
-_HALTS_ACCOUNT: Final = frozenset({"halt", "account_dead", "account_banned"})
+# kind onto every presence row, so the halt outlives this process too. Owned by
+# ``_telegram`` because the autoreply path acts on the same set.
+_HALTS_ACCOUNT: Final = _telegram.HALTS_ACCOUNT
 # Verdicts that belong to the CHAT. Another account of the same role meets them
 # identically, so the target is abandoned rather than retried with a second session.
 _LOSES_TARGET: Final = frozenset({"chat_blocked", "chat_unavailable"})
@@ -243,6 +250,15 @@ async def _record(
     await _settle_failure(context, target, step, account_id, result.error_type)
     if verdict in _HALTS_ACCOUNT:
         context.halted.add(account_id)
+        if verdict in _BANS_ACCOUNT:
+            # Persisted HERE, where the verdict is classified, because this is the only
+            # point every ban passes through: the reserve switch may be off and the
+            # chat may already be abandoned, and the account is finished either way.
+            await repository.ban_campaign_account(campaign_id, account_id)
+            # And handed to ``_steps``, which is the layer that owns the target's chat
+            # map and can therefore get a stand-in into the chat before it speaks. The
+            # verdict travels with it: only one of the two is evidence about the CHAT.
+            context.banned[account_id] = verdict
         await log_event(
             "WARNING",
             "neuroshilling_account_halted",

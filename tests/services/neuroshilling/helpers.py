@@ -37,6 +37,7 @@ async def seed_campaign(
     *,
     targets: str = "@alpha",
     accounts: tuple[str, ...] = ("acc-1", "acc-2"),
+    reserves: tuple[str, ...] = (),
     steps: list[NeuroshillingStepInput] | None = None,
     approve: bool = True,
     **overrides: Any,
@@ -44,9 +45,17 @@ async def seed_campaign(
     """A campaign with two roles, a two-line dialogue, a roster and an approval.
 
     One account per role by default, in roster order, which is what makes the step
-    tests deterministic without pinning the rng seam.
+    tests deterministic without pinning the rng seam. ``reserves`` are rostered with no
+    role and the reserve flag set, which is the substitution pool: the engine leaves
+    them out of the cast until a ban promotes one.
+
+    ``reserve_enabled`` defaults to ON here and OFF in the product, because the switch
+    is what every ban path runs through and a helper that left it off would make those
+    tests describe the switch instead of the path. The off position has a test of its
+    own, which passes it explicitly.
     """
-    for account_id in accounts:
+    overrides.setdefault("reserve_enabled", True)
+    for account_id in (*accounts, *reserves):
         await create_account(
             AccountCreate(account_id=account_id, label=account_id, session_name=account_id),
         )
@@ -65,11 +74,17 @@ async def seed_campaign(
             name="Promo",
             targets_raw=targets,
             accounts=[
-                NeuroshillingAccountAssignment(
-                    account_id=account_id,
-                    role_id=stored_roles[index].role_id,
-                )
-                for index, account_id in enumerate(accounts)
+                *(
+                    NeuroshillingAccountAssignment(
+                        account_id=account_id,
+                        role_id=stored_roles[index].role_id,
+                    )
+                    for index, account_id in enumerate(accounts)
+                ),
+                *(
+                    NeuroshillingAccountAssignment(account_id=account_id, is_reserve=True)
+                    for account_id in reserves
+                ),
             ],
             **overrides,
         ),

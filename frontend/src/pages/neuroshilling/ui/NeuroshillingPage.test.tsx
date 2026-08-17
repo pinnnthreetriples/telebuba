@@ -461,6 +461,25 @@ test('start posts once and is offered only when nothing blocks it', async () => 
   });
 });
 
+test('the reserve badge counts rostered reserves that are still unspent', async () => {
+  routeLaunchable({
+    available: [
+      ...LAUNCHABLE_BOARD.available!,
+      { account_id: 'a3', title: 'Виктор', assigned: true, is_reserve: true },
+      // Already promoted server-side: the flag is cleared, so it is no longer pool.
+      { account_id: 'a4', title: 'Галина', assigned: true, is_reserve: false, role_id: 'r1' },
+      // Banned while still flagged reserve — out of the pool for a different reason.
+      { account_id: 'a5', title: 'Дина', assigned: true, is_reserve: true, state: 'banned' },
+      // Unrostered accounts are somebody else's business.
+      { account_id: 'a6', title: 'Егор', is_reserve: true },
+    ],
+  });
+  renderPage();
+
+  await userEvent.click(await screen.findByRole('button', { name: /Расширенные настройки/ }));
+  expect(screen.getByText('В резерве: 1')).toBeInTheDocument();
+});
+
 test('a blocked campaign never reaches the start endpoint', async () => {
   // A draft scenario: the operator reads the reason instead of collecting a 409.
   routeApi([CAMPAIGN], SCENARIO, { ...LAUNCHABLE_BOARD, campaign: CAMPAIGN });

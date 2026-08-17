@@ -195,6 +195,13 @@ export function LaunchCard({
           />
           {t(`neuroshilling.campaign.status.${status}`)}
         </span>
+        {/* Counted over the whole campaign rather than this run, because the roster
+            row a substitution writes is the campaign's and outlives the run. Shown at
+            zero too: "nobody has been replaced" is the answer the operator is
+            checking for. */}
+        <span className="rounded-full bg-[#f4f3f0] px-[9px] py-[2px] text-[11px] font-medium tabular-nums text-ink-muted">
+          {t('neuroshilling.launch.substitutions', { n: run.substitutions ?? 0 })}
+        </span>
         {/* `sent` / `total` counts MESSAGE steps only: reactions are journalled but
             a skipped reaction is not lost progress, so presenting the bar as
             counting every step would make it lie downward. */}

@@ -306,12 +306,18 @@ class NeuroshillingRunStatus(BaseModel):
     ``halted_accounts`` are the accounts Telegram has taken out of the run — a flood
     wait, a peer flood, or the 500-chat ceiling. They are read back from the durable
     presence rows rather than from a run-local set, so a restart does not forget them.
+
+    ``substitutions`` is how many accounts a reserve one has taken over from. It is
+    here rather than derived on the client because the board's roster carries
+    ``state`` but not ``replaced_by_account_id``, and a ban with an empty reserve pool
+    writes the first without the second.
     """
 
     status: NeuroshillingStatus = "idle"
     run_id: str | None = None
     sent: int = Field(default=0, ge=0)
     total: int = Field(default=0, ge=0)
+    substitutions: int = Field(default=0, ge=0)
     # Exception CLASS NAME of whatever ended the last run, never its text.
     last_error_type: str | None = None
     halted_accounts: list[str] = Field(default_factory=list)

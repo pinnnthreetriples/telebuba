@@ -58,6 +58,7 @@ function renderCard(over: Partial<Parameters<typeof CampaignSetupCard>[0]> = {})
       initial={draft ?? setupDraftOf(CAMPAIGN)}
       onDraft={onDraft}
       dirty={false}
+      reserveCount={0}
       live={false}
       onSave={onSave}
       busy={false}
@@ -138,6 +139,15 @@ test('the two quota boxes clamp to the wire bounds instead of posting a 422', as
   await userEvent.clear(perChat);
   await userEvent.type(perChat, '5');
   expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).messagesPerChatPerDay).toBe(5);
+});
+
+test('the reserve badge counts the pool as it stands, not as the roster was arranged', async () => {
+  // A promoted account has its reserve flag cleared server-side, so the number the
+  // page passes in is what is left — and zero is the state worth seeing.
+  renderCard({ reserveCount: 2 });
+  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+
+  expect(screen.getByText('В резерве: 2')).toBeInTheDocument();
 });
 
 test('the reserve switch and the sequential option write to the draft', async () => {

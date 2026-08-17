@@ -13476,6 +13476,12 @@
             "title": "Total",
             "default": 0
           },
+          "substitutions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Substitutions",
+            "default": 0
+          },
           "last_error_type": {
             "anyOf": [
               {
@@ -13497,7 +13503,7 @@
         },
         "type": "object",
         "title": "NeuroshillingRunStatus",
-        "description": "What the launch card shows: where the run is and how far it has got.\n\n``sent`` counts delivered MESSAGE steps of the current run and ``total`` is\ntargets x message steps. Reactions are journalled but counted in neither, because\na skipped reaction is not lost progress.\n\n``halted_accounts`` are the accounts Telegram has taken out of the run \u2014 a flood\nwait, a peer flood, or the 500-chat ceiling. They are read back from the durable\npresence rows rather than from a run-local set, so a restart does not forget them."
+        "description": "What the launch card shows: where the run is and how far it has got.\n\n``sent`` counts delivered MESSAGE steps of the current run and ``total`` is\ntargets x message steps. Reactions are journalled but counted in neither, because\na skipped reaction is not lost progress.\n\n``halted_accounts`` are the accounts Telegram has taken out of the run \u2014 a flood\nwait, a peer flood, or the 500-chat ceiling. They are read back from the durable\npresence rows rather than from a run-local set, so a restart does not forget them.\n\n``substitutions`` is how many accounts a reserve one has taken over from. It is\nhere rather than derived on the client because the board's roster carries\n``state`` but not ``replaced_by_account_id``, and a ban with an empty reserve pool\nwrites the first without the second."
       },
       "NeuroshillingScenario": {
         "properties": {

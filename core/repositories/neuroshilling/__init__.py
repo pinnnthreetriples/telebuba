@@ -16,8 +16,12 @@ models / ``None`` — never raw rows.
 from __future__ import annotations
 
 from core.repositories.neuroshilling._accounts import (
+    ReserveSwap,
+    ban_campaign_account,
+    count_substitutions,
     list_campaign_accounts,
     list_campaign_role_ids,
+    substitute_banned_account,
 )
 from core.repositories.neuroshilling._campaigns import (
     create_campaign,
@@ -38,6 +42,7 @@ from core.repositories.neuroshilling._messages import (
     claim_message,
     fail_pending_messages,
     fetch_message_id,
+    hand_over_message,
     list_journalled_steps,
     settle_message,
 )
@@ -55,16 +60,20 @@ from core.repositories.neuroshilling._scenario import (
 )
 
 __all__ = [
+    "ReserveSwap",
     "approve_scenario",
+    "ban_campaign_account",
     "claim_message",
     "count_messages_since",
     "count_sent_message_steps",
+    "count_substitutions",
     "create_campaign",
     "delete_campaign",
     "fail_pending_messages",
     "fetch_campaign",
     "fetch_message_id",
     "fetch_presence_state",
+    "hand_over_message",
     "list_campaign_accounts",
     "list_campaign_role_ids",
     "list_campaigns",
@@ -80,5 +89,6 @@ __all__ = [
     "retire_account_presence",
     "set_run_state",
     "settle_message",
+    "substitute_banned_account",
     "update_campaign",
 ]
