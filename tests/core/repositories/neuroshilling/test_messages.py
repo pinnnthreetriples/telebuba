@@ -277,21 +277,27 @@ async def test_a_revive_cycles_rows_belong_to_the_run_that_spawned_them() -> Non
 
 
 @pytest.mark.asyncio
-async def test_our_own_message_ids_are_read_back_across_every_run_of_a_campaign() -> None:
+async def test_our_own_message_ids_are_read_back_across_every_run_and_campaign() -> None:
     """What the chat poller answers "is this ours?" with.
 
-    Telethon's ``out`` flag only covers the account doing the reading, so a line
-    said by a sibling account looks like a stranger's without this. Not scoped to
-    the current run either: an earlier run's messages are still in that chat and
-    are just as much ours.
+    Telethon's ``out`` flag only covers the account doing the reading, so a line said
+    by any other account looks like a stranger's without this. Not scoped to the
+    current run, because an earlier run's messages are still in that chat — and not to
+    the campaign either: a second campaign aimed at the same group read the first one's
+    scripted lines as a stranger's and answered them. The TARGET is still the key: ids
+    are only unique inside one chat.
     """
     campaign_id, steps = await _campaign()
     for run_id, step in ((_RUN, steps[0]), (f"{_RUN}#2", steps[1])):
         key = NeuroshillingStepKey(run_id=run_id, target="alpha", step_id=step.step_id)
         await claim_message(key, campaign_id=campaign_id, account_id="acc-1", text="a")
         await settle_message(key, status="sent", message_id=100 + step.position)
+    other_campaign, other_steps = await _campaign()
+    elsewhere = NeuroshillingStepKey(run_id="run-2", target="alpha", step_id=other_steps[0].step_id)
+    await claim_message(elsewhere, campaign_id=other_campaign, account_id="acc-2", text="a")
+    await settle_message(elsewhere, status="sent", message_id=205)
     # A claimed but unsettled row has no id in the chat, so it is not one of ours.
     await _claim(campaign_id, "beta", steps[0].step_id, "acc-1", "a")
 
-    assert await list_sent_message_ids(campaign_id, "alpha") == {101, 102}
-    assert await list_sent_message_ids(campaign_id, "beta") == set()
+    assert await list_sent_message_ids("alpha") == {101, 102, 205}
+    assert await list_sent_message_ids("beta") == set()

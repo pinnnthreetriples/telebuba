@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
-from core.repositories.accounts import list_accounts_by_ids
+from core.repositories.accounts import list_account_user_ids
 from services import pacing
 from services.neuroshilling import _listen, _revive, _seams, _steps, _telegram
 from services.neuroshilling._context import RunContext
@@ -116,9 +116,10 @@ async def _load_context(
         if account.role_id is None or account.state != "active" or account.is_reserve:
             continue
         by_role.setdefault(account.role_id, []).append(account.account_id)
-    # The whole roster and not just the speakers: a reserve promoted mid-run is one of
-    # ours from the moment it says anything, and this set is read once and never again.
-    rostered = await list_accounts_by_ids([account.account_id for account in accounts])
+    # Every account the deployment owns, and not this campaign's roster: the poller uses
+    # these to tell our own lines from a stranger's, and a line said by any of our
+    # sessions is ours whichever campaign — if any — put it in that chat. Read once and
+    # never again, so a reserve promoted mid-run is covered by the same set.
     context = RunContext(
         campaign=campaign,
         run_id=run_id,
@@ -128,9 +129,7 @@ async def _load_context(
         halted=set(),
         banned={},
         banned_in={},
-        our_user_ids=frozenset(
-            account.user_id for account in rostered.accounts if account.user_id is not None
-        ),
+        our_user_ids=await list_account_user_ids(),
     )
     played = await repository.list_journalled_steps(run_id)
     return context, parse_targets(campaign.targets_raw), played
