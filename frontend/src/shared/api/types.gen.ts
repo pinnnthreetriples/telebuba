@@ -2401,6 +2401,11 @@ export type NeuroshillingStep = {
  * NeuroshillingStepInput
  *
  * One dialogue step as the form declares it — no ``position``, see the module docstring.
+ *
+ * Which of ``reply_to_position``, ``target_position`` and ``emoji`` a ``kind`` may
+ * carry is NOT checked here. ``services.neuroshilling.scenario._kind_field_problem``
+ * holds the write to it, so that the operator gets ``scenario_invalid`` — the refusal
+ * the page already has copy for — rather than the generic 422 a schema rule raises.
  */
 export type NeuroshillingStepInput = {
   /**
