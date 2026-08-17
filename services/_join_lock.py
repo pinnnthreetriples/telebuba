@@ -22,13 +22,15 @@ lock is taken OUTSIDE ``account_lock``, which the gateway seams take beneath it.
 count the log, join and charge it under this mutex, and each counts it a second time
 once it holds it: the count taken before the mutex is spent by whoever charges first.
 
-**It closes the cap, not the exclusion.** Nothing refuses the listener account a
-neuroshilling roster: ``_claim_accounts`` in ``services.neuroshilling._runtime`` asks
-``list_active_campaign_account_names()`` and the ownership registry, and the listener —
-``neurocomment_runtime.listener_account_id`` — is in neither, so an operator can put it
-in a campaign and have both join passes running on it. What this lock changes is that
-the two then spend one budget between them, instead of each charging against a count
-the other has not spent yet.
+**It closes the cap, not the exclusion.** WHICH runtimes may drive one account at a
+time is settled at their starts, not here: ``_claim_accounts`` in
+``services.neuroshilling._runtime`` refuses a roster carrying the running listener and
+``start_neurocomment`` refuses an account a campaign holds, so those two no longer meet
+over this log. What is left for this lock is every overlap that is legitimate — a single
+charger's own queue of targets, and pair onboarding beside the listener's channel-join
+pass on an account that is both the listener and a neurocomment campaign's. Those spend
+one budget between them instead of each charging against a count the others have not
+spent yet.
 
 ponytail: one uvicorn worker, so an in-process ``asyncio.Lock`` reaches every join that
 takes it. A second worker would not share the map, and the cap would then need the count

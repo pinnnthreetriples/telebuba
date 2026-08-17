@@ -124,8 +124,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     Startup order matters for one pair: neuroshilling reconciles after WARMING,
     because warming writes the ownership registry as it restores and neuroshilling
     claims accounts out of it. Neurocomment is not part of that ordering — it only
-    ever reads the registry, and the "is this account serving a campaign?" question
-    is answered from the database whether its reconcile has run or not.
+    ever reads the registry, and both questions neuroshilling asks about it ("is this
+    account serving a campaign?", "is it the running listener?") are answered from the
+    database whether its reconcile has run or not.
     """
     setup_logging()
     await cleanup_stale_uploads()

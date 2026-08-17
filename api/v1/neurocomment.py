@@ -12,6 +12,7 @@ from api.v1._neurocomment_discovery import discovery_router
 from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
+    LISTENER_BUSY_NEUROSHILLING_CODE,
     AssignAccountRequest,
     CampaignCreate,
     CampaignList,
@@ -282,6 +283,14 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
             detail=DISCOVERY_BUSY_CODE,
+        ) from exc
+    except nc_service.ListenerBusyNeuroshillingError as exc:
+        # A code of its own rather than warming's ``account_busy_neuroshilling``: the
+        # condition is the same but the next move is not, and that copy tells the
+        # operator to start warming afterwards.
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=LISTENER_BUSY_NEUROSHILLING_CODE,
         ) from exc
     return await nc_service.neurocomment_runtime_status()
 

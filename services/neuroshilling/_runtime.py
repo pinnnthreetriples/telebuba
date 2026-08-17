@@ -24,13 +24,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import AsyncExitStack
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from core.config import settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
-from core.repositories.neurocomment import list_active_campaign_account_names
+from core.repositories.neurocomment import (
+    get_listener_account_id,
+    get_listener_running,
+    list_active_campaign_account_names,
+)
 from services import _account_owner
 from services.neuroshilling import _seams, _state, engine
 from services.neuroshilling.campaigns import (
@@ -54,6 +59,7 @@ _OWNER = "neuroshilling"
 _LIVE_STATUSES = frozenset({"running", "stopping"})
 
 _ACCOUNT_BUSY: NeuroshillingRefusalCode = "account_busy"
+_ACCOUNT_IS_LISTENER: NeuroshillingRefusalCode = "account_is_listener"
 _CAMPAIGN_RUNNING: NeuroshillingRefusalCode = "campaign_running"
 _NOT_ENOUGH_ACCOUNTS: NeuroshillingRefusalCode = "not_enough_accounts"
 _NO_TARGETS: NeuroshillingRefusalCode = "no_targets"
@@ -140,22 +146,61 @@ async def _check_roster(campaign: NeuroshillingCampaign) -> list[str]:
 async def _claim_accounts(campaign_id: str, account_ids: list[str]) -> None:
     """Take every account for this campaign, or take none and refuse.
 
-    The neurocomment question is asked FIRST and from the database, because that
-    feature never writes the registry: an account serving an active campaign there is
-    busy in a way no in-memory claim would show. Reading it before the loop is also
-    what keeps the loop itself free of ``await`` — from the first claim to the last
-    there is no suspension point, so a second start cannot interleave with this one.
+    Both neurocomment questions are asked FIRST and from the database, because that
+    feature never writes the registry: an account serving an active campaign there, or
+    standing as the running listener, is busy in a way no in-memory claim would show.
+    Reading them before the loop is also what keeps the loop itself free of ``await`` —
+    from the first claim to the last there is no suspension point, so a second start
+    cannot interleave with this one.
+
+    Every roster account's lifecycle lock is held across the reads AND the claims,
+    because ``start_neurocomment`` commits its listener row under that same lock. The
+    two starts therefore serialise per account, and whichever runs second sees what the
+    first published: the listener row here, the registry claim there. Without the locks
+    both read "free" — a database row and an in-memory claim are two publication points
+    with awaits between them, so neither read covers the other's write.
+
+    The ids are taken in sorted order so that two starts over overlapping rosters take
+    the locks in the same order and cannot each wait on what the other holds. They are
+    already distinct — ``(campaign_id, account_id)`` is the roster's primary key — which
+    matters because these locks are plain ``asyncio.Lock``s and do not re-enter.
     """
-    serving = await list_active_campaign_account_names()
-    if any(account_id in serving for account_id in account_ids):
-        raise NeuroshillingConflictError(_ACCOUNT_BUSY)
-    taken: list[str] = []
-    for account_id in account_ids:
-        if _account_owner.try_claim(account_id, _OWNER, campaign_id) is not None:
-            for held in taken:
-                _account_owner.release(held, _OWNER, campaign_id)
+    from services.warming import account_lock  # noqa: PLC0415 - avoids an import cycle
+
+    async with AsyncExitStack() as locks:
+        for account_id in sorted(account_ids):
+            await locks.enter_async_context(account_lock(account_id))
+        serving = await list_active_campaign_account_names()
+        if any(account_id in serving for account_id in account_ids):
             raise NeuroshillingConflictError(_ACCOUNT_BUSY)
-        taken.append(account_id)
+        listener = await _running_listener_account_id()
+        if listener is not None and listener in account_ids:
+            raise NeuroshillingConflictError(_ACCOUNT_IS_LISTENER)
+        taken: list[str] = []
+        for account_id in account_ids:
+            if _account_owner.try_claim(account_id, _OWNER, campaign_id) is not None:
+                for held in taken:
+                    _account_owner.release(held, _OWNER, campaign_id)
+                raise NeuroshillingConflictError(_ACCOUNT_BUSY)
+            taken.append(account_id)
+
+
+async def _running_listener_account_id() -> str | None:
+    """The account the neurocomment listener is subscribed with, or ``None``.
+
+    A remembered-but-PAUSED listener answers ``None``, the same reading
+    ``start_warming`` takes of the same two columns: the operator switched that runtime
+    off, so the session is free until they switch it back on — and at that moment
+    ``start_neurocomment`` is the half that refuses.
+
+    Read from the database rather than from neurocomment's in-process owner because the
+    listener is not a holder in ``services._account_owner`` (see that module's note on
+    why), so these columns are the only record of it that survives a restart and that
+    exists before neurocomment's own startup reconciliation has run.
+    """
+    if not await get_listener_running():
+        return None
+    return await get_listener_account_id()
 
 
 def _release_campaign(campaign_id: str) -> None:

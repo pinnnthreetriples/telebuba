@@ -13,7 +13,11 @@ from core.channel_tokens import parse_channels
 from core.config import settings
 from core.db import list_accounts, list_warming_account_ids
 from core.repositories import neuroshilling as repository
-from core.repositories.neurocomment import list_active_campaign_account_names
+from core.repositories.neurocomment import (
+    get_listener_account_id,
+    get_listener_running,
+    list_active_campaign_account_names,
+)
 from schemas.neuroshilling import (
     NeuroshillingBoard,
     NeuroshillingBoardAccount,
@@ -302,18 +306,30 @@ async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus
 async def _busy_owners(campaign_id: str) -> _BusyMap:
     """``account_id -> (owner, holder name)`` for every account something holds.
 
-    Four sources, in rising authority — later passes overwrite earlier ones. The
+    Five sources, in rising authority — later passes overwrite earlier ones. The
     in-memory registry is the truth while a run is actually in flight, but it says
     nothing about a process that has only just started, so the durable rows back
     it up: a neuroshilling campaign still marked ``running``, a warming state, a
-    serving neurocomment campaign. THIS campaign is excluded — its own roster is
-    not "busy elsewhere", which is the only thing the picker is asking.
+    serving neurocomment campaign, the running neurocomment listener. THIS campaign
+    is excluded — its own roster is not "busy elsewhere", which is the only thing
+    the picker is asking.
+
+    The listener is here because ``_runtime._claim_accounts`` refuses a roster that
+    carries it, and a card that showed it free would let the operator find that out
+    only from the Start button. It is read the way that refusal reads it — running
+    plus account — so the two cannot disagree about a PAUSED listener.
     """
     neuroshilling = await repository.list_running_campaign_account_names()
     busy: _BusyMap = {
         account_id: ("neurocomment", name)
         for account_id, name in (await list_active_campaign_account_names()).items()
     }
+    listener = await get_listener_account_id() if await get_listener_running() else None
+    if listener is not None:
+        # The same owner as a serving campaign, because it IS neurocomment holding that
+        # session; ``setdefault`` so an account doing both keeps the campaign's name,
+        # which is the more specific of the two answers.
+        busy.setdefault(listener, ("neurocomment", None))
     for account_id in await list_warming_account_ids():
         busy[account_id] = ("warming", None)
     for account_id, (holder_id, name) in neuroshilling.items():

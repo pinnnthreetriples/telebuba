@@ -42,6 +42,7 @@ from core.telegram_client._channels import _TELETHON_ERROR_CODES
 from core.telegram_client._media import _MEDIA_ERROR_CODES, MusicSaveErrorCode
 from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
+from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.telegram_actions import ActionStatus
 from schemas.warming import WarmingRefusalCode
@@ -95,9 +96,15 @@ def _expected_codes() -> set[str]:
     # (``services.warming._exclusion``) reach the operator as the 409's ``detail``. That
     # family was in no source here at all, so all three of its codes — including the
     # neuroshilling exclusion added on top of them — were translated by luck, not proof.
+    #
+    # ``NeurocommentRefusalCode`` is the same family for the listener's own start,
+    # which answers the 409 ``detail`` with a code the way the two above do. It exists
+    # so a refusal added there is enumerable here instead of reaching the operator the
+    # way that route's warming refusal still does, as an English sentence.
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
+        | set(get_args(NeurocommentRefusalCode))
         | set(get_args(NeuroshillingRefusalCode))
         | set(get_args(WarmingRefusalCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)

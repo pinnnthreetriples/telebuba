@@ -107,9 +107,9 @@ async def run_join_pass(  # noqa: C901 - anti-ban decision ladder
         first_join = False
         async with join_lock(listener_account_id):
             # Counted a second time, because the count above is spent by whoever charges
-            # first and the pause that can sit between them is minutes long:
-            # neuroshilling's ``join_target`` charges the same log for the same account,
-            # and nothing refuses the listener account a campaign roster. Without this
+            # first and the pause that can sit between them is minutes long: pair
+            # onboarding charges the same log for the same account whenever the listener
+            # is also on a neurocomment campaign of its own. Without this
             # count the mutex would only queue the joins that had already passed the
             # first one, and every one of them would still go out. Ends the burst the
             # same way and with the same event, so the refusals cannot be told apart.
