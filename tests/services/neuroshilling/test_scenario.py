@@ -251,6 +251,76 @@ async def test_a_step_pointing_at_itself_is_refused() -> None:
         await ns_service.set_scenario(campaign.campaign_id, itself)
 
 
+@pytest.mark.parametrize(
+    "step",
+    [
+        pytest.param(
+            NeuroshillingStepInput(role_id="a", kind="reaction", emoji="🔥"),
+            id="reaction_with_nothing_to_aim_at",
+        ),
+        pytest.param(
+            NeuroshillingStepInput(role_id="a", kind="reaction", target_position=1),
+            id="reaction_with_nothing_to_fire",
+        ),
+        pytest.param(
+            NeuroshillingStepInput(
+                role_id="a",
+                kind="reaction",
+                emoji="🔥",
+                target_position=1,
+                reply_to_position=1,
+            ),
+            id="reaction_carrying_a_reply_link",
+        ),
+        pytest.param(
+            NeuroshillingStepInput(role_id="a", text="second", target_position=1),
+            id="message_carrying_a_reaction_target",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_step_whose_fields_do_not_match_its_kind_is_refused(
+    step: NeuroshillingStepInput,
+) -> None:
+    """The save is the last place this is visible.
+
+    ``_steps._play_reaction`` aims through ``target_position`` and fires ``emoji``;
+    missing either, it logs INFO and returns success, so the run finishes ``done``
+    having quietly dropped the line. No link here points forwards, so the refusal
+    is this rule's and not ``_backward_link_problem``'s.
+    """
+    campaign = await _campaign()
+    body = NeuroshillingScenarioUpdate(
+        roles=[NeuroshillingRoleInput(role_id="a", name="A")],
+        steps=[NeuroshillingStepInput(role_id="a", text="first"), step],
+    )
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError) as refusal:
+        await ns_service.set_scenario(campaign.campaign_id, body)
+
+    assert refusal.value.code == "scenario_invalid"
+
+
+@pytest.mark.asyncio
+async def test_the_three_well_formed_step_shapes_are_saved() -> None:
+    """A bare message, a reply and an aimed reaction — what the card can build."""
+    campaign = await _campaign()
+    body = NeuroshillingScenarioUpdate(
+        roles=[NeuroshillingRoleInput(role_id="a", name="A")],
+        steps=[
+            NeuroshillingStepInput(role_id="a", text="first"),
+            NeuroshillingStepInput(role_id="a", text="second", reply_to_position=1),
+            NeuroshillingStepInput(role_id="a", kind="reaction", emoji="🔥", target_position=2),
+        ],
+    )
+
+    saved = await ns_service.set_scenario(campaign.campaign_id, body)
+
+    assert saved is not None
+    assert [step.kind for step in saved.steps] == ["message", "message", "reaction"]
+    assert saved.steps[2].target_position == 2
+
+
 @pytest.mark.asyncio
 async def test_more_steps_than_the_operator_configured_are_refused(
     monkeypatch: pytest.MonkeyPatch,
