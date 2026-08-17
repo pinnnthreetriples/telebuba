@@ -6,12 +6,17 @@ import '@/shared/i18n';
 
 import {
   BOARD,
+  CAMPAIGN,
   callsTo,
   ECHOED,
+  emitLogFrame,
   FULL_CAMPAIGN,
+  jsonResponse,
   renderPage,
   routeApi,
   SCENARIO,
+  SECOND_CAMPAIGN,
+  waitForRefetch,
 } from './NeuroshillingPage.testHelpers';
 
 test('the first campaign is selected by default and its roster is shown', async () => {
@@ -136,6 +141,58 @@ test('leaving the picker any way but «Готово» writes nothing', async () 
     expect(screen.queryByText('Готово')).not.toBeInTheDocument();
   });
   expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(0);
+});
+
+test('a selection the campaign list no longer carries falls back to the first campaign', async () => {
+  let listed = [CAMPAIGN, SECOND_CAMPAIGN];
+  routeApi(listed);
+  const routed = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neuroshilling/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: listed }));
+    }
+    const scoped = /campaigns\/([^/]+)\/board$/.exec(url.pathname);
+    if (scoped !== null) {
+      const campaign = listed.find((item) => item.campaign_id === (scoped[1] ?? ''));
+      // A campaign that is gone has no board either.
+      return Promise.resolve(
+        campaign === undefined
+          ? new Response(null, { status: 404 })
+          : jsonResponse({ ...BOARD, campaign }),
+      );
+    }
+    return routed(input, init);
+  });
+  renderPage();
+  await userEvent.click(await screen.findByText('Вторая'));
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c2/board', 'GET').length).toBeGreaterThan(0);
+  });
+
+  // Deleted from another tab: the next list comes back without it.
+  listed = [CAMPAIGN];
+  const dropped = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
+  emitLogFrame();
+  await waitForRefetch(dropped);
+
+  // Proven on the frame AFTER the one that dropped it: that frame's board read was
+  // already in flight when the shorter list landed.
+  const gone = callsTo('/api/v1/neuroshilling/campaigns/c2/board', 'GET').length;
+  const alive = callsTo('/api/v1/neuroshilling/campaigns/c1/board', 'GET').length;
+  const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
+  emitLogFrame();
+  await waitForRefetch(before);
+
+  // Taken on trust, the selection keeps every scoped read pointed at a campaign the
+  // server answers 404 for, on every frame, with nothing on screen to say so.
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1/board', 'GET').length).toBeGreaterThan(
+      alive,
+    );
+  });
+  expect(callsTo('/api/v1/neuroshilling/campaigns/c2/board', 'GET')).toHaveLength(gone);
 });
 
 test('deleting a campaign confirms first, then DELETEs it', async () => {

@@ -67,6 +67,12 @@ export const ECHOED: Omit<Required<NeuroshillingCampaignUpdate>, 'accounts'> = {
 
 export const FULL_CAMPAIGN: NeuroshillingCampaign = { ...CAMPAIGN, ...ECHOED };
 
+export const SECOND_CAMPAIGN: NeuroshillingCampaign = {
+  ...CAMPAIGN,
+  campaign_id: 'c2',
+  name: 'Вторая',
+};
+
 export const BOARD: NeuroshillingBoard = {
   campaign: CAMPAIGN,
   available: [
@@ -142,6 +148,9 @@ export function routeApi(
   scenario: NeuroshillingScenario = SCENARIO,
   board: NeuroshillingBoard = BOARD,
 ): void {
+  // The list the POST below adds to. The page looks its selection up in this list,
+  // so a creation that never joined it would read as a campaign that is gone.
+  const listed = [...campaigns];
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
@@ -153,9 +162,11 @@ export function routeApi(
     }
     if (url.pathname === '/api/v1/neuroshilling/campaigns') {
       if (request.method === 'POST') {
-        return Promise.resolve(jsonResponse({ ...CAMPAIGN, campaign_id: 'c9', name: 'Новая' }));
+        const created = { ...CAMPAIGN, campaign_id: 'c9', name: 'Новая' };
+        listed.push(created);
+        return Promise.resolve(jsonResponse(created));
       }
-      return Promise.resolve(jsonResponse({ campaigns }));
+      return Promise.resolve(jsonResponse({ campaigns: listed }));
     }
     if (url.pathname.endsWith('/start') || url.pathname.endsWith('/stop')) {
       return Promise.resolve(jsonResponse({ status: 'running', sent: 0, total: 2 }));

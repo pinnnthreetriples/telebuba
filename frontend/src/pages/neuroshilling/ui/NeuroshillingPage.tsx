@@ -148,8 +148,16 @@ export function NeuroshillingPage() {
 
   const campaigns = useQuery(neuroshillingCampaignsQueryOptions());
   const campaignList = campaigns.data?.campaigns ?? [];
-  // Every scoped read hangs off this: no campaign, no board query at all.
-  const campaignId = selected ?? campaignList[0]?.campaign_id ?? null;
+  // Every scoped read hangs off this: no campaign, no board query at all. The
+  // selection is looked UP in the list rather than trusted, because nothing else
+  // notices it going stale: a campaign deleted in another tab would keep every
+  // scoped read pointed at it, 404 on each refetch, and a failed query toasts
+  // nowhere (`shared/lib/query-client` only reports failed MUTATIONS) — so the
+  // page would go on showing the last board it managed to read.
+  const campaignId =
+    campaignList.find((item) => item.campaign_id === selected)?.campaign_id ??
+    campaignList[0]?.campaign_id ??
+    null;
 
   const board = useQuery({
     ...neuroshillingBoardQueryOptions({ path: { campaign_id: campaignId ?? '' } }),
