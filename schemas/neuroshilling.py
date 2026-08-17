@@ -93,8 +93,9 @@ NeuroshillingRefusalCode = Literal[
     "media_step_missing",
     # A rostered account is the running neurocomment listener. Named apart from
     # ``account_busy`` because that code covers three holders at once and its copy can
-    # only list them; there is exactly one listener, so this one can say which account
-    # it is and which switch turns it off.
+    # only list them; this one names the single hold it means and the switch that ends
+    # it. WHICH rostered account it is comes from the picker, which greys that row out
+    # (``campaigns._busy_owners``) — a refusal code carries no account id.
     "account_is_listener",
 ]
 

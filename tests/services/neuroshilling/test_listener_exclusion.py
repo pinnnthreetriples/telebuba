@@ -3,8 +3,9 @@
 The listener is not a holder in ``services._account_owner`` (see that module), so the
 exclusion is a point check on each side rather than the registry doing it for both:
 ``_claim_accounts`` reads the listener columns, ``start_neurocomment`` reads the
-registry. This file holds both halves, the legitimate cases they must not touch, and
-the race that only the shared account lock rules out.
+registry. This file holds both halves, the legitimate cases they must not touch, the
+card that has to say so before either refusal fires, and the race that only the shared
+account lock rules out.
 """
 
 from __future__ import annotations
