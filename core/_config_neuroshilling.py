@@ -85,6 +85,16 @@ class NeuroshillingSettings(BaseSettings):
     # neurocomment and is not shared.
     poll_min_seconds: float = Field(default=30.0, ge=1.0)
     poll_max_seconds: float = Field(default=60.0, ge=1.0)
+    # Rolling-24h ceiling on autoreply DRAFTS one chat may be charged for, counted per
+    # target across every campaign watching it. The provider bills for a draft whether
+    # or not the output gate publishes it, and the two ceilings that bound published
+    # answers cannot see the refused ones — so a chat whose every answer was refused
+    # spent ``max_llm_calls_per_day`` on its own and left the fleet's other campaigns
+    # nothing for the rest of the day. Several times the campaign form's default "3
+    # messages per chat per day", so an ordinary conversation meets the published
+    # ceiling first and never this one; at the default DeepSeek retry budget it bounds
+    # one chat at forty provider calls, a fifth of the day.
+    max_reply_attempts_per_chat_per_day: int = Field(default=20, ge=1)
     # Probability of answering a given human message, per "reply activity" setting.
     reply_chance_calm: float = Field(default=0.1, ge=0.0, le=1.0)
     reply_chance_medium: float = Field(default=0.3, ge=0.0, le=1.0)

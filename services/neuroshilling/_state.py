@@ -42,18 +42,27 @@ _GENERATING: set[str] = set()
 # of a double click straddle that gap.
 _STARTING: set[str] = set()
 
-# account_id -> the rolling hour of autoreply ATTEMPTS that account has paid for.
-# The budget above bounds the fleet's day; this bounds one account's hour, and the
-# difference is what one hostile chat costs. A busy group hands the poller a full page
-# every thirty seconds, and every message on it that wins the dice is a draft the
-# provider charges for whether or not the gate lets the answer out — so without this
-# a single chat spent the whole day's allowance in minutes and starved every other
-# campaign in the process for twenty-four hours. Counted per ACCOUNT because that is
-# what the operator's "messages per hour" already describes, and the ceiling reused is
-# that same number: an account may not pay for more answers in an hour than it is
-# allowed to publish messages in one.
+# account_id -> the rolling hour of autoreply ATTEMPTS that account has paid for, and
+# target -> the rolling day one CHAT has. Both count drafts rather than published
+# answers, because the provider charges for a draft whether or not the output gate lets
+# it out — and a busy group hands the poller a full page every thirty seconds, so every
+# message on it that wins the dice is billed.
+#
+# Two windows because they bound two different things. The hourly one is per ACCOUNT,
+# which is what the operator's "messages per hour" already describes, and it is that
+# same number: an account may not pay for more answers in an hour than it is allowed to
+# publish messages in one. On its own that only SPREAD a hostile chat's spend across the
+# fleet — ten accounts at ten attempts an hour is the whole ``max_llm_calls_per_day``
+# inside the first hour, after which every campaign in the process is refused for the
+# rest of the day. The daily one is therefore per TARGET: the unit that turns hostile is
+# a chat, and this is what stops one of them deciding for all of them. Keyed on the
+# target alone and not on the pair with a campaign, because the chat is one chat however
+# many of our fleets watch it — the reading ``claim_chat_reply`` takes of the same
+# question.
 _REPLY_ATTEMPTS: dict[str, deque[datetime]] = {}
+_CHAT_ATTEMPTS: dict[str, deque[datetime]] = {}
 _ATTEMPT_WINDOW = timedelta(hours=1)
+_CHAT_ATTEMPT_WINDOW = timedelta(hours=24)
 
 # Campaigns already told once that their key is missing. A configuration fault is one
 # fact about the campaign, not one fact per observed message, and the alternative was
@@ -102,6 +111,23 @@ def record_llm_call(now: datetime | None = None, *, calls: int = 1) -> None:
     _LLM_CALLS.extend([now or datetime.now(UTC)] * calls)
 
 
+def _at_attempt_cap(
+    windows: dict[str, deque[datetime]],
+    key: str,
+    cap: int,
+    window: timedelta,
+    moment: datetime,
+) -> bool:
+    """Has ``key`` reached ``cap`` attempts inside ``window``? Prunes as it counts."""
+    attempts = windows.get(key)
+    if attempts is None:
+        return False
+    cutoff = moment - window
+    while attempts and attempts[0] < cutoff:
+        attempts.popleft()
+    return len(attempts) >= cap
+
+
 def at_reply_attempt_cap(account_id: str, cap: int, now: datetime | None = None) -> bool:
     """Has this account paid for ``cap`` autoreply drafts in the last rolling hour?
 
@@ -109,19 +135,41 @@ def at_reply_attempt_cap(account_id: str, cap: int, now: datetime | None = None)
     what is counted is the ATTEMPT — the thing the provider bills for — and not the
     published reply the chat log already counts.
     """
+    return _at_attempt_cap(
+        _REPLY_ATTEMPTS,
+        account_id,
+        cap,
+        _ATTEMPT_WINDOW,
+        now or datetime.now(UTC),
+    )
+
+
+def at_chat_attempt_cap(target: str, now: datetime | None = None) -> bool:
+    """Has this chat been charged its day's worth of autoreply drafts?
+
+    The ceiling that keeps one conversation from spending the process's day. The cap
+    is a deployment setting rather than a campaign field, because what it protects —
+    ``max_llm_calls_per_day`` — is also one number for the whole process, and the
+    chats sharing it belong to campaigns that know nothing of each other.
+    """
+    return _at_attempt_cap(
+        _CHAT_ATTEMPTS,
+        target,
+        settings.neuroshilling.max_reply_attempts_per_chat_per_day,
+        _CHAT_ATTEMPT_WINDOW,
+        now or datetime.now(UTC),
+    )
+
+
+def record_reply_attempt(account_id: str, target: str, now: datetime | None = None) -> None:
+    """Charge one autoreply draft to ``account_id``'s hour and to ``target``'s day.
+
+    One call for both windows because one draft is charged to both, and a caller that
+    remembered only one of them would leave that ceiling unreachable.
+    """
     moment = now or datetime.now(UTC)
-    attempts = _REPLY_ATTEMPTS.get(account_id)
-    if attempts is None:
-        return False
-    cutoff = moment - _ATTEMPT_WINDOW
-    while attempts and attempts[0] < cutoff:
-        attempts.popleft()
-    return len(attempts) >= cap
-
-
-def record_reply_attempt(account_id: str, now: datetime | None = None) -> None:
-    """Charge one autoreply draft to ``account_id``'s rolling hour."""
-    _REPLY_ATTEMPTS.setdefault(account_id, deque()).append(now or datetime.now(UTC))
+    _REPLY_ATTEMPTS.setdefault(account_id, deque()).append(moment)
+    _CHAT_ATTEMPTS.setdefault(target, deque()).append(moment)
 
 
 def first_key_warning(campaign_id: str) -> bool:
@@ -275,6 +323,7 @@ def claim_settlement(campaign_id: str, run_id: str) -> bool:
 def reset_for_tests() -> None:
     _LLM_CALLS.clear()
     _REPLY_ATTEMPTS.clear()
+    _CHAT_ATTEMPTS.clear()
     _KEY_WARNED.clear()
     _GENERATING.clear()
     _STARTING.clear()
