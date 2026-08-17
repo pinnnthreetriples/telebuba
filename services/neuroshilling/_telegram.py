@@ -25,7 +25,9 @@ look like nothing at all to a caller that only reads ``error_type``:
   ``UserDeactivatedBanError`` is an ``UnauthorizedError``, so the gateway catches it
   with the whole dead-session family and re-raises ``ProfileGatewayError`` — which
   is the only thing ``error_type`` then says. The answer survives in
-  ``error_message``, which carries the stable code, so that is what is keyed on.
+  ``error_message``, which carries the stable code, so that is what BOTH
+  classifiers below key on — the join every bit as much as the send, since the
+  session is just as dead on the way into a chat as it is inside one.
 
 Bans get the same treatment for the same reason: only ``UserBannedInChannelError``
 (a 400 about the caller, and the one ban that does reach us as itself) and those
@@ -182,15 +184,25 @@ def classify_join(result: ActionResult) -> NeuroshillingPresenceState:
     because the gateway spends ``status`` on transport and ``error_type`` on
     meaning: ``already_participant`` is a success with a non-``ok`` status, and a
     queued approval request is a ``failed`` whose whole content is its error class.
+
+    The dead-session family is the exception, read off ``error_message`` for the same
+    reason :func:`classify_send` reads it there: all three arrive as one wrapper class
+    whose name says nothing. Filed as ``refused`` — the pair's verdict on one attempt,
+    which nothing ever sweeps — the account was walked into the next target and the one
+    after that, spending a paced join slot on each of them for a session Telegram had
+    already closed.
     """
     if result.status in _INSIDE_STATUSES:
         return "joined"
     if result.status in _HALT_STATUSES:
         return "flooded"
+    # One state for two answers, because they are the same answer: a verdict on the
+    # ACCOUNT that no amount of waiting undoes — the ~500-chat ceiling, and a session
+    # that cannot act at all.
+    if result.error_type == _ACCOUNT_FULL_ERROR or result.error_message in _ACCOUNT_DEAD_MESSAGES:
+        return "retired"
     if result.error_type == _JOIN_REQUEST_ERROR:
         return "pending_approval"
-    if result.error_type == _ACCOUNT_FULL_ERROR:
-        return "retired"
     # A chat-scoped wait and an infrastructure failure both leave the question open;
     # the pair stays pending so the next pass retries it rather than writing it off.
     if result.status in _CHAT_WAIT_STATUSES or result.status == "unavailable":
