@@ -12,6 +12,7 @@ from core.config import (
     ApiSettings,
     AuthSettings,
     NeurocommentSettings,
+    NeuroshillingSettings,
     Settings,
     TelegramSettings,
     WarmingSettings,
@@ -30,6 +31,27 @@ def test_reply_delay_min_must_not_exceed_max() -> None:
 def test_join_delay_min_must_not_exceed_max() -> None:
     with pytest.raises(ValidationError):
         NeurocommentSettings(join_delay_min_seconds=60.0, join_delay_max_seconds=30.0)
+
+
+def test_neuroshilling_join_delay_min_must_not_exceed_max() -> None:
+    with pytest.raises(ValidationError):
+        NeuroshillingSettings(join_delay_min_seconds=120.0, join_delay_max_seconds=30.0)
+
+
+def test_neuroshilling_poll_interval_min_must_not_exceed_max() -> None:
+    with pytest.raises(ValidationError):
+        NeuroshillingSettings(poll_min_seconds=60.0, poll_max_seconds=30.0)
+
+
+def test_neuroshilling_llm_output_cannot_exceed_the_gateway_ceiling() -> None:
+    """The gateway request schema is the real ceiling.
+
+    ``schemas.gemini`` caps ``max_output_tokens`` at 2048, so a larger value here
+    would only fail later, inside a request the operator never sees.
+    """
+    assert NeuroshillingSettings().llm_max_output_tokens == 2048
+    with pytest.raises(ValidationError):
+        NeuroshillingSettings(llm_max_output_tokens=4096)
 
 
 def test_inactive_channel_drop_days_rejects_a_fraction_of_a_day() -> None:

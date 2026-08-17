@@ -18,10 +18,18 @@ be (and was) mapped to codes with no copy in either locale, and nothing failed.
 
 Resolution mirrors the SPA: the global mutation toast
 (``frontend/src/shared/lib/query-client.ts``) is the surface every failed mutation
-reaches, and it tries ``accounts.profile.code.*`` → ``accounts.channel.code.*`` →
-``accounts.addStory.code.*``. A code present in any of the three is therefore
-visible to the operator; a code in none of them is not. Which namespace a code
-lives in is a UI decision this test deliberately does not police.
+reaches, and it tries ``shell.code.*`` → ``accounts.profile.code.*`` →
+``accounts.channel.code.*`` → ``accounts.addStory.code.*``. A code present in any
+of the four is therefore visible to the operator; a code in none of them is not.
+Which namespace a code lives in is a UI decision this test deliberately does not
+police.
+
+``shell.code`` sits at the TOP level of the locale file, not under ``accounts``,
+so it is read separately rather than added to ``_CODE_NAMESPACES`` — that tuple
+also feeds the log-ladder check below, whose keys really are ``accounts.*``. It
+had been outside this guard entirely, which meant the domain refusal codes that
+live there (``schemas.neuroshilling.NeuroshillingRefusalCode``) were checked by
+nothing at all.
 """
 
 from __future__ import annotations
@@ -34,12 +42,13 @@ from core.telegram_client._channels import _TELETHON_ERROR_CODES
 from core.telegram_client._media import _MEDIA_ERROR_CODES, MusicSaveErrorCode
 from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
+from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.telegram_actions import ActionStatus
 
 _ROOT = Path(__file__).resolve().parents[1]
 # Statuses that are not failures, so they never reach a code table.
 _NON_FAILURE_STATUSES = frozenset({"ok", "already_participant"})
-# The namespaces the mutation toast walks, in order.
+# The ``accounts.*`` namespaces the mutation toast walks, in order.
 _CODE_NAMESPACES = ("profile", "channel", "addStory")
 
 
@@ -49,8 +58,10 @@ def _i18n(locale: str) -> dict:
 
 
 def _translatable_codes(locale: str) -> set[str]:
-    accounts = _i18n(locale)["accounts"]
-    return {code for namespace in _CODE_NAMESPACES for code in accounts[namespace]["code"]}
+    table = _i18n(locale)
+    accounts = table["accounts"]
+    shell = set(table["shell"]["code"])
+    return shell | {code for namespace in _CODE_NAMESPACES for code in accounts[namespace]["code"]}
 
 
 def _mapped_codes() -> set[str]:
@@ -73,9 +84,15 @@ def _expected_codes() -> set[str]:
     # hand-raised code could ship untranslated — and one did: the add path's
     # refusal was reusing the remove path's ``profile_music_stale_reference``,
     # which was translated, so nothing here noticed the wrong copy either.
+    #
+    # ``NeuroshillingRefusalCode`` is the first refusal vocabulary that is neither a
+    # gateway ladder nor an ``ActionStatus``: the domain raises it straight out of
+    # policy and the route puts it in the envelope's ``message``. Without it here,
+    # nothing in the suite could see a refusal code shipping untranslated.
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
+        | set(get_args(NeuroshillingRefusalCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)
         | _mapped_codes()
     )

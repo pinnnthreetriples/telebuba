@@ -1,4 +1,8 @@
-"""Warming's half of the mutual exclusion with neurocomment's read traffic.
+"""Warming's half of the mutual exclusion with the other runtimes on one session.
+
+Neurocomment's read traffic was the first; a running neuroshilling campaign is the
+second, and it announces itself through ``services._account_owner`` rather than through
+a module of its own.
 
 ``test_runtime_start_stop`` already pins the listener guard. This module covers the two
 holes beside it: a channel-discovery run (which may only START while the listener is
@@ -19,13 +23,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from core.db import create_account
+from core.db import create_account, fetch_warming_state
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest
-from services import warming
+from services import _account_owner, warming
 from services.neurocomment import _discovery_state, _state
 from services.warming import _runtime
-from services.warming._exclusion import COOLING_CODE, DISCOVERY_CODE
+from services.warming._exclusion import COOLING_CODE, DISCOVERY_CODE, NEUROSHILLING_CODE
 from tests.services.warming._support import _fake_loop, _seed_ready_account, _set_settings
 
 if TYPE_CHECKING:
@@ -205,6 +209,66 @@ async def test_a_cooldown_on_another_account_does_not_block_warming(
     started = await warming.start_warming(StartWarmingRequest(account_id=_ACCOUNT))
 
     assert started.state == "active"
+    await _stop_task()
+
+
+@pytest.mark.asyncio
+async def test_start_warming_refuses_an_account_a_neuroshilling_run_holds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The third runtime that can already be driving this session.
+
+    ``_ready_account`` leaves ``enforce_readiness`` OFF, so this also pins that the
+    refusal is NOT behind the operator's readiness switch — same as the discovery one
+    it sits beside, and for the same reason: two features posting from one session is
+    not a health opinion anybody gets to overrule.
+    """
+    await _ready_account(monkeypatch)
+    assert _account_owner.try_claim(_ACCOUNT, "neuroshilling", "ns-1") is None
+
+    with pytest.raises(warming.AccountUnavailableError) as refused:
+        await warming.start_warming(StartWarmingRequest(account_id=_ACCOUNT))
+
+    assert refused.value.code == NEUROSHILLING_CODE
+    assert _ACCOUNT not in warming._RUNTIME
+    # A refused start must leave the holder's claim exactly as it found it.
+    assert _account_owner.holder_of(_ACCOUNT) == "ns-1"
+
+
+@pytest.mark.asyncio
+async def test_a_neuroshilling_run_on_another_account_does_not_block_warming(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The registry is keyed per account, not a fleet-wide "neuroshilling is on" flag."""
+    await _ready_account(monkeypatch)
+    _account_owner.try_claim("acc-other", "neuroshilling", "ns-1")
+
+    started = await warming.start_warming(StartWarmingRequest(account_id=_ACCOUNT))
+
+    assert started.state == "active"
+    await _stop_task()
+
+
+@pytest.mark.asyncio
+async def test_warmings_own_stale_claim_does_not_refuse_a_fresh_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The guard is owner-scoped, and the re-spawn takes the claim over.
+
+    A Stop that ran out of time retains its task, so its done callback never dropped the
+    claim; the operator's next Start would find warming's own hold still on the account.
+    Refusing there — or publishing the new generation while the registry still names the
+    dead run — is how an account becomes unusable until the process restarts.
+    """
+    await _ready_account(monkeypatch)
+    _account_owner.try_claim(_ACCOUNT, "warming", "run-stale")
+
+    started = await warming.start_warming(StartWarmingRequest(account_id=_ACCOUNT))
+
+    assert started.state == "active"
+    record = await fetch_warming_state(_ACCOUNT)
+    assert record is not None
+    assert _account_owner.holder_of(_ACCOUNT) == record.run_id
     await _stop_task()
 
 

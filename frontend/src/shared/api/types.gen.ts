@@ -1834,6 +1834,328 @@ export type NeurocommentSettingsUpdate = {
 };
 
 /**
+ * NeuroshillingAccountAssignment
+ *
+ * One account of a campaign's roster, as the operator arranged it.
+ */
+export type NeuroshillingAccountAssignment = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Role Id
+   */
+  role_id?: string | null;
+  /**
+   * Is Reserve
+   */
+  is_reserve?: boolean;
+};
+
+/**
+ * NeuroshillingBoard
+ *
+ * One composite read backing the whole page.
+ *
+ * The account pool is ONE list, not a pool plus its rostered subset: the two
+ * carried the same objects and left the client joining them by id. It also
+ * carries no derived counters (role/step/account/target counts, dialogue length
+ * estimates) and no run block: every one of those is an ``arr.length``, a
+ * ``reduce``, or a field of ``campaign`` already in this same payload, and a
+ * second copy could only drift from the first.
+ */
+export type NeuroshillingBoard = {
+  campaign: NeuroshillingCampaign;
+  /**
+   * Available
+   */
+  available?: Array<NeuroshillingBoardAccount>;
+  /**
+   * Targets
+   */
+  targets?: Array<string>;
+};
+
+/**
+ * NeuroshillingBoardAccount
+ *
+ * One account of the pool, with whatever this campaign's roster says about it.
+ *
+ * ``assigned`` is what separates a rostered account from a merely offerable one;
+ * ``role_id``, ``is_reserve`` and ``state`` are meaningful only when it is true.
+ * ``busy_owner`` is what greys a row out in the picker, and
+ * ``busy_campaign_name`` is what lets the UI say WHICH campaign holds it rather
+ * than only that something does.
+ */
+export type NeuroshillingBoardAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Assigned
+   */
+  assigned?: boolean;
+  /**
+   * Role Id
+   */
+  role_id?: string | null;
+  /**
+   * Is Reserve
+   */
+  is_reserve?: boolean;
+  /**
+   * State
+   */
+  state?: 'active' | 'banned' | 'replaced';
+  /**
+   * Busy Owner
+   */
+  busy_owner?: 'warming' | 'neuroshilling' | 'neurocomment' | null;
+  /**
+   * Busy Campaign Name
+   */
+  busy_campaign_name?: string | null;
+};
+
+/**
+ * NeuroshillingCampaign
+ *
+ * One row of ``neuroshilling_campaigns``.
+ */
+export type NeuroshillingCampaign = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Mode
+   */
+  mode: 'campaign' | 'revive';
+  /**
+   * Topic
+   */
+  topic?: string;
+  /**
+   * Targets Raw
+   */
+  targets_raw?: string;
+  /**
+   * Unique Messages
+   */
+  unique_messages?: boolean;
+  /**
+   * Use Chat Context
+   */
+  use_chat_context?: boolean;
+  /**
+   * Media Message Link
+   */
+  media_message_link?: string | null;
+  /**
+   * Media Step Position
+   */
+  media_step_position?: number | null;
+  /**
+   * Scenario Status
+   */
+  scenario_status?: 'draft' | 'approved';
+  /**
+   * Run Mode
+   */
+  run_mode?: 'sequential' | 'parallel';
+  /**
+   * Pause Min Seconds
+   */
+  pause_min_seconds?: number;
+  /**
+   * Pause Max Seconds
+   */
+  pause_max_seconds?: number;
+  /**
+   * Messages Per Hour
+   */
+  messages_per_hour?: number;
+  /**
+   * Messages Per Chat Per Day
+   */
+  messages_per_chat_per_day?: number;
+  /**
+   * Total Per Account
+   */
+  total_per_account?: number | null;
+  /**
+   * Reserve Enabled
+   */
+  reserve_enabled?: boolean;
+  /**
+   * Autoresponder
+   */
+  autoresponder?: 'off' | 'neurodialog';
+  /**
+   * Reply To Humans
+   */
+  reply_to_humans?: boolean;
+  /**
+   * Reply Activity
+   */
+  reply_activity?: 'calm' | 'medium' | 'active';
+  /**
+   * Listen Minutes
+   */
+  listen_minutes?: number;
+  /**
+   * Status
+   */
+  status?: 'idle' | 'running' | 'stopping' | 'done' | 'failed';
+  /**
+   * Run Id
+   */
+  run_id?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * NeuroshillingCampaignCreate
+ *
+ * Opening a campaign asks for a name and nothing else — the rest has defaults.
+ */
+export type NeuroshillingCampaignCreate = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Mode
+   */
+  mode?: 'campaign' | 'revive';
+};
+
+/**
+ * NeuroshillingCampaignList
+ *
+ * Wrapper so callers never receive a bare list.
+ */
+export type NeuroshillingCampaignList = {
+  /**
+   * Campaigns
+   */
+  campaigns?: Array<NeuroshillingCampaign>;
+};
+
+/**
+ * NeuroshillingCampaignUpdate
+ *
+ * Whole-form replacement of everything the operator edits on the page.
+ *
+ * Targets and the account roster travel here rather than through endpoints of
+ * their own: both are edited as part of one card and saving them separately
+ * would leave windows where the roster references a role the same save removed.
+ */
+export type NeuroshillingCampaignUpdate = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Mode
+   */
+  mode?: 'campaign' | 'revive';
+  /**
+   * Topic
+   */
+  topic?: string;
+  /**
+   * Targets Raw
+   */
+  targets_raw?: string;
+  /**
+   * Unique Messages
+   */
+  unique_messages?: boolean;
+  /**
+   * Use Chat Context
+   */
+  use_chat_context?: boolean;
+  /**
+   * Media Message Link
+   */
+  media_message_link?: string | null;
+  /**
+   * Media Step Position
+   */
+  media_step_position?: number | null;
+  /**
+   * Run Mode
+   */
+  run_mode?: 'sequential' | 'parallel';
+  /**
+   * Pause Min Seconds
+   */
+  pause_min_seconds?: number;
+  /**
+   * Pause Max Seconds
+   */
+  pause_max_seconds?: number;
+  /**
+   * Messages Per Hour
+   */
+  messages_per_hour?: number;
+  /**
+   * Messages Per Chat Per Day
+   */
+  messages_per_chat_per_day?: number;
+  /**
+   * Total Per Account
+   */
+  total_per_account?: number | null;
+  /**
+   * Reserve Enabled
+   */
+  reserve_enabled?: boolean;
+  /**
+   * Autoresponder
+   */
+  autoresponder?: 'off' | 'neurodialog';
+  /**
+   * Reply To Humans
+   */
+  reply_to_humans?: boolean;
+  /**
+   * Reply Activity
+   */
+  reply_activity?: 'calm' | 'medium' | 'active';
+  /**
+   * Listen Minutes
+   */
+  listen_minutes?: number;
+  /**
+   * Accounts
+   */
+  accounts?: Array<NeuroshillingAccountAssignment>;
+};
+
+/**
  * Page[AccountRead]
  */
 export type PageAccountRead = {
@@ -7030,3 +7352,217 @@ export type CountLogsResponses = {
 };
 
 export type CountLogsResponse = CountLogsResponses[keyof CountLogsResponses];
+
+export type ListNeuroshillingCampaignsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns';
+};
+
+export type ListNeuroshillingCampaignsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListNeuroshillingCampaignsError =
+  ListNeuroshillingCampaignsErrors[keyof ListNeuroshillingCampaignsErrors];
+
+export type ListNeuroshillingCampaignsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingCampaignList;
+};
+
+export type ListNeuroshillingCampaignsResponse =
+  ListNeuroshillingCampaignsResponses[keyof ListNeuroshillingCampaignsResponses];
+
+export type CreateNeuroshillingCampaignData = {
+  body: NeuroshillingCampaignCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns';
+};
+
+export type CreateNeuroshillingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CreateNeuroshillingCampaignError =
+  CreateNeuroshillingCampaignErrors[keyof CreateNeuroshillingCampaignErrors];
+
+export type CreateNeuroshillingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingCampaign;
+};
+
+export type CreateNeuroshillingCampaignResponse =
+  CreateNeuroshillingCampaignResponses[keyof CreateNeuroshillingCampaignResponses];
+
+export type DeleteNeuroshillingCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}';
+};
+
+export type DeleteNeuroshillingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type DeleteNeuroshillingCampaignError =
+  DeleteNeuroshillingCampaignErrors[keyof DeleteNeuroshillingCampaignErrors];
+
+export type DeleteNeuroshillingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteNeuroshillingCampaignResponse =
+  DeleteNeuroshillingCampaignResponses[keyof DeleteNeuroshillingCampaignResponses];
+
+export type UpdateNeuroshillingCampaignData = {
+  body: NeuroshillingCampaignUpdate;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}';
+};
+
+export type UpdateNeuroshillingCampaignErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UpdateNeuroshillingCampaignError =
+  UpdateNeuroshillingCampaignErrors[keyof UpdateNeuroshillingCampaignErrors];
+
+export type UpdateNeuroshillingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingCampaign;
+};
+
+export type UpdateNeuroshillingCampaignResponse =
+  UpdateNeuroshillingCampaignResponses[keyof UpdateNeuroshillingCampaignResponses];
+
+export type GetNeuroshillingBoardData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/board';
+};
+
+export type GetNeuroshillingBoardErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetNeuroshillingBoardError =
+  GetNeuroshillingBoardErrors[keyof GetNeuroshillingBoardErrors];
+
+export type GetNeuroshillingBoardResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingBoard;
+};
+
+export type GetNeuroshillingBoardResponse =
+  GetNeuroshillingBoardResponses[keyof GetNeuroshillingBoardResponses];

@@ -14,6 +14,7 @@ from api.v1 import (
     health,
     logs,
     neurocomment,
+    neuroshilling,
     proxies,
     warming,
 )
@@ -34,5 +35,9 @@ router.include_router(warming.router, dependencies=_protected, responses=PROTECT
 router.include_router(neurocomment.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(logs.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 router.include_router(events.router, dependencies=_protected, responses=PROTECTED_ERRORS)
+# Mounted after the routers that predate it: mount order is what orders ``paths``
+# in the generated OpenAPI document, so appending keeps the generated client's
+# diff an append too, whatever the reader's diff algorithm makes of the rest.
+router.include_router(neuroshilling.router, dependencies=_protected, responses=PROTECTED_ERRORS)
 
 __all__ = ["router"]

@@ -41,6 +41,7 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.neurocomment_pipeline import PipelineOutcome
+from services import _account_owner
 from services.neurocomment import _filters, _reply_wait, _seams, _state
 from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
@@ -320,7 +321,18 @@ async def _select_account(
 # one. A maxed-out-but-healthy account (quota) means "add accounts / raise the cap",
 # which is more useful than reporting some other account that is merely not warmed yet.
 # The two quota caps report separately (which one is full) but both outrank the rest.
-_BLOCK_PRIORITY = ("quota_hour", "quota_day", "cooldown", "unhealthy", "not_ready")
+# ``busy_neuroshilling`` is the exception that goes FIRST despite passing the fewest gates:
+# it is not a verdict about the account's health at all, it is "another feature is driving
+# this session right now". Reporting a quota below it would send the operator to raise a
+# cap that was never the reason, and hide the one fact that resolves itself.
+_BLOCK_PRIORITY = (
+    "busy_neuroshilling",
+    "quota_hour",
+    "quota_day",
+    "cooldown",
+    "unhealthy",
+    "not_ready",
+)
 
 
 def _account_block_reason(
@@ -334,6 +346,12 @@ def _account_block_reason(
 
     Single source of the selection gate ladder — ``_is_eligible`` is just "no reason".
     """
+    # First, and re-read per post rather than once at listener start: selection runs on
+    # EVERY incoming post, and a neuroshilling campaign can take the account between two
+    # of them. A synchronous dict read, so the ``_SelectionPool`` promise of no
+    # per-account I/O in this pass holds — there is nothing here to bulk-load.
+    if _account_owner.owner_of(account_id) == "neuroshilling":
+        return "busy_neuroshilling"
     if _state.in_cooldown(account_id, now, channel):
         return "cooldown"
     account = pool.accounts.get(account_id)

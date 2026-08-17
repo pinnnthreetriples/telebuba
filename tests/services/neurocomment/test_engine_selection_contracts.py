@@ -6,9 +6,13 @@ from datetime import UTC, datetime
 
 import pytest
 
+from core.db import fetch_active_campaign_for_channel
 from schemas.accounts import AccountRead
 from schemas.neurocomment import NeurocommentSettings
+from services import _account_owner
 from services.neurocomment import _state, engine
+from services.neurocomment.settings_store import load_settings as load_neuro_settings
+from tests.services.neurocomment.engine_support import _make_campaign
 
 pytestmark = pytest.mark.usefixtures("isolate_engine")
 
@@ -96,6 +100,9 @@ def test_missing_account_is_not_ready_even_if_readiness_row_exists(
         ({"not_ready", "unhealthy"}, "unhealthy"),
         ({"cooldown", "quota_day"}, "quota_day"),
         ({"quota_hour", "quota_day"}, "quota_hour"),
+        # Not a health verdict, so it must not be reported behind one: a quota label
+        # sends the operator to raise a cap that was never the reason.
+        ({"busy_neuroshilling", "quota_hour"}, "busy_neuroshilling"),
     ],
 )
 def test_selection_miss_reports_highest_priority_blocker(
@@ -112,3 +119,65 @@ def test_selection_miss_reports_highest_priority_blocker(
         engine._selection_block_reason(accounts, "@channel", 1, datetime.now(UTC), _pool())
         == expected
     )
+
+
+# --------------------------------------------------------------------------- #
+# Exclusion from a running neuroshilling campaign
+# --------------------------------------------------------------------------- #
+
+
+def test_a_neuroshilling_hold_blocks_before_every_other_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """First in the ladder, on a pool that would otherwise say the account is perfect.
+
+    The account is healthy, ready, uncooled and under both caps here, so nothing but the
+    registry read can produce this verdict.
+    """
+    monkeypatch.setattr(_state, "in_cooldown", lambda *_a: False)
+    _account_owner.try_claim("account", "neuroshilling", "ns-1")
+
+    assert (
+        engine._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
+        == "busy_neuroshilling"
+    )
+
+
+def test_a_warming_hold_is_not_the_selection_gates_business(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only ``neuroshilling`` blocks here, not "somebody owns this account".
+
+    Warming and neurocomment were already exclusive through promotion and hand-off, and
+    those gates report far better reasons than a registry owner would. Widening this
+    branch to any owner would silently take that vocabulary away — so the verdict here
+    is the ladder's own (this pool carries no warming row), never ``busy_neuroshilling``.
+    """
+    monkeypatch.setattr(_state, "in_cooldown", lambda *_a: False)
+    _account_owner.try_claim("account", "warming", "run-1")
+
+    assert (
+        engine._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
+        == "not_ready"
+    )
+
+
+@pytest.mark.asyncio
+async def test_selection_skips_an_account_a_neuroshilling_run_holds() -> None:
+    """Through the real ``_select_account``, on the only account the campaign has.
+
+    Selection runs on EVERY incoming post — a start-time check would be blind to a
+    campaign that took the account between two of them — so this is the gate that has to
+    hold, and the miss reason is what the activity log shows the operator.
+    """
+    await _make_campaign("@chan", "acc-1")
+    campaign = await fetch_active_campaign_for_channel("@chan")
+    assert campaign is not None
+    limits = await load_neuro_settings()
+    assert (await engine._select_account(campaign, "@chan", limits)).account_id == "acc-1"
+
+    _account_owner.try_claim("acc-1", "neuroshilling", "ns-1")
+
+    selection = await engine._select_account(campaign, "@chan", limits)
+    assert selection.account_id is None
+    assert selection.reason == "busy_neuroshilling"

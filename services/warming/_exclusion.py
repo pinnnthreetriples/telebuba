@@ -12,7 +12,13 @@ alone leaves two ways for a second paced Telegram stream to land on one session:
   ``flood_wait_until`` (through the trust penalty) and would happily open a fresh cycle
   on an account Telegram is actively rate-limiting.
 
-Both facts belong to neurocomment, so both are read from it. The imports are deferred:
+A third runtime joined later and is answered the same way: a neuroshilling campaign
+holds the accounts of its running dialogue in ``services._account_owner``, and warming
+asks that registry the way it asks discovery's. That one is imported at module level —
+the registry is a leaf module with no imports of its own, so there is no cycle to dodge.
+
+Both neurocomment facts belong to neurocomment, so both are read from it. Those imports
+are deferred:
 ``services.neurocomment.engine`` imports ``services.warming.pacing`` at module level, so
 a load-time import the other way closes the cycle — the same reason neurocomment reaches
 back for ``account_lock`` inside its functions.
@@ -25,6 +31,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
+from services import _account_owner
 
 # Stable snake_case codes: the API reports them verbatim and the SPA owns the wording
 # (``shell.code.*``). Locale-neutral prose in a refusal would be untranslatable. The
@@ -32,6 +39,7 @@ from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
 # refusal; a copy here would be a second string to translate and forget.
 DISCOVERY_CODE = DISCOVERY_BUSY_CODE
 COOLING_CODE = "account_cooling"
+NEUROSHILLING_CODE = "account_busy_neuroshilling"
 
 
 class AccountUnavailableError(ValueError):
@@ -76,6 +84,25 @@ def assert_no_discovery_run(account_id: str) -> None:
     """
     if _discovery_holds(account_id):
         raise AccountUnavailableError(DISCOVERY_CODE, account_id)
+
+
+def assert_not_neuroshilling(account_id: str) -> None:
+    """Raise ``AccountUnavailableError`` while a neuroshilling run holds this account.
+
+    The reciprocal of the claim ``_spawn_runtime_task`` publishes: warming refuses an
+    account neuroshilling is driving, and neuroshilling's own start refuses one warming
+    is driving. Without this half the registry is written and never consulted, and both
+    features can hold one Telegram session at the same time — which is a flood report
+    and then a ban, not a scheduling annoyance.
+
+    Not behind ``enforce_readiness``, exactly like the discovery refusal it sits beside:
+    "another runtime is talking with this session" is not a health opinion the operator
+    can overrule. Synchronous for the same reason too — an in-process dict read, so the
+    caller makes it inside its lifecycle lock without an await for a concurrent start to
+    slip through.
+    """
+    if _account_owner.owner_of(account_id) == "neuroshilling":
+        raise AccountUnavailableError(NEUROSHILLING_CODE, account_id)
 
 
 def assert_not_cooling(account_id: str) -> None:

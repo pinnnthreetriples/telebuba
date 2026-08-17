@@ -30,9 +30,10 @@ from core.db import (
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
+from services import _account_owner
 from services.dialogues import assign_pairs
 from services.trust import account_trust_score
-from services.warming import _seams
+from services.warming import _exclusion, _seams
 from services.warming._exclusion import assert_no_discovery_run, assert_not_cooling
 from services.warming._purge import purge_stale_history
 from services.warming._runner import _warming_loop
@@ -141,9 +142,10 @@ async def _settle_late_stop(account_id: str, stopping_marker: str) -> None:
 
 
 def _runtime_task_done(account_id: str, run_id: str, task: asyncio.Task[None]) -> None:
-    """Done callback: terminal tasks leave both ownership registries atomically."""
+    """Done callback: terminal tasks leave all three ownership registries atomically."""
     _discard_runtime_task(account_id, task)
     _seams.revoke_lease(account_id, run_id)
+    _account_owner.release(account_id, "warming", run_id)
 
 
 def _late_stopped_task_done(task: asyncio.Task[None]) -> None:
@@ -157,8 +159,9 @@ def _late_stopped_task_done(task: asyncio.Task[None]) -> None:
 
 
 def _spawn_runtime_task(account_id: str, run_id: str) -> asyncio.Task[None]:
-    """Create and register the sole task/lease pair for one account generation."""
+    """Create and register the sole task/lease/claim trio for one account generation."""
     _seams.activate_lease(account_id, run_id)
+    _account_owner.take_over(account_id, "warming", run_id)
     task = asyncio.create_task(_warming_loop(account_id, run_id=run_id))
     _RUNTIME[account_id] = task
     task.add_done_callback(
@@ -322,6 +325,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # see it. The cooldown either runtime records is a health verdict instead, and is
         # enforced with the rest of them below.
         assert_no_discovery_run(data.account_id)
+        # The third holder of this session: a running neuroshilling campaign, whose
+        # claim lives in the same registry ``_spawn_runtime_task`` writes below.
+        _exclusion.assert_not_neuroshilling(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
         # Revoke + cancel first, and publish a fresh generation only after the old
         # coroutine is terminal. A task that suppresses cancellation remains owned
