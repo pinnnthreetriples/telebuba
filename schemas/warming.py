@@ -25,7 +25,8 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
-# Every start refusal, declared whole so the i18n parity test holds ``shell.code.*`` to it.
+# Every start refusal that answers with a CODE, declared whole so the i18n parity test holds
+# ``shell.code.*`` to it. Two more (still-stopping task, listener conflict) answer in prose.
 WarmingRefusalCode = Literal[
     "account_running_discovery", "account_cooling", "account_busy_neuroshilling"
 ]

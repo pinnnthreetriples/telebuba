@@ -27,8 +27,11 @@ export function AccountsCard({
         <span className="rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[4px] text-[11.5px] font-medium text-[#3a3a3a]">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
-        {/* The hint carries the two rules the picker enforces but cannot explain:
-            a dialogue needs two voices, and a held account is unavailable. */}
+        {/* The hint carries two rules. The picker enforces the second one — a held
+            account's row is disabled there, with the holder named under it — and
+            nothing enforces the first: a roster of one saves, and it is Start that
+            refuses to run it (LaunchCard's blockers, `not_enough_accounts` on the
+            server). */}
         <HelpHint text={t('neuroshilling.accounts.hint')} />
       </div>
 
