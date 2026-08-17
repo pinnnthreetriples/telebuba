@@ -68,7 +68,7 @@ async def seed_campaign(
     dialogue = steps if steps is not None else _default_steps(len(accounts))
     await repository.replace_scenario(campaign_id, role_inputs, dialogue)
     stored_roles, stored_steps = await repository.load_scenario(campaign_id)
-    await repository.update_campaign(
+    updated = await repository.update_campaign(
         campaign_id,
         NeuroshillingCampaignUpdate(
             name="Promo",
@@ -89,8 +89,11 @@ async def seed_campaign(
             **overrides,
         ),
     )
+    assert updated is not None
     if approve:
-        await repository.approve_scenario(campaign_id)
+        # Straight through the repository, so the seed does not depend on the approval
+        # gate; the stamp the write is conditional on comes from the save above.
+        await repository.approve_scenario(campaign_id, expected_updated_at=updated.updated_at)
     return Seeded(campaign_id, stored_roles, stored_steps, list(accounts))
 
 

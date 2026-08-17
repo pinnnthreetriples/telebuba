@@ -158,7 +158,10 @@ def _resets_approval(campaign: NeuroshillingCampaign, data: NeuroshillingCampaig
     read came from a fetch two awaits earlier, and an approval landing in the gap
     would survive the very edit that invalidated it. Writing ``draft`` whenever an
     approval field moved is idempotent on a campaign already in draft, and it
-    closes the window instead of narrowing it.
+    closes THAT direction instead of narrowing it. The opposite one — this edit landing
+    inside an approval's own window — is closed at the other end:
+    ``scenario.approve_scenario`` writes only while the campaign still carries the
+    ``updated_at`` its verdict was reached on, and the write below moves it.
 
     Enforced HERE and not in the UI. The generated client types every field, so a
     direct call could otherwise keep an approval alive across the exact edit it was

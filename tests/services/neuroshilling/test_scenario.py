@@ -577,20 +577,21 @@ async def test_an_ask_bigger_than_the_configured_ceiling_is_refused(
 async def test_a_campaign_deleted_mid_save_reports_no_campaign(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The repository re-checks inside its own transaction; the service must relay that."""
+    """The repository re-checks inside its own transaction; the service must relay that.
+
+    Only the save relays it as ``None``. An approval that does not land is no longer a
+    missing campaign — the write is conditional on the row's stamp, so it also refuses a
+    row another request moved — and the service answers that by reading the row back:
+    ``tests/services/neuroshilling/test_scenario_approval_race.py`` holds that half.
+    """
     campaign = await _campaign(topic="delivery")
-    # Saved BEFORE the patch, so the approval gate has a valid scenario to pass and
-    # the only thing left to fail is the write itself.
-    await ns_service.set_scenario(campaign.campaign_id, _dialogue())
 
     async def _vanished(*_args: Any, **_kwargs: Any) -> bool:
         return False
 
     monkeypatch.setattr(repository, "replace_scenario", _vanished)
-    monkeypatch.setattr(repository, "approve_scenario", _vanished)
 
     assert await ns_service.set_scenario(campaign.campaign_id, _dialogue()) is None
-    assert await ns_service.approve_scenario(campaign.campaign_id) is None
 
 
 @pytest.mark.asyncio
