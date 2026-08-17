@@ -3314,7 +3314,11 @@ export const getNeuroshillingBoardQueryKey = (options: Options<GetNeuroshillingB
 /**
  * Get Board
  *
- * The whole page in one read: campaign, roster, account pool, targets, run.
+ * The whole page in one read: campaign, account pool, targets, run status.
+ *
+ * The roster is not a list of its own: ``available`` carries every offerable account
+ * with the rostered ones flagged ``assigned``, for the reason
+ * :class:`schemas.neuroshilling.NeuroshillingBoard` gives.
  */
 export const getNeuroshillingBoardOptions = (options: Options<GetNeuroshillingBoardData>) =>
   queryOptions<
