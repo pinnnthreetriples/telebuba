@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
@@ -19,9 +19,30 @@ import {
   waitForRefetch,
 } from './NeuroshillingPage.testHelpers';
 
+const CAMPAIGN_PATH = '/api/v1/neuroshilling/campaigns/c1';
 const SCENARIO_PATH = '/api/v1/neuroshilling/campaigns/c1/scenario';
 const GENERATE_PATH = '/api/v1/neuroshilling/campaigns/c1/generate';
 const APPROVE_PATH = '/api/v1/neuroshilling/campaigns/c1/approve';
+
+// Keeps every PUT unresolved until the returned function is called, and routes
+// everything else exactly as `routeApi` already did. What it buys is ORDER: two
+// requests fired in parallel and two fired in sequence leave the same call counts
+// behind, and only an unanswered first request tells them apart.
+function holdPut(): () => void {
+  const routed = vi.mocked(fetch).getMockImplementation();
+  if (routed === undefined) throw new Error('routeApi has to run first');
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    if ((input as Request).method === 'PUT') await held;
+    return routed(input, init);
+  });
+  return () => {
+    release();
+  };
+}
 
 test('a log-stream frame refetches this page s queries', async () => {
   routeApi();
@@ -175,6 +196,10 @@ test('generating drops the media step the operator picked for the old dialogue',
 
 test('a campaign with no dialogue generates without asking, and stores the topic first', async () => {
   routeApi([CAMPAIGN], { campaign_id: 'c1', scenario_status: 'draft', roles: [], steps: [] });
+  // The PUT is held open, which is the only way to tell "after" from "alongside": both
+  // orders leave one call of each behind, and the model is briefed from the STORED
+  // topic — fired in parallel, the ask can reach the server before the topic does.
+  const release = holdPut();
   renderPage();
   await waitFor(() => {
     expect(screen.getByText('Сгенерировать через ИИ')).toBeEnabled();
@@ -183,11 +208,16 @@ test('a campaign with no dialogue generates without asking, and stores the topic
   await userEvent.click(screen.getByText('Сгенерировать через ИИ'));
 
   await waitFor(() => {
+    expect(callsTo(CAMPAIGN_PATH, 'PUT')).toHaveLength(1);
+  });
+  expect(callsTo(GENERATE_PATH, 'POST')).toHaveLength(0);
+  release();
+
+  await waitFor(() => {
     expect(callsTo(GENERATE_PATH, 'POST')).toHaveLength(1);
   });
   expect(screen.queryByText('Сгенерировать новый диалог?')).not.toBeInTheDocument();
-  // The model is briefed from the STORED topic, so the PUT has to precede the ask.
-  expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(1);
+  expect(callsTo(CAMPAIGN_PATH, 'PUT')).toHaveLength(1);
 });
 
 test('approving posts the approval on its own', async () => {
