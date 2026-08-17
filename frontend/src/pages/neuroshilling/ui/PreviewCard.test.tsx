@@ -122,15 +122,20 @@ test('a loose reaction says only that it reacted', () => {
 
 test('playing restages the bubbles instead of running a timer per row', async () => {
   const { container } = renderCard();
-  const staggerOf = () =>
-    [...container.querySelectorAll<HTMLElement>('.tb-fadeup')].map(
-      (node) => node.style.animationDelay,
-    );
+  const bubbles = () => [...container.querySelectorAll<HTMLElement>('.tb-fadeup')];
+  const staggerOf = () => bubbles().map((node) => node.style.animationDelay);
+  const before = bubbles();
   expect(staggerOf()).toEqual(['0s', '0.12s', '0.24s']);
 
   await userEvent.click(screen.getByText('Проиграть'));
 
-  // The keys change, so the enter animation replays; nothing else moves.
+  // The bubble keys carry the play counter, so every row is a NEW element — which is
+  // what makes the CSS enter animation run again. Compared by node identity because
+  // the rendered markup is identical either way: an inert button would leave the same
+  // delays and the same text on screen and say nothing about a replay.
+  expect(bubbles()).toHaveLength(before.length);
+  expect(bubbles().some((node, index) => node === before[index])).toBe(false);
+  // Nothing else moves: the same stagger, the same lines.
   expect(staggerOf()).toEqual(['0s', '0.12s', '0.24s']);
   expect(screen.getAllByText('а работает вообще?')).toHaveLength(2);
 });
