@@ -54,8 +54,9 @@ _PRESENCE_COLUMNS: Final = (
 # for yet — which is the only reason this read looks past the pair it was asked about.
 _ACCOUNT_WIDE_STATES: Final = ("flooded", "retired")
 # The one of them that EXPIRES. Telegram's rate limit is a wait; the 500-chat ceiling
-# and a dead session are not. ``updated_at`` is when the flood was recorded, and the
-# caller supplies the cutoff, so a row older than it no longer answers for anything.
+# and a dead session are not. ``updated_at`` is when the flood was recorded and the
+# caller supplies the cutoff, so past it the row stops halting anything and answers
+# only for whatever membership is underneath it — see :func:`_state_now`.
 _EXPIRING_STATE: Final = "flooded"
 
 
@@ -108,9 +109,10 @@ async def record_presence(
 ) -> None:
     """Write where one account stands with one target.
 
-    ``joined_at`` survives a later state change on purpose — the operator's question
-    is "when did this account get in", and blanking it on the first flood would erase
-    the only answer.
+    ``joined_at`` survives a later state change on purpose. The operator's question is
+    "when did this account get in", and blanking it on the first flood would erase the
+    only answer — and :func:`_state_now` reads the same column for a second one, since
+    after the flood expires it is all that is left saying the account is in the chat.
     """
     await asyncio.to_thread(
         _record_presence,
@@ -140,6 +142,28 @@ async def list_presence(
     return await asyncio.to_thread(_list_presence, campaign_id, target)
 
 
+def _state_now(row: NeuroshillingPresence, flood_since: str) -> NeuroshillingPresenceState | None:
+    """What one stored row still answers once the flood clock has been applied.
+
+    ``None`` means it answers nothing any more. Applied to the pair's own row as well
+    as to the account-wide ones: a chat this account was flooded out of an hour ago is
+    a chat it may act in again.
+
+    A flood is a verdict on what the account may DO, and the sweep that records it
+    overwrites the ``state`` membership was being read out of. So when the window
+    passed, the row fell silent about membership too, the next pass read "nothing
+    known" and went off to re-join twenty chats this account was already sitting in —
+    against a daily join budget that ran out before the target list did, which skipped
+    every one of those targets instead. ``joined_at`` is where the membership survives:
+    :func:`_record_presence` stamps it on the way in and never clears it, so an expired
+    flood falls back to it rather than to nothing. It is a fact about the account and
+    the chat, not about the campaign that happened to record it.
+    """
+    if row.state != _EXPIRING_STATE or row.updated_at >= flood_since:
+        return row.state
+    return "joined" if row.joined_at is not None else None
+
+
 def _fetch_presence_state(
     campaign_id: str,
     account_id: str,
@@ -155,14 +179,12 @@ def _fetch_presence_state(
     )
     with _get_engine().connect() as connection:
         rows = [_row_to_presence(row._mapping) for row in connection.execute(statement)]  # noqa: SLF001 - Row API
-    # Applied to the pair's own row as well as to the account-wide ones: a chat this
-    # account was flooded out of an hour ago is a chat it may try again.
-    live = [row for row in rows if row.state != _EXPIRING_STATE or row.updated_at >= flood_since]
-    stored = next((row for row in live if row.state in _ACCOUNT_WIDE_STATES), None) or next(
-        (row for row in live if row.target == target),
+    live = [(row, state) for row in rows if (state := _state_now(row, flood_since)) is not None]
+    stored = next((entry for entry in live if entry[1] in _ACCOUNT_WIDE_STATES), None) or next(
+        (entry for entry in live if entry[0].target == target),
         None,
     )
-    return stored.state if stored is not None else None
+    return stored[1] if stored is not None else None
 
 
 async def fetch_presence_state(
@@ -179,10 +201,14 @@ async def fetch_presence_state(
     flooded while joining one target must not join the NEXT one either, and that
     target has no row of its own to carry the verdict.
 
-    ``flood_since`` is where that scope stops: a ``flooded`` row older than it answers
-    for nothing. The verdict has no other way back — ``retire_account_presence`` only
+    ``flood_since`` is where that scope stops: past it a ``flooded`` row stops halting
+    anything. The verdict has no other way back — ``retire_account_presence`` only
     rewrites live pairs — so an unbounded one turned a thirty-second wait into
     permanent retirement from every campaign.
+
+    What such a row still answers is :func:`_state_now`'s subject: the state says what
+    the pair may DO and ``joined_at`` says whether it is IN, and only the first of the
+    two expires.
     """
     return await asyncio.to_thread(
         _fetch_presence_state,

@@ -157,6 +157,9 @@ async def test_a_flood_stops_answering_once_its_window_has_passed() -> None:
     Unbounded, a thirty-second wait took the account out of every campaign for good.
     ``retired`` is not on the same clock — the 500-chat ceiling and a dead session do
     not expire — so it goes on answering.
+
+    Neither of these pairs was ever joined, so the expiry leaves nothing behind; the
+    test below is the one where it does.
     """
     campaign_id = await _campaign()
     await record_presence(campaign_id, "acc-1", "@a", "flooded")
@@ -165,6 +168,31 @@ async def test_a_flood_stops_answering_once_its_window_has_passed() -> None:
     assert await fetch_presence_state(campaign_id, "acc-1", "@a", flood_since=_EXPIRED) is None
     assert await fetch_presence_state(campaign_id, "acc-1", "@b", flood_since=_EXPIRED) is None
     assert await fetch_presence_state(campaign_id, "acc-2", "@b", flood_since=_EXPIRED) == "retired"
+
+
+@pytest.mark.asyncio
+async def test_an_expired_flood_still_says_the_account_is_in_the_chat() -> None:
+    """The wait expires. Being a member of the chat does not.
+
+    The sweep stamps ``flooded`` over the pair's ``joined``, so once the window passed
+    the row answered nothing at all and the next pass went off to re-join chats this
+    account was already sitting in — twenty of them ran the daily join budget out, and
+    every target after that was skipped for a member of it.
+    """
+    campaign_id = await _campaign()
+    await record_presence(campaign_id, "acc-1", "@a", "joined")
+    await record_presence(campaign_id, "acc-1", "@b", "pending")
+
+    await retire_account_presence("acc-1", "flooded")
+
+    assert (
+        await fetch_presence_state(campaign_id, "acc-1", "@a", flood_since=_IN_FORCE) == "flooded"
+    )
+    assert await fetch_presence_state(campaign_id, "acc-1", "@a", flood_since=_EXPIRED) == "joined"
+    # A pair that never got in has no membership to fall back on, and one it holds for
+    # @a is not an answer about a target it has no row for.
+    assert await fetch_presence_state(campaign_id, "acc-1", "@b", flood_since=_EXPIRED) is None
+    assert await fetch_presence_state(campaign_id, "acc-1", "@c", flood_since=_EXPIRED) is None
 
 
 @pytest.mark.asyncio
