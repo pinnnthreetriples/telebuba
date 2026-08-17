@@ -415,7 +415,11 @@ export function NeuroshillingPage() {
           onCreate={create}
         />
 
-        {campaignId === null ? null : (
+        {/* The board, not the selection, is what this card waits for: the picker
+            seeds its draft from the pool at mount, so a way in offered while the
+            board is still in flight opens it over an empty roster — and «done»
+            would then replace the campaign's real one with that. */}
+        {campaign === undefined ? null : (
           <AccountsCard
             accounts={roster}
             onPick={() => {
