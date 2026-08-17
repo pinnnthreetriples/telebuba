@@ -15,10 +15,17 @@ would spend a second model call on the same attacker-supplied text.
 ``record_chat_reply`` is the separate outcome write, and it alone is what the
 reply quota counts.
 
-Every READ here is scoped by ``(campaign_id, target)``: a chat is only ever read in
-the context of the campaign that joined it. :func:`claim_chat_reply` is the one
-exception and deliberately so — the rows are per campaign, but the chat is not, and
-two campaigns aimed at one target would otherwise both answer the same stranger.
+**The reads here use three different keys, one per question they answer.** The poll's
+own two — :func:`chat_cursor` and :func:`list_recent_chat` — are scoped by
+``(campaign_id, target)``: what THIS campaign has seen in one chat. The reply claim is
+keyed on ``(target, message_id)`` across campaigns, because the rows are per campaign
+but the chat is not, and two campaigns aimed at one target would otherwise both answer
+the same stranger. :func:`count_chat_reply_usage` is keyed on the ACCOUNT — plus the
+target for its chat-day half — and names no campaign at all, exactly as the journal's
+``read_quota_usage`` counts the same two windows, because those ceilings belong to the
+session and the caller adds the two answers together. :func:`count_chat_activity` is
+keyed on the campaign alone, across its targets: it is the launch card's own counter
+and the card is per campaign.
 """
 
 from __future__ import annotations
@@ -249,6 +256,12 @@ async def count_chat_reply_usage(
     and the journal's quota read cannot see it. Counted here and ADDED to that read
     by the caller, because the ceilings in the form belong to the account and it is
     the same account publishing both kinds of message.
+
+    Neither window is narrowed to a campaign, and neither is the journal half the
+    caller adds: an account two campaigns share carries both campaigns' sends into both
+    counts, which is what makes the sum mean "what this session has said" — the thing
+    Telegram is rate-limiting. Scoping one half and not the other would make the sum a
+    number neither ceiling describes.
 
     ``campaign_total`` is left at zero: the lifetime ceiling is worded per campaign
     and this table is not keyed by account and campaign together, so answering it
