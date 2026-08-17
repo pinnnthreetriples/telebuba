@@ -139,9 +139,10 @@ async def _over_quota(campaign: NeuroshillingCampaign, account_id: str, target: 
     The two ATTEMPT ceilings come first and cost no query: they are about what has
     already been PAID for rather than what has been published, and the two diverge
     exactly when a chat is hostile — every draft the gate refuses is billed and
-    publishes nothing, so none of the three counted ceilings below ever sees it. The
-    chat's is asked before the account's because it is the wider of the two: it is the
-    chat that is charged the drafts, whichever of our accounts and campaigns paid.
+    publishes nothing, so none of the three counted ceilings below ever sees it. Neither
+    costs a query, so the order between the two is arbitrary; what each bounds is not —
+    one is this account's hour, the other this chat's day, whichever of our accounts and
+    campaigns paid for the drafts in it.
     """
     if _state.at_chat_attempt_cap(target) or _state.at_reply_attempt_cap(
         account_id,
