@@ -416,3 +416,29 @@ async def test_no_steps_at_all_is_re_asked(monkeypatch: pytest.MonkeyPatch) -> N
 
     assert draft is not None
     assert "steps was empty" in gateway.requests[1].prompt
+
+
+@pytest.mark.asyncio
+async def test_an_answer_whose_every_step_is_dropped_is_re_asked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A repair that leaves nothing must not be stored as a dialogue.
+
+    Both faults are legal in the ANSWER — a reply with only spaces in it, a reaction
+    aimed at that reply — so ``_draft_problem`` passes them one by one and the emptiness
+    only appears in the renumbering. Written, it replaced the operator's dialogue with an
+    empty one, answered 200, and the paid call was already spent.
+    """
+    dissolves = _answer(
+        steps=[
+            {"speaker_id": 1, "text": "  ", "reply_to_index": None, "reaction": None},
+            {"speaker_id": 2, "text": "", "reply_to_index": 0, "reaction": "\U0001f525"},
+        ],
+    )
+    gateway = _Gateway(dissolves, _answer())
+
+    draft = await _generate_with(monkeypatch, gateway)
+
+    assert draft is not None
+    assert [step.text for step in draft.steps] == ["anyone tried it?", "a year now"]
+    assert "every step was unusable" in gateway.requests[1].prompt
