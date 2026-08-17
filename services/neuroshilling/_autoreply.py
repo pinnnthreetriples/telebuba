@@ -19,10 +19,13 @@ which is not, was never in the request to begin with.
 **The answer is parsed before it is published**, by ``_reply_guard``, and then run
 through the same ``is_acceptable`` / ``try_reserve_sent`` pair every other
 publishing path in this project uses. The dedup reservation is scoped to the
-target exactly as ``_dispatch`` scopes it, and it earns its place here for a
-reason the scenario steps do not have: five accounts answering the same provoking
-message would otherwise post five near-identical lines into one chat, which is
-the cross-account duplicate signal ``services.content`` exists to suppress.
+target and to nothing else — ``_dispatch._step_dedup_key`` adds the cycle for a
+``revive`` run's SCENARIO steps and this path never does, because an autoreply
+writes a fresh sentence every time, so a repeat here really is one. It earns its
+place for a reason the scenario steps do not have: five accounts answering the
+same provoking message would otherwise post five near-identical lines into one
+chat, which is the cross-account duplicate signal ``services.content`` exists to
+suppress.
 
 **A message is decided about once.** ``claim_chat_reply`` flips the row before the
 model is asked and nothing gives it back, so a refused, filtered or failed answer

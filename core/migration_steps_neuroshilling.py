@@ -35,7 +35,8 @@ def _ns_campaigns(connection: Connection) -> None:
     ``run_id`` is the current run and is READ on resume rather than re-minted —
     a fresh id would empty the journal's unique index and replay the whole
     staged dialogue into chats that already hold it. ``last_error`` carries a
-    class NAME, never ``str(exc)``: this row is served back by the API.
+    class NAME or a stable code the runtime writes in place of one, never
+    ``str(exc)``: this row is served back by the API.
     """
     connection.exec_driver_sql(
         "CREATE TABLE IF NOT EXISTS neuroshilling_campaigns ("

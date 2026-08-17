@@ -64,7 +64,9 @@ _neuroshilling_campaigns = Table(
     Column("listen_minutes", Integer, nullable=False, server_default=text("60")),
     Column("status", String, nullable=False, server_default=text("'idle'")),
     Column("run_id", String, nullable=True),
-    # Class NAME only, never ``str(exc)``: this row is served back by the API.
+    # A class NAME, or a stable code the runtime writes where it raised no exception
+    # ("AccountBusy", "RunIdMissing"). Never ``str(exc)``: this row is served back by
+    # the API.
     Column("last_error", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
@@ -169,7 +171,9 @@ _neuroshilling_presence = Table(
     Column("account_id", String, primary_key=True),
     Column("target", String, primary_key=True),
     Column("state", String, nullable=False, server_default=text("'pending'")),
-    # Class NAME, not message text — this travels to the API like everything else.
+    # A stable ``NeuroshillingRefusalCode`` (the peer shapes a dialogue cannot run in)
+    # or the class-name-shaped reason the gateway reported, never an exception's TEXT —
+    # this travels to the API like everything else.
     Column("last_error_type", String, nullable=True),
     Column("joined_at", String, nullable=True),
     Column("updated_at", String, nullable=False),
