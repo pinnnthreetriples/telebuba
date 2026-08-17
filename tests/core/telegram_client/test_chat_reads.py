@@ -11,6 +11,9 @@ from telethon.tl.functions.messages import CheckChatInviteRequest
 from telethon.tl.types import (
     Channel,
     Chat,
+    ChatInvite,
+    ChatInviteAlready,
+    ChatInvitePeek,
     MessageMediaDocument,
     MessageMediaEmpty,
     MessageMediaPhoto,
@@ -175,7 +178,7 @@ class _InviteClient:
 async def test_a_private_invite_resolves_only_once_the_account_is_inside(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    client = _InviteClient(MagicMock(chat=_channel(megagroup=True)))
+    client = _InviteClient(ChatInviteAlready(chat=_channel(megagroup=True)))
     _patch_client(monkeypatch, client)
 
     result: ResolveChatResult = await execute_read("acc-1", ResolveChat(target="+ABCDEFGH"))  # ty: ignore[invalid-assignment]
@@ -192,7 +195,31 @@ async def test_an_invite_preview_is_not_a_resolution(monkeypatch: pytest.MonkeyP
     Nothing in that preview can be sent to, so treating it as success would let the
     engine "resolve" a chat the account has never entered.
     """
-    _patch_client(monkeypatch, _InviteClient(MagicMock(chat=None)))
+    preview = ChatInvite(
+        title="Target",
+        photo=None,  # ty: ignore[invalid-argument-type]
+        participants_count=3,
+        color=0,
+    )
+    _patch_client(monkeypatch, _InviteClient(preview))
+
+    with pytest.raises(TelegramReadError) as refusal:
+        await execute_read("acc-1", ResolveChat(target="+ABCDEFGH"))
+
+    assert refusal.value.reason == "chat_not_found"
+
+
+@pytest.mark.asyncio
+async def test_a_peek_at_an_invite_is_not_a_resolution(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The third answer: the real chat, handed to an account that has NOT joined.
+
+    ``ChatInvitePeek`` is a read-only look that expires, and it carries the same
+    ``chat`` field membership does — so a resolve that read the attribute instead of
+    the class answered a valid chat id for a chat this account is not in. Presence was
+    never written, the target counted as usable, and every send into it failed.
+    """
+    peek = ChatInvitePeek(chat=_channel(megagroup=True), expires=None)  # ty: ignore[invalid-argument-type]
+    _patch_client(monkeypatch, _InviteClient(peek))
 
     with pytest.raises(TelegramReadError) as refusal:
         await execute_read("acc-1", ResolveChat(target="+ABCDEFGH"))

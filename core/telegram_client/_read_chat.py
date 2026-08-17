@@ -19,6 +19,7 @@ from telethon.tl.functions.messages import CheckChatInviteRequest
 from telethon.tl.types import (
     Channel,
     Chat,
+    ChatInviteAlready,
     MessageMediaDocument,
     MessageMediaPhoto,
     MessageMediaWebPage,
@@ -97,17 +98,24 @@ def _entity_kind(entity: object) -> ChatKind:
 async def _resolve_invite(client: TelegramClient, invite_hash: str) -> object:
     """The chat behind a ``+HASH`` invite — only if this account is already inside.
 
-    ``CheckChatInviteRequest`` answers with a preview (``ChatInvite``, no id at all)
-    for an account that has not joined, and with the real chat once it has. The
-    preview is not a resolution: nothing in it can be sent to. ``ValueError`` is the
-    idiom the rest of the gateway uses for exactly this ("not a member"), so the
-    executor classifies it like any other refused resolve.
+    ``CheckChatInviteRequest`` has three answers and TWO of them carry a chat.
+    ``ChatInviteAlready`` is the one that means membership. ``ChatInvite`` is the
+    preview an outsider gets and holds no chat at all. ``ChatInvitePeek`` holds the
+    real chat and is handed to an account that has NOT joined — a read-only look that
+    expires — so accepting whichever answer has a ``chat`` attribute resolved a
+    perfectly valid id for a chat the account is not in: nothing recorded its absence,
+    the target counted as usable, and every send into it failed afterwards. The class
+    is therefore matched rather than the attribute, which is what Telethon's own
+    ``get_entity`` does with the same three answers.
+
+    The refusal is ``ChannelGatewayError(_NOT_FOUND)``, like every other unreachable
+    peer in this module; ``execute_read`` re-raises it as ``TelegramReadError`` and
+    ``services.neuroshilling._telegram.resolve_target`` writes the pair off.
     """
     invite = await client(CheckChatInviteRequest(hash=invite_hash))
-    chat = getattr(invite, "chat", None)
-    if chat is None:
+    if not isinstance(invite, ChatInviteAlready):
         raise ChannelGatewayError(_NOT_FOUND)
-    return chat
+    return invite.chat
 
 
 async def dispatch_resolve_chat(
