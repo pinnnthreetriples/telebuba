@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from typing import Final, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # The eight reactions the neuroshilling scenario form offers. Fixed rather than
 # free-form because a non-Premium account may place exactly ONE reaction per
@@ -67,16 +67,39 @@ class ResolveChat(BaseModel):
 
 
 class ReadChatMessages(BaseModel):
-    """Read-only: re-read messages by id in an arbitrary chat.
+    """Read-only: read messages of an arbitrary chat, by id or from a cursor.
 
     ``chat`` is a peer reference rather than an int so a message LINK can be checked
     before anything is resolved: an all-digit value is fed to Telethon as the raw
     positive id above, anything else as a username.
+
+    Two modes, and exactly one of them per request. ``message_ids`` re-reads named
+    messages, which is what a reachability check needs. ``min_id`` is a CURSOR: the
+    newest ``limit`` messages whose id is above it, which is what polling a chat
+    needs. A poll is deliberately built on this action rather than on the push
+    listener — that one belongs to neurocomment and carries a subscription registry
+    a second feature must not disturb.
     """
 
     action_type: Literal["read_chat_messages"] = "read_chat_messages"
     chat: str = Field(min_length=1)
-    message_ids: list[int] = Field(min_length=1, max_length=100)
+    message_ids: list[int] = Field(default_factory=list, max_length=100)
+    # ``0`` means "the newest ``limit`` messages, whatever their ids" — the first
+    # poll of a chat nothing has been read from yet.
+    min_id: int | None = Field(default=None, ge=0)
+    limit: int = Field(default=20, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def _check_one_mode(self) -> ReadChatMessages:
+        """Exactly one of the two modes, because they answer different questions.
+
+        Neither is a default for the other: with both set the dispatcher would have
+        to pick, and with neither it would read a whole chat nobody asked for.
+        """
+        if bool(self.message_ids) == (self.min_id is not None):
+            msg = "read_chat_messages takes either message_ids or min_id, not both"
+            raise ValueError(msg)
+        return self
 
 
 class ReactToMessage(BaseModel):

@@ -54,7 +54,6 @@ function renderCard(over: Partial<Parameters<typeof CampaignSetupCard>[0]> = {})
   const { draft, ...props } = over;
   render(
     <Harness
-      campaign={CAMPAIGN}
       initial={draft ?? setupDraftOf(CAMPAIGN)}
       onDraft={onDraft}
       dirty={false}
@@ -106,7 +105,9 @@ test('advanced settings hide behind a collapse whose badge counts real changes',
   renderCard({ draft: { ...setupDraftOf(CAMPAIGN), messagesPerHour: 4, reserveEnabled: true } });
   // Closed: nothing inside is reachable.
   expect(screen.queryByLabelText('Сообщений в час')).toBeNull();
-  expect(screen.getByText('2')).toBeInTheDocument();
+  // Five: the two set here, plus the three listening settings this campaign
+  // already carries away from their defaults.
+  expect(screen.getByText('5')).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
   expect(screen.getByLabelText('Сообщений в час')).toHaveValue(4);
@@ -160,24 +161,50 @@ test('the reserve switch and the sequential option write to the draft', async ()
   expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).reserveEnabled).toBe(true);
 });
 
-test('the stage-six controls are shown with their stored values and are inert', async () => {
+test('the listening controls write to the draft and show what is stored', async () => {
   const { onDraft } = renderCard();
   await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
 
-  expect(screen.getByText('скоро')).toBeInTheDocument();
+  expect(screen.getByText('Прослушка чата')).toBeInTheDocument();
   const humans = screen.getByRole('switch', { name: 'Отвечать реальным людям' });
-  expect(humans).toBeDisabled();
   expect(humans).toHaveAttribute('aria-checked', 'true');
-  // The stored value is on screen, so the operator sees what the column holds.
   expect(screen.getByRole('radio', { name: 'Нейродиалог' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
-  expect(screen.getByRole('radio', { name: 'Активно' })).toBeDisabled();
-  expect(screen.getByLabelText('Слушать чат, мин')).toBeDisabled();
+  expect(screen.getByLabelText('Слушать чат, мин')).toHaveValue(45);
 
   await userEvent.click(humans);
-  expect(onDraft).not.toHaveBeenCalled();
+  expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).replyToHumans).toBe(false);
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Спокойно' }));
+  expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).replyActivity).toBe('calm');
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Выключен' }));
+  expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).autoresponder).toBe('off');
+});
+
+test('the listening window clamps to the wire bound', async () => {
+  const { onDraft } = renderCard();
+  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+
+  const window = screen.getByLabelText('Слушать чат, мин');
+  await userEvent.clear(window);
+  await userEvent.type(window, '9999');
+
+  expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).listenMinutes).toBe(1440);
+});
+
+test('the warning appears only when BOTH switches are on', async () => {
+  // The server requires both before a stranger's message can provoke anything, so
+  // showing the warning for either one alone would name a risk that is not there.
+  const draft = { ...setupDraftOf(CAMPAIGN), autoresponder: 'off' as const };
+  renderCard({ draft });
+  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  expect(screen.queryByText(/Текст из чата пишут посторонние/)).toBeNull();
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Нейродиалог' }));
+  expect(screen.getByText(/Текст из чата пишут посторонние/)).toBeInTheDocument();
 });
 
 test('the segmented choices announce themselves as radio groups', async () => {
@@ -199,11 +226,15 @@ test('a clean form cannot be saved', () => {
   expect(screen.getByText('Сохранить настройки')).toBeDisabled();
 });
 
-test('a running campaign locks the whole card and says so', () => {
+test('a running campaign locks the whole card and says so', async () => {
   renderCard({ live: true, dirty: true });
   expect(screen.getByText(/Кампания запущена/)).toBeInTheDocument();
   expect(screen.getByLabelText('Целевые чаты')).toBeDisabled();
   expect(screen.getByRole('radio', { name: /Последовательно/ })).toBeDisabled();
+  // The listening block rides the same PUT, so it locks with everything else.
+  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  expect(screen.getByRole('switch', { name: 'Отвечать реальным людям' })).toBeDisabled();
+  expect(screen.getByLabelText('Слушать чат, мин')).toBeDisabled();
   // The server answers 409 `campaign_running` to the whole PUT.
   expect(screen.getByText('Сохранить настройки')).toBeDisabled();
 });

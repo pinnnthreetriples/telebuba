@@ -90,6 +90,18 @@ class NeuroshillingSettings(BaseSettings):
     reply_chance_medium: float = Field(default=0.3, ge=0.0, le=1.0)
     reply_chance_active: float = Field(default=0.6, ge=0.0, le=1.0)
 
+    # Ceilings on ONE published autoreply, enforced by a parser and not by asking the
+    # model. Both are here rather than in the prompt because the text that provoked
+    # the answer is written by a stranger: an instruction can be talked out of, a
+    # length check cannot. The character cap is the one that bounds a smuggled
+    # payload, the word cap is what keeps the answer reading like a chat message.
+    reply_max_chars: int = Field(default=300, ge=1)
+    reply_max_words: int = Field(default=40, ge=1)
+    # How similar an answer may be to the message that provoked it before it is
+    # dropped as an echo. Jaccard over token sets (``services.content.similarity``),
+    # so 1.0 would disable the check and 0.0 would refuse everything.
+    reply_echo_threshold: float = Field(default=0.6, gt=0.0, le=1.0)
+
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeuroshillingSettings:
         if self.join_delay_min_seconds > self.join_delay_max_seconds:

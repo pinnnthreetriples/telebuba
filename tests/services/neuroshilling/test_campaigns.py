@@ -11,8 +11,13 @@ from sqlalchemy import update as sql_update
 
 from core.config import settings
 from core.db import _get_engine, _now_iso, create_account, upsert_warming_state
+from core.repositories.neuroshilling import (
+    claim_chat_reply,
+    record_chat_messages,
+    record_chat_reply,
+    record_presence,
+)
 from core.repositories.neuroshilling import create_campaign as repo_create_campaign
-from core.repositories.neuroshilling import record_presence
 from core.repositories.neuroshilling._tables import (
     _neuroshilling_campaigns,
     _neuroshilling_roles,
@@ -22,6 +27,7 @@ from schemas.neuroshilling import (
     NeuroshillingAccountAssignment,
     NeuroshillingCampaignCreate,
     NeuroshillingCampaignUpdate,
+    NeuroshillingChatMessage,
 )
 from schemas.warming import WarmingStateWrite
 from services import _account_owner
@@ -433,3 +439,53 @@ async def test_the_launch_card_reports_a_halt_another_campaign_recorded(
     expired = await campaigns.run_status(mine.campaign_id)
     assert expired is not None
     assert expired.halted_accounts == []
+
+
+@pytest.mark.parametrize(
+    ("switches", "status", "expected"),
+    [
+        ({"use_chat_context": True}, "running", True),
+        ({"reply_to_humans": True}, "running", True),
+        ({"autoresponder": "neurodialog"}, "running", True),
+        ({}, "running", False),
+        # The switches are on the campaign row already; what the card cannot read
+        # off them is whether a run is in flight to act on them.
+        ({"use_chat_context": True}, "idle", False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_listening_needs_both_a_switch_and_a_live_run(
+    switches: dict[str, Any],
+    status: str,
+    *,
+    expected: bool,
+) -> None:
+    created = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
+    await campaigns.update_campaign(created.campaign_id, _update(name="Mine", **switches))
+    await _set_status(created.campaign_id, status)
+
+    run = await campaigns.run_status(created.campaign_id)
+
+    assert run is not None
+    assert run.listening is expected
+
+
+@pytest.mark.asyncio
+async def test_the_listener_counters_come_from_the_chat_log() -> None:
+    """``seen`` counts every observed row; ``replied`` counts published answers only."""
+    created = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
+    await record_chat_messages(
+        created.campaign_id,
+        "@a",
+        [
+            NeuroshillingChatMessage(message_id=7, text="hi"),
+            NeuroshillingChatMessage(message_id=8, text="hey"),
+        ],
+    )
+    await claim_chat_reply(created.campaign_id, "@a", 7)
+    await record_chat_reply(created.campaign_id, "@a", 7, account_id="acc-1")
+
+    run = await campaigns.run_status(created.campaign_id)
+
+    assert run is not None
+    assert (run.chat_messages_seen, run.human_replies_sent) == (2, 1)

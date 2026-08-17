@@ -131,15 +131,28 @@ async def dispatch_resolve_chat(
     return ResolveChatResult(chat_id=chat_id, kind=_entity_kind(entity))
 
 
-async def dispatch_read_chat_messages(
+def _preview(message: object, message_id: int) -> ChatMessagePreview:
+    """One Telethon message flattened to the contract. Media is a KIND, never bytes.
+
+    ``sender_id`` is read through ``int()`` rather than passed through: an anonymous
+    admin post carries none, and a test double answers every attribute with another
+    mock, so anything that is not already a number is reported as unknown.
+    """
+    sender = getattr(message, "sender_id", None)
+    return ChatMessagePreview(
+        message_id=message_id,
+        text=str(getattr(message, "message", None) or ""),
+        media_kind=media_kind(getattr(message, "media", None)),
+        sender_id=sender if isinstance(sender, int) else None,
+        outgoing=getattr(message, "out", False) is True,
+    )
+
+
+async def _read_by_ids(
     client: TelegramClient,
     action: ReadChatMessages,
 ) -> ReadChatMessagesResult:
-    """Re-read messages by id; a ``None`` slot means this account cannot see it.
-
-    Media is reported as a KIND and never as bytes: the callers are a reachability
-    check and a chat-context read, and neither wants a download.
-    """
+    """Re-read named messages; a ``None`` slot means this account cannot see it."""
     # get_messages(ids=[...]) returns a list aligned to ids (None where a message is
     # gone or invisible); the stub union also admits the single-id Message form.
     try:
@@ -154,12 +167,51 @@ async def dispatch_read_chat_messages(
     for message_id, message in zip(action.message_ids, messages, strict=True):
         if message is None:
             missing.append(message_id)
-            continue
-        previews.append(
-            ChatMessagePreview(
-                message_id=message_id,
-                text=str(getattr(message, "message", None) or ""),
-                media_kind=media_kind(getattr(message, "media", None)),
+        else:
+            previews.append(_preview(message, message_id))
+    return ReadChatMessagesResult(messages=previews, missing_ids=missing)
+
+
+async def _read_since(
+    client: TelegramClient,
+    action: ReadChatMessages,
+) -> ReadChatMessagesResult:
+    """The newest ``limit`` messages above the cursor, handed back oldest-first.
+
+    ``get_messages(limit=...)`` walks BACKWARDS from the head of the chat, which is
+    what makes ``min_id=0`` mean "the newest ``limit`` messages" instead of "the
+    oldest ones". A forward walk would start a first poll at the beginning of the
+    chat's history and grind through it a page per poll, replying to years-old
+    messages on the way.
+
+    Sorted ascending before returning, because a cursor is only advanced safely by
+    the LAST element and the caller reads the conversation in order.
+    """
+    try:
+        messages = cast(
+            "list[object]",
+            await client.get_messages(
+                peer_reference(action.chat),
+                limit=action.limit,
+                min_id=action.min_id,
             ),
         )
-    return ReadChatMessagesResult(messages=previews, missing_ids=missing)
+    except ValueError as exc:
+        raise ChannelGatewayError(_NOT_FOUND) from exc
+    previews = [
+        _preview(message, message_id)
+        for message in messages
+        if message is not None and (message_id := int(getattr(message, "id", 0) or 0)) > 0
+    ]
+    previews.sort(key=lambda preview: preview.message_id)
+    return ReadChatMessagesResult(messages=previews)
+
+
+async def dispatch_read_chat_messages(
+    client: TelegramClient,
+    action: ReadChatMessages,
+) -> ReadChatMessagesResult:
+    """Read a chat either by named ids or from a cursor — the action carries which."""
+    if action.min_id is None:
+        return await _read_by_ids(client, action)
+    return await _read_since(client, action)

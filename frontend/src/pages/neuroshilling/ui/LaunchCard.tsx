@@ -223,6 +223,17 @@ export function LaunchCard({
         />
       </div>
 
+      {/* Shown only while the run is really reading: the three switches are on the
+          campaign row already, and what the operator cannot see from there is
+          whether anything is acting on them right now. */}
+      {run.listening === true ? (
+        <div className="mb-[12px] flex flex-wrap items-center gap-[8px] rounded-[10px] bg-[#f4f3f0] px-[11px] py-[7px] text-[11.5px] tabular-nums text-ink-muted">
+          <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
+          <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
+          <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>
+        </div>
+      ) : null}
+
       {status === 'failed' && run.last_error_type ? (
         <div className="mb-[10px] rounded-[10px] bg-danger-tint px-[11px] py-[7px] text-[11.5px] text-danger">
           {t('neuroshilling.launch.failed', { type: run.last_error_type })}

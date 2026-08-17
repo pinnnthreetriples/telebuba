@@ -217,3 +217,32 @@ async def fail_pending_messages(run_id: str) -> int:
     must go on occupying their key so the resumed run does not play the step again.
     """
     return await asyncio.to_thread(_fail_pending_messages, run_id)
+
+
+def _list_sent_message_ids(campaign_id: str, target: str) -> set[int]:
+    statement = select(_TABLE.c.message_id).where(
+        (_TABLE.c.campaign_id == campaign_id)
+        & (_TABLE.c.target == target)
+        & (_TABLE.c.status == "sent")
+        & _TABLE.c.message_id.is_not(None),
+    )
+    with _get_engine().connect() as connection:
+        return {int(row[0]) for row in connection.execute(statement)}
+
+
+async def list_sent_message_ids(campaign_id: str, target: str) -> set[int]:
+    """Every message id THIS CAMPAIGN put into ``target``, across all its runs.
+
+    Half of what the chat poller needs to answer "is this one of ours?" honestly.
+    Telethon's ``out`` flag only answers it for the account doing the reading, so a
+    line said by a sibling account of the same campaign looks like a stranger's — and
+    the fleet would then quote its own scripted dialogue back into its own prompt and
+    offer to answer it. Only half, because this table holds SCENARIO steps: an
+    autoreply answers no step and has no row here at all, which is why
+    ``services.neuroshilling._autoreply`` records its own published answers straight
+    into the chat log instead.
+
+    Not scoped to the current run: the earlier runs' messages are still sitting in
+    that chat, and they are just as much ours.
+    """
+    return await asyncio.to_thread(_list_sent_message_ids, campaign_id, target)

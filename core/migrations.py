@@ -64,6 +64,7 @@ from core.migration_steps_neurocomment import (
     _add_readiness_join_request,
 )
 from core.migration_steps_neuroshilling import _add_neuroshilling_tables
+from core.migration_steps_neuroshilling_chat import _add_neuroshilling_chat_log
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
     _add_proxy_geo_consensus,
@@ -168,6 +169,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (53, "add_neurocomment_inbox", _add_neurocomment_inbox),
     (54, "harden_proxy_hosts", _harden_proxy_hosts),
     (55, "add_neuroshilling_tables", _add_neuroshilling_tables),
+    (56, "add_neuroshilling_chat_log", _add_neuroshilling_chat_log),
 )
 
 

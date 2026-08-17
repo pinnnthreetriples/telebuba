@@ -33,6 +33,15 @@ from core.repositories.neuroshilling._campaigns import (
     set_run_state,
     update_campaign,
 )
+from core.repositories.neuroshilling._chat_log import (
+    chat_cursor,
+    claim_chat_reply,
+    count_chat_activity,
+    count_chat_reply_usage,
+    list_recent_chat,
+    record_chat_messages,
+    record_chat_reply,
+)
 from core.repositories.neuroshilling._message_counts import (
     count_messages_since,
     count_sent_message_steps,
@@ -44,6 +53,7 @@ from core.repositories.neuroshilling._messages import (
     fetch_message_id,
     hand_over_message,
     list_journalled_steps,
+    list_sent_message_ids,
     settle_message,
 )
 from core.repositories.neuroshilling._presence import (
@@ -63,7 +73,11 @@ __all__ = [
     "ReserveSwap",
     "approve_scenario",
     "ban_campaign_account",
+    "chat_cursor",
+    "claim_chat_reply",
     "claim_message",
+    "count_chat_activity",
+    "count_chat_reply_usage",
     "count_messages_since",
     "count_sent_message_steps",
     "count_substitutions",
@@ -81,9 +95,13 @@ __all__ = [
     "list_journalled_steps",
     "list_live_campaigns",
     "list_presence",
+    "list_recent_chat",
     "list_running_campaign_account_names",
+    "list_sent_message_ids",
     "load_scenario",
     "read_quota_usage",
+    "record_chat_messages",
+    "record_chat_reply",
     "record_presence",
     "replace_scenario",
     "retire_account_presence",

@@ -194,6 +194,27 @@ test('progress counts delivered MESSAGE steps against targets x message steps', 
   expect(bar).toHaveAttribute('aria-valuemax', '4');
 });
 
+test('the listening counters appear only while a run is really reading', () => {
+  // The three switches are on the campaign row already; what the operator cannot
+  // see from there is whether anything is acting on them right now.
+  renderCard({ run: { status: 'running', sent: 0, total: 4 } });
+  expect(screen.queryByText('Прослушка')).toBeNull();
+
+  renderCard({
+    run: {
+      status: 'running',
+      sent: 0,
+      total: 4,
+      listening: true,
+      chat_messages_seen: 12,
+      human_replies_sent: 3,
+    },
+  });
+  expect(screen.getByText('Прослушка')).toBeInTheDocument();
+  expect(screen.getByText('прочитано: 12')).toBeInTheDocument();
+  expect(screen.getByText('ответов людям: 3')).toBeInTheDocument();
+});
+
 test('the tiles count the roster, the targets, the roles and the message steps', () => {
   renderCard();
   expect(screen.getByText('Аккаунтов').previousSibling).toHaveTextContent('2');

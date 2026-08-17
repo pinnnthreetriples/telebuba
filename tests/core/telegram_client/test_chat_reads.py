@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 from telethon.tl.functions.messages import CheckChatInviteRequest
 from telethon.tl.types import (
     Channel,
@@ -257,6 +258,83 @@ async def test_an_unreachable_chat_is_refused_with_a_stable_code(
         await execute_read("acc-1", ReadChatMessages(chat="@group", message_ids=[1]))
 
     assert refusal.value.reason == "chat_not_found"
+
+
+class _CursorClient:
+    """Answers the cursor form of ``get_messages`` and records how it was asked."""
+
+    def __init__(self, messages: list[object]) -> None:
+        self.messages = messages
+        self.calls: list[tuple[object, int, int]] = []
+
+    async def connect(self) -> None:
+        return None
+
+    async def get_messages(self, peer: object, *, limit: int, min_id: int) -> list[object]:
+        self.calls.append((peer, limit, min_id))
+        return self.messages
+
+
+def _message(
+    message_id: int, text: str, *, out: bool = False, sender: int | None = 42
+) -> MagicMock:
+    return MagicMock(id=message_id, message=text, media=None, out=out, sender_id=sender)
+
+
+@pytest.mark.asyncio
+async def test_the_cursor_form_asks_for_the_newest_page_and_answers_oldest_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Newest-first from Telegram, oldest-first to the caller.
+
+    The direction is not cosmetic. ``get_messages(limit=...)`` walks BACK from the
+    head of the chat, which is what makes ``min_id=0`` mean "the latest page"
+    instead of "the beginning of history"; the caller then needs the conversation
+    in the order it was said, and a cursor only advances safely by the last id.
+    """
+    client = _CursorClient([_message(9, "later"), _message(7, "earlier")])
+    _patch_client(monkeypatch, client)
+
+    result: ReadChatMessagesResult = await execute_read(  # ty: ignore[invalid-assignment]
+        "acc-1",
+        ReadChatMessages(chat="1234", min_id=5, limit=20),
+    )
+
+    assert [(m.message_id, m.text) for m in result.messages] == [(7, "earlier"), (9, "later")]
+    assert result.missing_ids == []
+    assert client.calls == [(1234, 20, 5)]
+
+
+@pytest.mark.asyncio
+async def test_the_cursor_form_reports_the_sender_and_whether_we_wrote_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_client(
+        monkeypatch,
+        _CursorClient([_message(7, "mine", out=True), _message(8, "theirs", sender=None)]),
+    )
+
+    result: ReadChatMessagesResult = await execute_read(  # ty: ignore[invalid-assignment]
+        "acc-1",
+        ReadChatMessages(chat="1234", min_id=0),
+    )
+
+    assert [(m.message_id, m.outgoing, m.sender_id) for m in result.messages] == [
+        (7, True, 42),
+        (8, False, None),
+    ]
+
+
+def test_a_read_names_exactly_one_mode() -> None:
+    """Neither mode and both modes are refused, and for opposite reasons.
+
+    With neither, the dispatcher would have to invent a default and read a whole
+    chat nobody asked for; with both, it would have to pick one silently.
+    """
+    with pytest.raises(ValidationError):
+        ReadChatMessages(chat="1234")
+    with pytest.raises(ValidationError):
+        ReadChatMessages(chat="1234", message_ids=[1], min_id=0)
 
 
 @pytest.mark.parametrize(
