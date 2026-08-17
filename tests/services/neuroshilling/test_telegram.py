@@ -185,17 +185,28 @@ async def test_concurrent_joins_for_one_account_still_stop_at_the_cap(
 
     Checked only before entering it, all six of these joins read a count that no join
     had yet incremented, every one of them passed, and the account made six joins
-    against a cap of two — spaced out, and entirely uncapped. The check that counts
-    therefore happens inside the slot the pacer granted, where the joins that went
-    first are already on the log.
+    against a cap of two — spaced out, and entirely uncapped. The count is therefore
+    re-read under the per-account join mutex, which is held from that read until the
+    join it authorises has been charged.
+
+    The stubbed RPC is twenty times the gap on purpose. A stub that returned at once
+    closed the window by itself, so this case passed against the unlocked code and only
+    reddened when the machine was slow enough to reopen it.
     """
     from core.config import settings  # noqa: PLC0415 - patched per test, not at import
 
     monkeypatch.setattr(settings.neuroshilling, "max_joins_per_account_per_day", 2)
-    # The real pacer, not the fixture: what serialises these is precisely the gap.
-    monkeypatch.setattr(_telegram, "_join_gap_seconds", lambda: 0.1)
+    # The real pacer, not the fixture: it is what puts these six in a queue at all.
+    monkeypatch.setattr(_telegram, "_join_gap_seconds", lambda: 0.01)
     campaign_id = await _campaign()
-    monkeypatch.setattr(_seams, "execute", _fake_execute(_result("ok")))
+    joins: list[str] = []
+
+    async def slow_join(account_id: str, action: Any) -> ActionResult:  # noqa: ARG001
+        joins.append(action.channel)
+        await asyncio.sleep(0.2)
+        return _result("ok")
+
+    monkeypatch.setattr(_seams, "execute", slow_join)
 
     states = await asyncio.gather(
         *(_telegram.join_target(campaign_id, "acc-1", f"@t{index}") for index in range(6)),
@@ -203,6 +214,9 @@ async def test_concurrent_joins_for_one_account_still_stop_at_the_cap(
 
     assert await count_account_joins_since("acc-1", _PAST) == 2
     assert sorted(states) == ["joined", "joined", *["pending"] * 4]
+    # And the four refused ones cost no Telegram traffic: the mutex is taken before the
+    # count is read, not merely around the write.
+    assert len(joins) == 2
 
 
 @pytest.mark.asyncio
