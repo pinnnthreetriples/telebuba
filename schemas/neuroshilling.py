@@ -91,6 +91,11 @@ NeuroshillingRefusalCode = Literal[
     # the dialogue. Apart from the code above for the same reason, and it is the
     # ordinary state right after a generation, which clears the slot.
     "media_step_missing",
+    # A rostered account is the running neurocomment listener. Named apart from
+    # ``account_busy`` because that code covers three holders at once and its copy can
+    # only list them; there is exactly one listener, so this one can say which account
+    # it is and which switch turns it off.
+    "account_is_listener",
 ]
 
 _MAX_NAME = 120

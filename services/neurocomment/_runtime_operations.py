@@ -6,6 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 from core.db import set_listener_account_id, set_listener_running
+from services import _account_owner
 from services.neurocomment import _discovery_state, _signals
 from services.neurocomment._onboarding_owner import generation_fence
 
@@ -28,6 +29,19 @@ class ListenerBusyDiscoveryError(Exception):
     Defined here, beside its only raise site, rather than next to
     ``ListenerBusyWarmingError`` in ``_runtime``: that module is 11 lines under the size
     gate's warn threshold and this class is 12 lines long.
+    """
+
+
+class ListenerBusyNeuroshillingError(Exception):
+    """Raised when a running neuroshilling campaign already holds the picked account.
+
+    The reciprocal of the ``account_is_listener`` refusal ``_claim_accounts`` answers
+    with: neuroshilling will not start a campaign on the running listener, and the
+    listener will not be pointed at an account a campaign is playing. Without this half
+    a campaign's account could be made the listener mid-run, which is two features
+    talking on one Telegram session — a flood report and then a ban.
+
+    Defined here beside its raise site for the same reason as the class above.
     """
 
 
@@ -61,6 +75,12 @@ async def start_neurocomment(
         # the account under this same lock, and the claim is the only record of it.
         if _discovery_state.account_busy(listener_account_id):
             raise ListenerBusyDiscoveryError(listener_account_id)
+        # The third holder of this session. Safe anywhere inside the lock rather than
+        # only next to the commit below: ``_claim_accounts`` takes the same per-account
+        # lock across its own listener read and its claim, so a campaign cannot publish
+        # a claim between this check and the two writes at the end of this block.
+        if _account_owner.owner_of(listener_account_id) == "neuroshilling":
+            raise ListenerBusyNeuroshillingError(listener_account_id)
         previous = await _runtime._runtime_get_listener_account_id()  # noqa: SLF001
         if previous is not None and previous != listener_account_id:
             _runtime._invalidate_runtime_owner(previous)  # noqa: SLF001

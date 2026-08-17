@@ -10,6 +10,7 @@ import pytest
 from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRow, ChallengeRowList
 from schemas.neurocomment import (
+    LISTENER_BUSY_NEUROSHILLING_CODE,
     CampaignList,
     ChannelLinkOutcome,
     CommentRecord,
@@ -24,6 +25,7 @@ from services.neurocomment import (
     ChannelNotInCampaignError,
     InvalidCursorError,
     ListenerBusyDiscoveryError,
+    ListenerBusyNeuroshillingError,
     ListenerBusyWarmingError,
 )
 
@@ -391,6 +393,27 @@ async def test_start_runtime_while_discovery_reads_is_409_with_its_code(
     envelope = resp.json()["error"]
     assert envelope["code"] == "conflict"
     assert envelope["message"] == DISCOVERY_BUSY_CODE
+
+
+@pytest.mark.asyncio
+async def test_start_runtime_on_a_campaign_account_is_409_with_its_own_code(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Its own code, not warming's: the condition matches but the next move does not."""
+
+    async def _start(listener_account_id: str) -> None:
+        raise ListenerBusyNeuroshillingError(listener_account_id)
+
+    monkeypatch.setattr("services.neurocomment.start_neurocomment", _start)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/start",
+            json={"listener_account_id": "acc-1"},
+        )
+    assert resp.status_code == 409
+    envelope = resp.json()["error"]
+    assert envelope["code"] == "conflict"
+    assert envelope["message"] == LISTENER_BUSY_NEUROSHILLING_CODE
 
 
 @pytest.mark.asyncio

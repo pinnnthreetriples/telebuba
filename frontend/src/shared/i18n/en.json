@@ -535,7 +535,9 @@
       "media_source_unreachable": "Some accounts cannot see the linked media message.",
       "media_check_unavailable": "Telegram did not answer the media check. Wait a minute and approve again.",
       "media_step_not_message": "The step carrying the media is a reaction step, and a reaction sends no media. Pick a message step and approve again.",
-      "media_step_missing": "Nothing is carrying the media: “Step carrying the media” is empty, or names a step the dialogue no longer has. Pick a message step and approve again."
+      "media_step_missing": "Nothing is carrying the media: “Step carrying the media” is empty, or names a step the dialogue no longer has. Pick a message step and approve again.",
+      "account_is_listener": "An account on this campaign is the running neurocomment listener, reading posts with the same session. Stop the listener or take that account off the campaign, then start the campaign.",
+      "listener_busy_neuroshilling": "A neuroshilling campaign is running with this account. Stop the campaign, or pick a different account for the listener."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",

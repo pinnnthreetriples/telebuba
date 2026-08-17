@@ -48,6 +48,15 @@ from schemas._neurocomment_settings import (  # noqa: F401 - re-export for exist
 CampaignStatus = Literal["active", "paused", "archived"]
 CommentStatus = Literal["waiting", "claimed", "posted", "failed"]
 
+# Locale-neutral refusals ``start_neurocomment`` answers with; the SPA owns the wording
+# (``shell.code.*``). Declared as a ``Literal`` rather than a bare string so
+# ``tests/test_error_code_i18n_parity.py`` can enumerate it, the way it enumerates
+# ``NeuroshillingRefusalCode`` and ``WarmingRefusalCode``.
+NeurocommentRefusalCode = Literal["listener_busy_neuroshilling"]
+# Annotated, so a code invented at the raise site is a type error rather than a raw
+# snake_case token in the operator's toast.
+LISTENER_BUSY_NEUROSHILLING_CODE: NeurocommentRefusalCode = "listener_busy_neuroshilling"
+
 
 class CampaignCreate(BaseModel):
     """User input to open a campaign — the product mention lives in the prompt."""

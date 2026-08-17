@@ -19,6 +19,16 @@ active neurocomment campaign. Drift between "the registry says free" and "the
 feature is using it" therefore cannot arise for neurocomment, because no line of
 code ever writes that value.
 
+**Where that leaves the neurocomment LISTENER.** It is not a holder here either, so
+the two features that must not share its session answer it with one point check each
+instead of with this registry: ``services.neuroshilling._runtime._claim_accounts``
+reads the listener columns, and ``services.neurocomment._runtime_operations
+.start_neurocomment`` reads ``owner_of``. That is a pair, not a rule — enrolling the
+listener as an owner would mean a claim, a release and a restart-time restore inside a
+runtime whose restart logic is load-bearing. A THIRD feature needing the same answer is
+the point at which enrolling it becomes the smaller change; a third pair of point
+checks is not.
+
 In-memory on purpose: nothing here outlives the process, a restart is a full
 repair, and a table would need its own migration plus its own garbage collector
 for state that is worth less than the ceremony.
