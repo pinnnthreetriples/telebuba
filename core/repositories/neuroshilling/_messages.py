@@ -12,9 +12,9 @@ resumed second attempt a no-op instead of a duplicate.
 **Nothing in this module deletes a ``pending`` row.** ``services.neuroshilling`` leaves
 one behind on purpose whenever the dispatch was already on the wire when the connection
 died (``UNCONFIRMED_ERROR_TYPE``): Telegram may well have applied it, so the row has to
-keep holding its key. :func:`fail_pending_messages` at boot moves those to ``failed``
-rather than removing them for exactly that reason — the row goes on occupying the key
-and the resumed run skips the step, which is what
+keep holding its key. :func:`fail_pending_messages` moves those to ``failed`` rather than
+removing them for exactly that reason — the row goes on occupying the key and the resumed
+run skips the step, which is what
 ``core.repositories.neurocomment._comment_lifecycle`` does with surviving claims.
 
 One write does delete journal rows: ``_scenario._drop_steps_beyond`` removes them for
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from schemas.neuroshilling import NeuroshillingMessageStatus, NeuroshillingStepKey
 
 _TABLE = _neuroshilling_messages
-# The row the boot sweep writes over an interrupted dispatch. A class NAME, like every
+# The row the sweep writes over an interrupted dispatch. A class NAME, like every
 # other ``error_type`` in the domain, because this column is read back by the board.
 _INTERRUPTED = "InterruptedRun"
 
@@ -237,7 +237,11 @@ def _fail_pending_messages(run_id: str) -> int:
 
 
 async def fail_pending_messages(run_id: str) -> int:
-    """Settle the rows a killed process left mid-flight; return how many there were.
+    """Settle the rows this run left mid-flight; return how many there were.
+
+    Called from both ends of a run's life: boot reconciliation, for what a killed
+    process left, and ``_runtime._settle``, because the terminal write clears ``run_id``
+    and a row nobody swept before that is a row nothing can find again.
 
     Updated rather than deleted, and that is the entire point: a ``pending`` row is
     either a dispatch that never finished or one whose outcome is unknown, and both

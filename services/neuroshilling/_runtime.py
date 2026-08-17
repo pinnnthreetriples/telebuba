@@ -282,11 +282,21 @@ async def _settle(
     have a dispatch on the wire holding that account's lock, so handing the roster back
     now would let another feature claim a session with a call in flight. ``_forget``
     gives it back when the task finally ends.
+
+    The run's own journal sweep happens HERE and not only at boot, because the write
+    below is what makes the run id unfindable: it clears ``run_id`` and the next Start
+    mints a new one, so a row left ``pending`` — a step reserved before a dispatch the
+    fence or the cancellation cut off, or one whose outcome never came back — would go on
+    counting against that account's per-campaign ceiling with nothing able to settle it
+    ever again. Failing it keeps the key occupied, which is the property the sweep is
+    written for; it does not delete anything.
     """
     if run_id is not None and not _state.claim_settlement(campaign_id, run_id):
         return
     if release:
         _release_campaign(campaign_id)
+    if run_id is not None:
+        await repository.fail_pending_messages(run_id)
     await repository.set_run_state(campaign_id, status, run_id=None, last_error=error)
     await log_event(
         "ERROR" if status == "failed" else "INFO",

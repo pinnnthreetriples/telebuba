@@ -462,6 +462,52 @@ async def test_a_run_that_settles_mid_stop_does_not_wedge_the_campaign(
 
 @pytest.mark.usefixtures("no_sleep", "gateway")
 @pytest.mark.asyncio
+async def test_stopping_inside_a_step_gives_the_reserved_slot_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row reserved before a dispatch nobody made must not spend a slot for ever.
+
+    The journal row goes in BEFORE the send, and ``pending`` counts against the caps —
+    that is what makes an in-flight send visible. A Stop landing between the two leaves
+    the row behind and then clears ``run_id``, so no later boot sweep can even find it,
+    while the per-campaign total for that account has no window to forget it: ten such
+    stops are ten messages the account may never send again.
+    """
+    dispatching = asyncio.Event()
+
+    async def _parks(_account_id: str, _action: TelegramAction) -> ActionResult:
+        dispatching.set()
+        await asyncio.Event().wait()
+        raise AssertionError  # unreachable: the wait above only ends in cancellation
+
+    monkeypatch.setattr(_seams, "execute", _parks)
+    seeded = await seed_campaign()
+    await _runtime.start_campaign(seeded.campaign_id)
+    await asyncio.wait_for(dispatching.wait(), timeout=1)
+    live = await repository.fetch_campaign(seeded.campaign_id)
+    assert live is not None
+    assert live.run_id is not None
+
+    await _runtime.stop_campaign(seeded.campaign_id)
+
+    # The row stays, because its key must go on being occupied — nothing may replay a
+    # step whose dispatch might have reached Telegram after all.
+    assert ("alpha", seeded.steps[0].step_id) in await repository.list_journalled_steps(
+        live.run_id,
+    )
+    # And it is settled, so the slot it reserved is back in the account's allowance.
+    usage = await repository.read_quota_usage(
+        seeded.campaign_id,
+        "acc-1",
+        "alpha",
+        hour_since="2000-01-01T00:00:00+00:00",
+        day_since="2000-01-01T00:00:00+00:00",
+    )
+    assert usage.campaign_total == 0
+
+
+@pytest.mark.usefixtures("no_sleep", "gateway")
+@pytest.mark.asyncio
 async def test_stop_keeps_the_roster_until_a_slow_run_has_unwound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
