@@ -239,7 +239,7 @@ def _set_scenario_status(
     clear_media_step: bool = False,
     expected_updated_at: str | None = None,
 ) -> bool:
-    """Write the status stamp; ``False`` means ``expected_updated_at`` no longer matched."""
+    """Write the status; ``False`` = no row matched, so it is missing or has moved on."""
     values: dict[str, object] = {"scenario_status": status, "updated_at": _now_iso()}
     if clear_media_step:
         values["media_step_position"] = None
@@ -320,11 +320,12 @@ async def approve_scenario(campaign_id: str, *, expected_updated_at: str) -> boo
     ``replace_scenario`` only ever writes ``draft``.
 
     ``expected_updated_at`` is the campaign's stamp as the validating read saw it, and
-    the write lands only while the row still carries it. Every write that changes what
-    the gate looked at moves that stamp in the same transaction — this module for the
-    roles and steps, ``_campaigns._update_campaign`` for the topic and the media slot —
-    so an edit that arrived while the service was validating leaves nothing to match.
-    ``False`` therefore means one of two things, no campaign or a moved one, and the
-    caller reads the row back rather than being told which.
+    the write lands only while the row still carries it. The stamp moves in the same
+    transaction as each write the gate reads from: the roles and steps here, the topic,
+    the media slot and the roster in ``_campaigns._update_campaign``, the run state in
+    ``_campaigns._set_run_state``. So an edit — or a launch — that arrived while the
+    service was validating leaves nothing for this to match. ``False`` therefore means
+    one of two things, no campaign or a moved one, and the caller reads the row back
+    rather than being told which.
     """
     return await asyncio.to_thread(_approve_scenario, campaign_id, expected_updated_at)
