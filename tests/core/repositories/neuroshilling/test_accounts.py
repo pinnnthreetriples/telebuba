@@ -1,13 +1,14 @@
 """The roster swap: one ban, one reserve, one transaction.
 
-The interesting property is negative — a second call for the same ban must not reach
-the pool. It is claimed by the conditional ``state = 'active'`` update the transaction
-opens with, which is why these tests call the function twice rather than reasoning about
-who could call it twice.
+The interesting property is negative — a second call for the same ban must not SPEND a
+reserve. What denies it is the conditional ``replaced_by_account_id IS NULL`` update, and
+that runs AFTER the pool has been read: the ban write the transaction opens with is
+unconditional and claims nothing. Which is why these tests call the function twice rather
+than reasoning about who could call it twice.
 
 The two ways of taking over nobody are told apart on purpose: ``claimed`` says whether
-THIS call wrote the ban, so a full pool and a lost race are not both reported to the
-operator as "the reserve pool is empty".
+THIS call took the ban's one substitution slot, so a full pool and a lost race are not
+both reported to the operator as "the reserve pool is empty".
 """
 
 from __future__ import annotations
@@ -77,13 +78,14 @@ async def test_the_oldest_reserve_takes_the_banned_account_s_role() -> None:
 
 @pytest.mark.asyncio
 async def test_a_second_call_for_one_ban_spends_nothing() -> None:
-    """The ban is CLAIMED before the pool is looked at, so the retry finds it gone."""
+    """The retry reads the pool like the first call and then finds the slot taken."""
     campaign_id, _role_id = await _seeded("res-1", "res-2")
 
     first = await substitute_banned_account(campaign_id, "acc-1")
     second = await substitute_banned_account(campaign_id, "acc-1")
 
-    # The retry did not claim the ban, which is what says the pool was never asked.
+    # ``claimed=False`` is the retry losing this ban's one substitution slot — a lost
+    # race and not an empty pool — and ``res-2`` below is the reserve it read and left.
     assert (first, second) == ((True, "res-1"), (False, None))
     roster = {row.account_id: row for row in await list_campaign_accounts(campaign_id)}
     assert roster["res-2"].is_reserve is True

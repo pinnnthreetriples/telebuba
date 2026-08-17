@@ -29,13 +29,15 @@ model is asked and nothing gives it back, so a refused, filtered or failed answe
 is never retried — a retry would pay for a second call on the same attacker text
 and could publish on the second roll what the first one caught.
 
-**A published answer is written into the chat log as ours, immediately.** It has no
+**An answer Telegram CONFIRMED is written into the chat log as ours.** It has no
 journal row — the journal is keyed on a scenario step — so the id-based half of
 ``_listen``'s ownership test cannot see it, and a sibling account reading the chat
 thirty seconds later would find our own reply looking exactly like a stranger's:
 answered again, charged again, and re-entering the prompt labelled ``them``. The
 one thing that would defeat is the ``us`` label ``_prompt`` documents as its reason
-for tracking ownership at all.
+for tracking ownership at all. The row is keyed on the message id the send answered
+with, so an ``unconfirmed`` send leaves none — Telegram may have published that line
+and we cannot name it, which is the one case this does not cover.
 
 The daily LLM budget and the per-campaign single-flight from the scenario generator
 apply unchanged, and two ceilings on ATTEMPTS are added to them — one on the account's

@@ -112,8 +112,10 @@ async def dispatch_copy_message_media(
                 caption=action.caption or None,  # ty: ignore[invalid-argument-type]
                 reply_to=action.reply_to,  # ty: ignore[invalid-argument-type]
             )
-        # Ordered: the mapped family first, since two of its members are themselves
-        # ``RPCError`` subclasses and the text probe below must not shadow them.
+        # Ordered: the mapped family first, since every one of its members is itself an
+        # ``RPCError`` subclass — three through ``BadRequestError`` and
+        # ``FilerefUpgradeNeededError`` through ``AuthKeyError`` — so the text probe
+        # below would otherwise shadow all four.
         except _FILE_REFERENCE_ERRORS as exc:
             stale = exc
         except errors.RPCError as exc:

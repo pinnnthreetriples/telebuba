@@ -164,8 +164,10 @@ class NeuroshillingPresence(BaseModel):
     account_id: str = Field(min_length=1)
     target: str = Field(min_length=1)
     state: NeuroshillingPresenceState = "pending"
-    # Exception CLASS NAME, never its text — this travels over HTTP like every
-    # other error field in the domain.
+    # Never an exception's TEXT — this travels over HTTP like every other error field
+    # in the domain. What IS written is either a stable code from
+    # ``NeuroshillingRefusalCode`` (the peer shapes a dialogue cannot run in) or the
+    # exception CLASS NAME the gateway reported for a refused join or send.
     last_error_type: str | None = None
     joined_at: str | None = None
     updated_at: str = Field(min_length=1)
@@ -249,7 +251,9 @@ class NeuroshillingCampaign(BaseModel):
     listen_minutes: int = 60
     status: NeuroshillingStatus = "idle"
     run_id: str | None = None
-    # Exception CLASS NAME, never its text: this field is served back over HTTP.
+    # An exception CLASS NAME, or one of the stable codes the runtime writes where it
+    # raised no exception at all ("AccountBusy", "RunIdMissing"). Never an exception's
+    # TEXT: this field is served back over HTTP.
     last_error: str | None = None
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
@@ -383,7 +387,8 @@ class NeuroshillingRunStatus(BaseModel):
     listening: bool = False
     chat_messages_seen: int = Field(default=0, ge=0)
     human_replies_sent: int = Field(default=0, ge=0)
-    # Exception CLASS NAME of whatever ended the last run, never its text.
+    # Whatever ended the last run, served straight from ``NeuroshillingCampaign``'s
+    # ``last_error``: a class name or one of that field's stable codes, never a text.
     last_error_type: str | None = None
     halted_accounts: list[str] = Field(default_factory=list)
 
