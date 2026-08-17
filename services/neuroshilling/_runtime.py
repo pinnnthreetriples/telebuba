@@ -311,13 +311,20 @@ async def stop_campaign(campaign_id: str) -> NeuroshillingRunStatus | None:
     Idempotent rather than a 409: by the time the operator's click lands the run may
     have finished a second ago, and answering "conflict" to that is noise rather than
     information.
+
+    Every step below acts on the run the row NAMED, so nothing below runs while a
+    DIFFERENT run owns the campaign. The row is a thread hop old: the run it names may
+    have settled in the gap and a Start may have published a successor, and the fence,
+    the ``stopping`` write and the drain would then all land on that successor instead —
+    see :func:`_state.revoke_run_if_current` for what that cost.
     """
     campaign = await repository.fetch_campaign(campaign_id)
     if campaign is None:
         return None
     if campaign.status not in _LIVE_STATUSES:
         return await run_status(campaign_id)
-    _state.revoke_run(campaign_id)
+    if not _state.revoke_run_if_current(campaign_id, campaign.run_id):
+        return await run_status(campaign_id)
     await repository.set_run_state(campaign_id, "stopping", run_id=campaign.run_id)
     drained = await _drain(campaign_id)
     fresh = await repository.fetch_campaign(campaign_id)

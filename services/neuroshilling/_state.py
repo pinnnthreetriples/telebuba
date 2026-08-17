@@ -207,10 +207,37 @@ def begin_run(campaign_id: str, run_id: str) -> int:
 def revoke_run(campaign_id: str) -> None:
     """Fence every coroutine of the current run without naming a successor.
 
-    Stop and shutdown both call this. The settlement right is deliberately left where
-    it was: the run being stopped is still the one that owns its terminal row.
+    Shutdown calls this directly, over the tasks it is about to cancel; Stop comes
+    through :func:`revoke_run_if_current`. The settlement right is deliberately left
+    where it was: the run being stopped is still the one that owns its terminal row.
     """
     _RUN_GENERATIONS[campaign_id] = _RUN_GENERATIONS.get(campaign_id, 0) + 1
+
+
+def revoke_run_if_current(campaign_id: str, run_id: str | None) -> bool:
+    """Fence the run ``run_id`` names; ``False`` means a newer run owns the campaign now.
+
+    What Stop needs and :func:`revoke_run` cannot give it. The row Stop acts on came
+    back from a thread, and in that gap the run it names can settle and a Start can
+    publish a successor. Fencing unconditionally then hit the NEW run, and Stop went on
+    to write its own ``stopping`` over the new run id and cancel the new task — after
+    which its settle was refused, because the successor owned the settlement. The
+    campaign stayed ``stopping`` with nothing playing it, every Start answered
+    ``campaign_running``, and no further Stop could get it out.
+
+    Asked of the in-memory owner and not of a row, because this test and the
+    :func:`begin_run` that publishes a successor are both await-free: whichever runs
+    first, the other sees it whole.
+
+    ``None`` — and a campaign with no owner entry at all — is granted, the same reading
+    :func:`claim_settlement` takes of the same map: there is nothing to fence against,
+    and refusing would leave a live row nothing can settle.
+    """
+    owner = _RUN_OWNER.get(campaign_id)
+    if run_id is not None and owner is not None and owner != run_id:
+        return False
+    revoke_run(campaign_id)
+    return True
 
 
 def run_is_current(campaign_id: str, generation: int) -> bool:
