@@ -12,12 +12,16 @@ import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy import update as sql_update
 
 from core.config import settings
 from core.db import _get_engine
 from core.repositories import neuroshilling as repository
-from core.repositories.neuroshilling._tables import _neuroshilling_campaigns
+from core.repositories.neuroshilling._tables import (
+    _neuroshilling_campaigns,
+    _neuroshilling_messages,
+)
 from schemas.neuroshilling import (
     NeuroshillingAccountAssignment,
     NeuroshillingCampaignUpdate,
@@ -60,6 +64,25 @@ async def _drain() -> None:
         return
     _done, pending = await asyncio.wait(tasks, timeout=10)
     assert not pending, "a run task never finished"
+
+
+async def _journal_row(key: NeuroshillingStepKey) -> tuple[str, str | None] | None:
+    """``(status, error_type)`` for one journal row — the columns no reader exposes."""
+
+    def _read() -> tuple[str, str | None] | None:
+        statement = select(
+            _neuroshilling_messages.c.status,
+            _neuroshilling_messages.c.error_type,
+        ).where(
+            (_neuroshilling_messages.c.run_id == key.run_id)
+            & (_neuroshilling_messages.c.target == key.target)
+            & (_neuroshilling_messages.c.step_id == key.step_id),
+        )
+        with _get_engine().connect() as connection:
+            row = connection.execute(statement).first()
+        return None if row is None else (str(row[0]), row[1])
+
+    return await asyncio.to_thread(_read)
 
 
 @pytest.mark.usefixtures("no_sleep", "gateway")
@@ -283,6 +306,12 @@ async def test_resume_reuses_the_persisted_run_id(gateway: list[TelegramAction])
 @pytest.mark.usefixtures("no_sleep", "gateway")
 @pytest.mark.asyncio
 async def test_reconcile_settles_the_rows_a_killed_process_left_pending() -> None:
+    """The row keeps its key and stops being ``pending``, which is what settling means.
+
+    Read as a STATUS, because that is the only thing the sweep changes: the row was
+    already journalled and already had no message id before it ran, so both of those
+    answers are the same whether or not it was called at all.
+    """
     seeded = await seed_campaign()
     await repository.set_run_state(seeded.campaign_id, "running", run_id="run-old")
     key = NeuroshillingStepKey(
@@ -296,13 +325,12 @@ async def test_reconcile_settles_the_rows_a_killed_process_left_pending() -> Non
         account_id="acc-1",
         text="line 0",
     )
+    assert await _journal_row(key) == ("pending", None)
 
     await _runtime.reconcile_neuroshilling_on_startup()
     await _drain()
 
-    rows = await repository.list_journalled_steps("run-old")
-    assert ("alpha", seeded.steps[0].step_id) in rows
-    assert await repository.fetch_message_id(key) is None
+    assert await _journal_row(key) == ("failed", "InterruptedRun")
 
 
 @pytest.mark.usefixtures("no_sleep", "gateway")
