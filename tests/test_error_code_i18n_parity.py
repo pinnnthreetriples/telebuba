@@ -44,6 +44,7 @@ from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ER
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.telegram_actions import ActionStatus
+from schemas.warming import WarmingRefusalCode
 
 _ROOT = Path(__file__).resolve().parents[1]
 # Statuses that are not failures, so they never reach a code table.
@@ -89,10 +90,16 @@ def _expected_codes() -> set[str]:
     # gateway ladder nor an ``ActionStatus``: the domain raises it straight out of
     # policy and the route puts it in the envelope's ``message``. Without it here,
     # nothing in the suite could see a refusal code shipping untranslated.
+    #
+    # ``WarmingRefusalCode`` is the same shape one layer over: warming's start refusals
+    # (``services.warming._exclusion``) reach the operator as the 409's ``detail``. That
+    # family was in no source here at all, so all three of its codes — including the
+    # neuroshilling exclusion added on top of them — were translated by luck, not proof.
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
         | set(get_args(NeuroshillingRefusalCode))
+        | set(get_args(WarmingRefusalCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)
         | _mapped_codes()
     )

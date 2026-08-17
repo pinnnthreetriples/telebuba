@@ -25,6 +25,10 @@ from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export
 
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
+# Every start refusal, declared whole so the i18n parity test holds ``shell.code.*`` to it.
+WarmingRefusalCode = Literal[
+    "account_running_discovery", "account_cooling", "account_busy_neuroshilling"
+]
 
 # Five-stage warming lifecycle. Determines per-account daily action cap and
 # what behaviour is unlocked. Computed from (calendar age, trust_band) and

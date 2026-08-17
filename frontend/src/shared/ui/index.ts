@@ -7,6 +7,7 @@ export { FieldError, FormField } from './FormField';
 export { HelpHint, HintBubble } from './HelpHint';
 export { Modal } from './Modal';
 export { StatusIcon } from './StatusIcon';
+export { Switch } from './Switch';
 export { Toaster } from './Toaster';
 export { toastError } from './toast';
 export { useWideContainer } from './useWideViewport';

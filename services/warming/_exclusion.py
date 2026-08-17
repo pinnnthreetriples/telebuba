@@ -29,17 +29,24 @@ Split out of ``_runtime`` for the file-size budget, not for layering.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
 from services import _account_owner
+
+if TYPE_CHECKING:
+    from schemas.warming import WarmingRefusalCode
 
 # Stable snake_case codes: the API reports them verbatim and the SPA owns the wording
 # (``shell.code.*``). Locale-neutral prose in a refusal would be untranslatable. The
 # discovery one comes from ``schemas`` because the listener's start reports the identical
 # refusal; a copy here would be a second string to translate and forget.
-DISCOVERY_CODE = DISCOVERY_BUSY_CODE
-COOLING_CODE = "account_cooling"
-NEUROSHILLING_CODE = "account_busy_neuroshilling"
+#
+# Annotated rather than left bare so a code invented here is a type error, not a raw
+# token in the toast: that ``Literal`` is what the i18n parity test holds the locales to.
+DISCOVERY_CODE: WarmingRefusalCode = DISCOVERY_BUSY_CODE
+COOLING_CODE: WarmingRefusalCode = "account_cooling"
+NEUROSHILLING_CODE: WarmingRefusalCode = "account_busy_neuroshilling"
 
 
 class AccountUnavailableError(ValueError):
@@ -51,7 +58,7 @@ class AccountUnavailableError(ValueError):
     ``account_cooling`` start statuses.
     """
 
-    def __init__(self, code: str, account_id: str) -> None:
+    def __init__(self, code: WarmingRefusalCode, account_id: str) -> None:
         self.code = code
         super().__init__(f"{code}: {account_id}")
 
