@@ -11,6 +11,7 @@ that plants one asserts the branch, not the wiring.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -21,6 +22,7 @@ from core.db import (
     configure_database,
     create_account,
     create_campaign,
+    fetch_warming_state,
     link_channel_to_campaign,
 )
 from core.repositories import neuroshilling as repository
@@ -34,6 +36,7 @@ from services.neurocomment import engine as nc_engine
 from services.neuroshilling import _runtime, _seams, _state, _steps, _telegram
 from services.neuroshilling import engine as ns_engine
 from services.neuroshilling.campaigns import NeuroshillingConflictError
+from services.warming import _runtime as warming_runtime
 from services.warming._exclusion import AccountUnavailableError
 from tests.services.neuroshilling.helpers import seed_campaign, sent
 
@@ -42,6 +45,10 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from schemas.telegram_actions import ActionResult, TelegramAction
+
+# Long enough for the other coroutine to reach its gate, short enough that the one wait
+# the lock makes unreachable does not slow the suite down.
+_GATE_SECONDS = 0.3
 
 
 @pytest.fixture(autouse=True)
@@ -76,6 +83,13 @@ def _reset() -> None:
     _state.reset_for_tests()
     _steps.reset_for_tests()
     _runtime.reset_for_tests()
+    # And the lifecycle locks, which no other fixture empties. An ``asyncio.Lock``
+    # belongs to the loop that first WAITED on it, and this file is where two coroutines
+    # contend on one: a lock left behind by an earlier test's loop answers the second
+    # waiter with ``RuntimeError`` instead of blocking it, which reads as the refusal
+    # under test never happening. Same failure the root conftest resets pacing and the
+    # join mutexes for, scoped here because this is the only file that contends.
+    warming_runtime._ACCOUNT_LOCKS.clear()
 
 
 @pytest.fixture
@@ -201,6 +215,78 @@ async def test_an_account_may_be_assigned_to_two_campaigns_but_held_by_one() -> 
 
     with pytest.raises(NeuroshillingConflictError):
         await _runtime.start_campaign(second.campaign_id)
+
+
+@pytest.mark.usefixtures("live_run")
+@pytest.mark.asyncio
+async def test_a_warming_start_cannot_evict_a_campaign_claiming_inside_its_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warming's refusal and its eviction are several awaits apart, not one stretch.
+
+    ``_spawn_runtime_task`` publishes with ``_account_owner.take_over``, which cannot be
+    told no, and between ``assert_not_neuroshilling`` above it and that write
+    ``start_warming`` awaits a readiness verdict and a bounded wait for the previous task
+    to unwind — seconds, not instructions. What keeps a campaign out of that window is
+    the per-account lifecycle lock: warming holds it across the whole of Start, and
+    ``_claim_accounts`` enters it for every roster account before it reads or claims
+    anything. Take that lock away and both sides drive one session.
+
+    Forced with a gate, because a ``gather`` cannot produce this order: the campaign has
+    to arrive after warming's refusal and before its spawn. The campaign's own wait is
+    what expires — it is parked on the lock warming is holding — and that expiry is the
+    shape of the proof rather than a hedge.
+    """
+    seeded = await seed_campaign()
+    refusal_passed = asyncio.Event()
+    campaign_settled = asyncio.Event()
+
+    async def _gate_after_the_refusal(_account_id: str, _account: object) -> None:
+        refusal_passed.set()
+        with suppress(TimeoutError):
+            await asyncio.wait_for(campaign_settled.wait(), timeout=_GATE_SECONDS)
+
+    async def _parked_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(warming_runtime, "_enforce_start_readiness", _gate_after_the_refusal)
+    monkeypatch.setattr(warming_runtime, "_warming_loop", _parked_loop)
+
+    async def _claim_inside_the_window() -> None:
+        await asyncio.wait_for(refusal_passed.wait(), timeout=_GATE_SECONDS)
+        try:
+            await _runtime.start_campaign(seeded.campaign_id)
+        finally:
+            campaign_settled.set()
+
+    outcomes = await asyncio.gather(
+        warming.start_warming(StartWarmingRequest(account_id="acc-1")),
+        _claim_inside_the_window(),
+        return_exceptions=True,
+    )
+
+    refusals = [item for item in outcomes if isinstance(item, BaseException)]
+    assert [getattr(item, "code", None) for item in refusals] == ["account_busy"], outcomes
+    assert _account_owner.holder_of("acc-1") == (await warming_state_run_id())
+    campaign = await repository.fetch_campaign(seeded.campaign_id)
+    assert campaign is not None
+    assert campaign.status == "idle"
+    await _cancel_warming_task("acc-1")
+
+
+async def warming_state_run_id(account_id: str = "acc-1") -> str | None:
+    """The generation warming published for ``account_id``, as its own row records it."""
+    record = await fetch_warming_state(account_id)
+    return None if record is None else record.run_id
+
+
+async def _cancel_warming_task(account_id: str) -> None:
+    """Unwind the parked warming loop, so its claim leaves the registry with it."""
+    task = warming_runtime._RUNTIME.pop(account_id, None)
+    assert task is not None
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
 
 
 @pytest.mark.asyncio

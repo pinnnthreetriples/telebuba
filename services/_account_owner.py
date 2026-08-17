@@ -5,7 +5,9 @@ synchronous functions with no ``await`` in them, nothing persisted. A single
 uvicorn worker means a single event loop, so a function that contains no
 ``await`` cannot be straddled by a second caller — that is what makes a claim
 atomic here without a lock, and it holds only as long as the callers keep the
-claim and the point of no return in the same await-free stretch.
+claim and the point of no return in the same await-free stretch, or hold one lock
+across both instead: :func:`take_over` cannot do the first and its caller does the
+second, under the per-account lifecycle lock both writers of this map take.
 
 **The holder is an identity, not a flag.** ``holder`` is warming's ``run_id`` and
 neuroshilling's ``campaign_id``; :func:`release` gives the claim up only when
@@ -82,9 +84,17 @@ def take_over(account_id: str, owner: Owner, holder: str) -> None:
     new generation's identity-checked :func:`release` would never match again: the
     account would stay held until the process restarted.
 
-    Safe only because the refusal already happened above it: ``start_warming`` raises
-    before it spawns, and the only other caller — restart reconciliation — runs before
-    anything in this process can have claimed. A caller that CAN be told no must use
+    Safe because the refusal that must precede it and this write are held under ONE
+    per-account lifecycle lock, and NOT because they sit in one await-free stretch —
+    several awaits separate them, one of them a bounded wait for the previous task to
+    unwind. ``start_warming`` holds ``services.warming._runtime._account_lock`` across
+    both its ``assert_not_neuroshilling`` and this eviction, and every neuroshilling
+    claim is taken under that same lock (``services.neuroshilling._runtime.
+    _claim_accounts`` enters it for every roster account before it reads or claims
+    anything), so a campaign cannot take the account inside that window and be evicted
+    here. Warming's other spawner — ``_maintenance._reconcile_account`` — holds the lock
+    too, and runs at boot before neuroshilling's own reconciliation, which is the first
+    thing on that side able to claim. A caller that CAN be told no must use
     :func:`try_claim`.
     """
     _OWNED[account_id] = (owner, holder)
