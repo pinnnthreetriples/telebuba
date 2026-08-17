@@ -12,6 +12,7 @@ from core.repositories.neuroshilling import (
     create_campaign,
     list_presence,
     record_presence,
+    retire_account_presence,
 )
 from core.telegram_client import UNCONFIRMED_ERROR_TYPE, TelegramReadError
 from schemas.neuroshilling import NeuroshillingCampaignCreate
@@ -103,6 +104,13 @@ def test_a_send_outcome_says_whose_fault_it_is(result: ActionResult, verdict: st
         # Deliberately reported as ``failed`` by the gateway — the account is NOT in.
         (_result("failed", error_type="InviteRequestSentError"), "pending_approval"),
         (_result("failed", error_type="ChannelsTooMuchError"), "retired"),
+        # The dead-session family, arriving on the JOIN under the same wrapper class it
+        # arrives under on the send: the class name is the wrapper's, so the stable code
+        # in ``error_message`` is the only thing that says which of the three it was.
+        *(
+            (_result("failed", error_type="ProfileGatewayError", error_message=code), "retired")
+            for code in ("account_deactivated", "account_frozen", "session_dead")
+        ),
         (_result("flood_wait", flood_wait_seconds=60), "flooded"),
         (_result("peer_flood"), "flooded"),
         (_result("premium_wait", flood_wait_seconds=30), "flooded"),
@@ -269,6 +277,10 @@ async def test_a_join_request_leaves_the_account_outside(
     [
         (_result("failed", error_type="ChannelsTooMuchError"), "retired"),
         (_result("flood_wait", flood_wait_seconds=300), "flooded"),
+        (
+            _result("failed", error_type="ProfileGatewayError", error_message="account_frozen"),
+            "retired",
+        ),
     ],
 )
 async def test_an_account_level_refusal_retires_every_target_it_was_playing(
@@ -309,6 +321,53 @@ async def test_a_pair_already_settled_is_not_joined_again(
     monkeypatch.setattr(_seams, "execute", _fake_execute(_result("ok")))
 
     assert await _telegram.join_target(campaign_id, "acc-1", "@group") == stored
+    assert paced == []
+    assert await count_account_joins_since("acc-1", _PAST) == 0
+
+
+@pytest.mark.asyncio
+async def test_a_dead_session_on_the_join_is_not_walked_into_the_next_target(
+    monkeypatch: pytest.MonkeyPatch,
+    paced: list[tuple[str, float]],
+) -> None:
+    """A logged-out, frozen or deactivated session cannot join anything, ever.
+
+    Read off ``error_type`` alone the three of them are one wrapper class that matches
+    no branch, so the join was filed ``refused`` — the pair's verdict on one attempt,
+    which no sweep clears and the settled-state gate does not stop. The account was
+    handed the next target, and the next, spending a paced join slot on each for a
+    session Telegram had already closed.
+    """
+    campaign_id = await _campaign()
+    dead = _result("failed", error_type="ProfileGatewayError", error_message="session_dead")
+    monkeypatch.setattr(_seams, "execute", _fake_execute(dead))
+
+    assert await _telegram.join_target(campaign_id, "acc-1", "@first") == "retired"
+    assert await _telegram.join_target(campaign_id, "acc-1", "@second") == "retired"
+
+    # One slot spent, not one per target, and the second target was never attempted.
+    assert [key for key, _gap in paced] == ["join:acc-1"]
+    assert [row.target for row in await list_presence(campaign_id)] == ["@first"]
+
+
+@pytest.mark.asyncio
+async def test_a_pair_that_outlived_its_flood_is_not_joined_again(
+    monkeypatch: pytest.MonkeyPatch,
+    paced: list[tuple[str, float]],
+) -> None:
+    """The flood took the pair's ``joined`` row; the expiry must not take its membership.
+
+    Answered ``None`` once the window passed, the pair looked unknown and the account
+    went to re-join a chat it was already in — which is what the shared daily budget
+    then ran out on, skipping every target it was a member of.
+    """
+    campaign_id = await _campaign()
+    await record_presence(campaign_id, "acc-1", "@group", "joined")
+    await retire_account_presence("acc-1", "flooded")
+    monkeypatch.setattr(_telegram, "flood_since", lambda: "9999-01-01T00:00:00+00:00")
+    monkeypatch.setattr(_seams, "execute", _fake_execute(_result("ok")))
+
+    assert await _telegram.join_target(campaign_id, "acc-1", "@group") == "joined"
     assert paced == []
     assert await count_account_joins_since("acc-1", _PAST) == 0
 
