@@ -371,7 +371,8 @@ async def test_the_poller_is_handed_every_account_we_own_not_just_the_cast(
         nonlocal elapsed
         elapsed += 31.0
 
-    pages = [[_preview_by(4242)]]
+    # One message, written by an account of ours this campaign has never heard of.
+    pages = [[ChatMessagePreview(message_id=900, text="и почём?", sender_id=4242)]]
 
     async def _read(_account_id: str, action: TelegramAction) -> object:
         if isinstance(action, ReadChatMessages):
@@ -389,11 +390,6 @@ async def test_the_poller_is_handed_every_account_we_own_not_just_the_cast(
 
     assert gateway.actions
     assert [(line.message_id, line.is_ours) for line in log] == [(900, True)]
-
-
-def _preview_by(sender_id: int) -> ChatMessagePreview:
-    """One observed message written by ``sender_id`` and by nobody this campaign knows."""
-    return ChatMessagePreview(message_id=900, text="и почём?", sender_id=sender_id)
 
 
 async def _account_with_user_id(account_id: str, user_id: int) -> None:
