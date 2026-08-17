@@ -9,6 +9,14 @@ This module is re-export only; the submodules own the behaviour.
 
 from __future__ import annotations
 
+# Imported after the two modules above because ``_runtime`` pulls in the engine, which
+# pulls in ``campaigns`` — the same one-way order every other submodule here follows.
+from services.neuroshilling._runtime import (
+    reconcile_neuroshilling_on_startup,
+    shutdown_neuroshilling_on_shutdown,
+    start_campaign,
+    stop_campaign,
+)
 from services.neuroshilling.campaigns import (
     NeuroshillingConflictError,
     NeuroshillingInvalidError,
@@ -19,6 +27,7 @@ from services.neuroshilling.campaigns import (
     list_campaigns,
     load_board,
     parse_targets,
+    run_status,
     update_campaign,
 )
 from services.neuroshilling.scenario import (
@@ -41,6 +50,11 @@ __all__ = [
     "load_board",
     "load_scenario",
     "parse_targets",
+    "reconcile_neuroshilling_on_startup",
+    "run_status",
     "set_scenario",
+    "shutdown_neuroshilling_on_shutdown",
+    "start_campaign",
+    "stop_campaign",
     "update_campaign",
 ]

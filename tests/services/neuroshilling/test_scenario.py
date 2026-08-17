@@ -330,6 +330,43 @@ async def test_the_media_slot_must_name_a_step_that_exists() -> None:
     assert scenario._approval_problem(orphan, [_role()], [_step(1)]) == "media_step_without_link"
 
 
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("загляните на https://t.me/shop", "scenario_text_has_link"),
+        ("промокод на первый заказ", "scenario_text_forbidden_word"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_dialogue_the_send_gate_would_refuse_cannot_be_approved(
+    text: str,
+    code: str,
+) -> None:
+    """The two gates are the same two rules, asked where the operator can still act.
+
+    ``_dispatch`` runs ``is_acceptable`` over every send, against settings shared with
+    warming whose stock forbidden-word list is the vocabulary a shilling dialogue is
+    written in. Approved and launched, such a campaign skipped every message step and
+    finished ``done`` having sent nothing, with a warning per step as the only trace.
+    """
+    campaign = await _campaign(topic="delivery")
+    await ns_service.set_scenario(
+        campaign.campaign_id,
+        NeuroshillingScenarioUpdate(
+            roles=[NeuroshillingRoleInput(role_id="a", name="Skeptic")],
+            steps=[NeuroshillingStepInput(role_id="a", text=text)],
+        ),
+    )
+
+    with pytest.raises(ns_service.NeuroshillingInvalidError) as refusal:
+        await ns_service.approve_scenario(campaign.campaign_id)
+
+    assert refusal.value.code == code
+    stored = await repository.fetch_campaign(campaign.campaign_id)
+    assert stored is not None
+    assert stored.scenario_status == "draft"
+
+
 @pytest.mark.asyncio
 async def test_an_empty_scenario_cannot_be_approved() -> None:
     campaign = await _campaign(topic="delivery")

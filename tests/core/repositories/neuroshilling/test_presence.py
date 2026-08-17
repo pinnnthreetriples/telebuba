@@ -4,15 +4,28 @@ from __future__ import annotations
 
 import pytest
 
+from core.db import create_account
 from core.repositories.neuroshilling import (
     create_campaign,
     delete_campaign,
     fetch_presence_state,
+    list_halted_accounts,
     list_presence,
     record_presence,
     retire_account_presence,
+    update_campaign,
 )
-from schemas.neuroshilling import NeuroshillingCampaignCreate
+from schemas.accounts import AccountCreate
+from schemas.neuroshilling import (
+    NeuroshillingAccountAssignment,
+    NeuroshillingCampaignCreate,
+    NeuroshillingCampaignUpdate,
+)
+
+# A cutoff every stored row is newer than: "no flood has expired yet".
+_IN_FORCE = "1970-01-01T00:00:00+00:00"
+# A cutoff no stored row can reach: "every flood has expired".
+_EXPIRED = "9999-01-01T00:00:00+00:00"
 
 
 async def _campaign() -> str:
@@ -114,11 +127,11 @@ async def test_a_pairs_stored_state_is_what_answers_the_next_join() -> None:
     campaign_id = await _campaign()
     await record_presence(campaign_id, "acc-1", "@a", "joined")
 
-    assert await fetch_presence_state(campaign_id, "acc-1", "@a") == "joined"
+    assert await fetch_presence_state(campaign_id, "acc-1", "@a", flood_since=_IN_FORCE) == "joined"
     # A pair with no row at all: nothing has been learnt about it yet.
-    assert await fetch_presence_state(campaign_id, "acc-1", "@b") is None
+    assert await fetch_presence_state(campaign_id, "acc-1", "@b", flood_since=_IN_FORCE) is None
     # Another account's row is not an answer about this one.
-    assert await fetch_presence_state(campaign_id, "acc-2", "@a") is None
+    assert await fetch_presence_state(campaign_id, "acc-2", "@a", flood_since=_IN_FORCE) is None
 
 
 @pytest.mark.asyncio
@@ -132,8 +145,50 @@ async def test_an_account_halt_answers_for_a_target_it_has_no_row_for() -> None:
     other_campaign = await _campaign()
     await record_presence(flooded_campaign, "acc-1", "@a", "flooded")
 
-    assert await fetch_presence_state(flooded_campaign, "acc-1", "@unseen") == "flooded"
-    assert await fetch_presence_state(other_campaign, "acc-1", "@unseen") == "flooded"
+    for campaign_id in (flooded_campaign, other_campaign):
+        state = await fetch_presence_state(campaign_id, "acc-1", "@unseen", flood_since=_IN_FORCE)
+        assert state == "flooded"
+
+
+@pytest.mark.asyncio
+async def test_a_flood_stops_answering_once_its_window_has_passed() -> None:
+    """The verdict has no other way back: the retirement sweep only stamps live pairs.
+
+    Unbounded, a thirty-second wait took the account out of every campaign for good.
+    ``retired`` is not on the same clock — the 500-chat ceiling and a dead session do
+    not expire — so it goes on answering.
+    """
+    campaign_id = await _campaign()
+    await record_presence(campaign_id, "acc-1", "@a", "flooded")
+    await record_presence(campaign_id, "acc-2", "@a", "retired")
+
+    assert await fetch_presence_state(campaign_id, "acc-1", "@a", flood_since=_EXPIRED) is None
+    assert await fetch_presence_state(campaign_id, "acc-1", "@b", flood_since=_EXPIRED) is None
+    assert await fetch_presence_state(campaign_id, "acc-2", "@b", flood_since=_EXPIRED) == "retired"
+
+
+@pytest.mark.asyncio
+async def test_the_halted_roster_reads_verdicts_written_by_another_campaign() -> None:
+    """What the launch card shows must be what the join gate will honour.
+
+    The verdict is about the ACCOUNT and binds whichever campaign recorded it, so a
+    card that only read its own presence rows stayed silent about exactly the accounts
+    its next run would refuse to play.
+    """
+    reporting = await _campaign()
+    elsewhere = await _campaign()
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    await update_campaign(
+        reporting,
+        NeuroshillingCampaignUpdate(
+            name="Promo",
+            accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
+        ),
+    )
+    await record_presence(elsewhere, "acc-1", "@a", "flooded")
+
+    assert await list_halted_accounts(reporting, flood_since=_IN_FORCE) == ["acc-1"]
+    assert await list_halted_accounts(reporting, flood_since=_EXPIRED) == []
 
 
 @pytest.mark.asyncio

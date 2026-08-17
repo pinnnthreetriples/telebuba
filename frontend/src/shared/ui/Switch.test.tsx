@@ -19,3 +19,13 @@ test('reports its state through role/aria and toggles to the opposite value', as
   await userEvent.click(screen.getByRole('switch', { name: 'Резерв' }));
   expect(onChange).toHaveBeenLastCalledWith(false);
 });
+
+test('a disabled switch is inert, so a not-yet-wired feature cannot be toggled', async () => {
+  const onChange = vi.fn();
+  render(<Switch disabled checked={false} onChange={onChange} label="Отвечать людям" />);
+
+  const control = screen.getByRole('switch', { name: 'Отвечать людям' });
+  expect(control).toBeDisabled();
+  await userEvent.click(control);
+  expect(onChange).not.toHaveBeenCalled();
+});

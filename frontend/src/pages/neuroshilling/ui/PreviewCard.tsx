@@ -4,18 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
 import { CollapsibleCard } from '@/shared/ui';
 
-import { ROLE_COLORS } from './scenarioDraft';
-
-// mm:ss, so a dialogue that runs for minutes reads as minutes rather than as a
-// four-digit number of seconds.
-function clock(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return `${String(minutes)}:${rest < 10 ? '0' : ''}${String(rest)}`;
-}
-
-const mean = (step: NeuroshillingStep) =>
-  ((step.delay_min_seconds ?? 60) + (step.delay_max_seconds ?? 180)) / 2;
+import { clock, dialogueSeconds, ROLE_COLORS, stepMeanSeconds } from './scenarioDraft';
 
 // Card 3: the SAVED dialogue as it will read in the chat.
 //
@@ -45,7 +34,7 @@ export function PreviewCard({
 
   const byPosition = new Map(steps.map((step) => [step.position, step]));
   const roleIndex = new Map(roles.map((role, index) => [role.role_id, index]));
-  const total = steps.reduce((sum, step) => sum + mean(step), 0);
+  const total = dialogueSeconds(steps);
   let elapsed = 0;
 
   return (
@@ -76,7 +65,7 @@ export function PreviewCard({
       ) : (
         <div className="flex flex-col">
           {steps.map((step, index) => {
-            elapsed += mean(step);
+            elapsed += stepMeanSeconds(step);
             const at = roleIndex.get(step.role_id ?? '');
             const role = at === undefined ? undefined : roles[at];
             const color = ROLE_COLORS[(at ?? 0) % ROLE_COLORS.length];

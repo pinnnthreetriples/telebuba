@@ -6,6 +6,11 @@ raise skipped every later step — leaving the pooled Telethon clients connected
 clients unclosed. Each step is guarded now, and the sequence is preserved:
 warming drains BEFORE the pool is torn down, or live ``execute(...)`` calls blow up
 mid-handshake.
+
+The STARTUP order is recorded by the same list, because it is load-bearing in the
+other direction and was pinned by nothing: neuroshilling is the only feature that
+takes accounts rather than resuming its own, so it has to reconcile after the two
+that restore theirs.
 """
 
 from __future__ import annotations
@@ -20,26 +25,30 @@ import main
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+# Neuroshilling reconciles last: it TAKES accounts, so it has to see the picture the
+# other two have already restored.
+_RECONCILE = (
+    "reconcile_warming_runtime",
+    "reconcile_neurocomment_on_startup",
+    "reconcile_neuroshilling_on_startup",
+)
+# Neuroshilling sits between neurocomment and the pool teardown: its run tasks hold
+# pooled Telethon clients, so they have to drain before the pool goes.
 _STEPS = (
     "shutdown_warming_runtime",
     "shutdown_neurocomment_on_shutdown",
+    "shutdown_neuroshilling_on_shutdown",
     "shutdown_telegram_pool",
     "close_gemini_client",
     "close_openai_client",
 )
-_EXPECTED_ORDER = [
-    "shutdown_warming_runtime",
-    "shutdown_neurocomment_on_shutdown",
-    "shutdown_telegram_pool",
-    "close_gemini_client",
-    "close_openai_client",
-]
+_EXPECTED_ORDER = [*_RECONCILE, *_STEPS]
 _LEAK_CANARY = "socks5://operator:hunter2@198.51.100.7:1080"
 
 
 @pytest.fixture
 def harness(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Neutralise startup, record teardown, and capture the events ``main`` logs."""
+    """Record both halves of the lifespan, and capture the events ``main`` logs."""
     ran: list[str] = []
     events: list[tuple[str, str, dict[str, object]]] = []
 
@@ -62,8 +71,6 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(main, "_log_app_started", _noop)
     monkeypatch.setattr(main, "seed_admin_if_empty", _noop)
     monkeypatch.setattr(main, "run_db_maintenance_loop", _forever)
-    monkeypatch.setattr(main, "reconcile_warming_runtime", _noop)
-    monkeypatch.setattr(main, "reconcile_neurocomment_on_startup", _noop)
 
     def _step(name: str, raises: BaseException | None = None) -> Callable[[], Awaitable[None]]:
         async def _run() -> None:
@@ -73,7 +80,7 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
         return _run
 
-    for name in _STEPS:
+    for name in (*_RECONCILE, *_STEPS):
         monkeypatch.setattr(main, name, _step(name))
 
     def _make_fail(name: str, exc: BaseException) -> None:
@@ -83,11 +90,25 @@ def harness(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_a_clean_shutdown_runs_every_step_in_order(harness: dict[str, Any]) -> None:
+async def test_a_clean_lifespan_runs_every_step_in_order(harness: dict[str, Any]) -> None:
     async with main.lifespan(main.app):
         pass
     assert harness["ran"] == _EXPECTED_ORDER
     assert harness["events"] == []
+
+
+@pytest.mark.asyncio
+async def test_neuroshilling_reconciles_after_the_features_it_takes_accounts_from(
+    harness: dict[str, Any],
+) -> None:
+    """Asserted INSIDE the lifespan, where the startup half is all that has run.
+
+    Neuroshilling claims accounts warming and neurocomment merely resume, so it has to
+    read a registry those two have already refilled — an order nothing pinned while
+    only the teardown sequence was recorded.
+    """
+    async with main.lifespan(main.app):
+        assert harness["ran"] == list(_RECONCILE)
 
 
 @pytest.mark.parametrize("failing", _STEPS)

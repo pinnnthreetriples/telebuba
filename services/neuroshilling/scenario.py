@@ -31,6 +31,7 @@ from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.neuroshilling_scenario import NeuroshillingScenario
 from schemas.telegram_actions import ReadChatMessages, ReadChatMessagesResult
 from schemas.telegram_actions_chat import COPYABLE_MEDIA_KINDS
+from services.content import has_link, is_acceptable
 from services.neuroshilling import _generate, _seams, _state
 from services.neuroshilling.campaigns import (
     NeuroshillingConflictError,
@@ -55,6 +56,13 @@ _SCENARIO_INVALID: NeuroshillingRefusalCode = "scenario_invalid"
 _LLM_UNAVAILABLE: NeuroshillingRefusalCode = "llm_unavailable"
 _MEDIA_UNREACHABLE: NeuroshillingRefusalCode = "media_source_unreachable"
 _MEDIA_CHECK_UNAVAILABLE: NeuroshillingRefusalCode = "media_check_unavailable"
+# The approval problems specific enough to name on the wire. Everything else answers
+# ``scenario_invalid``: the page holds the same roles and steps and can point at the
+# offending row itself, whereas a refused LINE is not visibly wrong at all.
+_PROBLEM_CODES: dict[str, NeuroshillingRefusalCode] = {
+    "text_has_link": "scenario_text_has_link",
+    "text_forbidden_word": "scenario_text_forbidden_word",
+}
 # Read kinds that say nothing about what the account can SEE. A flood is Telegram
 # pacing us and an ``unavailable`` is our own socket; both are over in minutes, and
 # neither is evidence about the link.
@@ -129,8 +137,9 @@ def _approval_problem(
 ) -> str | None:
     """The first reason this scenario may not be approved, or ``None``.
 
-    The reason is for the test suite and the reader, not for the wire: every one of
-    them answers the same ``scenario_invalid``.
+    Most reasons are for the test suite and the reader and answer the same
+    ``scenario_invalid`` on the wire; the two text ones are translated through
+    ``_PROBLEM_CODES`` into refusals of their own.
     """
     if not roles:
         return "no_roles"
@@ -138,7 +147,29 @@ def _approval_problem(
         return "no_message_step"
     if any(step.role_id is None for step in steps):
         return "step_without_role"
-    return _media_problem(campaign, len(steps))
+    return _text_problem(steps) or _media_problem(campaign, len(steps))
+
+
+def _text_problem(steps: Sequence[NeuroshillingStep]) -> str | None:
+    """Which outbound-filter rule the first unpublishable message step breaks.
+
+    ``services.content.is_acceptable`` is run on every send by ``_dispatch``, over
+    settings shared with warming — links blocked by default, and a forbidden-word list
+    whose stock entries (``купить``, ``промокод``, ``скидк``) are the vocabulary a
+    shilling dialogue is written in. Without this check a campaign was approved,
+    launched, skipped EVERY message step and finished ``done`` with nothing sent, and
+    the only trace was a warning per step in the log.
+
+    The gate asked is ``is_acceptable`` itself, so this cannot drift from what the send
+    path applies; the second read only decides which of its two rules to name.
+    """
+    for step in steps:
+        if step.kind != "message" or is_acceptable(step.text):
+            continue
+        if settings.warming.content_block_links and has_link(step.text):
+            return "text_has_link"
+        return "text_forbidden_word"
+    return None
 
 
 def _media_problem(campaign: NeuroshillingCampaign, step_count: int) -> str | None:
@@ -243,8 +274,9 @@ async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
         return None
     refuse_while_live(campaign)
     roles, steps = await repository.load_scenario(campaign_id)
-    if _approval_problem(campaign, roles, steps) is not None:
-        raise NeuroshillingInvalidError(_SCENARIO_INVALID)
+    problem = _approval_problem(campaign, roles, steps)
+    if problem is not None:
+        raise NeuroshillingInvalidError(_PROBLEM_CODES.get(problem, _SCENARIO_INVALID))
     # After the row-only checks and never before them: this one talks to Telegram,
     # and a scenario that is broken on its own terms should not cost N live reads to
     # find out.

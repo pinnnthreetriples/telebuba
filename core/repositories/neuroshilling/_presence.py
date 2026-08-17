@@ -25,7 +25,10 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
-from core.repositories.neuroshilling._tables import _neuroshilling_presence
+from core.repositories.neuroshilling._tables import (
+    _neuroshilling_accounts,
+    _neuroshilling_presence,
+)
 from schemas.neuroshilling import NeuroshillingPresence
 
 if TYPE_CHECKING:
@@ -50,6 +53,10 @@ _PRESENCE_COLUMNS: Final = (
 # for every target that account was going to play, including the ones it has no row
 # for yet — which is the only reason this read looks past the pair it was asked about.
 _ACCOUNT_WIDE_STATES: Final = ("flooded", "retired")
+# The one of them that EXPIRES. Telegram's rate limit is a wait; the 500-chat ceiling
+# and a dead session are not. ``updated_at`` is when the flood was recorded, and the
+# caller supplies the cutoff, so a row older than it no longer answers for anything.
+_EXPIRING_STATE: Final = "flooded"
 
 
 def _row_to_presence(mapping: RowMapping) -> NeuroshillingPresence:
@@ -137,6 +144,7 @@ def _fetch_presence_state(
     campaign_id: str,
     account_id: str,
     target: str,
+    flood_since: str,
 ) -> NeuroshillingPresenceState | None:
     statement = select(*_PRESENCE_COLUMNS).where(
         (_TABLE.c.account_id == account_id)
@@ -147,8 +155,11 @@ def _fetch_presence_state(
     )
     with _get_engine().connect() as connection:
         rows = [_row_to_presence(row._mapping) for row in connection.execute(statement)]  # noqa: SLF001 - Row API
-    stored = next((row for row in rows if row.state in _ACCOUNT_WIDE_STATES), None) or next(
-        (row for row in rows if row.target == target),
+    # Applied to the pair's own row as well as to the account-wide ones: a chat this
+    # account was flooded out of an hour ago is a chat it may try again.
+    live = [row for row in rows if row.state != _EXPIRING_STATE or row.updated_at >= flood_since]
+    stored = next((row for row in live if row.state in _ACCOUNT_WIDE_STATES), None) or next(
+        (row for row in live if row.target == target),
         None,
     )
     return stored.state if stored is not None else None
@@ -158,6 +169,8 @@ async def fetch_presence_state(
     campaign_id: str,
     account_id: str,
     target: str,
+    *,
+    flood_since: str,
 ) -> NeuroshillingPresenceState | None:
     """The stored verdict that already answers a join of this pair, or ``None``.
 
@@ -165,8 +178,50 @@ async def fetch_presence_state(
     campaign wrote it, because that is the scope Telegram applied it at: an account
     flooded while joining one target must not join the NEXT one either, and that
     target has no row of its own to carry the verdict.
+
+    ``flood_since`` is where that scope stops: a ``flooded`` row older than it answers
+    for nothing. The verdict has no other way back — ``retire_account_presence`` only
+    rewrites live pairs — so an unbounded one turned a thirty-second wait into
+    permanent retirement from every campaign.
     """
-    return await asyncio.to_thread(_fetch_presence_state, campaign_id, account_id, target)
+    return await asyncio.to_thread(
+        _fetch_presence_state,
+        campaign_id,
+        account_id,
+        target,
+        flood_since,
+    )
+
+
+def _list_halted_accounts(campaign_id: str, flood_since: str) -> list[str]:
+    statement = (
+        select(_neuroshilling_accounts.c.account_id)
+        .distinct()
+        .select_from(
+            _neuroshilling_accounts.join(
+                _TABLE,
+                _TABLE.c.account_id == _neuroshilling_accounts.c.account_id,
+            ),
+        )
+        .where(
+            (_neuroshilling_accounts.c.campaign_id == campaign_id)
+            & _TABLE.c.state.in_(_ACCOUNT_WIDE_STATES)
+            & ((_TABLE.c.state != _EXPIRING_STATE) | (_TABLE.c.updated_at >= flood_since)),
+        )
+        .order_by(_neuroshilling_accounts.c.account_id)
+    )
+    with _get_engine().connect() as connection:
+        return [str(account_id) for (account_id,) in connection.execute(statement)]
+
+
+async def list_halted_accounts(campaign_id: str, *, flood_since: str) -> list[str]:
+    """This campaign's roster accounts carrying an account-wide verdict still in force.
+
+    The roster narrows it, the verdict does not: the join gate reads ``flooded`` and
+    ``retired`` whichever campaign wrote them, so a card scoped to its own campaign's
+    presence rows under-reported exactly the accounts that will refuse to play.
+    """
+    return await asyncio.to_thread(_list_halted_accounts, campaign_id, flood_since)
 
 
 def _retire_account_presence(

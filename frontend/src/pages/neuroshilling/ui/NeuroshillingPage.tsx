@@ -12,8 +12,11 @@ import {
   neuroshillingCampaignsQueryOptions,
   neuroshillingScenarioQueryOptions,
   setNeuroshillingScenarioMutation,
+  startNeuroshillingCampaignMutation,
+  stopNeuroshillingCampaignMutation,
   updateNeuroshillingCampaignMutation,
 } from '@/entities/neuroshilling';
+import { clearLogsMutation, logCountQueryOptions, logsQueryOptions } from '@/entities/log';
 import type {
   NeuroshillingAccountAssignment,
   NeuroshillingBoardAccount,
@@ -24,12 +27,16 @@ import { useLogEventStream } from '@/shared/lib';
 import { ConfirmModal } from '@/shared/ui';
 
 import { AccountsCard } from './AccountsCard';
+import { CampaignSetupCard } from './CampaignSetupCard';
 import { CampaignsCard } from './CampaignsCard';
 import { HowItWorksCard } from './HowItWorksCard';
+import { LaunchCard } from './LaunchCard';
 import { PreviewCard } from './PreviewCard';
 import { ScenarioCard } from './ScenarioCard';
 import type { ScenarioDraft } from './scenarioDraft';
 import { campaignFieldsOf, draftOf, scenarioBody } from './scenarioDraft';
+import type { SetupDraft } from './setupDraft';
+import { setupDraftOf, setupFieldsOf } from './setupDraft';
 
 // The query-key `_id`s this page owns. The SSE stream fires on every log row in
 // the whole app, so a bare invalidateQueries() would refetch accounts, warming,
@@ -39,13 +46,24 @@ import { campaignFieldsOf, draftOf, scenarioBody } from './scenarioDraft';
 // 400 ms trailing debounce, and the scenario query backs an explicit-save form:
 // refetching it under the operator's typing is exactly what the separate
 // endpoint exists to avoid. It refreshes from its own mutations, below.
-const NEUROSHILLING_QUERY_IDS = new Set(['listNeuroshillingCampaigns', 'getNeuroshillingBoard']);
+const NEUROSHILLING_QUERY_IDS = new Set([
+  'listNeuroshillingCampaigns',
+  'getNeuroshillingBoard',
+  // The launch card renders the feed, so the stream that fires on every log row
+  // has to refresh the page holding it.
+  'listLogs',
+]);
 
 // The generation ask, which is not stored anywhere: it describes ONE call. It
 // lives on the page rather than inside the scenario card because the preview
 // card's "regenerate" fires the same request.
 const DEFAULT_PERSONAS = 3;
 const DEFAULT_STEPS = 8;
+
+// One page of the activity feed. The same depth the neurocomment terminal reads,
+// and well under the `le=1000` ceiling on `LogFilter.limit` (schemas/logs.py).
+const LOG_LIMIT = 80;
+const LOG_PREFIX = 'neuroshilling';
 
 function assignmentsOf(
   pool: NeuroshillingBoardAccount[],
@@ -114,6 +132,7 @@ export function NeuroshillingPage() {
   const [showAccounts, setShowAccounts] = useState(false);
   const [deleteFor, setDeleteFor] = useState<NeuroshillingCampaign | null>(null);
   const [confirmGenerate, setConfirmGenerate] = useState(false);
+  const [confirmClearLogs, setConfirmClearLogs] = useState(false);
   const [personaCount, setPersonaCount] = useState(DEFAULT_PERSONAS);
   const [stepCount, setStepCount] = useState(DEFAULT_STEPS);
   const [draft, setDraft] = useState<ScenarioDraft | null>(null);
@@ -121,6 +140,11 @@ export function NeuroshillingPage() {
   // than against the live query keeps "dirty" true for the moment between a save
   // landing and the board refetch that reflects it.
   const [baseline, setBaseline] = useState('');
+  // The setup card's own draft and baseline, kept apart from the scenario's: the
+  // two cards save independently, so a save of one must not adopt the other's
+  // unsaved edits as its new baseline.
+  const [setup, setSetup] = useState<SetupDraft | null>(null);
+  const [setupBaseline, setSetupBaseline] = useState('');
 
   const campaigns = useQuery(neuroshillingCampaignsQueryOptions());
   const campaignList = campaigns.data?.campaigns ?? [];
@@ -135,10 +159,26 @@ export function NeuroshillingPage() {
     ...neuroshillingScenarioQueryOptions({ path: { campaign_id: campaignId ?? '' } }),
     enabled: campaignId !== null,
   });
+  // The activity feed the launch card renders. Unscoped by campaign on purpose:
+  // `log_event` rows carry no campaign column, and the prefix filter is what
+  // keeps a clear from touching neurocomment's history.
+  const logs = useQuery(
+    logsQueryOptions({ query: { event_prefix: LOG_PREFIX, limit: LOG_LIMIT } }),
+  );
+  // How many rows a clear would actually delete. Asked only while the confirmation
+  // is open: the panel shows one page, so its length is no guide to the size of a
+  // purge spanning the whole retention window, and an operator who cleared on that
+  // impression once lost a month of history without noticing.
+  const logCount = useQuery({
+    ...logCountQueryOptions({ query: { event_prefix: LOG_PREFIX } }),
+    enabled: confirmClearLogs,
+  });
+
   const campaign = board.data?.campaign;
   const stored = scenario.data;
   const pool = board.data?.available ?? [];
   const roster = pool.filter((account) => account.assigned);
+  const run = board.data?.run ?? {};
 
   // A picker left open across a campaign switch would show the new campaign's pool
   // over the old campaign's draft, and closing it would write that draft to the
@@ -163,7 +203,19 @@ export function NeuroshillingPage() {
     setBaseline(JSON.stringify(next));
   }, [campaign, stored, draft]);
 
+  // The setup form is seeded from the server exactly once per campaign, for the
+  // same reason as the scenario form above: the board query IS in the invalidation
+  // set, so resyncing on every server value would empty it under the operator.
+  useEffect(() => {
+    if (campaign === undefined) return;
+    if (setup?.campaignId === campaign.campaign_id) return;
+    const next = setupDraftOf(campaign);
+    setSetup(next);
+    setSetupBaseline(JSON.stringify(next));
+  }, [campaign, setup]);
+
   const dirty = draft !== null && JSON.stringify(draft) !== baseline;
+  const setupDirty = setup !== null && JSON.stringify(setup) !== setupBaseline;
 
   const createCampaign = useMutation(createNeuroshillingCampaignMutation());
   const deleteCampaign = useMutation(deleteNeuroshillingCampaignMutation());
@@ -171,11 +223,16 @@ export function NeuroshillingPage() {
   const saveScenario = useMutation(setNeuroshillingScenarioMutation());
   const generateScenario = useMutation(generateNeuroshillingScenarioMutation());
   const approveScenario = useMutation(approveNeuroshillingScenarioMutation());
+  const startCampaign = useMutation(startNeuroshillingCampaignMutation());
+  const stopCampaign = useMutation(stopNeuroshillingCampaignMutation());
+  const clearLogs = useMutation(clearLogsMutation());
   const busy =
     updateCampaign.isPending ||
     saveScenario.isPending ||
     generateScenario.isPending ||
-    approveScenario.isPending;
+    approveScenario.isPending ||
+    startCampaign.isPending ||
+    stopCampaign.isPending;
 
   const adopt = (next: ScenarioDraft) => {
     setDraft(next);
@@ -292,6 +349,42 @@ export function NeuroshillingPage() {
       .finally(refresh);
   };
 
+  // Card 4 is explicit-save too, and it owns a DIFFERENT slice of the same PUT:
+  // its fields go over an echo of the ones the other cards own.
+  const saveSetup = () => {
+    if (campaign === undefined || setup === null) return;
+    void updateCampaign
+      .mutateAsync({
+        path: { campaign_id: campaign.campaign_id },
+        body: {
+          ...campaignBody(
+            campaign,
+            assignmentsOf(
+              pool,
+              roster.map((account) => account.account_id),
+            ),
+          ),
+          ...setupFieldsOf(setup),
+        },
+      })
+      .then((updated) => {
+        // Adopt the answer, so the fields the server normalised (a clamped pause,
+        // a rejected target dropped from the blob) stop reading as unsaved edits.
+        const next = setupDraftOf(updated);
+        setSetup(next);
+        setSetupBaseline(JSON.stringify(next));
+      })
+      .catch(() => undefined)
+      .finally(invalidateNeuroshilling);
+  };
+
+  // Fire-on-click, unlike the two forms above: there is nothing to save, and the
+  // refusal an operator can still hit here is a race the board is about to show
+  // them anyway.
+  const runAction = (call: Promise<unknown>) => {
+    void call.catch(() => undefined).finally(invalidateNeuroshilling);
+  };
+
   return (
     <div className="tb-fadeup mx-auto max-w-[1000px]">
       <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
@@ -359,6 +452,42 @@ export function NeuroshillingPage() {
           </>
         )}
 
+        {campaign === undefined || setup === null || setup.campaignId !== campaignId ? null : (
+          <CampaignSetupCard
+            campaign={campaign}
+            draft={setup}
+            onDraft={setSetup}
+            dirty={setupDirty}
+            live={campaign.status === 'running' || campaign.status === 'stopping'}
+            onSave={saveSetup}
+            busy={busy}
+          />
+        )}
+
+        {campaign === undefined ||
+        stored === undefined ||
+        stored.campaign_id !== campaignId ? null : (
+          <LaunchCard
+            campaign={campaign}
+            run={run}
+            pool={pool}
+            targets={board.data?.targets ?? []}
+            roles={stored.roles ?? []}
+            steps={stored.steps ?? []}
+            logLines={logs.data?.items ?? []}
+            onStart={() => {
+              runAction(startCampaign.mutateAsync({ path: { campaign_id: campaign.campaign_id } }));
+            }}
+            onStop={() => {
+              runAction(stopCampaign.mutateAsync({ path: { campaign_id: campaign.campaign_id } }));
+            }}
+            onClearLogs={() => {
+              setConfirmClearLogs(true);
+            }}
+            busy={busy}
+          />
+        )}
+
         <HowItWorksCard />
       </div>
 
@@ -385,6 +514,26 @@ export function NeuroshillingPage() {
           // model answers, and leaves it open on a refusal — a busy generation or
           // an exhausted daily budget is something the operator has to see.
           onConfirm={generate}
+        />
+      ) : null}
+
+      {confirmClearLogs ? (
+        // The count comes FIRST and the operator confirms against it: the panel
+        // shows one page, and clearing on that impression once cost a month of
+        // history. The prefix keeps the purge off neurocomment's rows.
+        <ConfirmModal
+          title={t('neuroshilling.modal.clearLogs.title')}
+          body={t('neuroshilling.modal.clearLogs.body', { count: logCount.data?.matching ?? 0 })}
+          confirmLabel={t('neuroshilling.modal.clearLogs.confirm')}
+          cancelLabel={t('neuroshilling.modal.clearLogs.cancel')}
+          onClose={() => {
+            setConfirmClearLogs(false);
+          }}
+          onConfirm={() =>
+            clearLogs
+              .mutateAsync({ query: { event_prefix: LOG_PREFIX } })
+              .finally(invalidateNeuroshilling)
+          }
         />
       ) : null}
 

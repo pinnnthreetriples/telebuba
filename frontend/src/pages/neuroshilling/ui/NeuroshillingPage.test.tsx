@@ -27,6 +27,12 @@ const CAMPAIGN: NeuroshillingCampaign = {
   updated_at: 'now',
 };
 
+const LAUNCHABLE_CAMPAIGN: NeuroshillingCampaign = {
+  ...CAMPAIGN,
+  scenario_status: 'approved',
+  targets_raw: '@chat\n@other',
+};
+
 const BOARD: NeuroshillingBoard = {
   campaign: CAMPAIGN,
   available: [
@@ -66,23 +72,59 @@ function renderPage(ui: ReactElement = <NeuroshillingPage />) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
+// A campaign a Start would actually be allowed to begin: approved dialogue, two
+// targets, and one account per role.
+const LAUNCHABLE_SCENARIO: NeuroshillingScenario = { ...SCENARIO, scenario_status: 'approved' };
+const LAUNCHABLE_BOARD: NeuroshillingBoard = {
+  campaign: LAUNCHABLE_CAMPAIGN,
+  available: [
+    { account_id: 'a1', title: 'Алиса', assigned: true, role_id: 'r1' },
+    { account_id: 'a2', title: 'Борис', assigned: true, role_id: 'r1' },
+  ],
+  targets: ['@chat', '@other'],
+  run: { status: 'idle', sent: 0, total: 2 },
+};
+
+// One row, so the panel has something to clear. Account-less on purpose: naming
+// the account column is the terminal's own test, and a second "Алиса" on the page
+// would only make the roster assertions ambiguous.
+const LOG_ROW = {
+  id: 7,
+  created_at: '2026-07-11T10:00:00+00:00',
+  level: 'INFO',
+  status: 'success',
+  account_id: null,
+  event: 'neuroshilling_run_started',
+  extra: {},
+};
+
 // Routes every endpoint the page reaches; `campaigns` lets a test start from an
 // empty account of the world and `scenario` from a campaign with no dialogue.
 function routeApi(
   campaigns: NeuroshillingCampaign[] = [CAMPAIGN],
   scenario: NeuroshillingScenario = SCENARIO,
+  board: NeuroshillingBoard = BOARD,
 ): void {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
+    if (url.pathname === '/api/v1/logs/count') {
+      return Promise.resolve(jsonResponse({ matching: 412 }));
+    }
+    if (url.pathname === '/api/v1/logs' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ items: [LOG_ROW] }));
+    }
     if (url.pathname === '/api/v1/neuroshilling/campaigns') {
       if (request.method === 'POST') {
         return Promise.resolve(jsonResponse({ ...CAMPAIGN, campaign_id: 'c9', name: 'Новая' }));
       }
       return Promise.resolve(jsonResponse({ campaigns }));
     }
+    if (url.pathname.endsWith('/start') || url.pathname.endsWith('/stop')) {
+      return Promise.resolve(jsonResponse({ status: 'running', sent: 0, total: 2 }));
+    }
     if (url.pathname.endsWith('/board')) {
-      return Promise.resolve(jsonResponse(BOARD));
+      return Promise.resolve(jsonResponse(board));
     }
     if (url.pathname.endsWith('/scenario')) {
       return Promise.resolve(jsonResponse(scenario));
@@ -372,4 +414,129 @@ test('approving posts the approval on its own', async () => {
     expect(callsTo(APPROVE_PATH, 'POST')).toHaveLength(1);
   });
   expect(callsTo(SCENARIO_PATH, 'PUT')).toHaveLength(0);
+});
+
+const START_PATH = '/api/v1/neuroshilling/campaigns/c1/start';
+const STOP_PATH = '/api/v1/neuroshilling/campaigns/c1/stop';
+const LOGS_PATH = '/api/v1/logs';
+
+function routeLaunchable(over: Partial<NeuroshillingBoard> = {}): void {
+  routeApi([CAMPAIGN], LAUNCHABLE_SCENARIO, { ...LAUNCHABLE_BOARD, ...over });
+}
+
+test('the setup card saves ITS slice over an echo of every other card s fields', async () => {
+  routeLaunchable();
+  renderPage();
+  const targets = await screen.findByLabelText('Целевые чаты');
+  await userEvent.type(targets, '\n@third');
+  await userEvent.click(screen.getByText('Сохранить настройки'));
+
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(1);
+  });
+  const body = (await callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')[0]!.json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body.targets_raw).toBe('@chat\n@other\n@third');
+  // The PUT is a whole-form replacement, so the scenario card's fields and the
+  // stage-six columns have to ride along untouched.
+  expect(body.topic).toBe('про сервис');
+  expect(body.listen_minutes).toBe(45);
+  expect(body.messages_per_hour).toBe(7);
+});
+
+test('start posts once and is offered only when nothing blocks it', async () => {
+  routeLaunchable();
+  renderPage();
+  const start = await screen.findByRole('button', { name: 'Запустить' });
+  await waitFor(() => {
+    expect(start).toBeEnabled();
+  });
+
+  await userEvent.click(start);
+
+  await waitFor(() => {
+    expect(callsTo(START_PATH, 'POST')).toHaveLength(1);
+  });
+});
+
+test('a blocked campaign never reaches the start endpoint', async () => {
+  // A draft scenario: the operator reads the reason instead of collecting a 409.
+  routeApi([CAMPAIGN], SCENARIO, { ...LAUNCHABLE_BOARD, campaign: CAMPAIGN });
+  renderPage();
+
+  expect(await screen.findByText(/Сценарий не утверждён/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
+  expect(callsTo(START_PATH, 'POST')).toHaveLength(0);
+});
+
+test('a running campaign offers Stop, which posts to the stop endpoint', async () => {
+  routeLaunchable({
+    campaign: { ...LAUNCHABLE_BOARD.campaign, status: 'running' },
+    run: { status: 'running', sent: 1, total: 2 },
+  });
+  renderPage();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Остановить' }));
+  await waitFor(() => {
+    expect(callsTo(STOP_PATH, 'POST')).toHaveLength(1);
+  });
+});
+
+test('the activity feed is read under this page s prefix and refetched by the stream', async () => {
+  routeLaunchable();
+  renderPage();
+  await waitFor(() => {
+    expect(callsTo(LOGS_PATH, 'GET').length).toBeGreaterThan(0);
+  });
+  expect(new URL(callsTo(LOGS_PATH, 'GET')[0]!.url).searchParams.get('event_prefix')).toBe(
+    'neuroshilling',
+  );
+  const before = callsTo(LOGS_PATH, 'GET').length;
+
+  emitLogFrame();
+
+  // `listLogs` is in the invalidation set now that the page renders the panel.
+  await waitFor(
+    () => {
+      expect(callsTo(LOGS_PATH, 'GET').length).toBeGreaterThan(before);
+    },
+    { timeout: 3000 },
+  );
+});
+
+test('clearing the log states the real count first and only then deletes', async () => {
+  routeLaunchable();
+  renderPage();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Очистить лог' }));
+
+  // The count spans the whole retention window, not the page on screen: an
+  // operator who cleared on that impression once lost a month of history.
+  expect(await screen.findByText(/412/)).toBeInTheDocument();
+  expect(callsTo(LOGS_PATH, 'DELETE')).toHaveLength(0);
+
+  await userEvent.click(screen.getByText('Очистить'));
+  await waitFor(() => {
+    expect(callsTo(LOGS_PATH, 'DELETE')).toHaveLength(1);
+  });
+  // Scoped by prefix, so neurocomment's history is untouched.
+  expect(new URL(callsTo(LOGS_PATH, 'DELETE')[0]!.url).searchParams.get('event_prefix')).toBe(
+    'neuroshilling',
+  );
+});
+
+test('what the operator typed into the setup card survives a log frame', async () => {
+  routeLaunchable();
+  renderPage();
+  await userEvent.type(await screen.findByLabelText('Целевые чаты'), '\n@third');
+  const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
+
+  emitLogFrame();
+  await waitForRefetch(before);
+
+  // The board IS refetched and it carries the stored targets. Reseeding the form
+  // from it is the bug the once-per-campaign seeding avoids.
+  expect(screen.getByLabelText('Целевые чаты')).toHaveValue('@chat\n@other\n@third');
 });

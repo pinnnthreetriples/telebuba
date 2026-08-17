@@ -1859,11 +1859,14 @@ export type NeuroshillingAccountAssignment = {
  * One composite read backing the whole page.
  *
  * The account pool is ONE list, not a pool plus its rostered subset: the two
- * carried the same objects and left the client joining them by id. It also
- * carries no derived counters (role/step/account/target counts, dialogue length
- * estimates) and no run block: every one of those is an ``arr.length``, a
- * ``reduce``, or a field of ``campaign`` already in this same payload, and a
- * second copy could only drift from the first.
+ * carried the same objects and left the client joining them by id. It carries no
+ * derived counters either (role/step/account/target counts, dialogue length
+ * estimates): every one of those is an ``arr.length``, a ``reduce``, or a field of
+ * ``campaign`` already in this same payload, and a second copy could only drift.
+ *
+ * ``run`` is the exception and is here because it is NOT derivable: how many steps
+ * actually reached their chats and which accounts Telegram has halted are answers
+ * only the journal and the presence table hold.
  */
 export type NeuroshillingBoard = {
   campaign: NeuroshillingCampaign;
@@ -1875,6 +1878,7 @@ export type NeuroshillingBoard = {
    * Targets
    */
   targets?: Array<string>;
+  run?: NeuroshillingRunStatus;
 };
 
 /**
@@ -2223,6 +2227,46 @@ export type NeuroshillingRoleInput = {
    * Description
    */
   description?: string;
+};
+
+/**
+ * NeuroshillingRunStatus
+ *
+ * What the launch card shows: where the run is and how far it has got.
+ *
+ * ``sent`` counts delivered MESSAGE steps of the current run and ``total`` is
+ * targets x message steps. Reactions are journalled but counted in neither, because
+ * a skipped reaction is not lost progress.
+ *
+ * ``halted_accounts`` are the accounts Telegram has taken out of the run — a flood
+ * wait, a peer flood, or the 500-chat ceiling. They are read back from the durable
+ * presence rows rather than from a run-local set, so a restart does not forget them.
+ */
+export type NeuroshillingRunStatus = {
+  /**
+   * Status
+   */
+  status?: 'idle' | 'running' | 'stopping' | 'done' | 'failed';
+  /**
+   * Run Id
+   */
+  run_id?: string | null;
+  /**
+   * Sent
+   */
+  sent?: number;
+  /**
+   * Total
+   */
+  total?: number;
+  /**
+   * Last Error Type
+   */
+  last_error_type?: string | null;
+  /**
+   * Halted Accounts
+   */
+  halted_accounts?: Array<string>;
 };
 
 /**
@@ -7983,3 +8027,95 @@ export type ApproveNeuroshillingScenarioResponses = {
 
 export type ApproveNeuroshillingScenarioResponse =
   ApproveNeuroshillingScenarioResponses[keyof ApproveNeuroshillingScenarioResponses];
+
+export type StartNeuroshillingCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/start';
+};
+
+export type StartNeuroshillingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StartNeuroshillingCampaignError =
+  StartNeuroshillingCampaignErrors[keyof StartNeuroshillingCampaignErrors];
+
+export type StartNeuroshillingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingRunStatus;
+};
+
+export type StartNeuroshillingCampaignResponse =
+  StartNeuroshillingCampaignResponses[keyof StartNeuroshillingCampaignResponses];
+
+export type StopNeuroshillingCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/stop';
+};
+
+export type StopNeuroshillingCampaignErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type StopNeuroshillingCampaignError =
+  StopNeuroshillingCampaignErrors[keyof StopNeuroshillingCampaignErrors];
+
+export type StopNeuroshillingCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingRunStatus;
+};
+
+export type StopNeuroshillingCampaignResponse =
+  StopNeuroshillingCampaignResponses[keyof StopNeuroshillingCampaignResponses];

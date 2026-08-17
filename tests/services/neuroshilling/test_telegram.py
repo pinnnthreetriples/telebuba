@@ -353,6 +353,39 @@ async def test_a_flood_mid_dialogue_is_written_down_like_a_flood_on_the_join() -
     assert states == {"@a": "flooded", "@b": "flooded"}
 
 
+@pytest.mark.parametrize(
+    "outcome",
+    [
+        {"status": "failed", "error_message": "account_deactivated"},
+        {"status": "failed", "error_type": "UserBannedInChannelError"},
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_account_that_cannot_act_at_all_is_written_down_as_retired(
+    outcome: dict[str, str],
+) -> None:
+    """The run's halt set held these two and nothing else did.
+
+    A restart therefore offered a deactivated or banned account the very next target,
+    which is the one case waiting cannot fix — hence ``retired``, the state that does
+    not expire, rather than the flood's window.
+    """
+    campaign_id = await _campaign()
+    await record_presence(campaign_id, "acc-1", "@a", "joined")
+    await record_presence(campaign_id, "acc-1", "@b", "joined")
+
+    verdict = await _telegram.record_send_verdict(
+        campaign_id,
+        "acc-1",
+        "@a",
+        _result(**outcome),
+    )
+
+    assert verdict in {"account_dead", "account_banned"}
+    states = {row.target: row.state for row in await list_presence(campaign_id)}
+    assert states == {"@a": "retired", "@b": "retired"}
+
+
 @pytest.mark.asyncio
 async def test_a_chat_scoped_send_refusal_writes_nothing() -> None:
     """Only the ACCOUNT verdicts are persisted.

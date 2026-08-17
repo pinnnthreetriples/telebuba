@@ -14,8 +14,16 @@ from core.config import settings
 from core.db import list_accounts, list_warming_account_ids
 from core.repositories import neuroshilling as repository
 from core.repositories.neurocomment import list_active_campaign_account_names
-from schemas.neuroshilling import NeuroshillingBoard, NeuroshillingBoardAccount
+from schemas.neuroshilling import (
+    NeuroshillingBoard,
+    NeuroshillingBoardAccount,
+    NeuroshillingRunStatus,
+)
 from services import _account_owner
+
+# From the module that owns the flood verdict, so the launch card and the join gate
+# cannot answer "is this account still halted?" out of two different windows.
+from services.neuroshilling._telegram import flood_since
 
 if TYPE_CHECKING:
     from schemas.neuroshilling import (
@@ -221,6 +229,48 @@ async def load_board(campaign_id: str) -> NeuroshillingBoard | None:
         campaign=campaign,
         available=available,
         targets=parse_targets(campaign.targets_raw),
+        run=await _run_status(campaign),
+    )
+
+
+async def run_status(campaign_id: str) -> NeuroshillingRunStatus | None:
+    """The launch card's run block on its own. ``None`` means no such campaign."""
+    campaign = await repository.fetch_campaign(campaign_id)
+    return None if campaign is None else await _run_status(campaign)
+
+
+async def _run_status(campaign: NeuroshillingCampaign) -> NeuroshillingRunStatus:
+    """How far the current run has got, and who Telegram has taken out of it.
+
+    The numerator counts delivered MESSAGE steps of this ``run_id`` and the
+    denominator is targets x message steps. Reactions are journalled but appear in
+    neither: a reaction is not a message, and a skipped one must not read as lost
+    progress.
+
+    A campaign with no ``run_id`` has no run to report on, so the numerator is zero
+    without a query — the denominator still describes the work a Start would create,
+    which is what the card shows before the first launch.
+
+    ``halted_accounts`` is read through the same lens the join gate uses: a verdict
+    about the ACCOUNT counts whichever campaign recorded it, and a flood counts only
+    while it is still in force. Asking this campaign's presence rows alone left the
+    card silent about accounts the engine will refuse to play.
+    """
+    _roles, steps = await repository.load_scenario(campaign.campaign_id)
+    message_steps = sum(1 for step in steps if step.kind == "message")
+    sent = (
+        0 if campaign.run_id is None else await repository.count_sent_message_steps(campaign.run_id)
+    )
+    return NeuroshillingRunStatus(
+        status=campaign.status,
+        run_id=campaign.run_id,
+        sent=sent,
+        total=len(parse_targets(campaign.targets_raw)) * message_steps,
+        last_error_type=campaign.last_error,
+        halted_accounts=await repository.list_halted_accounts(
+            campaign.campaign_id,
+            flood_since=flood_since(),
+        ),
     )
 
 

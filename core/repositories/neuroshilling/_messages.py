@@ -1,0 +1,192 @@
+"""The send journal — one row per ``(run_id, target, step_id)``, written BEFORE the send.
+
+**The order is the whole point.** The unique index only protects rows that EXIST, so
+a run that sends first and writes afterwards leaves a window in which Telegram has
+the message and SQLite has nothing: the next boot finds no row, replays the step, and
+a stranger's chat gets the line twice. :func:`claim_message` therefore inserts
+``pending`` before anything is dispatched and :func:`settle_message` moves the row to
+its outcome afterwards — the same order ``core.repositories.neurocomment._comments``
+uses for its claim, and the same ``on_conflict_do_nothing`` that makes a concurrent or
+resumed second attempt a no-op instead of a duplicate.
+
+**Nothing in this module deletes a ``pending`` row.** ``services.neuroshilling`` leaves
+one behind on purpose whenever the dispatch was already on the wire when the connection
+died (``UNCONFIRMED_ERROR_TYPE``): Telegram may well have applied it, so the row has to
+keep holding its key. :func:`fail_pending_messages` at boot moves those to ``failed``
+rather than removing them for exactly that reason — the row goes on occupying the key
+and the resumed run skips the step, which is what
+``core.repositories.neurocomment._comment_lifecycle`` does with surviving claims.
+
+One write does delete journal rows: ``_scenario._drop_steps_beyond`` removes them for
+steps a shortened scenario no longer has. It cannot reach a run in flight, because
+``campaigns.refuse_while_live`` refuses every scenario write while the campaign is
+live — which is what keeps the durability claim above true for as long as it matters.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING
+
+from sqlalchemy import ColumnElement, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+from core.db import _get_engine, _now_iso
+from core.repositories.neuroshilling._tables import _neuroshilling_messages
+
+if TYPE_CHECKING:
+    from schemas.neuroshilling import NeuroshillingMessageStatus, NeuroshillingStepKey
+
+_TABLE = _neuroshilling_messages
+# The row the boot sweep writes over an interrupted dispatch. A class NAME, like every
+# other ``error_type`` in the domain, because this column is read back by the board.
+_INTERRUPTED = "InterruptedRun"
+
+
+def _at(key: NeuroshillingStepKey) -> ColumnElement[bool]:
+    """The WHERE clause naming exactly one journal row."""
+    return (
+        (_TABLE.c.run_id == key.run_id)
+        & (_TABLE.c.target == key.target)
+        & (_TABLE.c.step_id == key.step_id)
+    )
+
+
+def _claim_message(
+    key: NeuroshillingStepKey,
+    campaign_id: str,
+    account_id: str,
+    text: str,
+    status: NeuroshillingMessageStatus,
+) -> bool:
+    statement = (
+        sqlite_insert(_TABLE)
+        .values(
+            campaign_id=campaign_id,
+            run_id=key.run_id,
+            target=key.target,
+            step_id=key.step_id,
+            account_id=account_id,
+            text=text,
+            status=status,
+            created_at=_now_iso(),
+        )
+        .on_conflict_do_nothing(
+            index_elements=[_TABLE.c.run_id, _TABLE.c.target, _TABLE.c.step_id],
+        )
+    )
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount > 0
+
+
+async def claim_message(
+    key: NeuroshillingStepKey,
+    *,
+    campaign_id: str,
+    account_id: str,
+    text: str,
+    status: NeuroshillingMessageStatus = "pending",
+) -> bool:
+    """Reserve one step of one target for this run. ``False`` means it is already taken.
+
+    Called BEFORE the dispatch, and the ``False`` is what makes a resumed run skip a
+    step it already played: the row survives whatever happened to the process, so the
+    key stays occupied.
+
+    ``status`` is parametrised for the one caller that knows before it inserts that
+    nothing will be sent — a step the account's quota refuses — so a skip reserves its
+    key through THIS insert rather than a second one that would have to re-earn the
+    same conflict guarantee. Copied from ``_comments._claim_comment``.
+    """
+    return await asyncio.to_thread(_claim_message, key, campaign_id, account_id, text, status)
+
+
+def _settle_message(
+    key: NeuroshillingStepKey,
+    status: NeuroshillingMessageStatus,
+    message_id: int | None,
+    error_type: str | None,
+) -> bool:
+    values: dict[str, object] = {
+        "status": status,
+        "message_id": message_id,
+        "error_type": error_type,
+    }
+    if status == "sent":
+        values["sent_at"] = _now_iso()
+    statement = (
+        update(_TABLE)
+        # Only a row this run is still holding. A settle that arrived after the boot
+        # sweep already wrote the step off must not resurrect it.
+        .where(_at(key) & (_TABLE.c.status == "pending"))
+        .values(**values)
+    )
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount > 0
+
+
+async def settle_message(
+    key: NeuroshillingStepKey,
+    *,
+    status: NeuroshillingMessageStatus,
+    message_id: int | None = None,
+    error_type: str | None = None,
+) -> bool:
+    """Record what became of a claimed step. ``False`` means the claim was gone.
+
+    ``message_id`` is what the reply chain and the reaction steps are aimed at, so a
+    ``sent`` row without one is a step nothing can answer — which is why the anchor
+    walk treats an empty id and a missing row identically.
+    """
+    return await asyncio.to_thread(_settle_message, key, status, message_id, error_type)
+
+
+def _fetch_message_id(key: NeuroshillingStepKey) -> int | None:
+    statement = select(_TABLE.c.message_id).where(_at(key) & (_TABLE.c.status == "sent"))
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).first()
+    return None if row is None else row[0]
+
+
+async def fetch_message_id(key: NeuroshillingStepKey) -> int | None:
+    """The id a delivered step got IN THIS TARGET, or ``None``.
+
+    The key is the whole triple and never the step alone — see
+    :class:`schemas.neuroshilling.NeuroshillingStepKey` for what splitting it costs.
+    """
+    return await asyncio.to_thread(_fetch_message_id, key)
+
+
+def _list_journalled_steps(run_id: str) -> set[tuple[str, str]]:
+    statement = select(_TABLE.c.target, _TABLE.c.step_id).where(_TABLE.c.run_id == run_id)
+    with _get_engine().connect() as connection:
+        return {(str(target), str(step_id)) for target, step_id in connection.execute(statement)}
+
+
+async def list_journalled_steps(run_id: str) -> set[tuple[str, str]]:
+    """Every ``(target, step_id)`` this run has already written a row for.
+
+    Read once when a run starts so a resumed pass walks past finished work instead of
+    sleeping through each step's delay only to lose the insert at the end of it.
+    """
+    return await asyncio.to_thread(_list_journalled_steps, run_id)
+
+
+def _fail_pending_messages(run_id: str) -> int:
+    statement = (
+        update(_TABLE)
+        .where((_TABLE.c.run_id == run_id) & (_TABLE.c.status == "pending"))
+        .values(status="failed", error_type=_INTERRUPTED)
+    )
+    with _get_engine().begin() as connection:
+        return int(connection.execute(statement).rowcount)
+
+
+async def fail_pending_messages(run_id: str) -> int:
+    """Settle the rows a killed process left mid-flight; return how many there were.
+
+    Updated rather than deleted, and that is the entire point: a ``pending`` row is
+    either a dispatch that never finished or one whose outcome is unknown, and both
+    must go on occupying their key so the resumed run does not play the step again.
+    """
+    return await asyncio.to_thread(_fail_pending_messages, run_id)
