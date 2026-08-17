@@ -10,7 +10,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-GeminiStatus = Literal["ok", "error", "rate_limited"]
+# ``truncated`` is an error that says WHICH one: the answer hit ``max_tokens``
+# mid-word. Its own member because retrying it unchanged is guaranteed to
+# truncate again — a caller that can shrink its ask (``services.neuroshilling``)
+# needs to tell it apart, and one that cannot treats it as any other error.
+GeminiStatus = Literal["ok", "error", "rate_limited", "truncated"]
 
 
 class GeminiRequest(BaseModel):
@@ -30,6 +34,14 @@ class GeminiRequest(BaseModel):
     # Optional JSON-Schema for server-side structured output (Gemini
     # ``responseSchema``); an opaque schema dict, not inter-layer domain data.
     response_schema_json: dict[str, object] | None = None
+    # Ask an OpenAI-format provider for ``response_format: {"type": "json_object"}``
+    # instead of the schema-enforced mode. DeepSeek documents ``response_format.type``
+    # as "one of ``text`` or ``json_object``" and answers a ``json_schema`` request
+    # with an error, so a caller that wants JSON from it has no other way to say so.
+    # ``core.gemini`` ignores this field, exactly as it ignores nothing else here:
+    # Gemini's own structured output is ``response_schema_json`` and stays that.
+    # False by default, so no existing payload changes by a byte.
+    response_json_object: bool = False
     # Optional inline image (base64) for a multimodal request — e.g. an image
     # captcha the vision model must read. ``image_mime`` is ignored when
     # ``image_b64`` is None; the model must be vision-capable (gemini-2.5-flash is).

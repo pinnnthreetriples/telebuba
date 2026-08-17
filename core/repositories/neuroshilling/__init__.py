@@ -27,8 +27,14 @@ from core.repositories.neuroshilling._campaigns import (
     list_running_campaign_account_names,
     update_campaign,
 )
+from core.repositories.neuroshilling._scenario import (
+    approve_scenario,
+    load_scenario,
+    replace_scenario,
+)
 
 __all__ = [
+    "approve_scenario",
     "create_campaign",
     "delete_campaign",
     "fetch_campaign",
@@ -36,5 +42,7 @@ __all__ = [
     "list_campaign_role_ids",
     "list_campaigns",
     "list_running_campaign_account_names",
+    "load_scenario",
+    "replace_scenario",
     "update_campaign",
 ]

@@ -185,4 +185,8 @@ def test_the_operation_ids_the_generated_client_is_named_after(app: FastAPI) -> 
         "put /campaigns/{campaign_id}": "updateNeuroshillingCampaign",
         "delete /campaigns/{campaign_id}": "deleteNeuroshillingCampaign",
         "get /campaigns/{campaign_id}/board": "getNeuroshillingBoard",
+        "get /campaigns/{campaign_id}/scenario": "getNeuroshillingScenario",
+        "put /campaigns/{campaign_id}/scenario": "setNeuroshillingScenario",
+        "post /campaigns/{campaign_id}/generate": "generateNeuroshillingScenario",
+        "post /campaigns/{campaign_id}/approve": "approveNeuroshillingScenario",
     }

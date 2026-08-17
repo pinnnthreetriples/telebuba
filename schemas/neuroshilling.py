@@ -54,6 +54,20 @@ _MAX_TARGETS_RAW = 8000
 _MAX_MEDIA_LINK = 500
 _MAX_SECONDS = 3600
 _MAX_LISTEN_MINUTES = 1440
+# Posting-rate ceilings. Stage four reads these as the per-account rate, so an
+# unbounded value is a ban rather than a big number: neurocomment's tuned figures
+# for the same two rules are 10 an hour and 3 per chat a day
+# (``core._config_domains``), and these sit a few times above them — room for an
+# operator who wants to push, not room for a fleet posting once a second.
+_MAX_PER_HOUR = 60
+_MAX_PER_CHAT_PER_DAY = 50
+# Lifetime ceiling per account for ONE campaign: 100 hours at the hourly cap.
+_MAX_TOTAL_PER_ACCOUNT = 1000
+# Mirrors ``schemas.neuroshilling_scenario.MAX_STEPS`` by value rather than by
+# import: the scenario module imports this one and the dependency may not run
+# back the other way. A position past the dialogue is refused at approval anyway;
+# this only stops an unbounded integer reaching the column.
+_MAX_STEP_POSITION = 50
 
 
 class NeuroshillingAccountAssignment(BaseModel):
@@ -106,15 +120,15 @@ class NeuroshillingCampaignUpdate(BaseModel):
     unique_messages: bool = True
     use_chat_context: bool = False
     media_message_link: str | None = Field(default=None, max_length=_MAX_MEDIA_LINK)
-    media_step_position: int | None = Field(default=None, ge=1)
+    media_step_position: int | None = Field(default=None, ge=1, le=_MAX_STEP_POSITION)
     run_mode: NeuroshillingRunMode = "sequential"
     pause_min_seconds: int = Field(default=10, ge=0, le=_MAX_SECONDS)
     pause_max_seconds: int = Field(default=20, ge=0, le=_MAX_SECONDS)
-    messages_per_hour: int = Field(default=10, ge=1)
+    messages_per_hour: int = Field(default=10, ge=1, le=_MAX_PER_HOUR)
     # 0 = no per-chat ceiling.
-    messages_per_chat_per_day: int = Field(default=3, ge=0)
+    messages_per_chat_per_day: int = Field(default=3, ge=0, le=_MAX_PER_CHAT_PER_DAY)
     # None = no lifetime ceiling for this campaign.
-    total_per_account: int | None = Field(default=None, ge=1)
+    total_per_account: int | None = Field(default=None, ge=1, le=_MAX_TOTAL_PER_ACCOUNT)
     reserve_enabled: bool = False
     autoresponder: NeuroshillingAutoresponder = "off"
     # Answering real people is OFF unless the operator turns it on: it is the one

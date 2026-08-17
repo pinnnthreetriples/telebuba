@@ -33,6 +33,18 @@ if TYPE_CHECKING:
 # the operator's to change.
 _LIVE_STATUSES = frozenset({"running", "stopping"})
 
+# The campaign fields whose value the approved dialogue was written FROM. Changing
+# one of them means the reviewed text no longer answers the brief it was reviewed
+# against — see :func:`_resets_approval`.
+_APPROVAL_FIELDS = (
+    "topic",
+    "mode",
+    "media_message_link",
+    "media_step_position",
+    "unique_messages",
+    "use_chat_context",
+)
+
 # Named rather than written at the raise site so each one is greppable from the
 # locale file that translates it.
 _CAMPAIGN_RUNNING: NeuroshillingRefusalCode = "campaign_running"
@@ -55,6 +67,15 @@ class NeuroshillingConflictError(NeuroshillingRefusedError):
 
 class NeuroshillingInvalidError(NeuroshillingRefusedError):
     """The request describes a campaign this build cannot run (HTTP 400)."""
+
+
+class NeuroshillingUnavailableError(NeuroshillingRefusedError):
+    """An upstream provider could not serve the request (HTTP 503).
+
+    503 rather than 502: ``api.errors`` has no description for 502, so
+    ``error_responses(502)`` would raise at import time and the reachable-status
+    contract test pins the set it does have.
+    """
 
 
 def parse_targets(targets_raw: str) -> list[str]:
@@ -80,7 +101,7 @@ async def delete_campaign(campaign_id: str) -> bool:
     campaign = await repository.fetch_campaign(campaign_id)
     if campaign is None:
         return False
-    _refuse_while_live(campaign)
+    refuse_while_live(campaign)
     await repository.delete_campaign(campaign_id)
     return True
 
@@ -93,17 +114,51 @@ async def update_campaign(
     campaign = await repository.fetch_campaign(campaign_id)
     if campaign is None:
         return None
-    _refuse_while_live(campaign)
+    refuse_while_live(campaign)
     _check_shape(data)
     # Read once, not once per roster entry: this is a thread hop and a full table
     # read, and a twenty-account roster would otherwise pay for twenty of them.
     existing = await _existing_account_ids()
     data.accounts = [item for item in data.accounts if item.account_id in existing]
     await _check_roles(campaign_id, data)
-    return await repository.update_campaign(campaign_id, data)
+    return await repository.update_campaign(
+        campaign_id,
+        data,
+        reset_approval=_resets_approval(campaign, data),
+    )
 
 
-def _refuse_while_live(campaign: NeuroshillingCampaign) -> None:
+def _resets_approval(campaign: NeuroshillingCampaign, data: NeuroshillingCampaignUpdate) -> bool:
+    """Does this edit invalidate an approval the operator already gave?
+
+    One rule, and it is about MEANING rather than about which card the field sits
+    on: a change to WHAT gets said resets the approval, a change to how fast or
+    where it gets said does not. So the topic, the mode, the media the dialogue
+    carries — the link AND which step carries it, since the approval gate checks
+    both — whether every account writes its own wording, and whether the wording is
+    written against what strangers in the target chat said all reset it, while the
+    name, the target list, the roster, the pauses and every quota do not, since
+    none of them changes a word of what was reviewed.
+
+    Deliberately does NOT ask whether the campaign is approved right now. That
+    read came from a fetch two awaits earlier, and an approval landing in the gap
+    would survive the very edit that invalidated it. Writing ``draft`` whenever an
+    approval field moved is idempotent on a campaign already in draft, and it
+    closes the window instead of narrowing it.
+
+    Enforced HERE and not in the UI. The generated client types every field, so a
+    direct call could otherwise keep an approval alive across the exact edit it was
+    given to guard against.
+    """
+    return any(getattr(campaign, field) != getattr(data, field) for field in _APPROVAL_FIELDS)
+
+
+def refuse_while_live(campaign: NeuroshillingCampaign) -> None:
+    """Public because the scenario module needs the same gate, from its own routes.
+
+    Editing the dialogue under a run in flight is the one edit that cannot merely
+    be inconsistent: the engine reads steps as it plays them.
+    """
     if campaign.status in _LIVE_STATUSES:
         raise NeuroshillingConflictError(_CAMPAIGN_RUNNING)
 

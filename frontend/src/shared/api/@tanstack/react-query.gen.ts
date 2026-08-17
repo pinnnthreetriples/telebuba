@@ -13,6 +13,7 @@ import {
   addAccountMusic,
   addWarmingChannels,
   adoptCampaignDiscovery,
+  approveNeuroshillingScenario,
   assignCampaignAccount,
   assignProxy,
   checkAccount,
@@ -35,6 +36,7 @@ import {
   deleteProxy,
   editAccountChannelPost,
   expandDiscoveryKeywords,
+  generateNeuroshillingScenario,
   getAccountChannel,
   getAccountPrivacy,
   getAccountProfileSnapshot,
@@ -45,6 +47,7 @@ import {
   getNeurocommentRuntime,
   getNeurocommentSettings,
   getNeuroshillingBoard,
+  getNeuroshillingScenario,
   getReadiness,
   getWarmingBoard,
   getWarmingSettings,
@@ -91,6 +94,7 @@ import {
   setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
+  setNeuroshillingScenario,
   skipNeurocommentPair,
   spamCheckAccount,
   startCampaignDiscovery,
@@ -122,6 +126,9 @@ import type {
   AdoptCampaignDiscoveryData,
   AdoptCampaignDiscoveryError,
   AdoptCampaignDiscoveryResponse,
+  ApproveNeuroshillingScenarioData,
+  ApproveNeuroshillingScenarioError,
+  ApproveNeuroshillingScenarioResponse,
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
@@ -188,6 +195,9 @@ import type {
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsError,
   ExpandDiscoveryKeywordsResponse,
+  GenerateNeuroshillingScenarioData,
+  GenerateNeuroshillingScenarioError,
+  GenerateNeuroshillingScenarioResponse,
   GetAccountChannelData,
   GetAccountChannelError,
   GetAccountChannelResponse,
@@ -218,6 +228,9 @@ import type {
   GetNeuroshillingBoardData,
   GetNeuroshillingBoardError,
   GetNeuroshillingBoardResponse,
+  GetNeuroshillingScenarioData,
+  GetNeuroshillingScenarioError,
+  GetNeuroshillingScenarioResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -353,6 +366,9 @@ import type {
   SetCampaignStatusData,
   SetCampaignStatusError,
   SetCampaignStatusResponse,
+  SetNeuroshillingScenarioData,
+  SetNeuroshillingScenarioError,
+  SetNeuroshillingScenarioResponse,
   SkipNeurocommentPairData,
   SkipNeurocommentPairError,
   SkipNeurocommentPairResponse,
@@ -3310,3 +3326,125 @@ export const getNeuroshillingBoardOptions = (options: Options<GetNeuroshillingBo
     },
     queryKey: getNeuroshillingBoardQueryKey(options),
   });
+
+export const getNeuroshillingScenarioQueryKey = (options: Options<GetNeuroshillingScenarioData>) =>
+  createQueryKey('getNeuroshillingScenario', options);
+
+/**
+ * Get Scenario
+ *
+ * Roles, steps and the approval status — a read of its own, not a board field.
+ *
+ * Separate so the SPA can keep it OUT of the log-stream invalidation set: the
+ * stream fires on every log line, and a scenario form refetched under the
+ * operator's typing would lose what they were writing.
+ */
+export const getNeuroshillingScenarioOptions = (options: Options<GetNeuroshillingScenarioData>) =>
+  queryOptions<
+    GetNeuroshillingScenarioResponse,
+    GetNeuroshillingScenarioError,
+    GetNeuroshillingScenarioResponse,
+    ReturnType<typeof getNeuroshillingScenarioQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeuroshillingScenario({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeuroshillingScenarioQueryKey(options),
+  });
+
+/**
+ * Set Scenario
+ *
+ * Save the whole dialogue. ALWAYS returns the campaign to ``draft``.
+ */
+export const setNeuroshillingScenarioMutation = (
+  options?: Partial<Options<SetNeuroshillingScenarioData>>,
+): UseMutationOptions<
+  SetNeuroshillingScenarioResponse,
+  SetNeuroshillingScenarioError,
+  Options<SetNeuroshillingScenarioData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetNeuroshillingScenarioResponse,
+    SetNeuroshillingScenarioError,
+    Options<SetNeuroshillingScenarioData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setNeuroshillingScenario({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Generate Scenario
+ *
+ * Write a fresh dialogue with the LLM, replacing whatever the campaign had.
+ *
+ * 409 is a second click (``generation_in_progress``) or the rolling daily budget
+ * (``llm_daily_limit_reached``); 503 is the provider having produced nothing
+ * usable within its retry budget, or no key being configured at all.
+ */
+export const generateNeuroshillingScenarioMutation = (
+  options?: Partial<Options<GenerateNeuroshillingScenarioData>>,
+): UseMutationOptions<
+  GenerateNeuroshillingScenarioResponse,
+  GenerateNeuroshillingScenarioError,
+  Options<GenerateNeuroshillingScenarioData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    GenerateNeuroshillingScenarioResponse,
+    GenerateNeuroshillingScenarioError,
+    Options<GenerateNeuroshillingScenarioData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await generateNeuroshillingScenario({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Approve Scenario
+ *
+ * The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.
+ */
+export const approveNeuroshillingScenarioMutation = (
+  options?: Partial<Options<ApproveNeuroshillingScenarioData>>,
+): UseMutationOptions<
+  ApproveNeuroshillingScenarioResponse,
+  ApproveNeuroshillingScenarioError,
+  Options<ApproveNeuroshillingScenarioData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ApproveNeuroshillingScenarioResponse,
+    ApproveNeuroshillingScenarioError,
+    Options<ApproveNeuroshillingScenarioData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await approveNeuroshillingScenario({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};

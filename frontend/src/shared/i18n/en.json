@@ -1380,6 +1380,106 @@
       "selected": "Picked: {{count}}",
       "none": "No accounts picked yet"
     },
+    "scenario": {
+      "title": "Scenario configuration",
+      "stepper": {
+        "less": "{{label}}: one fewer",
+        "more": "{{label}}: one more"
+      },
+      "status": {
+        "draft": "Draft",
+        "approved": "✓ Approved",
+        "willReset": "Saving drops the approval"
+      },
+      "mode": {
+        "label": "Campaign mode",
+        "campaign": "Campaign",
+        "revive": "Revive a chat",
+        "hint": "A campaign walks the target chats and acts the dialogue out once in each. Reviving keeps one chat alive with a fresh dialogue every cycle."
+      },
+      "topic": {
+        "label": "Topic",
+        "placeholder": "What the accounts should be talking about",
+        "hint": "The brief the model writes from. It is stored on the campaign, so a generation always runs on the topic that was last saved."
+      },
+      "generate": {
+        "personas": "Roles",
+        "steps": "Steps",
+        "run": "Generate with AI",
+        "hint": "One generation asks for at most 12 steps, because the answer has to arrive in a single reply. A hand-written dialogue may be longer."
+      },
+      "unique": {
+        "label": "Unique wording per account",
+        "hint": "Each account says the same thing in its own words, so the identical text is not posted across every target chat."
+      },
+      "context": {
+        "label": "Read the chat before writing",
+        "hint": "The accounts read the last messages of the target chat and answer in its tone. Chat text is untrusted input and is fenced before it reaches the model."
+      },
+      "media": {
+        "label": "Media message link",
+        "placeholder": "https://t.me/channel/123",
+        "hint": "A link to the message whose photo or video one step of the dialogue carries. Leave it empty for a text-only dialogue.",
+        "step": "Step carrying the media",
+        "stepNone": "No media step"
+      },
+      "roles": {
+        "title": "Roles",
+        "hint": "A role is a persona: its description IS the prompt the account speaks from. Every role needs an account of its own before the campaign can start.",
+        "add": "+ Add role",
+        "none": "No roles yet",
+        "name": "Name of role {{position}}",
+        "namePlaceholder": "Name",
+        "description": "Persona of role {{position}}",
+        "descriptionPlaceholder": "How this persona talks",
+        "remove": "Remove role {{position}}",
+        "nameRequired": "Every role needs a name"
+      },
+      "steps": {
+        "title": "Dialogue",
+        "hint": "The order of the list is the order of the dialogue. A reply or a reaction can only point at a step above it, because that message has to be in the chat already.",
+        "none": "No steps yet",
+        "position": "#{{position}}",
+        "role": "Role of step {{position}}",
+        "rolePick": "Pick a role",
+        "remove": "Remove step {{position}}",
+        "text": "Text of step {{position}}",
+        "textPlaceholder": "What this role says",
+        "emoji": "Reaction of step {{position}}",
+        "replyTo": "Step {{position}} replies to",
+        "replyNone": "Not a reply",
+        "target": "Step {{position}} reacts to",
+        "targetNone": "No target",
+        "delay": "Pause",
+        "delayMin": "Shortest pause before step {{position}}",
+        "delayMax": "Longest pause before step {{position}}",
+        "seconds": "s",
+        "add": {
+          "message": "+ Message",
+          "reaction": "+ Reaction"
+        }
+      },
+      "save": "Use this scenario",
+      "approve": "Approve",
+      "approveHint": "Save the scenario before approving it."
+    },
+    "preview": {
+      "title": "Scenario preview",
+      "status": {
+        "draft": "Draft",
+        "approved": "✓ Approved"
+      },
+      "unsaved": "Unsaved edits — the preview shows the scenario as it is stored.",
+      "none": "Nothing to preview yet. Generate a dialogue or write one by hand.",
+      "pause": "{{min}}–{{max}} s",
+      "at": "+{{time}}",
+      "noRole": "No role",
+      "reaction": "reacted to #{{position}}",
+      "reactionLoose": "reacted",
+      "total": "≈ {{time}} in all",
+      "play": "Play",
+      "regenerate": "Regenerate"
+    },
     "howto": {
       "title": "How it works",
       "steps": {
@@ -1409,6 +1509,12 @@
           "neurocomment": "held by neurocomment"
         },
         "busyNamed": "{{owner}} — {{name}}"
+      },
+      "regenerate": {
+        "title": "Generate a new dialogue?",
+        "body": "The model writes a fresh dialogue and it replaces the stored one — every role, every step and every edit made by hand. This cannot be undone.",
+        "confirm": "Generate",
+        "cancel": "Cancel"
       }
     }
   },

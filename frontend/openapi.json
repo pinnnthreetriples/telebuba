@@ -9177,6 +9177,450 @@
           }
         }
       }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/scenario": {
+      "get": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Get Scenario",
+        "description": "Roles, steps and the approval status \u2014 a read of its own, not a board field.\n\nSeparate so the SPA can keep it OUT of the log-stream invalidation set: the\nstream fires on every log line, and a scenario form refetched under the\noperator's typing would lose what they were writing.",
+        "operationId": "getNeuroshillingScenario",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingScenario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Set Scenario",
+        "description": "Save the whole dialogue. ALWAYS returns the campaign to ``draft``.",
+        "operationId": "setNeuroshillingScenario",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingScenarioUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingScenario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/generate": {
+      "post": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Generate Scenario",
+        "description": "Write a fresh dialogue with the LLM, replacing whatever the campaign had.\n\n409 is a second click (``generation_in_progress``) or the rolling daily budget\n(``llm_daily_limit_reached``); 503 is the provider having produced nothing\nusable within its retry budget, or no key being configured at all.",
+        "operationId": "generateNeuroshillingScenario",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingGenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingScenario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/approve": {
+      "post": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Approve Scenario",
+        "description": "The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.",
+        "operationId": "approveNeuroshillingScenario",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingScenario"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12594,6 +13038,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 50.0,
                 "minimum": 1.0
               },
               {
@@ -12627,12 +13072,14 @@
           },
           "messages_per_hour": {
             "type": "integer",
+            "maximum": 60.0,
             "minimum": 1.0,
             "title": "Messages Per Hour",
             "default": 10
           },
           "messages_per_chat_per_day": {
             "type": "integer",
+            "maximum": 50.0,
             "minimum": 0.0,
             "title": "Messages Per Chat Per Day",
             "default": 3
@@ -12641,6 +13088,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 1000.0,
                 "minimum": 1.0
               },
               {
@@ -12700,6 +13148,342 @@
         ],
         "title": "NeuroshillingCampaignUpdate",
         "description": "Whole-form replacement of everything the operator edits on the page.\n\nTargets and the account roster travel here rather than through endpoints of\ntheir own: both are edited as part of one card and saving them separately\nwould leave windows where the roster references a role the same save removed."
+      },
+      "NeuroshillingGenerateRequest": {
+        "properties": {
+          "persona_count": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 2.0,
+            "title": "Persona Count",
+            "default": 3
+          },
+          "step_count": {
+            "type": "integer",
+            "maximum": 12.0,
+            "minimum": 2.0,
+            "title": "Step Count",
+            "default": 8
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "NeuroshillingGenerateRequest",
+        "description": "Inputs to ONE generation. None of them is stored \u2014 they describe the ask.\n\n``persona_count`` is the stepper on the scenario card; it never reached a\ncolumn because it says nothing about a campaign once the dialogue exists."
+      },
+      "NeuroshillingRole": {
+        "properties": {
+          "role_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Role Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "default": ""
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role_id",
+          "name",
+          "created_at"
+        ],
+        "title": "NeuroshillingRole",
+        "description": "One row of ``neuroshilling_roles``."
+      },
+      "NeuroshillingRoleInput": {
+        "properties": {
+          "role_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Id"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Description",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "NeuroshillingRoleInput",
+        "description": "One role as the form declares it.\n\n``role_id`` is how a step says WHICH role speaks, and it is matched against the\ncampaign's stored roles: a value that is already one of them updates that row\nin place \u2014 which is what keeps the account roster's ``role_id`` pointing\nsomewhere after a save \u2014 and anything else (including ``None``) mints a new\nrole. So a client may invent keys for roles that do not exist yet, and the\nserver rewires the steps to the real ids it mints."
+      },
+      "NeuroshillingScenario": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Id"
+          },
+          "scenario_status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "approved"
+            ],
+            "title": "Scenario Status",
+            "default": "draft"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingRole"
+            },
+            "type": "array",
+            "title": "Roles"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id"
+        ],
+        "title": "NeuroshillingScenario",
+        "description": "The scenario card's whole read: the dialogue plus whether it is approved.\n\nCarries no derived counters and no duration estimate \u2014 every one of those is\nan ``arr.length`` or a ``reduce`` over the two lists in this same payload."
+      },
+      "NeuroshillingScenarioUpdate": {
+        "properties": {
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingRoleInput"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Roles"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingStepInput"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Steps"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "NeuroshillingScenarioUpdate",
+        "description": "Roles and steps in ONE body, because they must be written in one transaction.\n\nTwo endpoints would leave a window in which a step's ``role_id`` points at a\nrole the other call has already deleted, and no amount of client ordering\ncloses it."
+      },
+      "NeuroshillingStep": {
+        "properties": {
+          "step_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Step Id"
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Position"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message",
+              "reaction"
+            ],
+            "title": "Kind"
+          },
+          "role_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "default": ""
+          },
+          "reply_to_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To Position"
+          },
+          "target_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Position"
+          },
+          "emoji": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emoji"
+          },
+          "delay_min_seconds": {
+            "type": "integer",
+            "title": "Delay Min Seconds",
+            "default": 60
+          },
+          "delay_max_seconds": {
+            "type": "integer",
+            "title": "Delay Max Seconds",
+            "default": 180
+          }
+        },
+        "type": "object",
+        "required": [
+          "step_id",
+          "position",
+          "kind"
+        ],
+        "title": "NeuroshillingStep",
+        "description": "One row of ``neuroshilling_steps``.\n\n``emoji`` is a plain ``str`` here rather than the input's ``Literal``: the\ncolumn is free text and a row written before the set was narrowed must still\nread back instead of failing validation on the way out."
+      },
+      "NeuroshillingStepInput": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message",
+              "reaction"
+            ],
+            "title": "Kind",
+            "default": "message"
+          },
+          "role_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "title": "Text",
+            "default": ""
+          },
+          "reply_to_position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To Position"
+          },
+          "target_position": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 50.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Position"
+          },
+          "emoji": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "\ud83d\udc4d",
+                  "\u2764\ufe0f",
+                  "\ud83d\udd25",
+                  "\ud83d\udc4f",
+                  "\ud83e\udd14",
+                  "\ud83d\udcaf",
+                  "\u2728",
+                  "\ud83d\ude4c"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emoji"
+          },
+          "delay_min_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Delay Min Seconds",
+            "default": 60
+          },
+          "delay_max_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Delay Max Seconds",
+            "default": 180
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "NeuroshillingStepInput",
+        "description": "One dialogue step as the form declares it \u2014 no ``position``, see the module docstring."
       },
       "Page_AccountRead_": {
         "properties": {
