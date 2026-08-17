@@ -35,6 +35,32 @@ def _update(**overrides: Any) -> NeuroshillingCampaignUpdate:
     return NeuroshillingCampaignUpdate(**payload)
 
 
+# Every field the whole-form update carries, each holding a value the COLUMN would not
+# default to — a name dropped from ``_EDITABLE_COLUMNS`` leaves its column at that
+# default, which a value equal to it could not be told apart from one the write stored.
+_EDITED: dict[str, Any] = {
+    "name": "Renamed",
+    "mode": "revive",
+    "topic": "delivery service",
+    "targets_raw": "@one @two",
+    "unique_messages": False,
+    "use_chat_context": True,
+    "media_message_link": "https://t.me/chan/7",
+    "media_step_position": 2,
+    "run_mode": "parallel",
+    "pause_min_seconds": 5,
+    "pause_max_seconds": 25,
+    "messages_per_hour": 4,
+    "messages_per_chat_per_day": 0,
+    "total_per_account": 9,
+    "reserve_enabled": True,
+    "autoresponder": "neurodialog",
+    "reply_to_humans": True,
+    "reply_activity": "active",
+    "listen_minutes": 15,
+}
+
+
 @pytest.mark.asyncio
 async def test_a_new_campaign_starts_idle_as_a_draft() -> None:
     created = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
@@ -69,42 +95,22 @@ async def test_fetching_an_unknown_campaign_returns_none() -> None:
 
 @pytest.mark.asyncio
 async def test_update_writes_every_editable_column() -> None:
+    """Every field the operator can edit reaches its column, and none is dropped.
+
+    The whole body and never a hand-picked few: ``update_campaign`` answers with a
+    fresh read of the row, so comparing that answer against the values sent is what
+    catches a column the write left out. A field added to the request model and
+    forgotten by ``_EDITABLE_COLUMNS`` is caught by the first assertion instead.
+    """
     campaign = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
 
-    updated = await update_campaign(
-        campaign.campaign_id,
-        _update(
-            name="Renamed",
-            mode="revive",
-            topic="delivery service",
-            targets_raw="@one @two",
-            unique_messages=False,
-            use_chat_context=True,
-            media_message_link="https://t.me/chan/7",
-            media_step_position=2,
-            pause_min_seconds=5,
-            pause_max_seconds=25,
-            messages_per_hour=4,
-            messages_per_chat_per_day=0,
-            total_per_account=9,
-            reserve_enabled=True,
-            autoresponder="neurodialog",
-            reply_to_humans=True,
-            reply_activity="active",
-            listen_minutes=15,
-        ),
-    )
+    assert set(_EDITED) == set(NeuroshillingCampaignUpdate.model_fields) - {"accounts"}
+
+    updated = await update_campaign(campaign.campaign_id, NeuroshillingCampaignUpdate(**_EDITED))
 
     assert updated is not None
-    persisted = await fetch_campaign(campaign.campaign_id)
-    assert persisted == updated
-    assert updated.name == "Renamed"
-    assert updated.mode == "revive"
-    assert updated.targets_raw == "@one @two"
-    assert updated.unique_messages is False
-    assert updated.use_chat_context is True
-    assert updated.total_per_account == 9
-    assert updated.reply_activity == "active"
+    stored = updated.model_dump()
+    assert {name: stored[name] for name in _EDITED} == _EDITED
     assert updated.updated_at >= campaign.updated_at
 
 
