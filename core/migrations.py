@@ -15,6 +15,7 @@ from core.migration_steps import (
     _add_account_avatar,
     _add_account_bio,
     _add_account_proxy_geo,
+    _add_account_twofa_password,
     _add_logs_indexes,
     _add_neurocomment_challenges,
     _add_neurocomment_comment_indexes,
@@ -170,6 +171,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (54, "harden_proxy_hosts", _harden_proxy_hosts),
     (55, "add_neuroshilling_tables", _add_neuroshilling_tables),
     (56, "add_neuroshilling_chat_log", _add_neuroshilling_chat_log),
+    (57, "add_account_twofa_password", _add_account_twofa_password),
 )
 
 

@@ -168,6 +168,23 @@ async def test_error_calls_sentry_when_dsn_set(monkeypatch: pytest.MonkeyPatch) 
     assert kwargs.get("level") == "error"
 
 
+def test_sentry_init_never_ships_stack_frame_locals(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``include_local_variables=False`` — the one switch that reaches Telethon's frames.
+
+    Its default is ``True``, and the default logging integration turns any ERROR
+    record carrying ``exc_info`` into an event with every frame's ``f_locals``
+    rendered by ``repr()``. A failed ``edit_2fa`` holds the cloud password, the
+    recovery address and the mailed code as bare string locals inside Telethon, so
+    field-level ``repr=False`` cannot close that path — only this can.
+    """
+    monkeypatch.setattr(settings.logging, "sentry_dsn", "https://fake@sentry.example/0")
+    reset_logging_for_tests()
+    with patch("core.logging.sentry_sdk.init") as mock_init:
+        setup_logging()
+
+    assert mock_init.call_args.kwargs["include_local_variables"] is False
+
+
 @pytest.mark.asyncio
 async def test_error_skips_sentry_when_dsn_unset() -> None:
     with patch("core.logging.sentry_sdk.capture_message") as mock_capture:

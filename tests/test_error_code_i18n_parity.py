@@ -41,10 +41,12 @@ from typing import get_args
 from core.telegram_client._channels import _TELETHON_ERROR_CODES
 from core.telegram_client._media import _MEDIA_ERROR_CODES, MusicSaveErrorCode
 from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ERROR_CODES
+from core.telegram_client._twofa import _TWOFA_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
 from schemas.telegram_actions import ActionStatus
+from schemas.twofa import TwoFactorRefusalCode
 from schemas.warming import WarmingRefusalCode
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +69,7 @@ def _translatable_codes(locale: str) -> set[str]:
 
 
 def _mapped_codes() -> set[str]:
-    """Every code the gateway's four Telethon-error → code ladders can produce."""
+    """Every code the gateway's Telethon-error → code ladders can produce."""
     return {
         code
         for family in (
@@ -75,6 +77,7 @@ def _mapped_codes() -> set[str]:
             _TELETHON_ERROR_CODES,
             _MEDIA_ERROR_CODES,
             _DEAD_SESSION_ERROR_CODES,
+            _TWOFA_ERROR_CODES,
         )
         for _error_cls, code in family
     }
@@ -97,6 +100,12 @@ def _expected_codes() -> set[str]:
     # family was in no source here at all, so all three of its codes — including the
     # neuroshilling exclusion added on top of them — were translated by luck, not proof.
     #
+    # ``TwoFactorRefusalCode`` is the 2FA domain's whole vocabulary, and it exists
+    # because three of its codes are raised BY HAND rather than through a ladder
+    # (``twofa_not_changed``, ``twofa_password_not_set``, ``twofa_password_not_stored``)
+    # and one of those is raised from ``services/``, not the gateway. Enumerating only
+    # ``_TWOFA_ERROR_CODES`` left those three checked by nothing.
+    #
     # ``NeurocommentRefusalCode`` is the same family for the listener's own start,
     # which answers the 409 ``detail`` with a code the way the two above do. It exists
     # so a refusal added there is enumerable here instead of reaching the operator the
@@ -107,6 +116,7 @@ def _expected_codes() -> set[str]:
         | set(get_args(NeurocommentRefusalCode))
         | set(get_args(NeuroshillingRefusalCode))
         | set(get_args(WarmingRefusalCode))
+        | set(get_args(TwoFactorRefusalCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)
         | _mapped_codes()
     )

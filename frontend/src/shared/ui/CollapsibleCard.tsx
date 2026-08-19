@@ -27,6 +27,7 @@ export function CollapsibleCard({
   trailing,
   label,
   defaultOpen = false,
+  onOpenChange,
   wrapperClassName = 'rounded-2xl border border-line bg-white',
   headerClassName = 'px-4 py-[14px]',
   bodyClassName = 'px-4 pb-4',
@@ -36,6 +37,10 @@ export function CollapsibleCard({
   trailing?: ReactNode;
   label?: string;
   defaultOpen?: boolean;
+  // Collapsing does NOT unmount the body (it only gets `hidden`), so a card
+  // holding a one-time secret cannot rely on unmount to drop it. This tells the
+  // owner the card just closed; the 2FA card clears its plaintext on it.
+  onOpenChange?: (open: boolean) => void;
   wrapperClassName?: string;
   headerClassName?: string;
   bodyClassName?: string;
@@ -66,7 +71,9 @@ export function CollapsibleCard({
   const toggle = () => {
     setSettled(false);
     setReachable(true);
-    setOpen((value) => !value);
+    const next = !open;
+    setOpen(next);
+    onOpenChange?.(next);
   };
 
   // Drive the transition from the real content height so tall content (>600px)

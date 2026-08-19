@@ -82,6 +82,11 @@ from schemas.telegram_actions_media import (
 )
 from schemas.telegram_actions_privacy import GetPrivacySettings, SetPrivacySettings
 from schemas.telegram_actions_rights import CheckWriteRights
+from schemas.telegram_actions_twofa import (
+    GetTwoFactorStatus,
+    ManageTwoFactorEmail,
+    SetTwoFactorPassword,
+)
 
 ActionResult = _telegram_results.ActionResult
 ActionStatus = _telegram_results.ActionStatus
@@ -298,6 +303,8 @@ TelegramAction = Annotated[
     | ClickButton
     | UpdateProfile
     | SetPrivacySettings
+    | SetTwoFactorPassword
+    | ManageTwoFactorEmail
     | SetOnline
     | ReadChannel
     | ReactToPost
@@ -334,6 +341,7 @@ TelegramReadAction = Annotated[
     | ReadChatMessages
     | GetUserProfile
     | GetPrivacySettings
+    | GetTwoFactorStatus
     | ListPinnedStories
     | ListActiveStories
     | ListProfileMusic

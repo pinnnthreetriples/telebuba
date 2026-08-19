@@ -18,6 +18,7 @@ from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
+from api.v1._accounts_twofa import twofa_router
 from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload, staged_upload
 from core.config import settings
@@ -292,3 +293,5 @@ router.include_router(channels_router)
 router.include_router(channel_posts_router)
 # Telegram privacy keys (who may see the avatar / bio / last seen).
 router.include_router(privacy_router)
+# The account's Telegram cloud password (2FA).
+router.include_router(twofa_router)

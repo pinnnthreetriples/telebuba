@@ -46,6 +46,14 @@ _accounts = Table(
     Column("first_name", String, nullable=True),
     Column("last_name", String, nullable=True),
     Column("bio", String, nullable=True),
+    # The Telegram cloud password (2FA) this dashboard set, or NULL. Stored
+    # because it is the only way a later ``submit_phone_code`` can be completed:
+    # without it an account whose session is reset is unrecoverable by anyone,
+    # the operator included. Reachable only through
+    # ``core.repositories._accounts_twofa.fetch_account_twofa_password`` — it is
+    # in no SELECT the account read model uses, the same arrangement
+    # ``proxies.password`` has (``_row_to_proxy`` maps it to ``has_password``).
+    Column("twofa_password", String, nullable=True),
     # Small (~160px) profile photo captured on the session check, served by the
     # cacheable /avatar endpoint. ``avatar_etag`` (content hash) is what the list
     # query selects and the SPA puts in the <img> URL as ?v= — the BLOB stays out

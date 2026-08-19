@@ -46,6 +46,7 @@ from core.telegram_client._read_stories import (
     dispatch_list_active_stories,
     dispatch_list_pinned_stories,
 )
+from core.telegram_client._twofa import dispatch_get_twofa_status
 from schemas.telegram_actions import (
     BanCheckResult,
     CheckBannedInChannel,
@@ -53,6 +54,7 @@ from schemas.telegram_actions import (
     CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
     GetPrivacySettings,
+    GetTwoFactorStatus,
     GetUserProfile,
     LinkedDiscussionGroupResult,
     ListActiveStories,
@@ -223,6 +225,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await _dispatch_get_user_profile(client)
         case GetPrivacySettings():
             return await dispatch_get_privacy_settings(client)
+        case GetTwoFactorStatus():
+            return await dispatch_get_twofa_status(client)
         case ListPinnedStories():
             return await dispatch_list_pinned_stories(client, action)
         case ListActiveStories():

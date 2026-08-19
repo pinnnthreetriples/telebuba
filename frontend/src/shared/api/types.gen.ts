@@ -397,6 +397,141 @@ export type AccountStats = {
 };
 
 /**
+ * AccountTwoFactorCreated
+ *
+ * The POST response — the ONLY model in this codebase carrying the plaintext.
+ *
+ * It appears in the response to the request that set the password and nowhere
+ * else: no read endpoint returns it, ``AccountRead`` does not carry it, and no
+ * log event or error message may contain it. Same contract as an API key —
+ * shown once at creation so the operator can copy it into a password manager,
+ * never shown again.
+ *
+ * ``stored`` is ``False`` when Telegram accepted the password but the DB write
+ * that remembers it failed. The password is returned regardless, because after
+ * a successful RPC this response is the operator's only copy; losing it would
+ * leave the account unrecoverable if its session is ever reset.
+ *
+ * ``confirmed`` is ``False`` when the request reached the wire and only the ANSWER
+ * was lost, so Telegram may or may not have applied it. The password is still
+ * returned and still stored for the same reason: if Telegram DID apply it, this is
+ * the only copy anybody has, and discarding it would strand the account behind a
+ * password no human ever saw.
+ */
+export type AccountTwoFactorCreated = {
+  /**
+   * Password
+   */
+  password: string;
+  /**
+   * Hint
+   */
+  hint?: string | null;
+  /**
+   * Stored
+   */
+  stored?: boolean;
+  /**
+   * Confirmed
+   */
+  confirmed?: boolean;
+};
+
+/**
+ * AccountTwoFactorEmailConfirmRequest
+ *
+ * The code the operator read out of the letter Telegram just sent.
+ */
+export type AccountTwoFactorEmailConfirmRequest = {
+  /**
+   * Code
+   */
+  code: string;
+};
+
+/**
+ * AccountTwoFactorEmailPending
+ *
+ * Outcome of attaching (or re-sending to) a recovery email.
+ *
+ * ``pending`` means Telegram has the address and has mailed a confirmation code
+ * that the operator still has to type back. ``pending=False`` is the rarer
+ * branch: Telegram accepted the address as already verified and asked for
+ * nothing, so the flow is finished in one step.
+ *
+ * ``code_length`` is the length Telegram will accept, and it exists only because
+ * ``EMAIL_UNCONFIRMED_<N>`` reports it; ``None`` means Telegram did not say (the
+ * resend path), not that any length goes. Neither field is sensitive — the
+ * address and the code itself never leave the request they arrived in.
+ */
+export type AccountTwoFactorEmailPending = {
+  /**
+   * Pending
+   */
+  pending: boolean;
+  /**
+   * Code Length
+   */
+  code_length?: number | null;
+};
+
+/**
+ * AccountTwoFactorEmailRequest
+ *
+ * Attach-a-recovery-email body.
+ *
+ * The address is checked only for a shape that could not possibly be an email;
+ * see ``_EMAIL_SHAPE`` for why that is deliberate and what catches the rest.
+ */
+export type AccountTwoFactorEmailRequest = {
+  /**
+   * Email
+   */
+  email: string;
+};
+
+/**
+ * AccountTwoFactorUpdateRequest
+ *
+ * Set/change body. Both fields optional: no password means "generate one".
+ *
+ * ``extra="forbid"`` so a typo'd key 422s instead of silently generating a
+ * password the operator did not expect.
+ */
+export type AccountTwoFactorUpdateRequest = {
+  /**
+   * Password
+   */
+  password?: string | null;
+  /**
+   * Hint
+   */
+  hint?: string | null;
+};
+
+/**
+ * AccountTwoFactorView
+ *
+ * One account's live 2FA state, or why it could not be read.
+ *
+ * ``has_stored_password`` is about THIS dashboard, not about Telegram: it says
+ * whether the password we set is still in the DB, which is what decides
+ * whether a change or a removal can be authorised at all. It is a boolean by
+ * design — see the module docstring.
+ */
+export type AccountTwoFactorView = {
+  status?: TwoFactorStatusResult | null;
+  /**
+   * Has Stored Password
+   */
+  has_stored_password?: boolean;
+  /**
+   * Error
+   */
+  error?: string | null;
+};
+
+/**
  * ActionResult
  *
  * Outcome of one ``execute`` call.
@@ -442,6 +577,10 @@ export type ActionResult = {
    * Applied Privacy Keys
    */
   applied_privacy_keys?: Array<string> | null;
+  /**
+   * Twofa Email Code Length
+   */
+  twofa_email_code_length?: number | null;
   /**
    * Error Type
    */
@@ -3104,6 +3243,41 @@ export type TdataImportResult = {
 };
 
 /**
+ * TwoFactorStatusResult
+ *
+ * Gateway output for ``GetTwoFactorStatus`` — booleans plus the public hint.
+ *
+ * Every field is what ``account.getPassword`` reports, and every one of them is
+ * optional in the TL schema, so an absent flag degrades to the "no password"
+ * default rather than being guessed at. ``pending_reset_date`` is an ISO string
+ * (repo convention at the JSON boundary), never the ``datetime`` Telethon
+ * returns. The password itself is not here and cannot be: Telegram never
+ * returns it, and neither does this codebase after the one POST response.
+ */
+export type TwoFactorStatusResult = {
+  /**
+   * Has Password
+   */
+  has_password?: boolean;
+  /**
+   * Hint
+   */
+  hint?: string | null;
+  /**
+   * Has Recovery
+   */
+  has_recovery?: boolean;
+  /**
+   * Pending Reset Date
+   */
+  pending_reset_date?: string | null;
+  /**
+   * Email Unconfirmed Pattern
+   */
+  email_unconfirmed_pattern?: string | null;
+};
+
+/**
  * UpdatePromptRequest
  *
  * Replace a campaign's generation prompt (the edit-prompt modal).
@@ -5644,6 +5818,417 @@ export type SetAllAccountsPrivacyResponses = {
 
 export type SetAllAccountsPrivacyResponse =
   SetAllAccountsPrivacyResponses[keyof SetAllAccountsPrivacyResponses];
+
+export type RemoveAccountTwofaData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa';
+};
+
+export type RemoveAccountTwofaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type RemoveAccountTwofaError = RemoveAccountTwofaErrors[keyof RemoveAccountTwofaErrors];
+
+export type RemoveAccountTwofaResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorView;
+};
+
+export type RemoveAccountTwofaResponse =
+  RemoveAccountTwofaResponses[keyof RemoveAccountTwofaResponses];
+
+export type GetAccountTwofaData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa';
+};
+
+export type GetAccountTwofaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountTwofaError = GetAccountTwofaErrors[keyof GetAccountTwofaErrors];
+
+export type GetAccountTwofaResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorView;
+};
+
+export type GetAccountTwofaResponse = GetAccountTwofaResponses[keyof GetAccountTwofaResponses];
+
+export type SetAccountTwofaData = {
+  body: AccountTwoFactorUpdateRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa';
+};
+
+export type SetAccountTwofaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SetAccountTwofaError = SetAccountTwofaErrors[keyof SetAccountTwofaErrors];
+
+export type SetAccountTwofaResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorCreated;
+};
+
+export type SetAccountTwofaResponse = SetAccountTwofaResponses[keyof SetAccountTwofaResponses];
+
+export type CancelAccountTwofaEmailData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa/email';
+};
+
+export type CancelAccountTwofaEmailErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type CancelAccountTwofaEmailError =
+  CancelAccountTwofaEmailErrors[keyof CancelAccountTwofaEmailErrors];
+
+export type CancelAccountTwofaEmailResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorView;
+};
+
+export type CancelAccountTwofaEmailResponse =
+  CancelAccountTwofaEmailResponses[keyof CancelAccountTwofaEmailResponses];
+
+export type SetAccountTwofaEmailData = {
+  body: AccountTwoFactorEmailRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa/email';
+};
+
+export type SetAccountTwofaEmailErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SetAccountTwofaEmailError =
+  SetAccountTwofaEmailErrors[keyof SetAccountTwofaEmailErrors];
+
+export type SetAccountTwofaEmailResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorEmailPending;
+};
+
+export type SetAccountTwofaEmailResponse =
+  SetAccountTwofaEmailResponses[keyof SetAccountTwofaEmailResponses];
+
+export type ConfirmAccountTwofaEmailData = {
+  body: AccountTwoFactorEmailConfirmRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa/email/confirm';
+};
+
+export type ConfirmAccountTwofaEmailErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ConfirmAccountTwofaEmailError =
+  ConfirmAccountTwofaEmailErrors[keyof ConfirmAccountTwofaEmailErrors];
+
+export type ConfirmAccountTwofaEmailResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorView;
+};
+
+export type ConfirmAccountTwofaEmailResponse =
+  ConfirmAccountTwofaEmailResponses[keyof ConfirmAccountTwofaEmailResponses];
+
+export type ResendAccountTwofaEmailData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa/email/resend';
+};
+
+export type ResendAccountTwofaEmailErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ResendAccountTwofaEmailError =
+  ResendAccountTwofaEmailErrors[keyof ResendAccountTwofaEmailErrors];
+
+export type ResendAccountTwofaEmailResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorEmailPending;
+};
+
+export type ResendAccountTwofaEmailResponse =
+  ResendAccountTwofaEmailResponses[keyof ResendAccountTwofaEmailResponses];
+
+export type ClearAccountTwofaEmailData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/2fa/email/recovery';
+};
+
+export type ClearAccountTwofaEmailErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ClearAccountTwofaEmailError =
+  ClearAccountTwofaEmailErrors[keyof ClearAccountTwofaEmailErrors];
+
+export type ClearAccountTwofaEmailResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountTwoFactorView;
+};
+
+export type ClearAccountTwofaEmailResponse =
+  ClearAccountTwofaEmailResponses[keyof ClearAccountTwofaEmailResponses];
 
 export type ListProxiesData = {
   body?: never;

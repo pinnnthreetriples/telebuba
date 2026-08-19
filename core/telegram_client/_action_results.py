@@ -52,6 +52,11 @@ class _DispatchResult:
     # Recent post ids fetched during a read, threaded to a following react so it
     # skips re-fetching the same channel (set only by ``read_channel``).
     recent_message_ids: list[int] | None = None
+    # Length of the recovery-email confirmation code Telegram just mailed (set only
+    # by ``manage_twofa_email`` in ``set`` mode). It exists nowhere else: the number
+    # arrives inside the ``EMAIL_UNCONFIRMED_<N>`` the gateway swallows as a
+    # success, and the operator cannot type the code without it.
+    twofa_email_code_length: int | None = None
 
 
 async def _flood_action_result(  # noqa: PLR0913 - four keyword-only outcome facets, no bag
