@@ -12,8 +12,10 @@ account health/quota/cooldown selection gates (anti-ban), and the outer
 try/except that isolates any fault from the listener task.
 
 All Telegram / Gemini / spam / randomness access goes through ``_seams`` so a
-test patches one place; the account-health reads are imported at module scope so
-tests patch ``engine.<name>``. The reply delay uses ``asyncio.sleep`` (patched).
+test patches one place; the bulk selection reads are imported at module scope so
+tests patch ``engine.<name>`` (the gate ladder that judges them, and the health
+scorers it calls, belong to ``_gates``). The reply delay uses ``asyncio.sleep``
+(patched).
 """
 
 from __future__ import annotations
@@ -41,17 +43,18 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.neurocomment_pipeline import PipelineOutcome
-from services import _account_owner
 from services.neurocomment import _filters, _reply_wait, _seams, _state
 from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
-from services.trust import account_trust_score_from
-from services.warming.pacing import evaluate_readiness
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
-    from schemas.neurocomment import NeurocommentCampaign, NeurocommentSettings
+    from schemas.neurocomment import (
+        NeurocommentCampaign,
+        NeurocommentReadiness,
+        NeurocommentSettings,
+    )
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import NewPostEvent
     from schemas.warming import WarmingStateRecord
@@ -214,7 +217,7 @@ class _SelectionPool(NamedTuple):
     """Bulk-loaded signals to score every candidate in one pass (no per-account I/O)."""
 
     accounts: dict[str, AccountRead]
-    ready_account_ids: frozenset[str]  # accounts ready for THIS channel
+    readiness: dict[str, NeurocommentReadiness]  # this channel's row, per account
     states: dict[str, WarmingStateRecord]
     spam: dict[str, SpamStatusVerdict]
     fingerprints: dict[str, DeviceFingerprint]
@@ -237,13 +240,14 @@ async def _load_selection_pool(
     not O(fleet) x O(campaign channels), as accounts and channels scale.
     """
     accounts = {acc.account_id: acc for acc in (await list_accounts_by_ids(account_ids)).accounts}
-    ready_account_ids = frozenset(
-        r.account_id
+    # Whole rows, because every miss reason below ``cooldown`` is derived from one: a set of
+    # ready ids can only ever say "not ready". One query, scoped to this channel; the judging
+    # belongs to the ladder (``_gates._account_block_reason``), including the operator skip
+    # (#148) and the auto-ban (#30), which must outrank a stale ``ready=1``.
+    readiness = {
+        r.account_id: r
         for r in (await list_channel_readiness(campaign_id, channel, account_ids)).readiness
-        # Honour the operator skip (#148) and the auto-ban (#30) even if a stale
-        # re-enable left ready=1: a human-skipped or banned pair is never selected.
-        if r.ready and not r.human_skipped and not r.banned
-    )
+    }
     states = {rec.account_id: rec for rec in await list_warming_states_by_ids(account_ids)}
     spam = await list_spam_statuses_by_ids(account_ids)
     fingerprints = await list_device_fingerprints_by_ids(account_ids)
@@ -258,7 +262,7 @@ async def _load_selection_pool(
         daily = {c.account_id: c.count for c in daily_rows.counts}
     return _SelectionPool(
         accounts=accounts,
-        ready_account_ids=ready_account_ids,
+        readiness=readiness,
         states=states,
         spam=spam,
         fingerprints=fingerprints,
@@ -286,7 +290,7 @@ async def _select_account(
     cache and never re-probed here: probing @SpamBot per post is itself a ban
     signal, so warming/onboarding own spam freshness.
 
-    On a miss returns the binding blocker (``_selection_block_reason``) so the
+    On a miss returns the binding blocker (``_gates._selection_block_reason``) so the
     activity log can tell the operator *why* — busy quota vs cooldown vs not warmed.
     """
     # Who serves this channel — the shared ``_pins`` rule the four channel-drop rules
@@ -317,106 +321,15 @@ async def _select_account(
     return _Selection(_seams.rng.choice(idlest), None)
 
 
-# Report the blocker of the account that passed the *most* gates — the most actionable
-# one. A maxed-out-but-healthy account (quota) means "add accounts / raise the cap",
-# which is more useful than reporting some other account that is merely not warmed yet.
-# The two quota caps report separately (which one is full) but both outrank the rest.
-# ``busy_neuroshilling`` is the exception that goes FIRST despite passing the fewest gates:
-# it is not a verdict about the account's health at all, it is "another feature is driving
-# this session right now". Reporting a quota below it would send the operator to raise a
-# cap that was never the reason, and hide the one fact that resolves itself.
-_BLOCK_PRIORITY = (
-    "busy_neuroshilling",
-    "quota_hour",
-    "quota_day",
-    "cooldown",
-    "unhealthy",
-    "not_ready",
-)
-
-
-def _account_block_reason(
-    account_id: str,
-    channel: str,
-    channel_count: int,
-    now: datetime,
-    pool: _SelectionPool,
-) -> str | None:
-    """The first gate that makes one account ineligible, or ``None`` if it's eligible.
-
-    Single source of the selection gate ladder — ``_is_eligible`` is just "no reason".
-    """
-    # First, and re-read per post rather than once at listener start: selection runs on
-    # EVERY incoming post, and a neuroshilling campaign can take the account between two
-    # of them. A synchronous dict read, so the ``_SelectionPool`` promise of no
-    # per-account I/O in this pass holds — there is nothing here to bulk-load.
-    if _account_owner.owner_of(account_id) == "neuroshilling":
-        return "busy_neuroshilling"
-    if _state.in_cooldown(account_id, now, channel):
-        return "cooldown"
-    account = pool.accounts.get(account_id)
-    warming = pool.states.get(account_id)
-    if (
-        account_id not in pool.ready_account_ids
-        or account is None
-        or warming is None
-        or not warming.promoted_to_nc
-        or not warming.nc_handed_off
-    ):
-        return "not_ready"
-    if not _is_healthy(account, channel_count, now, pool):
-        return "unhealthy"
-    return _quota_block_reason(account_id, pool.limits, pool.hourly_counts, pool.daily_counts)
-
-
-def _is_eligible(
-    account_id: str, channel: str, channel_count: int, now: datetime, pool: _SelectionPool
-) -> bool:
-    return _account_block_reason(account_id, channel, channel_count, now, pool) is None
-
-
-def _selection_block_reason(
-    account_ids: list[str], channel: str, channel_count: int, now: datetime, pool: _SelectionPool
-) -> str:
-    """Summarise why no account was eligible as the highest-priority binding blocker."""
-    reasons = {
-        reason
-        for account_id in account_ids
-        if (reason := _account_block_reason(account_id, channel, channel_count, now, pool))
-    }
-    return next((reason for reason in _BLOCK_PRIORITY if reason in reasons), "not_ready")
-
-
-def _is_healthy(
-    account: AccountRead,
-    channel_count: int,
-    now: datetime,
-    pool: _SelectionPool,
-) -> bool:
-    """Warming readiness gate + Trust Score, scored from already-loaded signals."""
-    spam = pool.spam.get(account.account_id)
-    fingerprint = pool.fingerprints.get(account.account_id)
-    trust = account_trust_score_from(
-        account=account,
-        record=pool.states.get(account.account_id),
-        spam=spam,
-        lang_code=fingerprint.system_lang_code if fingerprint else None,
-        now=now,
-    )
-    if trust.score < pool.limits.min_trust_score:
-        return False
-    health = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
-    return health.ready
-
-
-# The quota ladder lives in ``_gates`` (file-size budget), together with the re-check the
-# ``reply``-mode wait runs before it sends: both paths score the caps through ONE function,
-# so a cap that moves moves for the immediate send and for a post parked an hour ago alike.
-# Re-exported so ``engine._quota_block_reason`` / ``engine._account_quota_block_reason``
-# still resolve for the selection ladder above and for callers.
-from services.neurocomment._gates import (  # noqa: E402 - re-export after the module body.
+# Every gate the two send paths share lives in ``_gates`` (file-size budget, and one home
+# for the whole ladder): the immediate post scored here and the ``reply``-mode post the wait
+# resumes an hour later run the SAME functions, so a cap or a readiness row that moves moves
+# for both. ``_select_account`` above reads the selection two; ``_handle_new_post`` reads the
+# under-lock quota re-check.
+from services.neurocomment._gates import (  # noqa: E402 - imported after the module body.
     _account_quota_block_reason,
-    _quota_block_reason,
+    _is_eligible,
+    _selection_block_reason,
 )
 
 # The generation + outcome-classification back half lives in ``_generate`` (file-

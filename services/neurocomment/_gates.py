@@ -6,9 +6,14 @@ path every gate is read microseconds before the send, so nothing can change in b
 parked post is sent one to a hundred and twenty minutes later, and every one of those gates
 is a statement about NOW: a paused channel, a flood cooldown, a revoked readiness row, a
 filled quota. Asking again is the whole job of :func:`resume_refusal`, and it asks through
-the same ladder ``engine._select_account`` scores candidates with — a hand-written second
-list of gates over in the wait is exactly how the two paths would drift apart on the next
-edit to either.
+the very ladder ``engine._select_account`` scores candidates with — :func:`_is_eligible`
+and :func:`_account_block_reason` below — because a hand-written second list of gates over
+in the wait is exactly how the two paths would drift apart on the next edit to either.
+
+The whole ladder lives here, not just the quota rungs: the rungs are read as one ordered
+sequence (:data:`_BLOCK_PRIORITY`), and a rung whose order lived in one module while its
+verdict lived in another is a rung nothing can keep honest. ``engine`` keeps the bulk pool
+LOAD, which is I/O and its own concern; this module keeps every judgement made from it.
 
 Refusals are reported with the immediate path's own event codes; this module coins none.
 """
@@ -25,11 +30,21 @@ from core.db import (
     list_campaign_accounts,
     list_campaign_channels,
 )
-from services.neurocomment import _state
+from services import _account_owner
+from services.neurocomment import _pair_status, _state
 from services.neurocomment._pins import serving_accounts
+from services.trust import account_trust_score_from
+from services.warming.pacing import evaluate_readiness
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
     from schemas.neurocomment import CommentRecord, NeurocommentCampaign, NeurocommentSettings
+
+    # Type-only, and deliberately this direction: ``_SelectionPool`` is what ``engine``'s
+    # bulk loader RETURNS, so it belongs beside that loader, while the runtime import runs
+    # one way only (``engine`` imports this module). Naming the type here costs nothing at
+    # import time; owning it here would drag the loader and its patch seams along with it.
+    from services.neurocomment.engine import _SelectionPool
 
 
 def _quota_block_reason(
@@ -99,6 +114,109 @@ async def _account_quota_block_reason(
     return None
 
 
+# Report the blocker of the account that passed the *most* gates. A maxed-out-but-healthy
+# account (quota) means "add accounts / raise the cap", which is more useful than reporting
+# some other account that is merely not warmed yet. The two quota caps report separately
+# (which one is full) but both outrank the rest. Below them the same distance rule runs on,
+# and where two blockers sit at comparable distance the TERMINAL one reports: a transient
+# block announces itself when the channel starts working, a permanent loss never does. That
+# half of the order ships with the vocabulary it orders, in ``_pair_status.REPORT_ORDER``
+# — read its comment before moving a rung — and ends in ``not_ready``, the rung that says
+# nothing more specific than that.
+# ``busy_neuroshilling`` is the exception that goes FIRST despite passing the fewest gates:
+# it is not a verdict about the account's health at all, it is "another feature is driving
+# this session right now". Reporting a quota below it would send the operator to raise a
+# cap that was never the reason, and hide the one fact that resolves itself.
+_BLOCK_PRIORITY = (
+    "busy_neuroshilling",
+    "quota_hour",
+    "quota_day",
+    "cooldown",
+    "unhealthy",
+    *_pair_status.REPORT_ORDER,
+)
+
+
+def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
+    account_id: str,
+    channel: str,
+    channel_count: int,
+    now: datetime,
+    pool: _SelectionPool,
+) -> str | None:
+    """The first gate that makes one account ineligible, or ``None`` if it's eligible.
+
+    Single source of the selection gate ladder — ``_is_eligible`` is just "no reason".
+    The readiness row's own verdict is ``_pair_status``', shared with the board's channel
+    badge; the rungs here are the ones no readiness row can answer.
+    """
+    # First, and re-read per post rather than once at listener start: selection runs on
+    # EVERY incoming post, and a neuroshilling campaign can take the account between two
+    # of them. A synchronous dict read, so the ``_SelectionPool`` promise of no
+    # per-account I/O in this pass holds — there is nothing here to bulk-load.
+    if _account_owner.owner_of(account_id) == "neuroshilling":
+        return "busy_neuroshilling"
+    if _state.in_cooldown(account_id, now, channel):
+        return "cooldown"
+    account = pool.accounts.get(account_id)
+    readiness = pool.readiness.get(account_id)
+    if account is None or readiness is None:
+        return "no_data"
+    if readiness.human_skipped:
+        # Above the row ladder, and above ``ready``: the operator took this pair out of
+        # service (#148), which holds even if a stale ``ready=1`` survived the skip. The
+        # CHANNEL badge deliberately does not show it, which is why it is not shared.
+        return "human_skipped"
+    if (blocked := _pair_status.pair_block_reason(readiness, now)) is not None:
+        return blocked
+    warming = pool.states.get(account_id)
+    if warming is None or not warming.promoted_to_nc or not warming.nc_handed_off:
+        return "not_handed_off"
+    if not _is_healthy(account, channel_count, now, pool):
+        return "unhealthy"
+    return _quota_block_reason(account_id, pool.limits, pool.hourly_counts, pool.daily_counts)
+
+
+def _is_eligible(
+    account_id: str, channel: str, channel_count: int, now: datetime, pool: _SelectionPool
+) -> bool:
+    return _account_block_reason(account_id, channel, channel_count, now, pool) is None
+
+
+def _selection_block_reason(
+    account_ids: list[str], channel: str, channel_count: int, now: datetime, pool: _SelectionPool
+) -> str:
+    """Summarise why no account was eligible as the highest-priority binding blocker."""
+    reasons = {
+        reason
+        for account_id in account_ids
+        if (reason := _account_block_reason(account_id, channel, channel_count, now, pool))
+    }
+    return next((reason for reason in _BLOCK_PRIORITY if reason in reasons), "not_ready")
+
+
+def _is_healthy(
+    account: AccountRead,
+    channel_count: int,
+    now: datetime,
+    pool: _SelectionPool,
+) -> bool:
+    """Warming readiness gate + Trust Score, scored from already-loaded signals."""
+    spam = pool.spam.get(account.account_id)
+    fingerprint = pool.fingerprints.get(account.account_id)
+    trust = account_trust_score_from(
+        account=account,
+        record=pool.states.get(account.account_id),
+        spam=spam,
+        lang_code=fingerprint.system_lang_code if fingerprint else None,
+        now=now,
+    )
+    if trust.score < pool.limits.min_trust_score:
+        return False
+    health = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
+    return health.ready
+
+
 class Refusal(NamedTuple):
     """A gate saying no, in the words the immediate path already logs that gate with."""
 
@@ -132,9 +250,9 @@ async def resume_refusal(
     if row.account_id not in serving_accounts(links, row.channel):
         return Refusal("neurocomment_no_account_available", "no_accounts_linked")
     channel_count = max(1, len((await list_campaign_channels(campaign.campaign_id)).links))
-    # Late so the import stays one-way: ``engine`` imports this module for the quota ladder
-    # above, and the selection ladder below cannot move here with it — ``_is_healthy`` reads
-    # ``engine.evaluate_readiness``, which is where every test patches account health.
+    # The one reference this module makes to ``engine``, and late so the runtime import stays
+    # one-way: ``engine`` imports the gates above at load, so a module-scope import back would
+    # close the cycle. Only the bulk LOAD is borrowed — the ladder that judges it is local.
     from services.neurocomment import engine  # noqa: PLC0415
 
     pool = await engine._load_selection_pool(  # noqa: SLF001 - this domain's own gate ladder.
@@ -143,7 +261,7 @@ async def resume_refusal(
     # The ladder's last rung is quota, scored off those grouped counts — which include the
     # parked row itself. Emptied here so the fresh, own-slot-aware re-read below is the only
     # quota verdict; left in, they would refuse every resumed post the moment a cap is 1.
-    reason = engine._account_block_reason(  # noqa: SLF001 - this domain's own gate ladder.
+    reason = _account_block_reason(
         row.account_id,
         row.channel,
         channel_count,

@@ -202,9 +202,11 @@ async def _classify_post(
         # solver-clearable. Previously this fell to the generic tail, which touches no
         # state, so the pair was re-picked on the channel's very next post and failed
         # forever (live DB: 38 such failures vs 19 sends). (joined=False,
-        # captcha_passed=True) is onboarding's existing hard-join-failure sentinel, already
-        # rendered as ``join_failed`` by board's ``_not_joined_status`` — no schema/board
-        # change needed. ready=False stops selection now, and since the row is neither
+        # captcha_passed=True) is onboarding's existing hard-join-failure sentinel, so no
+        # schema/board change is needed; how it READS is ``_pair_status.pair_block_reason``'s
+        # split through ``_rejoin`` — ``rejoining`` while re-join budget remains, terminal
+        # (``rejoin_exhausted``, which the channel badge shows as ``join_failed``) once that
+        # budget is spent. ready=False stops selection now, and since the row is neither
         # human_skipped nor banned an onboarding pass re-joins it. That recovery is NOT
         # automatic: ``_ensure_onboarding_running`` has no timer — only operator Start, app
         # boot with ``listener_running=1``, and the campaign link/deactivate/assign/

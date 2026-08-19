@@ -26,7 +26,7 @@ from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.neurocomment import NeurocommentSettings
 from schemas.telegram_actions import NewPostEvent
 from services.content import try_reserve_sent
-from services.neurocomment import _outcomes, _seams, _state, engine
+from services.neurocomment import _gates, _outcomes, _seams, _state, engine
 from tests.services.neurocomment.engine_support import (
     _CommentStub,
     _FixedRng,
@@ -372,7 +372,7 @@ def test_min_trust_gate_rejects_below_threshold() -> None:
     )
     pool = engine._SelectionPool(
         accounts={"low": account},
-        ready_account_ids=frozenset({"low"}),
+        readiness={},
         states={},
         spam={},
         fingerprints={},
@@ -381,7 +381,7 @@ def test_min_trust_gate_rejects_below_threshold() -> None:
         limits=limits,
     )
 
-    assert engine._is_healthy(account, 1, datetime.now(UTC), pool) is False
+    assert _gates._is_healthy(account, 1, datetime.now(UTC), pool) is False
 
 
 # --------------------------------------------------------------------------- #
@@ -505,8 +505,10 @@ async def test_banned_pair_is_not_selected_for_the_next_post(
 ) -> None:
     """After a ban, a fresh post on the same channel finds no eligible account."""
     await _make_campaign("@chan", "acc-1", "acc-2")
-    # acc-2 is joined but not ready: it never competes for the post, and its un-banned
-    # readiness row keeps the channel linked, so the miss below is the banned pair alone.
+    # acc-2 is joined but not past the bot check: it never competes for the post, and its
+    # un-banned readiness row keeps the channel linked. Its own blocker is
+    # ``chat_restricted``, which the ban outranks — a transient block announces itself when
+    # the chat opens up, a ban never would.
     await upsert_readiness("acc-2", "@chan", joined=True, captcha_passed=False, ready=False)
     comment = _CommentStub(status="failed", error_type="UserBannedInChannelError")
     _patch_io(monkeypatch, comment=comment)
@@ -517,9 +519,10 @@ async def test_banned_pair_is_not_selected_for_the_next_post(
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
 
-    # No second attempt — the banned pair is excluded from selection.
+    # No second attempt — the banned pair is excluded from selection, and the log says so
+    # instead of the old catch-all that also meant "skipped" and "not in the chat".
     assert len(comment.posts) == 1
-    assert await _latest_extra("neurocomment_no_account_available", "reason") == "not_ready"
+    assert await _latest_extra("neurocomment_no_account_available", "reason") == "banned"
 
 
 # --------------------------------------------------------------------------- #
@@ -568,9 +571,11 @@ async def test_lost_access_pair_is_not_reselected_for_the_next_post(
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
 
-    # No second attempt — ready=False excludes the pair instead of looping forever.
+    # No second attempt — ready=False excludes the pair instead of looping forever, and the
+    # reason is the one ``_rejoin`` is actually working on: the pair is walking itself back
+    # in, so the operator waits rather than reaching for another account.
     assert len(comment.calls) == 1
-    assert await _latest_extra("neurocomment_no_account_available", "reason") == "not_ready"
+    assert await _latest_extra("neurocomment_no_account_available", "reason") == "rejoining"
 
 
 @pytest.mark.asyncio

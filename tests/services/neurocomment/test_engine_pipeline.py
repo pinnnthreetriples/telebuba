@@ -30,7 +30,7 @@ from schemas.accounts import AccountCreate, AccountList
 from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import NewPostEvent
-from services.neurocomment import _seams, _state, engine
+from services.neurocomment import _gates, _seams, _state, engine
 from tests.services.neurocomment.engine_support import (
     _async_return,
     _CommentStub,
@@ -358,14 +358,15 @@ async def test_no_account_reason_cooldown(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_no_account_reason_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_no_account_reason_chat_restricted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """In the chat but not past its bot check → the write block, not a bare "not ready"."""
     await _make_campaign("@chan", "acc-1")
     await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)
     _patch_io(monkeypatch, comment=_CommentStub())
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
-    assert await _latest_reason("neurocomment_no_account_available") == "not_ready"
+    assert await _latest_reason("neurocomment_no_account_available") == "chat_restricted"
 
 
 @pytest.mark.asyncio
@@ -480,7 +481,7 @@ async def test_gemini_error_regenerates_then_gives_up(monkeypatch: pytest.Monkey
 @pytest.mark.asyncio
 async def test_unhealthy_account_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
-    monkeypatch.setattr(engine, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=False))
+    monkeypatch.setattr(_gates, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=False))
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)
 

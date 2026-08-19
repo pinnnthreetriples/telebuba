@@ -23,7 +23,7 @@ from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, BanCheckResult
-from services.neurocomment import _generate, _seams, _state, engine
+from services.neurocomment import _gates, _generate, _seams, _state, engine
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -59,7 +59,7 @@ def isolate_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     # Default health: the readiness gate is forced open. Trust is scored from bulk
     # signals via the pure account_trust_score_from and ignored here (evaluate_readiness
     # is stubbed); spam comes from the cached bulk read, never a live probe.
-    monkeypatch.setattr(engine, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=True))
+    monkeypatch.setattr(_gates, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=True))
     yield
     _state.reset_for_tests()
 

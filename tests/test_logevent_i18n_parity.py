@@ -250,7 +250,7 @@ def _module_reason_codes(source: str, path: Path) -> set[str]:
     ``reason``/``*_reason`` NAME carries — the variable a branch ladder assigns
     (``_generate``'s regeneration ladder), the module constant (``_RATE_LIMITED_REASON``)
     and the return of a ``*_reason`` function (``_filters.filter_reason``,
-    ``engine._selection_block_reason``). Names are resolved through
+    ``_gates._selection_block_reason``). Names are resolved through
     :func:`_string_bindings`, so a variable forwarded into the dict is followed too. The
     ``extra=`` anchor is what keeps this to the LOG vocabulary: ``reason=`` is also a
     field on schemas the operator UI never renders through this map
