@@ -8,9 +8,9 @@ import pytest
 
 from core.db import fetch_active_campaign_for_channel
 from schemas.accounts import AccountRead
-from schemas.neurocomment import NeurocommentSettings
+from schemas.neurocomment import NeurocommentReadiness, NeurocommentSettings
 from services import _account_owner
-from services.neurocomment import _state, engine
+from services.neurocomment import _gates, _pair_status, _state, engine
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from tests.services.neurocomment.engine_support import _make_campaign
 
@@ -39,16 +39,28 @@ def _limits(*, hourly: int = 5, daily: int = 3) -> NeurocommentSettings:
 )
 def test_quota_boundaries(hourly: int, daily: int, expected: str | None) -> None:
     assert (
-        engine._quota_block_reason("account", _limits(), {"account": hourly}, {"account": daily})
+        _gates._quota_block_reason("account", _limits(), {"account": hourly}, {"account": daily})
         == expected
     )
 
 
 def test_zero_daily_cap_is_an_off_switch() -> None:
     assert (
-        engine._quota_block_reason("account", _limits(daily=0), {"account": 0}, {"account": 999})
+        _gates._quota_block_reason("account", _limits(daily=0), {"account": 0}, {"account": 999})
         is None
     )
+
+
+def _row(account_id: str = "account", **overrides: object) -> NeurocommentReadiness:
+    fields: dict[str, object] = {
+        "account_id": account_id,
+        "channel": "@channel",
+        "joined": True,
+        "captcha_passed": True,
+        "ready": True,
+        "checked_at": "2026-01-01T00:00:00+00:00",
+    }
+    return NeurocommentReadiness.model_validate(fields | overrides)
 
 
 def _pool() -> engine._SelectionPool:
@@ -60,7 +72,7 @@ def _pool() -> engine._SelectionPool:
     )
     return engine._SelectionPool(
         accounts={"account": account},
-        ready_account_ids=frozenset({"account"}),
+        readiness={"account": _row()},
         states={},
         spam={},
         fingerprints={},
@@ -73,25 +85,55 @@ def _pool() -> engine._SelectionPool:
 def test_block_ladder_stops_at_cooldown_before_other_signals(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pool = _pool()._replace(accounts={}, ready_account_ids=frozenset())
+    pool = _pool()._replace(accounts={}, readiness={})
     monkeypatch.setattr(_state, "in_cooldown", lambda *_a: True)
 
     assert (
-        engine._account_block_reason("account", "@channel", 1, datetime.now(UTC), pool)
+        _gates._account_block_reason("account", "@channel", 1, datetime.now(UTC), pool)
         == "cooldown"
     )
 
 
-def test_missing_account_is_not_ready_even_if_readiness_row_exists(
+def test_missing_account_reports_no_data_even_if_readiness_row_exists(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Half the pair is on file and half is not, which is neither a readiness verdict nor a
+    # gate: ``no_data`` is what the board badges a channel it has no rows for, and it says
+    # the same thing here — nothing is known about this account, so nothing can be blamed.
     pool = _pool()._replace(accounts={})
     monkeypatch.setattr(_state, "in_cooldown", lambda *_a: False)
 
     assert (
-        engine._account_block_reason("account", "@channel", 1, datetime.now(UTC), pool)
-        == "not_ready"
+        _gates._account_block_reason("account", "@channel", 1, datetime.now(UTC), pool) == "no_data"
     )
+
+
+@pytest.mark.parametrize(
+    ("row", "expected"),
+    [
+        (_row(banned=True, ready=True), "banned"),  # a stale ready=1 never beats the ban
+        (_row(), None),  # joined, past the bot check, ready
+        (_row(ready=False, captcha_passed=False), "chat_restricted"),
+        (_row(ready=False, joined=False, captcha_passed=True), "rejoining"),
+        (
+            _row(ready=False, joined=False, captcha_passed=True, rejoin_gave_up=True),
+            "rejoin_exhausted",
+        ),
+        (
+            # ``_rejoin`` will not re-join a skipped pair, so its sentinel never
+            # self-resolves — the terminal reading, exactly as the board badges it.
+            _row(ready=False, joined=False, captcha_passed=True, human_skipped=True),
+            "join_failed",
+        ),
+        (_row(ready=False, joined=False, captcha_passed=False), "join_by_request"),
+        (_row(ready=False), "not_ready"),  # joined and past the bot check, still not ready
+    ],
+)
+def test_pair_ladder_names_each_readiness_state(
+    row: NeurocommentReadiness, expected: str | None
+) -> None:
+    """Every rung of the shared per-row ladder, which the board badges off too."""
+    assert _pair_status.pair_block_reason(row) == expected
 
 
 @pytest.mark.parametrize(
@@ -103,6 +145,12 @@ def test_missing_account_is_not_ready_even_if_readiness_row_exists(
         # Not a health verdict, so it must not be reported behind one: a quota label
         # sends the operator to raise a cap that was never the reason.
         ({"busy_neuroshilling", "quota_hour"}, "busy_neuroshilling"),
+        # Terminal before transient at comparable distance: the mute announces itself the
+        # moment the chat opens up, the permanent loss would otherwise never be reported.
+        ({"banned", "chat_restricted"}, "banned"),
+        # Distance first: ``not_handed_off`` is only reached once readiness said ready.
+        ({"not_handed_off", "human_skipped"}, "not_handed_off"),
+        ({"not_ready", "rejoin_exhausted"}, "rejoin_exhausted"),
     ],
 )
 def test_selection_miss_reports_highest_priority_blocker(
@@ -110,13 +158,13 @@ def test_selection_miss_reports_highest_priority_blocker(
 ) -> None:
     accounts = sorted(reasons)
     monkeypatch.setattr(
-        engine,
+        _gates,
         "_account_block_reason",
         lambda account_id, *_args: account_id,
     )
 
     assert (
-        engine._selection_block_reason(accounts, "@channel", 1, datetime.now(UTC), _pool())
+        _gates._selection_block_reason(accounts, "@channel", 1, datetime.now(UTC), _pool())
         == expected
     )
 
@@ -138,7 +186,7 @@ def test_a_neuroshilling_hold_blocks_before_every_other_gate(
     _account_owner.try_claim("account", "neuroshilling", "ns-1")
 
     assert (
-        engine._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
+        _gates._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
         == "busy_neuroshilling"
     )
 
@@ -157,8 +205,8 @@ def test_a_warming_hold_is_not_the_selection_gates_business(
     _account_owner.try_claim("account", "warming", "run-1")
 
     assert (
-        engine._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
-        == "not_ready"
+        _gates._account_block_reason("account", "@channel", 1, datetime.now(UTC), _pool())
+        == "not_handed_off"
     )
 
 

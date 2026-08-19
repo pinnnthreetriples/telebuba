@@ -34,6 +34,7 @@ from core.db import (  # type: ignore[attr-defined]
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 from services.neurocomment import (
+    _gates,
     _give_up,
     _rejoin,
     _runtime,
@@ -190,7 +191,7 @@ async def test_the_account_keeps_commenting_on_its_other_channels(
     _patch_telegram(monkeypatch)
     # The health gate reads warming signals this fixture does not build; selection's own
     # readiness filter — the thing under test — is the line below it.
-    monkeypatch.setattr(engine, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=True))
+    monkeypatch.setattr(_gates, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=True))
 
     await _rejoin.review_access_lost(datetime.now(UTC))
 
@@ -317,7 +318,7 @@ async def test_every_reader_of_the_budget_stops_claiming_the_pair_is_worked_on(
     now = datetime.now(UTC)
     row = await fetch_readiness("acc-1", _CHANNEL)
     assert row is not None
-    assert board._not_joined_status([row]) == "join_failed"
+    assert board._channel_status([row], None, challenged=False, paused=False) == "join_failed"
     assert [p.account_id for p in await campaigns._rejoin_exhausted_pairs()] == ["acc-1"]
     assert _rejoin.still_retrying(row, now) is False
 

@@ -121,10 +121,11 @@ def exhausted(readiness: NeurocommentReadiness, now: datetime | None = None) -> 
     and the wall clock for the callers that just ask what the pair is right now (the board
     badge), which is the same instant for them.
 
-    Public alongside :func:`access_lost` because ``board`` badges the two together — a
-    parked pair still inside its budget is ``rejoining``, one past it is ``join_failed``
-    — and reading the budget off this rule is what keeps the badge from claiming a pair
-    is finished while the sweep is still retrying it.
+    Public alongside :func:`access_lost` because ``_pair_status`` reads the two together —
+    a parked pair still inside its budget is ``rejoining``, one past it is
+    ``rejoin_exhausted``, which the channel badge renders ``join_failed`` — and reading the
+    budget off this rule is what keeps that badge, and the engine's selection-miss log with
+    it, from claiming a pair is finished while the sweep is still retrying it.
     """
     if terminal(readiness) or readiness.rejoin_gave_up:
         return True

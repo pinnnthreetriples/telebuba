@@ -40,9 +40,7 @@ test('a row with neither field says nothing, so a caller can render its own plac
 });
 
 test('resolves a reason, and falls back to status when there is no reason', () => {
-  expect(eventReason(t, entry({ reason: 'rejoin_exhausted' }))).toBe(
-    'попытки вернуться в чат закончились',
-  );
+  expect(eventReason(t, entry({ reason: 'rejoin_exhausted' }))).toBe('попытки входа исчерпаны');
   expect(eventReason(t, entry({ status: 'failed' }))).toBe('Telegram отклонил');
   // `reason` wins: a row carrying both is a failure whose specific cause is known.
   expect(eventReason(t, entry({ reason: 'quota', status: 'failed' }))).toBe('лимит исчерпан');

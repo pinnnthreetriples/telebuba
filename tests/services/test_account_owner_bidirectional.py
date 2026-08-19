@@ -31,6 +31,7 @@ from schemas.neurocomment import CampaignCreate, NeurocommentSettings
 from schemas.telegram_actions import ResolveChatResult
 from schemas.warming import StartWarmingRequest
 from services import _account_owner, warming
+from services.neurocomment import _gates as nc_gates
 from services.neurocomment import _state as nc_state
 from services.neurocomment import engine as nc_engine
 from services.neuroshilling import _runtime, _seams, _state, _steps, _telegram
@@ -133,7 +134,7 @@ async def test_neurocomment_selection_skips_an_account_a_running_campaign_holds(
     seeded = await seed_campaign()
     await _runtime.start_campaign(seeded.campaign_id)
 
-    reason = nc_engine._account_block_reason(
+    reason = nc_gates._account_block_reason(
         "acc-1",
         "@chan",
         1,
@@ -148,7 +149,7 @@ def _empty_pool() -> nc_engine._SelectionPool:
     """A pool that knows nothing, so only the registry read can produce a verdict."""
     return nc_engine._SelectionPool(
         accounts={},
-        ready_account_ids=frozenset(),
+        readiness={},
         states={},
         spam={},
         fingerprints={},

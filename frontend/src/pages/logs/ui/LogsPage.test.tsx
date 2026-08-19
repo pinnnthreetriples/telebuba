@@ -167,9 +167,7 @@ test('shows the reason of a row that carries one', async () => {
   });
   renderWithClient(<LogsPage />);
 
-  expect(
-    await screen.findByRole('cell', { name: 'попытки вернуться в чат закончились' }),
-  ).toBeInTheDocument();
+  expect(await screen.findByRole('cell', { name: 'попытки входа исчерпаны' })).toBeInTheDocument();
 });
 
 test('places the em-dash in the reason cell when the row explains nothing', async () => {

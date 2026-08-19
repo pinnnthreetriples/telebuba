@@ -9,7 +9,7 @@ approach.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 import pytest
 
@@ -41,7 +41,8 @@ from core.repositories.neurocomment import set_campaign_account_channels
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate, NeurocommentSettingsUpdate
-from services.neurocomment import _state
+from services.neurocomment import _pair_status, _state
+from services.neurocomment import board as board_module
 from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
@@ -583,6 +584,16 @@ async def test_channel_status_throttled_when_joined_but_not_ready() -> None:
 
     assert board is not None
     assert board.channels[0].status == "throttled"
+
+
+def test_every_pair_verdict_the_shared_ladder_can_return_has_a_channel_badge() -> None:
+    # ``_channel_status`` renders a pair verdict through two plain lookups that both fall
+    # back to ``throttled``, so a rung added to ``_pair_status`` and to neither of them would
+    # badge the wrong thing in silence: no type error, no missing translation, no failing
+    # case above. This is what notices.
+    rendered = board_module._AS_CHANNEL.keys() | set(board_module._CHANNEL_PRIORITY)
+
+    assert set(get_args(_pair_status.PairBlock)) <= rendered
 
 
 @pytest.mark.asyncio

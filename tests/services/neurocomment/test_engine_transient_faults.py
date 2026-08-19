@@ -110,7 +110,9 @@ async def test_user_not_participant_pair_is_not_reselected_for_the_next_post(
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
 
     assert len(comment.calls) == 1
-    assert await _latest_extra("neurocomment_no_account_available", "reason") == "not_ready"
+    # The same sentinel ``ChannelPrivateError`` writes, so the same reading: ``_rejoin`` has
+    # budget left for this pair and the miss log says which of the readiness states it is.
+    assert await _latest_extra("neurocomment_no_account_available", "reason") == "rejoining"
 
 
 # --------------------------------------------------------------------------- #

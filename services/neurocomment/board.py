@@ -35,7 +35,7 @@ from schemas.neurocomment_board import (
     NeurocommentBoard,
     NeurocommentChannelRow,
 )
-from services.neurocomment import _rejoin, _state, settings_store
+from services.neurocomment import _pair_status, _state, settings_store
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -202,22 +202,39 @@ def _build_channel_row(
     flags: _ChannelFlags,
 ) -> NeurocommentChannelRow:
     rows = [r for r in readiness if r.channel == channel]
-    ready_count = sum(1 for r in rows if r.ready)
     return NeurocommentChannelRow(
         channel=channel,
-        status=_channel_status(
-            rows, linked, ready_count, challenged=flags.challenged, paused=flags.paused
-        ),
-        ready_accounts=ready_count,
+        status=_channel_status(rows, linked, challenged=flags.challenged, paused=flags.paused),
+        ready_accounts=sum(1 for r in rows if r.ready),
         total_accounts=len(rows),
         deleted_recent=flags.deleted_recent,
     )
 
 
+# The pair verdicts a CHANNEL row has no word of its own for. ``rejoin_exhausted`` is
+# per-account by construction (``ChannelStatus``: the channel keeps whatever its other
+# accounts make of it), and ``not_ready`` is the pair-level catch-all this row has always
+# badged ``throttled``.
+_AS_CHANNEL: dict[str, ChannelStatus] = {
+    "rejoin_exhausted": "join_failed",
+    "not_ready": "throttled",
+}
+# Applied to the SET of per-row verdicts rather than walked row by row, which gives the same
+# answer: every rung of ``_pair_status.pair_block_reason`` already excludes the rungs above
+# it, so per-row precedence and channel-wide precedence coincide.
+_CHANNEL_PRIORITY: tuple[ChannelStatus, ...] = (
+    "banned",
+    "chat_restricted",
+    "rejoining",
+    "join_failed",
+    "join_by_request",
+    "throttled",
+)
+
+
 def _channel_status(
     rows: list[NeurocommentReadiness],
     linked: LinkedDiscussionGroup | None,
-    ready_count: int,
     *,
     challenged: bool,
     paused: bool,
@@ -225,52 +242,35 @@ def _channel_status(
     """Aggregate a channel's status from its readiness rows + linked-group cache.
 
     Precedence: a comments-off channel can never be commented on; a channel serving out
-    a "will not let us write" round (Ф2 #147) is paused regardless of
-    readiness; otherwise an account that's ready wins; then an auto-ban (#30) when no
-    account is ready but one is banned here; then the joined-but-blocked failure modes
-    — ``bot_challenge`` when a guardian-bot challenge row exists for the channel
-    (#145), else ``chat_restricted`` (a Telegram-level write block) — then the
-    not-joined readings, which :func:`_not_joined_status` splits.
+    a "will not let us write" round (Ф2 #147) is paused regardless of readiness; otherwise
+    an account that's ready wins — read off ``rows`` here rather than taken as a count from
+    the caller, because a count that disagreed with the rows beside it (all it took was
+    passing 0 for rows that do carry a ready one) silently walked the ladder below.
+
+    Below that the row-derived verdicts are ``_pair_status.pair_block_reason``'s — the SAME
+    ladder ``engine`` reports its selection misses through, so badge and activity log read a
+    pair's own row the same way, rung for rung. One deliberate divergence: the operator skip
+    (#148) is checked in ``engine`` ABOVE that ladder and is not a channel-level state at
+    all, so a pair the operator took out of service logs ``human_skipped`` while its channel
+    badges whatever else its row says — a skipped pair that also failed its bot check reads
+    ``chat_restricted`` here.
+
+    This function keeps only what a readiness row cannot answer: the two channel-level gates
+    above, the empty-rows reading, and ``bot_challenge``, which is ``chat_restricted`` plus a
+    guardian-bot challenge row for the channel (#145).
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
     if paused:
         return "channel_paused"
-    if ready_count > 0:
+    if any(r.ready for r in rows):
         return "ready"
-    if any(r.banned for r in rows):
-        return "banned"
-    if any(r.joined and not r.captcha_passed for r in rows):
-        return "bot_challenge" if challenged else "chat_restricted"
-    return _not_joined_status(rows)
-
-
-def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
-    """Status for a channel none of whose accounts are joined-and-ready.
-
-    The unjoined-but-captcha_passed row is ONE sentinel with two readings, and the badge
-    used to give both the terminal one. It is written by a hard join failure AND by an
-    account kicked out of the chat (``_rejoin``'s module docstring: both mean "this pair
-    needs a fresh join"), and since the re-join rule shipped it does self-resolve — one
-    attempt within minutes, then one a day, ``channel_max_rounds`` in all. So a pair with
-    attempts left is ``rejoining`` (the timeline is running), and only one that has spent them
-    — or one ``_rejoin`` refuses to retry at all, i.e. skipped (#148) — is the terminal
-    ``join_failed``. Since #44 the row also says WHY the pair is out, and ``exhausted``
-    folds that in: a verdict a re-join can never beat (a handle nobody owns, a revoked
-    invite key) is finished on arrival, so the badge stops offering «Возвращаемся в чат»
-    for a chat nothing is walking back into. Then the approval gate ``join_by_request``;
-    ``throttled`` is the catch-all.
-    """
     if not rows:
         return "no_data"  # onboarding hasn't produced readiness data for this channel yet
-    # Both halves read straight off the rule that does the retrying, never a second copy
-    # of its threshold: ``access_lost`` is the retryable half of the sentinel (it excludes
-    # the skipped and banned rows the rule will not touch) and ``exhausted`` is the budget
-    # it spends. A banned row never reaches here — ``banned`` wins one branch up.
-    if any(_rejoin.access_lost(r) and not _rejoin.exhausted(r) for r in rows):
-        return "rejoining"
-    if any(not r.joined and r.captcha_passed for r in rows):
-        return "join_failed"
-    if any(not r.joined for r in rows):
-        return "join_by_request"
-    return "throttled"
+    blocked = {
+        _AS_CHANNEL.get(reason, reason)
+        for r in rows
+        if (reason := _pair_status.pair_block_reason(r)) is not None
+    }
+    status = next((s for s in _CHANNEL_PRIORITY if s in blocked), "throttled")
+    return "bot_challenge" if challenged and status == "chat_restricted" else status
