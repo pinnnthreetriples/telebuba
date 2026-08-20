@@ -9,6 +9,7 @@ cleared) is exercised rather than mocked.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from typing import TYPE_CHECKING
 
 import pytest
@@ -46,6 +47,9 @@ if TYPE_CHECKING:
 # How long the per-account-lock test waits for the second writer to arrive. Generous:
 # it is only ever reached on FAILURE, where one global lock keeps it from arriving.
 _RENDEZVOUS_SECONDS = 5.0
+# How long the ONE-account race test waits before concluding the second writer was
+# held out. Short: on that test the timeout is the PASS, so it is paid every run.
+_HELD_OUT_SECONDS = 0.25
 # Two concurrent writers, on two accounts, is the whole experiment.
 _WRITERS = 2
 
@@ -301,12 +305,25 @@ async def test_two_concurrent_writes_for_one_account_do_not_interleave(
     await set_account_twofa_password("acc-race", _STORED)
     _patch_read(monkeypatch, _status(has_password=True))
     _patch_log(monkeypatch)
+    depth = {"now": 0, "max": 0}
     order: list[str] = []
+    both_in = asyncio.Event()
 
     async def _slow(account_id: str, action: SetTwoFactorPassword) -> ActionResult:
-        order.append(f"enter {action.new_password}")
-        await asyncio.sleep(0)
-        order.append(f"leave {action.new_password}")
+        depth["now"] += 1
+        depth["max"] = max(depth["max"], depth["now"])
+        order.append(str(action.new_password))
+        if depth["now"] == _WRITERS:
+            both_in.set()
+        # The same rendezvous as the per-account test below, with the verdict inverted:
+        # there the timeout IS the failure, here it is the pass, so it must be short
+        # enough not to slow the suite. The wait is what makes the test discriminating
+        # — reaching this dispatcher costs several real ``to_thread`` suspensions whose
+        # skew on this platform exceeds any short sleep, so a sleeping version let the
+        # two writes serialise by accident and passed with the lock removed. Measured.
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(both_in.wait(), _HELD_OUT_SECONDS)
+        depth["now"] -= 1
         return _ok(account_id)
 
     monkeypatch.setattr("services.accounts.twofa.execute", _slow)
@@ -316,15 +333,15 @@ async def test_two_concurrent_writes_for_one_account_do_not_interleave(
         set_account_twofa("acc-race", AccountTwoFactorUpdateRequest(password="second-password")),
     )
 
-    assert order == [
-        "enter first-password",
-        "leave first-password",
-        "enter second-password",
-        "leave second-password",
-    ]
-    # The second write authorised itself with what the FIRST one stored, so the
-    # column is the second password and no copy was lost on the way.
-    assert await fetch_account_twofa_password("acc-race") == "second-password"
+    # The gauge is DEPTH, not a fixed order. The lock guarantees mutual exclusion, not
+    # which tab wins — asyncio's scheduler decides that, and CI was observed picking
+    # the other one where this machine picks "first", so the old fixed-order assertion
+    # was testing the scheduler.
+    assert depth["max"] == 1
+    assert len(order) == 2
+    # Whichever write ran LAST authorised itself with what the previous one stored, so
+    # the column is its password and no copy was lost on the way.
+    assert await fetch_account_twofa_password("acc-race") == order[-1]
 
 
 @pytest.mark.asyncio
