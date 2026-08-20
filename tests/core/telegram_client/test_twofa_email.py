@@ -36,9 +36,9 @@ from core.telegram_client import execute, execute_read
 from core.telegram_client._twofa import (
     _TWOFA_ERROR_CODES,
     TwoFactorGatewayError,
-    dispatch_manage_twofa_email,
     twofa_log_extra,
 )
+from core.telegram_client._twofa_email import dispatch_manage_twofa_email
 from schemas.telegram_actions import GetTwoFactorStatus, ManageTwoFactorEmail
 from schemas.telegram_actions_twofa import TwoFactorStatusResult
 from schemas.twofa import TwoFactorRefusalCode
@@ -106,7 +106,7 @@ def stub_compute_check(monkeypatch: pytest.MonkeyPatch) -> list[tuple[object, st
         calls.append((pwd, password))
         return "srp-proof"
 
-    monkeypatch.setattr("core.telegram_client._twofa.compute_check", _fake)
+    monkeypatch.setattr("core.telegram_client._twofa_email.compute_check", _fake)
     return calls
 
 
@@ -175,9 +175,10 @@ async def test_email_unconfirmed_is_the_success_signal_carrying_the_code_length(
     """``EMAIL_UNCONFIRMED_<N>`` means "attached, code of length N mailed"."""
     client = _EmailClient(error=errors.EmailUnconfirmedError(None, capture=6))
 
-    code_length = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
+    outcome = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
 
-    assert code_length == 6
+    assert outcome.twofa_email_code_length == 6
+    assert outcome.twofa_email_unconfirmed is True
     # The settings call WAS made and authorised; only its reply was an "error".
     assert len(stub_compute_check) == 1
     assert isinstance(client.only(UpdatePasswordSettingsRequest), UpdatePasswordSettingsRequest)
@@ -197,9 +198,14 @@ async def test_the_bare_email_unconfirmed_reports_no_length_rather_than_zero(
     """
     client = _EmailClient(error=errors.EmailUnconfirmedError(None))
 
-    code_length = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
+    outcome = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
 
-    assert code_length is None
+    assert outcome.twofa_email_code_length is None
+    # ``None`` is the LENGTH being unknown, never the address not being pending: the
+    # flag is threaded separately for exactly that reason, and
+    # ``tests/services/accounts/test_twofa_email.py`` asserts what the service then
+    # reports end to end.
+    assert outcome.twofa_email_unconfirmed is True
     assert len(stub_compute_check) == 1
 
 
@@ -218,7 +224,7 @@ async def test_an_unusable_srp_challenge_becomes_one_stable_code(
         msg = "bad p/g in password"
         raise ValueError(msg)
 
-    monkeypatch.setattr("core.telegram_client._twofa.compute_check", _unusable)
+    monkeypatch.setattr("core.telegram_client._twofa_email.compute_check", _unusable)
     client = _EmailClient()
     patch_action_client(monkeypatch, client)
 
@@ -237,9 +243,10 @@ async def test_a_clean_return_means_the_address_needed_no_confirmation(
 ) -> None:
     client = _EmailClient()
 
-    code_length = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
+    outcome = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
 
-    assert code_length is None
+    assert outcome.twofa_email_code_length is None
+    assert outcome.twofa_email_unconfirmed is False
     assert len(stub_compute_check) == 1
 
 
@@ -255,6 +262,7 @@ async def test_the_code_length_reaches_the_action_result(
 
     assert result.status == "ok"
     assert result.twofa_email_code_length == 8
+    assert result.twofa_email_unconfirmed is True
     assert len(stub_compute_check) == 1
 
 
@@ -296,10 +304,11 @@ async def test_each_other_mode_sends_exactly_its_own_request(
     client = _EmailClient()
     action = ManageTwoFactorEmail(mode=mode, **kwargs)  # ty: ignore[invalid-argument-type]
 
-    code_length = await dispatch_manage_twofa_email(client, action)  # ty: ignore[invalid-argument-type]
+    outcome = await dispatch_manage_twofa_email(client, action)  # ty: ignore[invalid-argument-type]
 
     # Only ``set`` can learn a length; none of these three answers one.
-    assert code_length is None
+    assert outcome.twofa_email_code_length is None
+    assert outcome.twofa_email_unconfirmed is False
     # No ``getPassword`` either: only the set/clear modes need an SRP proof.
     assert [type(r) for r in client.requests] == [request_cls]
     if mode == "confirm":
@@ -441,7 +450,12 @@ def test_every_refusal_code_is_a_member_of_the_enumerated_vocabulary() -> None:
 
     sources = "".join(
         (_REPO_ROOT / relative).read_text(encoding="utf-8")
-        for relative in ("core/telegram_client/_twofa.py", "services/accounts/twofa.py")
+        for relative in (
+            "core/telegram_client/_twofa.py",
+            "core/telegram_client/_twofa_email.py",
+            "services/accounts/twofa.py",
+            "services/accounts/_twofa_email.py",
+        )
     )
     unused = sorted(code for code in declared if f'"{code}"' not in sources)
     assert unused == [], f"declared but raised nowhere: {unused}"

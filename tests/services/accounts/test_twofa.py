@@ -19,14 +19,9 @@ from core.db import (
     fetch_account_twofa_password,
     set_account_twofa_password,
 )
-from core.telegram_client import (
-    UNCONFIRMED_ERROR_TYPE,
-    TelegramAccountNotFoundError,
-    TelegramReadError,
-)
+from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import ActionResult
-from schemas.telegram_actions_twofa import SetTwoFactorPassword, TwoFactorStatusResult
 from schemas.twofa import AccountTwoFactorUpdateRequest
 from services.accounts import (
     AccountActionError,
@@ -35,85 +30,18 @@ from services.accounts import (
     remove_account_twofa,
     set_account_twofa,
 )
+from tests.services.accounts._twofa_support import STORED as _STORED
+from tests.services.accounts._twofa_support import ok_result as _ok
+from tests.services.accounts._twofa_support import patch_execute as _patch_execute
+from tests.services.accounts._twofa_support import patch_log as _patch_log
+from tests.services.accounts._twofa_support import patch_lost_answer as _patch_lost_answer
+from tests.services.accounts._twofa_support import patch_read as _patch_read
+from tests.services.accounts._twofa_support import status as _status
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-_STORED = "stored-password"
-
-
-def _ok(account_id: str) -> ActionResult:
-    return ActionResult(status="ok", action_type="set_twofa_password", account_id=account_id)
-
-
-def _status(**overrides: object) -> TwoFactorStatusResult:
-    return TwoFactorStatusResult(**overrides)  # ty: ignore[invalid-argument-type]
-
-
-def _patch_read(
-    monkeypatch: pytest.MonkeyPatch,
-    status: TwoFactorStatusResult,
-    *later: TwoFactorStatusResult,
-) -> list[str]:
-    """Canned live reads; the last one answers every further read.
-
-    ``remove_account_twofa`` reads twice — once to decide whether Telegram still has
-    a password at all, once to build the response — so it needs two.
-    """
-    reads: list[str] = []
-    queue = (status, *later)
-
-    async def _fake(account_id: str, action: object) -> TwoFactorStatusResult:  # noqa: ARG001
-        reads.append(account_id)
-        return queue[min(len(reads) - 1, len(queue) - 1)]
-
-    monkeypatch.setattr("services.accounts.twofa.execute_read", _fake)
-    return reads
-
-
-def _patch_execute(monkeypatch: pytest.MonkeyPatch) -> list[SetTwoFactorPassword]:
-    actions: list[SetTwoFactorPassword] = []
-
-    async def _fake(account_id: str, action: SetTwoFactorPassword) -> ActionResult:
-        actions.append(action)
-        return _ok(account_id)
-
-    monkeypatch.setattr("services.accounts.twofa.execute", _fake)
-    return actions
-
-
-def _patch_lost_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The write reached the wire and only the ANSWER was lost.
-
-    Shared by the set and the change case, which differ in exactly one thing —
-    whether there was a stored password to lose — so they must stub the same seam.
-    """
-
-    async def _lost(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
-        return ActionResult(
-            status="unavailable",
-            action_type="set_twofa_password",
-            account_id=account_id,
-            error_type=UNCONFIRMED_ERROR_TYPE,
-            error_message="ConnectionError()",
-        )
-
-    monkeypatch.setattr("services.accounts.twofa.execute", _lost)
-
-
-def _patch_log(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, dict[str, object]]]:
-    events: list[tuple[str, str, dict[str, object]]] = []
-
-    async def _capture(
-        level: str,
-        event: str,
-        account_id: str | None = None,  # noqa: ARG001 - mirrors log_event
-        extra: dict[str, object] | None = None,
-    ) -> None:
-        events.append((level, event, extra or {}))
-
-    monkeypatch.setattr("services.accounts.twofa.log_event", _capture)
-    return events
+    from schemas.telegram_actions_twofa import SetTwoFactorPassword, TwoFactorStatusResult
 
 
 @pytest.mark.asyncio
@@ -328,6 +256,11 @@ async def test_two_concurrent_writes_for_one_account_do_not_interleave(
     Whoever loses then persists a password Telegram has already replaced (or, on a
     lost answer, would have clobbered the winner's), so the read-then-write pair has
     to be one critical section per account.
+
+    Both writers here are password writes, i.e. both were already inside the lock, so
+    this proves the lock EXISTS and nothing about who else takes it. The recovery-email
+    half is the pair that was outside it —
+    ``test_twofa_email.test_an_email_write_does_not_interleave_with_a_password_change``.
     """
     await create_account(AccountCreate(account_id="acc-race"))
     await set_account_twofa_password("acc-race", _STORED)

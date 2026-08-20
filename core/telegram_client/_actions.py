@@ -215,6 +215,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
         channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
         recent_message_ids=id_strings(outcome.recent_message_ids),
         twofa_email_code_length=outcome.twofa_email_code_length,
+        twofa_email_unconfirmed=outcome.twofa_email_unconfirmed,
     )
 
 

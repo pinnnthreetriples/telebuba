@@ -15,6 +15,7 @@ import pytest
 
 from schemas.accounts import AccountCreate
 from services.accounts import add_account, remove_account
+from services.accounts.twofa import _TWOFA_LOCKS, twofa_lock
 from services.neurocomment._state import in_cooldown, reset_for_tests, set_cooldown
 
 if TYPE_CHECKING:
@@ -63,3 +64,27 @@ async def test_removing_an_account_leaves_every_other_account_parked() -> None:
 
     assert in_cooldown("acc-keep", datetime.now(UTC)) is True
     assert in_cooldown("acc-keep", datetime.now(UTC), channel="@chat") is True
+
+
+@pytest.mark.asyncio
+async def test_removing_an_account_drops_its_twofa_lock() -> None:
+    """The third per-account registry, and the only one the delete had not been told about.
+
+    ``remove_account`` deliberately drops the post-listener generation and the
+    neurocomment cooldown map for the same reason: both are keyed by account id, and
+    nothing else ever drops those keys, so an app that outlives many deletes
+    accumulates one dead entry per account. ``_TWOFA_LOCKS`` was added later and was
+    never included, so it leaked an ``asyncio.Lock`` per account that ever set a
+    cloud password — and a re-imported id reusing that key would take a lock bound to
+    an event loop that may no longer be the running one.
+    """
+    await add_account(AccountCreate(account_id=_ACCOUNT, label="A", session_name=_ACCOUNT))
+    twofa_lock(_ACCOUNT)
+    twofa_lock("acc-keep")
+    assert _ACCOUNT in _TWOFA_LOCKS
+
+    await remove_account(_ACCOUNT)
+
+    assert _ACCOUNT not in _TWOFA_LOCKS
+    # Keyed by account, not a convenient way to clear the whole table.
+    assert "acc-keep" in _TWOFA_LOCKS

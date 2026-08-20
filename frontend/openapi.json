@@ -11736,6 +11736,11 @@
             ],
             "title": "Twofa Email Code Length"
           },
+          "twofa_email_unconfirmed": {
+            "type": "boolean",
+            "title": "Twofa Email Unconfirmed",
+            "default": false
+          },
           "error_type": {
             "anyOf": [
               {

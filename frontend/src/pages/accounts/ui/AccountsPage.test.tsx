@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -618,4 +618,61 @@ test('the open profile modal survives the account dropping out of the filtered l
   expect(screen.getByText('Текст')).toBeInTheDocument();
   // The modal header still carries the click-time row's phone.
   expect(screen.getAllByText(/\+70000000003/).length).toBeGreaterThanOrEqual(1);
+});
+
+test('the open edit view survives the account dropping out of the filtered list', async () => {
+  // The mirror of the profile-modal guard above, and the view that needs it most:
+  // the 2FA card's reveal panel holds a password the backend will never hand over
+  // again, and that card's own success invalidates this very list. Deriving the row
+  // from the live list with no click-time fallback means one refetched page that no
+  // longer carries the row unmounts the panel and the secret with it.
+  const edited: AccountRead = { ...account('acc-1'), phone: '+70000000004' };
+  const other: AccountRead = { ...account('acc-2'), phone: '+70000000005' };
+  let call = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 1, active: 1, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      call += 1;
+      // The second page no longer holds the edited row — a rename that fell out of
+      // the search, or simply a different slice of a moving list.
+      return Promise.resolve(
+        jsonResponse({ items: call === 1 ? [edited] : [other], next_cursor: null }),
+      );
+    }
+    return Promise.resolve(jsonResponse(account('acc-1')));
+  });
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AccountsPage />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => {
+    expect(screen.getByText('+70000000004')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('+70000000004'));
+  expect(await screen.findByText('Облачный пароль (2FA)')).toBeInTheDocument();
+
+  await client.invalidateQueries();
+  // React Query hands observer updates to React on a macrotask (notifyManager
+  // schedules with setTimeout 0), which `act` alone does not flush — so let one
+  // timer turn pass inside act, or this assertion runs against the pre-refetch
+  // render and passes whatever the page does with the fresh list.
+  await act(async () => {
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  });
+
+  // The refetched page carries somebody else; the edit view is still the thing on
+  // screen, on the row that was clicked.
+  expect(screen.getByText('Облачный пароль (2FA)')).toBeInTheDocument();
+  expect(screen.queryByText('+70000000005')).not.toBeInTheDocument();
 });

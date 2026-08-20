@@ -84,6 +84,7 @@ async def remove_account(account_id: str) -> None:
         set_listener_account_id,
         set_listener_running,
     )
+    from services.accounts.twofa import _TWOFA_LOCKS  # noqa: PLC0415
     from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
     from services.neurocomment._state import forget_account_cooldowns  # noqa: PLC0415
     from services.warming import (  # noqa: PLC0415
@@ -147,6 +148,11 @@ async def remove_account(account_id: str) -> None:
         # ``neurocomment_cooldowns`` rows so a re-imported id is not born parked, but the
         # live map those rows only back up is a service global core cannot reach.
         forget_account_cooldowns(account_id)
+        # Third registry, same reason, and the one this function had not been told
+        # about: the 2FA writes serialise per account through a module-level table
+        # that nothing else ever drops keys from. A re-imported id reusing the key
+        # would also take a lock bound to a loop that may no longer be running.
+        _TWOFA_LOCKS.pop(account_id, None)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

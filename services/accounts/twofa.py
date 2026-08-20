@@ -2,9 +2,12 @@
 
 Why this exists: an account with no cloud password is one phone number and one
 login code away from being taken over, and Telegram offers no way to read the
-password back — only whether one is set. So this module owns both halves: the
-live read the card renders, the set / change / remove writes, and the
-operator-in-the-loop recovery-email flow (attach, confirm, resend, cancel).
+password back — only whether one is set. So this module owns the live read the
+card renders and the set / change / remove writes.
+
+The recovery-email half lives in the extracted sibling
+``services.accounts._twofa_email`` (440-line file budget); it imports
+:func:`read_account_twofa` and :func:`twofa_lock` from here, never the reverse.
 
 ``execute`` / ``execute_read`` are imported at module scope so tests can
 monkeypatch ``services.accounts.twofa.execute`` (same for ``execute_read`` and
@@ -13,18 +16,9 @@ documents at its own module scope.
 
 Secret discipline, the rule that outranks everything else here: the password
 reaches exactly one response, :class:`AccountTwoFactorCreated`, and nothing else.
-Not a ``log_event`` name, not an ``extra`` value, not an error message. The
-recovery email address and the confirmation code Telegram mails are the same:
-they arrive in a request body and go no further. Every log extra below carries
-booleans and the bounded ``mode`` only, and
-``tests/services/accounts/test_twofa*.py`` assert that none of the three ever
-turns up in a view or a log.
-
-The email event names are four separate literals rather than
-``"account_twofa_email_" + mode``: ``tests/test_logevent_i18n_parity`` discovers
-codes by reading literals out of the AST, and a concatenation or a dict lookup is
-invisible to it — an untranslated event would then reach the operator as a raw
-snake_case token.
+Not a ``log_event`` name, not an ``extra`` value, not an error message. Every log
+extra below carries booleans only, and ``tests/services/accounts/test_twofa*.py``
+assert that the password never turns up in a view or a log.
 """
 
 from __future__ import annotations
@@ -42,16 +36,8 @@ from core.telegram_client import (
     execute,
     execute_read,
 )
-from schemas.telegram_actions_twofa import (
-    GetTwoFactorStatus,
-    ManageTwoFactorEmail,
-    SetTwoFactorPassword,
-)
-from schemas.twofa import (
-    AccountTwoFactorCreated,
-    AccountTwoFactorEmailPending,
-    AccountTwoFactorView,
-)
+from schemas.telegram_actions_twofa import GetTwoFactorStatus, SetTwoFactorPassword
+from schemas.twofa import AccountTwoFactorCreated, AccountTwoFactorView
 from services.accounts._result import (
     AccountActionError,
     AccountNotFoundError,
@@ -61,21 +47,13 @@ from services.accounts.lifecycle import require_account
 
 if TYPE_CHECKING:
     from schemas.telegram_actions_twofa import TwoFactorStatusResult
-    from schemas.twofa import (
-        AccountTwoFactorEmailConfirmRequest,
-        AccountTwoFactorEmailRequest,
-        AccountTwoFactorUpdateRequest,
-    )
+    from schemas.twofa import AccountTwoFactorUpdateRequest
 
 __all__ = [
-    "cancel_account_twofa_email",
-    "clear_account_twofa_email",
-    "confirm_account_twofa_email",
     "read_account_twofa",
     "remove_account_twofa",
-    "resend_account_twofa_email",
     "set_account_twofa",
-    "set_account_twofa_email",
+    "twofa_lock",
 ]
 
 # ``secrets.token_urlsafe(16)`` → 22 URL-safe characters over 128 bits of
@@ -88,12 +66,35 @@ _GENERATED_PASSWORD_BYTES = 16
 # the stored password and then WRITE it back: two tabs would otherwise both read the
 # same ``current``, both send it, and the loser's persist could clobber the winner's.
 # ``tests/services/accounts/conftest.py`` clears it per test — a lock binds to the
-# loop that first awaited it.
+# loop that first awaited it. ``services.accounts.lifecycle.remove_account`` drops the
+# key, like the two other per-account registries there.
+#
+# ponytail: known residual, deliberately not fixed here. This lock serialises the
+# dashboard against ITSELF; it cannot stop ``core.telegram_client.evict_client`` from
+# disconnecting a pooled client out from under an in-flight 2FA write. The realistic
+# trigger is proxy rotation — ``add_proxy`` / ``remove_proxy`` evict every account on a
+# proxy, from another domain entirely — and the real fix is a borrow refcount in the
+# pool, a cross-cutting change to something every domain uses, which is not this PR.
+# What makes the residual survivable is that every outcome of a killed write is now
+# recoverable: a fresh set persists BEFORE the RPC, and a stale stored password is
+# droppable through the remove path's stale branch.
+#
+# These writes deliberately do NOT join ``core.telegram_client._auth._AUTH_LOCKS``.
+# That lock guards a measured two-``SQLiteSession``-handles-on-one-file hazard between
+# flows that build their own clients; 2FA borrows from the pool and never opens a
+# second handle. What it needs is the converse guarantee — "do not disconnect the
+# client I am holding" — which nothing provides today.
 _TWOFA_LOCKS: dict[str, asyncio.Lock] = {}
 
 
-def _twofa_lock(account_id: str) -> asyncio.Lock:
-    """Serialise the password writes for one account."""
+def twofa_lock(account_id: str) -> asyncio.Lock:
+    """Serialise the authorised writes for one account.
+
+    Public because ``_twofa_email`` takes the same lock: its ``set`` and ``clear``
+    modes read the stored password and then send an SRP-authorised
+    ``updatePasswordSettings`` with it, which is the read-then-write shape this
+    registry exists for.
+    """
     lock = _TWOFA_LOCKS.get(account_id)
     if lock is None:
         lock = asyncio.Lock()
@@ -154,6 +155,19 @@ async def set_account_twofa(
     would strand the account behind a password nobody holds. The response says
     ``stored=False`` instead, and the failure is logged.
 
+    On a FRESH SET the persist happens BEFORE the RPC, and that ordering is the only
+    thing standing between a process death and an unrecoverable account. Between
+    "Telegram applied it" and a post-RPC persist there are several awaits —
+    ``execute`` itself awaits ``log_event``, a threaded SQLite insert plus an SSE
+    fan-out — and dying in that window leaves the password live on Telegram, nothing
+    in the row and no log line: the plaintext existed only in a response nobody
+    received. Writing first inverts it into a recoverable state, stored-but-never-
+    applied, which reads as ``has_stored_password=True`` with ``has_password=False``
+    and is exactly what the stale branch below and the card's "forget the stale
+    password" row are for. An ANSWERED refusal rolls that write back, because the
+    answer is proof Telegram did not apply it; only the two ambiguous outcomes (a
+    lost answer, a killed process) leave it in place.
+
     A LOST ANSWER is handled the same way, for a stronger version of the same
     reason. ``status="unavailable"`` with ``error_type == UNCONFIRMED_ERROR_TYPE``
     means the request was already on the wire, so Telegram may have applied this
@@ -166,13 +180,20 @@ async def set_account_twofa(
     success, flagged ``confirmed=False``. Every other non-ok status still raises.
 
     That persist is asymmetric, and the asymmetry is the point: it happens only when
-    there was NOTHING stored. On a CHANGE the stored value is a credential Telegram is
-    known to accept, so overwriting it with one that may never have been applied would
-    trade a recoverable ambiguity for exactly the unrecoverable loss above. A change
-    therefore keeps the old value, still returns the new one (Telegram may hold it) and
-    says ``previous_kept=True``, so the card can send the operator to the phone.
+    there was NOTHING LIVE to lose. On a CHANGE the stored value is a credential
+    Telegram is known to accept, so overwriting it with one that may never have been
+    applied would trade a recoverable ambiguity for exactly the unrecoverable loss
+    above. A change therefore keeps the old value, still returns the new one (Telegram
+    may hold it) and says ``previous_kept=True``, so the card can send the operator to
+    the phone — UNLESS the live read says Telegram has no password at all, in which
+    case the stored value is stale by definition, cannot be "the previous one in
+    force", and keeping it would persist nothing at all.
+
+    ``confirmed`` is also ``False`` when Telegram answered ``EMAIL_UNCONFIRMED``: the
+    write was accepted, but TDLib holds its ``last_set_password_`` pending until the
+    recovery-email code is typed back, so the new password is not certainly in force.
     """
-    async with _twofa_lock(account_id):
+    async with twofa_lock(account_id):
         await require_account(account_id)
         password = request.password or secrets.token_urlsafe(_GENERATED_PASSWORD_BYTES)
         current = await fetch_account_twofa_password(account_id)
@@ -180,6 +201,14 @@ async def set_account_twofa(
         if status is not None and status.has_password and current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
+        # FRESH SET ONLY: nothing live to lose, so the candidate is written first and
+        # the silent-loss window closes (see the docstring).
+        fresh = current is None
+        stored = fresh and await _remember_password(
+            account_id,
+            password,
+            has_hint=bool(request.hint),
+        )
         result = await execute(
             account_id,
             # ``hint=None`` means KEEP whatever Telegram shows; the gateway resolves it
@@ -191,15 +220,29 @@ async def set_account_twofa(
             ),
         )
         lost = result.status == "unavailable" and result.error_type == UNCONFIRMED_ERROR_TYPE
-        confirmed = not lost
-        if confirmed:
+        if not lost:
+            if result.status != "ok" and stored:
+                # ROLLBACK. An answered refusal proves Telegram did not apply this
+                # password, and leaving a never-applied one in the column is its own
+                # lockout: the next attempt sends it as ``current_password`` and
+                # ``twofa_password_not_stored`` can no longer fire, because something
+                # IS stored. Only the ambiguous outcomes keep the pre-write.
+                await _remember_password(account_id, None)
+                stored = False
             raise_for_result(result)
-        previous_kept = not confirmed and current is not None
-        stored = not previous_kept and await _remember_password(
-            account_id,
-            password,
-            has_hint=bool(request.hint),
-        )
+        # A stored password the live read contradicts is stale BY DEFINITION, so it is
+        # not the "known to work" credential this branch exists to protect — keeping it
+        # would discard the password Telegram may now require and persist nothing at
+        # all, which is the terminal state the docstring describes.
+        stale_stored = status is not None and not status.has_password
+        confirmed = not lost and not result.twofa_email_unconfirmed
+        previous_kept = not confirmed and current is not None and not stale_stored
+        if not fresh and not previous_kept:
+            stored = await _remember_password(
+                account_id,
+                password,
+                has_hint=bool(request.hint),
+            )
         await log_event(
             "INFO",
             "account_twofa_set",
@@ -288,7 +331,7 @@ async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
     Serialised against a concurrent set/change for the reason ``_TWOFA_LOCKS`` gives:
     this flow also reads the stored password and then writes the column back.
     """
-    async with _twofa_lock(account_id):
+    async with twofa_lock(account_id):
         await require_account(account_id)
         current = await fetch_account_twofa_password(account_id)
         if current is None:
@@ -307,133 +350,3 @@ async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
             extra={"stale": stale},
         )
         return await read_account_twofa(account_id)
-
-
-async def _run_email_action(account_id: str, action: ManageTwoFactorEmail) -> int | None:
-    """Guard, dispatch and report one recovery-email mode; answer the code length.
-
-    The 404 guard runs here rather than in each caller so the four modes cannot
-    drift apart on it. Callers own their own ``log_event`` literal — see the
-    module docstring for why that is not centralised.
-    """
-    await require_account(account_id)
-    result = await execute(account_id, action)
-    raise_for_result(result)
-    return result.twofa_email_code_length
-
-
-async def set_account_twofa_email(
-    account_id: str,
-    request: AccountTwoFactorEmailRequest,
-) -> AccountTwoFactorEmailPending:
-    """Attach a recovery email, authorising with the password this dashboard stored.
-
-    Nothing stored means the change cannot be authorised at all, so it is refused
-    before any RPC with the same code the change and remove paths use — Telegram
-    would otherwise answer a bare invalid-password error that explains nothing.
-
-    ``pending`` is derived from the code length rather than threaded separately:
-    the length exists only inside ``EMAIL_UNCONFIRMED_<N>``, and that error IS
-    Telegram saying it has mailed a code. Its absence therefore means Telegram
-    accepted the address as already verified and asked for nothing.
-
-    The 404 guard runs FIRST, before the stored-password one, even though
-    ``_run_email_action`` repeats it: an unknown account has to answer 404 like its
-    six siblings rather than 400 ``twofa_password_not_stored``.
-    """
-    await require_account(account_id)
-    current = await fetch_account_twofa_password(account_id)
-    if current is None:
-        code = "twofa_password_not_stored"
-        raise AccountActionError(code)
-    code_length = await _run_email_action(
-        account_id,
-        ManageTwoFactorEmail(mode="set", current_password=current, email=request.email),
-    )
-    await log_event(
-        "INFO",
-        "account_twofa_email_set",
-        account_id=account_id,
-        extra={"mode": "set", "pending": code_length is not None},
-    )
-    return AccountTwoFactorEmailPending(pending=code_length is not None, code_length=code_length)
-
-
-async def confirm_account_twofa_email(
-    account_id: str,
-    request: AccountTwoFactorEmailConfirmRequest,
-) -> AccountTwoFactorView:
-    """Type the mailed code back; on success the pending email becomes the recovery one.
-
-    Answers with the re-read live state so the card shows ``has_recovery`` without
-    a second round trip — the shape ``remove_account_twofa`` already uses.
-    """
-    await _run_email_action(account_id, ManageTwoFactorEmail(mode="confirm", code=request.code))
-    await log_event(
-        "INFO",
-        "account_twofa_email_confirmed",
-        account_id=account_id,
-        extra={"mode": "confirm"},
-    )
-    return await read_account_twofa(account_id)
-
-
-async def resend_account_twofa_email(account_id: str) -> AccountTwoFactorEmailPending:
-    """Mail the confirmation code again for an email that is still pending.
-
-    ``code_length`` stays ``None``: ``account.resendPasswordEmail`` answers with a
-    bare ``Bool`` and never repeats the length, and reporting the previous one
-    would be a guess. ``pending`` is ``True`` by definition — Telegram refuses the
-    call when there is nothing pending, and that refusal reaches the caller.
-    """
-    await _run_email_action(account_id, ManageTwoFactorEmail(mode="resend"))
-    await log_event(
-        "INFO",
-        "account_twofa_email_resent",
-        account_id=account_id,
-        extra={"mode": "resend"},
-    )
-    return AccountTwoFactorEmailPending(pending=True)
-
-
-async def clear_account_twofa_email(account_id: str) -> AccountTwoFactorView:
-    """Detach a CONFIRMED recovery email — not the same call as cancelling a pending one.
-
-    ``account.cancelPasswordEmail`` only abandons a verification still in flight. A
-    confirmed address comes off with ``updatePasswordSettings`` and an empty
-    ``email``, which needs the stored password to authorise it — so this refuses up
-    front with the same code the other authorised writes use, after the 404 guard for
-    the reason ``set_account_twofa_email`` documents.
-    """
-    await require_account(account_id)
-    current = await fetch_account_twofa_password(account_id)
-    if current is None:
-        code = "twofa_password_not_stored"
-        raise AccountActionError(code)
-    await _run_email_action(
-        account_id,
-        ManageTwoFactorEmail(mode="clear", current_password=current),
-    )
-    await log_event(
-        "INFO",
-        "account_twofa_email_cleared",
-        account_id=account_id,
-        extra={"mode": "clear"},
-    )
-    return await read_account_twofa(account_id)
-
-
-async def cancel_account_twofa_email(account_id: str) -> AccountTwoFactorView:
-    """Abandon a pending recovery email. The cloud password is untouched.
-
-    Nothing is cleared locally because nothing was stored locally: the address
-    lives only on Telegram, which is why this feature added no column.
-    """
-    await _run_email_action(account_id, ManageTwoFactorEmail(mode="cancel"))
-    await log_event(
-        "INFO",
-        "account_twofa_email_cancelled",
-        account_id=account_id,
-        extra={"mode": "cancel"},
-    )
-    return await read_account_twofa(account_id)

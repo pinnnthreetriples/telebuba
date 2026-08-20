@@ -122,9 +122,26 @@ export function CollapsibleCard({
           // max-height drives THIS card's settled/reachable — and while closed that
           // means `hidden` on the whole body.
           if (event.target !== event.currentTarget) return;
-          if (event.propertyName !== 'max-height') return;
-          if (open) setSettled(true);
-          else setReachable(false);
+          // Asymmetric on purpose, and this is a SHARED-layer fix: every
+          // collapsible card in the app (account-edit, warming, neurocomment)
+          // closes through this branch.
+          //
+          // The open ends on max-height (0 -> `--mh`, see the @starting-style note
+          // in index.css). The close cannot: `.tb-settled` has by then dropped the
+          // cap to `max-height: none`, and `none -> 0` is not interpolable, so
+          // Chrome creates NO max-height transition for the close — only opacity
+          // runs. Filtering the close on max-height therefore never ran
+          // `setReachable(false)`, and after ONE open/close cycle every collapsed
+          // body kept `hidden` off: measured in Chrome, `.focus()` on a control
+          // inside a closed body succeeded and a nested input's value was
+          // readable, i.e. exactly the a11y hole this state exists to close.
+          // happy-dom fires no transitionend at all, which is why the suite could
+          // not see it.
+          if (open) {
+            if (event.propertyName === 'max-height') setSettled(true);
+          } else if (event.propertyName === 'opacity') {
+            setReachable(false);
+          }
         }}
       >
         <div className={bodyClassName}>{children}</div>

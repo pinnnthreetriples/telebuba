@@ -11,13 +11,22 @@ appears anywhere in the recorded extras.
 
 from __future__ import annotations
 
-import pytest
+import asyncio
+from types import SimpleNamespace
 
-from core.db import create_account, set_account_twofa_password
+import pytest
+from telethon import errors
+from telethon.tl.functions.account import GetPasswordRequest
+
+from core.db import create_account, fetch_account_twofa_password, set_account_twofa_password
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import ActionResult
 from schemas.telegram_actions_twofa import ManageTwoFactorEmail, TwoFactorStatusResult
-from schemas.twofa import AccountTwoFactorEmailConfirmRequest, AccountTwoFactorEmailRequest
+from schemas.twofa import (
+    AccountTwoFactorEmailConfirmRequest,
+    AccountTwoFactorEmailRequest,
+    AccountTwoFactorUpdateRequest,
+)
 from services.accounts import (
     AccountActionError,
     AccountNotFoundError,
@@ -25,7 +34,16 @@ from services.accounts import (
     clear_account_twofa_email,
     confirm_account_twofa_email,
     resend_account_twofa_email,
+    set_account_twofa,
     set_account_twofa_email,
+)
+from tests.core.telegram_client.helpers import patch_action_client
+from tests.services.accounts._twofa_support import (
+    EMAIL_MODULE,
+    patch_log,
+    patch_lost_answer,
+    patch_read,
+    status,
 )
 
 _STORED = "stored-password"
@@ -38,6 +56,7 @@ def _patch_execute(
     monkeypatch: pytest.MonkeyPatch,
     *,
     code_length: int | None = None,
+    unconfirmed: bool = False,
 ) -> list[ManageTwoFactorEmail]:
     actions: list[ManageTwoFactorEmail] = []
 
@@ -48,9 +67,10 @@ def _patch_execute(
             action_type=action.action_type,
             account_id=account_id,
             twofa_email_code_length=code_length,
+            twofa_email_unconfirmed=unconfirmed,
         )
 
-    monkeypatch.setattr("services.accounts.twofa.execute", _fake)
+    monkeypatch.setattr(f"{EMAIL_MODULE}.execute", _fake)
     return actions
 
 
@@ -72,7 +92,7 @@ def _patch_log(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, dict[str
     ) -> None:
         events.append((level, event, extra or {}))
 
-    monkeypatch.setattr("services.accounts.twofa.log_event", _capture)
+    monkeypatch.setattr(f"{EMAIL_MODULE}.log_event", _capture)
     return events
 
 
@@ -92,7 +112,7 @@ async def test_set_email_authorises_with_the_stored_password(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     await _account_with_password("acc-mail")
-    actions = _patch_execute(monkeypatch, code_length=6)
+    actions = _patch_execute(monkeypatch, code_length=6, unconfirmed=True)
     events = _patch_log(monkeypatch)
 
     pending = await set_account_twofa_email(
@@ -269,7 +289,7 @@ async def test_a_refused_email_write_keeps_its_stable_code(
             error_message="twofa_email_code_invalid",
         )
 
-    monkeypatch.setattr("services.accounts.twofa.execute", _refuse)
+    monkeypatch.setattr(f"{EMAIL_MODULE}.execute", _refuse)
     events = _patch_log(monkeypatch)
 
     with pytest.raises(AccountActionError) as excinfo:
@@ -306,3 +326,164 @@ async def test_every_email_entry_point_404s_on_an_unknown_account(
         await set_account_twofa_email("acc-ghost", AccountTwoFactorEmailRequest(email=_EMAIL))
     with pytest.raises(AccountNotFoundError):
         await clear_account_twofa_email("acc-ghost")
+
+
+class _BareUnconfirmedClient:
+    """Answers the SRP read, then refuses the write with a SUFFIX-LESS ``EMAIL_UNCONFIRMED``.
+
+    Telethon maps that form to ``code_length = 0``, which the gateway reports as
+    ``None`` because zero is not a length the card can use. The whole point of this
+    double is that ``None`` is then the ONLY thing the service sees.
+    """
+
+    async def connect(self) -> None:
+        return None
+
+    async def __call__(self, request: object) -> object:
+        if isinstance(request, GetPasswordRequest):
+            return SimpleNamespace(current_algo=object())
+        raise errors.EmailUnconfirmedError(None)
+
+
+@pytest.mark.asyncio
+async def test_a_bare_email_unconfirmed_still_reports_the_address_as_pending(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End to end THROUGH the real gateway, because that is how this got through.
+
+    ``EMAIL_UNCONFIRMED`` with no ``_<N>`` suffix is Telegram saying "address
+    accepted, a code has been mailed" without saying how long the code is. Deriving
+    ``pending`` from the length turns exactly that answer into ``{pending: false}``,
+    which :class:`AccountTwoFactorEmailPending` documents as "already verified,
+    nothing asked for" — so the card drops back to the empty attach form for an
+    address that IS pending. The gateway's own test asserts only the ``None``; that
+    assertion is true and was never the bug.
+    """
+    await _account_with_password("acc-bare")
+    patch_action_client(monkeypatch, _BareUnconfirmedClient())
+    monkeypatch.setattr(
+        "core.telegram_client._twofa_email.compute_check",
+        lambda _pwd, _password: "srp-proof",
+    )
+    events = patch_log(monkeypatch, module=EMAIL_MODULE)
+
+    pending = await set_account_twofa_email("acc-bare", AccountTwoFactorEmailRequest(email=_EMAIL))
+
+    assert pending.code_length is None
+    # The load-bearing assertion: the address is pending even with no length to size
+    # the input with.
+    assert pending.pending is True
+    assert events[0][2]["pending"] is True
+
+
+@pytest.mark.asyncio
+async def test_an_email_write_does_not_interleave_with_a_password_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both flows READ the stored password and then send an SRP-authorised write.
+
+    That is exactly the shape ``_TWOFA_LOCKS`` exists for, and the email half was not
+    taking it: two ``updatePasswordSettings`` in flight for one account, authorised by
+    two different passwords. The loser is told "wrong current password" about a
+    password the dashboard itself had just replaced.
+
+    The password half's own race test proves only that the lock exists — both of its
+    writers were already inside it — so nothing covered this pair. The gauge is depth
+    rather than a fixed order: either flow may win, but never both at once, and the
+    email write must authorise with whatever the column held when it ran.
+    """
+    await _account_with_password("acc-mail-race")
+    depth = {"now": 0, "max": 0}
+    authorised: list[tuple[str | None, str | None]] = []
+
+    async def _enter() -> None:
+        depth["now"] += 1
+        depth["max"] = max(depth["max"], depth["now"])
+        # A real suspension, long enough for the other task to reach its own write if
+        # nothing is keeping it out.
+        await asyncio.sleep(0.01)
+
+    async def _slow_email(account_id: str, action: ManageTwoFactorEmail) -> ActionResult:
+        await _enter()
+        authorised.append((action.current_password, await fetch_account_twofa_password(account_id)))
+        depth["now"] -= 1
+        return ActionResult(
+            status="ok",
+            action_type=action.action_type,
+            account_id=account_id,
+            twofa_email_unconfirmed=True,
+        )
+
+    async def _slow_password(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        await _enter()
+        depth["now"] -= 1
+        return ActionResult(status="ok", action_type="set_twofa_password", account_id=account_id)
+
+    monkeypatch.setattr(f"{EMAIL_MODULE}.execute", _slow_email)
+    monkeypatch.setattr("services.accounts.twofa.execute", _slow_password)
+    patch_read(monkeypatch, status(has_password=True))
+    patch_log(monkeypatch, module=EMAIL_MODULE)
+    patch_log(monkeypatch)
+
+    await asyncio.gather(
+        set_account_twofa_email("acc-mail-race", AccountTwoFactorEmailRequest(email=_EMAIL)),
+        set_account_twofa("acc-mail-race", AccountTwoFactorUpdateRequest(password="the-new-one")),
+    )
+
+    assert depth["max"] == 1, "two authorised writes were in flight for one account"
+    # And the email write authorised itself with the password that was actually in the
+    # column when it ran, whichever of the two won.
+    assert authorised == [(authorised[0][1], authorised[0][1])]
+
+
+@pytest.mark.asyncio
+async def test_a_lost_confirm_answer_is_settled_by_re_reading_the_live_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 503 here tells the operator to retry a code that can only fail from now on.
+
+    ``account.confirmPasswordEmail`` was already on the wire, so the address may well
+    be attached — and the card keeps the code and refocuses, so the operator retries
+    and gets ``twofa_email_code_invalid`` or ``twofa_email_hash_expired`` for an
+    address that is already confirmed. The code is single-use: no retry can ever
+    succeed, and the error the operator is shown is simply false. ``set_account_twofa``
+    already branches on ``UNCONFIRMED_ERROR_TYPE``; this is the same branch, settled
+    by the live read instead of by persisting anything.
+    """
+    await _account_with_password("acc-confirm-lost")
+    patch_lost_answer(monkeypatch, module=EMAIL_MODULE)
+    patch_read(monkeypatch, status(has_password=True, has_recovery=True))
+    events = patch_log(monkeypatch, module=EMAIL_MODULE)
+
+    view = await confirm_account_twofa_email(
+        "acc-confirm-lost",
+        AccountTwoFactorEmailConfirmRequest(code=_CODE),
+    )
+
+    assert view.status is not None
+    assert view.status.has_recovery is True
+    assert [event for _level, event, _extra in events] == ["account_twofa_email_confirmed"]
+
+
+@pytest.mark.asyncio
+async def test_a_lost_confirm_answer_still_fails_when_no_recovery_email_appeared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other half: the live read is the evidence, and it can say no.
+
+    ``has_recovery`` still false means the confirmation did not land, so the outage
+    keeps its 503 rather than being reported as a success on the strength of nothing.
+    """
+    await _account_with_password("acc-confirm-lost-no")
+    patch_lost_answer(monkeypatch, module=EMAIL_MODULE)
+    patch_read(monkeypatch, status(has_password=True, has_recovery=False))
+    events = patch_log(monkeypatch, module=EMAIL_MODULE)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await confirm_account_twofa_email(
+            "acc-confirm-lost-no",
+            AccountTwoFactorEmailConfirmRequest(code=_CODE),
+        )
+
+    assert excinfo.value.code == "unavailable"
+    assert events == []

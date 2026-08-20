@@ -15,7 +15,7 @@ import { ConfirmModal } from '@/shared/ui';
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
 import { Section, Spinner } from './_shared';
-import { FIELD_LOCKED } from './_styles';
+import { FIELD_READONLY } from './_styles';
 
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
@@ -43,7 +43,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   // the attach response is the only carrier of the code length, and the refetch it
   // triggers flips that component's key and remounts it.
   const [emailCodeLength, setEmailCodeLength] = useState<number | null>(null);
-  const [copied, setCopied] = useState(false);
+  // The typed confirmation code, lifted for the same reason and by the same route: a
+  // status refetch flips TwoFactorEmail's key and remounts it, which used to wipe
+  // what the operator had just read out of the letter.
+  const [emailCode, setEmailCode] = useState('');
+  // 'failed' is a state of its own, not the absence of 'done': a rejected write has
+  // to say so, because the manual selection below is then the only copy route left.
+  const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle');
   const [changing, setChanging] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
@@ -61,7 +67,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   const readError = twofa.data?.error ?? null;
   const hasPassword = status?.has_password === true;
   const hasStored = twofa.data?.has_stored_password === true;
-  const removeKind = hasPassword ? 'Disable' : 'Forget';
+  const readFailed = readError != null || twofa.isError;
+  // One modal and one DELETE serve three situations, and the copy has to say which.
+  // The third is the read-failure one: `remove_account_twofa` only takes its "clear
+  // the column, spend no RPC" branch when the live read SAYS 2FA is off, so with no
+  // live status the DELETE does attempt a real removal on Telegram — the plain
+  // "Telegram keeps its copy" wording of the stale case would be a lie here.
+  const removeKind = readFailed ? 'ForgetUnknown' : hasPassword ? 'Disable' : 'Forget';
 
   const onCreated = (result: AccountTwoFactorCreated) => {
     setCreated(result);
@@ -69,17 +81,32 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
     invalidate();
   };
 
-  // Establishes the clipboard precedent for this codebase: guarded (happy-dom
-  // and any non-secure context have no navigator.clipboard), fire-and-forget,
-  // and a rejected write never reaches the render path.
+  // The clipboard precedent for this codebase, and it lives or dies on the FAILURE
+  // states: this panel is the only copy of the password, so "Скопировано" over a
+  // write that rejected (denied permission, an unfocused document — Chrome rejects
+  // for that) loses the credential the moment the operator clicks Готово. Hence a
+  // label driven by how the promise SETTLED, never by having called it.
+  //
+  // `navigator.clipboard` is absent altogether in any non-secure context — the
+  // dashboard reached over http:// by LAN IP instead of localhost, and happy-dom —
+  // where a copy button would be dead. There the panel drops the button and says to
+  // select the password and copy it by hand instead.
+  const clipboard: Clipboard | undefined = navigator.clipboard;
   const copyPassword = (password: string) => {
-    const clipboard: Clipboard | undefined = navigator.clipboard;
     if (!clipboard) return;
-    void clipboard.writeText(password).catch(() => undefined);
-    setCopied(true);
-    later(() => {
-      setCopied(false);
-    }, 2400);
+    void clipboard.writeText(password).then(
+      () => {
+        setCopyState('done');
+        later(() => {
+          setCopyState('idle');
+        }, 2400);
+      },
+      () => {
+        // No auto-reset: this one has to stay until the operator has copied it by
+        // hand, which is the only route left.
+        setCopyState('failed');
+      },
+    );
   };
 
   const onRemove = () =>
@@ -97,9 +124,10 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           // sitting in a card they walked away from.
           if (!open) {
             setCreated(null);
-            setCopied(false);
+            setCopyState('idle');
             setChanging(false);
             setEmailCodeLength(null);
+            setEmailCode('');
           }
         }}
         right={
@@ -116,6 +144,18 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           )
         }
       >
+        {/* Somebody is trying to take the account with a password reset. Above the
+            state branches on purpose: a status can carry a pending reset with
+            `has_password: false` (Telegram has already dropped the password the
+            reset was requested against), and inside the 2FA-on arm that warning was
+            silently dropped in exactly the case where it matters most. */}
+        {status?.pending_reset_date ? (
+          <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-semibold text-danger">
+            {t('accounts.edit.twofaResetRequested', {
+              date: status.pending_reset_date.slice(0, 10),
+            })}
+          </div>
+        ) : null}
         {twofa.isPending ? (
           <div className="py-2">
             <Spinner size={16} />
@@ -152,44 +192,86 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 readOnly
                 value={created.password}
                 aria-label={t('accounts.edit.twofaNewPassword')}
-                className={`${FIELD_LOCKED} font-mono`}
+                className={`${FIELD_READONLY} font-mono`}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  copyPassword(created.password);
-                }}
-                className="shrink-0 rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[12px] font-medium text-ink-muted"
-              >
-                {copied ? t('accounts.edit.twofaCopied') : t('accounts.edit.twofaCopy')}
-              </button>
+              {clipboard ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    copyPassword(created.password);
+                  }}
+                  className="shrink-0 rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[12px] font-medium text-ink-muted"
+                >
+                  {copyState === 'done'
+                    ? t('accounts.edit.twofaCopied')
+                    : t('accounts.edit.twofaCopy')}
+                </button>
+              ) : null}
             </div>
+            {clipboard ? null : (
+              <div className="mb-[12px] text-[11.5px] leading-[1.45] text-ink-subtle">
+                {t('accounts.edit.twofaCopyManual')}
+              </div>
+            )}
+            {copyState === 'failed' ? (
+              <div className="mb-[12px] text-[11.5px] font-medium leading-[1.45] text-danger">
+                {t('accounts.edit.twofaCopyFailed')}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={() => {
                 setCreated(null);
-                setCopied(false);
+                setCopyState('idle');
               }}
               className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium"
             >
               {t('accounts.edit.twofaDone')}
             </button>
           </>
-        ) : readError != null || twofa.isError ? (
-          // A write against an account whose live state we could not read is a
-          // guess, so this branch offers nothing actionable.
-          <div className="text-[11.5px] text-danger">
-            {t('accounts.edit.twofaReadErr', {
-              reason: readError
-                ? t(`shell.code.${readError}`, { defaultValue: readError })
-                : t('shell.mutationError'),
-            })}
-          </div>
+        ) : readFailed ? (
+          <>
+            {/* A set, change or disable against an account whose live state we could
+                not read is a guess, so this branch offers none of them. */}
+            <div className="text-[11.5px] text-danger">
+              {t('accounts.edit.twofaReadErr', {
+                reason: readError
+                  ? t(`shell.code.${readError}`, { defaultValue: readError })
+                  : t('shell.mutationError'),
+              })}
+            </div>
+            {hasStored ? (
+              // The one exception, and it is not a guess: `has_stored_password` is a
+              // DB fact the backend answers even when the live read failed, and
+              // dropping our copy needs no successful read. Without this row a
+              // transient `twofa_state_unreadable` left a plaintext cloud password
+              // sitting on disk that the card neither showed nor could clear —
+              // every control that can do it lived in the `hasPassword` arm.
+              <div className="mt-3">
+                <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-medium text-ink-muted">
+                  {t('accounts.edit.twofaStored')}
+                </div>
+                <div className="mt-[10px] text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmRemove(true);
+                    }}
+                    className="bg-transparent p-0 text-[12.5px] font-medium text-danger"
+                  >
+                    {t('accounts.edit.twofaForget')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
         ) : hasPassword ? (
           <>
             <Fact
               label={t('accounts.edit.twofaHint')}
-              value={status?.hint ?? t('accounts.edit.twofaHintNone')}
+              // `||`, not `??`: '' is not nullish, and '' is exactly what the
+              // gateway reports once this card has cleared a hint.
+              value={status?.hint || t('accounts.edit.twofaHintNone')}
             />
             <Fact
               label={t('accounts.edit.twofaRecovery')}
@@ -206,31 +288,31 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             >
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
-            {status?.pending_reset_date ? (
-              // Somebody is trying to take the account with a password reset.
-              <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-semibold text-danger">
-                {t('accounts.edit.twofaResetRequested', {
-                  date: status.pending_reset_date.slice(0, 10),
-                })}
-              </div>
-            ) : null}
-            {hasStored ? (
-              <TwoFactorEmail
-                // Keyed on the server-side email state: a write's optimistic
-                // override then lives exactly until the status confirms it.
-                key={`${String(status?.has_recovery === true)}|${status?.email_unconfirmed_pattern ?? ''}`}
-                accountId={accountId}
-                hasRecovery={status?.has_recovery === true}
-                unconfirmedPattern={status?.email_unconfirmed_pattern ?? null}
-                codeLength={emailCodeLength}
-                onCodeLength={setEmailCodeLength}
-                onChanged={invalidate}
-              />
-            ) : (
+            {hasStored ? null : (
               <div className="mt-3 text-[11.5px] leading-[1.45] text-ink-subtle">
                 {t('accounts.edit.twofaNotStoredNote')}
               </div>
             )}
+            <TwoFactorEmail
+              // Keyed on the server-side email state: a write's optimistic
+              // override then lives exactly until the status confirms it.
+              key={`${String(status?.has_recovery === true)}|${status?.email_unconfirmed_pattern ?? ''}`}
+              accountId={accountId}
+              hasRecovery={status?.has_recovery === true}
+              // Rendered whatever `has_stored_password` says, because three of the
+              // five email operations need no stored password: confirm, resend and
+              // cancel go straight through on the backend. Only attach and detach are
+              // gated, inside — and hiding the block instead left a pending address
+              // invisible in a state that is reachable whenever the password was set
+              // from the phone, kept by a `previous_kept` change, or failed to store.
+              hasStored={hasStored}
+              unconfirmedPattern={status?.email_unconfirmed_pattern ?? null}
+              code={emailCode}
+              onCode={setEmailCode}
+              codeLength={emailCodeLength}
+              onCodeLength={setEmailCodeLength}
+              onChanged={invalidate}
+            />
             <div className="mt-4">
               {changing ? (
                 <TwoFactorForm
@@ -302,11 +384,12 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
       </Section>
       {confirmRemove ? (
         <ConfirmModal
-          // Two situations, one modal and one DELETE: turning 2FA off on Telegram, or
-          // dropping a stored password Telegram no longer has. The copy has to say
-          // which — the second one costs the account nothing and warning about SMS
-          // takeover there would be a lie. The value is the i18n key suffix, the
-          // shape TwoFactorEmail's own two-branch modal already uses.
+          // Three situations, one modal and one DELETE: turning 2FA off on Telegram,
+          // dropping a stored password Telegram no longer has, and dropping one while
+          // the live state could not be read at all. The copy has to say which — the
+          // second costs the account nothing and warning about SMS takeover there
+          // would be a lie, while the third cannot promise either way. The value is
+          // the i18n key suffix, the shape TwoFactorEmail's own modal already uses.
           title={t(`accounts.edit.twofa${removeKind}Title`)}
           body={t(`accounts.edit.twofa${removeKind}Body`)}
           confirmLabel={t(`accounts.edit.twofa${removeKind}Confirm`)}

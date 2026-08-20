@@ -300,7 +300,17 @@
   }
 }
 /* After the open transition settles, drop the cap so content taller than the
-   measured height (added later, e.g. an expanding log) is never clipped. */
+   measured height (added later, e.g. an expanding log) is never clipped.
+   The price, and CollapsibleCard's onTransitionEnd is built around it: from here
+   the computed max-height is `none`, and `none -> 0` is not interpolable, so the
+   CLOSE creates no max-height transition at all — measured in Chrome, the only
+   transition the close runs is opacity 1 -> 0. That is why the component keys the
+   close off `opacity` and only the open off `max-height`; keying both on
+   max-height left every collapsed card's controls in the tab order and the a11y
+   tree. `transition-behavior: allow-discrete` would restore the event, but a
+   discrete max-height flips at the halfway point, so the body would hold full
+   height for 250ms and then snap — worse than the immediate collapse under a
+   fading opacity. */
 .tb-collapse.tb-open.tb-settled {
   max-height: none;
 }

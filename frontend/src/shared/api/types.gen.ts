@@ -591,6 +591,10 @@ export type ActionResult = {
    */
   twofa_email_code_length?: number | null;
   /**
+   * Twofa Email Unconfirmed
+   */
+  twofa_email_unconfirmed?: boolean;
+  /**
    * Error Type
    */
   error_type?: string | null;

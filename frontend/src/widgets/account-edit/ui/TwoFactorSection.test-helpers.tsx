@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
@@ -6,6 +6,8 @@ import { vi } from 'vitest';
 import '@/shared/i18n';
 
 import type { AccountRead, TwoFactorStatusResult } from '@/shared/api';
+import { mutationErrorText } from '@/shared/lib';
+import { Toaster, toastError } from '@/shared/ui';
 
 import { TwoFactorSection } from './TwoFactorSection';
 
@@ -81,16 +83,39 @@ export const PENDING: TwoFactorStatusResult = {
   email_unconfirmed_pattern: 'o**@example.com',
 };
 
+// The card reports NO failure inline — every one of them reaches the operator
+// through the app's MutationCache.onError toast (src/shared/lib/query-client.ts),
+// so a QueryClient without that cache makes every error test in both 2FA files
+// assert half a behaviour: the dialog stays open, and nothing anywhere says why.
+// Hence the production wiring here, and <Toaster/> mounted next to the card the
+// way the app root mounts it.
 export function renderSection() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        toastError(mutationErrorText(error));
+      },
+    }),
+  });
   return {
     queryClient,
     ...render(
       <QueryClientProvider client={queryClient}>
         <TwoFactorSection account={ACCOUNT} />
+        <Toaster />
       </QueryClientProvider>,
     ),
   };
+}
+
+// Every queued toast's text. A list, not one string: the queue is module state
+// with a 5s life, so a message from an earlier test in the same file can still be
+// on screen — `toContain` over the list is honest about that, `getByRole('alert')`
+// would throw on it.
+export async function toastMessages(): Promise<string[]> {
+  const alerts = await screen.findAllByRole('alert');
+  return alerts.map((alert) => alert.textContent ?? '');
 }
 
 // Every card is collapsed by default and a collapsed body is `hidden`, so the

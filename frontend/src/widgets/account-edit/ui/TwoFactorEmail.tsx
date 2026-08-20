@@ -1,8 +1,9 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  accountTwofaQueryKey,
   cancelAccountTwofaEmailMutation,
   clearAccountTwofaEmailMutation,
   confirmAccountTwofaEmailMutation,
@@ -14,6 +15,17 @@ import { ConfirmModal } from '@/shared/ui';
 import { Spinner } from './_shared';
 import { FIELD, LABEL } from './_styles';
 
+// The exact bounds `schemas/twofa` enforces. Gating on anything looser makes the
+// button fire a request that can only 422, and a `validation_error` envelope
+// resolves through no `shell.code.*` entry — so the operator would get FastAPI prose
+// or the generic fallback instead of an inline message they can act on.
+const EMAIL_SHAPE = /.+@.+/;
+const MAX_EMAIL_LENGTH = 254;
+// Telegram's real length comes back as `code_length` in the attach reply only; this
+// is the server's upper bound, and it is what the field falls back to after a reload
+// or a reopened card, where the pattern came from the status and the length is gone.
+const MAX_CODE_LENGTH = 32;
+
 // The recovery-email leg of the 2FA card: attach an address, then type the code
 // Telegram mailed. Rendered only when the account has a password AND that
 // password is stored here, because the backend can authorise neither otherwise.
@@ -24,30 +36,43 @@ import { FIELD, LABEL } from './_styles';
 // point. The parent keys this component on the server-side state, so an override
 // lives exactly until the server confirms it.
 //
-// `codeLength` therefore CANNOT live here. It exists only in the attach response,
-// and the refetch that response triggers flips the key (the pattern appears), which
-// remounts this component and would drop it — so the parent holds it and passes it
-// back down. The number is plumbed through three backend layers precisely so the
-// operator gets the right field length; losing it on the first refetch would waste
-// all of that.
+// `codeLength` therefore CANNOT live here, and neither can the typed `code`: both
+// exist across a refetch that flips the key (the pattern appears or disappears) and
+// remounts this component. The parent holds them and passes them back down. The
+// length is plumbed through three backend layers precisely so the operator gets the
+// right field size, and the code is what they just read out of the letter — the
+// refetch after an attach wiped it here, so a code typed promptly was silently
+// blanked and the POST went out empty.
 export function TwoFactorEmail({
   accountId,
   hasRecovery,
+  hasStored,
   unconfirmedPattern,
+  code,
+  onCode,
   codeLength,
   onCodeLength,
   onChanged,
 }: {
   accountId: string;
   hasRecovery: boolean;
+  // Whether THIS dashboard still holds the account's current password. Only the two
+  // authorised operations need it — attaching an address (`updatePasswordSettings`)
+  // and detaching a confirmed one (the same call with an empty email). Confirming a
+  // code, re-sending it and cancelling a pending address need no password at all, so
+  // gating the whole leg on this hid a pending verification the operator could still
+  // have completed.
+  hasStored: boolean;
   unconfirmedPattern: string | null;
+  code: string;
+  onCode: (code: string) => void;
   codeLength: number | null;
   onCodeLength: (length: number | null) => void;
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [address, setAddress] = useState('');
-  const [code, setCode] = useState('');
   const [override, setOverride] = useState<string | null | undefined>(undefined);
   // One modal serves both destructive branches; the value is the i18n key suffix.
   // The HANDLERS stay separate because the two call different endpoints.
@@ -62,9 +87,10 @@ export function TwoFactorEmail({
 
   const path = { path: { account_id: accountId } } as const;
   const pending: string | null = override === undefined ? unconfirmedPattern : override;
+  const email = address.trim();
+  const addressValid = EMAIL_SHAPE.test(email) && email.length <= MAX_EMAIL_LENGTH;
 
   const onAttach = () => {
-    const email = address.trim();
     setEmail.mutate(
       { ...path, body: { email } },
       {
@@ -85,10 +111,17 @@ export function TwoFactorEmail({
     confirmEmail.mutate(
       { ...path, body: { code: code.trim() } },
       {
-        onSuccess: () => {
+        onSuccess: (view) => {
+          // Rendered from the RESPONSE, which is a whole fresh AccountTwoFactorView
+          // (the route re-reads the live state for exactly this reason). Nulling the
+          // override and waiting for the refetch instead left `hasRecovery` at its
+          // stale `false` for one live `account.getPassword` round trip, and the card
+          // spent those seconds saying the address is not attached and offering to
+          // attach the one just confirmed.
+          queryClient.setQueryData(accountTwofaQueryKey(path), view);
           setOverride(null);
           onCodeLength(null);
-          setCode('');
+          onCode('');
           onChanged();
         },
         // A wrong or expired code is named by the global toast; the field keeps
@@ -114,7 +147,7 @@ export function TwoFactorEmail({
     cancelEmail.mutateAsync(path).then(() => {
       setOverride(null);
       onCodeLength(null);
-      setCode('');
+      onCode('');
       onChanged();
     });
 
@@ -139,7 +172,8 @@ export function TwoFactorEmail({
             onClick={() => {
               setConfirming('Unlink');
             }}
-            className="bg-transparent p-0 text-[12.5px] font-medium text-danger"
+            disabled={!hasStored}
+            className="bg-transparent p-0 text-[12.5px] font-medium text-danger disabled:opacity-50"
           >
             {t('accounts.edit.twofaEmailUnlink')}
           </button>
@@ -156,11 +190,11 @@ export function TwoFactorEmail({
               ref={codeRef}
               value={code}
               onChange={(event) => {
-                setCode(event.target.value);
+                onCode(event.target.value);
               }}
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={codeLength ?? undefined}
+              maxLength={codeLength ?? MAX_CODE_LENGTH}
               className={`${FIELD} font-mono tracking-[0.18em]`}
             />
           </label>
@@ -210,8 +244,14 @@ export function TwoFactorEmail({
               }}
               type="email"
               autoComplete="off"
+              maxLength={MAX_EMAIL_LENGTH}
               className={FIELD}
             />
+            {email && !addressValid ? (
+              <span className="mt-[5px] block text-[11px] font-medium text-danger">
+                {t('accounts.edit.twofaEmailErrShape')}
+              </span>
+            ) : null}
           </label>
           <div className="mb-[12px] text-[11.5px] text-ink-subtle">
             {t('accounts.edit.twofaEmailWarn')}
@@ -219,7 +259,7 @@ export function TwoFactorEmail({
           <button
             type="button"
             onClick={onAttach}
-            disabled={setEmail.isPending || !address.trim()}
+            disabled={setEmail.isPending || !addressValid || !hasStored}
             className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
           >
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}

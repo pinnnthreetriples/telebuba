@@ -4,7 +4,7 @@
 
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 
 import {
   PENDING,
@@ -15,6 +15,7 @@ import {
   requests,
   stubApi,
   stubTwofa,
+  toastMessages,
   urls,
   viewResponse,
 } from './TwoFactorSection.test-helpers';
@@ -64,11 +65,18 @@ test('the attach response drives the pending state, and its code length outlives
   });
   for (const url of urls()) expect(url).not.toContain('ops@example.com');
 
+  // Typed BEFORE the refetch, because that is the whole point: the operator reads
+  // the letter and types while the status query is still catching up, and the
+  // remount that refetch causes must not eat what they typed. With an empty field
+  // this test could not tell a surviving input from a blanked one — which is how
+  // the wiped code shipped.
+  await userEvent.type(code, '654321');
   reportPending = true;
   await queryClient.invalidateQueries();
 
   expect(await screen.findByText('Код отправлен на o**@example.com')).toBeInTheDocument();
   expect(screen.getByLabelText('Код из письма')).toHaveAttribute('maxlength', '6');
+  expect(screen.getByLabelText('Код из письма')).toHaveValue('654321');
 });
 
 test('a confirmed address AND a newly pending one both stay actionable', async () => {
@@ -114,13 +122,37 @@ test('a wrong code keeps the input mounted with what was typed', async () => {
   // Retyping the address after a mistyped digit would be a second round trip.
   expect(screen.getByLabelText('Код из письма')).toHaveValue('123456');
   for (const url of urls()) expect(url).not.toContain('123456');
+  // The kept input is only half of it: the global mutation toast is the only thing
+  // that says WHY the code was rejected, and without it this test passed while the
+  // operator was told nothing at all.
+  expect(await toastMessages()).toContain('Неверный код из письма. Проверьте и введите заново.');
 });
 
-test('a good code confirms the address', async () => {
-  stubTwofa(PENDING, {
-    routes: {
-      [`POST ${TWOFA}/email/confirm`]: () => viewResponse({ has_password: true }),
-    },
+test('a good code renders the attached state from the response, not from a refetch', async () => {
+  // The confirm response already carries the fresh AccountTwoFactorView, and it used
+  // to be discarded: the card nulled its pending override while the `hasRecovery`
+  // prop was still the stale `false`, so for one whole `account.getPassword` round
+  // trip it invited the operator to attach the address they had just confirmed.
+  // Asserting only that the POST fired is how that shipped.
+  //
+  // The status GET deliberately hangs after the first read, so nothing on screen can
+  // come from a refetch — only from the response.
+  const firstRead = viewResponse(PENDING);
+  const afterConfirm = viewResponse({ has_password: true, has_recovery: true });
+  let statusReads = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === `${TWOFA}/email/confirm`) return Promise.resolve(afterConfirm.clone());
+    if (pathname === TWOFA) {
+      statusReads += 1;
+      return statusReads === 1
+        ? Promise.resolve(firstRead)
+        : new Promise<Response>(() => {
+            // never settles
+          });
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
   });
   renderSection();
   await openCard();
@@ -134,6 +166,75 @@ test('a good code confirms the address', async () => {
   expect(await requests(`${TWOFA}/email/confirm`, 'POST')[0]!.clone().json()).toEqual({
     code: '654321',
   });
+  expect(await screen.findByText('Резервная почта: привязана')).toBeInTheDocument();
+  // Never an invitation to attach what was just confirmed.
+  expect(screen.queryByLabelText('Адрес почты')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument();
+});
+
+test('a pending address stays visible and confirmable with the password not stored', async () => {
+  // Reachable when the password was set from the phone, after a `previous_kept`
+  // change, or after a failed store. Only attach and detach need the stored password
+  // to authorise them — confirm, resend and cancel go straight through on the
+  // backend, so hiding the whole leg hid a pending address the operator could then
+  // neither see nor finish.
+  stubTwofa(PENDING, {
+    stored: false,
+    routes: {
+      [`POST ${TWOFA}/email/confirm`]: () =>
+        viewResponse({ has_password: true, has_recovery: true }),
+    },
+  });
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByText('Код отправлен на o**@example.com')).toBeInTheDocument();
+  await userEvent.type(screen.getByLabelText('Код из письма'), '654321');
+  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
+
+  await waitFor(() => {
+    expect(requests(`${TWOFA}/email/confirm`, 'POST')).toHaveLength(1);
+  });
+});
+
+test('without a stored password detach is disabled rather than hidden', async () => {
+  stubTwofa({ has_password: true, has_recovery: true }, { stored: false });
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByText('Резервная почта: привязана')).toBeInTheDocument();
+  // `clear` authorises with the stored current password, so the backend refuses it —
+  // but the operator still has to be able to SEE that an address is attached.
+  expect(screen.getByRole('button', { name: 'Отвязать' })).toBeDisabled();
+});
+
+test('an address that cannot be an email is refused inline, not by a 422', async () => {
+  // The backend enforces `.+@.+` and 254 characters; a 422 comes back as
+  // `validation_error`, which resolves through no `shell.code.*` entry, so the
+  // operator would get FastAPI prose or the generic fallback instead of the inline
+  // error every other form here gives.
+  stubTwofa({ has_password: true, has_recovery: false });
+  renderSection();
+  await openCard();
+
+  const address = await screen.findByLabelText('Адрес почты');
+  expect(address).toHaveAttribute('maxlength', '254');
+  await userEvent.type(address, 'ops.example.com');
+
+  expect(screen.getByText(/Нужен адрес вида/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Привязать почту' })).toBeDisabled();
+  expect(requests(`${TWOFA}/email`, 'POST')).toHaveLength(0);
+});
+
+test('the code field is clamped even when no attach response said how long it is', async () => {
+  // `code_length` exists only in the attach reply, so after a reload or a reopened
+  // card the pattern comes from the status and the length is unknown — the server
+  // still bounds the code to 32.
+  stubTwofa(PENDING);
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByLabelText('Код из письма')).toHaveAttribute('maxlength', '32');
 });
 
 test('resend mails the code again and does not confirm anything', async () => {

@@ -67,6 +67,13 @@ TwoFactorRefusalCode = Literal[
     # (unimplemented algorithm, bad p/g/B/g_b). Its own message is bare ``ValueError``
     # prose about Telethon internals, so this is what the operator sees instead.
     "twofa_password_algo_unsupported",
+    # The SRP work outran its bound. Its own code rather than the one above, because
+    # the two mean opposite things operationally: "unsupported" is instant and about
+    # this account, whereas a timeout means Telegram's prime is one Telethon's
+    # ``check_prime_and_good`` cannot validate in finite time — a FLEET-wide fault
+    # that would have wedged the worker before the bound existed, and one that leaks
+    # a spinning thread every time it fires.
+    "twofa_password_compute_timeout",
 ]
 
 

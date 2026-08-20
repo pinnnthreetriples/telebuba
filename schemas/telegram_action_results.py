@@ -166,6 +166,12 @@ class ActionResult(BaseModel):
     # into a success, so the caller has no second way to learn it. Not a secret —
     # the address and the code itself never travel in a response at all.
     twofa_email_code_length: int | None = None
+    # Whether Telegram answered ``EMAIL_UNCONFIRMED``, which is a different fact from
+    # the length above: the bare form of that error carries no usable length, so the
+    # length is advisory (it sizes the input) and THIS is what "a code was mailed" /
+    # "the password write is not certainly in force yet" is read from. Deriving the
+    # first from the second reported a pending address as already verified.
+    twofa_email_unconfirmed: bool = False
     error_type: str | None = None
     error_message: str | None = None
 

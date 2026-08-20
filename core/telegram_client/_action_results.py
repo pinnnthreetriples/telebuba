@@ -57,6 +57,15 @@ class _DispatchResult:
     # arrives inside the ``EMAIL_UNCONFIRMED_<N>`` the gateway swallows as a
     # success, and the operator cannot type the code without it.
     twofa_email_code_length: int | None = None
+    # Telegram answered ``EMAIL_UNCONFIRMED``. Carried SEPARATELY from the length
+    # because the bare form of that error reports ``code_length = 0``, which the
+    # gateway turns into ``None`` — so "did Telegram mail a code" cannot be recovered
+    # from the length, and deriving it from one reported the single answer meaning
+    # "address accepted, code mailed" as "nothing was asked for". On the PASSWORD path
+    # the same flag means the write was accepted while a recovery-email verification
+    # is still pending, which TDLib treats as "not certainly in force" rather than a
+    # clean success.
+    twofa_email_unconfirmed: bool = False
 
 
 async def _flood_action_result(  # noqa: PLR0913 - four keyword-only outcome facets, no bag

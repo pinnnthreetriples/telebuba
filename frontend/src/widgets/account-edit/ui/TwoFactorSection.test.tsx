@@ -2,11 +2,14 @@
 // stored password. The recovery-email half lives in TwoFactorEmail.test.tsx; the
 // harness both drive is in TwoFactorSection.test-helpers.tsx.
 
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { accountStatsQueryKey, accountTwofaQueryKey, accountsQueryKey } from '@/entities/account';
+
 import {
+  ACCOUNT,
   TITLE,
   TWOFA,
   jsonResponse,
@@ -14,9 +17,21 @@ import {
   renderSection,
   requests,
   stubTwofa,
+  toastMessages,
   urls,
   viewResponse,
 } from './TwoFactorSection.test-helpers';
+
+// Any non-secure context — the dashboard reached over http:// by LAN IP rather
+// than localhost — has no `navigator.clipboard` at all.
+function withoutClipboard(): () => void {
+  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+  Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+  return () => {
+    if (original) Object.defineProperty(navigator, 'clipboard', original);
+    else Reflect.deleteProperty(navigator, 'clipboard');
+  };
+}
 
 test('the header pill answers on/off before the card is opened', async () => {
   stubTwofa({ has_password: true });
@@ -204,6 +219,59 @@ test('the reveal panel copies the password to the clipboard', async () => {
   expect(await navigator.clipboard.readText()).toBe('test-password-copy');
 });
 
+test('a rejected clipboard write never claims the password was copied', async () => {
+  // writeText rejects on a denied permission and, in Chrome, whenever the document
+  // is not focused. "Скопировано" over a rejected write is how the operator's only
+  // copy of the credential gets lost: they read it, click Готово, and it is gone.
+  stubTwofa(
+    { has_password: false },
+    {
+      stored: false,
+      routes: { [`POST ${TWOFA}`]: () => jsonResponse({ password: 'test-password-denied' }) },
+    },
+  );
+  renderSection();
+  await openCard();
+  await userEvent.click(await screen.findByRole('button', { name: 'Включить 2FA' }));
+  await screen.findByDisplayValue('test-password-denied');
+
+  const write = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
+  await userEvent.click(screen.getByRole('button', { name: 'Копировать' }));
+
+  expect(await screen.findByText(/Скопировать не удалось/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Скопировано' })).not.toBeInTheDocument();
+  // Still on screen and still selectable, which is the whole fallback.
+  expect(screen.getByDisplayValue('test-password-denied')).toBeInTheDocument();
+  write.mockRestore();
+});
+
+test('with no clipboard at all the panel asks for a manual copy, not a dead button', async () => {
+  stubTwofa(
+    { has_password: false },
+    {
+      stored: false,
+      routes: { [`POST ${TWOFA}`]: () => jsonResponse({ password: 'test-password-noclip' }) },
+    },
+  );
+  const restore = withoutClipboard();
+  try {
+    renderSection();
+    // fireEvent, not userEvent: user-event attaches its own clipboard stub on the
+    // next interaction, which would undo the very condition under test.
+    fireEvent.click(screen.getByText(TITLE));
+    fireEvent.click(await screen.findByRole('button', { name: 'Включить 2FA' }));
+
+    const field = await screen.findByDisplayValue('test-password-noclip');
+    expect(screen.getByText(/Буфер обмена/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Копировать' })).not.toBeInTheDocument();
+    // A read-only input IS selectable, so `cursor-not-allowed` would signal the
+    // opposite of the instruction just given.
+    expect(field).not.toHaveClass('cursor-not-allowed');
+  } finally {
+    restore();
+  }
+});
+
 test('the on-state lists the live facts, including a requested reset', async () => {
   stubTwofa({
     has_password: true,
@@ -220,7 +288,7 @@ test('the on-state lists the live facts, including a requested reset', async () 
   expect(screen.getByText('Запрошен сброс пароля: 2026-09-01')).toBeInTheDocument();
 });
 
-test('an unstored password disables change, removal and the whole email leg', async () => {
+test('an unstored password disables change, removal and attaching an address', async () => {
   stubTwofa({ has_password: true, has_recovery: false }, { stored: false });
   renderSection();
   await openCard();
@@ -230,7 +298,9 @@ test('an unstored password disables change, removal and the whole email leg', as
   // Without our copy of the current password Telegram authorises none of these.
   expect(screen.getByRole('button', { name: 'Сменить пароль' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Отключить 2FA' })).toBeDisabled();
-  expect(screen.queryByRole('button', { name: 'Привязать почту' })).not.toBeInTheDocument();
+  // Disabled, not absent: the email state itself stays readable, because three of
+  // the five email operations need no stored password at all.
+  expect(screen.getByRole('button', { name: 'Привязать почту' })).toBeDisabled();
 });
 
 test('change password reuses the set form and ends in the same reveal panel', async () => {
@@ -276,7 +346,9 @@ test('an unconfirmed write says so as loudly as a failed store', async () => {
 
 test('the plaintext does not outlive the reveal panel in the mutation cache', async () => {
   // useMutation retains `variables` (the typed password) and `data` (the returned
-  // plaintext) until mutation gc, minutes after unmount.
+  // plaintext) until mutation gc, minutes after unmount. Run in CUSTOM mode with a
+  // typed password on purpose: in generate mode the body is empty, so `variables`
+  // held no secret and half of what this test claims to cover was never exercised.
   stubTwofa(
     { has_password: false },
     {
@@ -287,7 +359,9 @@ test('the plaintext does not outlive the reveal panel in the mutation cache', as
   const { queryClient } = renderSection();
   await openCard();
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Включить 2FA' }));
+  await userEvent.click(await screen.findByText('Свой пароль'));
+  await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'test-password-sent');
+  await userEvent.click(screen.getByRole('button', { name: 'Включить 2FA' }));
   await screen.findByDisplayValue('test-password-nocache');
 
   // reset() only SCHEDULES collection, hence the gcTime the form pins to 0.
@@ -298,6 +372,8 @@ test('the plaintext does not outlive the reveal panel in the mutation cache', as
         .getAll()
         .map((mutation) => mutation.state),
     );
+    // `variables` first: it is the half this test used to skip.
+    expect(cached).not.toContain('test-password-sent');
     expect(cached).not.toContain('test-password-nocache');
   });
 });
@@ -347,6 +423,11 @@ test('a failed removal keeps the confirm dialog open', async () => {
     expect(requests(TWOFA, 'DELETE')).toHaveLength(1);
   });
   expect(screen.getByText('Отключить облачный пароль?')).toBeInTheDocument();
+  // The card renders no inline failure of its own: the global mutation toast is the
+  // ONLY thing that tells the operator why the dialog is still there.
+  expect(await toastMessages()).toContain(
+    'Текущий пароль не сохранён в панели, изменить или снять его отсюда нельзя.',
+  );
 });
 
 test('a stored password Telegram no longer has can be seen and dropped', async () => {
@@ -374,6 +455,59 @@ test('a stored password Telegram no longer has can be seen and dropped', async (
   await waitFor(() => {
     expect(requests(TWOFA, 'DELETE')).toHaveLength(1);
   });
+});
+
+test('a read failure still shows a stored password and can drop it', async () => {
+  // `has_stored_password` is a DB fact the backend answers even when the live read
+  // failed, and the removal does not need the read to have succeeded — so a
+  // transient twofa_state_unreadable used to leave a plaintext cloud password on
+  // disk with nothing on screen saying so and no control that could clear it.
+  stubTwofa(null, {
+    error: 'twofa_state_unreadable',
+    routes: { [`DELETE ${TWOFA}`]: () => viewResponse({ has_password: false }, false) },
+  });
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByText(/Состояние 2FA не прочитано/)).toBeInTheDocument();
+  expect(screen.getByText('Пароль сохранён в Telebuba')).toBeInTheDocument();
+  // Still nothing that writes a password against a state we could not read.
+  expect(screen.queryByRole('button', { name: 'Включить 2FA' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Сменить пароль' })).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить сохранённый пароль' }));
+  // With no live status the backend cannot take its "clear the column, spend no RPC"
+  // branch, so this DELETE may really remove the password from Telegram. The stale
+  // case's "nothing changes on Telegram" body would be a lie here.
+  expect(await screen.findByText(/Если облачный пароль в Telegram есть/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+
+  await waitFor(() => {
+    expect(requests(TWOFA, 'DELETE')).toHaveLength(1);
+  });
+});
+
+test('a hint cleared through this card reads as "not set", not as blank', async () => {
+  // '' is what the gateway reports after this card clears a hint, and '' is not
+  // nullish — so `??` left the row empty instead of saying there is no hint.
+  stubTwofa({ has_password: true, has_recovery: false, hint: '' });
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByText('не задана')).toBeInTheDocument();
+});
+
+test('a requested reset is shown even when the account has no password', async () => {
+  // Telegram reports the pending reset against an account whose password is already
+  // gone, and that is the loudest version of "somebody is taking this account" —
+  // rendered inside the 2FA-on arm, it was dropped exactly there.
+  stubTwofa({ has_password: false, pending_reset_date: '2026-09-01T10:00:00Z' }, { stored: false });
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByText('Запрошен сброс пароля: 2026-09-01')).toBeInTheDocument();
+  // …without costing the off-state its form.
+  expect(screen.getByRole('button', { name: 'Включить 2FA' })).toBeInTheDocument();
 });
 
 test('an unconfirmed CHANGE says both passwords are now candidates', async () => {
@@ -444,9 +578,14 @@ test('every 2FA write invalidates by key, never the whole cache', async () => {
   await screen.findByDisplayValue('test-password-invalidate');
 
   // A bare invalidateQueries() refetches the warming board, the logs and the
-  // accounts list this view derives its account from.
-  expect(invalidate).toHaveBeenCalled();
-  for (const [filters] of invalidate.mock.calls) {
-    expect(filters?.queryKey).toBeDefined();
-  }
+  // accounts list this view derives its account from. Asserting only that a
+  // queryKey is DEFINED lets a wrong key through — an invalidation naming another
+  // account passes that, refetches nothing, and leaves this card stale.
+  const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+  expect(keys).toContainEqual(accountTwofaQueryKey({ path: { account_id: ACCOUNT.account_id } }));
+  expect(keys).toContainEqual(accountsQueryKey());
+  expect(keys).toContainEqual(accountStatsQueryKey());
+  // The fourth is the proxy list (an account holds a pool slot); four in total, so
+  // nothing widened into a cache-wide sweep either.
+  expect(keys).toHaveLength(4);
 });

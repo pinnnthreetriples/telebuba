@@ -34,6 +34,13 @@ from services.accounts._table import (
     list_accounts_page,
     list_listener_accounts,
 )
+from services.accounts._twofa_email import (
+    cancel_account_twofa_email,
+    clear_account_twofa_email,
+    confirm_account_twofa_email,
+    resend_account_twofa_email,
+    set_account_twofa_email,
+)
 from services.accounts.channel_posts import (
     delete_account_channel_post,
     edit_account_channel_post,
@@ -94,14 +101,9 @@ from services.accounts.sessions import (
     import_account_tdata,
 )
 from services.accounts.twofa import (
-    cancel_account_twofa_email,
-    clear_account_twofa_email,
-    confirm_account_twofa_email,
     read_account_twofa,
     remove_account_twofa,
-    resend_account_twofa_email,
     set_account_twofa,
-    set_account_twofa_email,
 )
 
 __all__ = [
