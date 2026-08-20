@@ -16,8 +16,9 @@ The PASSWORD half reproduces ``edit_2fa``'s body (telethon 1.44
 ``client/auth.py``) minus the ``email`` / ``email_code_callback`` arm an
 unattended backend cannot use. Delegating cost four things:
 
-- the SRP work ran on the event-loop thread, and it can fail to terminate at all
-  (:func:`_srp`, which owns both the offload and the bound);
+- the SRP work ran on the event-loop thread, and for a server-supplied ``(p, g)``
+  outside Telethon's fast path it can fail to terminate at all — the extracted
+  sibling ``_twofa_srp`` owns the admission check, the offload and the bound;
 - ``edit_2fa`` issued its OWN ``getPassword``, so a pre-flight read here could
   not make a dead read honest — the socket just died one leg later, and it was
   still reported as "Telegram may have applied this password"
@@ -36,26 +37,36 @@ to check it against — so a "remove" then removes nothing, which is a no-op and
 never a success.
 
 The recovery-email half lives in the extracted sibling ``_twofa_email``, which
-imports the refusal ladder and :func:`_srp` from here and is imported back only
-inside :func:`dispatch_twofa_action` — see the comment there.
+imports the refusal ladder from here and is imported back only inside
+:func:`dispatch_twofa_action` — see the comment there.
+
+ponytail: KNOWN RESIDUAL, inherited and deliberately not fixed. TDLib re-encrypts
+the Telegram Passport secure secret under the new password on every change;
+``edit_2fa`` never did and neither does this replacement, so an account whose
+Passport data was set up elsewhere loses access to it after a password change.
+Telethon exposes no helper for it (there is no ``new_secure_settings`` arm in
+``edit_2fa``), the fix is a second RPC plus its own crypto, and no Telebuba
+workflow touches Passport — LOW for this product, but a real behaviour gap.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.password import compute_check, compute_digest
 from telethon.tl.functions.account import GetPasswordRequest, UpdatePasswordSettingsRequest
-from telethon.tl.types import (
-    InputCheckPasswordEmpty,
-    PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow,
-)
+from telethon.tl.types import InputCheckPasswordEmpty
 from telethon.tl.types.account import Password, PasswordInputSettings
 
 from core.telegram_client._action_results import _DispatchResult
+from core.telegram_client._twofa_srp import (
+    TwoFactorGatewayError,
+    _ModPowAlgo,
+    _srp,
+    require_fast_algo,
+)
 from schemas.telegram_actions_twofa import (
     ManageTwoFactorEmail,
     SetTwoFactorPassword,
@@ -63,13 +74,7 @@ from schemas.telegram_actions_twofa import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from telethon import TelegramClient
-
-# The one KDF class Telethon implements. ``passwordKdfAlgoUnknown`` is the other member
-# of that TL union and carries no salt at all, so it is refused rather than reached.
-_ModPowAlgo = PasswordKdfAlgoSHA256SHA256PBKDF2HMACSHA512iter100000SHA256ModPow
 
 # Telethon refusal family → stable, locale-neutral code (mirrors
 # ``_profile._PROFILE_ERROR_CODES``). The three SRP members all mean one
@@ -92,6 +97,11 @@ _TWOFA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     # resend / cancel fired with nothing pending, and to any authorised write against
     # an account whose password went away elsewhere. Same fact as the guards below.
     (errors.PasswordMissingError, "twofa_password_not_set"),
+    # ``NEW_SETTINGS_EMPTY`` is documented for ``account.updatePasswordSettings`` as
+    # "no password is set on the current account, and no new password was specified" —
+    # the same fact one call later, reachable when the password disappears between the
+    # ONE read and the write, so it collapses onto the same code.
+    (errors.NewSettingsEmptyError, "twofa_password_not_set"),
     # The recovery-email half. ``EmailInvalidError`` is mapped even though the API
     # layer already refuses an address with no ``@``: that check is deliberately
     # weak (no ``email-validator`` dependency), so Telegram is the real validator
@@ -103,60 +113,6 @@ _TWOFA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     (errors.EmailVerifyExpiredError, "twofa_email_hash_expired"),
     (errors.EmailInvalidError, "twofa_email_invalid"),
 )
-
-
-class TwoFactorGatewayError(ValueError):
-    """A cloud-password action was refused; ``str(exc)`` is the stable code.
-
-    Same contract as :class:`core.telegram_client._media.ProfileGatewayError`: the
-    code rides ``execute``'s generic-exception ladder into
-    ``ActionResult.error_message`` verbatim and the SPA translates it. The unreadable
-    detail travels as the chained cause into the failure log — for this family the
-    only place any Telethon text about the attempt exists.
-    """
-
-    def __init__(self, code: str) -> None:
-        self.code = code
-        super().__init__(code)
-
-
-# Pure-Python 2048-bit modular arithmetic, MEASURED: 68 ms for a ``compute_digest``,
-# 98 ms for a ``compute_check``, 165 ms for a change doing both — during which a
-# heartbeat on the loop thread came back 171 ms late. (An earlier comment here
-# guessed "~1s"; these are the numbers.) That is why it runs in a thread.
-#
-# The BOUND is a different problem and is not about milliseconds. Both functions call
-# ``telethon.password.check_prime_and_good``, whose fast path fires only when
-# ``algo.p`` byte-equals Telethon's hardcoded prime; any other ``p`` falls into
-# Pollard-Brent factorisation of a prime, which does not terminate — measured on the
-# RFC 3526 group-14 prime, still running after 30 s. ``p`` is SERVER-supplied, so a
-# Telegram prime rotation would otherwise wedge the single uvicorn worker for good,
-# taking warming, the listener, SSE and ``/ready`` with it.
-#
-# What the bound buys is one failed request instead of a dead process. It does NOT
-# stop the spinning: Python cannot kill a thread, so every expiry LEAKS one worker
-# thread burning a core until the process exits. That is the trade, deliberately.
-_SRP_TIMEOUT_SECONDS = 15.0
-
-
-async def _srp[T](compute: Callable[..., T], *args: object) -> T:
-    """One SRP computation, off the loop thread and bounded — see the comment above.
-
-    Both refusals collapse into stable codes here rather than at the call sites. A
-    bare ``ValueError`` is ``compute_check`` / ``compute_digest``'s whole vocabulary
-    for a challenge they cannot use (an unimplemented algorithm class, a bad p/g, a
-    bad B or g_b), none of it actionable prose. Doing it here also keeps the two
-    apart: ``TwoFactorGatewayError`` IS a ``ValueError``, so a call site wrapping
-    this in ``except ValueError`` would relabel the timeout as a bad algorithm.
-    """
-    try:
-        return await asyncio.wait_for(asyncio.to_thread(compute, *args), _SRP_TIMEOUT_SECONDS)
-    except TimeoutError as exc:
-        code = "twofa_password_compute_timeout"
-        raise TwoFactorGatewayError(code) from exc
-    except ValueError as exc:
-        code = "twofa_password_algo_unsupported"
-        raise TwoFactorGatewayError(code) from exc
 
 
 def _flag(source: object, name: str) -> bool:
@@ -216,7 +172,9 @@ async def dispatch_set_twofa_password(
 
     ``edit_2fa``'s body, reproduced — see the module docstring for the four reasons
     it is not called. The SRP work is the only part that costs measurable CPU, which
-    is why both halves of it go through :func:`_srp` instead of being awaited here.
+    is why both halves of it go through ``_twofa_srp._srp`` instead of being awaited
+    here, and why every algorithm is admitted by ``require_fast_algo`` BEFORE any of
+    it is offloaded.
     """
     pwd = await _password_state(client)
     current_password = action.current_password
@@ -224,19 +182,21 @@ async def dispatch_set_twofa_password(
         if action.new_password is None:
             # With no password on the account there is nothing for a current one to
             # authorise, so a REMOVAL removes nothing. ``edit_2fa`` answered that with
-            # ``False`` from a call it never sent: a no-op, never a success. The
-            # service's stale branch is what actually resolves this state.
+            # ``False`` from a call it never sent for exactly this pair of ``None``s
+            # (a removal against an account that HAS a password does send the
+            # request): a no-op, never a success. The service's stale branch is what
+            # actually resolves this state.
             code = "twofa_not_changed"
             raise TwoFactorGatewayError(code)
         current_password = None
-    algo = pwd.new_algo
-    if not isinstance(algo, _ModPowAlgo):
-        # ``passwordKdfAlgoUnknown``: the server offered a KDF this Telethon cannot
-        # implement, so there is no salt to extend and no digest to compute. Telethon
-        # would ``AttributeError`` on the next line; this is the same stable code
-        # ``compute_digest``'s own ``ValueError`` would have produced.
-        code = "twofa_password_algo_unsupported"
-        raise TwoFactorGatewayError(code)
+    if current_password is not None:
+        # The mirror of the recovery-email sibling's guard, and it is not decoration:
+        # ``compute_check`` opens with ``request.current_algo``
+        # (``telethon/password.py:137``), which is an optional TL flag — so an absent
+        # one raises ``AttributeError``, a class outside this module's ladder that
+        # reaches the operator as Telethon prose about a call carrying a password.
+        _require_current_algo(pwd)
+    algo = require_fast_algo(pwd.new_algo)
     # Telethon's line, security-relevant rather than cosmetic: the SERVER chose
     # ``salt1``, and 32 bytes of client randomness are appended so the KDF is not
     # keyed by a salt it alone controls. Dropping this silently weakens every
@@ -247,6 +207,7 @@ async def dispatch_set_twofa_password(
         if current_password is not None
         else InputCheckPasswordEmpty()
     )
+    hint = _resolved_hint(pwd, action)
     try:
         await client(
             UpdatePasswordSettingsRequest(
@@ -254,19 +215,83 @@ async def dispatch_set_twofa_password(
                 new_settings=PasswordInputSettings(
                     new_algo=algo,
                     new_password_hash=await _new_password_hash(algo, action),
-                    hint=_resolved_hint(pwd, action),
+                    hint=hint,
                 ),
             ),
         )
-    except errors.EmailUnconfirmedError:
-        # ACCEPTED, but not plainly done: a recovery-email verification is still
-        # pending and TDLib holds its ``last_set_password_`` until the mailed code is
-        # typed back, so the new password is not certainly in force. Applied-but-
-        # unconfirmed is therefore the honest report, never a clean success.
-        return _DispatchResult(twofa_email_unconfirmed=True)
+    except errors.EmailUnconfirmedError as exc:
+        return await _email_unconfirmed_result(client, action, exc, hint)
     except errors.RPCError as exc:
         raise _gateway_error(exc) from exc
-    return _DispatchResult()
+    return _DispatchResult(twofa_hint=hint)
+
+
+def _require_current_algo(pwd: object) -> None:
+    """Refuse a write whose proof cannot be computed, before anything is computed.
+
+    An absent ``current_algo`` is the "2FA is off" case reported one field over from
+    ``has_password``, and it has its own code because the operator's answer differs:
+    there is nothing to authorise against, not a challenge we cannot use.
+    """
+    current_algo = getattr(pwd, "current_algo", None)
+    if current_algo is None:
+        code = "twofa_password_not_set"
+        raise TwoFactorGatewayError(code)
+    require_fast_algo(current_algo)
+
+
+async def _email_unconfirmed_result(
+    client: TelegramClient,
+    action: SetTwoFactorPassword,
+    exc: errors.EmailUnconfirmedError,
+    hint: str,
+) -> _DispatchResult:
+    """``EMAIL_UNCONFIRMED`` on a password write — decided from live state, per verb.
+
+    A REMOVAL may never answer this as a success. ``execute`` would stamp it ``ok``,
+    ``remove_account_twofa`` passes that straight to ``raise_for_result`` and never
+    reads the unconfirmed flag — only ``set_account_twofa`` does — so it would go on
+    to clear the column and tell the operator 2FA is off. If the write was not in
+    force, the dashboard has just destroyed the only copy of a live cloud password.
+    Its own stable code, so the answer is a refusal the service cannot mistake.
+
+    For a set or a change the previous round claimed "TDLib holds its
+    ``last_set_password_`` until the mailed code is typed back". **That member does
+    not exist** — it is absent from ``PasswordManager.cpp`` and ``.h``, and the
+    sentence was written here from an unverified claim. The real authority is
+    TDLib's own API contract (``td_api.tl``, ``setPassword``): the change is held
+    pending only when a NEW recovery email is specified in the same call, and this
+    write specifies no email at all. So the ambiguity is settled the way TDLib
+    settles it — treat the answer as success and RE-READ — rather than by assumption:
+    one confirming ``account.getPassword``, and ``has_password`` decides. A read that
+    fails, or one that says there is no password, stays conservative and reports
+    applied-but-unconfirmed.
+
+    ``code_length`` rides along either way, advisory, exactly as the recovery-email
+    sibling threads it: it exists nowhere but inside this error.
+    """
+    if action.new_password is None:
+        code = "twofa_removal_unconfirmed"
+        raise TwoFactorGatewayError(code) from exc
+    return _DispatchResult(
+        twofa_email_unconfirmed=not await _password_is_live(client),
+        twofa_email_code_length=exc.code_length or None,
+        twofa_hint=hint,
+    )
+
+
+async def _password_is_live(client: TelegramClient) -> bool:
+    """One confirming ``account.getPassword``: does Telegram hold a password now?
+
+    Both verbs that reach it (a set and a change) end with a password present, so
+    ``has_password`` is the whole check. Any failure answers ``False``: this is the
+    conservative leg of an already-ambiguous outcome and must never upgrade an
+    unknown into a confirmation.
+    """
+    try:
+        return _flag(await client(GetPasswordRequest()), "has_password")
+    except Exception:  # noqa: BLE001 - the write already landed; an unreadable state is a "no"
+        return False
 
 
 async def _password_state(client: TelegramClient) -> Password:
@@ -339,8 +364,8 @@ async def dispatch_twofa_action(
     inside the ``EMAIL_UNCONFIRMED`` this module converts into a success.
     """
     # Local, and the only import in either direction that has to be: ``_twofa_email``
-    # imports the refusal ladder, ``_srp`` and ``TwoFactorGatewayError`` from this
-    # module at module scope, so naming it up top would close the loop.
+    # imports the refusal ladder and ``_password_state`` from this module at module
+    # scope, so naming it up top would close the loop.
     from core.telegram_client._twofa_email import (  # noqa: PLC0415
         dispatch_manage_twofa_email,
     )

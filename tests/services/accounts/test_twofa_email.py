@@ -37,6 +37,8 @@ from services.accounts import (
     set_account_twofa,
     set_account_twofa_email,
 )
+from services.accounts.twofa import _TWOFA_LOCKS
+from tests.core.telegram_client._twofa_doubles import algo as _algo
 from tests.core.telegram_client.helpers import patch_action_client
 from tests.services.accounts._twofa_support import (
     EMAIL_MODULE,
@@ -341,7 +343,10 @@ class _BareUnconfirmedClient:
 
     async def __call__(self, request: object) -> object:
         if isinstance(request, GetPasswordRequest):
-            return SimpleNamespace(current_algo=object())
+            # A REAL algorithm: ``require_fast_algo`` admits only the ``(p, g)`` pair
+            # Telethon's prime check short-circuits on, so a placeholder is refused
+            # before the proof and this end-to-end test would never reach the write.
+            return SimpleNamespace(current_algo=_algo())
         raise errors.EmailUnconfirmedError(None)
 
 
@@ -487,3 +492,72 @@ async def test_a_lost_confirm_answer_still_fails_when_no_recovery_email_appeared
 
     assert excinfo.value.code == "unavailable"
     assert events == []
+
+
+@pytest.mark.asyncio
+async def test_a_pool_failure_on_confirm_is_still_a_plain_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The OTHER half of ``unavailable``, which the ``lost`` predicate has to exclude.
+
+    ``confirm_account_twofa_email`` treats a lost answer as possibly-confirmed and
+    re-reads the live state. That is only sound when the request was already on the
+    wire: ``error_type == UNCONFIRMED_ERROR_TYPE``. When the POOL never handed back a
+    client nothing left the process, so re-reading and reporting success would invent
+    a confirmation out of an outage — and the password half has a test for exactly
+    this distinction while this half had none.
+    """
+    await create_account(AccountCreate(account_id="acc-nopool-mail"))
+    patch_read(monkeypatch, status(has_password=True, has_recovery=True))
+    patch_log(monkeypatch, module=EMAIL_MODULE)
+
+    async def _no_client(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        return ActionResult(
+            status="unavailable",
+            action_type="manage_twofa_email",
+            account_id=account_id,
+            error_type="TelegramClientPoolError",
+        )
+
+    monkeypatch.setattr(f"{EMAIL_MODULE}.execute", _no_client)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await confirm_account_twofa_email(
+            "acc-nopool-mail",
+            AccountTwoFactorEmailConfirmRequest(code=_CODE),
+        )
+
+    # ``has_recovery`` is TRUE in the canned read, so a predicate that ignored the
+    # error type would have reported this outage as a successful confirmation.
+    assert excinfo.value.code == "unavailable"
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        pytest.param(
+            lambda account_id: set_account_twofa_email(
+                account_id,
+                AccountTwoFactorEmailRequest(email=_EMAIL),
+            ),
+            id="set-email",
+        ),
+        pytest.param(clear_account_twofa_email, id="clear-email"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_unknown_account_leaves_no_lock_behind(
+    call: object,
+) -> None:
+    """The 404 guard runs BEFORE the lock, so an unknown id cannot mint one.
+
+    ``_TWOFA_LOCKS`` is created lazily, keyed by account id, and pruned in exactly
+    one place — ``remove_account``, which needs a row. So taking the lock first meant
+    five POSTs naming nonexistent ids left five ``asyncio.Lock`` objects that nothing
+    would ever remove, and the route passes ``account_id`` straight through from the
+    path.
+    """
+    with pytest.raises(AccountNotFoundError):
+        await call("acc-no-such")  # ty: ignore[call-non-callable]
+
+    assert "acc-no-such" not in _TWOFA_LOCKS

@@ -152,6 +152,13 @@ async def remove_account(account_id: str) -> None:
         # about: the 2FA writes serialise per account through a module-level table
         # that nothing else ever drops keys from. A re-imported id reusing the key
         # would also take a lock bound to a loop that may no longer be running.
+        #
+        # ponytail: popped WITHOUT holding it, so an in-flight 2FA write for this id
+        # keeps a lock object no new caller can find and a concurrent write would mint
+        # a second one. Bounded on purpose — the row is already gone, so the only
+        # remaining verb is the 404 every 2FA entry point raises first — and holding
+        # it here would be this registry's first nesting, under warming's lifecycle
+        # lock. Recorded rather than fixed.
         _TWOFA_LOCKS.pop(account_id, None)
     await log_event("INFO", "account_removed", account_id=account_id)
 

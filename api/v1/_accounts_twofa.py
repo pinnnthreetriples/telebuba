@@ -84,10 +84,22 @@ async def set_account_twofa(
     operation_id="removeAccountTwofa",
     responses=SERVICE_ERRORS,
 )
-async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
-    """Turn 2FA off using the stored password, then answer with the re-read state."""
+async def remove_account_twofa(
+    account_id: str,
+    forget_only: bool = False,  # noqa: FBT001, FBT002 - a FastAPI query parameter
+) -> AccountTwoFactorView:
+    """Turn 2FA off using the stored password, then answer with the re-read state.
+
+    ``?forget_only=true`` drops the dashboard's copy of the password and spends no
+    RPC at all. It is the only way out of every state in which the column holds a
+    password Telegram does not accept — a rollback whose UPDATE failed, a process
+    death mid-write, a lost answer over a live read that also failed — each of which
+    is otherwise terminal, because something IS stored so the not-stored guard can
+    never fire again. It is a query flag rather than an inference because only the
+    operator can tell a worthless stored value from a working one.
+    """
     with service_errors_to_http():
-        return await accounts.remove_account_twofa(account_id)
+        return await accounts.remove_account_twofa(account_id, forget_only=forget_only)
 
 
 @twofa_router.post(

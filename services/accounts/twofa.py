@@ -46,6 +46,7 @@ from services.accounts._result import (
 from services.accounts.lifecycle import require_account
 
 if TYPE_CHECKING:
+    from schemas.telegram_actions import ActionResult
     from schemas.telegram_actions_twofa import TwoFactorStatusResult
     from schemas.twofa import AccountTwoFactorUpdateRequest
 
@@ -110,6 +111,11 @@ async def _live_status(account_id: str) -> tuple[TwoFactorStatusResult | None, s
     including when the row disappears between a caller's guard and this read,
     which the gateway reports with its own error type; without translating it the
     route would answer 500.
+
+    ponytail: a refused read logs NOTHING, by design — the envelope is the report and
+    ``execute_read`` does not log. The cost is that "why did the card show an error at
+    14:32" cannot be answered from the log afterwards. Recorded, not fixed: a log line
+    per refused read would fire on every poll of an unreachable account.
     """
     try:
         result = await execute_read(account_id, GetTwoFactorStatus())
@@ -189,12 +195,14 @@ async def set_account_twofa(
     case the stored value is stale by definition, cannot be "the previous one in
     force", and keeping it would persist nothing at all.
 
-    ``confirmed`` is also ``False`` when Telegram answered ``EMAIL_UNCONFIRMED``: the
-    write was accepted, but TDLib holds its ``last_set_password_`` pending until the
-    recovery-email code is typed back, so the new password is not certainly in force.
+    ``confirmed`` can also be ``False`` when Telegram answered ``EMAIL_UNCONFIRMED``,
+    but that is now the gateway's call rather than an assumption: it issues one
+    confirming ``account.getPassword`` and reports the flag only when that read did
+    not come back saying a password is set. See ``_twofa._email_unconfirmed_result``
+    for why the previous round's TDLib citation was fabricated.
     """
+    await require_account(account_id)
     async with twofa_lock(account_id):
-        await require_account(account_id)
         password = request.password or secrets.token_urlsafe(_GENERATED_PASSWORD_BYTES)
         current = await fetch_account_twofa_password(account_id)
         status, _error = await _live_status(account_id)
@@ -221,14 +229,15 @@ async def set_account_twofa(
         )
         lost = result.status == "unavailable" and result.error_type == UNCONFIRMED_ERROR_TYPE
         if not lost:
-            if result.status != "ok" and stored:
-                # ROLLBACK. An answered refusal proves Telegram did not apply this
-                # password, and leaving a never-applied one in the column is its own
-                # lockout: the next attempt sends it as ``current_password`` and
-                # ``twofa_password_not_stored`` can no longer fire, because something
-                # IS stored. Only the ambiguous outcomes keep the pre-write.
-                await _remember_password(account_id, None)
-                stored = False
+            if result.status != "ok" and stored and not await _remember_password(account_id, None):
+                # The ROLLBACK itself failed, and that is not a plain refusal any
+                # more: the column keeps a password Telegram provably rejected, so
+                # ``has_stored_password`` stays ``True``, the not-stored guard can
+                # never fire again and every later verb authorises itself with a
+                # value Telegram will reject. Its own code, so the operator is told
+                # to forget the stored password rather than just "try again".
+                code = "twofa_rollback_failed"
+                raise AccountActionError(code)
             raise_for_result(result)
         # A stored password the live read contradicts is stale BY DEFINITION, so it is
         # not the "known to work" credential this branch exists to protect — keeping it
@@ -236,13 +245,22 @@ async def set_account_twofa(
         # all, which is the terminal state the docstring describes.
         stale_stored = status is not None and not status.has_password
         confirmed = not lost and not result.twofa_email_unconfirmed
-        previous_kept = not confirmed and current is not None and not stale_stored
-        if not fresh and not previous_kept:
+        kept = not confirmed and current is not None and not stale_stored
+        # UNKNOWN, not ``True``: with no live read there is no evidence Telegram holds
+        # a password at all, so "the previous one or this one is in force" would be an
+        # assertion drawn from a read that answered nothing.
+        previous_kept = None if kept and status is None else kept
+        if not fresh and not kept:
             stored = await _remember_password(
                 account_id,
                 password,
                 has_hint=bool(request.hint),
             )
+        # ponytail: INFO/success even on the lost-answer branch, where ``confirmed`` is
+        # ``False``. Correct — Telegram may well hold the password, and the row carries
+        # the flag — but an operator skimming the log sees a success row for an outcome
+        # that needs their attention. Recorded rather than promoted to WARNING, because
+        # the event name is what the i18n table and the log filters key off.
         await log_event(
             "INFO",
             "account_twofa_set",
@@ -256,14 +274,34 @@ async def set_account_twofa(
         )
         return AccountTwoFactorCreated(
             password=password,
-            # What Telegram HOLDS now, not what the request carried: an omitted hint keeps
-            # the live one, and the status read above is the only place this layer can see
-            # it (``None`` when that read failed, i.e. "unknown", same as "not set").
-            hint=request.hint if request.hint is not None else (status.hint if status else None),
+            # What the GATEWAY WROTE. It resolves an omitted hint against its own fresh
+            # ``account.getPassword``, so reporting this layer's separate read could name
+            # a hint that never reached the wire. ``None`` only when the answer was lost,
+            # and then the request field is the best this layer has.
+            hint=_reported_hint(result, request, status),
             stored=stored,
             confirmed=confirmed,
             previous_kept=previous_kept,
         )
+
+
+def _reported_hint(
+    result: ActionResult,
+    request: AccountTwoFactorUpdateRequest,
+    status: TwoFactorStatusResult | None,
+) -> str | None:
+    """The hint to REPORT: what the gateway wrote, or the best guess if it never said.
+
+    The gateway is the only layer that knows the written value — it resolves
+    ``hint=None`` ("keep") against its own fresh ``account.getPassword`` — so its
+    answer wins outright. It is absent only when the answer was lost, in which case
+    the request field, then this layer's own read, then "unknown" is the ladder.
+    """
+    if result.twofa_hint is not None:
+        return result.twofa_hint
+    if request.hint is not None:
+        return request.hint
+    return status.hint if status else None
 
 
 async def _remember_password(
@@ -304,42 +342,52 @@ async def _remember_password(
     return stored
 
 
-async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
+async def remove_account_twofa(
+    account_id: str,
+    *,
+    forget_only: bool = False,
+) -> AccountTwoFactorView:
     """Turn 2FA off, authorising with the password this dashboard stored.
 
     Nothing stored means nothing to authorise with, and it must refuse rather than
-    try: Telethon drops a current password when the account has no 2FA and then
-    returns ``False`` from a call it never made, so a blind "remove" would have
-    reported success while changing nothing. The ``twofa_password_not_stored``
-    refusal names the real situation — the password was set outside this
-    dashboard, so it has to be removed there too.
+    try: Telethon drops a current password when the account has no 2FA, so a blind
+    "remove" would have sent a request that changes nothing and reported it as done.
+    The ``twofa_password_not_stored`` refusal names the real situation — the password
+    was set outside this dashboard, so it has to be removed there too.
 
     The column is cleared only after Telegram confirmed: a stored password whose
     2FA is gone guards nothing, but clearing it first would destroy the one copy
     that could authorise a retry.
 
-    Unless the live read already says 2FA is OFF, in which case the stored value is
-    stale by definition and this is the only affordance that can drop it. That state
-    is reachable two ways — the operator removed the password from their phone, or an
-    earlier removal's post-RPC clear failed — and without this branch it is terminal:
-    ``has_stored_password`` stays ``True``, so the card keeps offering change /
-    remove / attach-email and all three fail (a remove hits Telethon's ``if not
-    pwd.has_password and current_password: current_password = None``, returns
-    ``False``, and surfaces as ``twofa_not_changed``). No RPC is spent: there is
+    ``forget_only`` is the CLEAR-ONLY verb, and it spends no RPC. It is what makes
+    every "the column holds a password Telegram does not accept" state recoverable,
+    and there are several: a rollback whose UPDATE failed, a process death between a
+    fresh set's pre-write and its RPC, a lost answer over a live read that itself
+    failed. All of them are otherwise terminal — ``has_stored_password`` stays
+    ``True`` so the not-stored guard can never fire, every verb authorises itself
+    with the bogus value, and the ``stale`` branch below cannot help because the live
+    read says ``has_password=True``. Only the operator can distinguish "this stored
+    value is worthless" from "this is my working password", so it is an explicit
+    request rather than an inference.
+
+    The ``stale`` branch is the same clear, taken automatically: the live read
+    already says 2FA is OFF, so the stored value is stale by definition and there is
     nothing left on Telegram's side to remove.
 
     Serialised against a concurrent set/change for the reason ``_TWOFA_LOCKS`` gives:
-    this flow also reads the stored password and then writes the column back.
+    this flow also reads the stored password and then writes the column back. The 404
+    guard runs BEFORE the lock, or a POST naming an account that does not exist would
+    mint a lock nothing ever removes.
     """
+    await require_account(account_id)
     async with twofa_lock(account_id):
-        await require_account(account_id)
         current = await fetch_account_twofa_password(account_id)
         if current is None:
             code = "twofa_password_not_stored"
             raise AccountActionError(code)
         status, _error = await _live_status(account_id)
         stale = status is not None and not status.has_password
-        if not stale:
+        if not stale and not forget_only:
             remove = SetTwoFactorPassword(current_password=current)
             raise_for_result(await execute(account_id, remove))
         await _remember_password(account_id, None)
@@ -347,6 +395,6 @@ async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
             "INFO",
             "account_twofa_removed",
             account_id=account_id,
-            extra={"stale": stale},
+            extra={"stale": stale, "forget_only": forget_only},
         )
         return await read_account_twofa(account_id)

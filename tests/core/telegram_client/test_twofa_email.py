@@ -39,9 +39,14 @@ from core.telegram_client._twofa import (
     twofa_log_extra,
 )
 from core.telegram_client._twofa_email import dispatch_manage_twofa_email
-from schemas.telegram_actions import GetTwoFactorStatus, ManageTwoFactorEmail
+from schemas.telegram_actions import (
+    GetTwoFactorStatus,
+    ManageTwoFactorEmail,
+    SetTwoFactorPassword,
+)
 from schemas.telegram_actions_twofa import TwoFactorStatusResult
 from schemas.twofa import TwoFactorRefusalCode
+from tests.core.telegram_client._twofa_doubles import algo as _algo
 from tests.core.telegram_client.helpers import patch_action_client, patch_read_client
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -54,8 +59,9 @@ _SECRETS = (_PASSWORD, _EMAIL, _CODE)
 _EMAIL_ONLY_FLAGS = 2
 
 
-class _Algo:
-    """Stand-in for ``PasswordKdfAlgo*`` — only its presence is read here."""
+# ``_algo`` is the shared REAL ``PasswordKdfAlgo*`` factory, not a stand-in any more:
+# ``require_fast_algo`` admits only the ``(p, g)`` Telethon short-circuits on, so a
+# placeholder would be refused before the proof is computed. See ``_twofa_doubles``.
 
 
 class _Password:
@@ -75,9 +81,11 @@ class _EmailClient:
         *,
         password: _Password | None = None,
         error: Exception | None = None,
+        read_error: Exception | None = None,
     ) -> None:
-        self._password = password if password is not None else _Password(current_algo=_Algo())
+        self._password = password if password is not None else _Password(current_algo=_algo())
         self._error = error
+        self._read_error = read_error
         self.requests: list[object] = []
 
     async def connect(self) -> None:
@@ -86,6 +94,8 @@ class _EmailClient:
     async def __call__(self, request: object) -> object:
         self.requests.append(request)
         if isinstance(request, GetPasswordRequest):
+            if self._read_error is not None:
+                raise self._read_error
             return self._password
         if self._error is not None:
             raise self._error
@@ -361,7 +371,7 @@ async def test_get_twofa_status_reports_a_pending_email_pattern(
         monkeypatch,
         _EmailClient(
             password=_Password(
-                current_algo=_Algo(),
+                current_algo=_algo(),
                 has_password=True,
                 has_recovery=False,
                 email_unconfirmed_pattern="r**@example.com",
@@ -374,6 +384,42 @@ async def test_get_twofa_status_reports_a_pending_email_pattern(
     assert isinstance(result, TwoFactorStatusResult)
     assert result.email_unconfirmed_pattern == "r**@example.com"
     assert result.has_recovery is False
+
+
+@pytest.mark.parametrize(
+    ("action", "expected"),
+    [
+        pytest.param(
+            SetTwoFactorPassword(new_password=_PASSWORD, hint="h"),
+            {"has_hint": True, "removing": False},
+            id="set-with-hint",
+        ),
+        pytest.param(
+            SetTwoFactorPassword(new_password=_PASSWORD),
+            {"has_hint": False, "removing": False},
+            id="set",
+        ),
+        pytest.param(
+            SetTwoFactorPassword(current_password=_PASSWORD),
+            {"has_hint": False, "removing": True},
+            id="remove",
+        ),
+    ],
+)
+def test_the_password_log_extra_says_what_kind_of_write_it_was_and_nothing_more(
+    action: SetTwoFactorPassword,
+    expected: dict[str, object],
+) -> None:
+    """The PASSWORD branch of the same function: every field it carries is a secret.
+
+    Lives beside the email branch because they are two arms of one ``twofa_log_extra``
+    — and because nothing pinned this arm at all, so a mutant returning the email
+    shape for a password write killed no test.
+    """
+    extra = twofa_log_extra(action)
+
+    assert extra == expected
+    assert _PASSWORD not in str(extra)
 
 
 @pytest.mark.parametrize(
@@ -436,13 +482,48 @@ def test_none_of_the_three_secrets_appears_in_the_actions_repr() -> None:
     assert "mode='confirm'" in rendered
 
 
+@pytest.mark.parametrize(
+    "dead",
+    [
+        pytest.param(ConnectionError("socket died"), id="connection"),
+        pytest.param(TimeoutError("read timed out"), id="timeout"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_dead_srp_read_on_the_email_path_is_a_plain_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_compute_check: list[tuple[object, str]],
+    dead: Exception,
+) -> None:
+    """The bug ``_password_state`` exists to fix, which this path had left unfixed.
+
+    This read is the FIRST thing the write does, so a socket dying on it proves
+    nothing was sent. Issued bare, it escaped to ``execute``'s ``dispatched = client
+    is not None`` arm and was stamped ``UNCONFIRMED_ERROR_TYPE`` — "Telegram may have
+    applied this request" — for a call that never left the process. The password half
+    routed through ``_password_state`` for exactly this; the email half did not.
+    """
+    client = _EmailClient(read_error=dead)
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-mail", _set_action())
+
+    assert result.status == "failed"
+    assert result.error_type == "TwoFactorGatewayError"
+    assert result.error_message == "twofa_state_unreadable"
+    # Nothing was computed and nothing was sent: the read is the only request.
+    assert [type(request) for request in client.requests] == [GetPasswordRequest]
+    assert stub_compute_check == []
+
+
 def test_every_refusal_code_is_a_member_of_the_enumerated_vocabulary() -> None:
     """Two-way tripwire so a rename cannot slip past the i18n parity guard.
 
     ``tests/test_error_code_i18n_parity`` enumerates ``TwoFactorRefusalCode``, which
     only helps while the ``Literal`` and the code actually agree. Three of these
-    codes are raised by hand rather than through the ladder — one of them from
-    ``services/`` — so nothing else connects them to that guard.
+    codes are raised by hand rather than through the ladder — two of them from
+    ``services/`` and two from the extracted SRP sibling — so nothing else connects
+    them to that guard.
     """
     declared = set(get_args(TwoFactorRefusalCode))
     mapped = {code for _cls, code in _TWOFA_ERROR_CODES}
@@ -453,6 +534,7 @@ def test_every_refusal_code_is_a_member_of_the_enumerated_vocabulary() -> None:
         for relative in (
             "core/telegram_client/_twofa.py",
             "core/telegram_client/_twofa_email.py",
+            "core/telegram_client/_twofa_srp.py",
             "services/accounts/twofa.py",
             "services/accounts/_twofa_email.py",
         )

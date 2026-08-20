@@ -43,6 +43,12 @@ if TYPE_CHECKING:
 
     from schemas.telegram_actions_twofa import SetTwoFactorPassword, TwoFactorStatusResult
 
+# How long the per-account-lock test waits for the second writer to arrive. Generous:
+# it is only ever reached on FAILURE, where one global lock keeps it from arriving.
+_RENDEZVOUS_SECONDS = 5.0
+# Two concurrent writers, on two accounts, is the whole experiment.
+_WRITERS = 2
+
 
 @pytest.mark.asyncio
 async def test_read_account_twofa_returns_the_live_state_and_the_stored_flag(
@@ -50,10 +56,17 @@ async def test_read_account_twofa_returns_the_live_state_and_the_stored_flag(
 ) -> None:
     await create_account(AccountCreate(account_id="acc-read"))
     await set_account_twofa_password("acc-read", _STORED)
-    _patch_read(monkeypatch, _status(has_password=True, hint="the usual", has_recovery=True))
+    reads = _patch_read(
+        monkeypatch,
+        _status(has_password=True, hint="the usual", has_recovery=True),
+    )
 
     view = await read_account_twofa("acc-read")
 
+    # The read is made FOR this account. Nothing pinned the id, so a dispatcher
+    # passing a constant — or the wrong one of two arguments — killed no test, and
+    # every flow here decides what it may write from whatever that read answered.
+    assert reads == ["acc-read"]
     assert view.error is None
     assert view.status is not None
     assert (view.status.has_password, view.status.hint) == (True, "the usual")
@@ -196,6 +209,28 @@ async def test_a_change_without_a_hint_keeps_the_one_telegram_shows(
 
     assert [a.hint for a in actions] == [None]
     assert created.hint == "the usual"
+
+
+@pytest.mark.asyncio
+async def test_the_response_reports_the_hint_the_gateway_put_on_the_wire(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The written hint and this layer's read are two different facts.
+
+    ``hint=None`` means KEEP, and the gateway resolves it against its OWN fresh
+    ``account.getPassword`` — a second read, a moment later, possibly against a
+    different answer. Reporting the hint from THIS layer's read therefore let the
+    response name a value that never reached Telegram. The wire wins.
+    """
+    await create_account(AccountCreate(account_id="acc-hint-wire"))
+    await set_account_twofa_password("acc-hint-wire", _STORED)
+    _patch_read(monkeypatch, _status(has_password=True, hint="what this layer saw"))
+    _patch_execute(monkeypatch, twofa_hint="what the wire got")
+    _patch_log(monkeypatch)
+
+    created = await set_account_twofa("acc-hint-wire", AccountTwoFactorUpdateRequest())
+
+    assert created.hint == "what the wire got"
 
 
 @pytest.mark.asyncio
@@ -474,7 +509,7 @@ async def test_remove_clears_the_column_and_returns_the_fresh_state(
     assert view.status is not None
     assert view.status.has_password is False
     assert [(level, event, extra) for level, event, extra in events] == [
-        ("INFO", "account_twofa_removed", {"stale": False}),
+        ("INFO", "account_twofa_removed", {"stale": False, "forget_only": False}),
     ]
 
 
@@ -503,7 +538,7 @@ async def test_remove_clears_a_stored_password_telegram_no_longer_has(
     assert await fetch_account_twofa_password("acc-stale") is None
     assert view.has_stored_password is False
     assert events[0][1] == "account_twofa_removed"
-    assert events[0][2] == {"stale": True}
+    assert events[0][2] == {"stale": True, "forget_only": False}
 
 
 @pytest.mark.asyncio
@@ -598,3 +633,47 @@ async def test_every_password_entry_point_raises_not_found_for_an_unknown_accoun
 ) -> None:
     with pytest.raises(AccountNotFoundError):
         await call("acc-missing")
+
+
+@pytest.mark.asyncio
+async def test_the_write_lock_is_per_account_and_not_one_global_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two ACCOUNTS, and they must OVERLAP — the race tests above use only one.
+
+    Using one account proves the lock exists and says nothing about its key.
+    A single global lock would pass every one of them while serialising the whole
+    fleet behind one 2FA write — an operator setting passwords across 200 accounts
+    would then wait for 200 sequential round trips, each of them a live Telegram
+    call. The gauge is in-flight DEPTH: with a per-account key both writes are inside
+    the critical section at once.
+    """
+    for account_id in ("acc-key-a", "acc-key-b"):
+        await create_account(AccountCreate(account_id=account_id))
+    _patch_read(monkeypatch, _status())
+    _patch_log(monkeypatch)
+    depth = {"now": 0, "max": 0}
+    both_in = asyncio.Event()
+
+    async def _overlap(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        depth["now"] += 1
+        depth["max"] = max(depth["max"], depth["now"])
+        if depth["now"] == _WRITERS:
+            both_in.set()
+        # A rendezvous rather than a sleep: reaching this dispatcher takes several
+        # real suspensions (``to_thread`` for the guard, the read and the pre-write),
+        # so a single yield is not enough for the other task to catch up and a fixed
+        # sleep would only make the test slow AND flaky. One global lock times out
+        # here, which is the failure this is measuring.
+        await asyncio.wait_for(both_in.wait(), _RENDEZVOUS_SECONDS)
+        depth["now"] -= 1
+        return _ok(account_id)
+
+    monkeypatch.setattr("services.accounts.twofa.execute", _overlap)
+
+    await asyncio.gather(
+        set_account_twofa("acc-key-a", AccountTwoFactorUpdateRequest()),
+        set_account_twofa("acc-key-b", AccountTwoFactorUpdateRequest()),
+    )
+
+    assert depth["max"] == 2, "two different accounts must not serialise against each other"

@@ -2,7 +2,7 @@
 // stored password. The recovery-email half lives in TwoFactorEmail.test.tsx; the
 // harness both drive is in TwoFactorSection.test-helpers.tsx.
 
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -22,23 +22,29 @@ import {
   viewResponse,
 } from './TwoFactorSection.test-helpers';
 
-// Any non-secure context — the dashboard reached over http:// by LAN IP rather
-// than localhost — has no `navigator.clipboard` at all.
-function withoutClipboard(): () => void {
-  const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-  Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
-  return () => {
-    if (original) Object.defineProperty(navigator, 'clipboard', original);
-    else Reflect.deleteProperty(navigator, 'clipboard');
-  };
-}
-
-test('the header pill answers on/off before the card is opened', async () => {
+test('no live Telegram read happens until the card is opened', async () => {
+  // Measured against a real dispatcher: an ungated status query made opening ANY
+  // account's detail view borrow and connect a pooled Telethon client — a `.session`
+  // file and a DC connection out of nothing but a page load. The at-a-glance pill on
+  // a closed card is not worth one Telegram round trip per account opened.
   stubTwofa({ has_password: true });
   renderSection();
 
+  expect(await screen.findByText(TITLE)).toBeInTheDocument();
+  expect(requests(TWOFA)).toHaveLength(0);
+  expect(screen.queryByText('Включён')).not.toBeInTheDocument();
+  // Neutral, not a spinner: nothing is loading, nothing is known.
+  expect(screen.getByText('неизвестно')).toBeInTheDocument();
+
+  await openCard();
   expect(await screen.findByText('Включён')).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Включить 2FA' })).not.toBeInTheDocument();
+  expect(requests(TWOFA, 'GET')).toHaveLength(1);
+
+  // Collapsing and reopening is a UI gesture, not a reason to go back to Telegram.
+  await userEvent.click(screen.getByText(TITLE));
+  await userEvent.click(screen.getByText(TITLE));
+  expect(await screen.findByText('Включён')).toBeInTheDocument();
+  expect(requests(TWOFA, 'GET')).toHaveLength(1);
 });
 
 test('a failed read offers nothing to write', async () => {
@@ -198,78 +204,6 @@ test('Готово drops the plaintext, and collapsing the card does not bring i
   await userEvent.click(screen.getByText(TITLE));
   await userEvent.click(screen.getByText(TITLE));
   expect(screen.queryByDisplayValue('test-password-once')).not.toBeInTheDocument();
-});
-
-test('the reveal panel copies the password to the clipboard', async () => {
-  stubTwofa(
-    { has_password: false },
-    {
-      stored: false,
-      routes: { [`POST ${TWOFA}`]: () => jsonResponse({ password: 'test-password-copy' }) },
-    },
-  );
-  renderSection();
-  await openCard();
-  await userEvent.click(await screen.findByRole('button', { name: 'Включить 2FA' }));
-  await screen.findByDisplayValue('test-password-copy');
-
-  await userEvent.click(screen.getByRole('button', { name: 'Копировать' }));
-
-  expect(screen.getByRole('button', { name: 'Скопировано' })).toBeInTheDocument();
-  expect(await navigator.clipboard.readText()).toBe('test-password-copy');
-});
-
-test('a rejected clipboard write never claims the password was copied', async () => {
-  // writeText rejects on a denied permission and, in Chrome, whenever the document
-  // is not focused. "Скопировано" over a rejected write is how the operator's only
-  // copy of the credential gets lost: they read it, click Готово, and it is gone.
-  stubTwofa(
-    { has_password: false },
-    {
-      stored: false,
-      routes: { [`POST ${TWOFA}`]: () => jsonResponse({ password: 'test-password-denied' }) },
-    },
-  );
-  renderSection();
-  await openCard();
-  await userEvent.click(await screen.findByRole('button', { name: 'Включить 2FA' }));
-  await screen.findByDisplayValue('test-password-denied');
-
-  const write = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('denied'));
-  await userEvent.click(screen.getByRole('button', { name: 'Копировать' }));
-
-  expect(await screen.findByText(/Скопировать не удалось/)).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: 'Скопировано' })).not.toBeInTheDocument();
-  // Still on screen and still selectable, which is the whole fallback.
-  expect(screen.getByDisplayValue('test-password-denied')).toBeInTheDocument();
-  write.mockRestore();
-});
-
-test('with no clipboard at all the panel asks for a manual copy, not a dead button', async () => {
-  stubTwofa(
-    { has_password: false },
-    {
-      stored: false,
-      routes: { [`POST ${TWOFA}`]: () => jsonResponse({ password: 'test-password-noclip' }) },
-    },
-  );
-  const restore = withoutClipboard();
-  try {
-    renderSection();
-    // fireEvent, not userEvent: user-event attaches its own clipboard stub on the
-    // next interaction, which would undo the very condition under test.
-    fireEvent.click(screen.getByText(TITLE));
-    fireEvent.click(await screen.findByRole('button', { name: 'Включить 2FA' }));
-
-    const field = await screen.findByDisplayValue('test-password-noclip');
-    expect(screen.getByText(/Буфер обмена/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Копировать' })).not.toBeInTheDocument();
-    // A read-only input IS selectable, so `cursor-not-allowed` would signal the
-    // opposite of the instruction just given.
-    expect(field).not.toHaveClass('cursor-not-allowed');
-  } finally {
-    restore();
-  }
 });
 
 test('the on-state lists the live facts, including a requested reset', async () => {
@@ -455,6 +389,10 @@ test('a stored password Telegram no longer has can be seen and dropped', async (
   await waitFor(() => {
     expect(requests(TWOFA, 'DELETE')).toHaveLength(1);
   });
+  // No `forget_only` here: the live read SAYS 2FA is off, so the backend takes its own
+  // stale branch and re-reads to prove it. Asking it to skip that would throw away the
+  // one check that distinguishes stale from current.
+  expect(new URL(requests(TWOFA, 'DELETE')[0]!.url).searchParams.has('forget_only')).toBe(false);
 });
 
 test('a read failure still shows a stored password and can drop it', async () => {
@@ -476,15 +414,17 @@ test('a read failure still shows a stored password and can drop it', async () =>
   expect(screen.queryByRole('button', { name: 'Сменить пароль' })).not.toBeInTheDocument();
 
   await userEvent.click(screen.getByRole('button', { name: 'Удалить сохранённый пароль' }));
-  // With no live status the backend cannot take its "clear the column, spend no RPC"
-  // branch, so this DELETE may really remove the password from Telegram. The stale
-  // case's "nothing changes on Telegram" body would be a lie here.
-  expect(await screen.findByText(/Если облачный пароль в Telegram есть/)).toBeInTheDocument();
+  // `forget_only=true`: spending a Telegram RPC to clear a column, against a live
+  // state we could not read, is a write against a guess — and this is the only exit
+  // from a stored password Telegram does not accept, which a failed read cannot rule
+  // out. The body has to say that nothing changes on Telegram, because now nothing does.
+  expect(await screen.findByText(/в Telegram ничего не меняется/)).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
 
   await waitFor(() => {
     expect(requests(TWOFA, 'DELETE')).toHaveLength(1);
   });
+  expect(new URL(requests(TWOFA, 'DELETE')[0]!.url).searchParams.get('forget_only')).toBe('true');
 });
 
 test('a hint cleared through this card reads as "not set", not as blank', async () => {
@@ -540,6 +480,39 @@ test('an unconfirmed CHANGE says both passwords are now candidates', async () =>
   expect(screen.queryByText(/мог примениться, а мог и нет/)).not.toBeInTheDocument();
   // `stored: false` here means "the old password was kept", not "the write failed",
   // so the store-failure warning must stay away.
+  expect(screen.queryByText(/сохранить его в Telebuba не удалось/)).not.toBeInTheDocument();
+});
+
+test('an unconfirmed change whose live re-read said nothing claims neither password', async () => {
+  // `previous_kept: null` is the third state: the previous password was kept, but the
+  // confirming read answered nothing, so "one of these two is in force" is not
+  // sayable — Telegram may hold neither.
+  stubTwofa(
+    { has_password: true, has_recovery: false },
+    {
+      routes: {
+        [`POST ${TWOFA}`]: () =>
+          jsonResponse({
+            password: 'test-password-unknown-prev',
+            confirmed: false,
+            stored: false,
+            previous_kept: null,
+          }),
+      },
+    },
+  );
+  renderSection();
+  await openCard();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Сменить пароль' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Сменить пароль' }));
+
+  expect(await screen.findByDisplayValue('test-password-unknown-prev')).toBeInTheDocument();
+  expect(screen.getByText(/проверить состояние после этого не удалось/)).toBeInTheDocument();
+  // Neither of the two truthful-only-elsewhere messages may appear here.
+  expect(screen.queryByText(/действует либо прежний пароль/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/мог примениться, а мог и нет/)).not.toBeInTheDocument();
+  // `stored: false` with a kept previous password is not a failed write either.
   expect(screen.queryByText(/сохранить его в Telebuba не удалось/)).not.toBeInTheDocument();
 });
 

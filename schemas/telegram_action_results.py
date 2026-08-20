@@ -172,6 +172,12 @@ class ActionResult(BaseModel):
     # "the password write is not certainly in force yet" is read from. Deriving the
     # first from the second reported a pending address as already verified.
     twofa_email_unconfirmed: bool = False
+    # The hint ``set_twofa_password`` put on the wire, ``None`` for every other action
+    # and whenever the answer was lost. The gateway resolves ``hint=None`` ("keep")
+    # against its own fresh ``account.getPassword``, so this is the only place the
+    # written value exists — the service's separate read can disagree with it, and
+    # reporting THAT let the response name a hint the account does not have.
+    twofa_hint: str | None = None
     error_type: str | None = None
     error_message: str | None = None
 

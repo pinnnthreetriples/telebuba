@@ -120,9 +120,16 @@ test('a descendant’s max-height transition does not seal the card', async () =
   endTransition(screen.getByTestId('inner-dropdown'), 'opacity');
   expect(body).not.toHaveAttribute('hidden');
 
-  // Re-opening still works, i.e. the guard did not cost the card its own transitionend.
+  // Re-opening still works, i.e. the guard did not cost the card its own
+  // transitionend — and `tb-settled` is the only observable proof of that. It is
+  // what the card's own max-height transitionend is FOR: it swaps the animation's
+  // `--mh` cap for `max-height: none` so a body taller than the CSS fallback is not
+  // left clipped. Asserting only that the button is visible passed with
+  // `setSettled(true)` deleted, because visibility rides on `reachable`.
   await userEvent.click(screen.getByText('Действия'));
+  expect(body).not.toHaveClass('tb-settled');
   endTransition(body as HTMLElement, 'max-height');
+  expect(body).toHaveClass('tb-settled');
   expect(screen.getByRole('button', { name: 'Удалить аккаунт' })).toBeVisible();
 });
 

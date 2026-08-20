@@ -64,9 +64,11 @@ class SetTwoFactorPassword(BaseModel):
 
     ``new_password`` alone sets a password on an account that has none;
     both fields change an existing one; ``current_password`` alone removes it.
-    Both ``None`` is refused here: Telethon returns ``False`` from ``edit_2fa``
-    without issuing any RPC for that combination, so the action would report a
-    success it never attempted.
+    Both ``None`` is refused here: that is the ONE combination Telethon answered
+    with ``False`` from ``edit_2fa`` without issuing any RPC, so the action would
+    report a success it never attempted. (A removal against an account that has a
+    password does send the request — the no-op is the pair of ``None``s, not the
+    verb.)
 
     ``hint`` is shown at the login prompt to anyone holding the phone number, so
     it is public text — the API layer is what refuses a hint containing the
@@ -86,7 +88,12 @@ class SetTwoFactorPassword(BaseModel):
     # This is defence in depth for f-string / ``repr()`` sinks only — Telethon's own
     # frames hold the plaintext as bare strings, which only that switch covers.
     current_password: str | None = Field(default=None, repr=False)
-    new_password: str | None = Field(default=None, repr=False)
+    # ``min_length=1`` is the verb, not a policy: ``None`` REMOVES the password and a
+    # present value SETS one, so ``""`` names neither — it would be hashed like a
+    # real password rather than removing anything. The API layer's own
+    # ``min_length=8`` (Telegram's floor) keeps it off the HTTP path, but this
+    # boundary must hold for any caller, not only that one.
+    new_password: str | None = Field(default=None, repr=False, min_length=1)
     hint: str | None = None
 
     @model_validator(mode="after")

@@ -4667,7 +4667,7 @@
           "accounts"
         ],
         "summary": "Remove Account Twofa",
-        "description": "Turn 2FA off using the stored password, then answer with the re-read state.",
+        "description": "Turn 2FA off using the stored password, then answer with the re-read state.\n\n``?forget_only=true`` drops the dashboard's copy of the password and spends no\nRPC at all. It is the only way out of every state in which the column holds a\npassword Telegram does not accept \u2014 a rollback whose UPDATE failed, a process\ndeath mid-write, a lost answer over a live read that also failed \u2014 each of which\nis otherwise terminal, because something IS stored so the not-stored guard can\nnever fire again. It is a query flag rather than an inference because only the\noperator can tell a worthless stored value from a working one.",
         "operationId": "removeAccountTwofa",
         "parameters": [
           {
@@ -4677,6 +4677,16 @@
             "schema": {
               "type": "string",
               "title": "Account Id"
+            }
+          },
+          {
+            "name": "forget_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Forget Only"
             }
           },
           {
@@ -11502,7 +11512,14 @@
             "default": true
           },
           "previous_kept": {
-            "type": "boolean",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Previous Kept",
             "default": false
           }
@@ -11512,7 +11529,7 @@
           "password"
         ],
         "title": "AccountTwoFactorCreated",
-        "description": "The POST response \u2014 the ONLY model in this codebase carrying the plaintext.\n\nIt appears in the response to the request that set the password and nowhere\nelse: no read endpoint returns it, ``AccountRead`` does not carry it, and no\nlog event or error message may contain it. Same contract as an API key \u2014\nshown once at creation so the operator can copy it into a password manager,\nnever shown again.\n\n``stored`` is ``False`` when Telegram accepted the password but the DB write\nthat remembers it failed. The password is returned regardless, because after\na successful RPC this response is the operator's only copy; losing it would\nleave the account unrecoverable if its session is ever reset.\n\n``confirmed`` is ``False`` when the request reached the wire and only the ANSWER\nwas lost, so Telegram may or may not have applied it. The password is still\nreturned for the same reason: if Telegram DID apply it, this is the only copy\nanybody has, and discarding it would strand the account behind a password no\nhuman ever saw.\n\n``previous_kept`` splits that unconfirmed case in two, and only a CHANGE can\nreach it: the previously stored password was left in the database untouched, so\nONE of the two \u2014 it or ``password`` \u2014 is the live one and the operator has to\ncheck from the phone. A fresh set has nothing to keep and reports ``False``."
+        "description": "The POST response \u2014 the ONLY model in this codebase carrying the plaintext.\n\nIt appears in the response to the request that set the password and nowhere\nelse: no read endpoint returns it, ``AccountRead`` does not carry it, and no\nlog event or error message may contain it. Same contract as an API key \u2014\nshown once at creation so the operator can copy it into a password manager,\nnever shown again.\n\n``stored`` is ``False`` when Telegram accepted the password but the DB write\nthat remembers it failed. The password is returned regardless, because after\na successful RPC this response is the operator's only copy; losing it would\nleave the account unrecoverable if its session is ever reset.\n\n``confirmed`` is ``False`` in TWO cases, both meaning \"Telegram may or may not\nhold this password\": the request reached the wire and only the ANSWER was lost,\nor Telegram answered ``EMAIL_UNCONFIRMED`` and the one confirming\n``account.getPassword`` that follows it did not come back saying a password is\nset. The password is returned either way: if Telegram DID apply it, this is the\nonly copy anybody has, and discarding it would strand the account behind a\npassword no human ever saw.\n\n``previous_kept`` splits that unconfirmed case in three, and only a CHANGE can\nreach any of them. ``True``: the previously stored password was left in the\ndatabase untouched and the live read says Telegram does have a password, so ONE\nof the two \u2014 it or ``password`` \u2014 is the live one and the operator has to check\nfrom the phone. ``None``: the previous one was kept, but the live read answered\nnothing, so \"one of these two is in force\" is not something this response can\nclaim \u2014 Telegram may hold neither. ``False``: nothing was kept, either because\nthis was a fresh set or because the live read said Telegram has no password at\nall, which makes the stored value stale by definition."
       },
       "AccountTwoFactorEmailConfirmRequest": {
         "properties": {
@@ -11740,6 +11757,17 @@
             "type": "boolean",
             "title": "Twofa Email Unconfirmed",
             "default": false
+          },
+          "twofa_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twofa Hint"
           },
           "error_type": {
             "anyOf": [

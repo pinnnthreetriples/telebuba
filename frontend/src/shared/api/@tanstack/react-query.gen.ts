@@ -1757,6 +1757,14 @@ export const setAllAccountsPrivacyMutation = (
  * Remove Account Twofa
  *
  * Turn 2FA off using the stored password, then answer with the re-read state.
+ *
+ * ``?forget_only=true`` drops the dashboard's copy of the password and spends no
+ * RPC at all. It is the only way out of every state in which the column holds a
+ * password Telegram does not accept — a rollback whose UPDATE failed, a process
+ * death mid-write, a lost answer over a live read that also failed — each of which
+ * is otherwise terminal, because something IS stored so the not-stored guard can
+ * never fire again. It is a query flag rather than an inference because only the
+ * operator can tell a worthless stored value from a working one.
  */
 export const removeAccountTwofaMutation = (
   options?: Partial<Options<RemoveAccountTwofaData>>,

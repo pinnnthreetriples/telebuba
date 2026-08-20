@@ -31,6 +31,82 @@ test('the unattached email state offers an address input and states the trade', 
   expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument();
 });
 
+test('the recovery state is stated once, not twice', async () => {
+  // The card's summary row and the email section's own header both said
+  // "Резервная почта: не привязана", one under the other; the runtime auditor read the
+  // pair as a duplicate. The email leg owns the row now — in every state it can
+  // honestly claim, so nothing was lost with the summary row.
+  stubTwofa({ has_password: true, has_recovery: false });
+  renderSection();
+  await openCard();
+
+  expect(await screen.findByLabelText('Адрес почты')).toBeInTheDocument();
+  expect(screen.getAllByText(/Резервная почта/)).toHaveLength(1);
+});
+
+test('a code typed for an abandoned address does not prefill the next one', async () => {
+  // The typed code is lifted to the parent so a status refetch cannot wipe it, and the
+  // cost is that it outlives the address it was typed for: Telegram drops the pending
+  // verification (expired, or cancelled from the phone), the card falls back to the
+  // attach form, and the next attach comes up with Confirm already enabled over a code
+  // that can only be refused.
+  let pending = true;
+  stubApi((request) => {
+    const { pathname } = new URL(request.url);
+    if (pathname === `${TWOFA}/email` && request.method === 'POST') {
+      return jsonResponse({ pending: true, code_length: 6 });
+    }
+    if (pathname === TWOFA) {
+      return viewResponse(pending ? PENDING : { has_password: true, has_recovery: false });
+    }
+    return undefined;
+  });
+  const { queryClient } = renderSection();
+  await openCard();
+
+  await userEvent.type(await screen.findByLabelText('Код из письма'), '111111');
+  pending = false;
+  await queryClient.invalidateQueries();
+
+  await userEvent.type(await screen.findByLabelText('Адрес почты'), 'new@example.com');
+  await userEvent.click(screen.getByRole('button', { name: 'Привязать почту' }));
+
+  expect(await screen.findByLabelText('Код из письма')).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Подтвердить' })).toBeDisabled();
+});
+
+test('a pending address stays finishable after the live read starts failing', async () => {
+  // Confirm, resend and cancel need neither the live read nor a stored password, so a
+  // pending address must not become unreachable when the read fails. The reachable
+  // shape is a read that HAD succeeded and then started failing — react-query keeps
+  // the last good data beside the error; the envelope branch (`error` set) carries no
+  // status at all, by construction in `_live_status`.
+  let fail = false;
+  stubApi((request) => {
+    const { pathname } = new URL(request.url);
+    if (pathname !== TWOFA) return undefined;
+    return fail
+      ? jsonResponse({ error: { code: 'upstream_error', message: 'twofa_state_unreadable' } }, 503)
+      : viewResponse(PENDING);
+  });
+  const { queryClient } = renderSection();
+  await openCard();
+
+  expect(await screen.findByText('Код отправлен на o**@example.com')).toBeInTheDocument();
+  fail = true;
+  await queryClient.invalidateQueries();
+
+  expect(await screen.findByText(/Состояние 2FA не прочитано/)).toBeInTheDocument();
+  expect(screen.getByLabelText('Код из письма')).toBeInTheDocument();
+  for (const name of ['Подтвердить', 'Отправить заново', 'Отменить']) {
+    expect(screen.getByRole('button', { name })).toBeInTheDocument();
+  }
+  // Whether an address is CONFIRMED is not knowable here, so neither claim is printed.
+  expect(screen.queryByText(/Резервная почта/)).not.toBeInTheDocument();
+  // And still nothing that writes a password against a state we could not read.
+  expect(screen.queryByRole('button', { name: 'Сменить пароль' })).not.toBeInTheDocument();
+});
+
 test('the attach response drives the pending state, and its code length outlives the refetch', async () => {
   // Two phases, because the bug lived between them. Phase one: the status GET still
   // reports nothing pending, so everything on screen comes from the write's RESPONSE —
@@ -178,12 +254,26 @@ test('a pending address stays visible and confirmable with the password not stor
   // to authorise them — confirm, resend and cancel go straight through on the
   // backend, so hiding the whole leg hid a pending address the operator could then
   // neither see nor finish.
-  stubTwofa(PENDING, {
-    stored: false,
-    routes: {
-      [`POST ${TWOFA}/email/confirm`]: () =>
-        viewResponse({ has_password: true, has_recovery: true }),
-    },
+  //
+  // The status GET hangs after the first read, so everything asserted after the
+  // click can only have come from the confirm RESPONSE. Counting the POST and
+  // stopping there is the blind spot that hid the stale-`hasRecovery` bug in round 2:
+  // it cannot see what the card renders next.
+  const firstRead = viewResponse(PENDING, false);
+  const afterConfirm = viewResponse({ has_password: true, has_recovery: true }, false);
+  let statusReads = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === `${TWOFA}/email/confirm`) return Promise.resolve(afterConfirm.clone());
+    if (pathname === TWOFA) {
+      statusReads += 1;
+      return statusReads === 1
+        ? Promise.resolve(firstRead)
+        : new Promise<Response>(() => {
+            // never settles
+          });
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
   });
   renderSection();
   await openCard();
@@ -195,6 +285,11 @@ test('a pending address stays visible and confirmable with the password not stor
   await waitFor(() => {
     expect(requests(`${TWOFA}/email/confirm`, 'POST')).toHaveLength(1);
   });
+  // The address is attached, the code field is gone, and Detach — the one email
+  // control the missing password really does block — is disabled rather than absent.
+  expect(await screen.findByText('Резервная почта: привязана')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Отвязать' })).toBeDisabled();
 });
 
 test('without a stored password detach is disabled rather than hidden', async () => {
@@ -299,4 +394,40 @@ test('a CONFIRMED recovery email is detached through the clear route, not cancel
     expect(requests(`${TWOFA}/email/recovery`, 'DELETE')).toHaveLength(1);
   });
   expect(requests(`${TWOFA}/email`, 'DELETE')).toHaveLength(0);
+});
+
+test('a detached address is rendered detached from the response, not from a refetch', async () => {
+  // `clear` answers with a whole fresh AccountTwoFactorView, and discarding it in
+  // favour of the refetch left the card saying "attached" with an ENABLED Detach for
+  // one live `account.getPassword` round trip — where a second click fires a `clear`
+  // that can only refuse. Same defect the confirm path had, same fix.
+  //
+  // The status GET hangs after the first read, so nothing asserted below can have come
+  // from a refetch.
+  const firstRead = viewResponse({ has_password: true, has_recovery: true });
+  const afterClear = viewResponse({ has_password: true, has_recovery: false });
+  let statusReads = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === `${TWOFA}/email/recovery`) return Promise.resolve(afterClear.clone());
+    if (pathname === TWOFA) {
+      statusReads += 1;
+      return statusReads === 1
+        ? Promise.resolve(firstRead)
+        : new Promise<Response>(() => {
+            // never settles
+          });
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderSection();
+  await openCard();
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Отвязать' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Отвязать почту' }));
+
+  expect(await screen.findByText('Резервная почта: не привязана')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Отвязать' })).not.toBeInTheDocument();
+  // The attach form is back, which is the only honest offer once nothing is attached.
+  expect(screen.getByLabelText('Адрес почты')).toBeInTheDocument();
 });

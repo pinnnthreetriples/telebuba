@@ -52,8 +52,25 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   const [copyState, setCopyState] = useState<'idle' | 'done' | 'failed'>('idle');
   const [changing, setChanging] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const twofa = useQuery(accountTwofaQueryOptions({ path: { account_id: accountId } }));
+  // Gated on the card being OPEN, and that gate is the point. GET /2fa is a live
+  // `account.getPassword`: it borrows a pooled Telethon client and connects it to a
+  // DC. Ungated, merely opening an account's detail view spent one Telegram round
+  // trip per account — measured against a real dispatcher, a `.session` file appeared
+  // and a connection was made from nothing but a page load — and it put a page load
+  // in front of the pool's teardown path. The cost is that a closed card can no
+  // longer show on/off at a glance; it shows "unknown" until the first read lands,
+  // which is the honest label for a state nobody has asked Telegram about.
+  //
+  // `staleTime` so collapsing and reopening the card is a UI gesture rather than
+  // another round trip. Writes invalidate the key explicitly, so it does not stand
+  // between an operator and a change they just made.
+  const twofa = useQuery({
+    ...accountTwofaQueryOptions({ path: { account_id: accountId } }),
+    enabled: open,
+    staleTime: 5 * 60 * 1000,
+  });
   const removeTwofa = useMutation(removeAccountTwofaMutation());
 
   const invalidate = () => {
@@ -74,6 +91,12 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   // live status the DELETE does attempt a real removal on Telegram — the plain
   // "Telegram keeps its copy" wording of the stale case would be a lie here.
   const removeKind = readFailed ? 'ForgetUnknown' : hasPassword ? 'Disable' : 'Forget';
+  // `previous_kept` is three-valued and only two of them mean "nothing was kept".
+  // `true`: kept, and the live read says Telegram holds a password. `null`: kept, but
+  // the live read answered nothing. Both are deliberate, so neither is a store
+  // failure; `false`/absent is a fresh set, or a live read saying Telegram has no
+  // password at all, which makes any stored value stale by definition.
+  const keptPrevious = created?.previous_kept === true || created?.previous_kept === null;
 
   const onCreated = (result: AccountTwoFactorCreated) => {
     setCreated(result);
@@ -98,7 +121,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
       () => {
         setCopyState('done');
         later(() => {
-          setCopyState('idle');
+          // Only clears the state it was scheduled for. A flat `setCopyState('idle')`
+          // let a successful copy's timer land on a LATER rejected one and silently
+          // erase the warning — the only signal that the operator's single copy of
+          // the credential did not make it to the clipboard.
+          setCopyState((state) => (state === 'done' ? 'idle' : state));
         }, 2400);
       },
       () => {
@@ -110,19 +137,33 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   };
 
   const onRemove = () =>
-    removeTwofa.mutateAsync({ path: { account_id: accountId } }).then(() => {
-      setChanging(false);
-      invalidate();
-    });
+    removeTwofa
+      .mutateAsync({
+        path: { account_id: accountId },
+        // `forget_only` only in the read-failure branch. There the DELETE would
+        // otherwise spend a real `updatePasswordSettings` against a live state we
+        // could not read — a write on a guess, to clear one of our own columns. It is
+        // also the only exit from "the column holds a password Telegram does not
+        // accept", which is exactly what a failed read cannot rule out. The other two
+        // branches keep the plain DELETE: with a live status the backend decides
+        // between removing on Telegram and its own stale clear, and that decision
+        // needs the RPC path left open.
+        ...(removeKind === 'ForgetUnknown' ? { query: { forget_only: true } } : {}),
+      })
+      .then(() => {
+        setChanging(false);
+        invalidate();
+      });
 
   return (
     <>
       <Section
         title={t('accounts.edit.twofa')}
-        onOpenChange={(open) => {
+        onOpenChange={(next) => {
+          setOpen(next);
           // The plaintext is the operator's only copy, not a value to leave
           // sitting in a card they walked away from.
-          if (!open) {
+          if (!next) {
             setCreated(null);
             setCopyState('idle');
             setChanging(false);
@@ -131,7 +172,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           }
         }}
         right={
-          twofa.isPending ? (
+          twofa.isFetching ? (
             <Spinner size={13} />
           ) : (
             <span
@@ -139,7 +180,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 hasPassword ? 'bg-success-tint text-success' : 'bg-canvas text-ink-muted'
               }`}
             >
-              {hasPassword ? t('accounts.edit.twofaOn') : t('accounts.edit.twofaOff')}
+              {/* No data and nothing in flight means nobody has asked Telegram yet
+                  (see the query gate above) — a spinner would claim otherwise. */}
+              {!twofa.data
+                ? t('accounts.edit.twofaUnknown')
+                : hasPassword
+                  ? t('accounts.edit.twofaOn')
+                  : t('accounts.edit.twofaOff')}
             </span>
           )
         }
@@ -165,11 +212,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             <div className="mb-[10px] text-[12.5px] font-semibold text-ink">
               {t('accounts.edit.twofaCreatedTitle')}
             </div>
-            {created.stored === false && created.previous_kept !== true ? (
+            {created.stored === false && !keptPrevious ? (
               // The RPC landed but the DB write did not, so this response is the
               // ONLY copy and change/removal are gone until it is set again. NOT the
-              // unconfirmed-change case: nothing failed there, the previous password
-              // was kept on purpose and the warning below says so.
+              // unconfirmed-change cases: nothing failed there, the previous password
+              // was kept on purpose (`true` or `null`) and the warning below says so.
               <div className="mb-[10px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[9px] text-[11.5px] font-medium leading-[1.45] text-danger">
                 {t('accounts.edit.twofaStoreFailed')}
               </div>
@@ -180,34 +227,46 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // only copy — as loud as the store-failure warning above. On a CHANGE
               // the backend deliberately kept the OLD password stored rather than
               // overwrite a credential known to work, so the operator has two
-              // candidates and has to check which one the phone asks for.
+              // candidates and has to check which one the phone asks for — unless
+              // the read that would have proved Telegram holds ANY password answered
+              // nothing either (`previous_kept: null`), and then not even "one of
+              // these two is in force" is sayable.
               <div className="mb-[10px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[9px] text-[11.5px] font-medium leading-[1.45] text-danger">
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
-                  : t('accounts.edit.twofaUnconfirmed')}
+                  : created.previous_kept === null
+                    ? t('accounts.edit.twofaUnconfirmedKept')
+                    : t('accounts.edit.twofaUnconfirmed')}
               </div>
             ) : null}
-            <div className="mb-[12px] flex items-center gap-2">
-              <input
-                readOnly
-                value={created.password}
-                aria-label={t('accounts.edit.twofaNewPassword')}
-                className={`${FIELD_READONLY} font-mono`}
-              />
-              {clipboard ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    copyPassword(created.password);
-                  }}
-                  className="shrink-0 rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[12px] font-medium text-ink-muted"
-                >
-                  {copyState === 'done'
-                    ? t('accounts.edit.twofaCopied')
-                    : t('accounts.edit.twofaCopy')}
-                </button>
-              ) : null}
-            </div>
+            {/* A textarea, and on its own row. Measured in Chrome at a 355px viewport,
+                the input this replaces reported scrollWidth 196 against clientWidth
+                160 with `overflow: clip` and no ellipsis: the value was cut with
+                nothing on screen saying so, while the panel's own fallback asks the
+                operator to select and copy it by hand. An input cannot wrap; a
+                readonly textarea wraps (and scrolls past two rows for an unusually
+                long typed password), stays selectable, and keeps the label. The copy
+                button moves below so the field gets the full card width. */}
+            <textarea
+              readOnly
+              rows={2}
+              value={created.password}
+              aria-label={t('accounts.edit.twofaNewPassword')}
+              className={`${FIELD_READONLY} mb-2 resize-none break-all font-mono`}
+            />
+            {clipboard ? (
+              <button
+                type="button"
+                onClick={() => {
+                  copyPassword(created.password);
+                }}
+                className="mb-[12px] w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[12px] font-medium text-ink-muted"
+              >
+                {copyState === 'done'
+                  ? t('accounts.edit.twofaCopied')
+                  : t('accounts.edit.twofaCopy')}
+              </button>
+            ) : null}
             {clipboard ? null : (
               <div className="mb-[12px] text-[11.5px] leading-[1.45] text-ink-subtle">
                 {t('accounts.edit.twofaCopyManual')}
@@ -264,6 +323,36 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 </div>
               </div>
             ) : null}
+            {status?.email_unconfirmed_pattern ? (
+              // The other thing a failed read does not invalidate: confirming a
+              // pending address, having the code mailed again, and cancelling it are
+              // authorised by neither the live state nor a stored password, so a
+              // verification already under way stays finishable. Without this the
+              // address was simply unreachable — the whole email leg lived in the
+              // `hasPassword` arm.
+              //
+              // Reachable when a read that HAD succeeded starts failing: react-query
+              // keeps the last good data beside the error. The envelope branch
+              // (`error` set) carries no status at all — `_live_status` returns one or
+              // the other, never both — so nothing is invented here, the pattern is
+              // simply absent and this renders nothing.
+              <TwoFactorEmail
+                key={status.email_unconfirmed_pattern}
+                accountId={accountId}
+                // Whether a CONFIRMED address exists is exactly what could not be
+                // read, so neither claim may be printed: `null` renders no row.
+                hasRecovery={null}
+                // Attaching and detaching are the two email writes that need the
+                // stored password, and this branch offers neither.
+                hasStored={false}
+                unconfirmedPattern={status.email_unconfirmed_pattern}
+                code={emailCode}
+                onCode={setEmailCode}
+                codeLength={emailCodeLength}
+                onCodeLength={setEmailCodeLength}
+                onChanged={invalidate}
+              />
+            ) : null}
           </>
         ) : hasPassword ? (
           <>
@@ -273,14 +362,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // gateway reports once this card has cleared a hint.
               value={status?.hint || t('accounts.edit.twofaHintNone')}
             />
-            <Fact
-              label={t('accounts.edit.twofaRecovery')}
-              value={
-                status?.has_recovery === true
-                  ? t('accounts.edit.twofaRecoveryOn')
-                  : t('accounts.edit.twofaRecoveryOff')
-              }
-            />
+            {/* No recovery-email summary row here. TwoFactorEmail below states that
+                same fact in every state it can honestly claim it, and the two rows
+                landing one under the other read as a duplicate — the runtime auditor
+                saw "Резервная почта / не привязана" twice. Neither state lost its
+                reachability: the row moved, it did not go. */}
             <div
               className={`border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-medium ${
                 hasStored ? 'text-ink-muted' : 'text-danger'

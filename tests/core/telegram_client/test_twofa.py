@@ -282,6 +282,9 @@ async def test_a_change_against_an_account_with_no_password_degrades_to_a_set(
         (errors.rpcerrorlist.NewSettingsInvalidError(None), "twofa_settings_invalid"),
         (errors.rpcerrorlist.NewSaltInvalidError(None), "twofa_settings_invalid"),
         (errors.rpcerrorlist.PasswordMissingError(None), "twofa_password_not_set"),
+        # ``NEW_SETTINGS_EMPTY`` is the same fact one call later: reachable when the
+        # password disappears between the ONE read and the write.
+        (errors.rpcerrorlist.NewSettingsEmptyError(None), "twofa_password_not_set"),
     ],
 )
 @pytest.mark.asyncio
@@ -300,9 +303,20 @@ async def test_each_mapped_refusal_becomes_its_stable_code(
     assert result.error_message == code
 
 
+@pytest.mark.parametrize(
+    "dead",
+    [
+        pytest.param(ConnectionError("socket died"), id="connection"),
+        # The other half of ``_password_state``'s except tuple, and not decoration: a
+        # pooled client waking up answers a read with a TIMEOUT at least as often as
+        # with a reset, and ``execute``'s ``dispatched`` arm keys off both alike.
+        pytest.param(TimeoutError("read timed out"), id="timeout"),
+    ],
+)
 @pytest.mark.asyncio
 async def test_a_dead_read_is_a_plain_failure_not_a_maybe_applied_write(
     monkeypatch: pytest.MonkeyPatch,
+    dead: Exception,
 ) -> None:
     """The window the ONE read closes, and the previous double could not show.
 
@@ -315,7 +329,7 @@ async def test_a_dead_read_is_a_plain_failure_not_a_maybe_applied_write(
     complete. Waking a pooled client makes this the LIKELIEST failure, not the
     rarest.
     """
-    client = RawClient(read_error=ConnectionError("socket died"))
+    client = RawClient(read_error=dead)
     patch_action_client(monkeypatch, client)
 
     result = await execute("acc-2fa", SetTwoFactorPassword(new_password=PASSWORD))
@@ -346,27 +360,126 @@ async def test_a_socket_death_on_the_write_is_still_reported_as_unconfirmed(
 
 
 @pytest.mark.asyncio
-async def test_a_pending_recovery_email_reports_the_write_as_applied_but_unconfirmed(
+async def test_a_pending_recovery_email_is_settled_by_one_confirming_read(
     monkeypatch: pytest.MonkeyPatch,
     stub_srp: dict[str, list[Any]],  # noqa: ARG001 - the write must be reached
 ) -> None:
-    """``EMAIL_UNCONFIRMED`` on a password write is neither a crash nor a clean success.
+    """``EMAIL_UNCONFIRMED`` on a password write is neither a crash nor an assumption.
 
     Reachable whenever a recovery-email verification is still pending while the
-    password is changed. Through ``edit_2fa`` it arrived as the ``'NoneType' object
-    is not callable`` ``TypeError`` raised while Telethon handled it by calling the
-    callback this backend cannot provide — an opaque ``failed`` with the accepted
-    password never persisted. Owning the RPC means it arrives as itself, and TDLib
-    holds its ``last_set_password_`` pending in this state, so the honest answer is
-    "applied, not certainly in force" rather than a plain ok.
+    password is set. Through ``edit_2fa`` it arrived as the ``TypeError`` Telethon
+    raised while calling the code callback this backend cannot provide — an opaque
+    ``failed`` with the accepted password never persisted.
+
+    The previous round then justified reporting it as unconfirmed with "TDLib holds
+    its ``last_set_password_`` until the mailed code is typed back". That member does
+    not exist anywhere in TDLib; the sentence was fabricated. TDLib's own contract
+    holds a change pending only when a NEW recovery email rides the same call, and
+    this write carries none — so the ambiguity is settled the way TDLib settles it,
+    by treating the answer as success and RE-READING the live state.
     """
-    patch_action_client(monkeypatch, RawClient(error=errors.EmailUnconfirmedError(None, 6)))
+    client = RawClient(
+        error=errors.EmailUnconfirmedError(None, 6),
+        rereads=(Password(has_password=True),),
+    )
+    patch_action_client(monkeypatch, client)
 
     result = await execute("acc-2fa", SetTwoFactorPassword(new_password=PASSWORD))
 
     assert result.status == "ok"
     assert result.error_message is None
+    # Confirmed BY THE READ; without the read this is an assumption again.
+    assert client.reads() == 2
+    assert result.twofa_email_unconfirmed is False
+    # Advisory, and threaded rather than dropped: the number exists nowhere but
+    # inside this error, and the recovery-email sibling has always carried it.
+    assert result.twofa_email_code_length == 6
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        pytest.param(ConnectionError("socket died"), id="read-failed"),
+        pytest.param(None, id="no-password"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_confirming_read_that_proves_nothing_stays_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_srp: dict[str, list[Any]],  # noqa: ARG001 - the write must be reached
+    answer: Exception | None,
+) -> None:
+    """The conservative leg: an unknown must never be upgraded into a confirmation.
+
+    Either the confirming read never came back, or it says Telegram holds no password
+    at all. Both leave "is this password in force" open, so the write is reported
+    applied-but-unconfirmed and the service keeps the value while flagging it.
+    """
+    reread = answer if answer is not None else Password(has_password=False)
+    client = RawClient(error=errors.EmailUnconfirmedError(None, 6), rereads=(reread,))
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=PASSWORD))
+
+    assert result.status == "ok"
+    assert client.reads() == 2
     assert result.twofa_email_unconfirmed is True
+
+
+@pytest.mark.asyncio
+async def test_a_removal_answered_email_unconfirmed_is_a_refusal_never_an_ok(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_srp: dict[str, list[Any]],  # noqa: ARG001 - the write must be reached
+) -> None:
+    """The CRITICAL verb gate: this handler must never report a REMOVAL as applied.
+
+    Reported as ``ok`` — which is what a verb-blind handler does — the removal path
+    is unrecoverable: ``remove_account_twofa`` hands the result straight to
+    ``raise_for_result``, never reads ``twofa_email_unconfirmed`` (only
+    ``set_account_twofa`` does), goes on to clear the column and tells the operator
+    2FA is off. If the write was not in force the dashboard has just destroyed the
+    only copy of a live cloud password, and nothing can recover it.
+
+    So a removal gets its own stable code, and no confirming read is spent: nothing a
+    re-read could prove would make clearing the column safe here.
+    """
+    client = RawClient(error=errors.EmailUnconfirmedError(None, 6))
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(current_password=PASSWORD))
+
+    assert result.status == "failed"
+    assert result.error_type == "TwoFactorGatewayError"
+    assert result.error_message == "twofa_removal_unconfirmed"
+    assert client.reads() == 1
+
+
+@pytest.mark.asyncio
+async def test_a_write_needing_a_proof_is_refused_when_no_current_algo_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_srp: dict[str, list[Any]],
+) -> None:
+    """The mirror of the recovery-email sibling's guard, which this path had missed.
+
+    ``compute_check`` opens with ``request.current_algo``
+    (``telethon/password.py:137``) and every field on ``account.Password`` is an
+    optional TL flag, so an absent one raises ``AttributeError`` — a class outside
+    this module's ladder, which reaches the operator as Telethon prose about a call
+    that carried a plaintext password. It is refused before the proof instead.
+    """
+    client = RawClient(password=Password(has_password=True, current_algo=None))
+    patch_action_client(monkeypatch, client)
+
+    result = await execute(
+        "acc-2fa",
+        SetTwoFactorPassword(current_password="old", new_password=PASSWORD),
+    )
+
+    assert result.status == "failed"
+    assert result.error_type == "TwoFactorGatewayError"
+    assert result.error_message == "twofa_password_not_set"
+    assert [type(request) for request in client.requests] == [GetPasswordRequest]
+    assert stub_srp["check"] == []
 
 
 @pytest.mark.parametrize(
@@ -525,6 +638,26 @@ async def test_no_dispatched_value_or_error_message_carries_the_password(
     assert PASSWORD not in repr(excinfo.value.__cause__)
 
 
+@pytest.mark.asyncio
+async def test_the_result_reports_the_hint_the_gateway_actually_wrote(
+    monkeypatch: pytest.MonkeyPatch,
+    stub_srp: dict[str, list[Any]],  # noqa: ARG001 - the write must be reached
+) -> None:
+    """The written hint travels home, because only this layer knows what it resolved to.
+
+    ``hint=None`` means KEEP and is resolved against the gateway's OWN fresh read, so
+    the service's separate live read can legitimately disagree with the wire — and
+    reporting THAT let the response name a hint the account does not have.
+    """
+    client = RawClient(password=Password(has_password=True, hint="the usual"))
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=PASSWORD))
+
+    assert result.twofa_hint == "the usual"
+    assert client.written().new_settings.hint == "the usual"
+
+
 def test_neither_password_appears_in_the_actions_repr() -> None:
     """Both secrets carry ``repr=False``, so neither rides a rendered frame local.
 
@@ -545,3 +678,15 @@ def test_both_passwords_none_is_refused_by_the_action() -> None:
     """That combination names no verb, so the request would mean nothing at all."""
     with pytest.raises(ValueError, match="current_password/new_password"):
         SetTwoFactorPassword()
+
+
+def test_an_empty_new_password_is_refused_by_the_action() -> None:
+    """``""`` is not the removal verb — ``None`` is — so it must not be constructible.
+
+    ``_new_password_hash`` branches on ``is None``, so an empty string would be
+    HASHED like a real password rather than removing anything, and the docstring's
+    own invariant is about exactly that value. The API layer's ``min_length=8``
+    keeps it off the HTTP path, but this boundary has to hold for any caller.
+    """
+    with pytest.raises(ValueError, match="new_password"):
+        SetTwoFactorPassword(new_password="")

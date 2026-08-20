@@ -412,16 +412,23 @@ export type AccountStats = {
  * a successful RPC this response is the operator's only copy; losing it would
  * leave the account unrecoverable if its session is ever reset.
  *
- * ``confirmed`` is ``False`` when the request reached the wire and only the ANSWER
- * was lost, so Telegram may or may not have applied it. The password is still
- * returned for the same reason: if Telegram DID apply it, this is the only copy
- * anybody has, and discarding it would strand the account behind a password no
- * human ever saw.
+ * ``confirmed`` is ``False`` in TWO cases, both meaning "Telegram may or may not
+ * hold this password": the request reached the wire and only the ANSWER was lost,
+ * or Telegram answered ``EMAIL_UNCONFIRMED`` and the one confirming
+ * ``account.getPassword`` that follows it did not come back saying a password is
+ * set. The password is returned either way: if Telegram DID apply it, this is the
+ * only copy anybody has, and discarding it would strand the account behind a
+ * password no human ever saw.
  *
- * ``previous_kept`` splits that unconfirmed case in two, and only a CHANGE can
- * reach it: the previously stored password was left in the database untouched, so
- * ONE of the two — it or ``password`` — is the live one and the operator has to
- * check from the phone. A fresh set has nothing to keep and reports ``False``.
+ * ``previous_kept`` splits that unconfirmed case in three, and only a CHANGE can
+ * reach any of them. ``True``: the previously stored password was left in the
+ * database untouched and the live read says Telegram does have a password, so ONE
+ * of the two — it or ``password`` — is the live one and the operator has to check
+ * from the phone. ``None``: the previous one was kept, but the live read answered
+ * nothing, so "one of these two is in force" is not something this response can
+ * claim — Telegram may hold neither. ``False``: nothing was kept, either because
+ * this was a fresh set or because the live read said Telegram has no password at
+ * all, which makes the stored value stale by definition.
  */
 export type AccountTwoFactorCreated = {
   /**
@@ -443,7 +450,7 @@ export type AccountTwoFactorCreated = {
   /**
    * Previous Kept
    */
-  previous_kept?: boolean;
+  previous_kept?: boolean | null;
 };
 
 /**
@@ -594,6 +601,10 @@ export type ActionResult = {
    * Twofa Email Unconfirmed
    */
   twofa_email_unconfirmed?: boolean;
+  /**
+   * Twofa Hint
+   */
+  twofa_hint?: string | null;
   /**
    * Error Type
    */
@@ -5840,7 +5851,12 @@ export type RemoveAccountTwofaData = {
      */
     account_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Forget Only
+     */
+    forget_only?: boolean;
+  };
   url: '/api/v1/accounts/{account_id}/2fa';
 };
 

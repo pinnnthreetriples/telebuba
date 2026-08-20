@@ -101,10 +101,11 @@ def _expected_codes() -> set[str]:
     # neuroshilling exclusion added on top of them — were translated by luck, not proof.
     #
     # ``TwoFactorRefusalCode`` is the 2FA domain's whole vocabulary, and it exists
-    # because three of its codes are raised BY HAND rather than through a ladder
-    # (``twofa_not_changed``, ``twofa_password_not_set``, ``twofa_password_not_stored``)
-    # and one of those is raised from ``services/``, not the gateway. Enumerating only
-    # ``_TWOFA_ERROR_CODES`` left those three checked by nothing.
+    # because most of its codes are raised BY HAND rather than through a ladder —
+    # ``twofa_not_changed``, ``twofa_password_not_set``, ``twofa_removal_unconfirmed``
+    # in the gateway, ``twofa_password_not_stored`` and ``twofa_rollback_failed`` in
+    # ``services/``, and two more in the extracted SRP sibling. Enumerating only
+    # ``_TWOFA_ERROR_CODES`` left every one of them checked by nothing.
     #
     # ``NeurocommentRefusalCode`` is the same family for the listener's own start,
     # which answers the 409 ``detail`` with a code the way the two above do. It exists

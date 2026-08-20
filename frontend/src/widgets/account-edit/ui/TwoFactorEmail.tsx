@@ -27,8 +27,10 @@ const MAX_EMAIL_LENGTH = 254;
 const MAX_CODE_LENGTH = 32;
 
 // The recovery-email leg of the 2FA card: attach an address, then type the code
-// Telegram mailed. Rendered only when the account has a password AND that
-// password is stored here, because the backend can authorise neither otherwise.
+// Telegram mailed. Mounted whenever the live read says the account has a password —
+// with or without our copy of it, see `hasStored` — and, when the read failed but a
+// pending address is known, by that branch too, because finishing a verification
+// already under way needs neither the read nor the password.
 //
 // The override is the pending address: `undefined` means "read the state off the
 // status"; `null` means "the write just told us there is no pending address any
@@ -55,7 +57,11 @@ export function TwoFactorEmail({
   onChanged,
 }: {
   accountId: string;
-  hasRecovery: boolean;
+  // Three-valued: `null` is "the live read failed, so whether a confirmed address
+  // exists is not knowable" and prints no row at all. The read-error branch of the
+  // parent mounts this leg with it, to keep a pending verification finishable without
+  // claiming anything about a confirmed one.
+  hasRecovery: boolean | null;
   // Whether THIS dashboard still holds the account's current password. Only the two
   // authorised operations need it — attaching an address (`updatePasswordSettings`)
   // and detaching a confirmed one (the same call with an empty email). Confirming a
@@ -101,6 +107,11 @@ export function TwoFactorEmail({
           setOverride(result.pending ? email : null);
           onCodeLength(result.pending ? (result.code_length ?? null) : null);
           setAddress('');
+          // The code belongs to the address it was typed for. It is lifted to the
+          // parent so a refetch cannot wipe it, and the cost of that is exactly this:
+          // a code left over from an abandoned pending address prefilled the field for
+          // a NEW one, with Confirm enabled over something that can only be refused.
+          onCode('');
           onChanged();
         },
       },
@@ -151,9 +162,19 @@ export function TwoFactorEmail({
       onChanged();
     });
 
-  // No local state to reset: the parent keys this component on the server-side
-  // email state, so the refetch `onChanged` triggers remounts it.
-  const onUnlink = () => clearEmail.mutateAsync(path).then(onChanged);
+  // Rendered from the RESPONSE, for the reason the confirm path gives: `clear` answers
+  // with a whole fresh AccountTwoFactorView, and discarding it in favour of the
+  // refetch left `hasRecovery` at its stale `true` for one live `account.getPassword`
+  // round trip — the card kept saying the address is attached and kept the Detach
+  // button live, where a second click fires a `clear` that can only refuse.
+  //
+  // No local state to reset: the parent keys this component on the server-side email
+  // state, so writing that state remounts it.
+  const onUnlink = () =>
+    clearEmail.mutateAsync(path).then((view) => {
+      queryClient.setQueryData(accountTwofaQueryKey(path), view);
+      onChanged();
+    });
 
   return (
     <div className="mt-3 border-t border-[#f0eeeb] pt-3">
@@ -162,23 +183,35 @@ export function TwoFactorEmail({
           freshly pending one whenever the operator swaps the recovery address from
           the app — and while `has_recovery` won that test, the code field never
           appeared, so the swap could not be completed from here at all. */}
-      {hasRecovery ? (
-        <div className={`flex items-center justify-between gap-3 ${pending ? 'mb-[10px]' : ''}`}>
+      {hasRecovery === null ? null : (
+        // The one place the recovery state is stated. It used to be said here AND in a
+        // summary row the parent rendered just above, which read as a duplicate; the
+        // row moved here rather than going, so both states stay reachable — including
+        // "not attached" while a verification is pending, which is where the parent's
+        // row used to be the only one.
+        <div
+          className={`flex items-center justify-between gap-3 ${
+            pending || !hasRecovery ? 'mb-[10px]' : ''
+          }`}
+        >
           <span className="text-[12.5px] text-ink-muted">
-            {t('accounts.edit.twofaRecovery')}: {t('accounts.edit.twofaRecoveryOn')}
+            {t('accounts.edit.twofaRecovery')}:{' '}
+            {hasRecovery ? t('accounts.edit.twofaRecoveryOn') : t('accounts.edit.twofaRecoveryOff')}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              setConfirming('Unlink');
-            }}
-            disabled={!hasStored}
-            className="bg-transparent p-0 text-[12.5px] font-medium text-danger disabled:opacity-50"
-          >
-            {t('accounts.edit.twofaEmailUnlink')}
-          </button>
+          {hasRecovery ? (
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming('Unlink');
+              }}
+              disabled={!hasStored}
+              className="bg-transparent p-0 text-[12.5px] font-medium text-danger disabled:opacity-50"
+            >
+              {t('accounts.edit.twofaEmailUnlink')}
+            </button>
+          ) : null}
         </div>
-      ) : null}
+      )}
       {pending ? (
         <>
           <div className="mb-[10px] text-[12.5px] text-ink-muted">
@@ -230,11 +263,10 @@ export function TwoFactorEmail({
             </button>
           </div>
         </>
-      ) : hasRecovery ? null : (
+      ) : hasRecovery === false ? (
         <>
-          <div className="mb-[10px] text-[12.5px] text-ink-muted">
-            {t('accounts.edit.twofaRecovery')}: {t('accounts.edit.twofaRecoveryOff')}
-          </div>
+          {/* Only `false` invites an attach. `null` is "we could not read whether one
+              is attached", and offering to attach one over that is a guess. */}
           <label className="mb-[6px] block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailAddress')}</span>
             <input
@@ -265,7 +297,7 @@ export function TwoFactorEmail({
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
           </button>
         </>
-      )}
+      ) : null}
       {confirming ? (
         <ConfirmModal
           title={t(`accounts.edit.twofaEmail${confirming}Title`)}

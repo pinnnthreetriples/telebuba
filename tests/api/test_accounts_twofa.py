@@ -161,7 +161,7 @@ async def test_a_service_refusal_becomes_a_400_carrying_its_stable_code(
 ) -> None:
     method, url, json_body = call
 
-    async def _refuse(*_args: object) -> object:
+    async def _refuse(*_args: object, **_kwargs: object) -> object:
         raise AccountActionError(code)
 
     monkeypatch.setattr(f"services.accounts.{service}", _refuse)
@@ -222,8 +222,9 @@ async def test_remove_account_twofa_answers_with_the_re_read_state(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake(account_id: str) -> AccountTwoFactorView:
+    async def _fake(account_id: str, *, forget_only: bool = False) -> AccountTwoFactorView:
         assert account_id == "acc-1"
+        assert forget_only is False
         return AccountTwoFactorView(status=TwoFactorStatusResult())
 
     monkeypatch.setattr("services.accounts.remove_account_twofa", _fake)
@@ -234,6 +235,33 @@ async def test_remove_account_twofa_answers_with_the_re_read_state(
     body = resp.json()
     assert body["status"]["has_password"] is False
     assert body["has_stored_password"] is False
+
+
+@pytest.mark.asyncio
+async def test_the_delete_route_threads_forget_only_through_as_a_query_flag(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``?forget_only=true`` is the clear-only verb, and it must reach the service.
+
+    It is the only escape from every state in which the column holds a password
+    Telegram does not accept, and it spends no RPC — so a route that dropped the flag
+    would silently perform a real removal instead, authorising it with exactly the
+    value that is known to be wrong.
+    """
+    seen: list[bool] = []
+
+    async def _fake(account_id: str, *, forget_only: bool = False) -> AccountTwoFactorView:
+        assert account_id == "acc-1"
+        seen.append(forget_only)
+        return AccountTwoFactorView()
+
+    monkeypatch.setattr("services.accounts.remove_account_twofa", _fake)
+    async with _client(app) as client:
+        resp = await client.delete(f"{_TWOFA_URL}?forget_only=true")
+
+    assert resp.status_code == 200
+    assert seen == [True]
 
 
 @pytest.mark.asyncio

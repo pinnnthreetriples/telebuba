@@ -17,6 +17,13 @@ no account read model can carry it — exactly the arrangement
 ``core.repositories.proxies`` uses, where ``_row_to_proxy`` maps the stored
 secret to ``has_password=bool(...)`` and a separate, non-API-facing mapper is the
 only thing that resolves it.
+
+ponytail: KNOWN RESIDUAL, deliberately not fixed in this PR. Nothing here or
+anywhere else can clear the column on a DOWNGRADE. An older build boots fine
+against a migrated database and simply ignores this column, so a deploy rolled
+back "to be safe" leaves one orphaned plaintext password per account with no code
+left in the process that can read or clear it. The fix is a pre-downgrade wipe
+step, which needs a migration story this feature does not have yet.
 """
 
 from __future__ import annotations

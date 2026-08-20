@@ -59,20 +59,34 @@ TwoFactorRefusalCode = Literal[
     "twofa_not_changed",
     "twofa_password_not_set",
     "twofa_password_not_stored",
+    # ``EMAIL_UNCONFIRMED`` answered a REMOVAL. On a set or a change that answer is
+    # resolved by a live re-read, but a removal must never be reported as applied:
+    # ``remove_account_twofa`` would clear the stored password on the strength of it
+    # and leave a live cloud password with no copy anywhere. Its own code because the
+    # operator's next step is different — re-read the state, do not retry blindly.
+    "twofa_removal_unconfirmed",
+    # An answered refusal proved Telegram did not apply a fresh set, and the UPDATE
+    # that should have rolled the pre-write back ALSO failed. The column now holds a
+    # password Telegram rejected, which blocks the not-stored guard for good, so the
+    # operator has to hear that rather than a plain refusal.
+    "twofa_rollback_failed",
     # The pre-flight ``account.getPassword`` never answered, so NOTHING was written —
     # the one refusal that exists to keep a dead read leg from being reported as a
     # write that may have landed.
     "twofa_state_unreadable",
-    # ``telethon.password.compute_check`` could not use the challenge Telegram sent
-    # (unimplemented algorithm, bad p/g/B/g_b). Its own message is bare ``ValueError``
-    # prose about Telethon internals, so this is what the operator sees instead.
+    # The challenge Telegram sent cannot be used: an unimplemented KDF class, or a
+    # ``(p, g)`` outside the pair ``telethon.password.check_prime_and_good``
+    # short-circuits on — which ``_twofa_srp.require_fast_algo`` refuses BEFORE any
+    # computation, because the alternative is a factorisation that never returns.
+    # Telethon's own message for the same facts is bare ``ValueError`` prose about
+    # its internals, so this is what the operator sees instead. FLEET-wide when it
+    # fires: it means Telegram rotated its prime, not that this account is unusual.
     "twofa_password_algo_unsupported",
-    # The SRP work outran its bound. Its own code rather than the one above, because
-    # the two mean opposite things operationally: "unsupported" is instant and about
-    # this account, whereas a timeout means Telegram's prime is one Telethon's
-    # ``check_prime_and_good`` cannot validate in finite time — a FLEET-wide fault
-    # that would have wedged the worker before the bound existed, and one that leaks
-    # a spinning thread every time it fires.
+    # The SRP work outran its bound. Its own code rather than the one above because
+    # the two mean opposite things operationally: with the admission check in place
+    # "unsupported" is the expected answer to a rotated prime, whereas this one can
+    # now only mean the machine is overloaded or Telethon's fast path changed shape
+    # under us — and it leaks one of two private worker threads when it fires.
     "twofa_password_compute_timeout",
 ]
 
@@ -134,23 +148,30 @@ class AccountTwoFactorCreated(BaseModel):
     a successful RPC this response is the operator's only copy; losing it would
     leave the account unrecoverable if its session is ever reset.
 
-    ``confirmed`` is ``False`` when the request reached the wire and only the ANSWER
-    was lost, so Telegram may or may not have applied it. The password is still
-    returned for the same reason: if Telegram DID apply it, this is the only copy
-    anybody has, and discarding it would strand the account behind a password no
-    human ever saw.
+    ``confirmed`` is ``False`` in TWO cases, both meaning "Telegram may or may not
+    hold this password": the request reached the wire and only the ANSWER was lost,
+    or Telegram answered ``EMAIL_UNCONFIRMED`` and the one confirming
+    ``account.getPassword`` that follows it did not come back saying a password is
+    set. The password is returned either way: if Telegram DID apply it, this is the
+    only copy anybody has, and discarding it would strand the account behind a
+    password no human ever saw.
 
-    ``previous_kept`` splits that unconfirmed case in two, and only a CHANGE can
-    reach it: the previously stored password was left in the database untouched, so
-    ONE of the two — it or ``password`` — is the live one and the operator has to
-    check from the phone. A fresh set has nothing to keep and reports ``False``.
+    ``previous_kept`` splits that unconfirmed case in three, and only a CHANGE can
+    reach any of them. ``True``: the previously stored password was left in the
+    database untouched and the live read says Telegram does have a password, so ONE
+    of the two — it or ``password`` — is the live one and the operator has to check
+    from the phone. ``None``: the previous one was kept, but the live read answered
+    nothing, so "one of these two is in force" is not something this response can
+    claim — Telegram may hold neither. ``False``: nothing was kept, either because
+    this was a fresh set or because the live read said Telegram has no password at
+    all, which makes the stored value stale by definition.
     """
 
     password: str
     hint: str | None = None
     stored: bool = True
     confirmed: bool = True
-    previous_kept: bool = False
+    previous_kept: bool | None = False
 
 
 class AccountTwoFactorEmailRequest(BaseModel):

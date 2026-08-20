@@ -93,12 +93,14 @@ async def set_account_twofa_email(
     ``removing_client`` holds none across its yield, and ``_AUTH_LOCKS`` is taken only
     inside ``core.telegram_client._auth``.
 
-    The 404 guard runs FIRST, before the stored-password one, even though
-    ``_run_email_action`` repeats it: an unknown account has to answer 404 like its
-    six siblings rather than 400 ``twofa_password_not_stored``.
+    The 404 guard runs FIRST, before the stored-password one and before the LOCK,
+    even though ``_run_email_action`` repeats it: an unknown account has to answer
+    404 like its six siblings rather than 400 ``twofa_password_not_stored``, and
+    taking the lock first minted one per unknown id that nothing ever removes —
+    ``_TWOFA_LOCKS`` is only ever pruned by ``remove_account``, which needs a row.
     """
+    await require_account(account_id)
     async with twofa_lock(account_id):
-        await require_account(account_id)
         current = await fetch_account_twofa_password(account_id)
         if current is None:
             code = "twofa_password_not_stored"
@@ -181,10 +183,11 @@ async def clear_account_twofa_email(account_id: str) -> AccountTwoFactorView:
     confirmed address comes off with ``updatePasswordSettings`` and an empty
     ``email``, which needs the stored password to authorise it — so this refuses up
     front with the same code the other authorised writes use, after the 404 guard and
-    under the lock for the two reasons ``set_account_twofa_email`` documents.
+    under the lock for the two reasons ``set_account_twofa_email`` documents — the
+    guard OUTSIDE the lock, for the third one.
     """
+    await require_account(account_id)
     async with twofa_lock(account_id):
-        await require_account(account_id)
         current = await fetch_account_twofa_password(account_id)
         if current is None:
             code = "twofa_password_not_stored"

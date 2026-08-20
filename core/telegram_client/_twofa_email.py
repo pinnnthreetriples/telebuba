@@ -31,10 +31,10 @@ verification still in flight.
 ``EMAIL_UNCONFIRMED_<N>`` is the SUCCESS signal of that call, not a failure: the
 address is attached and a code of length ``N`` was just mailed, which is how TDLib
 reads it too, so it is reported as ``twofa_email_unconfirmed`` rather than
-stranding the operator with a pending email they cannot act on. On the PASSWORD
-path the same answer means the write was accepted while a verification is still
-pending — TDLib holds its ``last_set_password_`` until the code is typed back —
-so it is applied-but-UNCONFIRMED, not a clean success.
+stranding the operator with a pending email they cannot act on. What the PASSWORD
+path does with the same answer is decided by a live re-read rather than assumed —
+see ``_twofa._email_unconfirmed_result``, which also records why the TDLib member
+an earlier round cited here does not exist.
 """
 
 from __future__ import annotations
@@ -46,14 +46,14 @@ from telethon.password import compute_check
 from telethon.tl.functions.account import (
     CancelPasswordEmailRequest,
     ConfirmPasswordEmailRequest,
-    GetPasswordRequest,
     ResendPasswordEmailRequest,
     UpdatePasswordSettingsRequest,
 )
 from telethon.tl.types.account import PasswordInputSettings
 
 from core.telegram_client._action_results import _DispatchResult
-from core.telegram_client._twofa import TwoFactorGatewayError, _gateway_error, _srp
+from core.telegram_client._twofa import _gateway_error, _password_state
+from core.telegram_client._twofa_srp import TwoFactorGatewayError, _srp, require_fast_algo
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
@@ -73,10 +73,15 @@ async def _write_recovery_email(
     change — an empty-bytes hash there would DELETE the cloud password instead.
 
     ``compute_check`` needs the CURRENT algorithm off a fresh ``getPassword``, so
-    the read is part of this call and not cached; a missing ``current_algo`` is the
-    "2FA is off" case, which a recovery email has nothing to guard, so it is refused
-    with a stable code rather than Telethon's ``ValueError`` prose. The proof goes
-    through :func:`_srp` — this path runs the same unbounded prime check.
+    the read is part of this call and not cached — and that read goes through
+    ``_twofa._password_state`` like the password half's does, because a socket dying
+    on it PROVES nothing was sent: left bare, ``execute`` stamped it
+    ``UNCONFIRMED_ERROR_TYPE`` and told the operator Telegram may have applied a
+    request that never left the process. A missing ``current_algo`` is the "2FA is
+    off" case, which a recovery email has nothing to guard, so it is refused with a
+    stable code rather than Telethon's ``AttributeError``; a ``(p, g)`` outside
+    Telethon's fast path is refused by ``require_fast_algo`` before the proof is
+    offloaded at all, for the reason ``_twofa_srp`` documents.
 
     Reports whether Telegram answered ``EMAIL_UNCONFIRMED`` and, separately, the
     length of the code it mailed. The bare form of that error has no ``_<N>`` suffix
@@ -85,10 +90,12 @@ async def _write_recovery_email(
     button that can never enable — so the length is ``None`` while the FLAG still
     says pending. Deriving one from the other made a pending address look verified.
     """
-    pwd = await client(GetPasswordRequest())
-    if getattr(pwd, "current_algo", None) is None:
+    pwd = await _password_state(client)
+    current_algo = getattr(pwd, "current_algo", None)
+    if current_algo is None:
         code = "twofa_password_not_set"
         raise TwoFactorGatewayError(code)
+    require_fast_algo(current_algo)
     # ``clear`` sends an EMPTY address, which is what detaches a confirmed one.
     email = action.email if action.mode == "set" else ""
     proof = await _srp(compute_check, pwd, action.current_password)

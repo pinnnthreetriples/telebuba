@@ -16,6 +16,7 @@ from core.telegram_client._action_results import (
     _flood_action_result,
     _generic_error,
     _join_by_request_result,
+    _ok_result,
     _too_fresh_result,
     _unavailable_result,
 )
@@ -41,7 +42,7 @@ from core.telegram_client._react import dispatch_react_to_message, dispatch_reac
 from core.telegram_client._read_comments import _resolve_linked_group_entity
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._twofa import dispatch_twofa_action, twofa_log_extra
-from core.telegram_client._util import event_name, id_strings, sent_message_id
+from core.telegram_client._util import event_name, sent_message_id
 from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
@@ -206,17 +207,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
         account_id=account_id,
         extra=extra,
     )
-    return ActionResult(
-        status="ok",
-        action_type=action.action_type,
-        account_id=account_id,
-        message_id=outcome.message_id,
-        # int64 → decimal string at the JSON boundary (see ActionResult).
-        channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
-        recent_message_ids=id_strings(outcome.recent_message_ids),
-        twofa_email_code_length=outcome.twofa_email_code_length,
-        twofa_email_unconfirmed=outcome.twofa_email_unconfirmed,
-    )
+    return _ok_result(account_id, action, outcome)
 
 
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0911, PLR0912
