@@ -92,18 +92,34 @@ if TYPE_CHECKING:
 # change — either it is wrong, or the SRP challenge we computed against went
 # stale because the password changed elsewhere mid-call. Flood-family errors are
 # deliberately NOT mapped: they must reach ``execute``'s dedicated flood-wait
-# ladder unchanged.
+# ladder unchanged. Neither may anything that carries ``.seconds`` — mapping it here
+# would flatten the duration into a bare code, which is why ``SESSION_TOO_FRESH`` and
+# ``PASSWORD_TOO_FRESH`` are absent from this table and handled by that ladder
+# instead, even though both are ``BadRequestError`` rather than floods.
 _TWOFA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     (errors.PasswordHashInvalidError, "twofa_current_password_invalid"),
     (errors.SrpIdInvalidError, "twofa_current_password_invalid"),
     (errors.SrpPasswordChangedError, "twofa_current_password_invalid"),
     (errors.NewSettingsInvalidError, "twofa_settings_invalid"),
+    # ``NEW_SALT_INVALID`` is the same refusal one field over: Telegram rejected the
+    # settings we computed, and ``edit_2fa`` is what builds that salt
+    # (``pwd.new_algo.salt1 += os.urandom(32)``), so there is nothing for the
+    # operator to correct beyond retrying — exactly what the settings copy says.
+    (errors.NewSaltInvalidError, "twofa_settings_invalid"),
+    # ``PASSWORD_MISSING`` means 2FA is not enabled on the account, which is the
+    # likely answer to a confirm / resend / cancel fired with nothing pending, and to
+    # any authorised write against an account whose password went away elsewhere. It
+    # is the same fact the ``current_algo`` guard below raises by hand.
+    (errors.PasswordMissingError, "twofa_password_not_set"),
     # The recovery-email half. ``EmailInvalidError`` is mapped even though the API
     # layer already refuses an address with no ``@``: that check is deliberately
     # weak (no ``email-validator`` dependency), so Telegram is the real validator
     # here and its refusal has to be legible rather than an opaque ``failed``.
     (errors.CodeInvalidError, "twofa_email_code_invalid"),
     (errors.EmailHashExpiredError, "twofa_email_hash_expired"),
+    # ``EMAIL_VERIFY_EXPIRED`` is the same window closing, reported under a second
+    # name; one code, because "attach the address again" is the one way out of both.
+    (errors.EmailVerifyExpiredError, "twofa_email_hash_expired"),
     (errors.EmailInvalidError, "twofa_email_invalid"),
 )
 
@@ -180,25 +196,70 @@ async def dispatch_set_twofa_password(
 ) -> None:
     """Set / change / remove the cloud password — see the module docstring for which.
 
+    The PRE-FLIGHT read is what makes "the answer was lost" honest. ``edit_2fa``
+    issues its own ``account.getPassword`` before it writes anything, so a socket
+    dying on that first leg used to be classified from ``client is not None`` alone
+    and reported as "Telegram may have applied this password" — for a request that
+    provably never left. Reading the state here first moves that whole window into a
+    plain failure with a stable code, and only a fault AFTER this succeeded can still
+    mean the write left the process. The read costs one extra RPC and buys the
+    difference between "may be live" and "is not".
+
+    It also answers the hint. ``updatePasswordSettings`` always writes the field, so
+    ``hint=None`` (keep) is resolved against this read; only ``""`` clears.
+
     ponytail: known ceiling, deliberately not addressed. ``edit_2fa`` runs
     Telethon's ``compute_digest`` in pure Python — 2048-bit modular exponentiation
     plus a primality check — which blocks the event loop for up to ~1s per call.
     Acceptable for a single-account operator action; offload it to a thread if
     this ever grows a fleet-wide sweep.
     """
+    pwd = await _preflight_password(client)
     try:
         changed = await client.edit_2fa(
             # Telethon annotates both as ``str`` while defaulting them to ``None``,
             # and ``None`` is how the three verbs are spelled (see the docstring).
             current_password=action.current_password,  # ty: ignore[invalid-argument-type]
             new_password=action.new_password,  # ty: ignore[invalid-argument-type]
-            hint=action.hint,
+            hint=action.hint if action.hint is not None else _text(pwd, "hint") or "",
         )
     except errors.RPCError as exc:
         raise _gateway_error(exc) from exc
+    except TypeError as exc:
+        # ``EMAIL_UNCONFIRMED`` while a recovery-email verification is still pending.
+        # Telethon answers it INSIDE its own except clause by calling
+        # ``email_code_callback(e.code_length)`` — and this path passes no callback,
+        # because an unattended backend cannot read a mailbox. So what escapes is not
+        # the Telegram error but the ``'NoneType' object is not callable`` raised while
+        # handling it, which is why the context is what has to be inspected. The write
+        # itself was ACCEPTED: this is the same server answer ``_write_recovery_email``
+        # treats as success, and the two paths must not disagree about it. The pending
+        # email is untouched — no ``email`` was sent.
+        if not isinstance(exc.__context__, errors.EmailUnconfirmedError):
+            raise
+        return
     if not changed:
         code = "twofa_not_changed"
         raise TwoFactorGatewayError(code)
+
+
+async def _preflight_password(client: TelegramClient) -> object:
+    """``account.getPassword`` before any write, so a lost read is not a lost write.
+
+    A transport failure here becomes an ordinary refusal with a stable code rather
+    than reaching ``execute``'s ``unavailable`` arm, which would mark it
+    ``UNCONFIRMED_ERROR_TYPE`` — "Telegram may have applied it" — for a call that had
+    not yet sent anything. Only ``ConnectionError`` / ``TimeoutError`` are caught,
+    because those are exactly the classes that arm keys off; everything else keeps
+    its own ladder.
+    """
+    try:
+        return await client(GetPasswordRequest())
+    except errors.RPCError as exc:
+        raise _gateway_error(exc) from exc
+    except (ConnectionError, TimeoutError) as exc:
+        code = "twofa_state_unreadable"
+        raise TwoFactorGatewayError(code) from exc
 
 
 async def _write_recovery_email(
@@ -221,7 +282,12 @@ async def _write_recovery_email(
     code instead of Telethon's prose.
 
     Answers the length of the code Telegram just mailed, or ``None`` when it asked
-    for no confirmation.
+    for no confirmation — and also ``None`` for the bare ``EMAIL_UNCONFIRMED`` with no
+    ``_<N>`` suffix, which Telethon maps to the same class with ``code_length = 0``.
+    Zero is not a length: reported verbatim it reaches the card as
+    ``maxLength={0}``, an input nobody can type into and a Confirm button that can
+    never enable. "Telegram did not say" is the honest answer, and the pending
+    address still arrives on the next status read as ``email_unconfirmed_pattern``.
     """
     pwd = await client(GetPasswordRequest())
     if getattr(pwd, "current_algo", None) is None:
@@ -229,17 +295,26 @@ async def _write_recovery_email(
         raise TwoFactorGatewayError(code)
     # ``clear`` sends an EMPTY address, which is what detaches a confirmed one.
     email = action.email if action.mode == "set" else ""
+    # Bare ``ValueError`` is ``compute_check``'s whole vocabulary for a challenge it
+    # cannot use — an algorithm class it does not implement, a bad p/g, a bad B or
+    # g_b. None of it is actionable prose (and all of it names Telethon internals),
+    # so it collapses into one stable code instead of an opaque ``failed``.
+    try:
+        proof = compute_check(pwd, action.current_password)  # ty: ignore[invalid-argument-type]
+    except ValueError as exc:
+        code = "twofa_password_algo_unsupported"
+        raise TwoFactorGatewayError(code) from exc
     try:
         await client(
             UpdatePasswordSettingsRequest(
-                password=compute_check(pwd, action.current_password),  # ty: ignore[invalid-argument-type]
+                password=proof,
                 new_settings=PasswordInputSettings(email=email),
             ),
         )
     except errors.EmailUnconfirmedError as exc:
         # The happy path, not a failure: the address is attached and a code of
         # this length was just mailed to it.
-        return exc.code_length
+        return exc.code_length or None
     return None
 
 

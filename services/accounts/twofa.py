@@ -29,6 +29,7 @@ snake_case token.
 
 from __future__ import annotations
 
+import asyncio
 import secrets
 from typing import TYPE_CHECKING, cast
 
@@ -81,6 +82,23 @@ __all__ = [
 # entropy. Generation is policy, so it lives here and not in ``core/``: the
 # gateway sets whatever password it is handed.
 _GENERATED_PASSWORD_BYTES = 16
+
+# One lock per account, created lazily and never freed — the shape
+# ``core.telegram_client._auth._AUTH_LOCKS`` uses. It covers the two flows that READ
+# the stored password and then WRITE it back: two tabs would otherwise both read the
+# same ``current``, both send it, and the loser's persist could clobber the winner's.
+# ``tests/services/accounts/conftest.py`` clears it per test — a lock binds to the
+# loop that first awaited it.
+_TWOFA_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _twofa_lock(account_id: str) -> asyncio.Lock:
+    """Serialise the password writes for one account."""
+    lock = _TWOFA_LOCKS.get(account_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _TWOFA_LOCKS[account_id] = lock
+    return lock
 
 
 async def _live_status(account_id: str) -> tuple[TwoFactorStatusResult | None, str | None]:
@@ -146,43 +164,63 @@ async def set_account_twofa(
     no change, no remove, and ``submit_phone_code`` can never complete after a
     session reset. So that one status persists and returns the password like a
     success, flagged ``confirmed=False``. Every other non-ok status still raises.
+
+    That persist is asymmetric, and the asymmetry is the point: it happens only when
+    there was NOTHING stored. On a CHANGE the stored value is a credential Telegram is
+    known to accept, so overwriting it with one that may never have been applied would
+    trade a recoverable ambiguity for exactly the unrecoverable loss above. A change
+    therefore keeps the old value, still returns the new one (Telegram may hold it) and
+    says ``previous_kept=True``, so the card can send the operator to the phone.
     """
-    await require_account(account_id)
-    password = request.password or secrets.token_urlsafe(_GENERATED_PASSWORD_BYTES)
-    current = await fetch_account_twofa_password(account_id)
-    status, _error = await _live_status(account_id)
-    if status is not None and status.has_password and current is None:
-        code = "twofa_password_not_stored"
-        raise AccountActionError(code)
-    result = await execute(
-        account_id,
-        SetTwoFactorPassword(
-            current_password=current,
-            new_password=password,
-            hint=request.hint or "",
-        ),
-    )
-    confirmed = not (result.status == "unavailable" and result.error_type == UNCONFIRMED_ERROR_TYPE)
-    if confirmed:
-        raise_for_result(result)
-    stored = await _remember_password(account_id, password, has_hint=bool(request.hint))
-    await log_event(
-        "INFO",
-        "account_twofa_set",
-        account_id=account_id,
-        extra={
-            "has_hint": bool(request.hint),
-            "generated": request.password is None,
-            "changed": current is not None,
-            "confirmed": confirmed,
-        },
-    )
-    return AccountTwoFactorCreated(
-        password=password,
-        hint=request.hint,
-        stored=stored,
-        confirmed=confirmed,
-    )
+    async with _twofa_lock(account_id):
+        await require_account(account_id)
+        password = request.password or secrets.token_urlsafe(_GENERATED_PASSWORD_BYTES)
+        current = await fetch_account_twofa_password(account_id)
+        status, _error = await _live_status(account_id)
+        if status is not None and status.has_password and current is None:
+            code = "twofa_password_not_stored"
+            raise AccountActionError(code)
+        result = await execute(
+            account_id,
+            # ``hint=None`` means KEEP whatever Telegram shows; the gateway resolves it
+            # against its own fresh read, so an omitted hint cannot erase the live one.
+            SetTwoFactorPassword(
+                current_password=current,
+                new_password=password,
+                hint=request.hint,
+            ),
+        )
+        lost = result.status == "unavailable" and result.error_type == UNCONFIRMED_ERROR_TYPE
+        confirmed = not lost
+        if confirmed:
+            raise_for_result(result)
+        previous_kept = not confirmed and current is not None
+        stored = not previous_kept and await _remember_password(
+            account_id,
+            password,
+            has_hint=bool(request.hint),
+        )
+        await log_event(
+            "INFO",
+            "account_twofa_set",
+            account_id=account_id,
+            extra={
+                "has_hint": bool(request.hint),
+                "generated": request.password is None,
+                "changed": current is not None,
+                "confirmed": confirmed,
+            },
+        )
+        return AccountTwoFactorCreated(
+            password=password,
+            # What Telegram HOLDS now, not what the request carried: an omitted hint keeps
+            # the live one, and the status read above is the only place this layer can see
+            # it (``None`` when that read failed, i.e. "unknown", same as "not set").
+            hint=request.hint if request.hint is not None else (status.hint if status else None),
+            stored=stored,
+            confirmed=confirmed,
+            previous_kept=previous_kept,
+        )
 
 
 async def _remember_password(
@@ -203,18 +241,24 @@ async def _remember_password(
     2FA off by then, so a locked database must not answer 500 for a removal that
     succeeded: that would leave the plaintext in SQLite guarding nothing while
     telling the operator the removal failed.
+
+    A write that touched NO ROW is reported exactly like a failed one. The statement
+    is an ``UPDATE ... WHERE``, so an account deleted between the guard and here
+    updates nothing and raises nothing — and claiming ``stored=True`` for a password
+    that exists nowhere is the one lie this response must not tell.
     """
     try:
-        await set_account_twofa_password(account_id, password)
+        stored = await set_account_twofa_password(account_id, password)
     except Exception:  # noqa: BLE001 - the RPC already succeeded; see the docstring
+        stored = False
+    if not stored:
         await log_event(
             "ERROR",
             "account_twofa_store_failed",
             account_id=account_id,
             extra={"has_hint": has_hint, "clearing": password is None},
         )
-        return False
-    return True
+    return stored
 
 
 async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
@@ -240,19 +284,29 @@ async def remove_account_twofa(account_id: str) -> AccountTwoFactorView:
     pwd.has_password and current_password: current_password = None``, returns
     ``False``, and surfaces as ``twofa_not_changed``). No RPC is spent: there is
     nothing left on Telegram's side to remove.
+
+    Serialised against a concurrent set/change for the reason ``_TWOFA_LOCKS`` gives:
+    this flow also reads the stored password and then writes the column back.
     """
-    await require_account(account_id)
-    current = await fetch_account_twofa_password(account_id)
-    if current is None:
-        code = "twofa_password_not_stored"
-        raise AccountActionError(code)
-    status, _error = await _live_status(account_id)
-    stale = status is not None and not status.has_password
-    if not stale:
-        raise_for_result(await execute(account_id, SetTwoFactorPassword(current_password=current)))
-    await _remember_password(account_id, None)
-    await log_event("INFO", "account_twofa_removed", account_id=account_id, extra={"stale": stale})
-    return await read_account_twofa(account_id)
+    async with _twofa_lock(account_id):
+        await require_account(account_id)
+        current = await fetch_account_twofa_password(account_id)
+        if current is None:
+            code = "twofa_password_not_stored"
+            raise AccountActionError(code)
+        status, _error = await _live_status(account_id)
+        stale = status is not None and not status.has_password
+        if not stale:
+            remove = SetTwoFactorPassword(current_password=current)
+            raise_for_result(await execute(account_id, remove))
+        await _remember_password(account_id, None)
+        await log_event(
+            "INFO",
+            "account_twofa_removed",
+            account_id=account_id,
+            extra={"stale": stale},
+        )
+        return await read_account_twofa(account_id)
 
 
 async def _run_email_action(account_id: str, action: ManageTwoFactorEmail) -> int | None:

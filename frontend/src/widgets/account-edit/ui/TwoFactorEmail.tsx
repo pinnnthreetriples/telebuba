@@ -14,37 +14,41 @@ import { ConfirmModal } from '@/shared/ui';
 import { Spinner } from './_shared';
 import { FIELD, LABEL } from './_styles';
 
-interface PendingEmail {
-  // The masked pattern Telegram reports, or — right after the address was
-  // submitted, before the status refetch lands — the address just typed.
-  pattern: string;
-  codeLength: number | null;
-}
-
 // The recovery-email leg of the 2FA card: attach an address, then type the code
 // Telegram mailed. Rendered only when the account has a password AND that
 // password is stored here, because the backend can authorise neither otherwise.
 //
-// `undefined` override means "read the state off the status"; `null` means "the
-// write just told us there is no pending address any more" — which matters
-// because the status refetch has not landed yet at that point. The parent keys
-// this component on the server-side state, so an override lives exactly until
-// the server confirms it.
+// The override is the pending address: `undefined` means "read the state off the
+// status"; `null` means "the write just told us there is no pending address any
+// more" — which matters because the status refetch has not landed yet at that
+// point. The parent keys this component on the server-side state, so an override
+// lives exactly until the server confirms it.
+//
+// `codeLength` therefore CANNOT live here. It exists only in the attach response,
+// and the refetch that response triggers flips the key (the pattern appears), which
+// remounts this component and would drop it — so the parent holds it and passes it
+// back down. The number is plumbed through three backend layers precisely so the
+// operator gets the right field length; losing it on the first refetch would waste
+// all of that.
 export function TwoFactorEmail({
   accountId,
   hasRecovery,
   unconfirmedPattern,
+  codeLength,
+  onCodeLength,
   onChanged,
 }: {
   accountId: string;
   hasRecovery: boolean;
   unconfirmedPattern: string | null;
+  codeLength: number | null;
+  onCodeLength: (length: number | null) => void;
   onChanged: () => void;
 }) {
   const { t } = useTranslation();
   const [address, setAddress] = useState('');
   const [code, setCode] = useState('');
-  const [override, setOverride] = useState<PendingEmail | null | undefined>(undefined);
+  const [override, setOverride] = useState<string | null | undefined>(undefined);
   // One modal serves both destructive branches; the value is the i18n key suffix.
   // The HANDLERS stay separate because the two call different endpoints.
   const [confirming, setConfirming] = useState<'Unlink' | 'Cancel' | null>(null);
@@ -57,12 +61,7 @@ export function TwoFactorEmail({
   const clearEmail = useMutation(clearAccountTwofaEmailMutation());
 
   const path = { path: { account_id: accountId } } as const;
-  const pending: PendingEmail | null =
-    override === undefined
-      ? unconfirmedPattern
-        ? { pattern: unconfirmedPattern, codeLength: null }
-        : null
-      : override;
+  const pending: string | null = override === undefined ? unconfirmedPattern : override;
 
   const onAttach = () => {
     const email = address.trim();
@@ -73,9 +72,8 @@ export function TwoFactorEmail({
           // Driven off the RESPONSE: Telegram has already mailed the code, so
           // the operator gets the code field immediately instead of waiting a
           // round trip to be told what they just did.
-          setOverride(
-            result.pending ? { pattern: email, codeLength: result.code_length ?? null } : null,
-          );
+          setOverride(result.pending ? email : null);
+          onCodeLength(result.pending ? (result.code_length ?? null) : null);
           setAddress('');
           onChanged();
         },
@@ -89,6 +87,7 @@ export function TwoFactorEmail({
       {
         onSuccess: () => {
           setOverride(null);
+          onCodeLength(null);
           setCode('');
           onChanged();
         },
@@ -114,6 +113,7 @@ export function TwoFactorEmail({
   const onDrop = () =>
     cancelEmail.mutateAsync(path).then(() => {
       setOverride(null);
+      onCodeLength(null);
       setCode('');
       onChanged();
     });
@@ -124,8 +124,13 @@ export function TwoFactorEmail({
 
   return (
     <div className="mt-3 border-t border-[#f0eeeb] pt-3">
+      {/* Both rows when Telegram reports both, and the pending one is NOT hidden
+          behind the confirmed one. Telegram answers with a confirmed address and a
+          freshly pending one whenever the operator swaps the recovery address from
+          the app — and while `has_recovery` won that test, the code field never
+          appeared, so the swap could not be completed from here at all. */}
       {hasRecovery ? (
-        <div className="flex items-center justify-between gap-3">
+        <div className={`flex items-center justify-between gap-3 ${pending ? 'mb-[10px]' : ''}`}>
           <span className="text-[12.5px] text-ink-muted">
             {t('accounts.edit.twofaRecovery')}: {t('accounts.edit.twofaRecoveryOn')}
           </span>
@@ -139,10 +144,11 @@ export function TwoFactorEmail({
             {t('accounts.edit.twofaEmailUnlink')}
           </button>
         </div>
-      ) : pending ? (
+      ) : null}
+      {pending ? (
         <>
           <div className="mb-[10px] text-[12.5px] text-ink-muted">
-            {t('accounts.edit.twofaEmailSent', { pattern: pending.pattern })}
+            {t('accounts.edit.twofaEmailSent', { pattern: pending })}
           </div>
           <label className="mb-[10px] block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailCode')}</span>
@@ -154,7 +160,7 @@ export function TwoFactorEmail({
               }}
               inputMode="numeric"
               autoComplete="one-time-code"
-              maxLength={pending.codeLength ?? undefined}
+              maxLength={codeLength ?? undefined}
               className={`${FIELD} font-mono tracking-[0.18em]`}
             />
           </label>
@@ -190,7 +196,7 @@ export function TwoFactorEmail({
             </button>
           </div>
         </>
-      ) : (
+      ) : hasRecovery ? null : (
         <>
           <div className="mb-[10px] text-[12.5px] text-ink-muted">
             {t('accounts.edit.twofaRecovery')}: {t('accounts.edit.twofaRecoveryOff')}

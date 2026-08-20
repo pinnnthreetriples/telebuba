@@ -15,7 +15,7 @@ import pytest
 from telethon import errors
 from telethon.tl.functions.account import GetPasswordRequest
 
-from core.telegram_client import execute, execute_read
+from core.telegram_client import UNCONFIRMED_ERROR_TYPE, execute, execute_read
 from core.telegram_client._twofa import TwoFactorGatewayError, dispatch_set_twofa_password
 from schemas.telegram_actions import GetTwoFactorStatus, SetTwoFactorPassword
 from schemas.telegram_actions_twofa import TwoFactorStatusResult
@@ -57,23 +57,71 @@ class _PasswordClient:
 
 
 class _EditClient:
-    """Records the ``edit_2fa`` kwargs, returns a canned result or raises."""
+    """``edit_2fa`` EMULATED, not merely recorded, plus the pre-flight ``getPassword``.
 
-    def __init__(self, *, result: bool = True, error: Exception | None = None) -> None:
+    A ``**kwargs`` double asserts only what the caller passed in, which is no
+    assertion at all. This one takes exactly the arguments the dispatcher is allowed
+    to use — a stray one is a ``TypeError`` here, as it would be against the real
+    client — and it refuses ``email`` / ``email_code_callback`` outright: an ``email``
+    through ``edit_2fa`` would delete the cloud password (empty ``new_password_hash``),
+    and a callback cannot read a mailbox from an unattended backend.
+
+    ``email_unconfirmed`` reproduces Telethon 1.44's own clause for that answer, which
+    handles it by CALLING ``email_code_callback`` — so with no callback passed, the
+    exception that escapes is the ``'NoneType' object is not callable`` raised while
+    handling the Telegram error, not the Telegram error. Nothing but reproducing the
+    clause can show that.
+    """
+
+    def __init__(
+        self,
+        *,
+        result: bool = True,
+        error: Exception | None = None,
+        password: object = None,
+        preflight_error: Exception | None = None,
+        email_unconfirmed: int | None = None,
+    ) -> None:
         self._result = result
         self._error = error
+        self._password = password
+        self._preflight_error = preflight_error
+        self._email_unconfirmed = email_unconfirmed
         self.calls: list[Mapping[str, Any]] = []
         self.requests: list[object] = []
 
     async def connect(self) -> None:
         return None
 
-    async def __call__(self, request: object) -> object:  # pragma: no cover - no raw RPC here
+    async def __call__(self, request: object) -> object:
         self.requests.append(request)
-        return None
+        assert isinstance(request, GetPasswordRequest), "only the pre-flight read is raw"
+        if self._preflight_error is not None:
+            raise self._preflight_error
+        return self._password
 
-    async def edit_2fa(self, **kwargs: Any) -> bool:
-        self.calls.append(kwargs)
+    async def edit_2fa(
+        self,
+        *,
+        current_password: str | None = None,
+        new_password: str | None = None,
+        hint: str = "",
+        email: str | None = None,
+        email_code_callback: Any = None,
+    ) -> bool:
+        self.calls.append(
+            {"current_password": current_password, "new_password": new_password, "hint": hint},
+        )
+        assert email is None, "an email through edit_2fa would wipe the cloud password"
+        assert email_code_callback is None, "this backend cannot read a mailbox"
+        if self._email_unconfirmed is not None:
+            unconfirmed = errors.EmailUnconfirmedError(None, capture=self._email_unconfirmed)
+            try:
+                raise unconfirmed
+            except errors.EmailUnconfirmedError as exc:
+                # Telethon's line, verbatim in effect: it calls the callback it was
+                # handed, and this dispatcher hands it none.
+                email_code_callback(exc.code_length)
         if self._error is not None:
             raise self._error
         return self._result
@@ -173,7 +221,11 @@ async def test_edit_2fa_argument_shapes(
     action: SetTwoFactorPassword,
     expected: dict[str, object],
 ) -> None:
-    """The field pair IS the verb, and no recovery email is ever passed."""
+    """The field pair IS the verb, and no recovery email is ever passed.
+
+    The double refuses ``email`` / ``email_code_callback`` itself, so those two are
+    asserted by construction rather than by looking for absent dict keys.
+    """
     client = _EditClient()
     patch_action_client(monkeypatch, client)
 
@@ -181,8 +233,9 @@ async def test_edit_2fa_argument_shapes(
 
     assert result.status == "ok"
     assert client.calls == [expected]
-    assert "email" not in client.calls[0]
-    assert "email_code_callback" not in client.calls[0]
+    # The pre-flight read runs FIRST and is the only raw request this path makes:
+    # everything after it can have left the process, everything before it cannot.
+    assert [type(request) for request in client.requests] == [GetPasswordRequest]
 
 
 @pytest.mark.asyncio
@@ -206,6 +259,8 @@ async def test_a_false_return_is_a_no_op_not_a_success(
         (errors.rpcerrorlist.SrpIdInvalidError(None), "twofa_current_password_invalid"),
         (errors.rpcerrorlist.SrpPasswordChangedError(None), "twofa_current_password_invalid"),
         (errors.rpcerrorlist.NewSettingsInvalidError(None), "twofa_settings_invalid"),
+        (errors.rpcerrorlist.NewSaltInvalidError(None), "twofa_settings_invalid"),
+        (errors.rpcerrorlist.PasswordMissingError(None), "twofa_password_not_set"),
     ],
 )
 @pytest.mark.asyncio
@@ -221,6 +276,154 @@ async def test_each_mapped_refusal_becomes_its_stable_code(
     assert result.status == "failed"
     assert result.error_type == "TwoFactorGatewayError"
     assert result.error_message == code
+
+
+@pytest.mark.asyncio
+async def test_a_dead_pre_flight_read_is_a_plain_failure_not_a_maybe_applied_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The window this pre-flight exists to close.
+
+    ``execute`` decides "was it dispatched?" from ``client is not None``, so before the
+    pre-flight a socket dying on ``edit_2fa``'s OWN opening ``getPassword`` was
+    reported as ``unavailable`` / ``UnconfirmedRequest`` — "Telegram may have applied
+    this password" — for a call that had sent nothing. Waking a pooled client makes
+    that the LIKELIEST failure, not the rarest, and the service persists an
+    unconfirmed password on the strength of it.
+    """
+    client = _EditClient(preflight_error=ConnectionError("socket died"))
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=_PASSWORD))
+
+    assert result.status == "failed"
+    assert result.error_type == "TwoFactorGatewayError"
+    assert result.error_message == "twofa_state_unreadable"
+    # Nothing was written, and the assertion that proves it: no write was attempted.
+    assert client.calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_socket_death_after_the_pre_flight_is_still_reported_as_unconfirmed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The other side of the narrowing: the genuinely ambiguous window must survive.
+
+    Once the pre-flight answered, the next failure really can have taken only the
+    REPLY to a write, so it has to keep reaching ``execute``'s ``dispatched`` arm.
+    """
+    patch_action_client(monkeypatch, _EditClient(error=ConnectionError("socket died")))
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=_PASSWORD))
+
+    assert result.status == "unavailable"
+    assert result.error_type == UNCONFIRMED_ERROR_TYPE
+
+
+@pytest.mark.asyncio
+async def test_a_pending_recovery_email_does_not_crash_the_password_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``EMAIL_UNCONFIRMED`` is the same "applied" answer both 2FA paths must read.
+
+    Reachable whenever a recovery-email verification is still pending while the
+    password is changed — which is exactly why Telethon has the clause. Its handling
+    of it calls an ``email_code_callback`` this path deliberately does not pass, so the
+    answer the email path treats as SUCCESS used to surface here as
+    ``'NoneType' object is not callable`` → an opaque ``failed``, with the accepted
+    password never persisted.
+    """
+    client = _EditClient(email_unconfirmed=6)
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=_PASSWORD))
+
+    assert result.status == "ok"
+    assert result.error_message is None
+    assert len(client.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_real_type_error_is_not_swallowed_as_a_pending_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a ``TypeError`` raised while handling that Telegram error means "applied"."""
+    patch_action_client(monkeypatch, _EditClient(error=TypeError("genuinely broken")))
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=_PASSWORD))
+
+    assert result.status == "failed"
+    assert result.error_type == "TypeError"
+
+
+@pytest.mark.parametrize(
+    ("action", "current_hint", "expected"),
+    [
+        pytest.param(
+            SetTwoFactorPassword(new_password=_PASSWORD), "the usual", "the usual", id="kept"
+        ),
+        pytest.param(
+            SetTwoFactorPassword(new_password=_PASSWORD, hint=""),
+            "the usual",
+            "",
+            id="cleared",
+        ),
+        pytest.param(
+            SetTwoFactorPassword(new_password=_PASSWORD, hint="fresh"),
+            "the usual",
+            "fresh",
+            id="replaced",
+        ),
+        pytest.param(SetTwoFactorPassword(new_password=_PASSWORD), None, "", id="none-to-keep"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_an_omitted_hint_keeps_the_one_telegram_shows(
+    monkeypatch: pytest.MonkeyPatch,
+    action: SetTwoFactorPassword,
+    current_hint: str | None,
+    expected: str,
+) -> None:
+    """``updatePasswordSettings`` always writes the field, so "omitted" cannot mean "".
+
+    A change that mentions no hint used to erase the hint the operator set. ``None``
+    now means keep — resolved against the pre-flight read, which is the only place the
+    live value exists — and ``""`` is the deliberate clear.
+    """
+    client = _EditClient(password=_Password(hint=current_hint))
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-2fa", action)
+
+    assert result.status == "ok"
+    assert [call["hint"] for call in client.calls] == [expected]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(errors.rpcerrorlist.SessionTooFreshError(None, 900), id="session"),
+        pytest.param(errors.rpcerrorlist.PasswordTooFreshError(None, 900), id="password"),
+    ],
+)
+@pytest.mark.asyncio
+async def test_a_too_fresh_refusal_reaches_the_operator_with_its_wait(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    """Both are 400s that carry ``.seconds``, so they bypass the flood clauses.
+
+    ``SESSION_TOO_FRESH`` is *the* refusal for "this session just signed in and is now
+    setting a cloud password" — this dashboard's normal workflow — and it used to
+    reach the operator as a blank ``failed`` with the duration dropped. Mapping it into
+    ``_TWOFA_ERROR_CODES`` would drop it too, hence the ladder.
+    """
+    patch_action_client(monkeypatch, _EditClient(error=error))
+
+    result = await execute("acc-2fa", SetTwoFactorPassword(new_password=_PASSWORD))
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 900
 
 
 @pytest.mark.asyncio
@@ -269,7 +472,10 @@ async def test_no_dispatched_value_or_error_message_carries_the_password(
     result = await execute("acc-2fa", action)
 
     assert _PASSWORD not in result.model_dump_json()
-    assert client.requests == []
+    # The one raw request this path sends is the pre-flight read, which carries no
+    # fields at all — the password exists only in the exempt ``edit_2fa`` kwargs.
+    assert [type(request) for request in client.requests] == [GetPasswordRequest]
+    assert _PASSWORD not in str(client.requests)
     with pytest.raises(TwoFactorGatewayError) as excinfo:
         await dispatch_set_twofa_password(client, action)  # ty: ignore[invalid-argument-type]
     assert _PASSWORD not in str(excinfo.value)

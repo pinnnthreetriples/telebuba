@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-06
+last_updated: 2026-08-20
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -20,6 +20,8 @@ grounds_to:
 - Frozen accounts can remain authorized, so health classification uses Telegram freeze signals rather than `get_me()` alone. Rate-limit/frozen errors are converted to stable outcomes; services decide what state is durable.
 - Device fingerprints are immutable. Proxy credentials are resolved inside `core/` from the shared pool; capacity is config-driven. Proxy checks discover the exit IP over TLS and persist geolocation consensus without exposing credentials.
 - Profile/privacy writes use stable error codes. Telegram privacy `setPrivacy` replaces the key's entire rule vector, so applying a simplified level can discard exceptions and must remain an explicit operator action.
+- Telethon's `edit_2fa` writes an empty new-password hash whenever `new_password` is falsy, and a present-but-empty hash REMOVES the cloud password — so attaching a recovery email must issue the raw `account.updatePasswordSettings` with the password fields omitted from the flags. `EMAIL_UNCONFIRMED_<N>` there is a success signal, not a failure: the setting applied and N is the mailed code's length, which the operator types back in a second request.
+- A cloud password is stored because an account whose session is reset cannot re-authorise without it, and it is returned to the operator exactly once. A write whose answer was lost still persists when nothing was stored; an unconfirmed change keeps the previous value instead, rather than overwrite a credential Telegram is known to accept with one that may never have been applied.
 - An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
 - Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
 

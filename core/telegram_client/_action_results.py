@@ -93,6 +93,35 @@ async def _flood_action_result(  # noqa: PLR0913 - four keyword-only outcome fac
     )
 
 
+async def _too_fresh_result(
+    account_id: str,
+    action: TelegramAction,
+    seconds: int,
+    *,
+    domain: str | None = None,
+) -> ActionResult:
+    """``SESSION_TOO_FRESH`` / ``PASSWORD_TOO_FRESH`` — a wait dressed as a 400.
+
+    Neither is a ``FloodError``, so neither reaches the family above on its own, yet
+    both carry ``.seconds`` and both mean "come back later" rather than "fix your
+    request". ``SESSION_TOO_FRESH`` in particular is Telegram's normal answer to
+    setting a cloud password on a session that has just signed in — this dashboard's
+    own workflow — and it surfaced as a blank ``failed`` with the duration dropped.
+
+    Reported as ``flood_wait`` so the duration rides ``retry_after_seconds`` the way
+    ``SlowModeWaitError``'s does, and mapping them into a gateway code table instead
+    would be what threw the duration away. No account status is written: unlike a
+    flood on a profile edit, neither of these is a state the account is IN.
+    """
+    return await _flood_action_result(
+        account_id,
+        action,
+        status="flood_wait",
+        seconds=seconds,
+        domain=domain,
+    )
+
+
 async def _unavailable_result(
     account_id: str,
     action: TelegramAction,

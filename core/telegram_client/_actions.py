@@ -16,6 +16,7 @@ from core.telegram_client._action_results import (
     _flood_action_result,
     _generic_error,
     _join_by_request_result,
+    _too_fresh_result,
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
@@ -164,6 +165,10 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
             applied_privacy_keys=_applied_privacy_keys(exc),
             domain=domain,
         )
+    # Two waits that are NOT floods, so no clause above sees them — see
+    # ``_too_fresh_result``. Its own builder because this function is at its length cap.
+    except (errors.SessionTooFreshError, errors.PasswordTooFreshError) as exc:
+        return await _too_fresh_result(account_id, action, exc.seconds, domain=domain)
     except errors.UserAlreadyParticipantError as exc:
         if action.action_type in {"join_channel", "join_discussion_group"}:
             await log_event(

@@ -107,6 +107,9 @@ async def test_set_account_twofa_returns_the_password_once(
         "hint": "mine",
         "stored": True,
         "confirmed": True,
+        # Only an unconfirmed CHANGE can report this; the card reads it to tell the
+        # operator that two passwords are now candidates.
+        "previous_kept": False,
     }
     assert [(b.password, b.hint) for b in seen] == [(None, "mine")]
     # The one response in this API carrying a plaintext credential.

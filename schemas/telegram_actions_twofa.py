@@ -70,7 +70,12 @@ class SetTwoFactorPassword(BaseModel):
 
     ``hint`` is shown at the login prompt to anyone holding the phone number, so
     it is public text — the API layer is what refuses a hint containing the
-    password (``schemas.twofa.AccountTwoFactorUpdateRequest``).
+    password (``schemas.twofa.AccountTwoFactorUpdateRequest``). Three-valued on
+    purpose: ``None`` means KEEP whatever Telegram currently shows and ``""`` means
+    CLEAR it. ``account.updatePasswordSettings`` always writes the field, so without
+    the distinction a change that simply did not mention a hint would erase the one
+    the operator set — the gateway resolves ``None`` against a fresh
+    ``account.getPassword``.
     """
 
     action_type: Literal["set_twofa_password"] = "set_twofa_password"
@@ -82,7 +87,7 @@ class SetTwoFactorPassword(BaseModel):
     # frames hold the plaintext as bare strings, which only that switch covers.
     current_password: str | None = Field(default=None, repr=False)
     new_password: str | None = Field(default=None, repr=False)
-    hint: str = ""
+    hint: str | None = None
 
     @model_validator(mode="after")
     def _check_any_password(self) -> SetTwoFactorPassword:

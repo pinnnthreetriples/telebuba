@@ -100,7 +100,7 @@
     "scaffold_file": ".mex/patterns/add-service.md"
   },
   {
-    "body_hash": "bbb5cb688a20e257c0d1225edd7b36d48f1de99973f0fbef2c0b0e6a42c8986c",
+    "body_hash": "ee443e197e19442ffb6608e2098c86ed51b981e5bb47a1ec6d21240297007335",
     "node_id": "function:c7b49927e6426ff0746a253f426555c3",
     "scaffold_file": ".mex/patterns/add-telegram-task.md"
   },
@@ -110,7 +110,7 @@
     "scaffold_file": ".mex/patterns/add-telegram-task.md"
   },
   {
-    "body_hash": "ee0517efb4add385753867d9ff03d738597a25e67302338aeecc2017dfcfcf27",
+    "body_hash": "dceb440cd4c75801ca67518dd62c80b1aaa1f437ee2c2bcc1fd1a6a5b506a5c8",
     "node_id": "function:ada37d98a8b0c85378384369ca93c641",
     "scaffold_file": ".mex/patterns/add-telegram-task.md"
   },

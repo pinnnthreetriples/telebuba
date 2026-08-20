@@ -39,6 +39,10 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   const later = useClearedTimeouts();
 
   const [created, setCreated] = useState<AccountTwoFactorCreated | null>(null);
+  // Held here, next to `created`, for the reason TwoFactorEmail's own comment gives:
+  // the attach response is the only carrier of the code length, and the refetch it
+  // triggers flips that component's key and remounts it.
+  const [emailCodeLength, setEmailCodeLength] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [changing, setChanging] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -57,6 +61,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
   const readError = twofa.data?.error ?? null;
   const hasPassword = status?.has_password === true;
   const hasStored = twofa.data?.has_stored_password === true;
+  const removeKind = hasPassword ? 'Disable' : 'Forget';
 
   const onCreated = (result: AccountTwoFactorCreated) => {
     setCreated(result);
@@ -94,6 +99,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             setCreated(null);
             setCopied(false);
             setChanging(false);
+            setEmailCodeLength(null);
           }
         }}
         right={
@@ -119,9 +125,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             <div className="mb-[10px] text-[12.5px] font-semibold text-ink">
               {t('accounts.edit.twofaCreatedTitle')}
             </div>
-            {created.stored === false ? (
+            {created.stored === false && created.previous_kept !== true ? (
               // The RPC landed but the DB write did not, so this response is the
-              // ONLY copy and change/removal are gone until it is set again.
+              // ONLY copy and change/removal are gone until it is set again. NOT the
+              // unconfirmed-change case: nothing failed there, the previous password
+              // was kept on purpose and the warning below says so.
               <div className="mb-[10px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[9px] text-[11.5px] font-medium leading-[1.45] text-danger">
                 {t('accounts.edit.twofaStoreFailed')}
               </div>
@@ -129,9 +137,14 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             {created.confirmed === false ? (
               // The request was on the wire and only the answer was lost, so
               // Telegram may or may not hold this password. Either way it is the
-              // only copy — as loud as the store-failure warning above.
+              // only copy — as loud as the store-failure warning above. On a CHANGE
+              // the backend deliberately kept the OLD password stored rather than
+              // overwrite a credential known to work, so the operator has two
+              // candidates and has to check which one the phone asks for.
               <div className="mb-[10px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[9px] text-[11.5px] font-medium leading-[1.45] text-danger">
-                {t('accounts.edit.twofaUnconfirmed')}
+                {created.previous_kept === true
+                  ? t('accounts.edit.twofaUnconfirmedChange')
+                  : t('accounts.edit.twofaUnconfirmed')}
               </div>
             ) : null}
             <div className="mb-[12px] flex items-center gap-2">
@@ -209,6 +222,8 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 accountId={accountId}
                 hasRecovery={status?.has_recovery === true}
                 unconfirmedPattern={status?.email_unconfirmed_pattern ?? null}
+                codeLength={emailCodeLength}
+                onCodeLength={setEmailCodeLength}
                 onChanged={invalidate}
               />
             ) : (
@@ -251,18 +266,50 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             </div>
           </>
         ) : (
-          <TwoFactorForm
-            accountId={accountId}
-            submitLabel={t('accounts.edit.twofaEnable')}
-            onCreated={onCreated}
-          />
+          <>
+            {hasStored ? (
+              // Telegram reports 2FA OFF while a plaintext password is still stored
+              // here — the operator removed it from their phone, or an earlier
+              // removal's post-RPC clear failed. Every control that could drop that
+              // stale copy lives in the `hasPassword` arm above, so without this row
+              // the operator could neither SEE that a credential is still on disk for
+              // this account nor get rid of it: the backend's own stale branch (clear
+              // the column, spend no RPC) was unreachable from the UI.
+              <div className="mb-4">
+                <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-medium text-danger">
+                  {t('accounts.edit.twofaStoredStale')}
+                </div>
+                <div className="mt-[10px] text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmRemove(true);
+                    }}
+                    className="bg-transparent p-0 text-[12.5px] font-medium text-danger"
+                  >
+                    {t('accounts.edit.twofaForget')}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            <TwoFactorForm
+              accountId={accountId}
+              submitLabel={t('accounts.edit.twofaEnable')}
+              onCreated={onCreated}
+            />
+          </>
         )}
       </Section>
       {confirmRemove ? (
         <ConfirmModal
-          title={t('accounts.edit.twofaDisableTitle')}
-          body={t('accounts.edit.twofaDisableBody')}
-          confirmLabel={t('accounts.edit.twofaDisableConfirm')}
+          // Two situations, one modal and one DELETE: turning 2FA off on Telegram, or
+          // dropping a stored password Telegram no longer has. The copy has to say
+          // which — the second one costs the account nothing and warning about SMS
+          // takeover there would be a lie. The value is the i18n key suffix, the
+          // shape TwoFactorEmail's own two-branch modal already uses.
+          title={t(`accounts.edit.twofa${removeKind}Title`)}
+          body={t(`accounts.edit.twofa${removeKind}Body`)}
+          confirmLabel={t(`accounts.edit.twofa${removeKind}Confirm`)}
           cancelLabel={t('accounts.edit.cancel')}
           onClose={() => {
             setConfirmRemove(false);

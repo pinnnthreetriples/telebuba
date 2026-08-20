@@ -11500,6 +11500,11 @@
             "type": "boolean",
             "title": "Confirmed",
             "default": true
+          },
+          "previous_kept": {
+            "type": "boolean",
+            "title": "Previous Kept",
+            "default": false
           }
         },
         "type": "object",
@@ -11507,7 +11512,7 @@
           "password"
         ],
         "title": "AccountTwoFactorCreated",
-        "description": "The POST response \u2014 the ONLY model in this codebase carrying the plaintext.\n\nIt appears in the response to the request that set the password and nowhere\nelse: no read endpoint returns it, ``AccountRead`` does not carry it, and no\nlog event or error message may contain it. Same contract as an API key \u2014\nshown once at creation so the operator can copy it into a password manager,\nnever shown again.\n\n``stored`` is ``False`` when Telegram accepted the password but the DB write\nthat remembers it failed. The password is returned regardless, because after\na successful RPC this response is the operator's only copy; losing it would\nleave the account unrecoverable if its session is ever reset.\n\n``confirmed`` is ``False`` when the request reached the wire and only the ANSWER\nwas lost, so Telegram may or may not have applied it. The password is still\nreturned and still stored for the same reason: if Telegram DID apply it, this is\nthe only copy anybody has, and discarding it would strand the account behind a\npassword no human ever saw."
+        "description": "The POST response \u2014 the ONLY model in this codebase carrying the plaintext.\n\nIt appears in the response to the request that set the password and nowhere\nelse: no read endpoint returns it, ``AccountRead`` does not carry it, and no\nlog event or error message may contain it. Same contract as an API key \u2014\nshown once at creation so the operator can copy it into a password manager,\nnever shown again.\n\n``stored`` is ``False`` when Telegram accepted the password but the DB write\nthat remembers it failed. The password is returned regardless, because after\na successful RPC this response is the operator's only copy; losing it would\nleave the account unrecoverable if its session is ever reset.\n\n``confirmed`` is ``False`` when the request reached the wire and only the ANSWER\nwas lost, so Telegram may or may not have applied it. The password is still\nreturned for the same reason: if Telegram DID apply it, this is the only copy\nanybody has, and discarding it would strand the account behind a password no\nhuman ever saw.\n\n``previous_kept`` splits that unconfirmed case in two, and only a CHANGE can\nreach it: the previously stored password was left in the database untouched, so\nONE of the two \u2014 it or ``password`` \u2014 is the live one and the operator has to\ncheck from the phone. A fresh set has nothing to keep and reports ``False``."
       },
       "AccountTwoFactorEmailConfirmRequest": {
         "properties": {

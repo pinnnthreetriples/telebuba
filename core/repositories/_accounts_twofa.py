@@ -50,20 +50,27 @@ async def fetch_account_twofa_password(account_id: str) -> str | None:
     return await asyncio.to_thread(_fetch_account_twofa_password, account_id)
 
 
-def _set_account_twofa_password(account_id: str, password: str | None) -> None:
+def _set_account_twofa_password(account_id: str, password: str | None) -> bool:
     with _get_engine().begin() as connection:
-        connection.execute(
+        result = connection.execute(
             update(_accounts)
             .where(_accounts.c.account_id == account_id)
             .values(twofa_password=password, updated_at=_now_iso()),
         )
+    return result.rowcount > 0
 
 
-async def set_account_twofa_password(account_id: str, password: str | None) -> None:
+async def set_account_twofa_password(account_id: str, password: str | None) -> bool:
     """Remember (or clear, on ``None``) the cloud password we set for this account.
 
     ``None`` is the removal path: once 2FA is off, keeping the old password would
     be a stored secret guarding nothing. A missing account is a silent no-op, the
     same contract ``update_account_status`` has.
+
+    Answers whether a row was actually written, because for this column silence is
+    not good enough: the caller reports ``stored`` to the operator, and an
+    ``UPDATE ... WHERE`` against an account deleted a moment earlier changes nothing
+    and raises nothing. Without the ``rowcount`` the response would promise that the
+    only copy of a cloud password is safe in a row that does not exist.
     """
-    await asyncio.to_thread(_set_account_twofa_password, account_id, password)
+    return await asyncio.to_thread(_set_account_twofa_password, account_id, password)

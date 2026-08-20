@@ -59,6 +59,14 @@ TwoFactorRefusalCode = Literal[
     "twofa_not_changed",
     "twofa_password_not_set",
     "twofa_password_not_stored",
+    # The pre-flight ``account.getPassword`` never answered, so NOTHING was written —
+    # the one refusal that exists to keep a dead read leg from being reported as a
+    # write that may have landed.
+    "twofa_state_unreadable",
+    # ``telethon.password.compute_check`` could not use the challenge Telegram sent
+    # (unimplemented algorithm, bad p/g/B/g_b). Its own message is bare ``ValueError``
+    # prose about Telethon internals, so this is what the operator sees instead.
+    "twofa_password_algo_unsupported",
 ]
 
 
@@ -121,15 +129,21 @@ class AccountTwoFactorCreated(BaseModel):
 
     ``confirmed`` is ``False`` when the request reached the wire and only the ANSWER
     was lost, so Telegram may or may not have applied it. The password is still
-    returned and still stored for the same reason: if Telegram DID apply it, this is
-    the only copy anybody has, and discarding it would strand the account behind a
-    password no human ever saw.
+    returned for the same reason: if Telegram DID apply it, this is the only copy
+    anybody has, and discarding it would strand the account behind a password no
+    human ever saw.
+
+    ``previous_kept`` splits that unconfirmed case in two, and only a CHANGE can
+    reach it: the previously stored password was left in the database untouched, so
+    ONE of the two — it or ``password`` — is the live one and the operator has to
+    check from the phone. A fresh set has nothing to keep and reports ``False``.
     """
 
     password: str
     hint: str | None = None
     stored: bool = True
     confirmed: bool = True
+    previous_kept: bool = False
 
 
 class AccountTwoFactorEmailRequest(BaseModel):

@@ -19,11 +19,16 @@ import { FIELD, SEG_WRAP, seg } from './_styles';
 // Only the fields the operator actually filled in are sent: a bare `{}` is the
 // documented "generate one for me", and the backend forbids unknown keys, so
 // nulls buy nothing over omission.
-function twofaBody(value: TwofaFormValue): AccountTwoFactorUpdateRequest {
+//
+// An omitted `hint` means KEEP the one Telegram shows, so an emptied field has to
+// travel as `''` — that is the deliberate clear, and the prefill is what makes it
+// expressible. Without `initialHint` in the test there was nothing to clear, so an
+// empty hint stays omitted there and a fresh set still posts `{}`.
+function twofaBody(value: TwofaFormValue, initialHint: string): AccountTwoFactorUpdateRequest {
   const body: AccountTwoFactorUpdateRequest = {};
   if (value.mode === 'custom') body.password = value.password.trim();
   const hint = value.hint.trim();
-  if (hint) body.hint = hint;
+  if (hint || initialHint) body.hint = hint;
   return body;
 }
 
@@ -38,9 +43,9 @@ export function TwoFactorForm({
 }: {
   accountId: string;
   submitLabel: string;
-  // The hint Telegram currently shows, so an empty field means "no hint" instead
-  // of "keep whatever is there": the backend always writes the field, so a change
-  // submitted with a blank hint would otherwise erase the one already set.
+  // The hint Telegram currently shows. It is what lets the operator CLEAR a hint
+  // deliberately: the body then carries an explicit `''`, which the backend
+  // distinguishes from an omitted field ("keep the live one").
   initialHint?: string;
   onCreated: (created: AccountTwoFactorCreated) => void;
 }) {
@@ -55,7 +60,7 @@ export function TwoFactorForm({
     validators: { onChange: twofaFormSchema, onMount: twofaFormSchema },
     onSubmit: ({ value }) => {
       setTwofa.mutate(
-        { path: { account_id: accountId }, body: twofaBody(value) },
+        { path: { account_id: accountId }, body: twofaBody(value, initialHint) },
         {
           onSuccess: (created) => {
             // useMutation keeps `variables` (the typed password) and `data` (the

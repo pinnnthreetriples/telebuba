@@ -8,11 +8,17 @@ cleared) is exercised rather than mocked.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
 
-from core.db import create_account, fetch_account_twofa_password, set_account_twofa_password
+from core.db import (
+    create_account,
+    delete_account,
+    fetch_account_twofa_password,
+    set_account_twofa_password,
+)
 from core.telegram_client import (
     UNCONFIRMED_ERROR_TYPE,
     TelegramAccountNotFoundError,
@@ -74,6 +80,25 @@ def _patch_execute(monkeypatch: pytest.MonkeyPatch) -> list[SetTwoFactorPassword
 
     monkeypatch.setattr("services.accounts.twofa.execute", _fake)
     return actions
+
+
+def _patch_lost_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The write reached the wire and only the ANSWER was lost.
+
+    Shared by the set and the change case, which differ in exactly one thing —
+    whether there was a stored password to lose — so they must stub the same seam.
+    """
+
+    async def _lost(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        return ActionResult(
+            status="unavailable",
+            action_type="set_twofa_password",
+            account_id=account_id,
+            error_type=UNCONFIRMED_ERROR_TYPE,
+            error_message="ConnectionError()",
+        )
+
+    monkeypatch.setattr("services.accounts.twofa.execute", _lost)
 
 
 def _patch_log(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str, dict[str, object]]]:
@@ -160,9 +185,11 @@ async def test_set_generates_a_password_when_none_is_supplied(
     assert created.stored is True
     assert created.hint is None
     assert len(created.password) >= 8
-    # A set (not a change): nothing was stored, so no current password is sent.
+    # A set (not a change): nothing was stored, so no current password is sent. The
+    # hint travels as ``None`` — "keep whatever Telegram shows", which for an account
+    # with no password is nothing — never as an empty string that would write the field.
     assert [(a.current_password, a.new_password, a.hint) for a in actions] == [
-        (None, created.password, ""),
+        (None, created.password, None),
     ]
     assert await fetch_account_twofa_password("acc-gen") == created.password
     assert [(level, event) for level, event, _extra in events] == [("INFO", "account_twofa_set")]
@@ -218,6 +245,118 @@ async def test_set_sends_the_stored_password_as_the_current_one_on_a_change(
     assert await fetch_account_twofa_password("acc-change") == "the-new-one"
     assert created.stored is True
     assert events[0][2]["changed"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_change_without_a_hint_keeps_the_one_telegram_shows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An omitted hint is "keep", not "clear" — and the response echoes what is live.
+
+    ``updatePasswordSettings`` always writes the field, so a change that says nothing
+    about the hint used to erase the one at the login prompt. The action carries
+    ``None`` so the gateway can resolve it against its own fresh read; the response
+    reports the value this layer just read rather than the empty request field.
+    """
+    await create_account(AccountCreate(account_id="acc-hint"))
+    await set_account_twofa_password("acc-hint", _STORED)
+    _patch_read(monkeypatch, _status(has_password=True, hint="the usual"))
+    actions = _patch_execute(monkeypatch)
+    _patch_log(monkeypatch)
+
+    created = await set_account_twofa("acc-hint", AccountTwoFactorUpdateRequest())
+
+    assert [a.hint for a in actions] == [None]
+    assert created.hint == "the usual"
+
+
+@pytest.mark.asyncio
+async def test_a_change_that_clears_the_hint_says_so_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``""`` is the deliberate clear, and it must not be confused with "omitted"."""
+    await create_account(AccountCreate(account_id="acc-hint-clear"))
+    await set_account_twofa_password("acc-hint-clear", _STORED)
+    _patch_read(monkeypatch, _status(has_password=True, hint="the usual"))
+    actions = _patch_execute(monkeypatch)
+    _patch_log(monkeypatch)
+
+    created = await set_account_twofa("acc-hint-clear", AccountTwoFactorUpdateRequest(hint=""))
+
+    assert [a.hint for a in actions] == [""]
+    assert created.hint == ""
+
+
+@pytest.mark.asyncio
+async def test_set_reports_not_stored_when_the_row_vanished_before_the_persist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A write that touched zero rows is not a write.
+
+    The persist is an ``UPDATE ... WHERE``, so an account deleted between
+    ``require_account`` and here changes nothing and raises nothing — and
+    ``stored=True`` would then promise the operator that the only copy of a live
+    cloud password is safe in a row that does not exist.
+    """
+    await create_account(AccountCreate(account_id="acc-vanished"))
+    _patch_read(monkeypatch, _status())
+    _patch_execute(monkeypatch)
+    events = _patch_log(monkeypatch)
+
+    async def _delete_the_row(account_id: str, password: str | None) -> bool:
+        await delete_account(account_id)
+        return await set_account_twofa_password(account_id, password)
+
+    monkeypatch.setattr("services.accounts.twofa.set_account_twofa_password", _delete_the_row)
+
+    created = await set_account_twofa("acc-vanished", AccountTwoFactorUpdateRequest())
+
+    assert created.stored is False
+    assert created.password
+    assert [(level, event) for level, event, _extra in events] == [
+        ("ERROR", "account_twofa_store_failed"),
+        ("INFO", "account_twofa_set"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_two_concurrent_writes_for_one_account_do_not_interleave(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both tabs read ``current`` before either writes, without the lock.
+
+    Whoever loses then persists a password Telegram has already replaced (or, on a
+    lost answer, would have clobbered the winner's), so the read-then-write pair has
+    to be one critical section per account.
+    """
+    await create_account(AccountCreate(account_id="acc-race"))
+    await set_account_twofa_password("acc-race", _STORED)
+    _patch_read(monkeypatch, _status(has_password=True))
+    _patch_log(monkeypatch)
+    order: list[str] = []
+
+    async def _slow(account_id: str, action: SetTwoFactorPassword) -> ActionResult:
+        order.append(f"enter {action.new_password}")
+        await asyncio.sleep(0)
+        order.append(f"leave {action.new_password}")
+        return _ok(account_id)
+
+    monkeypatch.setattr("services.accounts.twofa.execute", _slow)
+
+    await asyncio.gather(
+        set_account_twofa("acc-race", AccountTwoFactorUpdateRequest(password="first-password")),
+        set_account_twofa("acc-race", AccountTwoFactorUpdateRequest(password="second-password")),
+    )
+
+    assert order == [
+        "enter first-password",
+        "leave first-password",
+        "enter second-password",
+        "leave second-password",
+    ]
+    # The second write authorised itself with what the FIRST one stored, so the
+    # column is the second password and no copy was lost on the way.
+    assert await fetch_account_twofa_password("acc-race") == "second-password"
 
 
 @pytest.mark.asyncio
@@ -304,24 +443,53 @@ async def test_set_keeps_the_password_when_only_the_answer_was_lost(
     await create_account(AccountCreate(account_id="acc-lost"))
     _patch_read(monkeypatch, _status())
     events = _patch_log(monkeypatch)
-
-    async def _lost(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
-        return ActionResult(
-            status="unavailable",
-            action_type="set_twofa_password",
-            account_id=account_id,
-            error_type=UNCONFIRMED_ERROR_TYPE,
-            error_message="ConnectionError()",
-        )
-
-    monkeypatch.setattr("services.accounts.twofa.execute", _lost)
+    _patch_lost_answer(monkeypatch)
 
     created = await set_account_twofa("acc-lost", AccountTwoFactorUpdateRequest())
 
     assert created.confirmed is False
     assert created.stored is True
+    # A SET has nothing to lose, so the new value is kept — the asymmetry the
+    # sibling below covers from the other side.
+    assert created.previous_kept is False
     assert await fetch_account_twofa_password("acc-lost") == created.password
     assert events[0][2]["confirmed"] is False
+
+
+@pytest.mark.asyncio
+async def test_an_unconfirmed_change_keeps_the_password_that_is_known_to_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A CHANGE must NOT overwrite the stored password when the answer was lost.
+
+    The sibling above seeds nothing, which is why it misses this. Overwriting a
+    known-good credential with one Telegram may never have applied destroys the only
+    value that can authorise anything: every later write sends the wrong
+    ``current_password``, and ``has_stored_password`` stays ``True`` so the
+    "not stored" precondition never fires again — the account is unmanageable for
+    good. "Which of these two is live" is recoverable; that is not.
+    """
+    await create_account(AccountCreate(account_id="acc-lost-change"))
+    await set_account_twofa_password("acc-lost-change", _STORED)
+    _patch_read(monkeypatch, _status(has_password=True))
+    events = _patch_log(monkeypatch)
+    _patch_lost_answer(monkeypatch)
+
+    created = await set_account_twofa("acc-lost-change", AccountTwoFactorUpdateRequest())
+
+    # The load-bearing assertion: the column still holds the value known to work.
+    assert await fetch_account_twofa_password("acc-lost-change") == _STORED
+    # Still handed out: if Telegram DID apply it, this response is the only copy.
+    assert created.password != _STORED
+    assert created.confirmed is False
+    assert created.stored is False
+    assert created.previous_kept is True
+    assert events[0][2] == {
+        "has_hint": False,
+        "generated": True,
+        "changed": True,
+        "confirmed": False,
+    }
 
 
 @pytest.mark.asyncio

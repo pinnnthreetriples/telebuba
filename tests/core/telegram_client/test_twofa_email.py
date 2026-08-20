@@ -22,6 +22,7 @@ from typing import Any, get_args
 
 import pytest
 from telethon import errors
+from telethon.extensions import BinaryReader
 from telethon.tl.functions.account import (
     CancelPasswordEmailRequest,
     ConfirmPasswordEmailRequest,
@@ -29,6 +30,7 @@ from telethon.tl.functions.account import (
     ResendPasswordEmailRequest,
     UpdatePasswordSettingsRequest,
 )
+from telethon.tl.types.account import PasswordInputSettings
 
 from core.telegram_client import execute, execute_read
 from core.telegram_client._twofa import (
@@ -47,6 +49,9 @@ _PASSWORD = "stored-passphrase"
 _EMAIL = "recovery@example.com"
 _CODE = "424242"
 _SECRETS = (_PASSWORD, _EMAIL, _CODE)
+# ``account.passwordInputSettings``: ``new_algo`` / ``new_password_hash`` / ``hint``
+# all sit behind flag 0 and ``email`` behind flag 1, so an email-only write is 2.
+_EMAIL_ONLY_FLAGS = 2
 
 
 class _Algo:
@@ -148,6 +153,19 @@ async def test_the_email_write_omits_both_password_fields_so_the_password_surviv
     # The proof is computed against a FRESH challenge, never a cached one.
     assert [password for _pwd, password in stub_compute_check] == [_PASSWORD]
     assert isinstance(client.requests[0], GetPasswordRequest)
+    # SERIALISED, not just read off the Python object. Everything above inspects
+    # attributes, and the claim this test is named for is about the WIRE: the three
+    # password fields share TL flag 0 and the email is flag 1, so "email only" is the
+    # single value 2 — and Telethon's own ``_bytes`` assert (all three false-y or all
+    # true-y) is what would reject a hash-only settings object. Round-tripped because
+    # that is the only way to show ``clear``'s empty string is a PRESENT flag rather
+    # than an omitted one: an omitted field reads back as ``None``, not as ``""``.
+    wire = bytes(request.new_settings)
+    assert int.from_bytes(wire[4:8], "little") == _EMAIL_ONLY_FLAGS
+    decoded = BinaryReader(wire).tgread_object()
+    assert isinstance(decoded, PasswordInputSettings)
+    assert decoded.email == expected_email
+    assert (decoded.new_algo, decoded.new_password_hash, decoded.hint) == (None, None, None)
 
 
 @pytest.mark.asyncio
@@ -163,6 +181,54 @@ async def test_email_unconfirmed_is_the_success_signal_carrying_the_code_length(
     # The settings call WAS made and authorised; only its reply was an "error".
     assert len(stub_compute_check) == 1
     assert isinstance(client.only(UpdatePasswordSettingsRequest), UpdatePasswordSettingsRequest)
+
+
+@pytest.mark.asyncio
+async def test_the_bare_email_unconfirmed_reports_no_length_rather_than_zero(
+    stub_compute_check: list[tuple[object, str]],
+) -> None:
+    """Telethon maps a suffix-less ``EMAIL_UNCONFIRMED`` to ``code_length = 0``.
+
+    Zero is not a length. Passed through, it reaches the card as ``maxLength={0}`` —
+    an input nobody can type into, next to a Confirm button that can never enable,
+    because ``?? null`` does not catch ``0``. ``None`` means "Telegram did not say",
+    which is the truth, and the pending address still shows up on the next status
+    read as ``email_unconfirmed_pattern``.
+    """
+    client = _EmailClient(error=errors.EmailUnconfirmedError(None))
+
+    code_length = await dispatch_manage_twofa_email(client, _set_action())  # ty: ignore[invalid-argument-type]
+
+    assert code_length is None
+    assert len(stub_compute_check) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unusable_srp_challenge_becomes_one_stable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``compute_check`` says everything with a bare ``ValueError``.
+
+    Unimplemented algorithm class, bad p/g, bad B, bad g_b — four different messages,
+    all of them Telethon internals, none of them an ``RPCError``, so all four used to
+    reach the operator as the opaque ``failed`` while the log carried the prose.
+    """
+
+    def _unusable(pwd: object, password: str) -> object:  # noqa: ARG001
+        msg = "bad p/g in password"
+        raise ValueError(msg)
+
+    monkeypatch.setattr("core.telegram_client._twofa.compute_check", _unusable)
+    client = _EmailClient()
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-mail", _set_action())
+
+    assert result.status == "failed"
+    assert result.error_type == "TwoFactorGatewayError"
+    assert result.error_message == "twofa_password_algo_unsupported"
+    # Refused before the write, so nothing about the account changed.
+    assert [r for r in client.requests if isinstance(r, UpdatePasswordSettingsRequest)] == []
 
 
 @pytest.mark.asyncio

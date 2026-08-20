@@ -414,9 +414,14 @@ export type AccountStats = {
  *
  * ``confirmed`` is ``False`` when the request reached the wire and only the ANSWER
  * was lost, so Telegram may or may not have applied it. The password is still
- * returned and still stored for the same reason: if Telegram DID apply it, this is
- * the only copy anybody has, and discarding it would strand the account behind a
- * password no human ever saw.
+ * returned for the same reason: if Telegram DID apply it, this is the only copy
+ * anybody has, and discarding it would strand the account behind a password no
+ * human ever saw.
+ *
+ * ``previous_kept`` splits that unconfirmed case in two, and only a CHANGE can
+ * reach it: the previously stored password was left in the database untouched, so
+ * ONE of the two — it or ``password`` — is the live one and the operator has to
+ * check from the phone. A fresh set has nothing to keep and reports ``False``.
  */
 export type AccountTwoFactorCreated = {
   /**
@@ -435,6 +440,10 @@ export type AccountTwoFactorCreated = {
    * Confirmed
    */
   confirmed?: boolean;
+  /**
+   * Previous Kept
+   */
+  previous_kept?: boolean;
 };
 
 /**

@@ -1,115 +1,22 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+// The password half of the 2FA card: reveal-once, change, disable, and the stale
+// stored password. The recovery-email half lives in TwoFactorEmail.test.tsx; the
+// harness both drive is in TwoFactorSection.test-helpers.tsx.
+
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
-import '@/shared/i18n';
-
-import type { AccountRead, TwoFactorStatusResult } from '@/shared/api';
-
-import { TwoFactorSection } from './TwoFactorSection';
-
-// Its own file rather than more of AccountEdit.test.tsx, which is already at
-// ~643 lines against the 700-line cap.
-
-const ACCOUNT: AccountRead = {
-  account_id: 'acc-1',
-  label: 'Main',
-  status: 'alive',
-  phone: '+79051184490',
-  created_at: 'now',
-  updated_at: 'now',
-};
-
-const TWOFA = '/api/v1/accounts/acc-1/2fa';
-const TITLE = 'Облачный пароль (2FA)';
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-// GET /2fa answers the live status plus whether OUR copy of the password exists.
-function viewResponse(
-  status: TwoFactorStatusResult | null,
-  hasStoredPassword = true,
-  error: string | null = null,
-): Response {
-  return jsonResponse({ status, has_stored_password: hasStoredPassword, error });
-}
-
-// Anything the route does not answer falls through to an empty page (the
-// accounts list / proxy list an invalidation refetches).
-function stubApi(route: (request: Request) => Response | undefined): void {
-  vi.mocked(fetch).mockImplementation((input) => {
-    const request = input as Request;
-    return Promise.resolve(route(request) ?? jsonResponse({ items: [], next_cursor: null }));
-  });
-}
-
-// The switch every test in here needs: GET /2fa answers `status`, and `routes`
-// overrides one `"<METHOD> <pathname>"` at a time. Thunks, not Responses — a body
-// can only be read once, and a refetch hits the same key again.
-function stubTwofa(
-  status: TwoFactorStatusResult | null,
-  {
-    stored = true,
-    error = null,
-    routes = {},
-  }: {
-    stored?: boolean;
-    error?: string | null;
-    routes?: Record<string, () => Response>;
-  } = {},
-): void {
-  stubApi((request) => {
-    const { pathname } = new URL(request.url);
-    const route = routes[`${request.method} ${pathname}`];
-    if (route) return route();
-    return pathname === TWOFA ? viewResponse(status, stored, error) : undefined;
-  });
-}
-
-// 2FA on, no confirmed recovery address, one pending and waiting for its code.
-const PENDING: TwoFactorStatusResult = {
-  has_password: true,
-  has_recovery: false,
-  email_unconfirmed_pattern: 'o**@example.com',
-};
-
-function renderSection() {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return {
-    queryClient,
-    ...render(
-      <QueryClientProvider client={queryClient}>
-        <TwoFactorSection account={ACCOUNT} />
-      </QueryClientProvider>,
-    ),
-  };
-}
-
-// Every card is collapsed by default and a collapsed body is `hidden`, so the
-// controls do not exist for a role query until the title is clicked.
-async function openCard(): Promise<void> {
-  await userEvent.click(screen.getByText(TITLE));
-}
-
-function requests(pathname: string, method?: string): Request[] {
-  return vi
-    .mocked(fetch)
-    .mock.calls.map(([input]) => input as Request)
-    .filter(
-      (request) =>
-        new URL(request.url).pathname === pathname && (!method || request.method === method),
-    );
-}
-
-function urls(): string[] {
-  return vi.mocked(fetch).mock.calls.map(([input]) => (input as Request).url);
-}
+import {
+  TITLE,
+  TWOFA,
+  jsonResponse,
+  openCard,
+  renderSection,
+  requests,
+  stubTwofa,
+  urls,
+  viewResponse,
+} from './TwoFactorSection.test-helpers';
 
 test('the header pill answers on/off before the card is opened', async () => {
   stubTwofa({ has_password: true });
@@ -442,151 +349,84 @@ test('a failed removal keeps the confirm dialog open', async () => {
   expect(screen.getByText('Отключить облачный пароль?')).toBeInTheDocument();
 });
 
-test('the unattached email state offers an address input and states the trade', async () => {
-  stubTwofa({ has_password: true, has_recovery: false });
+test('a stored password Telegram no longer has can be seen and dropped', async () => {
+  // 2FA is OFF on Telegram while a plaintext password is still stored here: the
+  // operator removed it from their phone, or an earlier removal's post-RPC clear
+  // failed. Every control that could drop that copy used to live behind
+  // `has_password`, so the row was invisible AND unremovable — and the backend's own
+  // stale branch (clear the column, spend no RPC) was unreachable from the UI.
+  stubTwofa(
+    { has_password: false },
+    { routes: { [`DELETE ${TWOFA}`]: () => viewResponse({ has_password: false }, false) } },
+  );
   renderSection();
   await openCard();
 
-  expect(await screen.findByLabelText('Адрес почты')).toBeInTheDocument();
-  expect(screen.getByText(/сможет сбросить пароль и забрать аккаунт/)).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Привязать почту' })).toBeInTheDocument();
-  expect(screen.queryByLabelText('Код из письма')).not.toBeInTheDocument();
+  expect(await screen.findByText(/здесь он всё ещё сохранён/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить сохранённый пароль' }));
+
+  expect(await screen.findByText('Удалить сохранённый пароль?')).toBeInTheDocument();
+  // Its own copy: nothing is being turned off on Telegram, so the SMS-takeover
+  // warning the disable dialog carries would be a lie here.
+  expect(screen.queryByText(/одним кодом из SMS/)).not.toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+
+  await waitFor(() => {
+    expect(requests(TWOFA, 'DELETE')).toHaveLength(1);
+  });
 });
 
-test('submitting an address moves to the pending state from the response', async () => {
-  // The status GET never reports a pending address here: the card must believe
-  // the write's response rather than wait for a refetch to tell it what it did.
+test('an unconfirmed CHANGE says both passwords are now candidates', async () => {
+  // The backend keeps the OLD password stored rather than overwrite a credential
+  // known to work, so exactly one of the two is live and only the phone can say
+  // which. The generic "may or may not have applied" copy would leave the operator
+  // believing the old one is gone.
   stubTwofa(
     { has_password: true, has_recovery: false },
     {
       routes: {
-        [`POST ${TWOFA}/email`]: () => jsonResponse({ pending: true, code_length: 6 }),
+        [`POST ${TWOFA}`]: () =>
+          jsonResponse({
+            password: 'test-password-candidate',
+            confirmed: false,
+            stored: false,
+            previous_kept: true,
+          }),
       },
     },
   );
   renderSection();
   await openCard();
 
-  await userEvent.type(await screen.findByLabelText('Адрес почты'), 'ops@example.com');
-  await userEvent.click(screen.getByRole('button', { name: 'Привязать почту' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Сменить пароль' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Сменить пароль' }));
 
-  const code = await screen.findByLabelText('Код из письма');
-  expect(code).toHaveAttribute('maxlength', '6');
-  expect(code).toHaveAttribute('autocomplete', 'one-time-code');
-  expect(screen.getByText('Код отправлен на ops@example.com')).toBeInTheDocument();
-  expect(await requests(`${TWOFA}/email`, 'POST')[0]!.clone().json()).toEqual({
-    email: 'ops@example.com',
-  });
-  for (const url of urls()) expect(url).not.toContain('ops@example.com');
+  expect(await screen.findByDisplayValue('test-password-candidate')).toBeInTheDocument();
+  expect(screen.getByText(/действует либо прежний пароль/)).toBeInTheDocument();
+  expect(screen.queryByText(/мог примениться, а мог и нет/)).not.toBeInTheDocument();
+  // `stored: false` here means "the old password was kept", not "the write failed",
+  // so the store-failure warning must stay away.
+  expect(screen.queryByText(/сохранить его в Telebuba не удалось/)).not.toBeInTheDocument();
 });
 
-test('a wrong code keeps the input mounted with what was typed', async () => {
-  stubTwofa(PENDING, {
-    routes: {
-      [`POST ${TWOFA}/email/confirm`]: () =>
-        jsonResponse(
-          { error: { code: 'invalid_request', message: 'twofa_email_code_invalid' } },
-          400,
-        ),
-    },
-  });
-  renderSection();
-  await openCard();
-
-  expect(await screen.findByText('Код отправлен на o**@example.com')).toBeInTheDocument();
-  await userEvent.type(screen.getByLabelText('Код из письма'), '123456');
-  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
-
-  await waitFor(() => {
-    expect(requests(`${TWOFA}/email/confirm`, 'POST')).toHaveLength(1);
-  });
-  // Retyping the address after a mistyped digit would be a second round trip.
-  expect(screen.getByLabelText('Код из письма')).toHaveValue('123456');
-  for (const url of urls()) expect(url).not.toContain('123456');
-});
-
-test('a good code confirms the address', async () => {
-  stubTwofa(PENDING, {
-    routes: {
-      [`POST ${TWOFA}/email/confirm`]: () => viewResponse({ has_password: true }),
-    },
-  });
-  renderSection();
-  await openCard();
-
-  await userEvent.type(await screen.findByLabelText('Код из письма'), '654321');
-  await userEvent.click(screen.getByRole('button', { name: 'Подтвердить' }));
-
-  await waitFor(() => {
-    expect(requests(`${TWOFA}/email/confirm`, 'POST')).toHaveLength(1);
-  });
-  expect(await requests(`${TWOFA}/email/confirm`, 'POST')[0]!.clone().json()).toEqual({
-    code: '654321',
-  });
-});
-
-test('resend mails the code again and does not confirm anything', async () => {
-  stubTwofa(PENDING, {
-    routes: {
-      [`POST ${TWOFA}/email/resend`]: () => jsonResponse({ pending: true, code_length: null }),
-    },
-  });
-  renderSection();
-  await openCard();
-
-  await userEvent.click(await screen.findByRole('button', { name: 'Отправить заново' }));
-
-  await waitFor(() => {
-    expect(requests(`${TWOFA}/email/resend`, 'POST')).toHaveLength(1);
-  });
-  expect(requests(`${TWOFA}/email/confirm`, 'POST')).toHaveLength(0);
-  expect(screen.getByLabelText('Код из письма')).toBeInTheDocument();
-});
-
-test('cancelling a pending address asks first, then DELETEs it', async () => {
-  stubTwofa(PENDING, {
-    routes: { [`DELETE ${TWOFA}/email`]: () => viewResponse({ has_password: true }) },
-  });
-  renderSection();
-  await openCard();
-
-  await userEvent.click(await screen.findByRole('button', { name: 'Отменить' }));
-  expect(await screen.findByText('Отменить привязку почты?')).toBeInTheDocument();
-  expect(requests(`${TWOFA}/email`, 'DELETE')).toHaveLength(0);
-
-  await userEvent.click(screen.getByRole('button', { name: 'Отменить привязку' }));
-  await waitFor(() => {
-    expect(requests(`${TWOFA}/email`, 'DELETE')).toHaveLength(1);
-  });
-});
-
-test('a CONFIRMED recovery email is detached through the clear route, not cancel', async () => {
-  // `cancelPasswordEmail` only abandons a verification still in flight; a confirmed
-  // address comes off with `updatePasswordSettings` and an empty email, which is a
-  // different endpoint. Firing the cancel one here would do nothing at all.
+test('emptying the prefilled hint posts an explicit empty one', async () => {
+  // An omitted hint now means "keep the one Telegram shows", so the deliberate clear
+  // has to be spelled out — otherwise the prefill would make clearing impossible.
   stubTwofa(
-    { has_password: true, has_recovery: true },
-    {
-      routes: {
-        [`DELETE ${TWOFA}/email/recovery`]: () => viewResponse({ has_password: true }),
-      },
-    },
+    { has_password: true, has_recovery: false, hint: 'котики' },
+    { routes: { [`POST ${TWOFA}`]: () => jsonResponse({ password: 'test-password-nohint' }) } },
   );
   renderSection();
   await openCard();
 
-  expect(await screen.findByText('Резервная почта: привязана')).toBeInTheDocument();
-  expect(screen.queryByLabelText('Адрес почты')).not.toBeInTheDocument();
+  await userEvent.click(await screen.findByRole('button', { name: 'Сменить пароль' }));
+  await userEvent.clear(screen.getByLabelText('Подсказка'));
+  await userEvent.click(screen.getByRole('button', { name: 'Сменить пароль' }));
 
-  await userEvent.click(screen.getByRole('button', { name: 'Отвязать' }));
-  expect(await screen.findByText('Отвязать резервную почту?')).toBeInTheDocument();
-  expect(requests(`${TWOFA}/email/recovery`, 'DELETE')).toHaveLength(0);
-
-  await userEvent.click(screen.getByRole('button', { name: 'Отвязать почту' }));
   await waitFor(() => {
-    expect(requests(`${TWOFA}/email/recovery`, 'DELETE')).toHaveLength(1);
+    expect(requests(TWOFA, 'POST')).toHaveLength(1);
   });
-  expect(requests(`${TWOFA}/email`, 'DELETE')).toHaveLength(0);
+  expect(await requests(TWOFA, 'POST')[0]!.clone().json()).toEqual({ hint: '' });
 });
 
 test('every 2FA write invalidates by key, never the whole cache', async () => {
