@@ -47,7 +47,14 @@ test('renders the hero and every section header', () => {
   expect(screen.getByText('+79051184490')).toBeInTheDocument();
   // trust comes from the backend-computed score
   expect(screen.getByText('82/100')).toBeInTheDocument();
-  for (const title of ['Сессия', 'Прокси', 'Device fingerprint', 'Спам/бан-сигналы', 'Действия']) {
+  for (const title of [
+    'Сессия',
+    'Прокси',
+    'Device fingerprint',
+    'Спам/бан-сигналы',
+    'Облачный пароль (2FA)',
+    'Действия',
+  ]) {
     expect(screen.getByText(title)).toBeInTheDocument();
   }
   // the locked device fingerprint shows the real fingerprint fields
@@ -58,19 +65,41 @@ test('renders the hero and every section header', () => {
   expect(screen.getByText('до 2026-07-01')).toBeInTheDocument();
 });
 
-test('the two security cards share one two-column row', () => {
-  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+// Card wrappers are found by class, so a wrapper restyle can silently stop
+// matching. Throw on a miss: otherwise the comparisons below hold two nulls
+// against each other and pass while asserting nothing.
+function cardWrapper(title: string): HTMLElement {
+  const el = screen.getByText(title).closest<HTMLElement>('.rounded-2xl');
+  if (!el) throw new Error(`no .rounded-2xl card wrapper around "${title}"`);
+  return el;
+}
+
+test('the two security cards are the page\'s last row, 2FA left of "Действия"', () => {
+  const { container } = renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
   // Both cards rendering is not the claim; being PAIRED is. The 2FA card was
   // full width and the actions card stood alone under it, and a refactor that
   // unpairs them again puts the cloud password back on a row of its own — plus
   // it silently drops the half-width constraint the reveal panel's wrapping
   // textarea exists for.
-  const card = (title: string) => screen.getByText(title).closest('.rounded-2xl');
-  const twofa = card('Облачный пароль (2FA)');
-  const row = twofa?.parentElement;
-  expect(card('Действия')?.parentElement).toBe(row);
-  // The same grid the session/proxy and device/signals rows use, gap included.
-  expect(row).toHaveClass('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-[14px]');
+  const twofa = cardWrapper('Облачный пароль (2FA)');
+  const row = twofa.parentElement;
+  // The exact attribute, not toHaveClass: that is a subset check, so an added
+  // md:grid-cols-1, !block or [&>*]:col-start-1 would unpair the cards with
+  // every asserted class still present. The class list also pins the ABSENCE
+  // of mb-[14px] — the row is last and owns the page's bottom edge, and a
+  // margin re-added here is the gap the row above it already provides.
+  expect(row).toHaveAttribute('class', 'grid grid-cols-1 md:grid-cols-2 gap-[14px]');
+  // Last child of the page root, so the row is neither wrapped in another grid
+  // nor moved above a row whose bottom margin it would then have to supply.
+  const page = container.firstElementChild;
+  expect(row?.parentElement).toBe(page);
+  expect(page?.lastElementChild).toBe(row);
+  // Exactly these two columns, in the order the design asks for: the cloud
+  // password left, the destructive actions right. A third card halves them
+  // both; an extra nesting level drops one out of the grid entirely.
+  expect(row?.children).toHaveLength(2);
+  expect(row?.children[0]).toBe(twofa);
+  expect(row?.children[1]).toBe(cardWrapper('Действия'));
 });
 
 test('section toggles, import tabs and proxy mode drive the handlers', async () => {

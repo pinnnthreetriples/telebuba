@@ -21,8 +21,8 @@ function trustColor(t: number): string {
 }
 
 // The design's account-edit view (reached by clicking a row): an always-visible
-// hero header above five collapsible cards — session, proxy, device, signals,
-// actions — each owning its own state/mutations. All wired to /api/v1.
+// hero header above six collapsible cards — session, proxy, device, signals,
+// 2FA, actions — each owning its own state/mutations. All wired to /api/v1.
 export function AccountEdit({ account, onBack }: { account: AccountRead; onBack: () => void }) {
   const { t } = useTranslation();
   const trust = account.trust_score ?? 0;
