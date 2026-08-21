@@ -212,6 +212,14 @@ from core.db_maintenance import (  # noqa: E402, F401
     run_db_maintenance_loop,
 )
 
+# The cloud-password column is read/written only here (see that module's docstring
+# on why the plaintext has exactly one exit); re-exported so callers keep taking
+# every account persistence function from ``core.db``.
+from core.repositories._accounts_twofa import (  # noqa: E402, F401
+    fetch_account_twofa_password,
+    set_account_twofa_password,
+)
+
 # --------------------------------------------------------------------------- #
 # Domain repositories (#38) — split out of this module and re-exported so that
 # existing ``from core.db import ...`` call sites keep working unchanged. These

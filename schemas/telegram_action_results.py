@@ -159,6 +159,25 @@ class ActionResult(BaseModel):
     # (``account.setPrivacy`` is one call per key with no rollback). ``None`` for
     # every other action, and for a privacy write that failed on its first key.
     applied_privacy_keys: list[str] | None = None
+    # Length of the confirmation code Telegram mailed to a freshly attached
+    # recovery email, ``None`` for every other action and for the email modes that
+    # do not mail one. Threaded for the same reason ``channel_id`` is: the number
+    # only ever exists inside the ``EMAIL_UNCONFIRMED_<N>`` the gateway converts
+    # into a success, so the caller has no second way to learn it. Not a secret —
+    # the address and the code itself never travel in a response at all.
+    twofa_email_code_length: int | None = None
+    # Whether Telegram answered ``EMAIL_UNCONFIRMED``, which is a different fact from
+    # the length above: the bare form of that error carries no usable length, so the
+    # length is advisory (it sizes the input) and THIS is what "a code was mailed" /
+    # "the password write is not certainly in force yet" is read from. Deriving the
+    # first from the second reported a pending address as already verified.
+    twofa_email_unconfirmed: bool = False
+    # The hint ``set_twofa_password`` put on the wire, ``None`` for every other action
+    # and whenever the answer was lost. The gateway resolves ``hint=None`` ("keep")
+    # against its own fresh ``account.getPassword``, so this is the only place the
+    # written value exists — the service's separate read can disagree with it, and
+    # reporting THAT let the response name a hint the account does not have.
+    twofa_hint: str | None = None
     error_type: str | None = None
     error_message: str | None = None
 

@@ -4437,6 +4437,912 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/2fa": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Account Twofa",
+        "description": "Live cloud-password state for one account \u2014 booleans and the public hint.",
+        "operationId": "getAccountTwofa",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Account Twofa",
+        "description": "Set or change the cloud password; the response is the only copy handed out.\n\n``no-store`` on the one response in this API that carries a plaintext\ncredential. A POST response is already non-cacheable per RFC 9111, so this is a\nbelt for any reverse proxy in front of the app, set through the injected\n``Response`` the auth cookies and ``GET /ready`` already use.",
+        "operationId": "setAccountTwofa",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountTwoFactorUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorCreated"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Twofa",
+        "description": "Turn 2FA off using the stored password, then answer with the re-read state.\n\n``?forget_only=true`` drops the dashboard's copy of the password and spends no\nRPC at all. It is the only way out of every state in which the column holds a\npassword Telegram does not accept \u2014 a rollback whose UPDATE failed, a process\ndeath mid-write, a lost answer over a live read that also failed \u2014 each of which\nis otherwise terminal, because something IS stored so the not-stored guard can\nnever fire again. It is a query flag rather than an inference because only the\noperator can tell a worthless stored value from a working one.",
+        "operationId": "removeAccountTwofa",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "forget_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Forget Only"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/2fa/email": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Account Twofa Email",
+        "description": "Attach a recovery email; the response says whether a code was mailed.",
+        "operationId": "setAccountTwofaEmail",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountTwoFactorEmailRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorEmailPending"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Cancel Account Twofa Email",
+        "description": "Abandon a pending recovery email; the cloud password stays as it is.",
+        "operationId": "cancelAccountTwofaEmail",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/2fa/email/confirm": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Confirm Account Twofa Email",
+        "description": "Confirm the pending recovery email with the code from the letter.",
+        "operationId": "confirmAccountTwofaEmail",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountTwoFactorEmailConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/2fa/email/resend": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Resend Account Twofa Email",
+        "description": "Mail the confirmation code again for an email that is still pending.",
+        "operationId": "resendAccountTwofaEmail",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorEmailPending"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/2fa/email/recovery": {
+      "delete": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Clear Account Twofa Email",
+        "description": "Detach a CONFIRMED recovery email; the cloud password stays as it is.\n\nA separate route from ``DELETE .../2fa/email`` because the two are separate\nTelegram calls: that one cancels a verification still in flight, this one clears\nan address Telegram already accepted. Nothing but\n``account.updatePasswordSettings`` with an empty ``email`` can do the second.",
+        "operationId": "clearAccountTwofaEmail",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountTwoFactorView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -10578,6 +11484,177 @@
         "title": "AccountStats",
         "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    \u2014 ``alive``.\n- ``idle``      \u2014 ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` \u2014 ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   \u2014 every other non-alive status (banned / session / frozen / errors)."
       },
+      "AccountTwoFactorCreated": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "stored": {
+            "type": "boolean",
+            "title": "Stored",
+            "default": true
+          },
+          "confirmed": {
+            "type": "boolean",
+            "title": "Confirmed",
+            "default": true
+          },
+          "previous_kept": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Kept",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "password"
+        ],
+        "title": "AccountTwoFactorCreated",
+        "description": "The POST response \u2014 the ONLY model in this codebase carrying the plaintext.\n\nIt appears in the response to the request that set the password and nowhere\nelse: no read endpoint returns it, ``AccountRead`` does not carry it, and no\nlog event or error message may contain it. Same contract as an API key \u2014\nshown once at creation so the operator can copy it into a password manager,\nnever shown again.\n\n``stored`` is ``False`` when Telegram accepted the password but the DB write\nthat remembers it failed. The password is returned regardless, because after\na successful RPC this response is the operator's only copy; losing it would\nleave the account unrecoverable if its session is ever reset.\n\n``confirmed`` is ``False`` in TWO cases, both meaning \"Telegram may or may not\nhold this password\": the request reached the wire and only the ANSWER was lost,\nor Telegram answered ``EMAIL_UNCONFIRMED`` and the one confirming\n``account.getPassword`` that follows it did not come back saying a password is\nset. The password is returned either way: if Telegram DID apply it, this is the\nonly copy anybody has, and discarding it would strand the account behind a\npassword no human ever saw.\n\n``previous_kept`` splits that unconfirmed case in three, and only a CHANGE can\nreach any of them. ``True``: the previously stored password was left in the\ndatabase untouched and the live read says Telegram does have a password, so ONE\nof the two \u2014 it or ``password`` \u2014 is the live one and the operator has to check\nfrom the phone. ``None``: the previous one was kept, but the live read answered\nnothing, so \"one of these two is in force\" is not something this response can\nclaim \u2014 Telegram may hold neither. ``False``: nothing was kept, either because\nthis was a fresh set or because the live read said Telegram has no password at\nall, which makes the stored value stale by definition."
+      },
+      "AccountTwoFactorEmailConfirmRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "AccountTwoFactorEmailConfirmRequest",
+        "description": "The code the operator read out of the letter Telegram just sent."
+      },
+      "AccountTwoFactorEmailPending": {
+        "properties": {
+          "pending": {
+            "type": "boolean",
+            "title": "Pending"
+          },
+          "code_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Length"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending"
+        ],
+        "title": "AccountTwoFactorEmailPending",
+        "description": "Outcome of attaching (or re-sending to) a recovery email.\n\n``pending`` means Telegram has the address and has mailed a confirmation code\nthat the operator still has to type back. ``pending=False`` is the rarer\nbranch: Telegram accepted the address as already verified and asked for\nnothing, so the flow is finished in one step.\n\n``code_length`` is the length Telegram will accept, and it exists only because\n``EMAIL_UNCONFIRMED_<N>`` reports it; ``None`` means Telegram did not say (the\nresend path), not that any length goes. Neither field is sensitive \u2014 the\naddress and the code itself never leave the request they arrived in."
+      },
+      "AccountTwoFactorEmailRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "pattern": ".+@.+",
+            "title": "Email"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "AccountTwoFactorEmailRequest",
+        "description": "Attach-a-recovery-email body.\n\nThe address is checked only for a shape that could not possibly be an email;\nsee ``_EMAIL_SHAPE`` for why that is deliberate and what catches the rest."
+      },
+      "AccountTwoFactorUpdateRequest": {
+        "properties": {
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AccountTwoFactorUpdateRequest",
+        "description": "Set/change body. Both fields optional: no password means \"generate one\".\n\n``extra=\"forbid\"`` so a typo'd key 422s instead of silently generating a\npassword the operator did not expect."
+      },
+      "AccountTwoFactorView": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TwoFactorStatusResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_stored_password": {
+            "type": "boolean",
+            "title": "Has Stored Password",
+            "default": false
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "title": "AccountTwoFactorView",
+        "description": "One account's live 2FA state, or why it could not be read.\n\n``has_stored_password`` is about THIS dashboard, not about Telegram: it says\nwhether the password we set is still in the DB, which is what decides\nwhether a change or a removal can be authorised at all. It is a boolean by\ndesign \u2014 see the module docstring."
+      },
       "ActionResult": {
         "properties": {
           "status": {
@@ -10664,6 +11741,33 @@
               }
             ],
             "title": "Applied Privacy Keys"
+          },
+          "twofa_email_code_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twofa Email Code Length"
+          },
+          "twofa_email_unconfirmed": {
+            "type": "boolean",
+            "title": "Twofa Email Unconfirmed",
+            "default": false
+          },
+          "twofa_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Twofa Hint"
           },
           "error_type": {
             "anyOf": [
@@ -14900,6 +16004,56 @@
         "type": "object",
         "title": "TdataImportResult",
         "description": "Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.\n\nWrapping the imported accounts in a model (instead of returning a raw\n``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room\nto add per-import metadata (counts, partial-failure summaries) without\nbreaking every call site, and matches the convention used by ``list_accounts``\nand other multi-row reads."
+      },
+      "TwoFactorStatusResult": {
+        "properties": {
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password",
+            "default": false
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "has_recovery": {
+            "type": "boolean",
+            "title": "Has Recovery",
+            "default": false
+          },
+          "pending_reset_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Reset Date"
+          },
+          "email_unconfirmed_pattern": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Unconfirmed Pattern"
+          }
+        },
+        "type": "object",
+        "title": "TwoFactorStatusResult",
+        "description": "Gateway output for ``GetTwoFactorStatus`` \u2014 booleans plus the public hint.\n\nEvery field is what ``account.getPassword`` reports, and every one of them is\noptional in the TL schema, so an absent flag degrades to the \"no password\"\ndefault rather than being guessed at. ``pending_reset_date`` is an ISO string\n(repo convention at the JSON boundary), never the ``datetime`` Telethon\nreturns. The password itself is not here and cannot be: Telegram never\nreturns it, and neither does this codebase after the one POST response."
       },
       "UpdatePromptRequest": {
         "properties": {

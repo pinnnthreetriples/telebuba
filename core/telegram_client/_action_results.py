@@ -2,7 +2,8 @@
 
 Split from ``_actions.py`` to keep that module under the aislop file-size
 budget. One builder per outcome family: rate-limit (the differentiated flood
-family), infrastructure (``unavailable``), and generic failure.
+family), infrastructure (``unavailable``), generic failure — and the SUCCESS
+mapping, which lives here for the same reason and grows for a different one.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
-from core.telegram_client._util import event_name
+from core.telegram_client._util import event_name, id_strings
 from schemas.telegram_actions import ActionResult
 
 if TYPE_CHECKING:
@@ -52,6 +53,25 @@ class _DispatchResult:
     # Recent post ids fetched during a read, threaded to a following react so it
     # skips re-fetching the same channel (set only by ``read_channel``).
     recent_message_ids: list[int] | None = None
+    # Length of the recovery-email confirmation code Telegram just mailed (set only
+    # by ``manage_twofa_email`` in ``set`` mode). It exists nowhere else: the number
+    # arrives inside the ``EMAIL_UNCONFIRMED_<N>`` the gateway swallows as a
+    # success, and the operator cannot type the code without it.
+    twofa_email_code_length: int | None = None
+    # Telegram answered ``EMAIL_UNCONFIRMED``. Carried SEPARATELY from the length
+    # because the bare form of that error reports ``code_length = 0``, which the
+    # gateway turns into ``None`` — so "did Telegram mail a code" cannot be recovered
+    # from the length, and deriving it from one reported the single answer meaning
+    # "address accepted, code mailed" as "nothing was asked for". On the PASSWORD path
+    # the same flag means the write was accepted while a recovery-email verification
+    # is still pending, which TDLib treats as "not certainly in force" rather than a
+    # clean success.
+    twofa_email_unconfirmed: bool = False
+    # The hint ``set_twofa_password`` actually put on the wire. It is resolved against
+    # the gateway's OWN fresh ``getPassword`` (``hint=None`` means KEEP), so the
+    # service's separate live read can legitimately disagree with it — and reporting
+    # that read let the response tell the operator a hint the account does not have.
+    twofa_hint: str | None = None
 
 
 async def _flood_action_result(  # noqa: PLR0913 - four keyword-only outcome facets, no bag
@@ -85,6 +105,35 @@ async def _flood_action_result(  # noqa: PLR0913 - four keyword-only outcome fac
         account_id=account_id,
         flood_wait_seconds=seconds,
         applied_privacy_keys=applied_privacy_keys,
+    )
+
+
+async def _too_fresh_result(
+    account_id: str,
+    action: TelegramAction,
+    seconds: int,
+    *,
+    domain: str | None = None,
+) -> ActionResult:
+    """``SESSION_TOO_FRESH`` / ``PASSWORD_TOO_FRESH`` — a wait dressed as a 400.
+
+    Neither is a ``FloodError``, so neither reaches the family above on its own, yet
+    both carry ``.seconds`` and both mean "come back later" rather than "fix your
+    request". ``SESSION_TOO_FRESH`` in particular is Telegram's normal answer to
+    setting a cloud password on a session that has just signed in — this dashboard's
+    own workflow — and it surfaced as a blank ``failed`` with the duration dropped.
+
+    Reported as ``flood_wait`` so the duration rides ``retry_after_seconds`` the way
+    ``SlowModeWaitError``'s does, and mapping them into a gateway code table instead
+    would be what threw the duration away. No account status is written: unlike a
+    flood on a profile edit, neither of these is a state the account is IN.
+    """
+    return await _flood_action_result(
+        account_id,
+        action,
+        status="flood_wait",
+        seconds=seconds,
+        domain=domain,
     )
 
 
@@ -261,4 +310,30 @@ async def _join_by_request_result(
         account_id=account_id,
         error_type=type(exc).__name__,
         error_message=str(exc),
+    )
+
+
+def _ok_result(
+    account_id: str,
+    action: TelegramAction,
+    outcome: _DispatchResult,
+) -> ActionResult:
+    """The ``_DispatchResult`` → ``ActionResult`` mapping for a SUCCESSFUL dispatch.
+
+    The fourth builder in this module, and the one the other three exist next to:
+    ``execute`` sits at the aislop function-length cap and this mapping only grows,
+    because every field on it is there for the same reason — a dispatcher learned
+    something at dispatch time that no caller has a second way to reach.
+    """
+    return ActionResult(
+        status="ok",
+        action_type=action.action_type,
+        account_id=account_id,
+        message_id=outcome.message_id,
+        # int64 → decimal string at the JSON boundary (see ActionResult).
+        channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
+        recent_message_ids=id_strings(outcome.recent_message_ids),
+        twofa_email_code_length=outcome.twofa_email_code_length,
+        twofa_email_unconfirmed=outcome.twofa_email_unconfirmed,
+        twofa_hint=outcome.twofa_hint,
     )

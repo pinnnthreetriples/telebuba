@@ -10,6 +10,7 @@ The implementations live in per-concern submodules:
 - :mod:`.sessions`  — ``.session`` and tdata-archive imports + liveness check
 - :mod:`.profile`   — profile-field updates (name / username / bio)
 - :mod:`.privacy`   — Telegram privacy keys (who may see photo / bio / last seen)
+- :mod:`.twofa`     — the account's Telegram cloud password + its recovery email
 - :mod:`.media`     — profile photo / story / music uploads
 - :mod:`.channels`  — own-channel management (create / edit / photo / delete)
 - :mod:`.channel_posts` — own-channel posts (publish / list / edit / delete)
@@ -32,6 +33,13 @@ from services.accounts._table import (
     account_stats,
     list_accounts_page,
     list_listener_accounts,
+)
+from services.accounts._twofa_email import (
+    cancel_account_twofa_email,
+    clear_account_twofa_email,
+    confirm_account_twofa_email,
+    resend_account_twofa_email,
+    set_account_twofa_email,
 )
 from services.accounts.channel_posts import (
     delete_account_channel_post,
@@ -92,6 +100,11 @@ from services.accounts.sessions import (
     import_account_session,
     import_account_tdata,
 )
+from services.accounts.twofa import (
+    read_account_twofa,
+    remove_account_twofa,
+    set_account_twofa,
+)
 
 __all__ = [
     "AccountActionError",
@@ -107,8 +120,11 @@ __all__ = [
     "add_account_profile_music",
     "apply_account_privacy",
     "apply_privacy_to_all_accounts",
+    "cancel_account_twofa_email",
     "check_account_channel_username",
     "check_account_session",
+    "clear_account_twofa_email",
+    "confirm_account_twofa_email",
     "create_account_channel",
     "delete_account_channel",
     "delete_account_channel_post",
@@ -128,18 +144,23 @@ __all__ = [
     "post_account_story",
     "publish_account_channel_post",
     "read_account_privacy",
+    "read_account_twofa",
     "remove_account",
     "remove_account_profile_music",
     "remove_account_profile_photo",
     "remove_account_story",
+    "remove_account_twofa",
     "request_login_code",
     "require_account",
+    "resend_account_twofa_email",
     "reset_account_session",
     "resync_account_avatar",
     "set_account_channel_photo",
     "set_account_main_profile_photo",
     "set_account_profile_photo",
     "set_account_story_pinned",
+    "set_account_twofa",
+    "set_account_twofa_email",
     "start_phone_login",
     "submit_login_code",
     "update_account_channel",

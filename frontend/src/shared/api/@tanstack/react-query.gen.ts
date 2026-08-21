@@ -16,12 +16,15 @@ import {
   approveNeuroshillingScenario,
   assignCampaignAccount,
   assignProxy,
+  cancelAccountTwofaEmail,
   checkAccount,
   checkAccountChannelUsername,
   checkCampaignChannelBans,
   checkProxy,
+  clearAccountTwofaEmail,
   clearLogs,
   clearNeurocommentListener,
+  confirmAccountTwofaEmail,
   countCampaignChallengeOutcomes,
   countLogs,
   createAccountChannel,
@@ -40,6 +43,7 @@ import {
   getAccountChannel,
   getAccountPrivacy,
   getAccountProfileSnapshot,
+  getAccountTwofa,
   getCampaignDiscovery,
   getHealth,
   getMe,
@@ -79,10 +83,12 @@ import {
   removeAccountMusic,
   removeAccountPhoto,
   removeAccountStory,
+  removeAccountTwofa,
   removeCampaignAccount,
   removeCampaignChannel,
   removeWarmingChannel,
   requestLoginCode,
+  resendAccountTwofaEmail,
   resetAccountSession,
   resyncAccountAvatar,
   setAccountChannelPhoto,
@@ -90,6 +96,8 @@ import {
   setAccountPhotoMain,
   setAccountPrivacy,
   setAccountStoryPinned,
+  setAccountTwofa,
+  setAccountTwofaEmail,
   setAllAccountsPrivacy,
   setCampaignAccountChannel,
   setCampaignSolver,
@@ -137,6 +145,9 @@ import type {
   AssignProxyData,
   AssignProxyError,
   AssignProxyResponse,
+  CancelAccountTwofaEmailData,
+  CancelAccountTwofaEmailError,
+  CancelAccountTwofaEmailResponse,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameError,
   CheckAccountChannelUsernameResponse,
@@ -149,12 +160,18 @@ import type {
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
+  ClearAccountTwofaEmailData,
+  ClearAccountTwofaEmailError,
+  ClearAccountTwofaEmailResponse,
   ClearLogsData,
   ClearLogsError,
   ClearLogsResponse,
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerError,
   ClearNeurocommentListenerResponse,
+  ConfirmAccountTwofaEmailData,
+  ConfirmAccountTwofaEmailError,
+  ConfirmAccountTwofaEmailResponse,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesResponse,
@@ -209,6 +226,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
+  GetAccountTwofaData,
+  GetAccountTwofaError,
+  GetAccountTwofaResponse,
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryError,
   GetCampaignDiscoveryResponse,
@@ -323,6 +343,9 @@ import type {
   RemoveAccountStoryData,
   RemoveAccountStoryError,
   RemoveAccountStoryResponse,
+  RemoveAccountTwofaData,
+  RemoveAccountTwofaError,
+  RemoveAccountTwofaResponse,
   RemoveCampaignAccountData,
   RemoveCampaignAccountError,
   RemoveCampaignAccountResponse,
@@ -335,6 +358,9 @@ import type {
   RequestLoginCodeData,
   RequestLoginCodeError,
   RequestLoginCodeResponse,
+  ResendAccountTwofaEmailData,
+  ResendAccountTwofaEmailError,
+  ResendAccountTwofaEmailResponse,
   ResetAccountSessionData,
   ResetAccountSessionError,
   ResetAccountSessionResponse,
@@ -356,6 +382,12 @@ import type {
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedError,
   SetAccountStoryPinnedResponse,
+  SetAccountTwofaData,
+  SetAccountTwofaEmailData,
+  SetAccountTwofaEmailError,
+  SetAccountTwofaEmailResponse,
+  SetAccountTwofaError,
+  SetAccountTwofaResponse,
   SetAllAccountsPrivacyData,
   SetAllAccountsPrivacyError,
   SetAllAccountsPrivacyResponse,
@@ -1711,6 +1743,254 @@ export const setAllAccountsPrivacyMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAllAccountsPrivacy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Twofa
+ *
+ * Turn 2FA off using the stored password, then answer with the re-read state.
+ *
+ * ``?forget_only=true`` drops the dashboard's copy of the password and spends no
+ * RPC at all. It is the only way out of every state in which the column holds a
+ * password Telegram does not accept — a rollback whose UPDATE failed, a process
+ * death mid-write, a lost answer over a live read that also failed — each of which
+ * is otherwise terminal, because something IS stored so the not-stored guard can
+ * never fire again. It is a query flag rather than an inference because only the
+ * operator can tell a worthless stored value from a working one.
+ */
+export const removeAccountTwofaMutation = (
+  options?: Partial<Options<RemoveAccountTwofaData>>,
+): UseMutationOptions<
+  RemoveAccountTwofaResponse,
+  RemoveAccountTwofaError,
+  Options<RemoveAccountTwofaData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountTwofaResponse,
+    RemoveAccountTwofaError,
+    Options<RemoveAccountTwofaData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountTwofa({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountTwofaQueryKey = (options: Options<GetAccountTwofaData>) =>
+  createQueryKey('getAccountTwofa', options);
+
+/**
+ * Get Account Twofa
+ *
+ * Live cloud-password state for one account — booleans and the public hint.
+ */
+export const getAccountTwofaOptions = (options: Options<GetAccountTwofaData>) =>
+  queryOptions<
+    GetAccountTwofaResponse,
+    GetAccountTwofaError,
+    GetAccountTwofaResponse,
+    ReturnType<typeof getAccountTwofaQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountTwofa({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountTwofaQueryKey(options),
+  });
+
+/**
+ * Set Account Twofa
+ *
+ * Set or change the cloud password; the response is the only copy handed out.
+ *
+ * ``no-store`` on the one response in this API that carries a plaintext
+ * credential. A POST response is already non-cacheable per RFC 9111, so this is a
+ * belt for any reverse proxy in front of the app, set through the injected
+ * ``Response`` the auth cookies and ``GET /ready`` already use.
+ */
+export const setAccountTwofaMutation = (
+  options?: Partial<Options<SetAccountTwofaData>>,
+): UseMutationOptions<
+  SetAccountTwofaResponse,
+  SetAccountTwofaError,
+  Options<SetAccountTwofaData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountTwofaResponse,
+    SetAccountTwofaError,
+    Options<SetAccountTwofaData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountTwofa({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Cancel Account Twofa Email
+ *
+ * Abandon a pending recovery email; the cloud password stays as it is.
+ */
+export const cancelAccountTwofaEmailMutation = (
+  options?: Partial<Options<CancelAccountTwofaEmailData>>,
+): UseMutationOptions<
+  CancelAccountTwofaEmailResponse,
+  CancelAccountTwofaEmailError,
+  Options<CancelAccountTwofaEmailData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CancelAccountTwofaEmailResponse,
+    CancelAccountTwofaEmailError,
+    Options<CancelAccountTwofaEmailData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await cancelAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Twofa Email
+ *
+ * Attach a recovery email; the response says whether a code was mailed.
+ */
+export const setAccountTwofaEmailMutation = (
+  options?: Partial<Options<SetAccountTwofaEmailData>>,
+): UseMutationOptions<
+  SetAccountTwofaEmailResponse,
+  SetAccountTwofaEmailError,
+  Options<SetAccountTwofaEmailData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountTwofaEmailResponse,
+    SetAccountTwofaEmailError,
+    Options<SetAccountTwofaEmailData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Confirm Account Twofa Email
+ *
+ * Confirm the pending recovery email with the code from the letter.
+ */
+export const confirmAccountTwofaEmailMutation = (
+  options?: Partial<Options<ConfirmAccountTwofaEmailData>>,
+): UseMutationOptions<
+  ConfirmAccountTwofaEmailResponse,
+  ConfirmAccountTwofaEmailError,
+  Options<ConfirmAccountTwofaEmailData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ConfirmAccountTwofaEmailResponse,
+    ConfirmAccountTwofaEmailError,
+    Options<ConfirmAccountTwofaEmailData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await confirmAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Resend Account Twofa Email
+ *
+ * Mail the confirmation code again for an email that is still pending.
+ */
+export const resendAccountTwofaEmailMutation = (
+  options?: Partial<Options<ResendAccountTwofaEmailData>>,
+): UseMutationOptions<
+  ResendAccountTwofaEmailResponse,
+  ResendAccountTwofaEmailError,
+  Options<ResendAccountTwofaEmailData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ResendAccountTwofaEmailResponse,
+    ResendAccountTwofaEmailError,
+    Options<ResendAccountTwofaEmailData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resendAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Clear Account Twofa Email
+ *
+ * Detach a CONFIRMED recovery email; the cloud password stays as it is.
+ *
+ * A separate route from ``DELETE .../2fa/email`` because the two are separate
+ * Telegram calls: that one cancels a verification still in flight, this one clears
+ * an address Telegram already accepted. Nothing but
+ * ``account.updatePasswordSettings`` with an empty ``email`` can do the second.
+ */
+export const clearAccountTwofaEmailMutation = (
+  options?: Partial<Options<ClearAccountTwofaEmailData>>,
+): UseMutationOptions<
+  ClearAccountTwofaEmailResponse,
+  ClearAccountTwofaEmailError,
+  Options<ClearAccountTwofaEmailData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ClearAccountTwofaEmailResponse,
+    ClearAccountTwofaEmailError,
+    Options<ClearAccountTwofaEmailData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await clearAccountTwofaEmail({
         ...options,
         ...fnOptions,
         throwOnError: true,

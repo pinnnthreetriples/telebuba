@@ -5,11 +5,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select, update
 
 from core.db import (
+    _accounts,
+    _get_engine,
     configure_database,
     create_account,
     fetch_account_avatar,
+    fetch_account_twofa_password,
     get_listener_account_id,
     get_listener_running,
     insert_challenge,
@@ -17,6 +21,7 @@ from core.db import (
     list_accounts,
     list_accounts_by_ids,
     list_challenged_channels,
+    set_account_twofa_password,
     set_listener_account_id,
     set_listener_running,
     update_account_from_session_check,
@@ -274,3 +279,63 @@ async def test_delete_account_leaves_other_listener_pointer_intact(tmp_path: Pat
     await asyncio.to_thread(_delete_account, "acc-other")
 
     assert await get_listener_account_id() == "acc-listener"
+
+
+# A timestamp no clock will produce, so "did the write move it" is unambiguous.
+# ``_now_iso`` has sub-second resolution but two calls inside one test can still
+# render the same string, which makes a ``>=`` comparison agree with a persist that
+# never touched the column at all.
+_ANCIENT = "2020-01-01T00:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_storing_a_cloud_password_stamps_updated_at(tmp_path: Path) -> None:
+    """The 2FA column shares the row's ``updated_at``, and the write must move it.
+
+    The dashboard sorts and reports accounts by that timestamp, so a persist that
+    leaves it alone makes a password change invisible in every list the operator
+    reads. Nothing asserted it, so dropping the stamp from the ``UPDATE`` killed no
+    test — and the clear on removal has to move it for the same reason.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-stamp"))
+
+    await _backdate("acc-stamp")
+    assert await set_account_twofa_password("acc-stamp", "stored-password") is True
+    assert await _updated_at("acc-stamp") != _ANCIENT
+    assert await fetch_account_twofa_password("acc-stamp") == "stored-password"
+
+    # The clear is the same statement and has to move it too: the removal path routes
+    # through here, and an account whose 2FA was just turned off is exactly the row an
+    # operator goes looking for.
+    await _backdate("acc-stamp")
+    assert await set_account_twofa_password("acc-stamp", None) is True
+    assert await _updated_at("acc-stamp") != _ANCIENT
+    assert await fetch_account_twofa_password("acc-stamp") is None
+
+    # An ``UPDATE ... WHERE`` against a row that is not there touches nothing, and the
+    # caller reports ``stored`` from exactly this boolean.
+    assert await set_account_twofa_password("acc-missing", "x") is False
+
+
+async def _backdate(account_id: str) -> None:
+    def _write() -> None:
+        with _get_engine().begin() as connection:
+            connection.execute(
+                update(_accounts)
+                .where(_accounts.c.account_id == account_id)
+                .values(updated_at=_ANCIENT),
+            )
+
+    await asyncio.to_thread(_write)
+
+
+async def _updated_at(account_id: str) -> str | None:
+    def _read() -> str | None:
+        with _get_engine().connect() as connection:
+            row = connection.execute(
+                select(_accounts.c.updated_at).where(_accounts.c.account_id == account_id),
+            ).first()
+        return None if row is None else row[0]
+
+    return await asyncio.to_thread(_read)

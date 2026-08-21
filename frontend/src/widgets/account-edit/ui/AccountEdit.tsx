@@ -8,6 +8,7 @@ import { DeviceSection } from './DeviceSection';
 import { ProxySection } from './ProxySection';
 import { SessionSection } from './SessionSection';
 import { SignalsSection } from './SignalsSection';
+import { TwoFactorSection } from './TwoFactorSection';
 
 function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
@@ -72,6 +73,13 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <DeviceSection account={account} />
         <SignalsSection account={account} />
+      </div>
+
+      {/* The security cards sit together: the cloud password is the other half
+          of "who can take this account" that the session card starts. Full width
+          because the set/change form plus the recovery-email leg needs the room. */}
+      <div className="mb-[14px]">
+        <TwoFactorSection account={account} />
       </div>
 
       <ActionsSection account={account} onBack={onBack} />

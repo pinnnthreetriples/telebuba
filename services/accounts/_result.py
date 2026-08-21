@@ -79,6 +79,10 @@ _STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
         "StoryCollageLayoutError",
         "StoryImageNormalisationError",
         "StoryVideoNormalisationError",
+        # The cloud-password refusals. Its codes are the only place a refused 2FA
+        # write says anything at all: the exception deliberately carries no Telethon
+        # prose, because the attempt it describes contained a plaintext password.
+        "TwoFactorGatewayError",
     },
 )
 

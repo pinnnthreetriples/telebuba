@@ -61,18 +61,23 @@ export function Section({
   icon,
   right,
   bodyClassName = 'px-5 pb-[18px]',
+  onOpenChange,
   children,
 }: {
   title: string;
   icon?: ReactNode;
   right?: ReactNode;
   bodyClassName?: string;
+  // Passed through for the 2FA card, whose one-time plaintext must not survive
+  // a collapse (a collapsed body is hidden, not unmounted).
+  onOpenChange?: (open: boolean) => void;
   children: ReactNode;
 }) {
   return (
     <CollapsibleCard
       label={title}
       trailing={right}
+      onOpenChange={onOpenChange}
       wrapperClassName="self-start rounded-2xl border border-line bg-white"
       headerClassName="px-5 py-4"
       bodyClassName={bodyClassName}

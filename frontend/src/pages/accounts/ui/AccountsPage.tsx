@@ -32,7 +32,7 @@ export function AccountsPage() {
   // row and re-enabled its buttons mid-request, and the first response to land
   // cleared the OTHER row's spinner.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [proxyAdding, setProxyAdding] = useState(false);
@@ -136,11 +136,15 @@ export function AccountsPage() {
 
   // Derive the edited/profiled row from the live list each render so it
   // reflects the latest refetch (e.g. status flips from 'unauthorized' after a
-  // code login), rather than a stale snapshot captured at click time. The
-  // profile modal keeps the click-time row as a fallback so an open modal
-  // doesn't vanish when the account drops out of the current filtered page
-  // after an invalidate (e.g. a renamed account no longer matches the search).
-  const editing = editingId ? (items.find((a) => a.account_id === editingId) ?? null) : null;
+  // code login), rather than a stale snapshot captured at click time. Both keep
+  // the click-time row as a fallback so an open view doesn't vanish when the
+  // account drops out of the current filtered page after an invalidate (e.g. a
+  // renamed account no longer matches the search). The edit view needs that at
+  // least as much as the modal: its 2FA card holds a one-time plaintext password
+  // and that card's own success invalidates this list.
+  const editing = editingRow
+    ? (items.find((a) => a.account_id === editingRow.account_id) ?? editingRow)
+    : null;
   const profiling = profilingRow
     ? (items.find((a) => a.account_id === profilingRow.account_id) ?? profilingRow)
     : null;
@@ -149,7 +153,7 @@ export function AccountsPage() {
       <AccountEdit
         account={editing}
         onBack={() => {
-          setEditingId(null);
+          setEditingRow(null);
         }}
       />
     );
@@ -232,7 +236,7 @@ export function AccountsPage() {
               onCheck={onCheck}
               onDelete={onDelete}
               onOpen={(account) => {
-                setEditingId(account.account_id);
+                setEditingRow(account);
               }}
               onProfile={(account) => {
                 setProfilingRow(account);

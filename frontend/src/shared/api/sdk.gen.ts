@@ -31,6 +31,9 @@ import type {
   AssignProxyData,
   AssignProxyErrors,
   AssignProxyResponses,
+  CancelAccountTwofaEmailData,
+  CancelAccountTwofaEmailErrors,
+  CancelAccountTwofaEmailResponses,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameErrors,
   CheckAccountChannelUsernameResponses,
@@ -43,12 +46,18 @@ import type {
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
+  ClearAccountTwofaEmailData,
+  ClearAccountTwofaEmailErrors,
+  ClearAccountTwofaEmailResponses,
   ClearLogsData,
   ClearLogsErrors,
   ClearLogsResponses,
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerErrors,
   ClearNeurocommentListenerResponses,
+  ConfirmAccountTwofaEmailData,
+  ConfirmAccountTwofaEmailErrors,
+  ConfirmAccountTwofaEmailResponses,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesErrors,
   CountCampaignChallengeOutcomesResponses,
@@ -103,6 +112,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
+  GetAccountTwofaData,
+  GetAccountTwofaErrors,
+  GetAccountTwofaResponses,
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryErrors,
   GetCampaignDiscoveryResponses,
@@ -217,6 +229,9 @@ import type {
   RemoveAccountStoryData,
   RemoveAccountStoryErrors,
   RemoveAccountStoryResponses,
+  RemoveAccountTwofaData,
+  RemoveAccountTwofaErrors,
+  RemoveAccountTwofaResponses,
   RemoveCampaignAccountData,
   RemoveCampaignAccountErrors,
   RemoveCampaignAccountResponses,
@@ -229,6 +244,9 @@ import type {
   RequestLoginCodeData,
   RequestLoginCodeErrors,
   RequestLoginCodeResponses,
+  ResendAccountTwofaEmailData,
+  ResendAccountTwofaEmailErrors,
+  ResendAccountTwofaEmailResponses,
   ResetAccountSessionData,
   ResetAccountSessionErrors,
   ResetAccountSessionResponses,
@@ -250,6 +268,12 @@ import type {
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedErrors,
   SetAccountStoryPinnedResponses,
+  SetAccountTwofaData,
+  SetAccountTwofaEmailData,
+  SetAccountTwofaEmailErrors,
+  SetAccountTwofaEmailResponses,
+  SetAccountTwofaErrors,
+  SetAccountTwofaResponses,
   SetAllAccountsPrivacyData,
   SetAllAccountsPrivacyErrors,
   SetAllAccountsPrivacyResponses,
@@ -1016,6 +1040,152 @@ export const setAllAccountsPrivacy = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Remove Account Twofa
+ *
+ * Turn 2FA off using the stored password, then answer with the re-read state.
+ *
+ * ``?forget_only=true`` drops the dashboard's copy of the password and spends no
+ * RPC at all. It is the only way out of every state in which the column holds a
+ * password Telegram does not accept — a rollback whose UPDATE failed, a process
+ * death mid-write, a lost answer over a live read that also failed — each of which
+ * is otherwise terminal, because something IS stored so the not-stored guard can
+ * never fire again. It is a query flag rather than an inference because only the
+ * operator can tell a worthless stored value from a working one.
+ */
+export const removeAccountTwofa = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountTwofaData, ThrowOnError>,
+): RequestResult<RemoveAccountTwofaResponses, RemoveAccountTwofaErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    RemoveAccountTwofaResponses,
+    RemoveAccountTwofaErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/2fa', ...options });
+
+/**
+ * Get Account Twofa
+ *
+ * Live cloud-password state for one account — booleans and the public hint.
+ */
+export const getAccountTwofa = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountTwofaData, ThrowOnError>,
+): RequestResult<GetAccountTwofaResponses, GetAccountTwofaErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountTwofaResponses, GetAccountTwofaErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/2fa',
+    ...options,
+  });
+
+/**
+ * Set Account Twofa
+ *
+ * Set or change the cloud password; the response is the only copy handed out.
+ *
+ * ``no-store`` on the one response in this API that carries a plaintext
+ * credential. A POST response is already non-cacheable per RFC 9111, so this is a
+ * belt for any reverse proxy in front of the app, set through the injected
+ * ``Response`` the auth cookies and ``GET /ready`` already use.
+ */
+export const setAccountTwofa = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountTwofaData, ThrowOnError>,
+): RequestResult<SetAccountTwofaResponses, SetAccountTwofaErrors, ThrowOnError> =>
+  (options.client ?? client).post<SetAccountTwofaResponses, SetAccountTwofaErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/2fa',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Cancel Account Twofa Email
+ *
+ * Abandon a pending recovery email; the cloud password stays as it is.
+ */
+export const cancelAccountTwofaEmail = <ThrowOnError extends boolean = false>(
+  options: Options<CancelAccountTwofaEmailData, ThrowOnError>,
+): RequestResult<CancelAccountTwofaEmailResponses, CancelAccountTwofaEmailErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    CancelAccountTwofaEmailResponses,
+    CancelAccountTwofaEmailErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/2fa/email', ...options });
+
+/**
+ * Set Account Twofa Email
+ *
+ * Attach a recovery email; the response says whether a code was mailed.
+ */
+export const setAccountTwofaEmail = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountTwofaEmailData, ThrowOnError>,
+): RequestResult<SetAccountTwofaEmailResponses, SetAccountTwofaEmailErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SetAccountTwofaEmailResponses,
+    SetAccountTwofaEmailErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/2fa/email',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Confirm Account Twofa Email
+ *
+ * Confirm the pending recovery email with the code from the letter.
+ */
+export const confirmAccountTwofaEmail = <ThrowOnError extends boolean = false>(
+  options: Options<ConfirmAccountTwofaEmailData, ThrowOnError>,
+): RequestResult<ConfirmAccountTwofaEmailResponses, ConfirmAccountTwofaEmailErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ConfirmAccountTwofaEmailResponses,
+    ConfirmAccountTwofaEmailErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/2fa/email/confirm',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Resend Account Twofa Email
+ *
+ * Mail the confirmation code again for an email that is still pending.
+ */
+export const resendAccountTwofaEmail = <ThrowOnError extends boolean = false>(
+  options: Options<ResendAccountTwofaEmailData, ThrowOnError>,
+): RequestResult<ResendAccountTwofaEmailResponses, ResendAccountTwofaEmailErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ResendAccountTwofaEmailResponses,
+    ResendAccountTwofaEmailErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/2fa/email/resend', ...options });
+
+/**
+ * Clear Account Twofa Email
+ *
+ * Detach a CONFIRMED recovery email; the cloud password stays as it is.
+ *
+ * A separate route from ``DELETE .../2fa/email`` because the two are separate
+ * Telegram calls: that one cancels a verification still in flight, this one clears
+ * an address Telegram already accepted. Nothing but
+ * ``account.updatePasswordSettings`` with an empty ``email`` can do the second.
+ */
+export const clearAccountTwofaEmail = <ThrowOnError extends boolean = false>(
+  options: Options<ClearAccountTwofaEmailData, ThrowOnError>,
+): RequestResult<ClearAccountTwofaEmailResponses, ClearAccountTwofaEmailErrors, ThrowOnError> =>
+  (options.client ?? client).delete<
+    ClearAccountTwofaEmailResponses,
+    ClearAccountTwofaEmailErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/2fa/email/recovery', ...options });
 
 /**
  * List Proxies

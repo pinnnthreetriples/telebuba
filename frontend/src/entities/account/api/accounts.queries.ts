@@ -87,6 +87,8 @@ export {
   getAccountPrivacyQueryKey as accountPrivacyQueryKey,
   getAccountProfileSnapshotOptions as accountProfileSnapshotQueryOptions,
   getAccountProfileSnapshotQueryKey as accountProfileSnapshotQueryKey,
+  getAccountTwofaOptions as accountTwofaQueryOptions,
+  getAccountTwofaQueryKey as accountTwofaQueryKey,
   listAccountChannelPostsOptions as accountChannelPostsQueryOptions,
   listAccountChannelPostsQueryKey as accountChannelPostsQueryKey,
   listAccountChannelsOptions as accountChannelsQueryOptions,

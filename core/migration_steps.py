@@ -43,6 +43,17 @@ def _add_account_bio(connection: Connection) -> None:
         connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN bio VARCHAR")
 
 
+def _add_account_twofa_password(connection: Connection) -> None:
+    # Table guard as well as the column guard (the ``_add_warming_state_reservation_token``
+    # shape, not ``_add_account_bio``'s): this is the first ``accounts`` migration that
+    # runs after #52, and ``tests/core/test_migrations_neurocomment_inbox`` drives the
+    # registry over a database built from the neurocomment slice alone.
+    if not _sqlite_table_exists(connection, "accounts"):
+        return
+    if "twofa_password" not in _sqlite_columns(connection, "accounts"):
+        connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN twofa_password VARCHAR")
+
+
 def _add_account_proxy_geo(connection: Connection) -> None:
     # ``account_proxies`` was retired by the proxy-pool migration (#18); on a
     # fresh DB the table no longer exists, so this legacy ALTER is a no-op.

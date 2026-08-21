@@ -116,6 +116,16 @@ def setup_logging() -> None:
             dsn=settings.logging.sentry_dsn,
             traces_sample_rate=0.0,
             send_default_pii=False,
+            # ``include_local_variables`` defaults to True, and the default logging
+            # integration turns any ERROR record carrying ``exc_info`` into an event
+            # with every frame's ``f_locals`` rendered by ``repr()``.
+            # ``core/db_maintenance.py`` documents that exact mechanism and accepts it
+            # "no secrets" — an assumption the cloud-password (2FA) feature
+            # invalidated: a failed ``edit_2fa`` leaves the plaintext password, the
+            # recovery address and the mailed code sitting in Telethon's own frames as
+            # bare string locals, which no field-level ``repr=False`` can reach. This
+            # is the only switch that covers third-party frames.
+            include_local_variables=False,
         )
         _state.sentry_active = True
     else:

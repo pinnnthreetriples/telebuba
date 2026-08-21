@@ -13,6 +13,7 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from services import warming
 from services.accounts import privacy as privacy_module
+from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
 
 if TYPE_CHECKING:
@@ -51,12 +52,16 @@ def _isolate_runtime(
     # and that table is module-level and loop-bound, so a lock built in an earlier test's
     # loop raises "bound to a different event loop" here under some orderings.
     warming._ACCOUNT_LOCKS.clear()
+    # The 2FA writes serialise per account through the same module-level, loop-bound
+    # shape, so it needs the same reset.
+    twofa_module._TWOFA_LOCKS.clear()
     reset_logging_for_tests()
     setup_logging()
     before = _repo_session_files()
     yield
     _IMPORT_LOCKS.clear()
     warming._ACCOUNT_LOCKS.clear()
+    twofa_module._TWOFA_LOCKS.clear()
     reset_logging_for_tests()
     # Isolation is not self-evident: ``monkeypatch`` is function-scoped and SHARED with
     # every test that requests it, so one ``monkeypatch.undo()`` reverts the redirect

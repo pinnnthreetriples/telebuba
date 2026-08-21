@@ -25,6 +25,19 @@ function toggles(): HTMLElement[] {
   return screen.getAllByRole('button', { name: 'Действия' });
 }
 
+// happy-dom drops `propertyName`: its TransitionEvent constructor ignores the
+// field and so does fireEvent.transitionEnd's init, so an event fired the usual
+// way arrives at the handler with propertyName === undefined — which is why every
+// propertyName filter in this component was invisible to this file, and a
+// transitionend that should have been discarded (or accepted) was neither. A hand
+// built native Event with the property defined on it does reach React's synthetic
+// event intact.
+function endTransition(element: HTMLElement, propertyName: string): void {
+  const event = new Event('transitionend', { bubbles: true });
+  Object.defineProperty(event, 'propertyName', { value: propertyName });
+  fireEvent(element, event);
+}
+
 test('both toggles announce the same body and its collapsed state', () => {
   render(<Card />);
   const [header, chevron] = toggles();
@@ -100,15 +113,59 @@ test('a descendant’s max-height transition does not seal the card', async () =
   );
   const body = document.getElementById(toggles()[0]?.getAttribute('aria-controls') ?? '');
 
-  // The card is closing; 80ms later an inner dropdown finishes its own max-height run.
+  // The card is closing; 80ms later an inner dropdown finishes its own run — of
+  // max-height, and of the opacity the close now keys off.
   await userEvent.click(screen.getByText('Действия'));
-  fireEvent.transitionEnd(screen.getByTestId('inner-dropdown'), { propertyName: 'max-height' });
+  endTransition(screen.getByTestId('inner-dropdown'), 'max-height');
+  endTransition(screen.getByTestId('inner-dropdown'), 'opacity');
   expect(body).not.toHaveAttribute('hidden');
 
-  // Re-opening still works, i.e. the guard did not cost the card its own transitionend.
+  // Re-opening still works, i.e. the guard did not cost the card its own
+  // transitionend — and `tb-settled` is the only observable proof of that. It is
+  // what the card's own max-height transitionend is FOR: it swaps the animation's
+  // `--mh` cap for `max-height: none` so a body taller than the CSS fallback is not
+  // left clipped. Asserting only that the button is visible passed with
+  // `setSettled(true)` deleted, because visibility rides on `reachable`.
   await userEvent.click(screen.getByText('Действия'));
-  fireEvent.transitionEnd(body as HTMLElement, { propertyName: 'max-height' });
+  expect(body).not.toHaveClass('tb-settled');
+  endTransition(body as HTMLElement, 'max-height');
+  expect(body).toHaveClass('tb-settled');
   expect(screen.getByRole('button', { name: 'Удалить аккаунт' })).toBeVisible();
+});
+
+// The other half of the a11y claim, and the half that shipped broken: a card that
+// was opened and then closed has to go BACK out of the a11y tree. `hidden` returns
+// only when the close transition ends, so what the handler accepts as "the close
+// ended" is the whole mechanism.
+//
+// In Chrome the close never ends on max-height. `.tb-collapse.tb-open.tb-settled`
+// drops the cap to `max-height: none`, and `none -> 0` is not interpolable, so no
+// max-height transition is created at all — only opacity runs. A handler filtering
+// on max-height therefore never fired and every collapsed card in the app handed
+// its controls back to the keyboard and the screen reader after one open/close
+// cycle (measured in Chrome against a verbatim copy of the CSS: `.focus()` inside
+// the closed body succeeded and a nested input's value was readable).
+//
+// Honest caveat: happy-dom fires NO transitionend of its own and applies no
+// transition CSS, so this test cannot reproduce the browser bug — it pins the
+// contract (the card closes on the signal a real browser actually sends) and it
+// fails against the pre-fix handler and against a handler with `setReachable(false)`
+// deleted. The CSS/handler pairing in index.css is the real fix.
+test('a settled card that closes leaves the a11y tree again', async () => {
+  render(<Card defaultOpen />);
+  const body = document.getElementById(toggles()[0]?.getAttribute('aria-controls') ?? '');
+
+  // Settle the open first — that is what replaces the numeric cap with `none` and
+  // makes the following close non-interpolable in a browser.
+  endTransition(body as HTMLElement, 'max-height');
+  await userEvent.click(screen.getByText('Действия'));
+  expect(body).not.toHaveAttribute('hidden');
+
+  // The close ends on opacity, because in a browser it is the only property that
+  // transitions here.
+  endTransition(body as HTMLElement, 'opacity');
+  expect(body).toHaveAttribute('hidden');
+  expect(screen.queryByRole('button', { name: 'Удалить аккаунт' })).not.toBeInTheDocument();
 });
 
 test('a card asked to start open needs no click', () => {

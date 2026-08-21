@@ -16,6 +16,8 @@ from core.telegram_client._action_results import (
     _flood_action_result,
     _generic_error,
     _join_by_request_result,
+    _ok_result,
+    _too_fresh_result,
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
@@ -39,7 +41,8 @@ from core.telegram_client._profile import (
 from core.telegram_client._react import dispatch_react_to_message, dispatch_react_to_post
 from core.telegram_client._read_comments import _resolve_linked_group_entity
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
-from core.telegram_client._util import event_name
+from core.telegram_client._twofa import dispatch_twofa_action, twofa_log_extra
+from core.telegram_client._util import event_name, sent_message_id
 from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
@@ -50,6 +53,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LeaveChannel,
     LeaveDiscussionGroup,
+    ManageTwoFactorEmail,
     MarkDirectMessageRead,
     PostComment,
     PostStory,
@@ -64,6 +68,7 @@ from schemas.telegram_actions import (
     SetOnline,
     SetPrivacySettings,
     SetProfilePhoto,
+    SetTwoFactorPassword,
     ToggleStoryPinned,
     UpdateProfile,
     WatchPeerStories,
@@ -161,6 +166,10 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
             applied_privacy_keys=_applied_privacy_keys(exc),
             domain=domain,
         )
+    # Two waits that are NOT floods, so no clause above sees them — see
+    # ``_too_fresh_result``. Its own builder because this function is at its length cap.
+    except (errors.SessionTooFreshError, errors.PasswordTooFreshError) as exc:
+        return await _too_fresh_result(account_id, action, exc.seconds, domain=domain)
     except errors.UserAlreadyParticipantError as exc:
         if action.action_type in {"join_channel", "join_discussion_group"}:
             await log_event(
@@ -198,19 +207,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
         account_id=account_id,
         extra=extra,
     )
-    return ActionResult(
-        status="ok",
-        action_type=action.action_type,
-        account_id=account_id,
-        message_id=outcome.message_id,
-        # int64 → decimal string at the JSON boundary (see ActionResult).
-        channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
-        recent_message_ids=(
-            [str(i) for i in outcome.recent_message_ids]
-            if outcome.recent_message_ids is not None
-            else None
-        ),
-    )
+    return _ok_result(account_id, action, outcome)
 
 
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0911, PLR0912
@@ -241,7 +238,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
                 action.text,
                 reply_to=action.reply_to,  # ty: ignore[invalid-argument-type]
             )
-            message_id = int(getattr(message, "id", 0)) or None
+            message_id = sent_message_id(message)
         case CommentOnPost():
             message_id = await _dispatch_comment_on_post(client, action)
         case ClickButton():
@@ -250,6 +247,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             await _dispatch_update_profile(client, action)
         case SetPrivacySettings():
             await dispatch_set_privacy_settings(client, action)
+        case SetTwoFactorPassword() | ManageTwoFactorEmail():
+            return await dispatch_twofa_action(client, action)
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
@@ -305,9 +304,9 @@ async def _dispatch_comment_on_post(client: TelegramClient, action: CommentOnPos
             msg = f"No linked discussion group to aim a reply at for {action.channel!r}"
             raise ValueError(msg)
         message = await client.send_message(entity, action.text, reply_to=action.reply_to)  # ty: ignore[invalid-argument-type]
-        return int(getattr(message, "id", 0)) or None
+        return sent_message_id(message)
     message = await client.send_message(action.channel, action.text, comment_to=action.post_id)
-    return int(getattr(message, "id", 0)) or None
+    return sent_message_id(message)
 
 
 async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> _DispatchResult:
@@ -407,6 +406,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
                 "bio": action.bio,
                 "last_seen": action.last_seen,
             }
+        case SetTwoFactorPassword() | ManageTwoFactorEmail():
+            extra = twofa_log_extra(action)
         case SetProfilePhoto() | PostStory() | AddProfileMusic():
             extra = {"filename": action.filename}
         case RemoveProfileMusic():
