@@ -3,7 +3,7 @@ from __future__ import annotations
 import secrets
 
 from core.db import fetch_account, fetch_device_fingerprint, insert_device_fingerprint
-from core.phone_geo import _lang_region, country_for_phone
+from core.device_fingerprint_lang import language_pair
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 _WINDOWS_VERSIONS = (
@@ -109,56 +109,7 @@ _LINUX_APP_VERSIONS = (
     "5.2.1 x64",
     "5.3.0 x64",
 )
-_SYSTEM_LANG_CODES = (
-    "en-US",
-    "en-GB",
-    "ru-RU",
-    "de-DE",
-    "fr-FR",
-    "es-ES",
-    "it-IT",
-    "pt-BR",
-    "ja-JP",
-    "ko-KR",
-    "zh-CN",
-    "zh-TW",
-    "en-AU",
-    "en-CA",
-)
 _PLATFORMS: tuple[DevicePlatform, ...] = ("windows", "macos", "linux")
-
-# The region halves of the tags above ARE the countries we can dress an account
-# for, so they are grouped, not typed out a second time. ``_lang_region`` is the
-# very function ``phone_geo.evaluate_geo`` uses to read the region back out of a
-# tag; inverting it here is what keeps the generator and that consumer from ever
-# disagreeing about which country ``ru-RU`` claims.
-_TAG_BY_COUNTRY: dict[str, str] = {
-    region: tag for tag in _SYSTEM_LANG_CODES if (region := _lang_region(tag))
-}
-_FALLBACK_TAG = "en-US"
-
-
-def _language_pair(phone: str | None) -> tuple[str, str]:
-    """``(lang_code, system_lang_code)`` coherent with the phone's country.
-
-    Telegram sees both fields. Drawing them independently let one account
-    announce ``lang_code="en"`` beside ``system_lang_code="ko-KR"`` on a Russian
-    number, which no real Telegram Desktop install does. Here the regional tag
-    follows the phone country and the bare language is that tag's own first
-    half, so the two cannot contradict each other.
-
-    The phone is the only input available: the fingerprint is minted at account
-    creation (``services.accounts.lifecycle.add_account``) BEFORE any proxy is
-    assigned, so there is no proxy country to consult at this point — plumbing
-    one in would read an association that does not exist yet.
-
-    With no phone, or a country outside the tag set, the pair falls back to
-    ``en-US`` rather than a random draw: an unrecognised OS locale is exactly
-    when a real Telegram Desktop settles on English, and a random draw is the
-    bug being fixed — it is what let the tag contradict the number.
-    """
-    tag = _TAG_BY_COUNTRY.get(country_for_phone(phone) or "", _FALLBACK_TAG)
-    return tag.split("-", 1)[0], tag
 
 
 def generate_random_device_fingerprint(
@@ -179,7 +130,7 @@ def generate_random_device_fingerprint(
         system_version = secrets.choice(_LINUX_DISTROS)
         app_version = secrets.choice(_LINUX_APP_VERSIONS)
 
-    lang_code, system_lang_code = _language_pair(phone)
+    lang_code, system_lang_code = language_pair(phone)
     return DeviceFingerprint(
         account_id=account_id,
         platform=platform,
@@ -196,8 +147,10 @@ async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint
     if existing is not None:
         return existing
 
-    # Read on the mint path only: an existing fingerprint is immutable, so an
-    # account whose phone lands later keeps the language it was born with.
+    # Read on the mint path only. On the two import paths the row has no phone
+    # yet — the connection that learns it needs this fingerprint first — so they
+    # mint the ``en-US`` fallback and the first successful session check
+    # corrects the language once (``core.repositories._accounts_session_check``).
     account = await fetch_account(account_id)
     profile = generate_random_device_fingerprint(
         account_id,

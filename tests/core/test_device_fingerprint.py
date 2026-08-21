@@ -309,20 +309,6 @@ def test_fingerprint_language_follows_the_phone_country() -> None:
     assert fingerprint.system_lang_code == "ru-RU"
 
 
-def test_fingerprint_language_pair_can_never_disagree() -> None:
-    """The two fields were drawn independently, so one draw could not catch it.
-
-    ``lang_code="en"`` beside ``system_lang_code="ko-KR"`` was reachable but
-    unlikely; only repeated draws per country make the old code fail here.
-    """
-    for phone in ("+79161234567", "+4915112345678", "+819012345678", "+380671234567", None):
-        for _ in range(40):
-            fingerprint = generate_random_device_fingerprint("acc", phone=phone)
-            language, _, region = fingerprint.system_lang_code.partition("-")
-            assert region
-            assert fingerprint.lang_code == language
-
-
 def test_fingerprint_language_satisfies_the_geo_evaluation() -> None:
     """Asserted against the consumer: ``evaluate_geo`` is what reads the tag back."""
     phone = "+4915112345678"

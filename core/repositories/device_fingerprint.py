@@ -15,6 +15,13 @@ from sqlalchemy.exc import IntegrityError
 
 from core.db import _device_fingerprints, _get_engine, _row_to_device_fingerprint
 
+# The table's only UPDATE lives in a sibling module (see its docstring on why it
+# cannot live here); re-exported so this module stays the whole write surface.
+from core.repositories._device_fingerprint_language import (  # noqa: F401
+    _correct_fingerprint_language,
+    _language_correction,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
