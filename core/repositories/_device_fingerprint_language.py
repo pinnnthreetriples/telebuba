@@ -19,9 +19,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import exists, update
+from sqlalchemy import update
 
-from core._schema_tables import _accounts, _device_fingerprints
+from core._schema_tables import _device_fingerprints
 from core.device_fingerprint_lang import FALLBACK_TAG, language_pair
 
 if TYPE_CHECKING:
@@ -36,22 +36,36 @@ def _language_correction(account_id: str, phone: str | None) -> Update | None:
     so no argument to this function can produce a statement that reaches the
     four device columns.
 
-    ``account_id`` keys the one row; beyond it two predicates bound when the
-    correction may fire at all. ``system_lang_code ==
-    FALLBACK_TAG`` is the "still the fallback" guard: a row already carrying a
-    derived tag matches nothing, and a phone whose own country resolves to the
-    fallback anyway (US, or no country at all) yields no statement at all — so a
-    fingerprint minted with a genuine ``en-US`` is never rewritten. The EXISTS on
-    ``accounts.last_checked_at IS NULL`` is the "first check" guard, and it is
-    what keeps rows minted before this correction existed out of scope: those
-    drew their two language fields independently and no migration touches them,
-    so a legacy ``('ja', 'en-US')`` still looks like a fallback. Rewriting it on
-    some routine check months in would change what the account has announced all
-    along, which is the linkage signal this correction exists to remove.
+    ``account_id`` keys the one row; ``system_lang_code == FALLBACK_TAG`` is the
+    "at most once" guard and the only bound on the blast radius. Both live in the
+    WHERE clause, not in Python, so that two concurrent session checks cannot
+    both read the fallback and both write. A row already carrying a derived tag
+    matches nothing, and a phone whose own country resolves to the fallback
+    anyway (US, or no country at all) yields no statement at all — so a
+    fingerprint minted with a genuine ``en-US`` is never rewritten, and a
+    corrected one is never corrected again.
 
-    Both live in the WHERE clause rather than in Python so that the guard is
-    evaluated where the write happens: two concurrent session checks cannot both
-    read an unchecked account on the fallback and both write.
+    A second predicate on ``accounts.last_checked_at IS NULL`` was added and then
+    removed, deliberately, and must not come back. It read as "only on a first
+    check", but that column is stamped by EVERY check and by
+    ``update_account_status``, not by a successful one — so a first check that
+    returned non-alive forfeited the correction permanently and silently. The
+    worst measured shape: with ``TELEGRAM__API_ID`` unset,
+    ``core.telegram_client._session`` answers ``session_error`` for every account
+    before it opens a client, so one credential typo at import time cost a whole
+    batch the feature for good. ``.session`` import runs no check at all, which
+    let a typed action's ``update_account_status`` exclude a row before anything
+    had checked it.
+
+    The accepted cost of dropping it: pre-existing rows drew the two language
+    fields independently, so roughly 1 in 14 carries ``en-US`` beside an
+    unrelated ``lang_code`` and will be corrected on its next session check,
+    changing the locale an established account announces. That was judged the
+    better outcome, because such a pair is internally contradictory TODAY — a
+    per-account, single-observation tell — whereas a corrected pair is coherent;
+    and because a synchronised fleet-wide flip is not reachable: the API exposes
+    no bulk-check route and ``AccountsPage.tsx`` has no multi-select, so at most
+    one account moves per operator action.
     """
     lang_code, system_lang_code = language_pair(phone)
     if system_lang_code == FALLBACK_TAG:
@@ -61,10 +75,6 @@ def _language_correction(account_id: str, phone: str | None) -> Update | None:
         .where(
             _device_fingerprints.c.account_id == account_id,
             _device_fingerprints.c.system_lang_code == FALLBACK_TAG,
-            exists().where(
-                _accounts.c.account_id == account_id,
-                _accounts.c.last_checked_at.is_(None),
-            ),
         )
         .values(lang_code=lang_code, system_lang_code=system_lang_code)
     )
@@ -80,10 +90,6 @@ def _correct_fingerprint_language(
     Taking the connection rather than opening one means the correction commits
     in the same transaction as the phone it was derived from, so the fingerprint
     can never disagree with the ``accounts`` row that produced it.
-
-    The caller must execute this BEFORE it stamps ``accounts.last_checked_at``,
-    because that column is the "first check" guard: stamping it first makes the
-    EXISTS false and the correction a silent no-op forever.
     """
     statement = _language_correction(account_id, phone)
     if statement is not None:

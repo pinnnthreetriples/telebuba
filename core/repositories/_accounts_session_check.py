@@ -52,6 +52,9 @@ def _update_account_from_session_check(result: TelegramSessionCheckResult) -> Ac
             values["avatar_etag"] = hashlib.blake2b(result.avatar_thumb, digest_size=16).hexdigest()
 
     with _get_engine().begin() as connection:
+        connection.execute(
+            update(_accounts).where(_accounts.c.account_id == result.account_id).values(**values),
+        )
         if result.status == "alive":
             # The one moment a fingerprint's language may be corrected, and the
             # reason it is here rather than at a service call site: this line is
@@ -66,15 +69,7 @@ def _update_account_from_session_check(result: TelegramSessionCheckResult) -> Ac
             # fallback and this repairs it once. It also repairs a phone login
             # whose operator-typed number was unparseable, because the number
             # here is Telegram's canonical form and not the typed one.
-            #
-            # It runs BEFORE the UPDATE below and not after: the correction's
-            # own guard is that this account has never been checked, which the
-            # UPDATE's ``last_checked_at`` is about to stop being true. Same
-            # transaction either way, so the two still commit together.
             _correct_fingerprint_language(connection, result.account_id, result.phone)
-        connection.execute(
-            update(_accounts).where(_accounts.c.account_id == result.account_id).values(**values),
-        )
 
     account = _fetch_account(result.account_id)
     if account is None:

@@ -15,7 +15,7 @@ edges:
 4. DB uses repositories; Telegram/providers/logging/events use `core/` gateways. Injectable domain collaborators go through focused seams.
 5. No `print()`, raw environment reads, operational magic values, or translated display text in backend responses. `core/config.py` and `.env.example` stay key/value aligned.
 6. Public I/O is async and typed; wrapped exceptions use `raise ... from e`.
-7. A fingerprint's device identity (platform, model, OS, app version) is immutable; its language may be corrected only on an account's first session check, and only while still the fallback. Credentials, `.session`, tdata and proxy passwords never enter logs or git.
+7. A fingerprint's device identity (platform, model, OS, app version) is immutable; its language pair may be corrected by any session check that learns a phone with a mapped country, while `system_lang_code` is still the fallback and only then — hence at most once, whether or not the account has been checked before. Credentials, `.session`, tdata and proxy passwords never enter logs or git.
 8. Package roots stay thin; split by responsibility. Backend and frontend test/test-helper sources stay ≤700 lines.
 9. Behavior changes include tests. Backend branch coverage stays ≥90%; warnings, unknown markers and unexpected xpass fail.
 

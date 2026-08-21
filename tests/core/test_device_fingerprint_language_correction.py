@@ -2,9 +2,16 @@
 
 Both import paths build their ``AccountCreate`` with no phone — the connection
 that learns the number needs the fingerprint first — so they mint the ``en-US``
-fallback and would otherwise announce it for the account's life. The first
-successful session check is where the phone arrives, and that is the only moment
-this correction may fire.
+fallback and would otherwise announce it for the account's life. A session check
+that returns alive is where the phone arrives; the correction fires there while
+the row still carries the fallback, and once it has, never again.
+
+Which check is not part of the guard, and several cases below exist because a
+narrower rule was tried and reverted: a predicate on
+``accounts.last_checked_at IS NULL`` looked like "only on a first check" but that
+column is stamped by every check and by ``update_account_status``, so any first
+check that did not return alive lost the correction for good. See
+``core.repositories._device_fingerprint_language`` for the trade that replaced it.
 
 Two of the cases below assert on generated SQL rather than on an outcome, which
 is why: `core/` is outside the mutation sweep (`pyproject.toml` `source_paths` is
@@ -15,11 +22,12 @@ suite green while making one check rewrite every fallback row in the table.
 
 from __future__ import annotations
 
+import asyncio
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import event, select
 
 from core.db import (
     _device_fingerprints,
@@ -77,15 +85,15 @@ def test_the_update_statement_can_only_reach_the_two_language_columns() -> None:
     assert assigned == {"lang_code", "system_lang_code"}
 
 
-def test_the_update_reaches_one_account_and_only_before_its_first_check() -> None:
+def test_the_update_reaches_one_account_and_only_while_it_is_the_fallback() -> None:
     """Structural, like the SET-clause test above, and for the same reason.
 
     That test bounds which columns a correction may touch; this one bounds which
-    rows. Both halves of "one account, once, and only on its first check" live in
-    the WHERE clause and nowhere else, so dropping a predicate has to fail here.
-    Behaviourally the ``account_id`` half is invisible to any single-account test,
-    and its absence would give every fallback row in the table one shared
-    language — the linkage signal this correction exists to remove.
+    rows, and pins the WHERE clause as an exact set so a widening predicate is as
+    visible as a missing one. Behaviourally the ``account_id`` half is invisible
+    to any single-account test, and its absence would give every fallback row in
+    the table one shared language — the linkage signal this correction exists to
+    remove.
     """
     statement = _language_correction("acc", "+79161234567")
     assert statement is not None
@@ -95,8 +103,6 @@ def test_the_update_reaches_one_account_and_only_before_its_first_check() -> Non
     assert constrained == {
         "device_fingerprints.account_id",
         "device_fingerprints.system_lang_code",
-        "accounts.account_id",
-        "accounts.last_checked_at",
     }
 
 
@@ -251,27 +257,132 @@ async def test_correcting_one_account_leaves_a_neighbour_byte_identical(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_only_an_account_never_checked_before_is_corrected(tmp_path: Path) -> None:
-    """The fallback guard alone would rewrite rows minted before this correction.
+async def test_a_legacy_pair_off_the_fallback_is_left_alone_however_incoherent(
+    tmp_path: Path,
+) -> None:
+    """The fallback tag is the whole bound on the blast radius, so pin it here.
 
-    Pre-existing fingerprints drew the two language fields independently and no
-    migration touches them, so a legacy ``('ja', 'en-US')`` still matches "still
-    the fallback" and would be rewritten on its next routine check — months into
-    the account's life, changing what it has announced all along. ``accounts``
-    knows the difference: ``last_checked_at`` is NULL only until something has
-    checked the account, so the correction is confined to a first check.
+    Rows minted before this correction drew the two fields independently, so a
+    legacy ``('ko', 'ru-RU')`` is as contradictory as a legacy ``('ko', 'en-US')``
+    — but only the second is in scope. The first is repaired by nothing and must
+    stay exactly as the account has always announced it; widening the guard to
+    "differs from the phone" would sweep in every established row in the table at
+    once, which is the linkage signal this correction exists to remove.
     """
-    await _seed(tmp_path, "legacy", lang_code="ja")
-    await update_account_status("legacy", status="alive")
-    await create_account(AccountCreateFactory.build(account_id="fresh"))
-    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="fresh"))
+    await _seed(tmp_path, "legacy", lang_code="ko", system_lang_code="ru-RU")
 
-    await update_account_from_session_check(_alive("legacy", "+79161234567"))
-    await update_account_from_session_check(_alive("fresh", "+79161234567"))
+    await update_account_from_session_check(_alive("legacy", "+819012345678"))
+    untouched = await fetch_device_fingerprint("legacy")
 
-    legacy = await fetch_device_fingerprint("legacy")
-    fresh = await fetch_device_fingerprint("fresh")
-    assert legacy is not None
-    assert fresh is not None
-    assert (legacy.lang_code, legacy.system_lang_code) == ("ja", "en-US")
-    assert (fresh.lang_code, fresh.system_lang_code) == ("ru", "ru-RU")
+    assert untouched is not None
+    assert (untouched.lang_code, untouched.system_lang_code) == ("ko", "ru-RU")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_first_check_does_not_forfeit_the_correction(tmp_path: Path) -> None:
+    """A proxy hiccup on the first check must not cost the account the feature.
+
+    Every check stamps ``accounts.last_checked_at``, alive or not, so a guard on
+    that column made the fallback permanent for exactly the accounts an operator
+    was about to fix and re-check — 8 of 200 in a measured bulk tdata import.
+    """
+    await _seed(tmp_path, "hiccup")
+
+    await update_account_from_session_check(
+        _alive("hiccup", None).model_copy(
+            update={"status": "proxy_error", "user_id": None, "error_type": "ProxyTimeoutError"},
+        ),
+    )
+    await update_account_from_session_check(_alive("hiccup", "+79161234567"))
+    corrected = await fetch_device_fingerprint("hiccup")
+
+    assert corrected is not None
+    assert (corrected.lang_code, corrected.system_lang_code) == ("ru", "ru-RU")
+
+
+@pytest.mark.asyncio
+async def test_credentials_filled_in_after_the_import_still_reach_the_language(
+    tmp_path: Path,
+) -> None:
+    """The whole-batch case: the failure was ours, not Telegram's.
+
+    ``core.telegram_client._session`` short-circuits to ``session_error`` /
+    ``MissingCredentials`` when ``TELEGRAM__API_ID`` is unset, before it opens a
+    client — so every account imported while ``.env`` was incomplete failed its
+    first check identically. Demonstrated on five: the operator filled the
+    credentials in, re-checked, and all five kept ``en-US`` for good.
+    """
+    await _seed(tmp_path, "batch")
+    await create_account(AccountCreateFactory.build(account_id="batch2"))
+    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="batch2"))
+    misconfigured = {
+        "status": "session_error",
+        "user_id": None,
+        "error_type": "MissingCredentials",
+        "error_message": "TELEGRAM__API_ID / TELEGRAM__API_HASH are not set in .env",
+    }
+
+    for account_id in ("batch", "batch2"):
+        await update_account_from_session_check(
+            _alive(account_id, None).model_copy(update=misconfigured),
+        )
+        await update_account_from_session_check(_alive(account_id, "+819012345678"))
+
+    for account_id in ("batch", "batch2"):
+        corrected = await fetch_device_fingerprint(account_id)
+        assert corrected is not None
+        assert (corrected.lang_code, corrected.system_lang_code) == ("ja", "ja-JP")
+
+
+@pytest.mark.asyncio
+async def test_a_typed_action_stamping_the_check_time_does_not_exclude_the_row(
+    tmp_path: Path,
+) -> None:
+    """``.session`` import runs no session check, so a typed action can stamp first.
+
+    ``services.accounts.sessions`` writes the file and returns; the typed-action
+    executor's ``update_account_status`` stamps ``last_checked_at`` the moment it
+    learns the account is frozen or flood-waited. That is not a check of the
+    session, and must not decide whether the language may still be corrected.
+    """
+    await _seed(tmp_path, "imported_session")
+    await update_account_status("imported_session", status="flood_wait")
+
+    await update_account_from_session_check(_alive("imported_session", "+4915112345678"))
+    corrected = await fetch_device_fingerprint("imported_session")
+
+    assert corrected is not None
+    assert (corrected.lang_code, corrected.system_lang_code) == ("de", "de-DE")
+
+
+@pytest.mark.asyncio
+async def test_two_simultaneous_checks_correct_the_row_exactly_once(tmp_path: Path) -> None:
+    """Why the guard is a WHERE clause and not a Python read of the current tag.
+
+    Each repository call runs in its own ``asyncio.to_thread`` worker on its own
+    connection, so two checks landing together genuinely race. Counting the rows
+    the UPDATE actually changed is what makes "once" observable: a read-then-write
+    guard, or no guard, lets both writes land and the pair the account settled on
+    depends on which transaction committed last.
+    """
+    await _seed(tmp_path, "raced")
+    changed: list[int] = []
+    engine = _get_engine()
+
+    def _record(_conn: object, cursor: Any, statement: str, *_rest: object) -> None:
+        if statement.lstrip().startswith("UPDATE device_fingerprints"):
+            changed.append(cursor.rowcount)
+
+    event.listen(engine, "after_cursor_execute", _record)
+    try:
+        await asyncio.gather(
+            update_account_from_session_check(_alive("raced", "+79161234567")),
+            update_account_from_session_check(_alive("raced", "+4915112345678")),
+        )
+    finally:
+        event.remove(engine, "after_cursor_execute", _record)
+    final = await fetch_device_fingerprint("raced")
+
+    assert sum(changed) == 1
+    assert final is not None
+    assert (final.lang_code, final.system_lang_code) in {("ru", "ru-RU"), ("de", "de-DE")}
