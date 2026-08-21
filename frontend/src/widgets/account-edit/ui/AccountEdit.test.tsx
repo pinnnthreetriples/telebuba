@@ -58,6 +58,21 @@ test('renders the hero and every section header', () => {
   expect(screen.getByText('до 2026-07-01')).toBeInTheDocument();
 });
 
+test('the two security cards share one two-column row', () => {
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  // Both cards rendering is not the claim; being PAIRED is. The 2FA card was
+  // full width and the actions card stood alone under it, and a refactor that
+  // unpairs them again puts the cloud password back on a row of its own — plus
+  // it silently drops the half-width constraint the reveal panel's wrapping
+  // textarea exists for.
+  const card = (title: string) => screen.getByText(title).closest('.rounded-2xl');
+  const twofa = card('Облачный пароль (2FA)');
+  const row = twofa?.parentElement;
+  expect(card('Действия')?.parentElement).toBe(row);
+  // The same grid the session/proxy and device/signals rows use, gap included.
+  expect(row).toHaveClass('grid', 'grid-cols-1', 'md:grid-cols-2', 'gap-[14px]');
+});
+
 test('section toggles, import tabs and proxy mode drive the handlers', async () => {
   const onBack = vi.fn();
   renderWithClient(<AccountEdit account={ACCOUNT} onBack={onBack} />);

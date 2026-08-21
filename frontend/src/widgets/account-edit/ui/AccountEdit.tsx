@@ -75,14 +75,14 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         <SignalsSection account={account} />
       </div>
 
-      {/* The security cards sit together: the cloud password is the other half
-          of "who can take this account" that the session card starts. Full width
-          because the set/change form plus the recovery-email leg needs the room. */}
-      <div className="mb-[14px]">
+      {/* The security cards sit together: the cloud password is the other half of
+          "who can take this account" that the session card starts, and the actions
+          card is what taking it away looks like. No bottom margin — the last row
+          owns the page's bottom edge. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <TwoFactorSection account={account} />
+        <ActionsSection account={account} onBack={onBack} />
       </div>
-
-      <ActionsSection account={account} onBack={onBack} />
     </div>
   );
 }
