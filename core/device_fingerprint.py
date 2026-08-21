@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import secrets
 
-from core.db import fetch_device_fingerprint, insert_device_fingerprint
+from core.db import fetch_account, fetch_device_fingerprint, insert_device_fingerprint
+from core.phone_geo import _lang_region, country_for_phone
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 _WINDOWS_VERSIONS = (
@@ -108,7 +109,6 @@ _LINUX_APP_VERSIONS = (
     "5.2.1 x64",
     "5.3.0 x64",
 )
-_LANG_CODES = ("en", "ru", "de", "fr", "es", "it", "pt", "ja", "ko", "zh")
 _SYSTEM_LANG_CODES = (
     "en-US",
     "en-GB",
@@ -127,8 +127,44 @@ _SYSTEM_LANG_CODES = (
 )
 _PLATFORMS: tuple[DevicePlatform, ...] = ("windows", "macos", "linux")
 
+# The region halves of the tags above ARE the countries we can dress an account
+# for, so they are grouped, not typed out a second time. ``_lang_region`` is the
+# very function ``phone_geo.evaluate_geo`` uses to read the region back out of a
+# tag; inverting it here is what keeps the generator and that consumer from ever
+# disagreeing about which country ``ru-RU`` claims.
+_TAG_BY_COUNTRY: dict[str, str] = {
+    region: tag for tag in _SYSTEM_LANG_CODES if (region := _lang_region(tag))
+}
+_FALLBACK_TAG = "en-US"
 
-def generate_random_device_fingerprint(account_id: str) -> DeviceFingerprint:
+
+def _language_pair(phone: str | None) -> tuple[str, str]:
+    """``(lang_code, system_lang_code)`` coherent with the phone's country.
+
+    Telegram sees both fields. Drawing them independently let one account
+    announce ``lang_code="en"`` beside ``system_lang_code="ko-KR"`` on a Russian
+    number, which no real Telegram Desktop install does. Here the regional tag
+    follows the phone country and the bare language is that tag's own first
+    half, so the two cannot contradict each other.
+
+    The phone is the only input available: the fingerprint is minted at account
+    creation (``services.accounts.lifecycle.add_account``) BEFORE any proxy is
+    assigned, so there is no proxy country to consult at this point — plumbing
+    one in would read an association that does not exist yet.
+
+    With no phone, or a country outside the tag set, the pair falls back to
+    ``en-US`` rather than a random draw: an unrecognised OS locale is exactly
+    when a real Telegram Desktop settles on English, and a random draw is the
+    bug being fixed — it is what let the tag contradict the number.
+    """
+    tag = _TAG_BY_COUNTRY.get(country_for_phone(phone) or "", _FALLBACK_TAG)
+    return tag.split("-", 1)[0], tag
+
+
+def generate_random_device_fingerprint(
+    account_id: str,
+    phone: str | None = None,
+) -> DeviceFingerprint:
     platform = secrets.choice(_PLATFORMS)
     if platform == "windows":
         device_model = secrets.choice(_DESKTOP_DEVICES)
@@ -143,14 +179,15 @@ def generate_random_device_fingerprint(account_id: str) -> DeviceFingerprint:
         system_version = secrets.choice(_LINUX_DISTROS)
         app_version = secrets.choice(_LINUX_APP_VERSIONS)
 
+    lang_code, system_lang_code = _language_pair(phone)
     return DeviceFingerprint(
         account_id=account_id,
         platform=platform,
         device_model=device_model,
         system_version=system_version,
         app_version=app_version,
-        lang_code=secrets.choice(_LANG_CODES),
-        system_lang_code=secrets.choice(_SYSTEM_LANG_CODES),
+        lang_code=lang_code,
+        system_lang_code=system_lang_code,
     )
 
 
@@ -159,5 +196,11 @@ async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint
     if existing is not None:
         return existing
 
-    profile = generate_random_device_fingerprint(account_id)
+    # Read on the mint path only: an existing fingerprint is immutable, so an
+    # account whose phone lands later keeps the language it was born with.
+    account = await fetch_account(account_id)
+    profile = generate_random_device_fingerprint(
+        account_id,
+        phone=account.phone if account else None,
+    )
     return await insert_device_fingerprint(profile)
