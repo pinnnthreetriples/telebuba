@@ -5,6 +5,12 @@ that learns the number needs the fingerprint first — so they mint the ``en-US`
 fallback and would otherwise announce it for the account's life. The first
 successful session check is where the phone arrives, and that is the only moment
 this correction may fire.
+
+Two of the cases below assert on generated SQL rather than on an outcome, which
+is why: `core/` is outside the mutation sweep (`pyproject.toml` `source_paths` is
+`["services", "schemas"]`), so nothing but an explicit test pins these
+predicates. Deleting the UPDATE's `account_id` predicate once left the entire
+suite green while making one check rewrite every fallback row in the table.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from core.db import (
     fetch_device_fingerprint,
     insert_device_fingerprint,
     update_account_from_session_check,
+    update_account_status,
 )
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.repositories._device_fingerprint_language import _language_correction
@@ -68,6 +75,29 @@ def test_the_update_statement_can_only_reach_the_two_language_columns() -> None:
     assigned = {part.split("=")[0].strip() for part in set_clause.group(1).split(",")}
 
     assert assigned == {"lang_code", "system_lang_code"}
+
+
+def test_the_update_reaches_one_account_and_only_before_its_first_check() -> None:
+    """Structural, like the SET-clause test above, and for the same reason.
+
+    That test bounds which columns a correction may touch; this one bounds which
+    rows. Both halves of "one account, once, and only on its first check" live in
+    the WHERE clause and nowhere else, so dropping a predicate has to fail here.
+    Behaviourally the ``account_id`` half is invisible to any single-account test,
+    and its absence would give every fallback row in the table one shared
+    language — the linkage signal this correction exists to remove.
+    """
+    statement = _language_correction("acc", "+79161234567")
+    assert statement is not None
+    where_clause = str(statement).split(" WHERE ", 1)[1]
+    constrained = set(re.findall(r"\b(?:device_fingerprints|accounts)\.\w+", where_clause))
+
+    assert constrained == {
+        "device_fingerprints.account_id",
+        "device_fingerprints.system_lang_code",
+        "accounts.account_id",
+        "accounts.last_checked_at",
+    }
 
 
 def test_no_statement_at_all_without_a_country_to_correct_to() -> None:
@@ -194,3 +224,54 @@ async def test_correction_repairs_an_operator_typed_number(tmp_path: Path) -> No
 
     assert corrected is not None
     assert (corrected.lang_code, corrected.system_lang_code) == ("ru", "ru-RU")
+
+
+@pytest.mark.asyncio
+async def test_correcting_one_account_leaves_a_neighbour_byte_identical(tmp_path: Path) -> None:
+    """One check must move one row, whatever else is on the fallback beside it.
+
+    Every other case here uses a single account, which is the one shape that
+    cannot observe an unkeyed UPDATE: a fleet is born on the same ``en-US``
+    fallback, so without the ``account_id`` predicate one alive check rewrites
+    every fingerprint in the table to the checked account's language.
+    """
+    await _seed(tmp_path, "checked")
+    await create_account(AccountCreateFactory.build(account_id="neighbour"))
+    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="neighbour"))
+    before = await fetch_device_fingerprint("neighbour")
+    assert before is not None
+
+    await update_account_from_session_check(_alive("checked", "+79161234567"))
+
+    checked = await fetch_device_fingerprint("checked")
+    neighbour = await fetch_device_fingerprint("neighbour")
+    assert checked is not None
+    assert (checked.lang_code, checked.system_lang_code) == ("ru", "ru-RU")
+    assert neighbour == before
+
+
+@pytest.mark.asyncio
+async def test_only_an_account_never_checked_before_is_corrected(tmp_path: Path) -> None:
+    """The fallback guard alone would rewrite rows minted before this correction.
+
+    Pre-existing fingerprints drew the two language fields independently and no
+    migration touches them, so a legacy ``('ja', 'en-US')`` still matches "still
+    the fallback" and would be rewritten on its next routine check — months into
+    the account's life, changing what it has announced all along. ``accounts``
+    knows the difference: ``last_checked_at`` is NULL only until something has
+    checked the account, so the correction is confined to a first check.
+    """
+    await _seed(tmp_path, "legacy", lang_code="ja")
+    await update_account_status("legacy", status="alive")
+    await create_account(AccountCreateFactory.build(account_id="fresh"))
+    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="fresh"))
+
+    await update_account_from_session_check(_alive("legacy", "+79161234567"))
+    await update_account_from_session_check(_alive("fresh", "+79161234567"))
+
+    legacy = await fetch_device_fingerprint("legacy")
+    fresh = await fetch_device_fingerprint("fresh")
+    assert legacy is not None
+    assert fresh is not None
+    assert (legacy.lang_code, legacy.system_lang_code) == ("ja", "en-US")
+    assert (fresh.lang_code, fresh.system_lang_code) == ("ru", "ru-RU")
