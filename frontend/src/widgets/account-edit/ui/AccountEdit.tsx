@@ -21,8 +21,8 @@ function trustColor(t: number): string {
 }
 
 // The design's account-edit view (reached by clicking a row): an always-visible
-// hero header above five collapsible cards — session, proxy, device, signals,
-// actions — each owning its own state/mutations. All wired to /api/v1.
+// hero header above six collapsible cards — session, proxy, device, signals,
+// 2FA, actions — each owning its own state/mutations. All wired to /api/v1.
 export function AccountEdit({ account, onBack }: { account: AccountRead; onBack: () => void }) {
   const { t } = useTranslation();
   const trust = account.trust_score ?? 0;
@@ -75,14 +75,14 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         <SignalsSection account={account} />
       </div>
 
-      {/* The security cards sit together: the cloud password is the other half
-          of "who can take this account" that the session card starts. Full width
-          because the set/change form plus the recovery-email leg needs the room. */}
-      <div className="mb-[14px]">
+      {/* The security cards sit together: the cloud password is the other half of
+          "who can take this account" that the session card starts, and the actions
+          card is what taking it away looks like. No bottom margin — the last row
+          owns the page's bottom edge. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <TwoFactorSection account={account} />
+        <ActionsSection account={account} onBack={onBack} />
       </div>
-
-      <ActionsSection account={account} onBack={onBack} />
     </div>
   );
 }
