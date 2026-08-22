@@ -74,6 +74,11 @@ override-dependencies = [
     "msgpack>=1.2.1",
     # GHSA-4xgf-cpjx-pc3j in pydantic-settings <=2.14.1 (direct dep, fix 2.14.2).
     "pydantic-settings>=2.14.2",
+    # PYSEC-2026-3721 in pip <26.2, reached only through pip-api, which is
+    # pip-audit's own dependency -- so the scanner was failing on its own tree,
+    # not on anything this project ships. Fix line is 26.2. Drop when pip-api
+    # stops vendoring a pinned pip.
+    "pip>=26.2",
 ]
 
 # ============================================================================
