@@ -31,6 +31,12 @@ from core.db import (
 # re-imported here so ``core.db`` re-exports ``delete_account`` and the private
 # ``_delete_account`` (used directly by tests) stays importable from this path.
 from core.repositories._accounts_delete import _delete_account, delete_account  # noqa: F401
+
+# The session-check write path is a sibling module too (file-size budget);
+# re-imported so ``core.db`` re-exports it from this path unchanged.
+from core.repositories._accounts_session_check import (  # noqa: F401
+    update_account_from_session_check,
+)
 from schemas.accounts import (
     AccountCreate,
     AccountList,
@@ -43,8 +49,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from sqlalchemy.sql import Select
-
-    from schemas.telegram_session import TelegramSessionCheckResult
 
 
 class DuplicateSessionNameError(ValueError):
@@ -398,42 +402,3 @@ async def update_account_avatar(account_id: str, thumb: bytes | None) -> None:
     avatar refresh passes ``None`` only when Telegram reports no photo at all.
     """
     await asyncio.to_thread(_update_account_avatar, account_id, thumb)
-
-
-def _update_account_from_session_check(result: TelegramSessionCheckResult) -> AccountRead:
-    now = _now_iso()
-    values: dict[str, object] = {
-        "status": result.status,
-        "last_checked_at": now,
-        "updated_at": now,
-    }
-    if result.status == "alive":
-        values.update(
-            {
-                "user_id": result.user_id,
-                "phone": result.phone,
-                "username": result.username,
-                "first_name": result.first_name,
-                "last_name": result.last_name,
-            },
-        )
-        # Only overwrite the avatar when the check actually returned bytes — a
-        # refused/absent download (None) must not wipe a good cached photo.
-        if result.avatar_thumb is not None:
-            values["avatar_thumb"] = result.avatar_thumb
-            values["avatar_etag"] = hashlib.blake2b(result.avatar_thumb, digest_size=16).hexdigest()
-
-    with _get_engine().begin() as connection:
-        connection.execute(
-            update(_accounts).where(_accounts.c.account_id == result.account_id).values(**values),
-        )
-
-    account = _fetch_account(result.account_id)
-    if account is None:
-        msg = f"Account not found: {result.account_id}"
-        raise RuntimeError(msg)
-    return account
-
-
-async def update_account_from_session_check(result: TelegramSessionCheckResult) -> AccountRead:
-    return await asyncio.to_thread(_update_account_from_session_check, result)

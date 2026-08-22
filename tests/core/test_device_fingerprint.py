@@ -18,6 +18,7 @@ from core.device_fingerprint import (
     generate_random_device_fingerprint,
     get_or_create_device_fingerprint,
 )
+from core.phone_geo import evaluate_geo
 from core.telegram_client import (
     check_telegram_session,
     create_telegram_client,
@@ -299,6 +300,48 @@ def test_generate_random_device_fingerprint_supports_desktop_platforms(monkeypat
     assert generate_random_device_fingerprint("windows-account").platform == "windows"
     assert generate_random_device_fingerprint("macos-account").platform == "macos"
     assert generate_random_device_fingerprint("linux-account").platform == "linux"
+
+
+def test_fingerprint_language_follows_the_phone_country() -> None:
+    fingerprint = generate_random_device_fingerprint("ru-account", phone="+79161234567")
+
+    assert fingerprint.lang_code == "ru"
+    assert fingerprint.system_lang_code == "ru-RU"
+
+
+def test_fingerprint_language_satisfies_the_geo_evaluation() -> None:
+    """Asserted against the consumer: ``evaluate_geo`` is what reads the tag back."""
+    phone = "+4915112345678"
+    fingerprint = generate_random_device_fingerprint("de-account", phone=phone)
+
+    verdict = evaluate_geo(
+        phone=phone,
+        proxy_country="DE",
+        lang_code=fingerprint.system_lang_code,
+    )
+
+    assert verdict.lang_matches is True
+
+
+def test_fingerprint_language_falls_back_to_english_when_the_country_is_unknown() -> None:
+    absent = generate_random_device_fingerprint("no-phone")
+    unrecognised = generate_random_device_fingerprint("odd-phone", phone="+9999999")
+
+    assert (absent.lang_code, absent.system_lang_code) == ("en", "en-US")
+    assert (unrecognised.lang_code, unrecognised.system_lang_code) == ("en", "en-US")
+
+
+@pytest.mark.asyncio
+async def test_created_fingerprint_language_follows_the_stored_phone(tmp_path: Path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(
+        AccountCreateFactory.build(account_id="12345", phone="+79161234567"),
+    )
+
+    fingerprint = await get_or_create_device_fingerprint("12345")
+
+    assert fingerprint.lang_code == "ru"
+    assert fingerprint.system_lang_code == "ru-RU"
 
 
 def test_create_telegram_client_passes_device_profile(monkeypatch) -> None:

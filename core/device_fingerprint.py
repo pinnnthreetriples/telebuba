@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import secrets
 
-from core.db import fetch_device_fingerprint, insert_device_fingerprint
+from core.db import fetch_account, fetch_device_fingerprint, insert_device_fingerprint
+from core.device_fingerprint_lang import language_pair
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 _WINDOWS_VERSIONS = (
@@ -108,27 +109,13 @@ _LINUX_APP_VERSIONS = (
     "5.2.1 x64",
     "5.3.0 x64",
 )
-_LANG_CODES = ("en", "ru", "de", "fr", "es", "it", "pt", "ja", "ko", "zh")
-_SYSTEM_LANG_CODES = (
-    "en-US",
-    "en-GB",
-    "ru-RU",
-    "de-DE",
-    "fr-FR",
-    "es-ES",
-    "it-IT",
-    "pt-BR",
-    "ja-JP",
-    "ko-KR",
-    "zh-CN",
-    "zh-TW",
-    "en-AU",
-    "en-CA",
-)
 _PLATFORMS: tuple[DevicePlatform, ...] = ("windows", "macos", "linux")
 
 
-def generate_random_device_fingerprint(account_id: str) -> DeviceFingerprint:
+def generate_random_device_fingerprint(
+    account_id: str,
+    phone: str | None = None,
+) -> DeviceFingerprint:
     platform = secrets.choice(_PLATFORMS)
     if platform == "windows":
         device_model = secrets.choice(_DESKTOP_DEVICES)
@@ -143,14 +130,15 @@ def generate_random_device_fingerprint(account_id: str) -> DeviceFingerprint:
         system_version = secrets.choice(_LINUX_DISTROS)
         app_version = secrets.choice(_LINUX_APP_VERSIONS)
 
+    lang_code, system_lang_code = language_pair(phone)
     return DeviceFingerprint(
         account_id=account_id,
         platform=platform,
         device_model=device_model,
         system_version=system_version,
         app_version=app_version,
-        lang_code=secrets.choice(_LANG_CODES),
-        system_lang_code=secrets.choice(_SYSTEM_LANG_CODES),
+        lang_code=lang_code,
+        system_lang_code=system_lang_code,
     )
 
 
@@ -159,5 +147,13 @@ async def get_or_create_device_fingerprint(account_id: str) -> DeviceFingerprint
     if existing is not None:
         return existing
 
-    profile = generate_random_device_fingerprint(account_id)
+    # Read on the mint path only. On the two import paths the row has no phone
+    # yet — the connection that learns it needs this fingerprint first — so they
+    # mint the ``en-US`` fallback and the first successful session check
+    # corrects the language once (``core.repositories._accounts_session_check``).
+    account = await fetch_account(account_id)
+    profile = generate_random_device_fingerprint(
+        account_id,
+        phone=account.phone if account else None,
+    )
     return await insert_device_fingerprint(profile)

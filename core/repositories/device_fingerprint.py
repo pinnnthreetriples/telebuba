@@ -1,8 +1,13 @@
 """Device-fingerprint repository (split out of core.db for #38).
 
-Owns reads/writes of the ``device_fingerprints`` table. Shared plumbing is
-imported from ``core.db``; the public async functions are re-exported by
-``core.db`` so callers are unaffected.
+Owns the insert and the reads of the ``device_fingerprints`` table. Shared
+plumbing is imported from ``core.db``; the public async functions are
+re-exported by ``core.db`` so callers are unaffected.
+
+The table's one UPDATE — the language correction — is not here: it belongs to the
+session check that learns the phone, and lives in
+``core.repositories._device_fingerprint_language`` (see that module's docstring
+for why it cannot be imported from here).
 """
 
 from __future__ import annotations
