@@ -59,6 +59,25 @@ async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
     await _runtime._cancel_bounded(*list(_runtime._TASKS))  # noqa: SLF001
 
 
+async def _refuse_if_busy(listener_account_id: str) -> None:
+    """The three runtimes that can already be holding this account's Telegram session.
+
+    The caller holds ``neurocomment_lifecycle()`` and ``account_lock(listener_account_id)``:
+    each check is only worth the lock that stops a claim landing just after it. The
+    discovery claim is in-process and synchronous, so it cannot be straddled; and
+    ``_claim_accounts`` takes the same per-account lock across its own listener read and
+    its claim, so a campaign cannot publish one between these checks and the caller's write.
+    """
+    from services.neurocomment import _runtime  # noqa: PLC0415
+
+    if listener_account_id in await _runtime._list_warming_account_ids():  # noqa: SLF001
+        raise _runtime.ListenerBusyWarmingError(listener_account_id)
+    if _discovery_state.account_busy(listener_account_id):
+        raise ListenerBusyDiscoveryError(listener_account_id)
+    if _account_owner.owner_of(listener_account_id) == "neuroshilling":
+        raise ListenerBusyNeuroshillingError(listener_account_id)
+
+
 async def start_neurocomment(
     listener_account_id: str,
     *,
@@ -69,18 +88,7 @@ async def start_neurocomment(
     from services.warming import account_lock  # noqa: PLC0415
 
     async with _runtime.neurocomment_lifecycle(), account_lock(listener_account_id):
-        if listener_account_id in await _runtime._list_warming_account_ids():  # noqa: SLF001
-            raise _runtime.ListenerBusyWarmingError(listener_account_id)
-        # In-process and synchronous, so it cannot be straddled: a discovery run claims
-        # the account under this same lock, and the claim is the only record of it.
-        if _discovery_state.account_busy(listener_account_id):
-            raise ListenerBusyDiscoveryError(listener_account_id)
-        # The third holder of this session. Safe anywhere inside the lock rather than
-        # only next to the commit below: ``_claim_accounts`` takes the same per-account
-        # lock across its own listener read and its claim, so a campaign cannot publish
-        # a claim between this check and the two writes at the end of this block.
-        if _account_owner.owner_of(listener_account_id) == "neuroshilling":
-            raise ListenerBusyNeuroshillingError(listener_account_id)
+        await _refuse_if_busy(listener_account_id)
         previous = await _runtime._runtime_get_listener_account_id()  # noqa: SLF001
         if previous is not None and previous != listener_account_id:
             _runtime._invalidate_runtime_owner(previous)  # noqa: SLF001
@@ -222,6 +230,30 @@ async def stop_neurocomment() -> None:
             await set_listener_running(running=False)
             return
         await _teardown_listener_locked(listener_account_id, clear_account=False)
+
+
+async def remember_neurocomment_listener(listener_account_id: str) -> bool:
+    """Persist the picked listener without starting anything ("Сохранить" in the modal).
+
+    Returns ``False`` without writing when the engine is running: re-pointing a live
+    listener is an ownership hand-off, and ``start_neurocomment`` is the only thing that
+    performs one. The read and the write share the lifecycle lock, so a Start cannot land
+    between them and leave the pointer naming an account no runtime owner ever took.
+
+    Refuses a busy account on the same terms as Start, even though nothing is started
+    here: a saved pointer is not inert. ``resolve_search_account`` prefers it for channel
+    discovery whether or not the engine runs, so a pointer at a warming or campaign-held
+    session would put a multi-minute keyword stream on a session another runtime owns.
+    """
+    from services.neurocomment import _runtime  # noqa: PLC0415
+    from services.warming import account_lock  # noqa: PLC0415
+
+    async with _runtime.neurocomment_lifecycle(), account_lock(listener_account_id):
+        await _refuse_if_busy(listener_account_id)
+        if await _runtime.get_listener_running():
+            return False
+        await set_listener_account_id(listener_account_id)
+        return True
 
 
 async def clear_neurocomment_listener() -> None:

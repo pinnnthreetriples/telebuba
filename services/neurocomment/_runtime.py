@@ -385,6 +385,7 @@ from services.neurocomment._runtime_operations import (  # noqa: E402, F401 - co
     _teardown_listener_locked,
     clear_neurocomment_listener,
     is_onboarding_running,
+    remember_neurocomment_listener,
     shutdown_neurocomment_runtime,
     start_neurocomment,
     stop_neurocomment,

@@ -8015,6 +8015,45 @@ export type StopNeurocommentResponses = {
 
 export type StopNeurocommentResponse = StopNeurocommentResponses[keyof StopNeurocommentResponses];
 
+export type SetNeurocommentListenerData = {
+  body: StartNeurocommentRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/listener';
+};
+
+export type SetNeurocommentListenerErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SetNeurocommentListenerError =
+  SetNeurocommentListenerErrors[keyof SetNeurocommentListenerErrors];
+
+export type SetNeurocommentListenerResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentRuntimeStatus;
+};
+
+export type SetNeurocommentListenerResponse =
+  SetNeurocommentListenerResponses[keyof SetNeurocommentListenerResponses];
+
 export type ClearNeurocommentListenerData = {
   body?: never;
   path?: never;

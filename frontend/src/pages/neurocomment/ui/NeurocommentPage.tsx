@@ -24,6 +24,7 @@ import {
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
+  setNeurocommentListenerMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,
@@ -213,6 +214,7 @@ export function NeurocommentPage() {
   const setSolver = useMutation(setCampaignSolverMutation());
   const setStatus = useMutation(setCampaignStatusMutation());
   const clearListener = useMutation(clearNeurocommentListenerMutation());
+  const saveListener = useMutation(setNeurocommentListenerMutation());
   const deleteCampaign = useMutation(deleteCampaignMutation());
   const removeChannel = useMutation(removeCampaignChannelMutation());
   const removeAccount = useMutation(removeCampaignAccountMutation());
@@ -357,6 +359,26 @@ export function NeurocommentPage() {
         onSettled: invalidateNeuro,
       },
     );
+  };
+
+  // Both doors onto the listener account — the card's picker and the edit modal's
+  // "Сохранить" — go through here. A running engine is re-pointed live by /start; a
+  // stopped one still has to persist the pick, which is what used to be dropped.
+  const pickListener = (id: string) => {
+    setStartRejectedWarming(false);
+    if (running) {
+      setListener(id);
+      startListener(id);
+      return;
+    }
+    // The local id is set only once the write lands: `listenerId` falls back to it when
+    // nothing is persisted, so an optimistic set would paint an unsaved account as the
+    // listener — the same lie this whole path exists to stop telling.
+    afterSettle(saveListener.mutateAsync({ body: { listener_account_id: id } }), (ok) => {
+      if (ok) {
+        setListener(id);
+      }
+    });
   };
 
   // GLOBAL listener start/stop (the whole engine). Kept distinct from the
@@ -535,8 +557,7 @@ export function NeurocommentPage() {
             }}
             accountOptions={listenerOptions}
             onPickListener={(id) => {
-              setStartRejectedWarming(false);
-              setListener(id);
+              pickListener(id);
               setListenerOpen(false);
             }}
           />
@@ -750,13 +771,7 @@ export function NeurocommentPage() {
           onClose={() => {
             setShowListenerEdit(false);
           }}
-          onSave={(id) => {
-            setStartRejectedWarming(false);
-            setListener(id);
-            if (running && !warmingIds.has(id)) {
-              startListener(id);
-            }
-          }}
+          onSave={pickListener}
         />
       ) : null}
 

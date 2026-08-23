@@ -286,6 +286,9 @@ import type {
   SetCampaignStatusData,
   SetCampaignStatusErrors,
   SetCampaignStatusResponses,
+  SetNeurocommentListenerData,
+  SetNeurocommentListenerErrors,
+  SetNeurocommentListenerResponses,
   SetNeuroshillingScenarioData,
   SetNeuroshillingScenarioErrors,
   SetNeuroshillingScenarioResponses,
@@ -1930,6 +1933,27 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
+
+/**
+ * Set Listener
+ *
+ * Remember the picked listener without starting the engine ("Сохранить" in the modal).
+ */
+export const setNeurocommentListener = <ThrowOnError extends boolean = false>(
+  options: Options<SetNeurocommentListenerData, ThrowOnError>,
+): RequestResult<SetNeurocommentListenerResponses, SetNeurocommentListenerErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SetNeurocommentListenerResponses,
+    SetNeurocommentListenerErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/listener',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Clear Listener

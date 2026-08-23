@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -362,4 +362,105 @@ test('after pausing, the listener strip still shows the remembered account', asy
   });
   // Not the empty "choose an account" affordance.
   expect(screen.queryByText('Выберите аккаунт…')).not.toBeInTheDocument();
+});
+
+test('saving a new listener while the engine is stopped persists the pick', async () => {
+  // The regression: the modal only kept the pick in local state (and only pushed it to
+  // the backend as a side effect of Start), so a stopped engine forgot it and the
+  // persisted listener came back on reload.
+  // The pointer the backend holds, so the card is read back the way the operator reads it.
+  let persisted = 'acc-1';
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/listener' && request.method === 'POST') {
+      persisted = 'acc-2';
+      return Promise.resolve(jsonResponse({ running: false, listener_account_id: persisted }));
+    }
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: persisted }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              account_id: 'acc-1',
+              label: 'acc-1',
+              first_name: 'Alisa',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+            {
+              account_id: 'acc-2',
+              label: 'acc-2',
+              first_name: 'Polina',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+
+  await userEvent.click(screen.getByTitle('Изменить аккаунт'));
+  const modal = screen.getByRole('dialog', { name: 'Аккаунт-слушатель' });
+  // The name shows twice inside the modal: on the closed trigger and in its option list.
+  await userEvent.click(within(modal).getAllByText('Alisa')[0]!);
+  await userEvent.click(within(modal).getByText('Polina'));
+  await userEvent.click(within(modal).getByText('Сохранить'));
+
+  await waitFor(() => {
+    const saved = vi
+      .mocked(fetch)
+      .mock.calls.find(
+        ([input]) =>
+          (input as Request).url.endsWith('/api/v1/neurocomment/listener') &&
+          (input as Request).method === 'POST',
+      );
+    expect(saved).toBeDefined();
+  });
+  const saved = vi
+    .mocked(fetch)
+    .mock.calls.find(
+      ([input]) =>
+        (input as Request).url.endsWith('/api/v1/neurocomment/listener') &&
+        (input as Request).method === 'POST',
+    )!;
+  // The account that was picked, not the one that was already there.
+  expect(await (saved[0] as Request).clone().json()).toEqual({ listener_account_id: 'acc-2' });
+  // Remembering is not starting: the stopped engine stays stopped.
+  const started = vi
+    .mocked(fetch)
+    .mock.calls.some(([input]) => (input as Request).url.endsWith('/neurocomment/start'));
+  expect(started).toBe(false);
+  // The operator's own check (step 5 of the report): reopen the modal and read back
+  // which account is selected. It used to be the old one.
+  await waitFor(
+    () => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    },
+    { timeout: 2000 },
+  );
+  await userEvent.click(screen.getByTitle('Изменить аккаунт'));
+  const reopened = screen.getByRole('dialog', { name: 'Аккаунт-слушатель' });
+  // Twice for the selected account (the closed trigger plus its option), once for the
+  // one that is only an option — so the trigger names Polina, not Alisa.
+  expect(within(reopened).getAllByText('Polina').length).toBe(2);
+  expect(within(reopened).getAllByText('Alisa').length).toBe(1);
 });

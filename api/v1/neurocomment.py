@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from contextlib import contextmanager
+from typing import TYPE_CHECKING, Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
@@ -34,6 +35,9 @@ from schemas.neurocomment_bans import ChannelBanCheckList
 from schemas.neurocomment_board import NeurocommentBoard
 from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
 from services import neurocomment as nc_service
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 router = APIRouter(prefix="/neurocomment", tags=["neurocomment"])
 # Channel discovery lives in a sibling module (file-size cap); mounted here so its
@@ -263,15 +267,15 @@ async def get_runtime() -> NeurocommentRuntimeStatus:
     return await nc_service.neurocomment_runtime_status()
 
 
-@router.post(
-    "/start",
-    response_model=NeurocommentRuntimeStatus,
-    operation_id="startNeurocomment",
-    responses=error_responses(409),
-)
-async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
+@contextmanager
+def _listener_conflicts_translated() -> Iterator[None]:
+    """The three runtimes that can hold a picked listener, as stable 409 codes.
+
+    Shared by the two routes that point the listener at an account, so both buttons
+    report a conflict the same way.
+    """
     try:
-        await nc_service.start_neurocomment(body.listener_account_id)
+        yield
     except nc_service.ListenerBusyWarmingError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
@@ -292,6 +296,17 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
             status_code=http_status.HTTP_409_CONFLICT,
             detail=LISTENER_BUSY_NEUROSHILLING_CODE,
         ) from exc
+
+
+@router.post(
+    "/start",
+    response_model=NeurocommentRuntimeStatus,
+    operation_id="startNeurocomment",
+    responses=error_responses(409),
+)
+async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
+    with _listener_conflicts_translated():
+        await nc_service.start_neurocomment(body.listener_account_id)
     return await nc_service.neurocomment_runtime_status()
 
 
@@ -300,6 +315,25 @@ async def stop() -> NeurocommentRuntimeStatus:
     """Pause the runtime: unsubscribe but keep the remembered listener account."""
     await nc_service.stop_neurocomment()
     return await nc_service.neurocomment_runtime_status()
+
+
+@router.post(
+    "/listener",
+    response_model=NeurocommentRuntimeStatus,
+    operation_id="setNeurocommentListener",
+    responses=error_responses(409),
+)
+async def set_listener(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
+    """Remember the picked listener without starting the engine ("Сохранить" in the modal)."""
+    with _listener_conflicts_translated():
+        remembered = await nc_service.remember_neurocomment_listener(body.listener_account_id)
+    if remembered:
+        return await nc_service.neurocomment_runtime_status()
+    # The engine is running, so this is a live hand-off rather than a bookmark, and only
+    # /start performs one. Not atomic with the check above: a Stop landing in the gap
+    # turns this into a start the operator did not press — a millisecond window, and the
+    # alternative is holding the lifecycle lock across the whole reconcile.
+    return await start(body)
 
 
 @router.post(
