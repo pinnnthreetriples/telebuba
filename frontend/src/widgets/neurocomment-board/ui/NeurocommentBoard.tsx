@@ -21,8 +21,11 @@ interface BoardRow {
   // 'no_data' (no readiness rows yet) is now a real backend status; deriveRows
   // also falls back to it when an account's channel is absent from the board map.
   status: NeurocommentChannelRow['status'];
-  // Our comments removed from this row's channel within the 24h board window.
-  deletedRecent: number;
+  // THIS account's comments removed from THIS row's channel in the 24h board window —
+  // the pair the row names, which is the only thing a chip beside a channel can mean.
+  deletedHere: number;
+  textDeleted: boolean;
+  textChannel: string | null;
   // Onboarding progress for this account: ready channels / target. While the
   // runtime reports onboarding in flight and the account is not yet fully armed,
   // the status cell animates this instead of the (misleading) static status.
@@ -46,7 +49,6 @@ function deriveRows(
   displayName: (accountId: string, fallback: string) => string,
 ): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
-  const channelDeleted = new Map((board.channels ?? []).map((c) => [c.channel, c.deleted_recent]));
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
     const pins = account.pinned_channels ?? [];
@@ -86,6 +88,15 @@ function deriveRows(
       accountId: account.account_id,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
+      // Only meaningful next to real text: the placeholder and the em dash stand in for
+      // a comment the row does not have, and striking those through says nothing.
+      textDeleted: Boolean(account.last_comment_deleted && account.last_comment_text),
+      // Which channel that comment went to — NOT always the one the channel column names.
+      // A pin outranks the last-comment channel there (see the chain above), so a pinned
+      // account can show @news beside a comment it made in @old. The strike is true about
+      // the comment either way; without naming the channel it reads as an accusation
+      // against the column next to it, which may hold a chip saying zero deletions.
+      textChannel: account.last_comment_channel ?? null,
       // The pair's own permanent ban (#30) outranks the channel's aggregate: the
       // aggregate only turns 'banned' once NO account is ready there, so one burnt
       // account among five working ones kept reading the channel's green «Готов» —
@@ -98,7 +109,13 @@ function deriveRows(
         : primary?.rejoin_gave_up && !primary.ready
           ? 'rejoin_exhausted'
           : (channelStatus.get(channel) ?? 'no_data'),
-      deletedRecent: channelDeleted.get(channel) ?? 0,
+      // THIS account in THIS channel, off the very readiness row `primary` already is —
+      // the pair the chip sits beside. The channel's own aggregate put the same chip on all
+      // five accounts sharing it, and the account's flat total put a deletion from another
+      // channel next to whichever channel the row happened to show.
+      // The channel aggregate did not just move: it counts a different SET (delivered vs
+      // posted) and is what explains a back-off, so it lives on the `CampaignsCard` chips.
+      deletedHere: primary?.deleted ?? 0,
       armedReady,
       armedTarget,
     };
@@ -242,9 +259,16 @@ export function NeurocommentBoard({
             className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
           >
             {row.original.channel}
-            {row.original.deletedRecent > 0 ? (
-              <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
-                {t('neurocomment.board.deleted', { count: row.original.deletedRecent })}
+            {/* The hover text carries the scope: the identical «N удалено» string also sits
+                on the channel pills in `CampaignsCard`, where it counts every account, and
+                a chip that reads 0 here beside a pill that reads 1 is otherwise unexplained
+                — the pill also counts a delivered comment the send recorded `failed`. */}
+            {row.original.deletedHere > 0 ? (
+              <span
+                title={t('neurocomment.board.deletedHint')}
+                className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger"
+              >
+                {t('neurocomment.board.deleted', { count: row.original.deletedHere })}
               </span>
             ) : null}
           </span>
@@ -256,7 +280,25 @@ export function NeurocommentBoard({
       {
         accessorKey: 'text',
         header: t('neurocomment.board.col.comment'),
-        cell: (info) => info.getValue<string>(),
+        // Struck through and red when the sweep found this very comment gone — the same
+        // vocabulary the expanded feed below the row already uses, minus its «удалён»
+        // pill, which a 240px truncating cell has no room for. The text stays: the account
+        // did post it, and blanking the cell would read as "never commented".
+        cell: ({ row }) =>
+          row.original.textDeleted ? (
+            <span
+              className="text-danger line-through"
+              title={
+                row.original.textChannel
+                  ? t('neurocomment.board.deletedIn', { channel: row.original.textChannel })
+                  : t('neurocomment.feed.deleted')
+              }
+            >
+              {row.original.text}
+            </span>
+          ) : (
+            row.original.text
+          ),
         meta: {
           cellClassName:
             'max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] text-[#5c5c5c]',

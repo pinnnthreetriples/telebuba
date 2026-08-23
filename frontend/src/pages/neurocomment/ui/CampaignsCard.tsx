@@ -51,7 +51,7 @@ export function CampaignsCard({
   campaignList: NeurocommentCampaign[];
   campaignId: string | null;
   activeCampaign: NeurocommentCampaign | null;
-  boardChannels: { channel: string }[];
+  boardChannels: { channel: string; deleted_recent?: number }[];
   openCampaignActions: string | null;
   onToggleActions: (campaignId: string) => void;
   onSelect: (campaignId: string) => void;
@@ -280,6 +280,19 @@ export function CampaignsCard({
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
+                {/* The channel's OWN deletions in the last 24h, across every account — the
+                    board row's chip counts one (account, channel) pair. A different set, too:
+                    this one counts every delivered comment the sweep found gone, including one
+                    recorded `failed` mid-send. It is the number that has to explain a back-off,
+                    so it lives on the channel and not on the accounts working there. */}
+                {(channel.deleted_recent ?? 0) > 0 ? (
+                  <span
+                    title={t('neurocomment.channels.deletedHint')}
+                    className="rounded-full bg-danger-tint px-[6px] py-px text-[10px] font-medium text-danger"
+                  >
+                    {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
+                  </span>
+                ) : null}
                 <button
                   type="button"
                   aria-label={t('neurocomment.channels.remove')}

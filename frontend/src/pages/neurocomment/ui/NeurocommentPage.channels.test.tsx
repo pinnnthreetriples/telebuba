@@ -274,3 +274,26 @@ test('checking channels colours banned chips red and healthy chips green', async
   });
   expect(chip('@promo')?.className).toContain('text-[#2e9e64]');
 });
+
+test('the channel chip carries the channel-scoped deleted count', async () => {
+  // The board row's chip counts one (account, channel) pair over `posted`. This one is the
+  // channel's own delivered-set count across every account — the number that has to explain
+  // a back-off, including a deletion of a comment recorded `failed` mid-send, which no
+  // account card can see. Narrowing the row chip must not take this one off the board.
+  routeApi({
+    ...BOARD,
+    channels: [{ ...BOARD.channels[0], deleted_recent: 4 }],
+    accounts: [{ ...BOARD.accounts[0], deleted_today: 0 }],
+  });
+
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('4 удалено')).toBeInTheDocument();
+  });
+  // …and it sits on the channel PILL, not on a board row. Both wrappers are a span holding
+  // the channel name plus the chip, so `textContent` alone cannot tell them apart — the
+  // pill is the one carrying the remove button.
+  const pill = screen.getByText('4 удалено').parentElement;
+  expect(pill?.textContent).toContain('@news');
+  expect(pill?.querySelector('button[aria-label="Убрать канал"]')).not.toBeNull();
+});

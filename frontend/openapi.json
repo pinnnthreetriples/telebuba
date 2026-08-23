@@ -10852,6 +10852,11 @@
             "type": "boolean",
             "title": "Rejoin Gave Up",
             "default": false
+          },
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted",
+            "default": 0
           }
         },
         "type": "object",
@@ -13595,6 +13600,11 @@
               }
             ],
             "title": "Last Comment Text"
+          },
+          "last_comment_deleted": {
+            "type": "boolean",
+            "title": "Last Comment Deleted",
+            "default": false
           },
           "last_comment_channel": {
             "anyOf": [

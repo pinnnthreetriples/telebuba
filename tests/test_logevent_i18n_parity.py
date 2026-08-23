@@ -53,7 +53,18 @@ _ACTION_TYPE = re.compile(r'action_type:\s*Literal\["([a-z_]+)"\]')
 _REASON_KEY = "reason"
 _EXTRA_KEY = "extra"
 _TELEGRAM_STATUSES = frozenset(
-    {"failed", "flood_wait", "slow_mode_wait", "premium_wait", "peer_flood", "already_participant"},
+    {
+        "failed",
+        "flood_wait",
+        "slow_mode_wait",
+        "premium_wait",
+        "peer_flood",
+        "already_participant",
+        # Omitted here as well as in the SPA, so the gap this list exists to catch went
+        # unseen for as long as the suffix did: every `*_by_request` row reached the
+        # operator as a raw event code and CI called it covered.
+        "by_request",
+    },
 )
 # ``services.neurocomment._outcomes._classify_post`` — every branch of the outcome ladder
 # that reports a non-delivered post. Named here because that ladder is the reason the

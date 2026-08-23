@@ -13,6 +13,11 @@ const TG_STATUS_SUFFIXES = [
   'premium_wait',
   'peer_flood',
   'already_participant',
+  // The join-request arm (`_join_by_request_result`). Missing here is why every
+  // `*_by_request` row printed its raw event code: the composer never split the suffix,
+  // so it fell through to the code even though `logEventTelegram.status.by_request` has
+  // been translated in both locales all along.
+  'by_request',
 ] as const;
 
 // The gateway also stamps the calling domain onto those names

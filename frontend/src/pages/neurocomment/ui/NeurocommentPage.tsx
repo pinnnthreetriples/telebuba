@@ -200,7 +200,20 @@ export function NeurocommentPage() {
     refetchInterval: FALLBACK_POLL_MS,
     enabled: campaignId !== null,
   });
-  const logLines = neuroLog.data?.items ?? [];
+  // ONE gateway row is dropped, and only because `_classify.py` writes
+  // `neurocomment_onboard_join_by_request` for the very same join — translated, and
+  // carrying the attempt ratio the raw row has no way to show. Every other `*_by_request`
+  // row stays: the listener's own `join_channel` (`services/neurocomment/_join.py`) has no
+  // service twin on this page, so that row is the only evidence the request went out.
+  // They read properly now — `by_request` was simply missing from `TG_STATUS_SUFFIXES`.
+  // Known gap, accepted: `_onboard_pair.py` runs `ensure_current()` between the gateway
+  // call and the classify that twins it, and its `CancelledError` is a BaseException no
+  // handler on that path catches — so a Stop landing in that window hides a request that
+  // really was sent. The next pass re-sends and logs it, because the same window also
+  // skips `stamp_join_request`.
+  const logLines = (neuroLog.data?.items ?? []).filter(
+    (line) => line.event !== 'neurocomment_telegram_join_discussion_group_by_request',
+  );
   const captchaQueue = challenges.data?.rows ?? [];
   // The captcha solver toggle reflects the campaign's per-campaign solver_enabled
   // override (null/true = on, only off when explicitly disabled).
@@ -322,16 +335,17 @@ export function NeurocommentPage() {
     },
     // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
     // both tiles read the account's 24h window. Summing the channels' `deleted_recent`
-    // instead (the number the per-channel badge shows) would drift both ways: an
-    // unlinked channel takes its deletions off the board while its comments stay on
-    // the account, and an unlinked account does the reverse.
-    // It also now counts a different SET: this tile and the cards count deletions among
-    // `posted` comments, while the per-channel badge counts them among DELIVERED ones (any
-    // row carrying a message id), so a comment mis-classified `failed` mid-send shows in the
-    // badge only. That is deliberate on the badge's side — it is the number that has to
-    // explain a channel back-off — and it means a channel row may legitimately read
-    // `deleted_recent` higher than its own `posted` count. Do not "reconcile" them by
-    // narrowing the badge; the back-off reads its own scan set either way.
+    // instead would drift both ways: an unlinked channel takes its deletions off the board
+    // while its comments stay on the account, and an unlinked account does the reverse.
+    // It also counts a different SET: this tile and the cards count deletions among
+    // `posted` comments, while the channel chips in `CampaignsCard` count them among
+    // DELIVERED ones (any row carrying a message id), so a comment mis-classified `failed`
+    // mid-send shows on the chip only. That is deliberate on the chip's side — it is the
+    // number that has to explain a channel back-off — and it means a channel may
+    // legitimately read `deleted_recent` higher than its own `posted` count. Do not
+    // "reconcile" them by narrowing the chip; the back-off reads its own scan set either
+    // way. The board row's own chip is a third thing again: that one is per (account,
+    // channel) and, like this tile, counts `posted`.
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),
