@@ -78,9 +78,7 @@ export function TwoFactorForm({
 
   return (
     <>
-      <div className="mb-[10px] text-[12.5px] text-ink-subtle">
-        {t('accounts.edit.twofaExplain')}
-      </div>
+      <div className="mb-[10px] text-body text-ink-subtle">{t('accounts.edit.twofaExplain')}</div>
       <div className={SEG_WRAP}>
         {(['generate', 'custom'] as const).map((option) => (
           <button
@@ -179,16 +177,14 @@ export function TwoFactorForm({
           )}
         </twofaForm.Field>
       </div>
-      <div className="mb-[14px] text-[11px] text-ink-subtle">
-        {t('accounts.edit.twofaHintWarn')}
-      </div>
+      <div className="mb-[14px] text-tiny text-ink-subtle">{t('accounts.edit.twofaHintWarn')}</div>
       <button
         type="button"
         onClick={() => {
           void twofaForm.handleSubmit();
         }}
         disabled={setTwofa.isPending || !canSubmit}
-        className="w-full rounded-lg border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
+        className="w-full rounded-lg border border-line-input bg-white py-[9px] text-lead font-medium disabled:opacity-50"
       >
         {setTwofa.isPending ? <Spinner size={14} /> : submitLabel}
       </button>

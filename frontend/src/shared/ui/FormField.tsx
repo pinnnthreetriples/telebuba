@@ -8,8 +8,8 @@ import { cn } from '@/shared/lib/cn';
 // (proxy add/edit, profile text, add-account) displays errors the same way.
 // `cn` is imported from the specific module (not the shared/lib barrel) to avoid
 // the shared/ui ↔ shared/lib import cycle.
-const FIELD = 'tb-time w-full rounded-lg border bg-white px-3 py-[9px] text-[13px] outline-none';
-const LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
+const FIELD = 'tb-time w-full rounded-lg border bg-white px-3 py-[9px] text-lead outline-none';
+const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 // Structural slice of a react-form string field — just what this primitive reads
 // and calls. Avoids depending on the library's exact FieldApi generics/export.
@@ -35,7 +35,7 @@ export function FieldError({ field }: { field: FormFieldApi }) {
   const { t } = useTranslation();
   const error = fieldError(field);
   if (!error) return null;
-  return <span className="mt-[5px] block text-[11px] font-medium text-danger">{t(error)}</span>;
+  return <span className="mt-[5px] block text-tiny font-medium text-danger">{t(error)}</span>;
 }
 
 // A labelled text input bound to a react-form field. `label` may be omitted when

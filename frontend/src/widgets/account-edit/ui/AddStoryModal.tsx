@@ -258,7 +258,7 @@ export function AddStoryModal({
     >
       <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
         <div className="mb-4 flex items-center justify-between">
-          <span className="text-[16px] font-bold">{t('accounts.addStory.title')}</span>
+          <span className="text-title font-bold">{t('accounts.addStory.title')}</span>
           <IconButton
             size="md"
             onClick={onClose}
@@ -267,13 +267,13 @@ export function AddStoryModal({
             // Telegram but the grid would never refresh. Lock the exits.
             disabled={busy}
             aria-label={t('accounts.addStory.close')}
-            className="text-[16px]"
+            className="text-title"
           >
             ×
           </IconButton>
         </div>
 
-        <div className="mb-[6px] text-[12.5px] font-medium text-ink-body">
+        <div className="mb-[6px] text-body font-medium text-ink-body">
           {t('accounts.addStory.audience')}
         </div>
         <div className="mb-[14px] flex gap-tight rounded-lg bg-canvas p-1">
@@ -292,7 +292,7 @@ export function AddStoryModal({
         </div>
 
         <label className="mb-[14px] block">
-          <span className="mb-[6px] block text-[12.5px] font-medium text-ink-body">
+          <span className="mb-[6px] block text-body font-medium text-ink-body">
             {t('accounts.addStory.caption')}
           </span>
           <input
@@ -332,15 +332,15 @@ export function AddStoryModal({
               </svg>
             )}
           </span>
-          <span className="text-[13px] text-ink-body">{t('accounts.addStory.noForward')}</span>
+          <span className="text-lead text-ink-body">{t('accounts.addStory.noForward')}</span>
         </button>
 
         <div className="mb-[6px] flex items-center justify-between">
-          <span className="text-[12.5px] font-medium text-ink-body">
+          <span className="text-body font-medium text-ink-body">
             {t('accounts.addStory.media')}
           </span>
           {video === null && count > 0 && (
-            <span className="text-[11px] text-ink-subtle">
+            <span className="text-tiny text-ink-subtle">
               {t('accounts.addStory.photoCount', { n: count, max: MAX_COLLAGE_IMAGES })}
             </span>
           )}
@@ -375,17 +375,17 @@ export function AddStoryModal({
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[12.5px] font-semibold">
+              <div className="truncate text-body font-semibold">
                 {hasMedia ? t('accounts.addStory.addMore') : t('accounts.addStory.dropTitle')}
               </div>
-              <div className="mt-px text-[11px] text-ink-subtle">
+              <div className="mt-px text-tiny text-ink-subtle">
                 {t('accounts.addStory.collageHint', { max: MAX_COLLAGE_IMAGES })}
               </div>
             </div>
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-surface px-4 py-3 text-[11px] text-ink-subtle">
+          <div className="rounded-lg border border-line bg-surface px-4 py-3 text-tiny text-ink-subtle">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -413,7 +413,7 @@ export function AddStoryModal({
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-black/55 px-[4px] text-[10.5px] font-semibold text-white">
+                  <span className="absolute left-[3px] top-[3px] flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-black/55 px-[4px] text-micro font-semibold text-white">
                     {index + 1}
                   </span>
                   <button
@@ -492,7 +492,7 @@ export function AddStoryModal({
         {/* Layout picker — only for a 2..6 photo collage. */}
         {isCollage && (
           <div className="mt-[14px]">
-            <div className="mb-[7px] text-[12.5px] font-medium text-ink-body">
+            <div className="mb-[7px] text-body font-medium text-ink-body">
               {t('accounts.addStory.layout')}
             </div>
             <div className="flex flex-wrap gap-sm">
@@ -535,8 +535,8 @@ export function AddStoryModal({
                 </svg>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[12.5px] font-semibold">{video.name}</div>
-                <div className={`mt-px text-[10.5px] ${metaTone}`}>{metaText}</div>
+                <div className="truncate text-body font-semibold">{video.name}</div>
+                <div className={`mt-px text-micro ${metaTone}`}>{metaText}</div>
               </div>
               {!busy && !done && (
                 <button
@@ -569,7 +569,7 @@ export function AddStoryModal({
         {hasMedia && (busy || done || failed) && (
           <div className="mt-[10px] tb-fadeup flex items-center gap-md rounded-lg border border-line bg-white px-[12px] py-[10px]">
             <div className="min-w-0 flex-1">
-              <div className={`text-[11px] font-medium ${metaTone}`}>{metaText}</div>
+              <div className={`text-tiny font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
                 <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-track">
                   <div
@@ -613,7 +613,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-[10px] py-[7px] text-left text-[11px] font-normal leading-[1.5] text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-[10px] py-[7px] text-left text-tiny font-normal leading-[1.5] text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] group-hover:block"
                     >
                       {errorDetail}
                     </span>
@@ -647,7 +647,7 @@ export function AddStoryModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink disabled:opacity-50"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink disabled:opacity-50"
           >
             {t('accounts.addStory.cancel')}
           </button>
@@ -658,7 +658,7 @@ export function AddStoryModal({
             // window — isPending is already false there, and a second click
             // would publish the same story to the live account twice.
             disabled={!hasMedia || busy || done}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {t('accounts.addStory.publish')}
           </button>

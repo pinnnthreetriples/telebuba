@@ -1,6 +1,6 @@
 const INPUT =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-const FIELD_LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
+const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 function EyeIcon({ off }: { off: boolean }) {
   return off ? (
@@ -85,7 +85,7 @@ export function ApiKeyField({
         <button
           type="button"
           onClick={onClear}
-          className="mt-[9px] text-[12.5px] font-medium text-danger transition-colors hover:underline"
+          className="mt-[9px] text-body font-medium text-danger transition-colors hover:underline"
         >
           {clearLabel}
         </button>

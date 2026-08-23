@@ -400,7 +400,7 @@ export function NeuroshillingPage() {
 
   return (
     <div className="tb-fadeup mx-auto max-w-[1000px]">
-      <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
+      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">
         {t('neuroshilling.title')}
       </h1>
 

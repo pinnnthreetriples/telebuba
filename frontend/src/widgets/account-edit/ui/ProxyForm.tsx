@@ -14,9 +14,9 @@ import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 // (the add-proxy modal owns the value + the create call), so the parent's footer
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
-const LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
+const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 const PASS_FIELD =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] pr-9 text-[13px] outline-none';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] pr-9 text-lead outline-none';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -51,7 +51,7 @@ export function ProxyForm({
   }, [canSubmit, onValidityChange]);
 
   const seg = (on: boolean): string =>
-    `flex-1 rounded-sm py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+    `flex-1 rounded-sm py-[7px] text-body font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
   const canProbe = detect !== 'loading' && values.host.trim() !== '' && values.port !== '';
 
   const runDetect = () => {
@@ -199,7 +199,7 @@ export function ProxyForm({
           type="button"
           onClick={runDetect}
           disabled={!canProbe}
-          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
+          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
         >
           {detect === 'loading' ? (
             <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />
@@ -219,10 +219,10 @@ export function ProxyForm({
           {detect === 'ok' ? t('accounts.proxyForm.detected') : t('accounts.proxyForm.detect')}
         </button>
         {detect === 'loading' && (
-          <span className="text-[12.5px] text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
+          <span className="text-body text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
         )}
         {detect === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
+          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
             {country ? (
               <span
                 className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
@@ -232,7 +232,7 @@ export function ProxyForm({
           </span>
         )}
         {detect === 'err' && (
-          <span className="inline-flex items-center gap-sm text-[12.5px] font-medium text-danger">
+          <span className="inline-flex items-center gap-sm text-body font-medium text-danger">
             <svg
               width="14"
               height="14"

@@ -204,25 +204,25 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.proxy')}>
-      <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
+      <div className="mb-3 text-body text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
       <div className="mb-3 flex items-center justify-between gap-sm rounded-lg bg-canvas px-3 py-[10px]">
         <span className="flex items-center gap-sm">
           <span className={`h-2 w-2 rounded-full ${proxyDot}`} />
-          <span className="text-[12.5px] text-ink-body">{proxyStateText}</span>
+          <span className="text-body text-ink-body">{proxyStateText}</span>
         </span>
         {account.proxy_id ? (
           <button
             type="button"
             onClick={onUnassign}
             disabled={unassignProxy.isPending}
-            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-[12.5px] font-medium text-ink-muted disabled:opacity-50"
+            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
           >
             {unassignProxy.isPending ? <Spinner size={12} /> : t('accounts.edit.proxyDetach')}
           </button>
         ) : null}
       </div>
       {unassignProxy.isError ? (
-        <div className="mb-3 text-[11px] text-danger">{t('accounts.edit.proxyDetachErr')}</div>
+        <div className="mb-3 text-tiny text-danger">{t('accounts.edit.proxyDetachErr')}</div>
       ) : null}
       <div className={SEG_WRAP}>
         {(['pool', 'manual'] as const).map((mode) => (
@@ -362,7 +362,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           type="button"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
-          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
+          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
         >
           {proxyCheck === 'loading' ? (
             <Spinner size={13} />
@@ -384,10 +384,10 @@ export function ProxySection({ account }: { account: AccountRead }) {
             : t('accounts.edit.proxyCheck')}
         </button>
         {proxyCheck === 'loading' && (
-          <span className="text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
+          <span className="text-body text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
         )}
         {proxyCheck === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
+          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
             {proxyResult?.country_code ? (
               <span
                 className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
@@ -399,7 +399,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </span>
         )}
         {proxyCheck === 'err' && (
-          <span className="inline-flex items-center gap-sm text-[12.5px] font-medium text-danger">
+          <span className="inline-flex items-center gap-sm text-body font-medium text-danger">
             <svg
               width="14"
               height="14"

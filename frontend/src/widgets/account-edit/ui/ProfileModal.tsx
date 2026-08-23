@@ -89,7 +89,7 @@ function SyncLabel({ updatedAt }: { updatedAt: number }) {
   if (!updatedAt) return null;
   const mins = Math.floor((Date.now() - updatedAt) / 60000);
   return (
-    <span className="text-[11px] text-ink-subtle">
+    <span className="text-tiny text-ink-subtle">
       {mins < 1
         ? t('accounts.profile.updatedJustNow')
         : t('accounts.profile.updatedMinAgo', { n: mins })}
@@ -602,7 +602,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const tabBtn = (value: Tab): string =>
-    `shrink-0 whitespace-nowrap border-b-2 py-[14px] text-[13px] font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
+    `shrink-0 whitespace-nowrap border-b-2 py-[14px] text-lead font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
 
   // The other half of the ARIA tabs pattern (the roles landed with the tablist):
   // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
@@ -645,7 +645,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 other behind an avatar that has not loaded — deliberately NOT tokens, for
                 the same reason as the media tiles in `_profileShared`. */}
             <div
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-[20px] font-semibold text-white"
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-white"
               style={
                 avatarUri
                   ? {
@@ -662,8 +662,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the account's identity is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate text-[16px] font-bold">{fullName}</h2>
-              <div className="truncate text-[12.5px] text-ink-subtle">
+              <h2 className="truncate text-title font-bold">{fullName}</h2>
+              <div className="truncate text-body text-ink-subtle">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}
               </div>
@@ -675,7 +675,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 onClick={() => {
                   void onRefresh();
                 }}
-                className={`inline-flex items-center gap-sm rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
+                className={`inline-flex items-center gap-sm rounded-full border bg-white px-3 py-[6px] text-body font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
               >
                 <span
                   className={`inline-flex ${
@@ -706,7 +706,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               onClick={requestClose}
               disabled={uploading}
               aria-label={t('accounts.profile.close')}
-              className="ml-[2px] text-[16px]"
+              className="ml-[2px] text-title"
             >
               ×
             </IconButton>
@@ -763,7 +763,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 [animation:ovfade_0.2s_ease]"
               >
                 <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-input border-t-primary" />
-                <span className="text-[12.5px] font-medium text-ink-muted">
+                <span className="text-body font-medium text-ink-muted">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
                     : t('accounts.profile.syncing')}
@@ -771,7 +771,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+              <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
@@ -779,7 +779,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   onClick={() => {
                     void onRefresh();
                   }}
-                  className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-[12.5px] font-medium disabled:opacity-60"
+                  className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium disabled:opacity-60"
                 >
                   {t('accounts.profile.refresh')}
                 </button>
@@ -799,7 +799,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.username')}>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-[13px] text-ink-subtle">@</span>
+                        <span className="absolute left-3 text-lead text-ink-subtle">@</span>
                         <input
                           value={field.state.value}
                           onChange={(event) => {
@@ -812,7 +812,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-[5px] block text-[11px] font-medium text-danger"
+                          className="mt-[5px] block text-tiny font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -843,7 +843,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-[5px] block text-[11px] font-medium text-danger"
+                          className="mt-[5px] block text-tiny font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -852,7 +852,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         <span
                           role="alert"
                           data-testid="bio-not-applied"
-                          className="mt-[5px] block text-[11px] font-medium text-warning-deep"
+                          className="mt-[5px] block text-tiny font-medium text-warning-deep"
                         >
                           {t('accounts.profile.bioNotApplied')}
                         </span>
@@ -987,7 +987,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               <div
                 role="alert"
                 title={saveErrorText}
-                className="mr-auto min-w-0 truncate text-[12.5px] font-medium text-danger"
+                className="mr-auto min-w-0 truncate text-body font-medium text-danger"
               >
                 {saveErrorText}
               </div>
@@ -996,7 +996,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               type="button"
               onClick={requestClose}
               disabled={uploading}
-              className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink disabled:opacity-50"
+              className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink disabled:opacity-50"
             >
               {t('accounts.profile.cancel')}
             </button>
@@ -1006,7 +1006,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 void form.handleSubmit();
               }}
               disabled={updateProfile.isPending || !canSave || !isDirty}
-              className={`rounded-full px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${saved ? 'bg-success' : 'bg-primary'}`}
+              className={`rounded-full px-[22px] py-[9px] text-lead font-semibold text-white transition-colors disabled:opacity-60 ${saved ? 'bg-success' : 'bg-primary'}`}
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">

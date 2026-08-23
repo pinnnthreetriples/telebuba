@@ -21,7 +21,7 @@ export function SessionErrorPanel() {
   const retrying = useRouterState({ select: (state) => state.isLoading });
   return (
     <div role="alert" className="p-8">
-      <p className="text-[13px] text-ink">{i18n.t('shell.sessionError')}</p>
+      <p className="text-lead text-ink">{i18n.t('shell.sessionError')}</p>
       <div className="mt-4 flex items-center gap-sm">
         <button
           type="button"
@@ -29,13 +29,13 @@ export function SessionErrorPanel() {
           onClick={() => {
             void router.invalidate();
           }}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
+          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-60"
         >
           {i18n.t('shell.sessionRetry')}
         </button>
         <Link
           to="/login"
-          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
+          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
         >
           {i18n.t('shell.sessionLogin')}
         </Link>

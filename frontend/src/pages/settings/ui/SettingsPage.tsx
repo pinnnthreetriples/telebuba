@@ -16,8 +16,8 @@ import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSetting
 import { Card } from './SettingsPrimitives';
 
 const INPUT =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-const FIELD_LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
+const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 // The three real, engine-used warming toggles surfaced as the design's flag rows.
 const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
@@ -265,7 +265,7 @@ function SettingsForm({
               onClick={() => {
                 setProvider(option);
               }}
-              className={`flex-1 rounded-lg border px-3 py-[9px] text-[13px] font-medium transition-colors ${
+              className={`flex-1 rounded-lg border px-3 py-[9px] text-lead font-medium transition-colors ${
                 provider === option
                   ? 'border-primary bg-primary-wash text-primary'
                   : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
@@ -278,7 +278,7 @@ function SettingsForm({
       </Card>
 
       <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
-        <div className="rounded-lg border border-dashed border-line-input bg-surface px-4 py-3 text-[12.5px] leading-relaxed text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line-input bg-surface px-4 py-3 text-body leading-relaxed text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
@@ -296,7 +296,7 @@ function SettingsForm({
               <form.Field name="delayFrom">
                 {(field) => (
                   <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-3 py-[9px]">
-                    <span className="shrink-0 text-[11px] text-ink-subtle">
+                    <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.from')}
                     </span>
                     <input
@@ -307,7 +307,7 @@ function SettingsForm({
                       }}
                       onBlur={field.handleBlur}
                       aria-label={t('settings.neuroLimits.delayFrom')}
-                      className="min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent text-right text-lead outline-none"
                     />
                   </label>
                 )}
@@ -315,7 +315,7 @@ function SettingsForm({
               <form.Field name="delayTo">
                 {(field) => (
                   <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-3 py-[9px]">
-                    <span className="shrink-0 text-[11px] text-ink-subtle">
+                    <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.to')}
                     </span>
                     <input
@@ -326,7 +326,7 @@ function SettingsForm({
                       }}
                       onBlur={field.handleBlur}
                       aria-label={t('settings.neuroLimits.delayTo')}
-                      className="min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent text-right text-lead outline-none"
                     />
                   </label>
                 )}
@@ -362,8 +362,8 @@ function SettingsForm({
             className="flex items-center justify-between gap-md border-b border-line-row py-[13px]"
           >
             <div>
-              <div className="text-[13px] font-medium">{t(`settings.flag.${flag}.label`)}</div>
-              <div className="mt-px text-[11px] text-ink-subtle">
+              <div className="text-lead font-medium">{t(`settings.flag.${flag}.label`)}</div>
+              <div className="mt-px text-tiny text-ink-subtle">
                 {t(`settings.flag.${flag}.desc`)}
               </div>
             </div>
@@ -382,14 +382,14 @@ function SettingsForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold"
+          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold"
         >
           {t('settings.cancel')}
         </button>
         <button
           type="submit"
           disabled={pending || !canSubmit}
-          className={`rounded-full px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-success' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
+          className={`rounded-full px-[22px] py-[9px] text-lead font-semibold text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-success' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
         >
           {justSaved ? (
             <span className="inline-flex items-center gap-sm">
@@ -446,7 +446,7 @@ export function SettingsPage() {
 
   return (
     <div className="tb-fadeup max-w-[760px]">
-      <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
+      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">
         {t('settings.title')}
       </h1>
       {loading ? (

@@ -42,13 +42,13 @@ export function ConfirmModal({
   return (
     <Modal onClose={onClose} className="w-[420px]" label={title}>
       <div className="p-6">
-        <div className="mb-2 text-[16px] font-bold">{title}</div>
-        <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">{body}</div>
+        <div className="mb-2 text-title font-bold">{title}</div>
+        <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">{body}</div>
         <div className="flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
           >
             {cancelLabel}
           </button>
@@ -56,7 +56,7 @@ export function ConfirmModal({
             type="button"
             onClick={confirm}
             disabled={pending}
-            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-[13px] font-semibold text-danger disabled:opacity-60"
+            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger disabled:opacity-60"
           >
             {pending ? (
               <span className="inline-flex items-center gap-sm">

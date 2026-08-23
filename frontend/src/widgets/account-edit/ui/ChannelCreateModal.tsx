@@ -207,13 +207,13 @@ export function ChannelCreateModal({
     >
       <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
         <div className="mb-4 flex items-center justify-between">
-          <span className="text-[16px] font-bold">{t('accounts.channel.createTitle')}</span>
+          <span className="text-title font-bold">{t('accounts.channel.createTitle')}</span>
           <IconButton
             size="md"
             onClick={onClose}
             disabled={busy}
             aria-label={t('accounts.channel.close')}
-            className="text-[16px]"
+            className="text-title"
           >
             ×
           </IconButton>
@@ -230,7 +230,7 @@ export function ChannelCreateModal({
             className={FIELD}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-1 block text-[11px] text-danger">
+            <span className="mt-1 block text-tiny text-danger">
               {t('accounts.channel.errTitle')}
             </span>
           )}
@@ -269,7 +269,7 @@ export function ChannelCreateModal({
           <label className="mb-[14px] block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
-              <span className="absolute left-3 text-[13px] text-ink-subtle">@</span>
+              <span className="absolute left-3 text-lead text-ink-subtle">@</span>
               <input
                 value={username}
                 onChange={(event) => {
@@ -279,13 +279,13 @@ export function ChannelCreateModal({
               />
             </div>
             {usernameHint && (
-              <span className={`mt-1 block text-[11px] ${hintColor}`}>{usernameHint.text}</span>
+              <span className={`mt-1 block text-tiny ${hintColor}`}>{usernameHint.text}</span>
             )}
           </label>
         )}
 
         {create.isError && (
-          <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+          <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
             {channelErrorText(create.error, t, t('accounts.channel.error'))}
           </div>
         )}
@@ -295,7 +295,7 @@ export function ChannelCreateModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink disabled:opacity-50"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink disabled:opacity-50"
           >
             {t('accounts.channel.cancel')}
           </button>
@@ -311,7 +311,7 @@ export function ChannelCreateModal({
                   }
             }
             disabled={createdId === null && !canSubmit}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {createdId !== null ? (
               t('accounts.channel.edit')

@@ -39,7 +39,7 @@ export function CodeLoginStep({
     <>
       {!requestCode.isSuccess ? (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg border border-line bg-white px-4 py-[14px] text-[12.5px] text-ink-subtle">
+          <div className="rounded-lg border border-line bg-white px-4 py-[14px] text-body text-ink-subtle">
             {phone}
           </div>
           <button
@@ -50,22 +50,22 @@ export function CodeLoginStep({
               }
             }}
             disabled={requestCode.isPending || !accountId}
-            className="self-start rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+            className="self-start rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {requestCode.isPending
               ? t('accounts.addWizard.sending')
               : t('accounts.addWizard.sendCode')}
           </button>
           {requestCode.isError && (
-            <div className="text-[12.5px] text-danger">{t('accounts.addWizard.loginErr')}</div>
+            <div className="text-body text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg bg-success-tint px-3 py-[10px] text-[12.5px] font-medium text-success">
+          <div className="rounded-lg bg-success-tint px-3 py-[10px] text-body font-medium text-success">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
-          <label className="block text-[11px] font-medium text-ink-subtle">
+          <label className="block text-tiny font-medium text-ink-subtle">
             {t('accounts.addWizard.smsCode')}
             <input
               type="text"
@@ -75,10 +75,10 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-[6px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] font-normal text-ink outline-none focus:border-primary"
+              className="mt-[6px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
-          <label className="block text-[11px] font-medium text-ink-subtle">
+          <label className="block text-tiny font-medium text-ink-subtle">
             {t('accounts.addWizard.twoFA')}
             <input
               type="password"
@@ -90,11 +90,11 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-[6px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] font-normal text-ink outline-none focus:border-primary"
+              className="mt-[6px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
           {submitCode.isError && (
-            <div className="text-[12.5px] text-danger">{t('accounts.addWizard.loginErr')}</div>
+            <div className="text-body text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
         </div>
       )}
@@ -103,7 +103,7 @@ export function CodeLoginStep({
           type="button"
           onClick={onConfirmLogin}
           disabled={!code.trim() || !requestCode.isSuccess || submitCode.isPending}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
         >
           {t('accounts.addWizard.confirmLogin')}
         </button>

@@ -34,26 +34,26 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 inline-flex items-center gap-sm bg-transparent p-0 text-[13px] font-medium text-ink-muted hover:text-ink"
+        className="mb-4 inline-flex items-center gap-sm bg-transparent p-0 text-lead font-medium text-ink-muted hover:text-ink"
       >
         ← {t('accounts.edit.back')}
       </button>
 
       <div className="mb-[14px] flex flex-wrap items-center gap-lg rounded-card border border-line bg-white px-5 py-[18px]">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[16px] font-semibold text-primary">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary">
           {mono(account)}
         </div>
         <div className="min-w-[150px] flex-1">
-          <div className="text-[16px] font-bold">{account.phone ?? account.account_id}</div>
-          <div className="text-[12.5px] text-ink-subtle">
+          <div className="text-title font-bold">{account.phone ?? account.account_id}</div>
+          <div className="text-body text-ink-subtle">
             {account.username ? `@${account.username}` : (account.label ?? '—')}
           </div>
         </div>
         <StatusBadge status={account.status} />
         <div className="min-w-[130px]">
           <div className="flex items-center justify-end gap-sm">
-            <span className="text-[12.5px] text-ink-muted">{t('accounts.edit.trust')}</span>
-            <span className={`text-[16px] font-bold ${tTone}`}>{trust}/100</span>
+            <span className="text-body text-ink-muted">{t('accounts.edit.trust')}</span>
+            <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
           </div>
           <div className="mt-[6px] h-[6px] overflow-hidden rounded-full bg-track">
             <div

@@ -102,10 +102,10 @@ test('disabled is inert and dimmed, so a pending action cannot be fired twice', 
 
 test('extra classes are appended, so a caller can size the glyph it puts inside', () => {
   render(
-    <IconButton aria-label="Закрыть" className="text-[16px]">
+    <IconButton aria-label="Закрыть" className="text-title">
       ×
     </IconButton>,
   );
 
-  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-[16px]', 'h-7');
+  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-title', 'h-7');
 });

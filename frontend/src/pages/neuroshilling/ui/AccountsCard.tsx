@@ -19,12 +19,10 @@ export function AccountsCard({
       label={t('neuroshilling.accounts.title')}
       headerClassName="px-4 py-[15px]"
       bodyClassName="px-4 pb-[15px]"
-      header={
-        <span className="text-[13px] font-semibold">{t('neuroshilling.accounts.title')}</span>
-      }
+      header={<span className="text-lead font-semibold">{t('neuroshilling.accounts.title')}</span>}
     >
       <div className="mb-[10px] flex items-center gap-sm">
-        <span className="rounded-full border border-line bg-track px-[11px] py-[4px] text-[11px] font-medium text-ink-body">
+        <span className="rounded-full border border-line bg-track px-[11px] py-[4px] text-tiny font-medium text-ink-body">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
         {/* The hint carries two rules. The picker enforces the second one — a held
@@ -40,14 +38,14 @@ export function AccountsCard({
           {accounts.map((account) => (
             <span
               key={account.account_id}
-              className="inline-flex items-center rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
+              className="inline-flex items-center rounded-full border border-line bg-track px-[11px] py-[5px] text-body text-ink-body"
             >
               {account.title}
             </span>
           ))}
         </div>
       ) : (
-        <div className="mb-[10px] text-[12.5px] text-ink-subtle">
+        <div className="mb-[10px] text-body text-ink-subtle">
           {t('neuroshilling.accounts.none')}
         </div>
       )}
@@ -55,7 +53,7 @@ export function AccountsCard({
       <button
         type="button"
         onClick={onPick}
-        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
+        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
       >
         {t('neuroshilling.accounts.pick')}
       </button>

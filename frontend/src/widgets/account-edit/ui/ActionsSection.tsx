@@ -88,10 +88,10 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
       <Section title={t('accounts.edit.actions')} bodyClassName="px-5 pb-[6px]">
         <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
           <div>
-            <div className="text-[13px] font-medium">{t('accounts.edit.aliveTitle')}</div>
+            <div className="text-lead font-medium">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className={`mt-px text-[11px] ${aliveCheck === 'ok' ? 'text-success' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
+              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')
@@ -173,8 +173,8 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         </div>
         <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
           <div>
-            <div className="text-[13px] font-medium">{t('accounts.edit.resetSession')}</div>
-            <div className="mt-px text-[11px] text-ink-subtle">
+            <div className="text-lead font-medium">{t('accounts.edit.resetSession')}</div>
+            <div className="mt-px text-tiny text-ink-subtle">
               {t('accounts.edit.resetSessionHint')}
             </div>
           </div>
@@ -186,7 +186,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
               type="button"
               onClick={onReset}
               disabled={resetSession.isPending}
-              className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
+              className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
             >
               {resetCheck === 'loading' ? <Spinner size={14} /> : t('accounts.edit.reset')}
             </button>
@@ -194,15 +194,15 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         </div>
         <div className="flex items-center justify-between gap-md py-[14px]">
           <div>
-            <div className="text-[13px] font-medium">{t('accounts.edit.deleteAccount')}</div>
-            <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.deleteHint')}</div>
+            <div className="text-lead font-medium">{t('accounts.edit.deleteAccount')}</div>
+            <div className="mt-px text-tiny text-ink-subtle">{t('accounts.edit.deleteHint')}</div>
           </div>
           <button
             type="button"
             onClick={() => {
               setConfirmDelete(true);
             }}
-            className="shrink-0 px-1 py-2 text-[13px] font-medium text-danger"
+            className="shrink-0 px-1 py-2 text-lead font-medium text-danger"
           >
             {t('accounts.edit.deleteAccount')}
           </button>

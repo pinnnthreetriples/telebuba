@@ -168,7 +168,7 @@ export function AccountsPage() {
       />
 
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
+        <h1 className="m-0 text-display font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
         <div className="flex w-full items-center gap-sm sm:w-auto">
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
@@ -191,7 +191,7 @@ export function AccountsPage() {
                 setCursorStack([null]);
               }}
               placeholder={t('accounts.searchPlaceholder')}
-              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-[13px] outline-none sm:w-[220px]"
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-lead outline-none sm:w-[220px]"
             />
           </div>
           <button
@@ -199,7 +199,7 @@ export function AccountsPage() {
             onClick={() => {
               setAdding(true);
             }}
-            className="rounded-full bg-primary px-[18px] py-[7px] text-[12.5px] font-semibold text-white"
+            className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white"
           >
             + {t('accounts.actions.add')}
           </button>
@@ -212,8 +212,8 @@ export function AccountsPage() {
             key={stat.label}
             className="min-w-[120px] rounded-lg border border-line bg-white px-4 py-[11px]"
           >
-            <div className={`text-[20px] font-bold ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px text-[11px] text-ink-muted">{stat.label}</div>
+            <div className={`text-stat font-bold ${stat.cls}`}>{stat.value}</div>
+            <div className="mt-px text-tiny text-ink-muted">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -227,7 +227,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+            <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-lead text-ink-subtle">
               {t('accounts.empty')}
             </div>
           ) : (
@@ -257,7 +257,7 @@ export function AccountsPage() {
                 onClick={() => {
                   setCursorStack((stack) => stack.slice(0, -1));
                 }}
-                className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.prev')}
               </button>
@@ -267,7 +267,7 @@ export function AccountsPage() {
                 onClick={() => {
                   setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
                 }}
-                className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.next')}
               </button>

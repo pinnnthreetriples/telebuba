@@ -16,10 +16,10 @@ import {
 } from './scenarioDraft';
 
 const FIELD =
-  'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] outline-none focus:border-primary';
-const PICK = 'rounded-md border border-line-input bg-white px-[9px] py-[6px] text-[12.5px]';
+  'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-body outline-none focus:border-primary';
+const PICK = 'rounded-md border border-line-input bg-white px-[9px] py-[6px] text-body';
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
+  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
 
 function Stepper({
   label,
@@ -37,7 +37,7 @@ function Stepper({
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-sm">
-      <span className="text-[12.5px] text-ink-muted">{label}</span>
+      <span className="text-body text-ink-muted">{label}</span>
       <div className="inline-flex items-center gap-[2px] rounded-full border border-line-input bg-white px-[4px] py-[2px]">
         <button
           type="button"
@@ -46,11 +46,11 @@ function Stepper({
           onClick={() => {
             onChange(value - 1);
           }}
-          className="h-[20px] w-[20px] rounded-full text-[13px] text-ink-muted disabled:opacity-40"
+          className="h-[20px] w-[20px] rounded-full text-lead text-ink-muted disabled:opacity-40"
         >
           −
         </button>
-        <span className="min-w-[18px] text-center text-[12.5px] font-semibold tabular-nums">
+        <span className="min-w-[18px] text-center text-body font-semibold tabular-nums">
           {value}
         </span>
         <button
@@ -60,7 +60,7 @@ function Stepper({
           onClick={() => {
             onChange(value + 1);
           }}
-          className="h-[20px] w-[20px] rounded-full text-[13px] text-ink-muted disabled:opacity-40"
+          className="h-[20px] w-[20px] rounded-full text-lead text-ink-muted disabled:opacity-40"
         >
           +
         </button>
@@ -95,7 +95,7 @@ function StepRow({
   return (
     <div className="rounded-lg border border-line bg-white p-[11px]">
       <div className="mb-[8px] flex items-center gap-sm">
-        <span className="rounded-full bg-track px-[8px] py-[2px] text-[11px] font-semibold tabular-nums text-ink-muted">
+        <span className="rounded-full bg-track px-[8px] py-[2px] text-tiny font-semibold tabular-nums text-ink-muted">
           {t('neuroshilling.scenario.steps.position', { position })}
         </span>
         <div className="min-w-0 flex-1">
@@ -115,7 +115,7 @@ function StepRow({
           type="button"
           aria-label={t('neuroshilling.scenario.steps.remove', { position })}
           onClick={onRemove}
-          className="h-[24px] shrink-0 rounded-sm border border-line bg-white px-[8px] text-[12.5px] text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
+          className="h-[24px] shrink-0 rounded-sm border border-line bg-white px-[8px] text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
         >
           ×
         </button>
@@ -149,7 +149,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`h-[28px] w-[28px] rounded-md border text-[13px] ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line-input bg-white'}`}
+              className={`h-[28px] w-[28px] rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line-input bg-white'}`}
             >
               {emoji}
             </button>
@@ -183,7 +183,7 @@ function StepRow({
             ariaLabel={linkLabel}
           />
         </div>
-        <div className="flex items-center gap-tight text-[11px] text-ink-subtle">
+        <div className="flex items-center gap-tight text-tiny text-ink-subtle">
           <span>{t('neuroshilling.scenario.steps.delay')}</span>
           <input
             type="number"
@@ -316,16 +316,14 @@ export function ScenarioCard({
       label={t('neuroshilling.scenario.title')}
       headerClassName="px-4 py-[15px]"
       bodyClassName="px-4 pb-[15px]"
-      header={
-        <span className="text-[13px] font-semibold">{t('neuroshilling.scenario.title')}</span>
-      }
+      header={<span className="text-lead font-semibold">{t('neuroshilling.scenario.title')}</span>}
       trailing={
         // The approval dies on THIS card, so it has to be visible on THIS card.
         // Every edit below returns the campaign to `draft` the moment it is saved,
         // and an operator who only ever saw the badge on the preview would find
         // that out from a refused launch.
         <span
-          className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${
+          className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${
             dirty && status === 'approved'
               ? 'bg-warning-tint text-warning'
               : status === 'approved'
@@ -354,7 +352,7 @@ export function ScenarioCard({
               onClick={() => {
                 onDraft({ ...draft, mode });
               }}
-              className={`rounded-full px-[13px] py-[5px] text-[12.5px] font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
+              className={`rounded-full px-[13px] py-[5px] text-body font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
             >
               {t(`neuroshilling.scenario.mode.${mode}`)}
             </button>
@@ -366,7 +364,7 @@ export function ScenarioCard({
       {/* A <span>, not a <label>: the control carries its own `aria-label`, and a
           second label element for the same field only makes the accessible name
           ambiguous. */}
-      <span className="mb-[5px] flex items-center gap-sm text-[12.5px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-sm text-body font-medium text-ink-muted">
         {t('neuroshilling.scenario.topic.label')}
         <HelpHint text={t('neuroshilling.scenario.topic.hint')} />
       </span>
@@ -401,7 +399,7 @@ export function ScenarioCard({
           type="button"
           disabled={busy || !draft.topic.trim()}
           onClick={onGenerate}
-          className="rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50"
+          className="rounded-full bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white disabled:opacity-50"
         >
           {t('neuroshilling.scenario.generate.run')}
         </button>
@@ -423,13 +421,13 @@ export function ScenarioCard({
                 onDraft({ ...draft, [field]: value });
               }}
             />
-            <span className="text-[12.5px]">{t(`neuroshilling.scenario.${key}.label`)}</span>
+            <span className="text-body">{t(`neuroshilling.scenario.${key}.label`)}</span>
             <HelpHint text={t(`neuroshilling.scenario.${key}.hint`)} />
           </div>
         ))}
       </div>
 
-      <span className="mb-[5px] flex items-center gap-sm text-[12.5px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-sm text-body font-medium text-ink-muted">
         {t('neuroshilling.scenario.media.label')}
         <HelpHint text={t('neuroshilling.scenario.media.hint')} />
       </span>
@@ -475,7 +473,7 @@ export function ScenarioCard({
         </div>
       </div>
 
-      <div className="mb-[7px] flex items-center gap-sm text-[12.5px] font-semibold">
+      <div className="mb-[7px] flex items-center gap-sm text-body font-semibold">
         {t('neuroshilling.scenario.roles.title')}
         <HelpHint text={t('neuroshilling.scenario.roles.hint')} />
       </div>
@@ -528,16 +526,14 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className="h-[30px] shrink-0 rounded-md border border-line bg-white px-[9px] text-[12.5px] text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
+              className="h-[30px] shrink-0 rounded-md border border-line bg-white px-[9px] text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
             >
               ×
             </button>
           </div>
         ))}
         {draft.roles.length === 0 ? (
-          <div className="text-[12.5px] text-ink-subtle">
-            {t('neuroshilling.scenario.roles.none')}
-          </div>
+          <div className="text-body text-ink-subtle">{t('neuroshilling.scenario.roles.none')}</div>
         ) : null}
       </div>
       <button
@@ -554,7 +550,7 @@ export function ScenarioCard({
         {t('neuroshilling.scenario.roles.add')}
       </button>
 
-      <div className="mb-[7px] flex items-center gap-sm text-[12.5px] font-semibold">
+      <div className="mb-[7px] flex items-center gap-sm text-body font-semibold">
         {t('neuroshilling.scenario.steps.title')}
         <HelpHint text={t('neuroshilling.scenario.steps.hint')} />
       </div>
@@ -579,9 +575,7 @@ export function ScenarioCard({
           />
         ))}
         {draft.steps.length === 0 ? (
-          <div className="text-[12.5px] text-ink-subtle">
-            {t('neuroshilling.scenario.steps.none')}
-          </div>
+          <div className="text-body text-ink-subtle">{t('neuroshilling.scenario.steps.none')}</div>
         ) : null}
       </div>
       <div className="mb-[14px] flex gap-sm">
@@ -602,7 +596,7 @@ export function ScenarioCard({
 
       <div className="flex flex-wrap items-center justify-end gap-sm">
         {namelessRole ? (
-          <span className="mr-auto text-[11px] text-danger">
+          <span className="mr-auto text-tiny text-danger">
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}
@@ -610,7 +604,7 @@ export function ScenarioCard({
           type="button"
           disabled={busy || !dirty || namelessRole}
           onClick={onSave}
-          className="rounded-full bg-primary px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+          className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50"
         >
           {t('neuroshilling.scenario.save')}
         </button>
@@ -619,7 +613,7 @@ export function ScenarioCard({
           disabled={busy || dirty || status === 'approved' || draft.steps.length === 0}
           title={dirty ? t('neuroshilling.scenario.approveHint') : undefined}
           onClick={onApprove}
-          className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold text-ink disabled:opacity-50"
+          className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold text-ink disabled:opacity-50"
         >
           {t('neuroshilling.scenario.approve')}
         </button>

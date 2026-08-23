@@ -37,7 +37,7 @@ export function CheckRow({
           </svg>
         )}
       </span>
-      <span className="text-[13px] text-ink-body">{label}</span>
+      <span className="text-lead text-ink-body">{label}</span>
     </button>
   );
 }

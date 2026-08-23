@@ -15,8 +15,8 @@ export function Card({
 }) {
   return (
     <div className={`${mb} rounded-card border border-line bg-white ${className}`}>
-      {title ? <div className="mb-[3px] text-[13px] font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-4 text-[12.5px] text-ink-subtle">{subtitle}</div> : null}
+      {title ? <div className="mb-[3px] text-lead font-semibold">{title}</div> : null}
+      {subtitle ? <div className="mb-4 text-body text-ink-subtle">{subtitle}</div> : null}
       {children}
     </div>
   );

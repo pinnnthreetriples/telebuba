@@ -73,9 +73,7 @@ export function ListenerCard({
           </svg>
         </span>
         <div className="min-w-0">
-          <div className="text-[12.5px] font-semibold text-ink">
-            {t('neurocomment.listener.title')}
-          </div>
+          <div className="text-body font-semibold text-ink">{t('neurocomment.listener.title')}</div>
         </div>
       </div>
 
@@ -154,13 +152,16 @@ export function ListenerCard({
                     className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
                   <span
-                    className={`text-[12.5px] font-semibold ${working ? 'tb-pulse text-success' : 'text-ink-muted'}`}
+                    className={`text-body font-semibold ${working ? 'tb-pulse text-success' : 'text-ink-muted'}`}
                   >
                     {statusLabel}
                   </span>
+                  {/* Off the status-pill rung on purpose: a counter, not a state label. The
+                      18px square minimum is what keeps a single digit CIRCULAR, and the
+                      canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-[10.5px] font-bold text-white ${working ? 'bg-success' : 'bg-ink-muted'}`}
+                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-micro font-bold text-white ${working ? 'bg-success' : 'bg-ink-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>
@@ -212,7 +213,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-2 text-[11px] font-medium text-danger">
+        <p className="mt-2 text-tiny font-medium text-danger">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

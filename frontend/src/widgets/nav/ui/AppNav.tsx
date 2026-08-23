@@ -129,7 +129,7 @@ export function AppNav() {
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
           </div>
-          <span className="text-[16px] font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
 
         <nav
@@ -140,7 +140,7 @@ export function AppNav() {
             <Link
               key={link.to}
               to={link.to}
-              className={`relative flex items-center self-stretch text-[13px] font-medium transition-colors ${activeIdx === index ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}
+              className={`relative flex items-center self-stretch text-lead font-medium transition-colors ${activeIdx === index ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}
             >
               {t(`nav.${link.key}`)}
             </Link>
@@ -177,7 +177,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only text-[12.5px] font-medium lg:not-sr-only ${systemActive ? 'text-success' : 'text-ink-muted'}`}
+              className={`sr-only text-body font-medium lg:not-sr-only ${systemActive ? 'text-success' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
@@ -207,7 +207,7 @@ export function AppNav() {
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-white lg:h-[34px] lg:w-[34px]"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lead font-semibold text-white lg:h-[34px] lg:w-[34px]"
             >
               {initials}
             </button>
@@ -224,7 +224,7 @@ export function AppNav() {
                 />
                 <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)] lg:top-[42px]">
                   {me.data ? (
-                    <div className="truncate border-b border-line-row px-[14px] py-[8px] text-[12.5px] text-ink-muted">
+                    <div className="truncate border-b border-line-row px-[10px] py-[8px] text-body text-ink-muted">
                       {me.data.username}
                     </div>
                   ) : null}
@@ -242,7 +242,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
+                    className="flex w-full items-center gap-sm px-[10px] py-[8px] text-left text-lead font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
                   >
                     <svg
                       width="15"

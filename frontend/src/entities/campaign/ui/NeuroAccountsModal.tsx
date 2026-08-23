@@ -86,7 +86,7 @@ function AccountRow({
     <div className="border-b border-line-row py-[11px]">
       <div className="flex flex-wrap items-center gap-md">
         <FeedbackMark result={result} />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
+        <span className="min-w-0 flex-1 truncate text-lead font-semibold text-ink">
           {account.name}
         </span>
         {account.linked ? (
@@ -107,7 +107,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink sm:w-[180px]"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-body text-ink sm:w-[180px]"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
@@ -131,7 +131,7 @@ function AccountRow({
             onClick={() => {
               onPick(account.account_id);
             }}
-            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary sm:w-[180px]"
+            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-body font-medium text-primary hover:border-primary sm:w-[180px]"
           >
             {t('neurocomment.modal.neuroAccounts.assign')}
           </button>
@@ -160,7 +160,7 @@ function AccountRow({
         // A per-pair ban is permanent — no retry, no un-ban — so the line states the
         // fact and nothing else; the operator's move is the "Добавить в кампанию"
         // button already on this screen.
-        <div className="mt-[6px] text-[11px] text-danger">
+        <div className="mt-[6px] text-tiny text-danger">
           {t('neurocomment.modal.neuroAccounts.banned', {
             channels: banned.map(shortChannel).join(', '),
           })}
@@ -189,7 +189,7 @@ function AccountRow({
             onClick={() => {
               onChannelChange(account.account_id, []);
             }}
-            className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-tint ${
+            className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-body transition-colors hover:bg-primary-tint ${
               selected.length === 0 ? 'font-medium text-primary' : 'text-ink'
             }`}
           >
@@ -207,7 +207,7 @@ function AccountRow({
                 onClick={() => {
                   toggleChannel(channel);
                 }}
-                className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-tint ${
+                className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-body transition-colors hover:bg-primary-tint ${
                   isSelected ? 'font-medium text-primary' : 'text-ink'
                 }`}
                 title={channel}
@@ -280,10 +280,10 @@ export function NeuroAccountsModal({
           </svg>
         </span>
         <div>
-          <div className="text-[16px] font-bold text-ink">
+          <div className="text-title font-bold text-ink">
             {t('neurocomment.modal.neuroAccounts.title')}
           </div>
-          <div className="mt-[2px] text-[12.5px] text-ink-subtle">
+          <div className="mt-[2px] text-body text-ink-subtle">
             {t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
           </div>
         </div>
@@ -303,7 +303,7 @@ export function NeuroAccountsModal({
             />
           ))
         ) : (
-          <div className="px-[10px] py-8 text-center text-[13px] text-ink-subtle">
+          <div className="px-[10px] py-8 text-center text-lead text-ink-subtle">
             {t('neurocomment.modal.neuroAccounts.empty')}
           </div>
         )}
@@ -313,7 +313,7 @@ export function NeuroAccountsModal({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
+          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
         >
           {t('neurocomment.modal.neuroAccounts.done')}
         </button>

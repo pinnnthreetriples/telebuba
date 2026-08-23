@@ -46,9 +46,7 @@ export function CampaignsCard({
       label={t('neuroshilling.campaigns.title')}
       headerClassName="px-4 py-[15px]"
       bodyClassName="px-4 pb-[15px]"
-      header={
-        <span className="text-[13px] font-semibold">{t('neuroshilling.campaigns.title')}</span>
-      }
+      header={<span className="text-lead font-semibold">{t('neuroshilling.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
@@ -69,10 +67,10 @@ export function CampaignsCard({
               className={`cursor-pointer rounded-lg border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
               <div className="flex justify-between gap-md">
-                <div className="min-w-0 flex-1 text-[13px] font-semibold">{campaign.name}</div>
+                <div className="min-w-0 flex-1 text-lead font-semibold">{campaign.name}</div>
                 <div className="flex shrink-0 items-center gap-md">
                   <span
-                    className={`inline-flex items-center gap-tight text-[11px] font-medium ${tone}`}
+                    className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
                   >
                     {/* `bg-current` — the dot can never disagree with its label. */}
                     <span className="h-[6px] w-[6px] rounded-full bg-current" />
@@ -105,7 +103,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-[18px] text-center text-[12.5px] text-ink-subtle">
+          <div className="py-[18px] text-center text-body text-ink-subtle">
             {t('neuroshilling.campaigns.none')}
           </div>
         ) : null}
@@ -127,13 +125,13 @@ export function CampaignsCard({
             }}
             placeholder={t('neuroshilling.campaigns.namePlaceholder')}
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
-            className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-3 py-[8px] text-[12.5px] outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-3 py-[8px] text-body outline-none"
           />
           <button
             type="button"
             disabled={!createName.trim()}
             onClick={onCreate}
-            className="shrink-0 rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50"
+            className="shrink-0 rounded-full bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white disabled:opacity-50"
           >
             {t('neuroshilling.campaigns.confirm')}
           </button>
@@ -141,7 +139,7 @@ export function CampaignsCard({
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
             onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line-input bg-white px-[12px] py-[8px] text-[12.5px] text-ink-muted"
+            className="shrink-0 rounded-full border border-line-input bg-white px-[12px] py-[8px] text-body text-ink-muted"
           >
             ×
           </button>
@@ -150,7 +148,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
+          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

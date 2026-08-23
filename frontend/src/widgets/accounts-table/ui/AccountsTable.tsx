@@ -56,7 +56,7 @@ function RowAvatar({ account }: { account: AccountRead }) {
     <AccountAvatar
       account={account}
       className="h-8 w-8 shrink-0 rounded-full"
-      fallbackClassName={`text-[12.5px] font-semibold ${AVATAR_CLASS[ds]}`}
+      fallbackClassName={`text-body font-semibold ${AVATAR_CLASS[ds]}`}
     />
   );
 }
@@ -124,8 +124,8 @@ export function AccountsTable({
           <div className="flex items-center gap-md">
             <RowAvatar account={account} />
             <div>
-              <div className="text-[13px] font-semibold">{accountDisplayName(account)}</div>
-              <div className="text-[11px] text-ink-subtle">
+              <div className="text-lead font-semibold">{accountDisplayName(account)}</div>
+              <div className="text-tiny text-ink-subtle">
                 {account.username ? `@${account.username}` : '—'}
               </div>
             </div>
@@ -155,10 +155,10 @@ export function AccountsTable({
                 className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
               />
             ) : null}
-            <span className="text-[12.5px] text-ink-body">{proxyMeta(account)}</span>
+            <span className="text-body text-ink-body">{proxyMeta(account)}</span>
           </div>
         ) : (
-          <span className="text-[12.5px] text-ink-subtle">—</span>
+          <span className="text-body text-ink-subtle">—</span>
         );
       },
     },
@@ -167,7 +167,7 @@ export function AccountsTable({
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
       cell: ({ row }) => (
-        <span className="text-[12.5px] text-ink-muted">{deviceLabel(row.original)}</span>
+        <span className="text-body text-ink-muted">{deviceLabel(row.original)}</span>
       ),
     },
     {
@@ -177,7 +177,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const trust = row.original.trust_score;
         return trust == null ? (
-          <span className="text-[12.5px] text-ink-subtle">—</span>
+          <span className="text-body text-ink-subtle">—</span>
         ) : (
           <div className="flex items-center gap-sm">
             <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
@@ -186,7 +186,7 @@ export function AccountsTable({
                 style={{ width: `${String(trust)}%` }}
               />
             </div>
-            <span className={`min-w-[20px] text-[12.5px] font-semibold ${trustTone(trust)}`}>
+            <span className={`min-w-[20px] text-body font-semibold ${trustTone(trust)}`}>
               {trust}
             </span>
           </div>

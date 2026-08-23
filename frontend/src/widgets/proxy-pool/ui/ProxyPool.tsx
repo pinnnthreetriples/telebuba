@@ -80,16 +80,14 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
     <div className="mb-4 rounded-card border border-line bg-white px-[18px] py-4">
       <div className="mb-[13px] flex flex-wrap items-center justify-between gap-md">
         <div>
-          <span className="text-[13px] font-semibold">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-2 text-[12.5px] text-ink-subtle">
-            {t('accounts.proxyPool.subtitle')}
-          </span>
+          <span className="text-lead font-semibold">{t('accounts.proxyPool.title')}</span>
+          <span className="ml-2 text-body text-ink-subtle">{t('accounts.proxyPool.subtitle')}</span>
         </div>
         {!empty && (
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-sm rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white"
+            className="inline-flex items-center gap-sm rounded-full bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white"
           >
             <svg
               width="13"
@@ -120,14 +118,14 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-1 text-[13px] font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
-          <div className="mb-4 max-w-[300px] text-[12.5px] text-ink-subtle">
+          <div className="mb-1 text-lead font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-4 max-w-[300px] text-body text-ink-subtle">
             {t('accounts.proxyPool.emptyBody')}
           </div>
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-sm rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
+            className="inline-flex items-center gap-sm rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
           >
             <svg
               width="15"
@@ -248,10 +246,10 @@ function ProxyCard({
           <span title={geoTitle} className="h-4 w-[22px] shrink-0 rounded-[3px] bg-line" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[12.5px] font-semibold">
+          <div className="truncate text-body font-semibold">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex items-center gap-tight text-[11px] text-ink-subtle">
+          <div className="mt-px flex items-center gap-tight text-tiny text-ink-subtle">
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
             <span className="text-line-strong">·</span>
             <span
@@ -308,8 +306,8 @@ function ProxyCard({
       </div>
       <div>
         <div className="mb-[5px] flex items-center justify-between">
-          <span className="text-[11px] text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
-          <span className={`text-[11px] font-semibold ${full ? 'text-danger' : 'text-success'}`}>
+          <span className="text-tiny text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
+          <span className={`text-tiny font-semibold ${full ? 'text-danger' : 'text-success'}`}>
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
@@ -319,7 +317,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-[5px] text-[10.5px] ${full ? 'text-danger' : 'text-success'}`}>
+        <div className={`mt-[5px] text-micro ${full ? 'text-danger' : 'text-success'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

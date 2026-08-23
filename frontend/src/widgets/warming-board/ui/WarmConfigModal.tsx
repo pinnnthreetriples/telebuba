@@ -53,8 +53,8 @@ function ToggleRow({
   return (
     <div className="flex items-start justify-between gap-lg">
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold">{title}</div>
-        <div className="mt-[2px] text-[11px] leading-[1.45] text-ink-subtle">{desc}</div>
+        <div className="text-lead font-semibold">{title}</div>
+        <div className="mt-[2px] text-tiny leading-[1.45] text-ink-subtle">{desc}</div>
       </div>
       <Switch checked={on} label={title} onChange={onToggle} />
     </div>
@@ -152,13 +152,13 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           </svg>
         </span>
         <div>
-          <div className="text-[16px] font-bold">{t('warming.cfg.title')}</div>
-          <div className="mt-[2px] text-[12.5px] text-ink-subtle">{phone}</div>
+          <div className="text-title font-bold">{t('warming.cfg.title')}</div>
+          <div className="mt-[2px] text-body text-ink-subtle">{phone}</div>
         </div>
       </div>
 
       <div className="px-6 pb-5 pt-[18px]">
-        <div className="mb-[14px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+        <div className="mb-[14px] text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('warming.cfg.behaviorTitle')}
         </div>
         <div className="flex flex-col gap-lg">
@@ -177,7 +177,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
 
         <div className="my-[18px] h-px bg-line-row" />
 
-        <div className="mb-[14px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+        <div className="mb-[14px] text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('warming.cfg.limitsTitle')}
         </div>
         <div className="flex flex-col gap-lg">
@@ -201,7 +201,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
 
         {toggles.local_time ? (
           <div className="tb-fadeup mt-[14px] rounded-lg">
-            <div className="mb-[10px] text-right text-[11px] font-semibold text-ink-muted">
+            <div className="mb-[10px] text-right text-tiny font-semibold text-ink-muted">
               {t('warming.cfg.quietHours')}
             </div>
             <div className="flex items-center justify-end gap-md">
@@ -213,9 +213,9 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietFrom')}
-                className="w-[64px] rounded-lg border border-line-input bg-white px-[11px] py-2 text-center text-[13px] font-semibold tabular-nums outline-none"
+                className="w-[64px] rounded-lg border border-line-input bg-white px-[11px] py-2 text-center text-lead font-semibold tabular-nums outline-none"
               />
-              <span className="shrink-0 text-[13px] text-ink-subtle">–</span>
+              <span className="shrink-0 text-lead text-ink-subtle">–</span>
               <input
                 value={to}
                 onChange={(e) => {
@@ -224,10 +224,10 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietTo')}
-                className="w-[64px] rounded-lg border border-line-input bg-white px-[11px] py-2 text-center text-[13px] font-semibold tabular-nums outline-none"
+                className="w-[64px] rounded-lg border border-line-input bg-white px-[11px] py-2 text-center text-lead font-semibold tabular-nums outline-none"
               />
             </div>
-            <div className="mt-[9px] text-right text-[11px] leading-[1.4] text-ink-subtle">
+            <div className="mt-[9px] text-right text-tiny leading-[1.4] text-ink-subtle">
               {t('warming.cfg.quietNote')}
             </div>
           </div>
@@ -242,7 +242,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             onClick={() => {
               setScope('one');
             }}
-            className={`flex-1 rounded-md py-[7px] text-[12.5px] font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
           >
             {t('warming.cfg.scopeOne')}
           </button>
@@ -251,13 +251,13 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             onClick={() => {
               setScope('all');
             }}
-            className={`flex-1 rounded-md py-[7px] text-[12.5px] font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
           >
             {t('warming.cfg.scopeAll')}
           </button>
         </div>
         {scope === 'one' ? (
-          <div className="mb-[12px] text-[11px] leading-[1.45] text-warning-strong">
+          <div className="mb-[12px] text-tiny leading-[1.45] text-warning-strong">
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}
@@ -265,7 +265,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           // The same text the global mutation toast shows, not the generic copy:
           // this alert is the in-context report and must not be the less
           // informative of the two. Falls back to shell.mutationError itself.
-          <div role="alert" className="mb-[12px] text-[11px] leading-[1.45] text-danger">
+          <div role="alert" className="mb-[12px] text-tiny leading-[1.45] text-danger">
             {mutationErrorText(save.error)}
           </div>
         ) : null}
@@ -274,14 +274,14 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             type="button"
             disabled={save.isPending || scope === 'one' || !settings}
             onClick={onSave}
-            className="flex-1 rounded-full bg-primary px-[14px] py-[10px] text-[13px] font-semibold text-white transition-colors hover:bg-primary-press disabled:opacity-50"
+            className="flex-1 rounded-full bg-primary px-[14px] py-[10px] text-lead font-semibold text-white transition-colors hover:bg-primary-press disabled:opacity-50"
           >
             {t('warming.cfg.save')}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-[13px] font-semibold text-ink"
+            className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-lead font-semibold text-ink"
           >
             {t('warming.cfg.cancel')}
           </button>

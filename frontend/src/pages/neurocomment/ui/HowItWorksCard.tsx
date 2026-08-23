@@ -12,15 +12,15 @@ export function HowItWorksCard() {
       label={t('neurocomment.howto.title')}
       wrapperClassName="rounded-card border border-line bg-canvas"
       headerClassName="px-4 py-[15px]"
-      header={<span className="text-[13px] font-semibold">{t('neurocomment.howto.title')}</span>}
+      header={<span className="text-lead font-semibold">{t('neurocomment.howto.title')}</span>}
     >
       <div className="flex flex-col gap-md">
         {HOW_STEPS.map((index) => (
           <div key={index} className="flex items-start gap-md">
-            <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10.5px] font-semibold text-white">
+            <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
               {index + 1}
             </span>
-            <span className="text-[12.5px] leading-[1.5] text-ink-muted">
+            <span className="text-body leading-[1.5] text-ink-muted">
               {t(`neurocomment.howto.steps.${String(index)}`)}
             </span>
           </div>

@@ -214,7 +214,9 @@
   top: calc(100% + 7px);
   left: 50%;
   transform: translateX(-50%) translateY(3px);
-  background: #16161a;
+  background: theme('colors.term.DEFAULT');
+  /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
+     a one-line label on the same surface. Plain white, so it stays a literal. */
   color: #fff;
   border-radius: 8px;
   padding: 7px 10px;
@@ -242,7 +244,7 @@
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-bottom-color: #16161a;
+  border-bottom-color: theme('colors.term.DEFAULT');
 }
 /* Wider, wrapping variant for tooltips that carry a full explanation
    (e.g. the daily-actions counter) instead of a one-word label. */
@@ -257,7 +259,7 @@
   height: 8px;
 }
 .tb-scroll::-webkit-scrollbar-thumb {
-  background: #d8d6d2;
+  background: theme('colors.line.strong');
   border-radius: 8px;
 }
 .tb-scroll::-webkit-scrollbar-track {
@@ -267,12 +269,15 @@
   width: 6px;
 }
 .term::-webkit-scrollbar-thumb {
+  /* The one shade with no name: a thumb that reads on `term` without becoming
+     `term.dim` (which is the terminal's own muted TEXT). One scrollbar is not worth a
+     role in the canon, so it stays a literal — deliberately, not by omission. */
   background: #2b2b2e;
   border-radius: 6px;
 }
 
 .tb-row:hover {
-  background: #faf9f7;
+  background: theme('colors.surface');
 }
 
 .tb-collapse {
@@ -389,6 +394,6 @@
     box-shadow 0.18s ease;
 }
 .tb-time:focus-within {
-  border-color: #0066ff !important;
+  border-color: theme('colors.primary.DEFAULT') !important;
   box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.12);
 }

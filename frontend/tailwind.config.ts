@@ -14,6 +14,27 @@ import type { Config } from 'tailwindcss';
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
+    // The eight type sizes the UI actually has, replacing Tailwind's `xs…9xl` scale
+    // outright — nothing used a single one of those names, and leaving them reachable
+    // would mean `text-sm` (14px) could arrive tomorrow next to a `text-lead` (13px)
+    // heading and disagree by a pixel, the way `gap-2` and `gap-[7px]` used to.
+    // `micro` is metadata under a row (a timestamp, a counter), `tiny` a caption or a
+    // pill's label, `body` the default for everything inside a card, `lead` a form
+    // control's own text and the one step up for a card's primary line, `title` a
+    // card or modal heading, `stat` an odometer's number, `display` a page heading,
+    // `hero` the one empty-state numeral. Bare strings, deliberately: `leading-*`
+    // stays an independent decision, and pairing a line-height into these rungs would
+    // silently re-space every one of the 694 sites that just moved onto them.
+    fontSize: {
+      micro: '10.5px',
+      tiny: '11px',
+      body: '12.5px',
+      lead: '13px',
+      title: '16px',
+      stat: '20px',
+      display: '22px',
+      hero: '42px',
+    },
     // Four corner radii and the pill, replacing Tailwind's scale outright so the
     // names that are left are the only ones a component can reach for: `sm` for
     // controls that sit inside another box (checkbox, tiny icon button), `md` for

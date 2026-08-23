@@ -77,7 +77,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
           <button
             type="button"
             onClick={runSpamCheck}
-            className={`inline-flex items-center gap-sm rounded-full px-3 py-[5px] text-[12.5px] font-medium transition-[background-color,border-color,color] duration-[250ms] ${
+            className={`inline-flex items-center gap-sm rounded-full px-3 py-[5px] text-body font-medium transition-[background-color,border-color,color] duration-[250ms] ${
               spamCheck === 'ok'
                 ? 'border border-success bg-success text-white'
                 : spamCheck === 'err'
@@ -125,18 +125,18 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         </span>
       }
     >
-      <div className="mb-2 text-[12.5px] text-ink-subtle">{t('accounts.edit.signalsReadonly')}</div>
+      <div className="mb-2 text-body text-ink-subtle">{t('accounts.edit.signalsReadonly')}</div>
       <div className="flex flex-col">
         {signals.map((signal) => (
           <div
             key={signal.label}
             className="flex items-center justify-between gap-md border-b border-line-row py-[11px]"
           >
-            <span className="flex items-center gap-sm text-[12.5px] text-ink-muted">
+            <span className="flex items-center gap-sm text-body text-ink-muted">
               <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>
-            <span className="text-right text-[12.5px] font-medium text-ink">{signal.value}</span>
+            <span className="text-right text-body font-medium text-ink">{signal.value}</span>
           </div>
         ))}
       </div>

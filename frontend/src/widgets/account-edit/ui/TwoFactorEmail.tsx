@@ -194,7 +194,7 @@ export function TwoFactorEmail({
             pending || !hasRecovery ? 'mb-[10px]' : ''
           }`}
         >
-          <span className="text-[12.5px] text-ink-muted">
+          <span className="text-body text-ink-muted">
             {t('accounts.edit.twofaRecovery')}:{' '}
             {hasRecovery ? t('accounts.edit.twofaRecoveryOn') : t('accounts.edit.twofaRecoveryOff')}
           </span>
@@ -205,7 +205,7 @@ export function TwoFactorEmail({
                 setConfirming('Unlink');
               }}
               disabled={!hasStored}
-              className="bg-transparent p-0 text-[12.5px] font-medium text-danger disabled:opacity-50"
+              className="bg-transparent p-0 text-body font-medium text-danger disabled:opacity-50"
             >
               {t('accounts.edit.twofaEmailUnlink')}
             </button>
@@ -214,7 +214,7 @@ export function TwoFactorEmail({
       )}
       {pending ? (
         <>
-          <div className="mb-[10px] text-[12.5px] text-ink-muted">
+          <div className="mb-[10px] text-body text-ink-muted">
             {t('accounts.edit.twofaEmailSent', { pattern: pending })}
           </div>
           <label className="mb-[10px] block">
@@ -236,7 +236,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onConfirmCode}
               disabled={confirmEmail.isPending || !code.trim()}
-              className="rounded-lg border border-line-input bg-white px-4 py-[7px] text-[12.5px] font-medium disabled:opacity-50"
+              className="rounded-lg border border-line-input bg-white px-4 py-[7px] text-body font-medium disabled:opacity-50"
             >
               {confirmEmail.isPending ? (
                 <Spinner size={13} />
@@ -248,7 +248,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onResend}
               disabled={resendEmail.isPending}
-              className="rounded-md border border-line-input bg-white px-3 py-[5px] text-[12.5px] font-medium text-ink-muted disabled:opacity-50"
+              className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
             >
               {resendEmail.isPending ? <Spinner size={12} /> : t('accounts.edit.twofaEmailResend')}
             </button>
@@ -257,7 +257,7 @@ export function TwoFactorEmail({
               onClick={() => {
                 setConfirming('Cancel');
               }}
-              className="bg-transparent p-0 text-[12.5px] font-medium text-danger"
+              className="bg-transparent p-0 text-body font-medium text-danger"
             >
               {t('accounts.edit.twofaEmailCancel')}
             </button>
@@ -280,19 +280,19 @@ export function TwoFactorEmail({
               className={FIELD}
             />
             {email && !addressValid ? (
-              <span className="mt-[5px] block text-[11px] font-medium text-danger">
+              <span className="mt-[5px] block text-tiny font-medium text-danger">
                 {t('accounts.edit.twofaEmailErrShape')}
               </span>
             ) : null}
           </label>
-          <div className="mb-[12px] text-[11px] text-ink-subtle">
+          <div className="mb-[12px] text-tiny text-ink-subtle">
             {t('accounts.edit.twofaEmailWarn')}
           </div>
           <button
             type="button"
             onClick={onAttach}
             disabled={setEmail.isPending || !addressValid || !hasStored}
-            className="w-full rounded-lg border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
+            className="w-full rounded-lg border border-line-input bg-white py-[9px] text-lead font-medium disabled:opacity-50"
           >
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
           </button>

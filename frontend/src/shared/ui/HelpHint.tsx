@@ -4,7 +4,7 @@
 // labels where the field's effect isn't obvious from its name.
 const BADGE =
   'flex h-[15px] w-[15px] shrink-0 cursor-help items-center justify-center rounded-full ' +
-  'border border-line-input text-[10.5px] font-bold leading-none text-ink-subtle ' +
+  'border border-line-input text-micro font-bold leading-none text-ink-subtle ' +
   'transition-colors hover:border-primary hover:text-primary focus:outline-none ' +
   'focus-visible:border-primary focus-visible:text-primary';
 
@@ -22,7 +22,7 @@ export function HintBubble({ text, example }: { text: string; example?: string }
        to the same rect can overlap. Fix properly with measurement, not a media
        query, if the clipping ever actually bites. */
     <span
-      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-[230px] -translate-x-1/2 rounded-lg border border-line bg-white p-[10px] text-left text-[11px] leading-snug text-ink-muted shadow-[0_6px_20px_rgba(0,0,0,0.12)] group-hover:block group-focus-within:block"
+      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-[230px] -translate-x-1/2 rounded-lg border border-line bg-white p-[10px] text-left text-tiny leading-snug text-ink-muted shadow-[0_6px_20px_rgba(0,0,0,0.12)] group-hover:block group-focus-within:block"
       role="tooltip"
     >
       {text}

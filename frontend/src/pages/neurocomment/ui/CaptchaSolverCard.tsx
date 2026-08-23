@@ -41,11 +41,11 @@ export function CaptchaSolverCard({
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-sm">
-              <span className="text-[12.5px] font-semibold text-ink">
+              <span className="text-body font-semibold text-ink">
                 {t('neurocomment.captcha.title')}
               </span>
               <span className="tb-tip inline-flex">
-                <span className="inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line-input bg-white text-[10.5px] font-bold text-ink-subtle">
+                <span className="inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line-input bg-white text-micro font-bold text-ink-subtle">
                   ?
                 </span>
                 <span className="tb-tip-pop tb-tip-pop--wide" style={{ textAlign: 'left' }}>
@@ -53,7 +53,7 @@ export function CaptchaSolverCard({
                 </span>
               </span>
             </div>
-            <div className="text-[10.5px] leading-[1.35] text-ink-subtle">
+            <div className="text-micro leading-[1.35] text-ink-subtle">
               {t('neurocomment.captcha.sub')}
             </div>
           </div>
@@ -82,7 +82,7 @@ export function CaptchaSolverCard({
               <path d="M12 8v4" />
               <path d="M12 16h.01" />
             </svg>
-            <span className="text-[11px] font-semibold uppercase tracking-[.03em] text-warning">
+            <span className="text-tiny font-semibold uppercase tracking-[.03em] text-warning">
               {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
             </span>
           </div>

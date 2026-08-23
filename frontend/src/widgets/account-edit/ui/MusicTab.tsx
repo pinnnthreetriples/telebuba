@@ -25,7 +25,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+      <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );
@@ -52,10 +52,10 @@ export function MusicTab({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-semibold">
+                <div className="truncate text-lead font-semibold">
                   {track.title ?? t('accounts.profile.trackTitle')}
                 </div>
-                <div className="truncate text-[12.5px] text-ink-subtle">
+                <div className="truncate text-body text-ink-subtle">
                   {track.performer ?? t('accounts.profile.trackArtist')}
                 </div>
               </div>
@@ -66,7 +66,7 @@ export function MusicTab({
                   onRemove(track);
                 }}
                 aria-label={t('accounts.profile.removeMusic')}
-                className="text-[16px]"
+                className="text-title"
               >
                 ×
               </IconButton>
@@ -74,7 +74,7 @@ export function MusicTab({
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
           {t('accounts.profile.noMusic')}
         </div>
       )}
@@ -82,7 +82,7 @@ export function MusicTab({
         type="button"
         disabled={busy}
         onClick={() => musicInput.current?.click()}
-        className="mt-3 rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-60"
+        className="mt-3 rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-60"
       >
         {t('accounts.profile.pickTrack')}
       </button>

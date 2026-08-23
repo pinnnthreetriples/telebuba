@@ -121,7 +121,7 @@ export function LogTerminal({
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="rounded-full bg-primary-tint px-2 py-[2px] text-[11px] font-medium text-primary hover:bg-danger-line hover:text-danger"
+              className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-medium text-primary hover:bg-danger-line hover:text-danger"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,
@@ -154,14 +154,14 @@ export function LogTerminal({
       header={
         <>
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
-          <span className="text-[13px] font-semibold">{title}</span>
-          <span className="rounded-full bg-track px-2 py-[2px] text-[11px] font-medium text-ink-muted">
+          <span className="text-lead font-semibold">{title}</span>
+          <span className="rounded-full bg-track px-2 py-[2px] text-tiny font-medium text-ink-muted">
             {shown.length}
           </span>
         </>
       }
     >
-      <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-lg bg-term px-[14px] py-3 font-mono text-[11px] leading-[1.85]">
+      <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-lg bg-term px-[14px] py-3 font-mono text-tiny leading-[1.85]">
         {shown.length === 0 ? (
           <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (

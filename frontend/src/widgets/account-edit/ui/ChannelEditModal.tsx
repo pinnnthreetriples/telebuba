@@ -166,11 +166,11 @@ export function ChannelEditModal({
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate text-[16px] font-bold">
+              <h2 className="truncate text-title font-bold">
                 {detail.data?.title ?? t('accounts.channel.loading')}
               </h2>
               {!detailBlank && (
-                <div className="truncate text-[12.5px] text-ink-subtle">
+                <div className="truncate text-body text-ink-subtle">
                   {detail.data?.username != null
                     ? `@${detail.data.username}`
                     : t('accounts.channel.privateBadge')}
@@ -184,21 +184,21 @@ export function ChannelEditModal({
               onClick={requestClose}
               disabled={busy}
               aria-label={t('accounts.channel.close')}
-              className="text-[16px]"
+              className="text-title"
             >
               ×
             </IconButton>
           </div>
 
           {detail.isError && (
-            <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+            <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <button
                 type="button"
                 onClick={() => {
                   void detail.refetch();
                 }}
-                className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-[12.5px] font-medium"
+                className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium"
               >
                 {t('accounts.channel.retry')}
               </button>
@@ -218,7 +218,7 @@ export function ChannelEditModal({
                   className={FIELD}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-1 block text-[11px] text-danger">
+                  <span className="mt-1 block text-tiny text-danger">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}
@@ -246,7 +246,7 @@ export function ChannelEditModal({
               />
 
               {update.isError && (
-                <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+                <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
                 </div>
               )}
@@ -256,7 +256,7 @@ export function ChannelEditModal({
                   type="button"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line-input bg-white px-4 py-[8px] text-[13px] font-medium disabled:opacity-60"
+                  className="rounded-full border border-line-input bg-white px-4 py-[8px] text-lead font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">
@@ -272,7 +272,7 @@ export function ChannelEditModal({
                   type="button"
                   onClick={save}
                   disabled={!canSave}
-                  className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
+                  className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-60"
                 >
                   {update.isPending ? (
                     <span className="inline-flex items-center gap-sm">

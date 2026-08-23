@@ -47,7 +47,7 @@ export function CommentModeFields({
   return (
     <div className="mt-[18px]">
       <div role="group" aria-label={t('neurocomment.mode.label')}>
-        <div className="mb-[7px] text-[12.5px] font-medium text-ink-body">
+        <div className="mb-[7px] text-body font-medium text-ink-body">
           {t('neurocomment.mode.label')}
         </div>
         <div className="flex gap-tight">
@@ -71,7 +71,7 @@ export function CommentModeFields({
                 // `title` is the native fallback the styled bubble does not replace: it is
                 // what a touch device and a screen reader get, since neither hovers.
                 title={`${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`}
-                className={`w-full rounded-md border px-[10px] py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-60 ${
+                className={`w-full rounded-md border px-[10px] py-[6px] text-body font-medium transition-colors disabled:opacity-60 ${
                   mode === option
                     ? 'border-primary bg-primary-wash text-primary'
                     : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
@@ -92,7 +92,7 @@ export function CommentModeFields({
           "пишем первыми" it would be a number the operator turns to no effect. */}
       {mode === 'reply' ? (
         <label className="mt-[13px] block">
-          <span className="mb-[7px] block text-[12.5px] font-medium text-ink-body">
+          <span className="mb-[7px] block text-body font-medium text-ink-body">
             {t('neurocomment.mode.waitLabel')}
           </span>
           <span className="flex items-center gap-sm">
@@ -115,9 +115,9 @@ export function CommentModeFields({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={t('neurocomment.mode.waitLabel')}
-              className="tb-time w-[68px] rounded-md border border-line-input bg-white px-[10px] py-[6px] text-[12.5px] font-medium text-ink disabled:opacity-60"
+              className="tb-time w-[68px] rounded-md border border-line-input bg-white px-[10px] py-[6px] text-body font-medium text-ink disabled:opacity-60"
             />
-            <span className="text-[11px] text-ink-subtle">{t('neurocomment.mode.waitHint')}</span>
+            <span className="text-tiny text-ink-subtle">{t('neurocomment.mode.waitHint')}</span>
           </span>
         </label>
       ) : null}

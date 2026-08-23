@@ -116,8 +116,8 @@ export function ListenerEditModal({
             </svg>
           </span>
           <div className="flex-1">
-            <div className="text-[16px] font-bold">{t('neurocomment.listener.title')}</div>
-            <div className="mt-px text-[12.5px] text-ink-subtle">
+            <div className="text-title font-bold">{t('neurocomment.listener.title')}</div>
+            <div className="mt-px text-body text-ink-subtle">
               {t('neurocomment.modal.listenerEdit.sub')}
             </div>
           </div>
@@ -125,13 +125,13 @@ export function ListenerEditModal({
             size="md"
             aria-label={t('neurocomment.modal.close')}
             onClick={onClose}
-            className="text-[16px]"
+            className="text-title"
           >
             ×
           </IconButton>
         </div>
 
-        <div className="mb-[7px] mt-[18px] text-[12.5px] font-medium text-ink-body">
+        <div className="mb-[7px] mt-[18px] text-body font-medium text-ink-body">
           {t('neurocomment.modal.listenerEdit.account')}
         </div>
         <Select
@@ -156,7 +156,7 @@ export function ListenerEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
           >
             {t('neurocomment.modal.cancel')}
           </button>
@@ -165,7 +165,7 @@ export function ListenerEditModal({
             onClick={save}
             // A second click while the PUT is open would send the same body again.
             disabled={saveSettings.isPending}
-            className={`rounded-full border px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
+            className={`rounded-full border px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">

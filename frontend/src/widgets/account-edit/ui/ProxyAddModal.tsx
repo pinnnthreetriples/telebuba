@@ -45,12 +45,12 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
     <Modal onClose={onClose} className="w-[460px]" label={t('accounts.proxyAdd.title')}>
       <div className="p-6">
         <div className="mb-4 flex items-center justify-between">
-          <span className="text-[16px] font-bold">{t('accounts.proxyAdd.title')}</span>
+          <span className="text-title font-bold">{t('accounts.proxyAdd.title')}</span>
           <IconButton
             size="md"
             onClick={onClose}
             aria-label={t('accounts.proxyAdd.close')}
-            className="text-[16px]"
+            className="text-title"
           >
             ×
           </IconButton>
@@ -60,7 +60,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
           >
             {t('accounts.proxyAdd.cancel')}
           </button>
@@ -68,7 +68,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onAdd}
             disabled={!canAdd}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {t('accounts.proxyAdd.add')}
           </button>

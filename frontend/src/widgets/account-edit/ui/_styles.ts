@@ -3,9 +3,9 @@
 // for React Fast Refresh).
 
 export const FIELD =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
 const FIELD_FLAT =
-  'w-full rounded-lg border border-line bg-canvas px-3 py-[9px] text-[13px] outline-none';
+  'w-full rounded-lg border border-line bg-canvas px-3 py-[9px] text-lead outline-none';
 // A greyed-out field the operator cannot type into but CAN select and copy from —
 // the 2FA reveal panel's password, where selecting it by hand is the documented
 // fallback whenever the clipboard write fails or there is no clipboard at all.
@@ -19,10 +19,14 @@ export const FIELD_READONLY = `${FIELD_FLAT} text-ink`;
 // The same look for a genuinely `disabled` input (the device facts), where the cursor
 // is telling the truth and the value is a fact nobody has to transcribe.
 export const FIELD_LOCKED = `cursor-not-allowed ${FIELD_FLAT} text-ink-subtle`;
-export const LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
+export const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 export const SEG_WRAP = 'mb-[10px] flex gap-tight rounded-lg bg-canvas p-1';
+// The canon's segmented rung is `8px 10px`; only the vertical half is applied. These
+// segments are `flex-1` in a fixed tray, so their width comes from the tray and a 10px
+// horizontal padding would change nothing except the point at which a long label forces
+// the tray to overflow.
 export const seg = (on: boolean): string =>
-  `flex-1 rounded-sm py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+  `flex-1 rounded-sm py-[8px] text-body font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
 
 // A check-button drives a tiny idle→loading→(ok|err) machine, settling back to
 // idle. Backed by real check calls (proxy connectivity / @SpamBot / alive).

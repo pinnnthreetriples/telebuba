@@ -189,7 +189,7 @@ export function ChannelPostsPanel({
 
   return (
     <div className="mt-5 border-t border-line-row pt-4">
-      <div className="mb-[10px] text-[13px] font-semibold">{t('accounts.channel.postsTitle')}</div>
+      <div className="mb-[10px] text-lead font-semibold">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}
       <div className="rounded-lg border border-line bg-white p-3">
@@ -226,7 +226,7 @@ export function ChannelPostsPanel({
                 </svg>
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{file.name}</span>
+            <span className="min-w-0 flex-1 truncate text-body font-medium">{file.name}</span>
             {!busy && (
               <button
                 type="button"
@@ -242,7 +242,7 @@ export function ChannelPostsPanel({
           </div>
         )}
         {publish.isError && (
-          <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-[12.5px] text-danger">
+          <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-body text-danger">
             {channelErrorText(publish.error, t, t('accounts.channel.error'))}
           </div>
         )}
@@ -265,7 +265,7 @@ export function ChannelPostsPanel({
                 <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
             </IconButton>
-            <span className="text-[11px] text-ink-subtle">
+            <span className="text-tiny text-ink-subtle">
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
           </div>
@@ -273,7 +273,7 @@ export function ChannelPostsPanel({
             type="button"
             onClick={doPublish}
             disabled={!canPublish}
-            className="rounded-full bg-primary px-4 py-[7px] text-[12.5px] font-medium text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-4 py-[7px] text-body font-medium text-white disabled:opacity-50"
           >
             {busy ? (
               <span className="inline-flex items-center gap-sm">
@@ -305,21 +305,21 @@ export function ChannelPostsPanel({
         </div>
       )}
       {posts.isError && (
-        <div className="mt-3 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+        <div className="mt-3 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <button
             type="button"
             onClick={() => {
               void posts.refetch();
             }}
-            className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-[12.5px] font-medium"
+            className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium"
           >
             {t('accounts.channel.retry')}
           </button>
         </div>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-3 rounded-lg border border-dashed border-line bg-white px-4 py-5 text-center text-[12.5px] text-ink-subtle">
+        <div className="mt-3 rounded-lg border border-dashed border-line bg-white px-4 py-5 text-center text-body text-ink-subtle">
           {t('accounts.channel.postsEmpty')}
         </div>
       )}
@@ -327,7 +327,7 @@ export function ChannelPostsPanel({
         <div className="mt-3 flex flex-col gap-sm">
           {items.map((post) => (
             <div key={post.post_id} className="rounded-lg border border-line px-[14px] py-3">
-              <div className="flex items-center gap-sm text-[11px] text-ink-subtle">
+              <div className="flex items-center gap-sm text-tiny text-ink-subtle">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
                   <span className="rounded-sm bg-canvas px-[6px] py-[1px] font-medium text-ink-muted">
@@ -374,7 +374,7 @@ export function ChannelPostsPanel({
                     className={`${FIELD} resize-none [font-family:inherit]`}
                   />
                   {editPost.isError && (
-                    <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-[12.5px] text-danger">
+                    <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-body text-danger">
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </div>
                   )}
@@ -382,7 +382,7 @@ export function ChannelPostsPanel({
                     {/* The same readout the composer carries: without it the box
                         just stops accepting input at the media-aware cap with
                         nothing on screen explaining why. */}
-                    <span className="mr-auto text-[11px] text-ink-subtle">
+                    <span className="mr-auto text-tiny text-ink-subtle">
                       {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
                     </span>
                     <button
@@ -391,7 +391,7 @@ export function ChannelPostsPanel({
                         setEditingId(null);
                       }}
                       disabled={editPost.isPending}
-                      className="rounded-full border border-line-input bg-white px-[14px] py-[6px] text-[12.5px] font-medium disabled:opacity-50"
+                      className="rounded-full border border-line-input bg-white px-[14px] py-[6px] text-body font-medium disabled:opacity-50"
                     >
                       {t('accounts.channel.postCancel')}
                     </button>
@@ -399,7 +399,7 @@ export function ChannelPostsPanel({
                       type="button"
                       onClick={saveEdit}
                       disabled={editPost.isPending || !canSaveEdit}
-                      className="rounded-full bg-primary px-[16px] py-[6px] text-[12.5px] font-medium text-white disabled:opacity-50"
+                      className="rounded-full bg-primary px-[16px] py-[6px] text-body font-medium text-white disabled:opacity-50"
                     >
                       {t('accounts.channel.postSave')}
                     </button>
@@ -407,7 +407,7 @@ export function ChannelPostsPanel({
                 </div>
               ) : (
                 post.text !== '' && (
-                  <div className="mt-[6px] whitespace-pre-wrap text-[13px] leading-[1.45]">
+                  <div className="mt-[6px] whitespace-pre-wrap text-lead leading-[1.45]">
                     {post.text}
                   </div>
                 )
@@ -423,7 +423,7 @@ export function ChannelPostsPanel({
             void loadMore();
           }}
           disabled={loadingMore}
-          className="mt-3 w-full rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold text-ink disabled:opacity-50"
+          className="mt-3 w-full rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold text-ink disabled:opacity-50"
         >
           {loadingMore ? (
             <span className="inline-flex items-center gap-sm">

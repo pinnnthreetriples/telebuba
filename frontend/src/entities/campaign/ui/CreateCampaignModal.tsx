@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal } from '@/shared/ui';
 
 const FIELD =
-  'box-border w-full rounded-lg border border-line-input px-3 py-[9px] text-[13px] text-ink outline-none';
+  'box-border w-full rounded-lg border border-line-input px-3 py-[9px] text-lead text-ink outline-none';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -48,17 +48,17 @@ export function CreateCampaignModal({
           </svg>
         </span>
         <div>
-          <div className="text-[16px] font-bold text-ink">
+          <div className="text-title font-bold text-ink">
             {t('neurocomment.modal.createCampaign.title')}
           </div>
-          <div className="mt-[2px] text-[12.5px] text-ink-subtle">
+          <div className="mt-[2px] text-body text-ink-subtle">
             {t('neurocomment.modal.createCampaign.sub')}
           </div>
         </div>
       </div>
 
       <div className="px-6 pb-5 pt-[18px]">
-        <div className="mb-[7px] text-[12.5px] font-semibold text-ink">
+        <div className="mb-[7px] text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.nameLabel')}
         </div>
         <input
@@ -71,7 +71,7 @@ export function CreateCampaignModal({
           className={`${FIELD} mb-4`}
         />
 
-        <div className="mb-[7px] text-[12.5px] font-semibold text-ink">
+        <div className="mb-[7px] text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <textarea
@@ -85,10 +85,10 @@ export function CreateCampaignModal({
           className={`${FIELD} mb-4 resize-y font-[inherit] leading-[1.5]`}
         />
 
-        <div className="mb-[7px] text-[12.5px] font-semibold text-ink">
+        <div className="mb-[7px] text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.channelsLabel')}
         </div>
-        <div className="mb-[10px] text-[11px] text-ink-subtle">
+        <div className="mb-[10px] text-tiny text-ink-subtle">
           {t('neurocomment.modal.createCampaign.channelsHint')}
         </div>
         {channels.length > 0 ? (
@@ -96,7 +96,7 @@ export function CreateCampaignModal({
             {channels.map((channel, index) => (
               <span
                 key={`${channel}-${String(index)}`}
-                className="inline-flex items-center gap-sm rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
+                className="inline-flex items-center gap-sm rounded-full border border-line bg-track px-[11px] py-[5px] text-body text-ink-body"
               >
                 {channel}
                 <button
@@ -105,7 +105,7 @@ export function CreateCampaignModal({
                   onClick={() => {
                     setChannels((list) => list.filter((_, i) => i !== index));
                   }}
-                  className="cursor-pointer text-[13px] leading-none text-ink-subtle"
+                  className="cursor-pointer text-lead leading-none text-ink-subtle"
                 >
                   ×
                 </button>
@@ -132,7 +132,7 @@ export function CreateCampaignModal({
           <button
             type="button"
             onClick={addChannel}
-            className="shrink-0 rounded-lg bg-primary-tint px-[18px] py-[7px] text-[12.5px] font-semibold text-primary"
+            className="shrink-0 rounded-lg bg-primary-tint px-[18px] py-[7px] text-body font-semibold text-primary"
           >
             {t('neurocomment.modal.add')}
           </button>
@@ -147,14 +147,14 @@ export function CreateCampaignModal({
             onCreate({ name: name.trim(), prompt: prompt.trim(), channels });
             onClose();
           }}
-          className="flex-1 rounded-full border border-primary bg-primary px-[14px] py-[10px] text-[13px] font-semibold text-white disabled:opacity-50"
+          className="flex-1 rounded-full border border-primary bg-primary px-[14px] py-[10px] text-lead font-semibold text-white disabled:opacity-50"
         >
           {t('neurocomment.modal.createCampaign.confirm')}
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-[13px] font-semibold text-ink"
+          className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-lead font-semibold text-ink"
         >
           {t('neurocomment.modal.cancel')}
         </button>

@@ -23,10 +23,10 @@ export function ProxyDeleteModal({
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
       <div className="p-6">
-        <div className="mb-2 text-[16px] font-bold">
+        <div className="mb-2 text-title font-bold">
           {t('accounts.proxyDeleteModal.title', { endpoint })}
         </div>
-        <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
+        <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">
           {used > 0
             ? t('accounts.proxyDeleteModal.bodyAssigned', { count: used })
             : t('accounts.proxyDeleteModal.body')}
@@ -35,7 +35,7 @@ export function ProxyDeleteModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
           >
             {t('accounts.proxyDeleteModal.cancel')}
           </button>
@@ -45,7 +45,7 @@ export function ProxyDeleteModal({
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-[13px] font-semibold text-danger"
+            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger"
           >
             {t('accounts.proxyDeleteModal.confirm')}
           </button>

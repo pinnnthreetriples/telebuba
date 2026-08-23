@@ -97,7 +97,7 @@ export function LogsPage() {
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-[120px]',
-          cellClassName: 'font-mono text-[12.5px] text-ink-subtle',
+          cellClassName: 'font-mono text-body text-ink-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -114,7 +114,7 @@ export function LogsPage() {
           row.original.account_id ? resolveAccount(row.original.account_id) : '—',
         meta: {
           className: 'w-[150px]',
-          cellClassName: 'text-[12.5px] text-ink-body',
+          cellClassName: 'text-body text-ink-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -123,7 +123,7 @@ export function LogsPage() {
         cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
         meta: {
           className: 'w-[170px]',
-          cellClassName: 'truncate text-[12.5px] text-ink-body',
+          cellClassName: 'truncate text-body text-ink-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -137,7 +137,7 @@ export function LogsPage() {
             {eventLabel(t, row.original.event)}
           </span>
         ),
-        meta: { cellClassName: 'text-[12.5px] text-ink-body' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'text-body text-ink-body' } satisfies DataTableColumnMeta,
       },
       {
         id: 'reason',
@@ -150,7 +150,7 @@ export function LogsPage() {
         // remaining width and the table already scrolls horizontally.
         cell: ({ row }) => eventReason(t, row.original) || '—',
         meta: {
-          cellClassName: 'text-[12.5px] text-ink-body',
+          cellClassName: 'text-body text-ink-body',
         } satisfies DataTableColumnMeta,
       },
     ],
@@ -192,7 +192,7 @@ export function LogsPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
+      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
 
       <div className="mb-[14px] flex flex-wrap items-center gap-sm">
         <div ref={pillsRef} className="relative flex rounded-full bg-white p-[3px]">
@@ -209,7 +209,7 @@ export function LogsPage() {
                 setStatus(value);
                 resetPaging();
               }}
-              className={`relative z-raised px-[14px] py-[6px] text-[12.5px] font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
+              className={`relative z-raised px-[14px] py-[6px] text-body font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
             >
               {t(`logs.filter.${value}`)}
             </button>
@@ -233,7 +233,7 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+        <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-lead text-ink-subtle">
           {t('logs.empty')}
         </div>
       ) : (
@@ -250,7 +250,7 @@ export function LogsPage() {
               onClick={() => {
                 setCursorStack((stack) => stack.slice(0, -1));
               }}
-              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+              className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
             >
               {t('logs.pagination.prev')}
             </button>
@@ -260,7 +260,7 @@ export function LogsPage() {
               onClick={() => {
                 setCursorStack((stack) => [...stack, data.next_cursor ?? null]);
               }}
-              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+              className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
             >
               {t('logs.pagination.next')}
             </button>

@@ -26,10 +26,13 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[12.5px] font-bold leading-[1.25] text-warning-deep">
+        <div className="text-body font-bold leading-[1.25] text-warning-deep">
           {t('neurocomment.idle.label', { count })}
         </div>
-        <div className="mt-px text-[11px] text-warning">{t('neurocomment.idle.sub')}</div>
+        {/* Grey under an amber heading, for the reason WarmingBoard's twin is grey: the
+            amber is already said by the heading, the chip and the surface, and `warning`
+            here reached only 3.57:1 against this tint where `ink-body` reaches 10.10:1. */}
+        <div className="mt-px text-tiny text-ink-body">{t('neurocomment.idle.sub')}</div>
       </div>
       <span className="flex shrink-0 text-warning">
         <svg

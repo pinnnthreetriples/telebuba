@@ -156,7 +156,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <div className="mb-[10px] flex items-center justify-between gap-md rounded-lg bg-canvas px-3 py-[10px]">
         <span className="flex items-center gap-sm">
           <span className={`h-2 w-2 rounded-full ${sessionDot}`} />
-          <span className="text-[12.5px] text-ink-body">{sessionText}</span>
+          <span className="text-body text-ink-body">{sessionText}</span>
         </span>
         <span className="flex items-center gap-sm">
           <FeedbackMark
@@ -166,21 +166,21 @@ export function SessionSection({ account }: { account: AccountRead }) {
             type="button"
             onClick={onLogout}
             disabled={logout.isPending}
-            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-[12.5px] font-medium text-ink-muted disabled:opacity-50"
+            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
           >
             {logoutCheck === 'loading' ? <Spinner size={12} /> : t('accounts.edit.logout')}
           </button>
         </span>
       </div>
       <div className="mb-[9px] mt-4 flex items-center justify-between gap-sm">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+        <span className="text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('accounts.edit.loginByCode')}
         </span>
         <button
           type="button"
           onClick={onRequestCode}
           disabled={requestCode.isPending}
-          className="rounded-full border border-line-input bg-white px-3 py-[4px] text-[11px] font-medium text-primary disabled:opacity-50"
+          className="rounded-full border border-line-input bg-white px-3 py-[4px] text-tiny font-medium text-primary disabled:opacity-50"
         >
           {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
         </button>
@@ -220,12 +220,12 @@ export function SessionSection({ account }: { account: AccountRead }) {
         type="button"
         onClick={onConfirmLogin}
         disabled={submitCode.isPending || !code}
-        className="w-full rounded-lg border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
+        className="w-full rounded-lg border border-line-input bg-white py-[9px] text-lead font-medium disabled:opacity-50"
       >
         {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
       </button>
-      {loginNote ? <div className="mt-[8px] text-[11px] text-ink-muted">{loginNote}</div> : null}
-      <div className="mb-[9px] mt-[18px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+      {loginNote ? <div className="mt-[8px] text-tiny text-ink-muted">{loginNote}</div> : null}
+      <div className="mb-[9px] mt-[18px] text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
         {t('accounts.edit.import')}
       </div>
       <div className={SEG_WRAP}>
@@ -261,8 +261,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
           </svg>
         </div>
         <div className="min-w-0">
-          <div className="text-[12.5px] font-semibold">{t('accounts.edit.dropTitle')}</div>
-          <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.dropHint')}</div>
+          <div className="text-body font-semibold">{t('accounts.edit.dropTitle')}</div>
+          <div className="mt-px text-tiny text-ink-subtle">{t('accounts.edit.dropHint')}</div>
         </div>
       </button>
       <input
@@ -309,8 +309,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-sm">
                   <div className="min-w-0">
-                    <div className="truncate text-[12.5px] font-semibold">{file.name}</div>
-                    <div className="mt-px text-[10.5px] text-ink-subtle">
+                    <div className="truncate text-body font-semibold">{file.name}</div>
+                    <div className="mt-px text-micro text-ink-subtle">
                       {t(`accounts.edit.upload.${file.status}`)}
                     </div>
                   </div>

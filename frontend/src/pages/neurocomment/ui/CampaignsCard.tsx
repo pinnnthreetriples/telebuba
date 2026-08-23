@@ -81,9 +81,7 @@ export function CampaignsCard({
       label={t('neurocomment.campaigns.title')}
       headerClassName="px-4 py-[15px]"
       bodyClassName="px-4 pb-[15px]"
-      header={
-        <span className="text-[13px] font-semibold">{t('neurocomment.campaigns.title')}</span>
-      }
+      header={<span className="text-lead font-semibold">{t('neurocomment.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
@@ -178,8 +176,8 @@ export function CampaignsCard({
                 >
                   <div className="flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
-                      <div className="mb-[5px] text-[13px] font-semibold">{campaign.name}</div>
-                      <div className="text-[11px] text-ink-muted">
+                      <div className="mb-[5px] text-lead font-semibold">{campaign.name}</div>
+                      <div className="text-tiny text-ink-muted">
                         {t('neurocomment.campaign.meta', {
                           channels: campaign.channel_count ?? 0,
                           accounts: campaign.account_count ?? 0,
@@ -188,7 +186,7 @@ export function CampaignsCard({
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-sm">
                       <span
-                        className={`inline-flex items-center gap-tight text-[11px] font-medium ${tone}`}
+                        className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
                       >
                         {/* `bg-current` — the dot can never disagree with its label. */}
                         <span className="h-[6px] w-[6px] rounded-full bg-current" />
@@ -225,7 +223,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-[18px] text-center text-[12.5px] text-ink-subtle">
+          <div className="py-[18px] text-center text-body text-ink-subtle">
             {t('neurocomment.campaigns.none')}
           </div>
         ) : null}
@@ -234,7 +232,7 @@ export function CampaignsCard({
       <button
         type="button"
         onClick={onCreate}
-        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
+        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
       >
         {t('neurocomment.campaigns.create')}
       </button>
@@ -248,11 +246,11 @@ export function CampaignsCard({
           bodyClassName="px-0 pb-0 pt-[11px]"
           label={t('neurocomment.channels.title')}
           header={
-            <span className="text-[12.5px] font-semibold">{t('neurocomment.channels.title')}</span>
+            <span className="text-body font-semibold">{t('neurocomment.channels.title')}</span>
           }
         >
           <div className="mb-[10px] flex items-center justify-between gap-sm">
-            <span className="min-w-0 truncate text-[11px] font-medium text-primary">
+            <span className="min-w-0 truncate text-tiny font-medium text-primary">
               {activeCampaign?.name ?? ''}
             </span>
             <div className="flex shrink-0 items-center gap-sm">
@@ -261,7 +259,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null || checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-[11px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -273,7 +271,7 @@ export function CampaignsCard({
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
-                className={`inline-flex items-center gap-sm rounded-full border px-[11px] py-[5px] text-[12.5px] transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
+                className={`inline-flex items-center gap-sm rounded-full border px-[11px] py-[5px] text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
@@ -283,7 +281,7 @@ export function CampaignsCard({
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-[13px] leading-none text-ink-subtle"
+                  className="text-lead leading-none text-ink-subtle"
                 >
                   ×
                 </button>
@@ -303,7 +301,7 @@ export function CampaignsCard({
                   }}
                   placeholder={t('neurocomment.channels.placeholder')}
                   aria-label={t('neurocomment.channels.placeholder')}
-                  className="w-[150px] border-none bg-transparent text-[12.5px] outline-none"
+                  className="w-[150px] border-none bg-transparent text-body outline-none"
                 />
                 <button
                   type="button"
@@ -331,7 +329,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null}
                 onClick={onStartAdd}
-                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12.5px] text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-body text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 {t('neurocomment.channels.addPill')}
               </button>
