@@ -274,3 +274,22 @@ test('checking channels colours banned chips red and healthy chips green', async
   });
   expect(chip('@promo')?.className).toContain('text-[#2e9e64]');
 });
+
+test('the channel chip carries the channel-scoped deleted count', async () => {
+  // The board row's chip is per-ACCOUNT and counts `posted` only. This one is the
+  // channel's own delivered-set count — the number that has to explain a back-off,
+  // including a deletion of a comment recorded `failed` mid-send, which no account
+  // card can see. Moving the row chip to the account must not take it off the board.
+  routeApi({
+    ...BOARD,
+    channels: [{ ...BOARD.channels[0], deleted_recent: 4 }],
+    accounts: [{ ...BOARD.accounts[0], deleted_today: 0 }],
+  });
+
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('4 удалено')).toBeInTheDocument();
+  });
+  // …and it sits on the channel chip, not on a board row.
+  expect(screen.getByText('4 удалено').parentElement?.textContent).toContain('@news');
+});

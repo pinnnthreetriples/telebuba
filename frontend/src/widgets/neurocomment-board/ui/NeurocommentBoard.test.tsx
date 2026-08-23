@@ -495,3 +495,22 @@ test('falls back to the label when the account is not in the full list', () => {
 
   expect(screen.getByText('+79261112233')).toBeInTheDocument();
 });
+
+test('an account with no channel gets no deleted chip beside the em dash', () => {
+  // `deleted_today` is account-wide, so a row that resolved no channel could pair it with
+  // the '—' placeholder and assert a deletion in a channel it does not name.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    accounts: [{ ...BOARD.accounts![1]!, deleted_today: 3 }],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  expect(screen.queryByText('3 удалено')).not.toBeInTheDocument();
+});

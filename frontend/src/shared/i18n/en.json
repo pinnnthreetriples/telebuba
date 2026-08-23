@@ -1233,6 +1233,7 @@
       "addPill": "+ Channel",
       "check": "Check channels",
       "checking": "Checking…",
+      "deletedHint": "Comments deleted in this channel in the last 24h — what sends it into back-off",
       "checkFailed": "Couldn't check channels",
       "placeholder": "t.me/channel or @channel",
       "remove": "Remove channel",

@@ -22,7 +22,7 @@ interface BoardRow {
   // also falls back to it when an account's channel is absent from the board map.
   status: NeurocommentChannelRow['status'];
   // Our comments removed from this row's channel within the 24h board window.
-  deletedRecent: number;
+  deletedToday: number;
   // Onboarding progress for this account: ready channels / target. While the
   // runtime reports onboarding in flight and the account is not yet fully armed,
   // the status cell animates this instead of the (misleading) static status.
@@ -99,9 +99,12 @@ function deriveRows(
           : (channelStatus.get(channel) ?? 'no_data'),
       // The ACCOUNT's own deletions, not the channel's aggregate: that put the same badge
       // on every account sharing the channel, so one deleted comment accused all five.
+      // The channel's own number did not just move — it counts a different SET (delivered
+      // vs posted) and is what explains a back-off, so it stays on the channel chips in
+      // `CampaignsCard` rather than being dropped.
       // ponytail: `deleted_today` spans every channel while the badge sits beside the ONE
       // the row shows — a per-pair count needs a new board field, add it if that bites.
-      deletedRecent: account.deleted_today ?? 0,
+      deletedToday: account.deleted_today ?? 0,
       armedReady,
       armedTarget,
     };
@@ -245,9 +248,12 @@ export function NeurocommentBoard({
             className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
           >
             {row.original.channel}
-            {row.original.deletedRecent > 0 ? (
+            {/* Suppressed on the em-dash row: with no channel to stand beside, `— 3 удалено`
+                reads as a deletion in a channel that is not named. The account's own number
+                still reaches the operator through the «Удалено» tile. */}
+            {row.original.channel !== '—' && row.original.deletedToday > 0 ? (
               <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
-                {t('neurocomment.board.deleted', { count: row.original.deletedRecent })}
+                {t('neurocomment.board.deleted', { count: row.original.deletedToday })}
               </span>
             ) : null}
           </span>
