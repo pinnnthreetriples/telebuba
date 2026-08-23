@@ -325,7 +325,7 @@ export function AddStoryModal({
                 height="13"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#fff"
+                className="stroke-white"
                 strokeWidth="3"
               >
                 <path d="M20 6 9 17l-5-5" />

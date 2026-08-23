@@ -52,7 +52,7 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-[#e4ecfa] bg-primary-wash px-[18px] py-4 text-ink">
+    <div className="rounded-card border border-primary-hairline bg-primary-wash px-[18px] py-4 text-ink">
       <div className="mb-[14px] flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
           <span className="text-[13px] font-semibold">{t('neurocomment.pipeline.title')}</span>
@@ -115,7 +115,7 @@ export function PipelineCard({
                       height="10"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#fff"
+                      className="stroke-white"
                       strokeWidth="3.4"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -165,7 +165,7 @@ export function PipelineCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#e4ecfa] bg-[#e4ecfa] md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-primary-hairline bg-primary-hairline md:grid-cols-6">
         {stats.map((stat) => (
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing

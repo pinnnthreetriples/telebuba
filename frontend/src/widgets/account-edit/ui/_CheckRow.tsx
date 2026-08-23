@@ -25,7 +25,14 @@ export function CheckRow({
         className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${on ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
       >
         {on && (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            className="stroke-white"
+            strokeWidth="3"
+          >
             <path d="M20 6 9 17l-5-5" />
           </svg>
         )}

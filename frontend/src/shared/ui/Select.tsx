@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 export type SelectOption = { value: string; label: string; disabled?: boolean };
 
@@ -29,10 +29,36 @@ export function Select({
   emptyLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // The keyboard cursor, as an index into `options`. DOM focus stays on the trigger the
+  // whole time — the list is `inert` while closed, and moving real focus into it would
+  // fight both that and the Modal Tab trap — so the cursor is published as
+  // `aria-activedescendant` instead, pointing at the option ids minted below.
+  const [active, setActive] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const optionId = (index: number) => `${listId}-${String(index)}`;
   // The label comes off the matching option, never off `value` being truthy: '' is a
   // real choice at two sites ("Все аккаунты", "Без медиа"), not the empty state.
   const current = options.find((option) => option.value === value);
+
+  // The next selectable option `delta` away, skipping disabled ones and WRAPPING at
+  // both ends: these lists run 2–20 rows and the panel is a contained ring, the same
+  // way Modal's own Tab trap wraps rather than dead-ending.
+  const step = (from: number, delta: number): number => {
+    const count = options.length;
+    let next = from;
+    for (let i = 0; i < count; i += 1) {
+      next = (next + delta + count) % count;
+      if (!options[next]?.disabled) return next;
+    }
+    return from;
+  };
+
+  const openList = () => {
+    const chosen = options.findIndex((option) => option.value === value && !option.disabled);
+    setActive(chosen === -1 ? step(-1, 1) : chosen);
+    setOpen(true);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -50,13 +76,36 @@ export function Select({
       ref={rootRef}
       className="relative"
       onKeyDown={(event) => {
+        const { key } = event;
         // Escape closes the list and stops there: most of these sit inside a Modal,
         // whose own Escape listener is on `document`, and one key must not both pick
         // nothing and throw the dialog away. Only while the list is open — a closed
         // Select has no business swallowing the dialog's Escape.
-        if (event.key === 'Escape' && open) {
+        if (key === 'Escape') {
+          if (!open) return;
           event.stopPropagation();
           setOpen(false);
+          return;
+        }
+        if (key === 'ArrowDown' || key === 'ArrowUp') {
+          event.preventDefault();
+          if (open) setActive((from) => step(from, key === 'ArrowDown' ? 1 : -1));
+          else openList();
+          return;
+        }
+        // Below here the keys only mean something to an open list; closed, Enter and
+        // Space are the button's own activation and must stay that way.
+        if (!open) return;
+        if (key === 'Home' || key === 'End') {
+          event.preventDefault();
+          setActive(key === 'Home' ? step(-1, 1) : step(0, -1));
+        } else if (key === 'Enter' || key === ' ') {
+          event.preventDefault();
+          const chosen = options[active];
+          if (chosen && !chosen.disabled) {
+            onChange(chosen.value);
+            setOpen(false);
+          }
         }
       }}
     >
@@ -64,10 +113,12 @@ export function Select({
         type="button"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
         aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => {
-          setOpen((previous) => !previous);
+          if (open) setOpen(false);
+          else openList();
         }}
         className={`${TRIGGER} ${open ? 'border-primary' : 'border-line'}`}
       >
@@ -100,9 +151,10 @@ export function Select({
         {options.length === 0 ? (
           <div className="px-[10px] py-[8px] text-[12.5px] text-ink-subtle">{emptyLabel}</div>
         ) : (
-          options.map((option) => (
+          options.map((option, index) => (
             <button
               key={option.value}
+              id={optionId(index)}
               type="button"
               role="option"
               aria-selected={option.value === value}
@@ -111,7 +163,9 @@ export function Select({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={`${OPTION} ${option.value === value ? 'font-medium text-primary' : 'text-ink'}`}
+              className={`${OPTION} ${option.value === value ? 'font-medium text-primary' : 'text-ink'} ${
+                open && index === active ? 'bg-primary-tint' : ''
+              }`}
             >
               <span className="min-w-0 truncate">{option.label}</span>
               {option.value === value ? (

@@ -68,8 +68,26 @@ export default {
           tint: '#eef4ff',
           wash: '#f2f6ff',
           line: '#cbd7ec',
+          // Not `line` a notch lighter by accident: this is a border faint enough to
+          // double as a divider FILL, which is the whole reason it has to exist. The
+          // neurocomment PipelineCard needs both jobs from one colour — its card border,
+          // and the background of a `gap-px` grid whose 1px gaps ARE the tile dividers.
+          // `line` is far too dark for that fill and `tint` far too blue for the border.
+          hairline: '#e4ecfa',
         },
-        success: { DEFAULT: '#12a150', tint: '#ddf7e9', line: '#b8ecce', dot: '#16b364' },
+        // `deep` and `press` mirror the amber and blue rungs: `deep` is the darkest green,
+        // for the heading of a notice on a green surface (WarmingBoard's "прогрет" block,
+        // where DEFAULT measures only 2.97:1 on `tint` and this measures 5.85:1), and
+        // `press` is the filled green button's hover, exactly as `primary.press` is the
+        // blue one's — it also lifts the white label on it from 3.37:1 to 4.32:1.
+        success: {
+          DEFAULT: '#12a150',
+          deep: '#0b6b37',
+          press: '#0e8c45',
+          tint: '#ddf7e9',
+          line: '#b8ecce',
+          dot: '#16b364',
+        },
         // `deep` is the one amber the set lacked: the darkest rung, for a heading or a
         // small icon sitting ON an amber chip, where DEFAULT is the subtitle beside it.
         // Two notices needed it — neurocomment's IdleBanner (heading over subtitle) and

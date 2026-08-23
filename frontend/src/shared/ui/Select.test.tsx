@@ -9,6 +9,22 @@ const OPTIONS: SelectOption[] = [
   { value: 'b', label: 'Boris' },
 ];
 
+const WITH_DISABLED: SelectOption[] = [
+  { value: 'a', label: 'Alisa' },
+  { value: 'b', label: 'Boris', disabled: true },
+  { value: 'c', label: 'Vera' },
+];
+
+// The keyboard cursor lives in `aria-activedescendant` on the trigger, pointing at an
+// option's id — DOM focus never leaves the trigger, so that attribute IS the cursor.
+function cursor(): string | null {
+  return screen.getByRole('button', { name: 'Аккаунт' }).getAttribute('aria-activedescendant');
+}
+
+function idOf(name: string): string {
+  return screen.getByRole('option', { name }).id;
+}
+
 function renderSelect(over: Partial<Parameters<typeof Select>[0]> = {}) {
   const onChange = vi.fn();
   render(
@@ -120,4 +136,111 @@ test('no options renders the empty label instead of a blank panel', async () => 
   await userEvent.click(trigger);
   expect(screen.getByText('Нет аккаунтов')).toBeInTheDocument();
   expect(screen.queryByRole('option')).not.toBeInTheDocument();
+});
+
+// The five sites converted off a native <select> had arrow keys for free; losing them
+// was the one real regression in that swap. DOM focus stays on the trigger throughout:
+// the list is inert while closed, and real focus inside it would fight both that and
+// the Modal Tab trap.
+test('Down on a closed trigger opens the list on the selected option', async () => {
+  const { trigger } = renderSelect({ value: 'b' });
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}');
+
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(cursor()).toBe(idOf('Boris'));
+});
+
+test('Down on a closed trigger with nothing picked lands on the first option', async () => {
+  const { trigger } = renderSelect();
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  expect(cursor()).toBe(idOf('Alisa'));
+});
+
+test('Down and Up move the cursor, wrapping at both ends', async () => {
+  const { trigger } = renderSelect();
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}');
+  expect(cursor()).toBe(idOf('Alisa'));
+
+  await userEvent.keyboard('{ArrowDown}');
+  expect(cursor()).toBe(idOf('Boris'));
+
+  // Past the last row it wraps to the first, and back again upwards.
+  await userEvent.keyboard('{ArrowDown}');
+  expect(cursor()).toBe(idOf('Alisa'));
+
+  await userEvent.keyboard('{ArrowUp}');
+  expect(cursor()).toBe(idOf('Boris'));
+});
+
+test('Home and End jump to the ends of the list', async () => {
+  const { trigger } = renderSelect();
+  trigger.focus();
+  await userEvent.keyboard('{ArrowDown}');
+
+  await userEvent.keyboard('{End}');
+  expect(cursor()).toBe(idOf('Boris'));
+
+  await userEvent.keyboard('{Home}');
+  expect(cursor()).toBe(idOf('Alisa'));
+});
+
+test('moving the cursor steps over a disabled option instead of resting on it', async () => {
+  const { trigger } = renderSelect({ options: WITH_DISABLED });
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}');
+  expect(cursor()).toBe(idOf('Alisa'));
+
+  // Boris is disabled, so Down goes straight past it.
+  await userEvent.keyboard('{ArrowDown}');
+  expect(cursor()).toBe(idOf('Vera'));
+
+  await userEvent.keyboard('{ArrowUp}');
+  expect(cursor()).toBe(idOf('Alisa'));
+
+  // And the ends skip it too — End cannot land on it either.
+  await userEvent.keyboard('{End}');
+  expect(cursor()).toBe(idOf('Vera'));
+});
+
+test('Enter commits the option under the cursor and closes the list', async () => {
+  const { onChange, trigger } = renderSelect();
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+  await userEvent.keyboard('{Enter}');
+
+  expect(onChange).toHaveBeenCalledWith('b');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+test('Space commits the option under the cursor too', async () => {
+  const { onChange, trigger } = renderSelect();
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}');
+  await userEvent.keyboard('[Space]');
+
+  expect(onChange).toHaveBeenCalledWith('a');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+});
+
+// The cursor is only a cursor while the list is open; a closed Select must not claim
+// an active descendant that nobody can see.
+test('the closed list publishes no active descendant', async () => {
+  const { trigger } = renderSelect();
+  trigger.focus();
+
+  expect(cursor()).toBeNull();
+  await userEvent.keyboard('{ArrowDown}');
+  expect(cursor()).not.toBeNull();
+  await userEvent.keyboard('{Escape}');
+  expect(cursor()).toBeNull();
 });

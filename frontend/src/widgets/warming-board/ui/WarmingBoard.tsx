@@ -398,7 +398,7 @@ function WarmingCard({
                         height="9"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="#fff"
+                        className="stroke-white"
                         strokeWidth="3.4"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -540,7 +540,7 @@ function WarmingCard({
                 height="13"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#fff"
+                className="stroke-white"
                 strokeWidth="3.4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -549,9 +549,13 @@ function WarmingCard({
               </svg>
             </span>
             <div className="min-w-0">
-              <div className="text-[12.5px] font-bold text-[#0b6b37]">
+              <div className="text-[12.5px] font-bold text-success-deep">
                 {t('warming.card.completeTitle')}
               </div>
+              {/* Deliberately still a literal: the heading above took `success-deep`, but
+                  `success` DEFAULT for this subtitle would drop it from 3.70:1 to 2.97:1
+                  on `success-tint` — a contrast regression, not a merge. Awaiting the call
+                  on a mid-green text rung (or on moving it to `ink-body`, 10.05:1). */}
               <div className="mt-px text-[10.5px] text-[#3f8a5e]">
                 {t('warming.card.completeSub', {
                   days: t('warming.card.dayProgress', { days, target, count: target }),
@@ -567,7 +571,7 @@ function WarmingCard({
               onClick={() => {
                 onPromote(account.account_id);
               }}
-              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success px-[14px] py-[10px] text-[12.5px] font-semibold text-white transition-colors hover:bg-[#0e8c45] disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success px-[14px] py-[10px] text-[12.5px] font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
             >
               <svg
                 width="14"
@@ -614,7 +618,7 @@ export function WarmingBoard({
               height="16"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#fff"
+              className="stroke-white"
               strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"
