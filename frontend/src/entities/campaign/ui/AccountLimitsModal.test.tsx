@@ -103,3 +103,65 @@ test('"back to fleet" clears every override rather than zeroing it', async () =>
     });
   });
 });
+
+test('the hourly cap cannot be driven to 0, the value the API refuses', async () => {
+  // Zero reads as "no cap" on the other two rows, so the box has to stop the operator
+  // rather than let a full-replace save 422 and take the other two edits down with it.
+  renderWithClient(<AccountLimitsModal accountId="a1" name="Polina" onClose={vi.fn()} />);
+  await screen.findByText('20 / 20');
+  const hourly = screen.getByLabelText('Комментарии в час');
+
+  await userEvent.clear(hourly);
+  await userEvent.type(hourly, '0');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(async () => {
+    expect((await putBody()).max_comments_per_hour).toBe(1);
+  });
+});
+
+test('a decimal or an absurd cap is clamped before it can reach the API', async () => {
+  renderWithClient(<AccountLimitsModal accountId="a1" name="Polina" onClose={vi.fn()} />);
+  await screen.findByText('20 / 20');
+  const joins = screen.getByLabelText('Вступления в каналы');
+
+  // Truncated, never handed to the API as a float — Pydantic's int would refuse it.
+  await userEvent.type(joins, '1.5');
+  expect(joins).toHaveValue(1);
+
+  await userEvent.clear(joins);
+  await userEvent.type(joins, '99999999999999999999');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(async () => {
+    expect((await putBody()).max_joins_per_day).toBe(10000);
+  });
+});
+
+test('an untouched cap stored above the ceiling is clamped, not echoed into a 422', async () => {
+  // The row predates the ceiling, and the operator is editing a different cap. A blind
+  // echo would 422 the whole replace and take the edit they DID make with it.
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(
+      new Response(
+        JSON.stringify({
+          ...VIEW,
+          joins: { ...VIEW.joins, limit: 50000, overridden: true },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    ),
+  );
+  renderWithClient(<AccountLimitsModal accountId="a1" name="Polina" onClose={vi.fn()} />);
+  await screen.findByText('20 / 50000');
+
+  await userEvent.clear(screen.getByLabelText('Комментарии в час'));
+  await userEvent.type(screen.getByLabelText('Комментарии в час'), '5');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(async () => {
+    const body = await putBody();
+    expect(body.max_joins_per_day).toBe(10000);
+    expect(body.max_comments_per_hour).toBe(5);
+  });
+});

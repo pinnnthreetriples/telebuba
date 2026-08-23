@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
 import { Modal, toastError } from '@/shared/ui';
 
-import { accountLimitsQueryOptions, updateAccountLimitsMutation } from '../api/campaign.queries';
+import {
+  accountLimitsQueryOptions,
+  neurocommentBoardQueryOptions,
+  updateAccountLimitsMutation,
+} from '../api/campaign.queries';
 
 // The three caps in the order they bind: an account has to get INTO a channel before it
 // can comment there, and the per-hour ceiling is spent before the per-channel day one.
@@ -19,6 +23,14 @@ const FIELD = {
   comments_per_hour: 'max_comments_per_hour',
   comments_per_channel_per_day: 'max_comments_per_channel_per_day',
 } as const;
+
+// The lowest value each cap accepts, mirroring schemas/neurocomment_limits.py. The hourly
+// cap starts at 1 because its gate is a bare ">=" — a zero there would refuse every
+// comment instead of lifting the cap, so the API rejects it, and offering it here meant a
+// 422 that also discarded the operator's other two edits.
+const MIN = { joins: 0, comments_per_hour: 1, comments_per_channel_per_day: 0 } as const;
+// Sanity ceiling, same as the API's: past 64 bits sqlite raises and the write became a 500.
+const CAP_MAX = 10_000;
 
 // `null` = the field is untouched and keeps whatever the account already had; a number is
 // an override; `''` is the operator having cleared the box, which saves as "follow the
@@ -53,12 +65,14 @@ function LimitRow({
   gauge,
   label,
   hint,
+  min,
   draft,
   onDraft,
 }: {
   gauge: AccountLimitGauge;
   label: string;
   hint: string;
+  min: number;
   draft: number | '' | undefined;
   onDraft: (value: number | '') => void;
 }) {
@@ -90,12 +104,21 @@ function LimitRow({
         </span>
         <input
           type="number"
-          min={0}
+          min={min}
+          max={CAP_MAX}
+          step={1}
           value={value}
           aria-label={label}
           placeholder={String(gauge.fleet_default)}
           onChange={(e) => {
-            onDraft(e.target.value === '' ? '' : Math.max(0, Number(e.target.value)));
+            // Clamped and truncated here rather than left to the API: every value this box
+            // can produce must be one the API accepts, or a full-replace save throws away
+            // the edits made in the other two rows along with this one.
+            onDraft(
+              e.target.value === ''
+                ? ''
+                : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
+            );
           }}
           className="w-[74px] rounded-[9px] border border-line-input bg-white px-[9px] py-[6px] text-right font-mono text-[12.5px] font-semibold text-ink"
         />
@@ -115,10 +138,15 @@ function LimitRow({
 export function AccountLimitsModal({
   accountId,
   name,
+  campaignId,
   onClose,
 }: {
   accountId: string;
   name: string;
+  // The board whose cards count against these caps, so a save refreshes them at once
+  // instead of leaving the denominator behind until the next poll. Absent when the modal
+  // is opened without a selected campaign.
+  campaignId?: string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -136,30 +164,37 @@ export function AccountLimitsModal({
       : t('neurocomment.modal.limits.window.day'),
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!view) return;
     // A full replace, every time: the API reads a null field as "drop this override", which
     // is the only way the operator can hand a cap back to the fleet.
     const body = Object.fromEntries(
       KEYS.map((key) => {
         const value = draft[key] ?? (view[key].overridden ? view[key].limit : '');
-        return [FIELD[key], value === '' ? null : value];
+        // Clamped on the way out as well as on the way in: an untouched row echoes back a
+        // STORED cap, and a stored value predating this ceiling would otherwise 422 the
+        // whole replace — taking the rows the operator did edit down with it, with no way
+        // out from the screen.
+        return [FIELD[key], value === '' ? null : Math.min(CAP_MAX, Math.max(MIN[key], value))];
       }),
     );
-    save.mutate(
-      { path: { account_id: accountId }, body },
-      {
-        onSuccess: async () => {
-          await queryClient.invalidateQueries({
-            queryKey: accountLimitsQueryOptions({ path: { account_id: accountId } }).queryKey,
-          });
-          onClose();
-        },
-        onError: () => {
-          toastError(t('neurocomment.modal.limits.saveFailed'));
-        },
-      },
-    );
+    // mutateAsync, not per-call callbacks: this modal is rendered per account row and can
+    // be closed mid-flight, which drops mutate()'s callbacks along with the component.
+    try {
+      await save.mutateAsync({ path: { account_id: accountId }, body });
+    } catch {
+      toastError(t('neurocomment.modal.limits.saveFailed'));
+      return;
+    }
+    await queryClient.invalidateQueries({
+      queryKey: accountLimitsQueryOptions({ path: { account_id: accountId } }).queryKey,
+    });
+    if (campaignId != null) {
+      await queryClient.invalidateQueries({
+        queryKey: neurocommentBoardQueryOptions({ path: { campaign_id: campaignId } }).queryKey,
+      });
+    }
+    onClose();
   };
 
   return (
@@ -202,6 +237,7 @@ export function AccountLimitsModal({
               gauge={view[key]}
               label={t(`neurocomment.modal.limits.cap.${key}`)}
               hint={hints[key]}
+              min={MIN[key]}
               draft={draft[key]}
               onDraft={(value) => {
                 setDraft((d) => ({ ...d, [key]: value }));
@@ -241,7 +277,9 @@ export function AccountLimitsModal({
           </button>
           <button
             type="button"
-            onClick={submit}
+            onClick={() => {
+              void submit();
+            }}
             disabled={!view || save.isPending}
             className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
           >

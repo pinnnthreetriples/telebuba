@@ -19,7 +19,7 @@ pytestmark = pytest.mark.usefixtures("isolate_engine")
 
 
 def _caps(*, hourly: int = 5, daily: int = 3) -> EffectiveAccountLimits:
-    """The per-account caps the quota gate now reads, resolved (#58)."""
+    """The per-account caps the quota gate now reads, resolved."""
     return EffectiveAccountLimits(
         max_joins_per_day=20,
         max_comments_per_hour=hourly,

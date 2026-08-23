@@ -58,13 +58,19 @@ function share(gauge: AccountLimitGauge | undefined): number {
 // the number of the TIGHTEST one, which is the cap that will actually stop this account.
 // A colour change is reserved for the two states worth interrupting a scan for — at the
 // cap, and within a fifth of it.
-// ponytail: one request per row. The roster is a campaign's accounts, so this is tens at
-// worst; if it ever grows, add a bulk `/limits?account_ids=` read rather than a cache here.
+// ponytail: one request per LINKED row. The unlinked rows are every graduated account not
+// yet on this campaign, which is the whole warmed fleet — they get no chip, so opening the
+// modal costs one read per account actually doing the work. If a campaign's roster ever
+// grows past tens, add a bulk `/limits?account_ids=` read rather than a cache here.
 function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => void }) {
   const { t } = useTranslation();
   const { data } = useQuery(accountLimitsQueryOptions({ path: { account_id: accountId } }));
+  // An uncapped gauge (limit 0) scores below every capped one, so it can only win when
+  // nothing is capped at all — otherwise a fresh account with joins set to "no cap" would
+  // advertise `0/∞` while its hourly cap was the one actually binding.
+  const rank = (key: (typeof GAUGES)[number]) => (data?.[key]?.limit ? share(data[key]) : -1);
   const tightest = data
-    ? GAUGES.reduce((best, key) => (share(data[key]) > share(data[best]) ? key : best))
+    ? GAUGES.reduce((best, key) => (rank(key) > rank(best) ? key : best))
     : null;
   const worst = share(tightest ? data?.[tightest] : undefined);
   const binding = tightest ? data?.[tightest] : undefined;
@@ -79,8 +85,9 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
     <button
       type="button"
       onClick={onOpen}
+      // No aria-label: it would override the button's own text, and the spend IS the
+      // label worth hearing. The title carries the word for a pointer user.
       title={t('neurocomment.modal.neuroAccounts.limits')}
-      aria-label={t('neurocomment.modal.neuroAccounts.limits')}
       className={`flex shrink-0 items-center gap-[7px] rounded-[9px] border px-[10px] py-[7px] text-[12px] font-medium ${skin}`}
     >
       <span className="flex h-3 items-end gap-[2px]">
@@ -107,6 +114,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
 function AccountRow({
   account,
   channels,
+  campaignId,
   onPick,
   onRemove,
   onChannelChange,
@@ -114,6 +122,7 @@ function AccountRow({
 }: {
   account: NeuroAccountRow;
   channels: string[];
+  campaignId?: string | null;
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
   onChannelChange: (accountId: string, channels: string[]) => void;
@@ -154,12 +163,14 @@ function AccountRow({
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
           {account.name}
         </span>
-        <LimitsChip
-          accountId={account.account_id}
-          onOpen={() => {
-            setLimitsOpen(true);
-          }}
-        />
+        {account.linked ? (
+          <LimitsChip
+            accountId={account.account_id}
+            onOpen={() => {
+              setLimitsOpen(true);
+            }}
+          />
+        ) : null}
         {account.linked ? (
           // Each linked account gets a ~180px multi-select of the campaign's channels;
           // an empty selection ("Все каналы") = comment on all. Custom tb-dd list (not a
@@ -294,6 +305,7 @@ function AccountRow({
         <AccountLimitsModal
           accountId={account.account_id}
           name={account.name}
+          campaignId={campaignId}
           onClose={() => {
             setLimitsOpen(false);
           }}
@@ -323,6 +335,7 @@ function AccountRow({
 export function NeuroAccountsModal({
   accounts,
   channels = [],
+  campaignId,
   onClose,
   onPick,
   onRemove,
@@ -331,6 +344,8 @@ export function NeuroAccountsModal({
 }: {
   accounts: NeuroAccountRow[];
   channels?: string[];
+  // Passed through to the limits modal so a saved cap refreshes this board's cards.
+  campaignId?: string | null;
   onClose: () => void;
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
@@ -377,6 +392,7 @@ export function NeuroAccountsModal({
               key={account.account_id}
               account={account}
               channels={channels}
+              campaignId={campaignId}
               onPick={onPick}
               onRemove={onRemove}
               onChannelChange={onChannelChange}

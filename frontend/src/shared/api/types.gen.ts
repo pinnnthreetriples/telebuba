@@ -8252,6 +8252,10 @@ export type GetAccountLimitsErrors = {
    */
   401: ErrorEnvelope;
   /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
    * Request validation failed
    */
   422: ErrorEnvelope;
@@ -8289,6 +8293,10 @@ export type UpdateAccountLimitsErrors = {
    * Not authenticated
    */
   401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
   /**
    * Request validation failed
    */

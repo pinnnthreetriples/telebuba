@@ -31,7 +31,7 @@ async def at_join_cap(account_id: str) -> bool:
     they had stayed under twenty. The price is that neurocomment reaches its own cap
     sooner when a campaign is running, which is the point rather than a side effect.
 
-    A per-account override (#58) governs BOTH features for the same reason the counter
+    A per-account override governs BOTH features for the same reason the counter
     does: it is one account's join budget, not one feature's. Only the fleet default
     below differs between the two.
     """

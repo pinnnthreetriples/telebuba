@@ -27,9 +27,15 @@ from core.db import (
     update_account_from_session_check,
 )
 from core.repositories.accounts import _delete_account
-from core.repositories.neurocomment import load_active_cooldowns, persist_cooldown
+from core.repositories.neurocomment import (
+    load_account_limit_override,
+    load_active_cooldowns,
+    persist_cooldown,
+    save_account_limit_override,
+)
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
+from schemas.neurocomment_limits import AccountLimitOverride, AccountLimitsUpdate
 from schemas.telegram_session import TelegramSessionCheckResult
 from tests.factories import DeviceFingerprintFactory
 
@@ -248,6 +254,27 @@ async def test_delete_account_purges_neurocomment_cooldowns(tmp_path: Path) -> N
 
     # After delete no cooldown survives to re-park the account on restart.
     assert await load_active_cooldowns("2026-01-01T00:00:00+00:00") == []
+
+
+@pytest.mark.asyncio
+async def test_delete_account_purges_neurocomment_account_limits(tmp_path: Path) -> None:
+    """Per-account cap overrides (migration #58, no FK) must not outlive the account.
+
+    Sharper than the cooldown above: a stale ``max_joins_per_day = 0`` reads as "no cap",
+    so an account reimported under the same id would join with no rolling-24h budget in
+    either feature — and nothing says so until somebody opens the limits modal.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-caps"))
+    await save_account_limit_override("acc-caps", AccountLimitsUpdate(max_joins_per_day=0))
+    assert (await load_account_limit_override("acc-caps")).max_joins_per_day == 0
+
+    await asyncio.to_thread(_delete_account, "acc-caps")
+
+    await create_account(AccountCreate(account_id="acc-caps"))
+    assert await load_account_limit_override("acc-caps") == AccountLimitOverride(
+        account_id="acc-caps",
+    )
 
 
 @pytest.mark.asyncio

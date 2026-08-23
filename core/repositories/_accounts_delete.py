@@ -32,6 +32,7 @@ def _delete_account(account_id: str) -> None:
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
     from core.repositories.neurocomment._tables import (  # noqa: PLC0415
+        _neurocomment_account_limits,
         _neurocomment_campaign_account_channels,
         _neurocomment_campaign_accounts,
         _neurocomment_challenges,
@@ -80,6 +81,16 @@ def _delete_account(account_id: str) -> None:
         connection.execute(
             delete(_neurocomment_cooldowns).where(
                 _neurocomment_cooldowns.c.account_id == account_id,
+            ),
+        )
+        # neurocomment_account_limits carries account_id but no FK (migration #58),
+        # and the same re-import hazard is sharper here than for a cooldown: a stale
+        # ``max_joins_per_day = 0`` reads as "no cap", so a brand-new account under a
+        # reused id would join without any rolling-24h budget in EITHER feature, and
+        # nothing on screen says so until somebody opens the limits modal.
+        connection.execute(
+            delete(_neurocomment_account_limits).where(
+                _neurocomment_account_limits.c.account_id == account_id,
             ),
         )
         # If this account was the persisted listener, clear the pointer AND the

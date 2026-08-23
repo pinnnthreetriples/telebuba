@@ -303,7 +303,8 @@ test('names the channels an account is banned in for good', () => {
 
 test('the limits chip reports the tightest cap and opens the limits modal', async () => {
   // The chip is the at-a-glance: without opening anything the operator sees which cap is
-  // closest to binding — here 8 of 20 joins, the highest share of the three.
+  // closest to binding — here 8 of 20 joins, the highest share of the three. Only the
+  // LINKED row gets one: the unlinked rows are the whole warmed fleet.
   renderWithClient(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
@@ -314,10 +315,14 @@ test('the limits chip reports the tightest cap and opens the limits modal', asyn
       onChannelChange={vi.fn()}
     />,
   );
-  const chips = await screen.findAllByRole('button', { name: 'Лимиты' });
+  // The accessible name is the spend, not the word — the chip exists to say `8/20` out
+  // loud, so it is found by its title instead.
+  const chips = await screen.findAllByTitle('Лимиты');
   await waitFor(() => {
     expect(chips[0]).toHaveTextContent('8/20');
   });
+
+  expect(chips).toHaveLength(1);
 
   await userEvent.click(chips[0]!);
 

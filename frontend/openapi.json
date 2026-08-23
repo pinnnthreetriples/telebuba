@@ -9503,6 +9503,16 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       },
@@ -9583,6 +9593,16 @@
           },
           "500": {
             "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -11094,6 +11114,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 10000.0,
                 "minimum": 0.0
               },
               {
@@ -11106,6 +11127,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 10000.0,
                 "minimum": 1.0
               },
               {
@@ -11118,6 +11140,7 @@
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 10000.0,
                 "minimum": 0.0
               },
               {

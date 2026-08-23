@@ -329,7 +329,7 @@ async def _at_join_cap(account_id: str) -> bool:
     gate on this before sending a real join RPC — an over-cap account has its
     remaining joins skipped this run and resumes as the 24h window rolls.
 
-    The cap is the account's own when the operator has set one (#58), else the fleet
+    The cap is the account's own when the operator has set one, else the fleet
     setting; ``services._account_limits`` owns that choice for every join site.
     """
     cap = await account_join_cap(account_id, settings.neurocomment.max_joins_per_account_per_day)

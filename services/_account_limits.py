@@ -1,4 +1,4 @@
-"""Resolving one account's caps: its own override, else the fleet number (#58).
+"""Resolving one account's caps: its own override, else the fleet number.
 
 Three caps bound an account, and until now all three were fleet-wide — one setting for
 every account at once, so raising a cap for the one account that keeps hitting it raised

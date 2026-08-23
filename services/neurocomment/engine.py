@@ -226,7 +226,7 @@ class _SelectionPool(NamedTuple):
     hourly_counts: dict[str, int]
     daily_counts: dict[str, int]
     limits: NeurocommentSettings  # operator-editable caps/min-trust (saved or config)
-    # Per-account cap overrides (#58), keyed by id and absent for an untuned account.
+    # Per-account cap overrides (migration #58), keyed by id and absent for an untuned account.
     # Raw rather than pre-resolved: the loader below also has to ask WHETHER any candidate
     # overrides the per-channel day cap, which a resolved number can no longer answer.
     overrides: dict[str, AccountLimitOverride]
@@ -265,7 +265,7 @@ async def _load_selection_pool(
     hourly = {c.account_id: c.count for c in hourly_rows}
     daily: dict[str, int] = {}
     # The fleet cap being off no longer means nobody enforces one: an override can switch
-    # the per-channel day cap ON for a single account (#58), and a pass that skipped this
+    # the per-channel day cap ON for a single account, and a pass that skipped this
     # query on the fleet number alone would score that account against counts it never read.
     day_capped = limits.max_comments_per_channel_per_day > 0 or any(
         (o.max_comments_per_channel_per_day or 0) > 0 for o in overrides.values()

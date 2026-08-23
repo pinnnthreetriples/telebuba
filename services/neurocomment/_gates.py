@@ -57,7 +57,7 @@ def _quota_block_reason(
 ) -> str | None:
     """Which cap the account has reached, or ``None`` while under both.
 
-    ``caps`` are this ACCOUNT's, not the fleet's (#58): two candidates scored in the same
+    ``caps`` are this ACCOUNT's, not the fleet's: two candidates scored in the same
     pass can hold different budgets, so the numbers arrive already resolved rather than
     being read off one shared settings object here.
 

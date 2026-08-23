@@ -370,17 +370,25 @@ async def update_settings(body: NeurocommentSettingsUpdate) -> NeurocommentSetti
     "/accounts/{account_id}/limits",
     response_model=AccountLimitsView,
     operation_id="getAccountLimits",
+    responses=error_responses(404),
 )
 async def get_account_limits(account_id: str) -> AccountLimitsView:
     """One account's caps, what each window has spent, and when a slot comes back."""
-    return await nc_service.load_account_limits(account_id)
+    view = await nc_service.load_account_limits(account_id)
+    if view is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="account not found")
+    return view
 
 
 @router.put(
     "/accounts/{account_id}/limits",
     response_model=AccountLimitsView,
     operation_id="updateAccountLimits",
+    responses=error_responses(404),
 )
 async def update_account_limits(account_id: str, body: AccountLimitsUpdate) -> AccountLimitsView:
     """Replace the account's overrides — a null field drops back to the fleet cap."""
-    return await nc_service.save_account_limits(account_id, body)
+    view = await nc_service.save_account_limits(account_id, body)
+    if view is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="account not found")
+    return view

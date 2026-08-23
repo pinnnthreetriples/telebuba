@@ -416,12 +416,12 @@ _neurocomment_join_log = Table(
     # pair IS the re-join attempt counter. NULL = the membership still stands.
     Column("lost_at", String, nullable=True),
 )
-# Per-account overrides of the three fleet caps (migration #58). A row exists only for
-# an account the operator has actually tuned, and a NULL column inside it means "this
-# cap still follows the fleet" — zero is a real value on two of the three ("no cap"), so
-# absence cannot be spelled as 0. An untouched fleet therefore behaves exactly as it did
-# before the table existed. ``max_joins_per_day`` also governs neuroshilling, which
-# spends the same join log.
+# Per-account overrides of the three fleet caps (migration #58). A row exists only for an
+# account the operator tuned, and a NULL column means "this cap still follows the fleet" —
+# zero is a real value on two of the three ("no cap"), so absence cannot be spelled as 0.
+# ``max_joins_per_day`` governs neuroshilling too, which spends the same join log. No CHECK
+# on the values: bounds belong on the way IN (``schemas.neurocomment_limits``), and a
+# constraint here could not reach a table an earlier migration already created anyway.
 _neurocomment_account_limits = Table(
     "neurocomment_account_limits",
     _metadata,
