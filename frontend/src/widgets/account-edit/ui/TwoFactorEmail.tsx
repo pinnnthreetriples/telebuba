@@ -177,7 +177,7 @@ export function TwoFactorEmail({
     });
 
   return (
-    <div className="mt-3 border-t border-[#f0eeeb] pt-3">
+    <div className="mt-3 border-t border-line-row pt-3">
       {/* Both rows when Telegram reports both, and the pending one is NOT hidden
           behind the confirmed one. Telegram answers with a confirmed address and a
           freshly pending one whenever the operator swaps the recovery address from
@@ -236,7 +236,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onConfirmCode}
               disabled={confirmEmail.isPending || !code.trim()}
-              className="rounded-[10px] border border-line-input bg-white px-4 py-[7px] text-[12.5px] font-medium disabled:opacity-50"
+              className="rounded-lg border border-line-input bg-white px-4 py-[7px] text-[12.5px] font-medium disabled:opacity-50"
             >
               {confirmEmail.isPending ? (
                 <Spinner size={13} />
@@ -248,7 +248,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onResend}
               disabled={resendEmail.isPending}
-              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
+              className="rounded-md border border-line-input bg-white px-3 py-[5px] text-[12.5px] font-medium text-ink-muted disabled:opacity-50"
             >
               {resendEmail.isPending ? <Spinner size={12} /> : t('accounts.edit.twofaEmailResend')}
             </button>
@@ -285,14 +285,14 @@ export function TwoFactorEmail({
               </span>
             ) : null}
           </label>
-          <div className="mb-[12px] text-[11.5px] text-ink-subtle">
+          <div className="mb-[12px] text-[11px] text-ink-subtle">
             {t('accounts.edit.twofaEmailWarn')}
           </div>
           <button
             type="button"
             onClick={onAttach}
             disabled={setEmail.isPending || !addressValid || !hasStored}
-            className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
+            className="w-full rounded-lg border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
           >
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
           </button>

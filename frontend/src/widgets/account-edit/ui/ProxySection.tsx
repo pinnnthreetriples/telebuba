@@ -18,12 +18,13 @@ import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyF
 import { Section, Spinner } from './_shared';
 import { FIELD, LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
 
-// Proxy-connection dot per proxy_status (matches the accounts-table palette).
-// No proxy_id → unassigned (grey); tcp_working → green; anything else → red.
-function proxyDotColor(account: AccountRead): string {
-  if (!account.proxy_id) return '#c8c6c2';
-  if (account.proxy_status === 'tcp_working') return '#2e9e64';
-  return '#c0473f';
+// Proxy-connection dot per proxy_status, as the tokens the states MEAN (the same
+// three the accounts table paints). No proxy_id → unassigned (grey);
+// tcp_working → green; anything else → red.
+function proxyDotTone(account: AccountRead): string {
+  if (!account.proxy_id) return 'bg-line-strong';
+  if (account.proxy_status === 'tcp_working') return 'bg-success';
+  return 'bg-danger';
 }
 
 // Proxy card: state row + detach, pool/manual assignment, and a real connectivity
@@ -188,7 +189,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
   };
 
   const country = account.proxy_country_code?.toUpperCase() ?? '—';
-  const proxyDot = proxyDotColor(account);
+  const proxyDot = proxyDotTone(account);
   const proxyStateText = !account.proxy_id
     ? t('accounts.edit.proxyNone')
     : account.proxy_status === 'tcp_working'
@@ -197,25 +198,25 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.proxy')}>
-      <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
-      <div className="mb-3 flex items-center justify-between gap-2 rounded-[10px] bg-[#f6f5f2] px-3 py-[10px]">
+      <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-[10px]">
         <span className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ background: proxyDot }} />
-          <span className="text-[12.5px] text-[#3a3a3a]">{proxyStateText}</span>
+          <span className={`h-2 w-2 rounded-full ${proxyDot}`} />
+          <span className="text-[12.5px] text-ink-body">{proxyStateText}</span>
         </span>
         {account.proxy_id ? (
           <button
             type="button"
             onClick={onUnassign}
             disabled={unassignProxy.isPending}
-            className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
+            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-[12.5px] font-medium text-ink-muted disabled:opacity-50"
           >
             {unassignProxy.isPending ? <Spinner size={12} /> : t('accounts.edit.proxyDetach')}
           </button>
         ) : null}
       </div>
       {unassignProxy.isError ? (
-        <div className="mb-3 text-[11.5px] text-[#c0473f]">{t('accounts.edit.proxyDetachErr')}</div>
+        <div className="mb-3 text-[11px] text-danger">{t('accounts.edit.proxyDetachErr')}</div>
       ) : null}
       <div className={SEG_WRAP}>
         {(['pool', 'manual'] as const).map((mode) => (
@@ -361,7 +362,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           type="button"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
-          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
+          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
         >
           {proxyCheck === 'loading' ? (
             <Spinner size={13} />
@@ -386,7 +387,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
         )}
         {proxyCheck === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-[6px] rounded-full bg-[#e7f2ec] px-3 py-[5px] text-[12.5px] font-medium text-[#2e7d55]">
+          <span className="tb-pop inline-flex items-center gap-[7px] rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
             {proxyResult?.country_code ? (
               <span
                 className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
@@ -398,7 +399,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </span>
         )}
         {proxyCheck === 'err' && (
-          <span className="inline-flex items-center gap-[6px] text-[12.5px] font-medium text-[#c0473f]">
+          <span className="inline-flex items-center gap-[7px] text-[12.5px] font-medium text-danger">
             <svg
               width="14"
               height="14"

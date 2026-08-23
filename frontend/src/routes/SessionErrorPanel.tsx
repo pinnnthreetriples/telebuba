@@ -29,13 +29,13 @@ export function SessionErrorPanel() {
           onClick={() => {
             void router.invalidate();
           }}
-          className="rounded-full bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
+          className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
         >
           {i18n.t('shell.sessionRetry')}
         </button>
         <Link
           to="/login"
-          className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
         >
           {i18n.t('shell.sessionLogin')}
         </Link>

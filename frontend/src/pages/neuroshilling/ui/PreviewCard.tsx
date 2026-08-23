@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
 import { CollapsibleCard } from '@/shared/ui';
 
-import { clock, dialogueSeconds, ROLE_COLORS, stepMeanSeconds } from './scenarioDraft';
+import { clock, dialogueSeconds, roleTone, stepMeanSeconds } from './scenarioDraft';
 
 // Card 3: the SAVED dialogue as it will read in the chat.
 //
@@ -46,20 +46,20 @@ export function PreviewCard({
       header={<span className="text-[13px] font-semibold">{t('neuroshilling.preview.title')}</span>}
       trailing={
         <span
-          className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${status === 'approved' ? 'bg-success-tint text-success' : 'bg-[#f4f3f0] text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${status === 'approved' ? 'bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
       }
     >
       {dirty ? (
-        <div className="mb-[10px] rounded-[10px] bg-[#fdf4e3] px-[11px] py-[7px] text-[11.5px] text-warning">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-[11px] text-warning">
           {t('neuroshilling.preview.unsaved')}
         </div>
       ) : null}
 
       {steps.length === 0 ? (
-        <div className="py-[18px] text-center text-[12px] text-ink-subtle">
+        <div className="py-[18px] text-center text-[12.5px] text-ink-subtle">
           {t('neuroshilling.preview.none')}
         </div>
       ) : (
@@ -68,7 +68,7 @@ export function PreviewCard({
             elapsed += stepMeanSeconds(step);
             const at = roleIndex.get(step.role_id ?? '');
             const role = at === undefined ? undefined : roles[at];
-            const color = ROLE_COLORS[(at ?? 0) % ROLE_COLORS.length];
+            const tone = roleTone(at ?? 0);
             const quoted =
               step.reply_to_position === null || step.reply_to_position === undefined
                 ? undefined
@@ -76,7 +76,7 @@ export function PreviewCard({
             return (
               <div key={`${String(play)}-${step.step_id}`}>
                 {index > 0 ? (
-                  <div className="my-[7px] flex items-center gap-[8px]">
+                  <div className="my-[7px] flex items-center gap-[7px]">
                     <span className="h-px flex-1 bg-line" />
                     <span className="text-[10.5px] tabular-nums text-ink-subtle">
                       {t('neuroshilling.preview.pause', {
@@ -88,18 +88,17 @@ export function PreviewCard({
                   </div>
                 ) : null}
                 <div
-                  className="tb-fadeup flex gap-[9px]"
+                  className="tb-fadeup flex gap-[10px]"
                   style={{ animationDelay: `${String(index * 0.12)}s` }}
                 >
                   <span
-                    className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
-                    style={{ background: color }}
+                    className={`flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${tone.bg}`}
                   >
                     {(role?.name ?? '?').slice(0, 1).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="mb-[3px] flex items-center gap-[7px]">
-                      <span className="text-[12px] font-semibold" style={{ color }}>
+                      <span className={`text-[12.5px] font-semibold ${tone.text}`}>
                         {role?.name ?? t('neuroshilling.preview.noRole')}
                       </span>
                       <span className="text-[10.5px] tabular-nums text-ink-subtle">
@@ -107,18 +106,17 @@ export function PreviewCard({
                       </span>
                     </div>
                     {step.kind === 'reaction' ? (
-                      <span className="inline-flex items-center gap-[5px] rounded-full border border-line bg-white px-[9px] py-[4px] text-[11.5px] text-ink-muted">
+                      <span className="inline-flex items-center gap-[5px] rounded-full border border-line bg-white px-[9px] py-[4px] text-[11px] text-ink-muted">
                         <span aria-hidden="true">{step.emoji ?? '·'}</span>
                         {step.target_position === null || step.target_position === undefined
                           ? t('neuroshilling.preview.reactionLoose')
                           : t('neuroshilling.preview.reaction', { position: step.target_position })}
                       </span>
                     ) : (
-                      <div className="rounded-[11px] rounded-tl-[3px] border border-line bg-[#faf9f7] px-[11px] py-[8px] text-[12.5px] leading-[1.5]">
+                      <div className="rounded-lg rounded-tl-[3px] border border-line bg-surface px-[11px] py-[8px] text-[12.5px] leading-[1.5]">
                         {quoted ? (
                           <span
-                            className="mb-[5px] block border-l-2 pl-[7px] text-[11.5px] text-ink-subtle"
-                            style={{ borderColor: color }}
+                            className={`mb-[5px] block border-l-2 pl-[7px] text-[11px] text-ink-subtle ${tone.border}`}
                           >
                             {quoted.text}
                           </span>
@@ -134,8 +132,8 @@ export function PreviewCard({
         </div>
       )}
 
-      <div className="mt-[14px] flex flex-wrap items-center gap-[8px]">
-        <span className="mr-auto text-[11.5px] tabular-nums text-ink-subtle">
+      <div className="mt-[14px] flex flex-wrap items-center gap-[7px]">
+        <span className="mr-auto text-[11px] tabular-nums text-ink-subtle">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>
         <button
@@ -144,7 +142,7 @@ export function PreviewCard({
           onClick={() => {
             setPlay((value) => value + 1);
           }}
-          className="rounded-full border border-line-input bg-white px-[14px] py-[8px] text-[12.5px] font-medium text-ink disabled:opacity-50"
+          className="rounded-full border border-line-input bg-white px-[15px] py-[7px] text-[11px] font-semibold text-ink disabled:opacity-50"
         >
           {t('neuroshilling.preview.play')}
         </button>
@@ -152,7 +150,7 @@ export function PreviewCard({
           type="button"
           disabled={busy}
           onClick={onRegenerate}
-          className="rounded-full border border-line-input bg-white px-[14px] py-[8px] text-[12.5px] font-medium text-primary disabled:opacity-50"
+          className="rounded-full border border-line-input bg-white px-[15px] py-[7px] text-[11px] font-semibold text-primary disabled:opacity-50"
         >
           {t('neuroshilling.preview.regenerate')}
         </button>

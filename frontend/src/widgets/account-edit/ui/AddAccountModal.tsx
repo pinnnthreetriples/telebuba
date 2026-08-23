@@ -13,7 +13,7 @@ import {
   proxyPoolQueryOptions,
   proxyTypeLabel,
 } from '@/entities/proxy';
-import { Modal } from '@/shared/ui';
+import { IconButton, Modal } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ProxyForm } from './ProxyForm';
@@ -53,14 +53,14 @@ function ChoiceCard({
       // Background lives in both branches, never in the base: two `bg-*` utilities in
       // one class list are resolved by stylesheet order, where `bg-white` comes last
       // and wins, so the picked method showed a blue border over a white row.
-      className={`flex cursor-pointer items-center gap-[11px] rounded-[12px] border px-[14px] py-[13px] text-left transition-colors hover:border-[#bfd6ff] ${selected ? 'border-primary bg-primary-tint' : 'border-line-input bg-white'}`}
+      className={`flex cursor-pointer items-center gap-[10px] rounded-lg border px-[14px] py-[13px] text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line-input bg-white'}`}
     >
-      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-primary-tint">
         {icon}
       </span>
       <span className="flex-1">
-        <span className="block text-[13.5px] font-semibold">{title}</span>
-        <span className="mt-px block text-[11.5px] text-ink-subtle">{desc}</span>
+        <span className="block text-[13px] font-semibold">{title}</span>
+        <span className="mt-px block text-[11px] text-ink-subtle">{desc}</span>
       </span>
       {chevron && (
         <svg
@@ -68,8 +68,8 @@ function ChoiceCard({
           height="16"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="#c8c6c2"
           strokeWidth="2"
+          className="stroke-line-strong"
         >
           <path d="m9 18 6-6-6-6" />
         </svg>
@@ -265,12 +265,12 @@ export function AddAccountModal({
   };
 
   return (
-    <Modal onClose={onClose} z={70} className="w-[480px]" label={t('accounts.addWizard.title')}>
+    <Modal onClose={onClose} className="w-[480px]" label={t('accounts.addWizard.title')}>
       <div className="px-6 pb-5 pt-[22px]">
         <div className="mb-4 flex items-start justify-between">
           <div>
             <div className="text-[16px] font-bold">{t('accounts.addWizard.title')}</div>
-            <div className="mt-[2px] text-[12px] text-ink-subtle">
+            <div className="mt-[2px] text-[12.5px] text-ink-subtle">
               {step === 1
                 ? t('accounts.addWizard.step1Label')
                 : step === 2
@@ -278,14 +278,14 @@ export function AddAccountModal({
                   : t('accounts.addWizard.step3Label')}
             </div>
           </div>
-          <button
-            type="button"
+          <IconButton
+            size="md"
             onClick={onClose}
             aria-label={t('accounts.addWizard.close')}
-            className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[16px] text-ink-muted"
+            className="text-[16px]"
           >
             ×
-          </button>
+          </IconButton>
         </div>
 
         {/* stepper */}
@@ -294,12 +294,11 @@ export function AddAccountModal({
             <Fragment key={n}>
               {n > 1 && (
                 <span
-                  className="h-[2px] flex-1 rounded-full"
-                  style={{ background: step >= n ? '#0066ff' : '#e6e5e3' }}
+                  className={`h-[2px] flex-1 rounded-full ${step >= n ? 'bg-primary' : 'bg-line'}`}
                 />
               )}
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-semibold ${step >= n ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
+                className={`flex h-7 w-7 items-center justify-center rounded-full text-[12.5px] font-semibold ${step >= n ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
               >
                 {n}
               </span>
@@ -317,8 +316,8 @@ export function AddAccountModal({
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0066ff"
                     strokeWidth="1.8"
+                    className="stroke-primary"
                   >
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <path d="M14 2v6h6" />
@@ -338,8 +337,8 @@ export function AddAccountModal({
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0066ff"
                     strokeWidth="1.8"
+                    className="stroke-primary"
                   >
                     <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />
                   </svg>
@@ -358,8 +357,8 @@ export function AddAccountModal({
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0066ff"
                     strokeWidth="1.8"
+                    className="stroke-primary"
                   >
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
@@ -373,8 +372,8 @@ export function AddAccountModal({
               />
 
               {method === 'phone' && (
-                <div className="tb-fadeup flex flex-col gap-[10px] rounded-[12px] border border-line bg-white px-3 py-[13px]">
-                  <label className="block text-[11.5px] font-medium text-ink-subtle">
+                <div className="tb-fadeup flex flex-col gap-[10px] rounded-lg border border-line bg-white px-3 py-[13px]">
+                  <label className="block text-[11px] font-medium text-ink-subtle">
                     {t('accounts.addWizard.phoneLabel')}
                   </label>
                   <input
@@ -386,7 +385,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none focus:border-primary"
+                    className="rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none focus:border-primary"
                   />
                   <button
                     type="button"
@@ -401,7 +400,7 @@ export function AddAccountModal({
                         : t('accounts.addWizard.phoneContinue')}
                   </button>
                   {startLogin.isError && (
-                    <div className="text-[11.5px] text-[#c0473f]">
+                    <div className="text-[11px] text-danger">
                       {t('accounts.addWizard.phoneError')}
                     </div>
                   )}
@@ -420,9 +419,9 @@ export function AddAccountModal({
                   <button
                     type="button"
                     onClick={() => fileInput.current?.click()}
-                    className="flex items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px] text-left"
+                    className="flex items-center gap-[10px] rounded-lg border border-dashed border-line bg-white px-4 py-[14px] text-left"
                   >
-                    <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-[13px] border border-line bg-white text-primary">
+                    <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
                       <svg
                         width="22"
                         height="22"
@@ -439,20 +438,20 @@ export function AddAccountModal({
                       <span className="block text-[13px] font-semibold">
                         {t('accounts.addWizard.dropTitle')}
                       </span>
-                      <span className="mt-px block text-[11.5px] text-ink-subtle">
+                      <span className="mt-px block text-[11px] text-ink-subtle">
                         {method === 'tdata'
                           ? t('accounts.addWizard.dropDescTdata')
                           : t('accounts.addWizard.dropDescSession')}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full border border-line-input px-[13px] py-[6px] text-[12px] font-medium text-ink">
+                    <span className="shrink-0 rounded-full border border-line-input px-[13px] py-[6px] text-[12.5px] font-medium text-ink">
                       {t('accounts.addWizard.browse')}
                     </span>
                   </button>
                   {fileName && (
-                    <div className="tb-fadeup rounded-[12px] border border-line bg-white px-3 py-[11px]">
-                      <div className="flex items-center gap-[11px]">
-                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#f4f3f0] text-ink-muted">
+                    <div className="tb-fadeup rounded-lg border border-line bg-white px-3 py-[11px]">
+                      <div className="flex items-center gap-[10px]">
+                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-track text-ink-muted">
                           {method === 'tdata' ? (
                             <svg
                               width="17"
@@ -481,15 +480,9 @@ export function AddAccountModal({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[12.5px] font-semibold">{fileName}</div>
+                          {/* Import verdict tone from the tokens the states MEAN. */}
                           <div
-                            className="mt-px text-[11px]"
-                            style={{
-                              color: importFailed
-                                ? '#c0473f'
-                                : createdAccountId
-                                  ? '#2e9e64'
-                                  : '#9a9893',
-                            }}
+                            className={`mt-px text-[11px] ${importFailed ? 'text-danger' : createdAccountId ? 'text-success' : 'text-ink-subtle'}`}
                           >
                             {importFailed
                               ? t('accounts.addWizard.importError')
@@ -503,7 +496,7 @@ export function AddAccountModal({
                         {importing ? (
                           <span className="tb-spin m-[5px] inline-block h-[14px] w-[14px] rounded-full border-2 border-line-input border-t-primary" />
                         ) : importFailed ? (
-                          <span className="m-[3px] inline-flex text-[#c0473f]">
+                          <span className="m-[3px] inline-flex text-danger">
                             <svg
                               width="18"
                               height="18"
@@ -517,7 +510,7 @@ export function AddAccountModal({
                             </svg>
                           </span>
                         ) : createdAccountId ? (
-                          <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
+                          <span className="tb-pop m-[3px] inline-flex text-success">
                             <svg
                               width="18"
                               height="18"
@@ -541,7 +534,7 @@ export function AddAccountModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
               >
                 {t('accounts.addWizard.cancel')}
               </button>
@@ -552,7 +545,7 @@ export function AddAccountModal({
                   setStep(2);
                   setProxyStep('choice');
                 }}
-                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
+                className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
               >
                 {t('accounts.addWizard.next')}
               </button>
@@ -569,18 +562,18 @@ export function AddAccountModal({
           />
         ) : proxyStep === 'choice' ? (
           <>
-            <div className="mb-[14px] flex items-center gap-2 rounded-[10px] bg-[#e7f2ec] px-3 py-[10px]">
+            <div className="mb-[14px] flex items-center gap-2 rounded-lg bg-success-tint px-3 py-[10px]">
               <svg
                 width="15"
                 height="15"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#2e7d55"
                 strokeWidth="2.2"
+                className="stroke-success"
               >
                 <path d="M20 6 9 17l-5-5" />
               </svg>
-              <span className="text-[12.5px] font-medium text-[#2e7d55]">
+              <span className="text-[12.5px] font-medium text-success">
                 {t('accounts.addWizard.added')}
               </span>
             </div>
@@ -592,8 +585,8 @@ export function AddAccountModal({
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0066ff"
                     strokeWidth="1.8"
+                    className="stroke-primary"
                   >
                     <path d="M12 5v14M5 12h14" />
                   </svg>
@@ -612,8 +605,8 @@ export function AddAccountModal({
                     height="18"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0066ff"
                     strokeWidth="1.8"
+                    className="stroke-primary"
                   >
                     <path d="M3 6h18M3 12h18M3 18h18" />
                   </svg>
@@ -632,14 +625,14 @@ export function AddAccountModal({
                 onClick={() => {
                   setStep(1);
                 }}
-                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
               >
                 {t('accounts.addWizard.back')}
               </button>
               <button
                 type="button"
                 onClick={afterProxy}
-                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink-muted"
+                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink-muted"
               >
                 {t('accounts.addWizard.skip')}
               </button>
@@ -658,7 +651,7 @@ export function AddAccountModal({
                 onClick={() => {
                   setProxyStep('choice');
                 }}
-                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
               >
                 {t('accounts.addWizard.back')}
               </button>
@@ -666,7 +659,7 @@ export function AddAccountModal({
                 type="button"
                 onClick={createAndAssign}
                 disabled={!proxyValid}
-                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
+                className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
               >
                 {t('accounts.addWizard.done')}
               </button>
@@ -676,7 +669,7 @@ export function AddAccountModal({
           <>
             <div className="flex flex-col gap-2">
               {freeProxies.length === 0 ? (
-                <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+                <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
                   {t('accounts.addWizard.poolEmpty')}
                 </div>
               ) : (
@@ -691,7 +684,7 @@ export function AddAccountModal({
                     onClick={() => {
                       assignFromPool(proxy.id);
                     }}
-                    className="flex items-center gap-[11px] rounded-[12px] border border-line-input bg-white px-[14px] py-3 text-left transition-colors hover:border-[#bfd6ff] disabled:opacity-60"
+                    className="flex items-center gap-[10px] rounded-lg border border-line-input bg-white px-[14px] py-3 text-left transition-colors hover:border-primary-line disabled:opacity-60"
                   >
                     {proxy.country_code ? (
                       <span
@@ -703,11 +696,11 @@ export function AddAccountModal({
                         {(proxy.country_code ?? '—').toUpperCase()} ·{' '}
                         {proxyTypeLabel(proxy.proxy_type)}
                       </span>
-                      <span className="block font-mono text-[11.5px] text-ink-subtle">
+                      <span className="block font-mono text-[11px] text-ink-subtle">
                         {proxy.host}:{proxy.port}
                       </span>
                     </span>
-                    <span className="text-[12px] font-medium text-[#2e7d55]">
+                    <span className="text-[12.5px] font-medium text-success">
                       {t('accounts.addWizard.poolFree', { count: proxy.free })}
                     </span>
                   </button>
@@ -717,7 +710,7 @@ export function AddAccountModal({
                   refusal has to be visible — otherwise the only signal is a
                   screen that did not change. */}
               {assignProxy.isError && (
-                <div role="alert" className="text-[11.5px] text-[#c0473f]">
+                <div role="alert" className="text-[11px] text-danger">
                   {t('accounts.addWizard.proxyAssignError')}
                 </div>
               )}
@@ -728,14 +721,14 @@ export function AddAccountModal({
                 onClick={() => {
                   setProxyStep('choice');
                 }}
-                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
               >
                 {t('accounts.addWizard.back')}
               </button>
               <button
                 type="button"
                 onClick={afterProxy}
-                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white"
+                className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
               >
                 {t('accounts.addWizard.done')}
               </button>

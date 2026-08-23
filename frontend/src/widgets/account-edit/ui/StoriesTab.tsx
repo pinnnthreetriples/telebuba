@@ -23,16 +23,16 @@ export function StoriesTab({
   const { t } = useTranslation();
   return (
     <div>
-      <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.profile.storiesHint')}</div>
+      <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.profile.storiesHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-3">
         {stories.map((story) => (
           <div key={story.story_id} className="relative">
             <div
-              className="rounded-[12px] border border-black/5"
+              className="rounded-lg border border-black/5"
               style={tileStyle(story.thumb_url, '9 / 16')}
             />
             {(story.views != null || story.reactions != null) && (
-              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-[6px] rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[9px] font-medium text-white">
+              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-[7px] rounded-sm bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[10.5px] font-medium text-white">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -84,13 +84,13 @@ export function StoriesTab({
               onClick={() => {
                 onPinToggle(story);
               }}
-              className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-[6px] px-[5px] py-[2px] text-center text-[9px] font-medium disabled:opacity-50 ${
+              className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-sm px-[5px] py-[2px] text-center text-[10.5px] font-medium disabled:opacity-50 ${
                 story.is_pinned ? 'bg-primary text-white' : 'bg-[rgba(11,11,12,0.6)] text-white'
               }`}
             >
               {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
             </button>
-            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-[9px] font-medium text-white">
+            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-[10.5px] font-medium text-white">
               {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
             </span>
           </div>

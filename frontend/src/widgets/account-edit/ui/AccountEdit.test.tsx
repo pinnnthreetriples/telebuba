@@ -69,8 +69,8 @@ test('renders the hero and every section header', () => {
 // matching. Throw on a miss: otherwise the comparisons below hold two nulls
 // against each other and pass while asserting nothing.
 function cardWrapper(title: string): HTMLElement {
-  const el = screen.getByText(title).closest<HTMLElement>('.rounded-2xl');
-  if (!el) throw new Error(`no .rounded-2xl card wrapper around "${title}"`);
+  const el = screen.getByText(title).closest<HTMLElement>('.rounded-card');
+  if (!el) throw new Error(`no .rounded-card card wrapper around "${title}"`);
   return el;
 }
 

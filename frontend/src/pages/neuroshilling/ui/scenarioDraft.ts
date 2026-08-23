@@ -15,10 +15,21 @@ import type {
   NeuroshillingStepInput,
 } from '@/shared/api';
 
-// The three role colours the design cycles through. ONE array, read by the
+// The three role colours the design cycles through, as design tokens rather than
+// hexes — one entry per role carrying the fill / ink / border spelling of the SAME
+// token, because the preview paints a role on all three. ONE array, read by the
 // editor's chips and by the preview's bubbles, so a role wears one colour on
 // both cards.
-export const ROLE_COLORS = ['#0066ff', '#12a150', '#9a7b22'] as const;
+const ROLE_TONES = [
+  { bg: 'bg-primary', text: 'text-primary', border: 'border-primary' },
+  { bg: 'bg-success', text: 'text-success', border: 'border-success' },
+  { bg: 'bg-warning', text: 'text-warning', border: 'border-warning' },
+] as const;
+
+/** The tone a role at this position wears, cycling through the three. */
+export function roleTone(index: number): (typeof ROLE_TONES)[number] {
+  return ROLE_TONES[index % ROLE_TONES.length] ?? ROLE_TONES[0];
+}
 
 // Read off the generated client instead of retyped. The backend narrowed the
 // step input's `emoji` to a Literal so the picker could be built from it, so a

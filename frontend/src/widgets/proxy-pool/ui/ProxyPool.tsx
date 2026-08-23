@@ -13,13 +13,14 @@ import type { ProxyRead } from '@/shared/api';
 
 import { ProxyDeleteModal } from './ProxyDeleteModal';
 
-// Proxy connectivity status → dot/label colour (design status palette). A failed
-// check drops the geo flag, so this is the only cue the proxy is dead — surface
-// it explicitly instead of letting the flag silently vanish.
-const PROXY_STATUS_COLOR: Record<ProxyRead['status'], string> = {
-  tcp_working: '#12a150',
-  failed: '#c0473f',
-  unknown: '#9a9893',
+// Proxy connectivity status → dot/label tone (the design's status tokens, so the
+// three states can't drift from the same three states elsewhere). A failed check
+// drops the geo flag, so this is the only cue the proxy is dead — surface it
+// explicitly instead of letting the flag silently vanish.
+const PROXY_STATUS_TONE: Record<ProxyRead['status'], string> = {
+  tcp_working: 'text-success',
+  failed: 'text-danger',
+  unknown: 'text-ink-subtle',
 };
 
 // The design's proxy-pool card: one card per pool proxy with a usage bar
@@ -76,11 +77,11 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <div className="mb-4 rounded-2xl border border-line bg-white px-[18px] py-4">
+    <div className="mb-4 rounded-card border border-line bg-white px-[18px] py-4">
       <div className="mb-[13px] flex flex-wrap items-center justify-between gap-3">
         <div>
-          <span className="text-[14px] font-semibold">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-2 text-[12px] text-ink-subtle">
+          <span className="text-[13px] font-semibold">{t('accounts.proxyPool.title')}</span>
+          <span className="ml-2 text-[12.5px] text-ink-subtle">
             {t('accounts.proxyPool.subtitle')}
           </span>
         </div>
@@ -88,7 +89,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-[6px] rounded-full bg-primary px-[15px] py-[7px] text-[12.5px] font-medium text-white"
+            className="inline-flex items-center gap-[7px] rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white"
           >
             <svg
               width="13"
@@ -106,7 +107,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
       </div>
       {empty ? (
         <div className="flex flex-col items-center justify-center px-4 pb-[30px] pt-[34px] text-center">
-          <div className="mb-[13px] flex h-[46px] w-[46px] items-center justify-center rounded-[14px] bg-[#f1efed] text-ink-subtle">
+          <div className="mb-[13px] flex h-[46px] w-[46px] items-center justify-center rounded-lg bg-canvas text-ink-subtle">
             <svg
               width="22"
               height="22"
@@ -119,16 +120,14 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-1 text-[13.5px] font-semibold">
-            {t('accounts.proxyPool.emptyTitle')}
-          </div>
-          <div className="mb-4 max-w-[300px] text-[12px] text-ink-subtle">
+          <div className="mb-1 text-[13px] font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-4 max-w-[300px] text-[12.5px] text-ink-subtle">
             {t('accounts.proxyPool.emptyBody')}
           </div>
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-[7px] rounded-full bg-primary px-5 py-[10px] text-[13px] font-medium text-white"
+            className="inline-flex items-center gap-[7px] rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
           >
             <svg
               width="15"
@@ -197,19 +196,19 @@ function ProxyCard({
     ipinfo: proxy.ipinfo_country_code ?? '—',
     maxmind: proxy.maxmind_country_code ?? '—',
   });
-  const statusColor = PROXY_STATUS_COLOR[proxy.status];
+  const statusTone = PROXY_STATUS_TONE[proxy.status];
   const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-[9px] rounded-[13px] border px-[14px] py-[13px] ${
+      className={`flex flex-col gap-[10px] rounded-lg border px-[14px] py-[13px] ${
         problem
-          ? 'border-[#f0d9d6] bg-[#fcf6f5]'
+          ? 'border-danger-line bg-danger-tint'
           : geoConflict
             ? 'border-[#ead9a8] bg-[#fffaf0]'
             : 'border-line bg-white'
       }`}
     >
-      <div className="flex items-center gap-[9px]">
+      <div className="flex items-center gap-[10px]">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
@@ -233,7 +232,7 @@ function ProxyCard({
             </svg>
           </span>
         ) : failed ? (
-          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-[#fbecec] text-danger">
+          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger">
             <svg
               width="11"
               height="11"
@@ -246,7 +245,7 @@ function ProxyCard({
             </svg>
           </span>
         ) : (
-          <span title={geoTitle} className="h-4 w-[22px] shrink-0 rounded-[3px] bg-[#e6e5e3]" />
+          <span title={geoTitle} className="h-4 w-[22px] shrink-0 rounded-[3px] bg-line" />
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-semibold">
@@ -256,14 +255,11 @@ function ProxyCard({
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
             <span className="text-line-strong">·</span>
             <span
-              className="inline-flex items-center gap-[4px] font-medium"
-              style={{ color: statusColor }}
+              className={`inline-flex items-center gap-[4px] font-medium ${statusTone}`}
               title={proxy.last_error ?? undefined}
             >
-              <span
-                className="h-[5px] w-[5px] shrink-0 rounded-full"
-                style={{ background: statusColor }}
-              />
+              {/* `bg-current` — the dot can never disagree with its label. */}
+              <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-current" />
               {t(`accounts.proxyPool.status.${proxy.status}`)}
             </span>
           </div>
@@ -276,7 +272,7 @@ function ProxyCard({
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
         >
           {busy ? (
-            <span className="tb-spin inline-block h-[12px] w-[12px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
+            <span className="tb-spin inline-block h-[12px] w-[12px] rounded-full border-2 border-line-strong border-t-primary" />
           ) : (
             <svg
               width="13"
@@ -296,7 +292,7 @@ function ProxyCard({
           onClick={onDelete}
           disabled={busy}
           aria-label={t('accounts.actions.delete')}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#b6b4af] disabled:opacity-50"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
         >
           <svg
             width="13"
@@ -313,9 +309,7 @@ function ProxyCard({
       <div>
         <div className="mb-[5px] flex items-center justify-between">
           <span className="text-[11px] text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
-          <span
-            className={`text-[11.5px] font-semibold ${full ? 'text-danger' : 'text-[#2e7d55]'}`}
-          >
+          <span className={`text-[11px] font-semibold ${full ? 'text-danger' : 'text-success'}`}>
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
@@ -325,7 +319,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-[5px] text-[10.5px] ${full ? 'text-danger' : 'text-[#2e7d55]'}`}>
+        <div className={`mt-[5px] text-[10.5px] ${full ? 'text-danger' : 'text-success'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

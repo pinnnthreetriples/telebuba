@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { logoutMutation, meQueryOptions } from '@/shared/auth';
 import { queryClient, useLogEventStream, type SseStatus } from '@/shared/lib';
+import { IconButton } from '@/shared/ui';
 
 import { NAV_LINKS as LINKS } from './links';
 import { NavDrawer } from './NavDrawer';
@@ -100,16 +101,16 @@ export function AppNav() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-[10px]">
+    <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
       <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-3 px-4 lg:gap-7 lg:px-6">
-        <button
-          type="button"
+        <IconButton
+          size="touch"
           aria-label={t('shell.menu')}
           aria-expanded={drawerOpen}
           onClick={() => {
             setDrawerOpen(true);
           }}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-line bg-white text-ink lg:hidden"
+          className="lg:hidden"
         >
           <svg
             width="18"
@@ -122,18 +123,18 @@ export function AppNav() {
           >
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
-        </button>
+        </IconButton>
 
-        <div className="flex shrink-0 items-center gap-[9px]">
+        <div className="flex shrink-0 items-center gap-[10px]">
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
           </div>
-          <span className="text-[15px] font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="text-[16px] font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
 
         <nav
           ref={navRef}
-          className="relative hidden flex-1 items-center gap-[22px] self-stretch lg:flex"
+          className="relative hidden flex-1 items-center gap-[14px] self-stretch lg:flex"
         >
           {LINKS.map((link, index) => (
             <Link
@@ -146,7 +147,7 @@ export function AppNav() {
           ))}
           <span
             aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-[2px] rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-[450ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
+            className="pointer-events-none absolute left-0 top-0 h-[2px] rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
             style={{
               width: indicator.width,
               // Position via GPU transform (matches the design's layoutId slide),
@@ -176,7 +177,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only text-[12px] font-medium lg:not-sr-only ${systemActive ? 'text-success' : 'text-ink-muted'}`}
+              className={`sr-only text-[12.5px] font-medium lg:not-sr-only ${systemActive ? 'text-success' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
@@ -219,11 +220,11 @@ export function AppNav() {
                   onClick={() => {
                     setMenuOpen(false);
                   }}
-                  className="fixed inset-0 z-40 cursor-default"
+                  className="fixed inset-0 z-raised cursor-default"
                 />
-                <div className="absolute right-0 top-[48px] z-50 w-[190px] overflow-hidden rounded-[12px] border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)] lg:top-[42px]">
+                <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)] lg:top-[42px]">
                   {me.data ? (
-                    <div className="truncate border-b border-[#f0eeeb] px-[14px] py-[8px] text-[12px] text-ink-muted">
+                    <div className="truncate border-b border-line-row px-[14px] py-[8px] text-[12.5px] text-ink-muted">
                       {me.data.username}
                     </div>
                   ) : null}
@@ -241,7 +242,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-[8px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-[#faf2f1]"
+                    className="flex w-full items-center gap-[7px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-[#faf2f1]"
                   >
                     <svg
                       width="15"

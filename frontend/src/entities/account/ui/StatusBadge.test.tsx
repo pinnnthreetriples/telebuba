@@ -12,15 +12,15 @@ test('renders the localized status label', () => {
 
 test('uses the design needs-code colour for unauthorized', () => {
   render(<StatusBadge status="unauthorized" />);
-  expect(screen.getByText('Не авторизован').className).toContain('text-[#0066ff]');
+  expect(screen.getByText('Не авторизован').className).toContain('text-primary');
 });
 
 test('uses the design banned colour for a permanent-failure status', () => {
   render(<StatusBadge status="session_error" />);
-  expect(screen.getByText('Ошибка сессии').className).toContain('text-[#e5372a]');
+  expect(screen.getByText('Ошибка сессии').className).toContain('text-danger');
 });
 
 test('renders frozen with the localized label and banned colour', () => {
   render(<StatusBadge status="frozen" />);
-  expect(screen.getByText('Заморожен').className).toContain('text-[#e5372a]');
+  expect(screen.getByText('Заморожен').className).toContain('text-danger');
 });

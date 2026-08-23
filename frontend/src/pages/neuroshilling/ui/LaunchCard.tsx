@@ -21,12 +21,13 @@ import { clock, dialogueSeconds } from './scenarioDraft';
 // accounts card's hint states the same two.
 const MIN_ACCOUNTS = 2;
 
-const STATUS_COLOR: Record<NonNullable<NeuroshillingRunStatus['status']>, string> = {
-  idle: '#74726e',
-  running: '#12a150',
-  stopping: '#c47d12',
-  done: '#0066ff',
-  failed: '#c0473f',
+// Tone is the token the status MEANS, matching the campaigns card row for row.
+const STATUS_TONE: Record<NonNullable<NeuroshillingRunStatus['status']>, string> = {
+  idle: 'text-ink-muted',
+  running: 'text-success',
+  stopping: 'text-warning-strong',
+  done: 'text-primary',
+  failed: 'text-danger',
 };
 
 /** Why Start is refused, in the SERVER's order, or an empty list.
@@ -92,8 +93,8 @@ function launchBlockers(
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-[11px] border border-line bg-[#faf9f7] px-[10px] py-[9px] text-center">
-      <div className="text-[15px] font-bold tabular-nums">{value}</div>
+    <div className="rounded-lg border border-line bg-surface px-[10px] py-[9px] text-center">
+      <div className="text-[16px] font-bold tabular-nums">{value}</div>
       <div className="mt-[2px] text-[10.5px] text-ink-subtle">{label}</div>
     </div>
   );
@@ -171,13 +172,13 @@ export function LaunchCard({
         // campaign to `draft` — and the consequence only shows here, at launch.
         // Repeating the badge is what stops that being a surprise 409.
         <span
-          className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success' : 'bg-[#f4f3f0] text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
         >
           {t(`neuroshilling.launch.scenario.${scenarioStatus}`)}
         </span>
       }
     >
-      <div className="mb-[12px] grid grid-cols-3 gap-[8px] sm:grid-cols-5">
+      <div className="mb-[12px] grid grid-cols-3 gap-[7px] sm:grid-cols-5">
         <Tile label={t('neuroshilling.launch.tile.accounts')} value={String(roster.length)} />
         <Tile label={t('neuroshilling.launch.tile.targets')} value={String(targets.length)} />
         <Tile label={t('neuroshilling.launch.tile.roles')} value={String(roles.length)} />
@@ -188,28 +189,25 @@ export function LaunchCard({
         />
       </div>
 
-      <div className="mb-[7px] flex flex-wrap items-center gap-[8px]">
+      <div className="mb-[7px] flex flex-wrap items-center gap-[7px]">
         <span
-          className="inline-flex items-center gap-[5px] text-[11.5px] font-medium"
-          style={{ color: STATUS_COLOR[status] }}
+          className={`inline-flex items-center gap-[5px] text-[11px] font-medium ${STATUS_TONE[status]}`}
         >
-          <span
-            className="h-[6px] w-[6px] rounded-full"
-            style={{ background: STATUS_COLOR[status] }}
-          />
+          {/* `bg-current` — the dot can never disagree with its label. */}
+          <span className="h-[6px] w-[6px] rounded-full bg-current" />
           {t(`neuroshilling.campaign.status.${status}`)}
         </span>
         {/* Counted over the whole campaign rather than this run, because the roster
             row a substitution writes is the campaign's and outlives the run. Shown at
             zero too: "nobody has been replaced" is the answer the operator is
             checking for. */}
-        <span className="rounded-full bg-[#f4f3f0] px-[9px] py-[2px] text-[11px] font-medium tabular-nums text-ink-muted">
+        <span className="rounded-full bg-track px-[9px] py-[2px] text-[11px] font-medium tabular-nums text-ink-muted">
           {t('neuroshilling.launch.substitutions', { n: run.substitutions ?? 0 })}
         </span>
         {/* `sent` / `total` counts MESSAGE steps only: reactions are journalled but
             a skipped reaction is not lost progress, so presenting the bar as
             counting every step would make it lie downward. */}
-        <span className="ml-auto text-[11.5px] tabular-nums text-ink-subtle">
+        <span className="ml-auto text-[11px] tabular-nums text-ink-subtle">
           {t(looping ? 'neuroshilling.launch.sentTotal' : 'neuroshilling.launch.progress', {
             sent,
             total,
@@ -223,10 +221,10 @@ export function LaunchCard({
           aria-valuemin={0}
           aria-valuemax={total}
           aria-valuenow={sent}
-          className="mb-[12px] h-[7px] w-full overflow-hidden rounded-full bg-[#eceae6]"
+          className="mb-[12px] h-[7px] w-full overflow-hidden rounded-full bg-track"
         >
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-500"
+            className="h-full rounded-full bg-primary transition-[width] duration-[420ms]"
             style={{ width: `${String(percent)}%` }}
           />
         </div>
@@ -236,7 +234,7 @@ export function LaunchCard({
           campaign row already, and what the operator cannot see from there is
           whether anything is acting on them right now. */}
       {run.listening === true ? (
-        <div className="mb-[12px] flex flex-wrap items-center gap-[8px] rounded-[10px] bg-[#f4f3f0] px-[11px] py-[7px] text-[11.5px] tabular-nums text-ink-muted">
+        <div className="mb-[12px] flex flex-wrap items-center gap-[7px] rounded-lg bg-track px-[11px] py-[7px] text-[11px] tabular-nums text-ink-muted">
           <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
           <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
           <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>
@@ -244,13 +242,13 @@ export function LaunchCard({
       ) : null}
 
       {status === 'failed' && run.last_error_type ? (
-        <div className="mb-[10px] rounded-[10px] bg-danger-tint px-[11px] py-[7px] text-[11.5px] text-danger">
+        <div className="mb-[10px] rounded-lg bg-danger-tint px-[11px] py-[7px] text-[11px] text-danger">
           {t('neuroshilling.launch.failed', { type: run.last_error_type })}
         </div>
       ) : null}
 
       {halted.length > 0 ? (
-        <div className="mb-[10px] rounded-[10px] bg-[#fdf4e3] px-[11px] py-[7px] text-[11.5px] text-warning">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-[11px] text-warning">
           {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
         </div>
       ) : null}
@@ -258,20 +256,20 @@ export function LaunchCard({
       {!live && blockers.length > 0 ? (
         // Every reason, not just the first: fixing one only to be refused by the
         // next is the loop this list exists to end.
-        <ul className="mb-[10px] flex list-none flex-col gap-[4px] rounded-[10px] bg-[#f4f3f0] px-[11px] py-[8px] text-[11.5px] text-ink-muted">
+        <ul className="mb-[10px] flex list-none flex-col gap-[4px] rounded-lg bg-track px-[11px] py-[8px] text-[11px] text-ink-muted">
           {blockers.map((reason) => (
             <li key={reason}>· {reason}</li>
           ))}
         </ul>
       ) : null}
 
-      <div className="mb-[14px] flex flex-wrap items-center justify-end gap-[8px]">
+      <div className="mb-[14px] flex flex-wrap items-center justify-end gap-[7px]">
         {live ? (
           <button
             type="button"
             disabled={busy || status === 'stopping'}
             onClick={onStop}
-            className="rounded-full border border-line-input bg-white px-[16px] py-[9px] text-[12.5px] font-semibold text-danger disabled:opacity-50"
+            className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold text-danger disabled:opacity-50"
           >
             {t('neuroshilling.launch.stop')}
           </button>
@@ -280,7 +278,7 @@ export function LaunchCard({
             type="button"
             disabled={busy || blockers.length > 0}
             onClick={onStart}
-            className="rounded-full bg-primary px-[16px] py-[9px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50"
           >
             {t('neuroshilling.launch.start')}
           </button>

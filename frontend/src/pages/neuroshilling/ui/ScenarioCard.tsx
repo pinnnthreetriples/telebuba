@@ -12,14 +12,14 @@ import {
   MAX_STEPS,
   mintKey,
   REACTIONS,
-  ROLE_COLORS,
+  roleTone,
 } from './scenarioDraft';
 
 const FIELD =
-  'w-full rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] outline-none focus:border-primary';
-const PICK = 'rounded-[9px] border border-line-input bg-white px-[9px] py-[6px] text-[12px]';
+  'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] outline-none focus:border-primary';
+const PICK = 'rounded-md border border-line-input bg-white px-[9px] py-[6px] text-[12.5px]';
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-[5px] rounded-[10px] border border-dashed border-[#c7d6f0] bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-[#f2f6ff] disabled:opacity-50';
+  'flex items-center justify-center gap-[5px] rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
 
 function Stepper({
   label,
@@ -37,7 +37,7 @@ function Stepper({
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-[7px]">
-      <span className="text-[12px] text-ink-muted">{label}</span>
+      <span className="text-[12.5px] text-ink-muted">{label}</span>
       <div className="inline-flex items-center gap-[2px] rounded-full border border-line-input bg-white px-[4px] py-[2px]">
         <button
           type="button"
@@ -93,9 +93,9 @@ function StepRow({
       : t('neuroshilling.scenario.steps.replyTo', { position });
 
   return (
-    <div className="rounded-[11px] border border-line bg-white p-[11px]">
+    <div className="rounded-lg border border-line bg-white p-[11px]">
       <div className="mb-[8px] flex items-center gap-[7px]">
-        <span className="rounded-full bg-[#f4f3f0] px-[8px] py-[2px] text-[11px] font-semibold tabular-nums text-ink-muted">
+        <span className="rounded-full bg-track px-[8px] py-[2px] text-[11px] font-semibold tabular-nums text-ink-muted">
           {t('neuroshilling.scenario.steps.position', { position })}
         </span>
         <select
@@ -117,7 +117,7 @@ function StepRow({
           type="button"
           aria-label={t('neuroshilling.scenario.steps.remove', { position })}
           onClick={onRemove}
-          className="h-[24px] shrink-0 rounded-[7px] border border-line bg-white px-[8px] text-[12px] text-ink-subtle hover:border-[#f0c9c5] hover:bg-danger-tint hover:text-danger"
+          className="h-[24px] shrink-0 rounded-sm border border-line bg-white px-[8px] text-[12.5px] text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
         >
           ×
         </button>
@@ -151,7 +151,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`h-[28px] w-[28px] rounded-[9px] border text-[14px] ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line-input bg-white'}`}
+              className={`h-[28px] w-[28px] rounded-md border text-[13px] ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line-input bg-white'}`}
             >
               {emoji}
             </button>
@@ -159,7 +159,7 @@ function StepRow({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-[9px]">
+      <div className="flex flex-wrap items-center gap-[10px]">
         <select
           value={link === null ? '' : String(link)}
           aria-label={linkLabel}
@@ -182,7 +182,7 @@ function StepRow({
             </option>
           ))}
         </select>
-        <div className="flex items-center gap-[5px] text-[11.5px] text-ink-subtle">
+        <div className="flex items-center gap-[5px] text-[11px] text-ink-subtle">
           <span>{t('neuroshilling.scenario.steps.delay')}</span>
           <input
             type="number"
@@ -326,10 +326,10 @@ export function ScenarioCard({
         <span
           className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${
             dirty && status === 'approved'
-              ? 'bg-[#fdf4e3] text-warning'
+              ? 'bg-warning-tint text-warning'
               : status === 'approved'
                 ? 'bg-success-tint text-success'
-                : 'bg-[#f4f3f0] text-ink-muted'
+                : 'bg-track text-ink-muted'
           }`}
         >
           {dirty && status === 'approved'
@@ -353,7 +353,7 @@ export function ScenarioCard({
               onClick={() => {
                 onDraft({ ...draft, mode });
               }}
-              className={`rounded-full px-[13px] py-[5px] text-[12px] font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
+              className={`rounded-full px-[13px] py-[5px] text-[12.5px] font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
             >
               {t(`neuroshilling.scenario.mode.${mode}`)}
             </button>
@@ -365,7 +365,7 @@ export function ScenarioCard({
       {/* A <span>, not a <label>: the control carries its own `aria-label`, and a
           second label element for the same field only makes the accessible name
           ambiguous. */}
-      <span className="mb-[5px] flex items-center gap-[6px] text-[12px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-[7px] text-[12.5px] font-medium text-ink-muted">
         {t('neuroshilling.scenario.topic.label')}
         <HelpHint text={t('neuroshilling.scenario.topic.hint')} />
       </span>
@@ -381,7 +381,7 @@ export function ScenarioCard({
         className={`${FIELD} mb-[12px] resize-none font-[inherit] leading-[1.5]`}
       />
 
-      <div className="mb-[12px] flex flex-wrap items-center gap-[12px] rounded-[11px] border border-line bg-[#faf9f7] p-[11px]">
+      <div className="mb-[12px] flex flex-wrap items-center gap-[14px] rounded-lg border border-line bg-surface p-[11px]">
         <Stepper
           label={t('neuroshilling.scenario.generate.personas')}
           value={personaCount}
@@ -400,21 +400,21 @@ export function ScenarioCard({
           type="button"
           disabled={busy || !draft.topic.trim()}
           onClick={onGenerate}
-          className="rounded-full bg-primary px-[14px] py-[8px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+          className="rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50"
         >
           {t('neuroshilling.scenario.generate.run')}
         </button>
         <HelpHint text={t('neuroshilling.scenario.generate.hint')} />
       </div>
 
-      <div className="mb-[12px] flex flex-col gap-[9px]">
+      <div className="mb-[12px] flex flex-col gap-[10px]">
         {(
           [
             ['uniqueMessages', 'unique'],
             ['useChatContext', 'context'],
           ] as const
         ).map(([field, key]) => (
-          <div key={key} className="flex items-center gap-[8px]">
+          <div key={key} className="flex items-center gap-[7px]">
             <Switch
               checked={draft[field]}
               label={t(`neuroshilling.scenario.${key}.label`)}
@@ -428,11 +428,11 @@ export function ScenarioCard({
         ))}
       </div>
 
-      <span className="mb-[5px] flex items-center gap-[6px] text-[12px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-[7px] text-[12.5px] font-medium text-ink-muted">
         {t('neuroshilling.scenario.media.label')}
         <HelpHint text={t('neuroshilling.scenario.media.hint')} />
       </span>
-      <div className="mb-[14px] flex flex-wrap items-center gap-[8px]">
+      <div className="mb-[14px] flex flex-wrap items-center gap-[7px]">
         <input
           value={draft.mediaMessageLink}
           maxLength={500}
@@ -472,17 +472,14 @@ export function ScenarioCard({
         </select>
       </div>
 
-      <div className="mb-[7px] flex items-center gap-[6px] text-[12px] font-semibold">
+      <div className="mb-[7px] flex items-center gap-[7px] text-[12.5px] font-semibold">
         {t('neuroshilling.scenario.roles.title')}
         <HelpHint text={t('neuroshilling.scenario.roles.hint')} />
       </div>
       <div className="mb-[9px] flex flex-col gap-[7px]">
         {draft.roles.map((role, index) => (
           <div key={role.roleId} className="flex items-center gap-[7px]">
-            <span
-              className="h-[9px] w-[9px] shrink-0 rounded-full"
-              style={{ background: ROLE_COLORS[index % ROLE_COLORS.length] }}
-            />
+            <span className={`h-[9px] w-[9px] shrink-0 rounded-full ${roleTone(index).bg}`} />
             <input
               value={role.name}
               maxLength={60}
@@ -528,14 +525,14 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className="h-[30px] shrink-0 rounded-[8px] border border-line bg-white px-[9px] text-[12px] text-ink-subtle hover:border-[#f0c9c5] hover:bg-danger-tint hover:text-danger"
+              className="h-[30px] shrink-0 rounded-md border border-line bg-white px-[9px] text-[12.5px] text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
             >
               ×
             </button>
           </div>
         ))}
         {draft.roles.length === 0 ? (
-          <div className="text-[12px] text-ink-subtle">
+          <div className="text-[12.5px] text-ink-subtle">
             {t('neuroshilling.scenario.roles.none')}
           </div>
         ) : null}
@@ -554,7 +551,7 @@ export function ScenarioCard({
         {t('neuroshilling.scenario.roles.add')}
       </button>
 
-      <div className="mb-[7px] flex items-center gap-[6px] text-[12px] font-semibold">
+      <div className="mb-[7px] flex items-center gap-[7px] text-[12.5px] font-semibold">
         {t('neuroshilling.scenario.steps.title')}
         <HelpHint text={t('neuroshilling.scenario.steps.hint')} />
       </div>
@@ -579,7 +576,7 @@ export function ScenarioCard({
           />
         ))}
         {draft.steps.length === 0 ? (
-          <div className="text-[12px] text-ink-subtle">
+          <div className="text-[12.5px] text-ink-subtle">
             {t('neuroshilling.scenario.steps.none')}
           </div>
         ) : null}
@@ -600,9 +597,9 @@ export function ScenarioCard({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-[8px]">
+      <div className="flex flex-wrap items-center justify-end gap-[7px]">
         {namelessRole ? (
-          <span className="mr-auto text-[11.5px] text-danger">
+          <span className="mr-auto text-[11px] text-danger">
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}
@@ -610,7 +607,7 @@ export function ScenarioCard({
           type="button"
           disabled={busy || !dirty || namelessRole}
           onClick={onSave}
-          className="rounded-full bg-primary px-[16px] py-[9px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+          className="rounded-full bg-primary px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50"
         >
           {t('neuroshilling.scenario.save')}
         </button>
@@ -619,7 +616,7 @@ export function ScenarioCard({
           disabled={busy || dirty || status === 'approved' || draft.steps.length === 0}
           title={dirty ? t('neuroshilling.scenario.approveHint') : undefined}
           onClick={onApprove}
-          className="rounded-full border border-line-input bg-white px-[16px] py-[9px] text-[12.5px] font-semibold text-ink disabled:opacity-50"
+          className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold text-ink disabled:opacity-50"
         >
           {t('neuroshilling.scenario.approve')}
         </button>

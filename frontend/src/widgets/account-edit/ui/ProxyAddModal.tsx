@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createProxyMutation, proxyPoolQueryOptions } from '@/entities/proxy';
-import { Modal } from '@/shared/ui';
+import { IconButton, Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
@@ -42,25 +42,25 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal onClose={onClose} z={70} className="w-[460px]" label={t('accounts.proxyAdd.title')}>
+    <Modal onClose={onClose} className="w-[460px]" label={t('accounts.proxyAdd.title')}>
       <div className="p-6">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[16px] font-bold">{t('accounts.proxyAdd.title')}</span>
-          <button
-            type="button"
+          <IconButton
+            size="md"
             onClick={onClose}
             aria-label={t('accounts.proxyAdd.close')}
-            className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[16px] text-ink-muted"
+            className="text-[16px]"
           >
             ×
-          </button>
+          </IconButton>
         </div>
         <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
           >
             {t('accounts.proxyAdd.cancel')}
           </button>
@@ -68,7 +68,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onAdd}
             disabled={!canAdd}
-            className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {t('accounts.proxyAdd.add')}
           </button>

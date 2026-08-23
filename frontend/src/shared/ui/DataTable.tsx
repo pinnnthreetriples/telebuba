@@ -43,13 +43,13 @@ interface DataTableProps<TData> {
 // wants a different alignment sets it via meta.className (text-right wins over this).
 const TH =
   'px-4 py-[11px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
-const ROW = 'tb-row border-t border-[#f0eeeb] transition-colors';
+const ROW = 'tb-row border-t border-line-row transition-colors';
 
 // Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
 // element-agnostic, so cards get the same hover tint for free.
-const CARD = 'tb-row overflow-hidden border-t border-[#f0eeeb] px-4 py-[13px] first:border-t-0';
+const CARD = 'tb-row overflow-hidden border-t border-line-row px-4 py-[13px] first:border-t-0';
 const CARD_LABEL = 'shrink-0 text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
-const CARD_VALUE = 'min-w-0 break-words text-right text-[12.5px] text-[#3a3a3a]';
+const CARD_VALUE = 'min-w-0 break-words text-right text-[12.5px] text-ink-body';
 
 // Local, dependency-free class join (avoids a shared/ui → shared/lib → query
 // barrel cycle). No tailwind-merge dedupe is needed — callers pass disjoint

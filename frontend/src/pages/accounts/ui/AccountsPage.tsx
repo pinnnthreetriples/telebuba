@@ -125,8 +125,8 @@ export function AccountsPage() {
   // query, not the current page, so they hold across pagination and search.
   const stats: { label: string; value: number; cls: string }[] = [
     { label: t('accounts.stats.total'), value: fleetStats?.total ?? 0, cls: 'text-ink' },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-[#2e7d55]' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-[#9a7b22]' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning' },
     { label: t('accounts.stats.code'), value: fleetStats?.needs_code ?? 0, cls: 'text-primary' },
     { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
   ];
@@ -199,7 +199,7 @@ export function AccountsPage() {
             onClick={() => {
               setAdding(true);
             }}
-            className="rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-white"
+            className="rounded-full bg-primary px-[18px] py-[7px] text-[12.5px] font-semibold text-white"
           >
             + {t('accounts.actions.add')}
           </button>
@@ -210,7 +210,7 @@ export function AccountsPage() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-w-[120px] rounded-xl border border-line bg-white px-4 py-[11px]"
+            className="min-w-[120px] rounded-lg border border-line bg-white px-4 py-[11px]"
           >
             <div className={`text-[20px] font-bold ${stat.cls}`}>{stat.value}</div>
             <div className="mt-px text-[11px] text-ink-muted">{stat.label}</div>
@@ -227,7 +227,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+            <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
               {t('accounts.empty')}
             </div>
           ) : (

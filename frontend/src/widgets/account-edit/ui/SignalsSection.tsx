@@ -11,8 +11,8 @@ import { type CheckState } from './_styles';
 
 // Real spam-status dot per verdict (matches the design's traffic-light tints).
 const SPAM_DOT: Record<NonNullable<AccountRead['spam_status']>, string> = {
-  clean: 'bg-[#2e9e64]',
-  limited: 'bg-[#c0473f]',
+  clean: 'bg-success',
+  limited: 'bg-danger',
   unknown: 'bg-line-strong',
 };
 
@@ -61,7 +61,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
           : t('accounts.edit.signalNone'),
     },
     {
-      dot: account.last_checked_at ? 'bg-[#2e9e64]' : 'bg-line-strong',
+      dot: account.last_checked_at ? 'bg-success' : 'bg-line-strong',
       label: t('accounts.edit.signalChecked'),
       value: account.last_checked_at
         ? account.last_checked_at.slice(0, 10)
@@ -77,11 +77,11 @@ export function SignalsSection({ account }: { account: AccountRead }) {
           <button
             type="button"
             onClick={runSpamCheck}
-            className={`inline-flex items-center gap-[6px] rounded-full px-3 py-[5px] text-[12px] font-medium transition-[background-color,border-color,color] duration-300 ${
+            className={`inline-flex items-center gap-[7px] rounded-full px-3 py-[5px] text-[12.5px] font-medium transition-[background-color,border-color,color] duration-[250ms] ${
               spamCheck === 'ok'
-                ? 'border border-[#2e9e64] bg-[#2e9e64] text-white'
+                ? 'border border-success bg-success text-white'
                 : spamCheck === 'err'
-                  ? 'border border-[#c0473f] bg-[#c0473f] text-white'
+                  ? 'border border-danger bg-danger text-white'
                   : 'border border-line-input bg-white text-ink-muted'
             }`}
           >
@@ -125,12 +125,12 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         </span>
       }
     >
-      <div className="mb-2 text-[12px] text-ink-subtle">{t('accounts.edit.signalsReadonly')}</div>
+      <div className="mb-2 text-[12.5px] text-ink-subtle">{t('accounts.edit.signalsReadonly')}</div>
       <div className="flex flex-col">
         {signals.map((signal) => (
           <div
             key={signal.label}
-            className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[11px]"
+            className="flex items-center justify-between gap-3 border-b border-line-row py-[11px]"
           >
             <span className="flex items-center gap-2 text-[12.5px] text-ink-muted">
               <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${signal.dot}`} />

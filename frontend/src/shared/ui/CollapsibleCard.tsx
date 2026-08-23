@@ -28,7 +28,7 @@ export function CollapsibleCard({
   label,
   defaultOpen = false,
   onOpenChange,
-  wrapperClassName = 'rounded-2xl border border-line bg-white',
+  wrapperClassName = 'rounded-card border border-line bg-white',
   headerClassName = 'px-4 py-[14px]',
   bodyClassName = 'px-4 pb-4',
   children,
@@ -96,7 +96,7 @@ export function CollapsibleCard({
           onClick={toggle}
           aria-expanded={open}
           aria-controls={bodyId}
-          className="flex min-w-0 flex-1 items-center gap-[9px] text-left"
+          className="flex min-w-0 flex-1 items-center gap-[10px] text-left"
         >
           {header}
         </button>

@@ -20,7 +20,7 @@ import { FIELD_READONLY } from './_styles';
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[9px]">
+    <div className="flex items-center justify-between gap-3 border-b border-line-row py-[9px]">
       <span className="text-[12.5px] text-ink-muted">{label}</span>
       <span className="text-right text-[12.5px] font-medium text-ink">{value}</span>
     </div>
@@ -176,7 +176,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             <Spinner size={13} />
           ) : (
             <span
-              className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11.5px] font-medium ${
+              className={`shrink-0 rounded-full px-[10px] py-[3px] text-[11px] font-medium ${
                 hasPassword ? 'bg-success-tint text-success' : 'bg-canvas text-ink-muted'
               }`}
             >
@@ -197,7 +197,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             reset was requested against), and inside the 2FA-on arm that warning was
             silently dropped in exactly the case where it matters most. */}
         {status?.pending_reset_date ? (
-          <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-semibold text-danger">
+          <div className="border-b border-line-row py-[9px] text-[12.5px] font-semibold text-danger">
             {t('accounts.edit.twofaResetRequested', {
               date: status.pending_reset_date.slice(0, 10),
             })}
@@ -217,7 +217,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // ONLY copy and change/removal are gone until it is set again. NOT the
               // unconfirmed-change cases: nothing failed there, the previous password
               // was kept on purpose (`true` or `null`) and the warning below says so.
-              <div className="mb-[10px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[9px] text-[11.5px] font-medium leading-[1.45] text-danger">
+              <div className="mb-[10px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[9px] text-[11px] font-medium leading-[1.45] text-danger">
                 {t('accounts.edit.twofaStoreFailed')}
               </div>
             ) : null}
@@ -231,7 +231,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the read that would have proved Telegram holds ANY password answered
               // nothing either (`previous_kept: null`), and then not even "one of
               // these two is in force" is sayable.
-              <div className="mb-[10px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[9px] text-[11.5px] font-medium leading-[1.45] text-danger">
+              <div className="mb-[10px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[9px] text-[11px] font-medium leading-[1.45] text-danger">
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
                   : created.previous_kept === null
@@ -260,7 +260,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 onClick={() => {
                   copyPassword(created.password);
                 }}
-                className="mb-[12px] w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[12px] font-medium text-ink-muted"
+                className="mb-[12px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[12.5px] font-medium text-ink-muted"
               >
                 {copyState === 'done'
                   ? t('accounts.edit.twofaCopied')
@@ -268,12 +268,12 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               </button>
             ) : null}
             {clipboard ? null : (
-              <div className="mb-[12px] text-[11.5px] leading-[1.45] text-ink-subtle">
+              <div className="mb-[12px] text-[11px] leading-[1.45] text-ink-subtle">
                 {t('accounts.edit.twofaCopyManual')}
               </div>
             )}
             {copyState === 'failed' ? (
-              <div className="mb-[12px] text-[11.5px] font-medium leading-[1.45] text-danger">
+              <div className="mb-[12px] text-[11px] font-medium leading-[1.45] text-danger">
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
@@ -283,7 +283,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 setCreated(null);
                 setCopyState('idle');
               }}
-              className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium"
+              className="w-full rounded-lg border border-line-input bg-white py-[9px] text-[13px] font-medium"
             >
               {t('accounts.edit.twofaDone')}
             </button>
@@ -292,7 +292,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           <>
             {/* A set, change or disable against an account whose live state we could
                 not read is a guess, so this branch offers none of them. */}
-            <div className="text-[11.5px] text-danger">
+            <div className="text-[11px] text-danger">
               {t('accounts.edit.twofaReadErr', {
                 reason: readError
                   ? t(`shell.code.${readError}`, { defaultValue: readError })
@@ -307,7 +307,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // sitting on disk that the card neither showed nor could clear —
               // every control that can do it lived in the `hasPassword` arm.
               <div className="mt-3">
-                <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-medium text-ink-muted">
+                <div className="border-b border-line-row py-[9px] text-[12.5px] font-medium text-ink-muted">
                   {t('accounts.edit.twofaStored')}
                 </div>
                 <div className="mt-[10px] text-center">
@@ -368,14 +368,14 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 saw "Резервная почта / не привязана" twice. Neither state lost its
                 reachability: the row moved, it did not go. */}
             <div
-              className={`border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-medium ${
+              className={`border-b border-line-row py-[9px] text-[12.5px] font-medium ${
                 hasStored ? 'text-ink-muted' : 'text-danger'
               }`}
             >
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
             {hasStored ? null : (
-              <div className="mt-3 text-[11.5px] leading-[1.45] text-ink-subtle">
+              <div className="mt-3 text-[11px] leading-[1.45] text-ink-subtle">
                 {t('accounts.edit.twofaNotStoredNote')}
               </div>
             )}
@@ -414,7 +414,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                     setChanging(true);
                   }}
                   disabled={!hasStored}
-                  className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
+                  className="w-full rounded-lg border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
                 >
                   {t('accounts.edit.twofaChange')}
                 </button>
@@ -444,7 +444,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // this account nor get rid of it: the backend's own stale branch (clear
               // the column, spend no RPC) was unreachable from the UI.
               <div className="mb-4">
-                <div className="border-b border-[#f0eeeb] py-[9px] text-[12.5px] font-medium text-danger">
+                <div className="border-b border-line-row py-[9px] text-[12.5px] font-medium text-danger">
                   {t('accounts.edit.twofaStoredStale')}
                 </div>
                 <div className="mt-[10px] text-center">

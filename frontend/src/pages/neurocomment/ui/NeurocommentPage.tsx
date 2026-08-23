@@ -308,17 +308,17 @@ export function NeurocommentPage() {
   const idleCount = warmedAccounts.filter((a) => !linkedIds.has(a.account_id)).length;
 
   const stats: { label: string; value: number; color: string }[] = [
-    { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: '#0b0b0c' },
+    { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: 'text-ink' },
     {
       label: t('neurocomment.stat.channels'),
       value: runtime.data?.active_channels ?? boardChannels.length,
-      color: '#0066ff',
+      color: 'text-primary',
     },
-    { label: t('neurocomment.stat.accounts'), value: boardAccounts.length, color: '#0b0b0c' },
+    { label: t('neurocomment.stat.accounts'), value: boardAccounts.length, color: 'text-ink' },
     {
       label: t('neurocomment.stat.comments'),
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
-      color: '#12a150',
+      color: 'text-success',
     },
     // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
     // both tiles read the account's 24h window. Summing the channels' `deleted_recent`
@@ -335,10 +335,10 @@ export function NeurocommentPage() {
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),
-      color: '#c0473f',
+      color: 'text-danger',
     },
     // The design's red "ошибок" odometer (#E5372A): today's error-level events.
-    { label: t('neurocomment.stat.errors'), value: errorCount, color: '#e5372a' },
+    { label: t('neurocomment.stat.errors'), value: errorCount, color: 'text-danger' },
   ];
 
   const activeCampaignCount = campaignList.filter((c) => c.status === 'active').length;
@@ -562,7 +562,7 @@ export function NeurocommentPage() {
             }}
           />
           {showWarmingBlock ? (
-            <p className="mt-2 text-[11.5px] font-medium text-danger">
+            <p className="mt-2 text-[11px] font-medium text-danger">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}

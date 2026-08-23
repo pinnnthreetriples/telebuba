@@ -8,9 +8,8 @@ import { cn } from '@/shared/lib/cn';
 // (proxy add/edit, profile text, add-account) displays errors the same way.
 // `cn` is imported from the specific module (not the shared/lib barrel) to avoid
 // the shared/ui ↔ shared/lib import cycle.
-const FIELD =
-  'tb-time w-full rounded-[10px] border bg-white px-3 py-[9px] text-[13px] outline-none';
-const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
+const FIELD = 'tb-time w-full rounded-lg border bg-white px-3 py-[9px] text-[13px] outline-none';
+const LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
 
 // Structural slice of a react-form string field — just what this primitive reads
 // and calls. Avoids depending on the library's exact FieldApi generics/export.
@@ -36,7 +35,7 @@ export function FieldError({ field }: { field: FormFieldApi }) {
   const { t } = useTranslation();
   const error = fieldError(field);
   if (!error) return null;
-  return <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">{t(error)}</span>;
+  return <span className="mt-[5px] block text-[11px] font-medium text-danger">{t(error)}</span>;
 }
 
 // A labelled text input bound to a react-form field. `label` may be omitted when
@@ -65,7 +64,7 @@ export function FormField({
             field.handleChange(event.target.value);
           }}
           onBlur={field.handleBlur}
-          className={cn(FIELD, invalid ? 'border-[#c0473f]' : 'border-line-input', className)}
+          className={cn(FIELD, invalid ? 'border-danger' : 'border-line-input', className)}
           {...rest}
         />
       )}

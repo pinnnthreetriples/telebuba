@@ -24,7 +24,7 @@ export function AccountsCard({
       }
     >
       <div className="mb-[10px] flex items-center gap-[7px]">
-        <span className="rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[4px] text-[11.5px] font-medium text-[#3a3a3a]">
+        <span className="rounded-full border border-line bg-track px-[11px] py-[4px] text-[11px] font-medium text-ink-body">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
         {/* The hint carries two rules. The picker enforces the second one — a held
@@ -40,14 +40,14 @@ export function AccountsCard({
           {accounts.map((account) => (
             <span
               key={account.account_id}
-              className="inline-flex items-center rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
+              className="inline-flex items-center rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
             >
               {account.title}
             </span>
           ))}
         </div>
       ) : (
-        <div className="mb-[10px] text-[12px] text-ink-subtle">
+        <div className="mb-[10px] text-[12.5px] text-ink-subtle">
           {t('neuroshilling.accounts.none')}
         </div>
       )}
@@ -55,7 +55,7 @@ export function AccountsCard({
       <button
         type="button"
         onClick={onPick}
-        className="flex w-full items-center justify-center gap-[5px] rounded-[10px] border border-dashed border-[#c7d6f0] bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-[#f2f6ff]"
+        className="flex w-full items-center justify-center gap-[5px] rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
       >
         {t('neuroshilling.accounts.pick')}
       </button>

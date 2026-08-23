@@ -9,7 +9,7 @@ import {
   publishAccountChannelPostMutation,
 } from '@/entities/account';
 import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
-import { ConfirmModal, toastError } from '@/shared/ui';
+import { ConfirmModal, IconButton, toastError } from '@/shared/ui';
 
 import {
   channelErrorText,
@@ -188,11 +188,11 @@ export function ChannelPostsPanel({
   };
 
   return (
-    <div className="mt-5 border-t border-[#f0eeeb] pt-4">
+    <div className="mt-5 border-t border-line-row pt-4">
       <div className="mb-[10px] text-[13px] font-semibold">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}
-      <div className="rounded-[12px] border border-line bg-white p-3">
+      <div className="rounded-lg border border-line bg-white p-3">
         <textarea
           rows={3}
           value={text}
@@ -204,15 +204,15 @@ export function ChannelPostsPanel({
           className={`${FIELD} resize-none [font-family:inherit]`}
         />
         {file && (
-          <div className="mt-2 flex items-center gap-[10px] rounded-[10px] border border-line bg-[#f8f7f5] px-[10px] py-2">
+          <div className="mt-2 flex items-center gap-[10px] rounded-lg border border-line bg-[#f8f7f5] px-[10px] py-2">
             {preview ? (
               <img
                 src={preview}
                 alt={file.name}
-                className="h-[38px] w-[38px] rounded-[8px] border border-black/5 object-cover"
+                className="h-[38px] w-[38px] rounded-md border border-black/5 object-cover"
               />
             ) : (
-              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[8px] bg-[#eeedea] text-ink-muted">
+              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
                 <svg
                   width="16"
                   height="16"
@@ -226,7 +226,7 @@ export function ChannelPostsPanel({
                 </svg>
               </span>
             )}
-            <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{file.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{file.name}</span>
             {!busy && (
               <button
                 type="button"
@@ -242,18 +242,17 @@ export function ChannelPostsPanel({
           </div>
         )}
         {publish.isError && (
-          <div className="mt-2 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[8px] text-[12px] text-danger">
+          <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-[12.5px] text-danger">
             {channelErrorText(publish.error, t, t('accounts.channel.error'))}
           </div>
         )}
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <IconButton
+              size="md"
               onClick={() => fileInput.current?.click()}
               disabled={busy}
               aria-label={t('accounts.channel.attach')}
-              className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-full border border-line-input bg-white text-ink-muted disabled:opacity-50"
             >
               <svg
                 width="15"
@@ -265,7 +264,7 @@ export function ChannelPostsPanel({
               >
                 <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
               </svg>
-            </button>
+            </IconButton>
             <span className="text-[11px] text-ink-subtle">
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
@@ -277,7 +276,7 @@ export function ChannelPostsPanel({
             className="rounded-full bg-primary px-4 py-[7px] text-[12.5px] font-medium text-white disabled:opacity-50"
           >
             {busy ? (
-              <span className="inline-flex items-center gap-[6px]">
+              <span className="inline-flex items-center gap-[7px]">
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.publishing')}
               </span>
@@ -306,32 +305,32 @@ export function ChannelPostsPanel({
         </div>
       )}
       {posts.isError && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <button
             type="button"
             onClick={() => {
               void posts.refetch();
             }}
-            className="shrink-0 rounded-full border border-[#f0c9c5] bg-white px-3 py-[4px] text-[12px] font-medium"
+            className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-[12.5px] font-medium"
           >
             {t('accounts.channel.retry')}
           </button>
         </div>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-3 rounded-[12px] border border-dashed border-line bg-white px-4 py-5 text-center text-[12.5px] text-ink-subtle">
+        <div className="mt-3 rounded-lg border border-dashed border-line bg-white px-4 py-5 text-center text-[12.5px] text-ink-subtle">
           {t('accounts.channel.postsEmpty')}
         </div>
       )}
       {items.length > 0 && (
         <div className="mt-3 flex flex-col gap-2">
           {items.map((post) => (
-            <div key={post.post_id} className="rounded-[12px] border border-line px-[14px] py-3">
+            <div key={post.post_id} className="rounded-lg border border-line px-[14px] py-3">
               <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
-                  <span className="rounded-[6px] bg-[#f1efed] px-[6px] py-[1px] font-medium text-ink-muted">
+                  <span className="rounded-sm bg-canvas px-[6px] py-[1px] font-medium text-ink-muted">
                     {mediaLabel(post.media_kind ?? 'none')}
                   </span>
                 )}
@@ -375,7 +374,7 @@ export function ChannelPostsPanel({
                     className={`${FIELD} resize-none [font-family:inherit]`}
                   />
                   {editPost.isError && (
-                    <div className="mt-2 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[8px] text-[12px] text-danger">
+                    <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-[12.5px] text-danger">
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </div>
                   )}
@@ -392,7 +391,7 @@ export function ChannelPostsPanel({
                         setEditingId(null);
                       }}
                       disabled={editPost.isPending}
-                      className="rounded-full border border-line-input bg-white px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50"
+                      className="rounded-full border border-line-input bg-white px-[14px] py-[6px] text-[12.5px] font-medium disabled:opacity-50"
                     >
                       {t('accounts.channel.postCancel')}
                     </button>
@@ -400,7 +399,7 @@ export function ChannelPostsPanel({
                       type="button"
                       onClick={saveEdit}
                       disabled={editPost.isPending || !canSaveEdit}
-                      className="rounded-full bg-primary px-[16px] py-[6px] text-[12px] font-medium text-white disabled:opacity-50"
+                      className="rounded-full bg-primary px-[16px] py-[6px] text-[12.5px] font-medium text-white disabled:opacity-50"
                     >
                       {t('accounts.channel.postSave')}
                     </button>
@@ -424,10 +423,10 @@ export function ChannelPostsPanel({
             void loadMore();
           }}
           disabled={loadingMore}
-          className="mt-3 w-full rounded-full border border-line-input bg-white px-4 py-2 text-[12.5px] font-medium text-ink disabled:opacity-50"
+          className="mt-3 w-full rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold text-ink disabled:opacity-50"
         >
           {loadingMore ? (
-            <span className="inline-flex items-center gap-[6px]">
+            <span className="inline-flex items-center gap-[7px]">
               <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
               {t('accounts.channel.loading')}
             </span>

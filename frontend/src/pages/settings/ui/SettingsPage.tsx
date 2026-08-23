@@ -16,8 +16,8 @@ import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSetting
 import { Card } from './SettingsPrimitives';
 
 const INPUT =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-const FIELD_LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
+const FIELD_LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
 
 // The three real, engine-used warming toggles surfaced as the design's flag rows.
 const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
@@ -209,7 +209,7 @@ function SettingsForm({
           />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
-              <span className={`${FIELD_LABEL} flex items-center gap-[6px]`}>
+              <span className={`${FIELD_LABEL} flex items-center gap-[7px]`}>
                 {t('settings.api.geminiRetries')}
                 <HelpHint
                   text={t('settings.api.geminiRetriesHelp')}
@@ -230,7 +230,7 @@ function SettingsForm({
               />
             </label>
             <label className="block">
-              <span className={`${FIELD_LABEL} flex items-center gap-[6px]`}>
+              <span className={`${FIELD_LABEL} flex items-center gap-[7px]`}>
                 {t('settings.api.geminiInterval')}
                 <HelpHint
                   text={t('settings.api.geminiIntervalHelp')}
@@ -265,10 +265,10 @@ function SettingsForm({
               onClick={() => {
                 setProvider(option);
               }}
-              className={`flex-1 rounded-[10px] border px-3 py-[9px] text-[13px] font-medium transition-colors ${
+              className={`flex-1 rounded-lg border px-3 py-[9px] text-[13px] font-medium transition-colors ${
                 provider === option
-                  ? 'border-primary bg-[#f2f6ff] text-primary'
-                  : 'border-line-input bg-white text-ink-muted hover:border-[#c8c6c2] hover:bg-[#f7f6f4]'
+                  ? 'border-primary bg-primary-wash text-primary'
+                  : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
               }`}
             >
               {t(`settings.captchaLlm.${option}`)}
@@ -278,7 +278,7 @@ function SettingsForm({
       </Card>
 
       <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
-        <div className="rounded-[10px] border border-dashed border-line-input bg-[#faf9f7] px-4 py-3 text-[12px] leading-relaxed text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line-input bg-surface px-4 py-3 text-[12.5px] leading-relaxed text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
@@ -292,10 +292,10 @@ function SettingsForm({
           </form.Field>
           <div className="min-w-0">
             <span className={FIELD_LABEL}>{t('settings.neuroLimits.delay')}</span>
-            <div className="flex items-center gap-[9px]">
+            <div className="flex items-center gap-[10px]">
               <form.Field name="delayFrom">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-[10px] border border-line-input bg-white px-3 py-[9px]">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-lg border border-line-input bg-white px-3 py-[9px]">
                     <span className="shrink-0 text-[11px] text-ink-subtle">
                       {t('settings.range.from')}
                     </span>
@@ -314,7 +314,7 @@ function SettingsForm({
               </form.Field>
               <form.Field name="delayTo">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-[10px] border border-line-input bg-white px-3 py-[9px]">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-lg border border-line-input bg-white px-3 py-[9px]">
                     <span className="shrink-0 text-[11px] text-ink-subtle">
                       {t('settings.range.to')}
                     </span>
@@ -359,11 +359,11 @@ function SettingsForm({
         {WARMING_TOGGLES.map((flag) => (
           <div
             key={flag}
-            className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[13px]"
+            className="flex items-center justify-between gap-3 border-b border-line-row py-[13px]"
           >
             <div>
               <div className="text-[13px] font-medium">{t(`settings.flag.${flag}.label`)}</div>
-              <div className="mt-px text-[11.5px] text-ink-subtle">
+              <div className="mt-px text-[11px] text-ink-subtle">
                 {t(`settings.flag.${flag}.desc`)}
               </div>
             </div>
@@ -382,17 +382,17 @@ function SettingsForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium"
+          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold"
         >
           {t('settings.cancel')}
         </button>
         <button
           type="submit"
           disabled={pending || !canSubmit}
-          className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-[#2e9e64]' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
+          className={`rounded-full px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-success' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
         >
           {justSaved ? (
-            <span className="inline-flex items-center gap-[6px]">
+            <span className="inline-flex items-center gap-[7px]">
               <span className="tb-swapin inline-flex">
                 <svg
                   width="15"
@@ -410,7 +410,7 @@ function SettingsForm({
               </span>
             </span>
           ) : saveFailed ? (
-            <span className="inline-flex items-center gap-[6px]">
+            <span className="inline-flex items-center gap-[7px]">
               <span className="tb-swapin inline-flex">
                 <svg
                   width="15"

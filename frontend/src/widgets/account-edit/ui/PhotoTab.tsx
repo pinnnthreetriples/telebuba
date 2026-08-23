@@ -60,19 +60,19 @@ export function PhotoTab({
         );
         onUpload(images);
       }}
-      className={`relative rounded-[12px] border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
+      className={`relative rounded-lg border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[12px] bg-white/70 text-[13px] font-medium text-primary">
+        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-[13px] font-medium text-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
-      <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.profile.photoHint')}</div>
+      <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.profile.photoHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
         {photos.map((photo) => (
           <div key={photo.photo_id} className="relative">
             <div
-              className="rounded-[12px] border border-black/5"
+              className="rounded-lg border border-black/5"
               style={tileStyle(photo.thumb_url, '1')}
             />
             <button

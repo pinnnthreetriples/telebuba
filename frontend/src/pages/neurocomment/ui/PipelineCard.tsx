@@ -52,10 +52,10 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-2xl border border-[#e4ecfa] bg-[#f7faff] px-[18px] py-4 text-ink">
+    <div className="rounded-card border border-[#e4ecfa] bg-[#f7faff] px-[18px] py-4 text-ink">
       <div className="mb-[14px] flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-[10px]">
-          <span className="text-[14px] font-semibold">{t('neurocomment.pipeline.title')}</span>
+          <span className="text-[13px] font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
             className={`rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${running ? 'tb-pulse bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
           >
@@ -66,7 +66,7 @@ export function PipelineCard({
           type="button"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`flex items-center gap-[7px] rounded-full px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
+          className={`flex items-center gap-[7px] rounded-full px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
         >
           {running ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -156,7 +156,7 @@ export function PipelineCard({
         </div>
       ) : null}
 
-      <div className="mb-[14px] flex items-center gap-[9px] rounded-[10px] border border-[#dce7fb] bg-[#eef4ff] px-[13px] py-[10px]">
+      <div className="mb-[14px] flex items-center gap-[10px] rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
         <span className="tb-pulse text-[12.5px] font-medium text-primary">
           {running
@@ -165,13 +165,13 @@ export function PipelineCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-[#e4ecfa] bg-[#e4ecfa] md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-[#e4ecfa] bg-[#e4ecfa] md:grid-cols-6">
         {stats.map((stat) => (
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
           // tile across both columns, and stays right as stats are added or removed.
           <div key={stat.label} className="bg-white px-4 py-[14px] max-md:odd:last:col-span-2">
-            <Odometer value={stat.value} color={stat.color} />
+            <Odometer value={stat.value} tone={stat.color} />
             <div className="mt-[2px] text-[11px] text-ink-subtle">{stat.label}</div>
           </div>
         ))}

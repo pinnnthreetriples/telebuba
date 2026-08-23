@@ -30,7 +30,7 @@ export function CampaignDeleteModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
           >
             {t('neurocomment.modal.cancel')}
           </button>
@@ -40,7 +40,7 @@ export function CampaignDeleteModal({
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger"
+            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-[13px] font-semibold text-danger"
           >
             {t('neurocomment.modal.campaignDelete.confirm')}
           </button>

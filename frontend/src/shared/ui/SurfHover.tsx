@@ -2,6 +2,11 @@
 // buttons (the design's lsnSnap/campSnap GSAP, done with CSS). Reveals on hover
 // AND when `open` is true — a gear button drives `open` so the actions are
 // reachable on touch/keyboard, not hover-only (finding #6).
+//
+// In shared/ui and not beside the first card that grew it: two screens already
+// revealed actions this way, with two different action widths (48px and 52px) and
+// therefore two different shifts. One action is 48px wide everywhere now, so
+// `shift` is always 48 × the number of actions.
 export function SurfHover({
   actions,
   surface,
@@ -24,10 +29,10 @@ export function SurfHover({
     // nothing below moves. Measured: clip 2px under the card, card and actions
     // unmoved. A 5px border survived where a 1px one did not, which is what says
     // this is the boundary and not a missing border.
-    <div className="group relative -mb-[2px] overflow-hidden rounded-[11px] pb-[2px]">
+    <div className="group relative -mb-[2px] overflow-hidden rounded-lg pb-[2px]">
       {/* `bottom-[2px]`, not `inset-0`: the padding above is behind the card, and an
           action layer stretched into it would show a grey sliver under every row. */}
-      <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-stretch justify-end rounded-[11px] bg-[#f1efed]">
+      <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-stretch justify-end rounded-lg bg-canvas">
         {actions}
       </div>
       {/* `bg-white` on the surface, not just on what the caller puts inside it: the
@@ -38,7 +43,7 @@ export function SurfHover({
           this and keeps its intended colour. */}
       <div
         id={surfaceId}
-        className={`relative rounded-[11px] bg-white transition-transform duration-[440ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
+        className={`relative rounded-lg bg-white transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
         style={{ ['--shift' as string]: `${String(shift)}px` }}
       >
         {surface}

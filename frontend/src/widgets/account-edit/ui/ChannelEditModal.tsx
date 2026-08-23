@@ -8,7 +8,7 @@ import {
   setAccountChannelPhotoMutation,
   updateAccountChannelMutation,
 } from '@/entities/account';
-import { ConfirmModal, Modal, toastError } from '@/shared/ui';
+import { ConfirmModal, IconButton, Modal, toastError } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -151,7 +151,6 @@ export function ChannelEditModal({
     <>
       <Modal
         onClose={requestClose}
-        z={75}
         backdrop={0.45}
         className="w-[560px]"
         // A fixed name, unlike the visible heading below it: this dialog opens
@@ -171,7 +170,7 @@ export function ChannelEditModal({
                 {detail.data?.title ?? t('accounts.channel.loading')}
               </h2>
               {!detailBlank && (
-                <div className="truncate text-[12px] text-ink-subtle">
+                <div className="truncate text-[12.5px] text-ink-subtle">
                   {detail.data?.username != null
                     ? `@${detail.data.username}`
                     : t('accounts.channel.privateBadge')}
@@ -180,26 +179,26 @@ export function ChannelEditModal({
                 </div>
               )}
             </div>
-            <button
-              type="button"
+            <IconButton
+              size="md"
               onClick={requestClose}
               disabled={busy}
               aria-label={t('accounts.channel.close')}
-              className="h-[30px] w-[30px] shrink-0 rounded-full border border-line bg-white text-[16px] text-ink-muted disabled:opacity-50"
+              className="text-[16px]"
             >
               ×
-            </button>
+            </IconButton>
           </div>
 
           {detail.isError && (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <button
                 type="button"
                 onClick={() => {
                   void detail.refetch();
                 }}
-                className="shrink-0 rounded-full border border-[#f0c9c5] bg-white px-3 py-[4px] text-[12px] font-medium"
+                className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-[12.5px] font-medium"
               >
                 {t('accounts.channel.retry')}
               </button>
@@ -219,7 +218,7 @@ export function ChannelEditModal({
                   className={FIELD}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-1 block text-[11.5px] text-danger">
+                  <span className="mt-1 block text-[11px] text-danger">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}
@@ -247,7 +246,7 @@ export function ChannelEditModal({
               />
 
               {update.isError && (
-                <div className="mb-[14px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+                <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
                 </div>
               )}
@@ -260,7 +259,7 @@ export function ChannelEditModal({
                   className="rounded-full border border-line-input bg-white px-4 py-[8px] text-[13px] font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
-                    <span className="inline-flex items-center gap-[6px]">
+                    <span className="inline-flex items-center gap-[7px]">
                       <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
                       {t('accounts.channel.avatarUpload')}
                     </span>
@@ -273,10 +272,10 @@ export function ChannelEditModal({
                   type="button"
                   onClick={save}
                   disabled={!canSave}
-                  className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-medium text-white disabled:opacity-60"
+                  className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
                 >
                   {update.isPending ? (
-                    <span className="inline-flex items-center gap-[6px]">
+                    <span className="inline-flex items-center gap-[7px]">
                       <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                       {t('accounts.channel.saving')}
                     </span>

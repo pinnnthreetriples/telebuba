@@ -21,16 +21,15 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
       onClose={onClose}
       variant="drawer-left"
       label={t('shell.menu')}
-      z={60}
       backdrop={0.45}
       className="flex w-[min(84vw,300px)] flex-col"
     >
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
-        <div className="flex items-center gap-[9px]">
+        <div className="flex items-center gap-[10px]">
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
           </div>
-          <span className="text-[15px] font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="text-[16px] font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
         <button
           type="button"
@@ -58,7 +57,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-[44px] items-center rounded-[10px] px-3 text-[14px] font-medium transition-colors ${
+            className={`flex min-h-[44px] items-center rounded-lg px-3 text-[13px] font-medium transition-colors ${
               activeIdx === index ? 'bg-primary-tint text-primary' : 'text-ink-muted'
             }`}
           >

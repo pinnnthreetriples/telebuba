@@ -34,10 +34,10 @@ test('Escape only closes the topmost modal, not the parent underneath it', async
   const onCloseChild = vi.fn();
   render(
     <>
-      <Modal onClose={onCloseParent} z={70} label="родитель">
+      <Modal onClose={onCloseParent} label="родитель">
         <div>родитель</div>
       </Modal>
-      <Modal onClose={onCloseChild} z={80} label="потомок">
+      <Modal onClose={onCloseChild} label="потомок">
         <div>потомок</div>
       </Modal>
     </>,
@@ -91,10 +91,10 @@ test('a second dialog closing with the first still unlocks page scroll', () => {
     if (!open) return null;
     return (
       <>
-        <Modal onClose={vi.fn()} z={70} label="родитель">
+        <Modal onClose={vi.fn()} label="родитель">
           <div>родитель</div>
         </Modal>
-        <Modal onClose={vi.fn()} z={80} label="потомок">
+        <Modal onClose={vi.fn()} label="потомок">
           <div>потомок</div>
         </Modal>
       </>

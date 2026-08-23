@@ -94,7 +94,7 @@ export function LogsPage() {
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-[120px]',
-          cellClassName: 'font-mono text-[12px] text-ink-subtle',
+          cellClassName: 'font-mono text-[12.5px] text-ink-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -111,7 +111,7 @@ export function LogsPage() {
           row.original.account_id ? resolveAccount(row.original.account_id) : '—',
         meta: {
           className: 'w-[150px]',
-          cellClassName: 'text-[12.5px] text-[#3a3a3a]',
+          cellClassName: 'text-[12.5px] text-ink-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -120,7 +120,7 @@ export function LogsPage() {
         cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
         meta: {
           className: 'w-[170px]',
-          cellClassName: 'truncate text-[12.5px] text-[#3a3a3a]',
+          cellClassName: 'truncate text-[12.5px] text-ink-body',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -134,7 +134,7 @@ export function LogsPage() {
             {eventLabel(t, row.original.event)}
           </span>
         ),
-        meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'text-[12.5px] text-ink-body' } satisfies DataTableColumnMeta,
       },
       {
         id: 'reason',
@@ -147,7 +147,7 @@ export function LogsPage() {
         // remaining width and the table already scrolls horizontally.
         cell: ({ row }) => eventReason(t, row.original) || '—',
         meta: {
-          cellClassName: 'text-[12.5px] text-[#3a3a3a]',
+          cellClassName: 'text-[12.5px] text-ink-body',
         } satisfies DataTableColumnMeta,
       },
     ],
@@ -211,7 +211,7 @@ export function LogsPage() {
         <div ref={pillsRef} className="relative flex gap-0 rounded-full bg-white p-[3px]">
           <span
             aria-hidden
-            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-[0_1px_2px_rgba(0,102,255,0.3)] transition-[left,width] duration-300"
+            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-[0_1px_2px_rgba(0,102,255,0.3)] transition-[left,width] duration-[250ms]"
             style={{ left: indicator.left, width: indicator.width, height: indicator.height }}
           />
           {STATUS_FILTERS.map((value) => (
@@ -222,7 +222,7 @@ export function LogsPage() {
                 setStatus(value);
                 resetPaging();
               }}
-              className={`relative z-[1] px-[14px] py-[6px] text-[12px] font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
+              className={`relative z-raised px-[14px] py-[6px] text-[12.5px] font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
             >
               {t(`logs.filter.${value}`)}
             </button>
@@ -260,7 +260,7 @@ export function LogsPage() {
             // `inert` is the real thing and, unlike `hidden`, keeps the open/close
             // transition (a not-yet-rendered element has no before-change style).
             inert={!accountOpen}
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-[5] max-h-[280px] overflow-y-auto rounded-[11px] border border-line bg-white shadow-[0_10px_28px_rgba(0,0,0,0.13)]${accountOpen ? ' open' : ''}`}
+            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop max-h-[280px] overflow-y-auto rounded-lg border border-line bg-white shadow-[0_10px_28px_rgba(0,0,0,0.13)]${accountOpen ? ' open' : ''}`}
           >
             <div className="p-1">
               {['', ...accountIds].map((value) => {
@@ -272,7 +272,7 @@ export function LogsPage() {
                     onClick={() => {
                       pickAccount(value);
                     }}
-                    className="flex w-full items-center justify-between rounded-[7px] px-[10px] py-[8px] text-[13px] hover:bg-[#faf9f7]"
+                    className="flex w-full items-center justify-between rounded-sm px-[10px] py-[8px] text-[13px] hover:bg-surface"
                   >
                     {value ? resolveAccount(value) : t('logs.filter.allAccounts')}
                     {selected && (
@@ -281,11 +281,10 @@ export function LogsPage() {
                         height="14"
                         viewBox="0 0 24 24"
                         fill="none"
-                        stroke="#0066ff"
                         strokeWidth="2.5"
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        className="shrink-0"
+                        className="shrink-0 stroke-primary"
                       >
                         <path d="M20 6 9 17l-5-5" />
                       </svg>
@@ -305,12 +304,12 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+        <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
           {t('logs.empty')}
         </div>
       ) : (
         <>
-          <div className="overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="overflow-hidden rounded-card border border-line bg-white">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>

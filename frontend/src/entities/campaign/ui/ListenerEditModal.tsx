@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { Modal, toastError } from '@/shared/ui';
+import { IconButton, Modal, toastError } from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -12,7 +12,7 @@ import {
 import { type CommentMode, CommentModeFields } from './CommentModeFields';
 
 const TRIGGER =
-  'tb-time flex w-full cursor-pointer items-center justify-between rounded-[10px] border border-line-input bg-white px-[13px] py-[10px] text-[13px]';
+  'tb-time flex w-full cursor-pointer items-center justify-between rounded-lg border border-line-input bg-white px-[13px] py-[10px] text-[13px]';
 
 // Design modal: listener-edit (L1387-1422) — pick the listener account from a
 // custom dropdown, save with a check→"Сохранено" swap. Also the home of the fleet-wide
@@ -100,10 +100,10 @@ export function ListenerEditModal({
   };
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[440px]" label={t('neurocomment.listener.title')}>
+    <Modal onClose={onClose} className="w-[440px]" label={t('neurocomment.listener.title')}>
       <div className="p-6">
-        <div className="mb-[6px] flex items-center gap-[11px]">
-          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
+        <div className="mb-[6px] flex items-center gap-[10px]">
+          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
             <svg
               width="17"
               height="17"
@@ -126,17 +126,17 @@ export function ListenerEditModal({
               {t('neurocomment.modal.listenerEdit.sub')}
             </div>
           </div>
-          <button
-            type="button"
+          <IconButton
+            size="md"
             aria-label={t('neurocomment.modal.close')}
             onClick={onClose}
-            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-line bg-white text-[16px] text-ink-muted"
+            className="text-[16px]"
           >
             ×
-          </button>
+          </IconButton>
         </div>
 
-        <div className="mb-[7px] mt-[18px] text-[12px] font-medium text-[#3a3a3a]">
+        <div className="mb-[7px] mt-[18px] text-[12.5px] font-medium text-ink-body">
           {t('neurocomment.modal.listenerEdit.account')}
         </div>
         <div className="relative">
@@ -168,7 +168,7 @@ export function ListenerEditModal({
             // .tb-dd collapses visually only, so these role="button" options kept
             // their tab stop while the list was closed. See the note in LogsPage.
             inert={!open}
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
+            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop rounded-lg border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
           >
             {options.map((o) => (
               <div
@@ -179,7 +179,7 @@ export function ListenerEditModal({
                   setPick(o.id);
                   setOpen(false);
                 }}
-                className="flex cursor-pointer items-center justify-between gap-2 rounded-[7px] px-[11px] py-[9px] text-[13px] transition-colors hover:bg-[#f2f6ff]"
+                className="flex cursor-pointer items-center justify-between gap-2 rounded-sm px-[11px] py-[9px] text-[13px] transition-colors hover:bg-primary-wash"
               >
                 <span className="font-medium">{o.name}</span>
                 {o.id === pick ? (
@@ -188,8 +188,8 @@ export function ListenerEditModal({
                     height="15"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#0066ff"
                     strokeWidth="2.4"
+                    className="stroke-primary"
                   >
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
@@ -213,7 +213,7 @@ export function ListenerEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
           >
             {t('neurocomment.modal.cancel')}
           </button>
@@ -222,10 +222,10 @@ export function ListenerEditModal({
             onClick={save}
             // A second click while the PUT is open would send the same body again.
             disabled={saveSettings.isPending}
-            className={`rounded-full border px-5 py-[9px] text-[13px] font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
+            className={`rounded-full border px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
           >
             {saved ? (
-              <span className="inline-flex items-center gap-[6px]">
+              <span className="inline-flex items-center gap-[7px]">
                 <span className="inline-flex [animation:swapin_0.3s_ease_both]">
                   <svg
                     width="15"

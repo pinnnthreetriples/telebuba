@@ -226,6 +226,8 @@
   transition:
     opacity 0.15s ease,
     transform 0.15s ease;
+  /* The `pop` rung of tailwind.config.ts's z ladder, as a literal: this tooltip is
+     a pseudo-element-bearing plain-CSS component, so it cannot take `z-pop`. */
   z-index: 20;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
 }

@@ -266,12 +266,12 @@ test('the errors tile counts the service verdict once, while the gateway twin st
     expect(errorsTileOffset()).toBe('translateY(-1.10em)');
   });
   // The twin is excluded from the count but still reads as a transport error in the list…
-  expect(screen.getByText('Комментарий к посту — ошибка')).toHaveStyle({ color: '#e5736b' });
+  expect(screen.getByText('Комментарий к посту — ошибка')).toHaveClass('text-term-error');
   // …and so does the UNTWINNED gateway failure, for which this row is the only evidence
   // there is (`_classify.py` logs nothing on that branch, `challenge.py` logs nothing at all).
-  expect(screen.getByText('Вступление в чат канала — ошибка')).toHaveStyle({ color: '#e5736b' });
+  expect(screen.getByText('Вступление в чат канала — ошибка')).toHaveClass('text-term-error');
   // The deliberately-amber service verdict keeps its own colour.
-  expect(screen.getByText('Потерян доступ к чату канала')).toHaveStyle({ color: '#ffd27f' });
+  expect(screen.getByText('Потерян доступ к чату канала')).toHaveClass('text-term-warning');
 });
 
 test('the clear-log trash confirms, then DELETEs only the neurocomment logs', async () => {

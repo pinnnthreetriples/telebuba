@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
+import { ConfirmModal, FeedbackMark, IconButton, Modal } from '@/shared/ui';
 
 export interface NeuroAccountRow {
   account_id: string;
@@ -107,7 +107,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink sm:w-[180px]"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-2 rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink sm:w-[180px]"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
@@ -131,18 +131,18 @@ function AccountRow({
             onClick={() => {
               onPick(account.account_id);
             }}
-            className="w-full shrink-0 rounded-[9px] border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary sm:w-[180px]"
+            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary sm:w-[180px]"
           >
             {t('neurocomment.modal.neuroAccounts.assign')}
           </button>
         )}
-        <button
-          type="button"
+        <IconButton
+          size="lg"
+          tone="danger"
           aria-label={t('neurocomment.modal.neuroAccounts.remove')}
           onClick={() => {
             setConfirmRemove(true);
           }}
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-line bg-white text-danger hover:border-[#f0c9c5] hover:bg-danger-tint"
         >
           <svg
             width="15"
@@ -154,13 +154,13 @@ function AccountRow({
           >
             <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
           </svg>
-        </button>
+        </IconButton>
       </div>
       {banned.length > 0 ? (
         // A per-pair ban is permanent — no retry, no un-ban — so the line states the
         // fact and nothing else; the operator's move is the "Добавить в кампанию"
         // button already on this screen.
-        <div className="mt-[6px] text-[11.5px] text-danger">
+        <div className="mt-[6px] text-[11px] text-danger">
           {t('neurocomment.modal.neuroAccounts.banned', {
             channels: banned.map(shortChannel).join(', '),
           })}
@@ -179,7 +179,7 @@ function AccountRow({
           // .tb-dd collapses visually only; without this every channel option of
           // every linked row kept its tab stop while closed. See the note in LogsPage.
           inert={!open}
-          className={`tb-dd ${open ? 'open mt-2 rounded-[10px] border border-line bg-white p-1' : ''}`}
+          className={`tb-dd ${open ? 'open mt-2 rounded-lg border border-line bg-white p-1' : ''}`}
         >
           <button
             key={ALL_CHANNELS}
@@ -189,8 +189,8 @@ function AccountRow({
             onClick={() => {
               onChannelChange(account.account_id, []);
             }}
-            className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
-              selected.length === 0 ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
+            className={`flex w-full items-center justify-between gap-2 rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-wash ${
+              selected.length === 0 ? 'bg-primary-wash font-semibold text-primary' : 'text-ink'
             }`}
           >
             <span className="min-w-0 truncate">{allChannels}</span>
@@ -207,8 +207,8 @@ function AccountRow({
                 onClick={() => {
                   toggleChannel(channel);
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
-                  isSelected ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
+                className={`flex w-full items-center justify-between gap-2 rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-wash ${
+                  isSelected ? 'bg-primary-wash font-semibold text-primary' : 'text-ink'
                 }`}
                 title={channel}
               >
@@ -261,12 +261,11 @@ export function NeuroAccountsModal({
   return (
     <Modal
       onClose={onClose}
-      z={72}
       className="w-[560px]"
       label={t('neurocomment.modal.neuroAccounts.title')}
     >
-      <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
+      <div className="flex items-center gap-[10px] border-b border-line-row px-6 pb-[15px] pt-5">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="18"
             height="18"
@@ -310,7 +309,7 @@ export function NeuroAccountsModal({
         )}
       </div>
 
-      <div className="flex justify-end border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
+      <div className="flex justify-end border-t border-line-row px-6 pb-5 pt-[14px]">
         <button
           type="button"
           onClick={onClose}

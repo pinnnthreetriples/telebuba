@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Modal } from '@/shared/ui';
+import { IconButton, Modal } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -190,7 +190,7 @@ export function ChannelCreateModal({
   }
   const hintColor =
     usernameHint?.tone === 'ok'
-      ? 'text-[#2e9e64]'
+      ? 'text-success'
       : usernameHint?.tone === 'error'
         ? 'text-danger'
         : 'text-ink-subtle';
@@ -201,7 +201,6 @@ export function ChannelCreateModal({
     // both the list refresh and the editor hand-off).
     <Modal
       onClose={busy ? () => undefined : onClose}
-      z={75}
       backdrop={0.45}
       className="w-[460px]"
       label={t('accounts.channel.createTitle')}
@@ -209,15 +208,15 @@ export function ChannelCreateModal({
       <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[16px] font-bold">{t('accounts.channel.createTitle')}</span>
-          <button
-            type="button"
+          <IconButton
+            size="md"
             onClick={onClose}
             disabled={busy}
             aria-label={t('accounts.channel.close')}
-            className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[16px] text-ink-muted disabled:opacity-50"
+            className="text-[16px]"
           >
             ×
-          </button>
+          </IconButton>
         </div>
 
         <label className="mb-[14px] block">
@@ -231,7 +230,7 @@ export function ChannelCreateModal({
             className={FIELD}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-1 block text-[11.5px] text-danger">
+            <span className="mt-1 block text-[11px] text-danger">
               {t('accounts.channel.errTitle')}
             </span>
           )}
@@ -280,13 +279,13 @@ export function ChannelCreateModal({
               />
             </div>
             {usernameHint && (
-              <span className={`mt-1 block text-[11.5px] ${hintColor}`}>{usernameHint.text}</span>
+              <span className={`mt-1 block text-[11px] ${hintColor}`}>{usernameHint.text}</span>
             )}
           </label>
         )}
 
         {create.isError && (
-          <div className="mb-[14px] rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+          <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
             {channelErrorText(create.error, t, t('accounts.channel.error'))}
           </div>
         )}
@@ -296,7 +295,7 @@ export function ChannelCreateModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink disabled:opacity-50"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink disabled:opacity-50"
           >
             {t('accounts.channel.cancel')}
           </button>
@@ -312,12 +311,12 @@ export function ChannelCreateModal({
                   }
             }
             disabled={createdId === null && !canSubmit}
-            className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
           >
             {createdId !== null ? (
               t('accounts.channel.edit')
             ) : busy ? (
-              <span className="inline-flex items-center gap-[6px]">
+              <span className="inline-flex items-center gap-[7px]">
                 <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.creating')}
               </span>

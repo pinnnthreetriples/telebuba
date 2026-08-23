@@ -55,13 +55,8 @@ export function NeuroshillingAccountsModal({
   };
 
   return (
-    <Modal
-      onClose={onClose}
-      z={72}
-      className="w-[560px]"
-      label={t('neuroshilling.modal.accounts.title')}
-    >
-      <div className="border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
+    <Modal onClose={onClose} className="w-[560px]" label={t('neuroshilling.modal.accounts.title')}>
+      <div className="border-b border-line-row px-6 pb-[15px] pt-5">
         <div className="text-[16px] font-bold text-ink">
           {t('neuroshilling.modal.accounts.title')}
         </div>
@@ -88,9 +83,9 @@ export function NeuroshillingAccountsModal({
                   onClick={() => {
                     toggle(account.account_id);
                   }}
-                  className={`w-full shrink-0 rounded-[9px] border px-[11px] py-[8px] text-[12.5px] font-medium disabled:opacity-50 sm:w-[180px] ${
+                  className={`w-full shrink-0 rounded-md border px-[11px] py-[8px] text-[12.5px] font-medium disabled:opacity-50 sm:w-[180px] ${
                     isPicked
-                      ? 'border-[#f0c9c5] bg-danger-tint text-danger'
+                      ? 'border-danger-line bg-danger-tint text-danger'
                       : 'border-dashed border-line-strong bg-white text-primary hover:border-primary'
                   }`}
                 >
@@ -99,7 +94,7 @@ export function NeuroshillingAccountsModal({
                     : t('neuroshilling.modal.accounts.add')}
                 </button>
               </div>
-              {held ? <div className="mt-[6px] text-[11.5px] text-ink-subtle">{held}</div> : null}
+              {held ? <div className="mt-[6px] text-[11px] text-ink-subtle">{held}</div> : null}
             </div>
           );
         })}
@@ -110,11 +105,11 @@ export function NeuroshillingAccountsModal({
         ) : null}
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
+      <div className="flex justify-end gap-2 border-t border-line-row px-6 pb-5 pt-[14px]">
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
         >
           {t('neuroshilling.modal.accounts.cancel')}
         </button>

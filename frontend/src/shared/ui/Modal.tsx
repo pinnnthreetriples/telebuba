@@ -25,7 +25,7 @@ let overflowBeforeLock = '';
 
 // Presets rather than two free `className` props: both halves set the same
 // properties (radius, animation, height), and a caller's `rounded-none` beside the
-// base `rounded-[18px]` would depend on Tailwind's emit order, which is no guarantee.
+// base `rounded-card` would depend on Tailwind's emit order, which is no guarantee.
 //
 // A card taller than the viewport scrolls via the OVERLAY, never via the card. Both
 // alternatives are wrong: `overflow-y-auto` on the card computes `overflow-x` to
@@ -40,7 +40,7 @@ let overflowBeforeLock = '';
 const SHELL = {
   center: {
     overlay: 'justify-center overflow-y-auto overscroll-contain p-4 sm:p-5',
-    card: 'm-auto rounded-[18px] [animation:fadeup_0.25s_ease]',
+    card: 'm-auto rounded-card [animation:fadeup_0.25s_ease]',
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
@@ -50,16 +50,23 @@ const SHELL = {
 
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
 // card (fadeup). Backdrop-click and Escape close; the card stops propagation.
-// z and backdrop opacity match the design's per-modal values. Focus moves into
+// Backdrop opacity matches the design's per-modal values. Focus moves into
 // the dialog on open, Tab cycles inside it, and the previously-focused element
 // gets focus back on close.
+//
+// Every dialog sits on the same `z-dialog` rung of the config's four-layer
+// ladder. There is no per-modal z any more: the six hand-picked values it used to
+// take (60 for the drawer, 70/72/75/80 for nesting depth) were encoding the order
+// the portal already produces — a nested dialog renders inside its parent, so it
+// mounts later and is appended to document.body after it, which at equal z-index
+// paints it on top. That also lets the toast layer share the rung and still clear
+// an open dialog (see Toaster).
 export function Modal({
   onClose,
   children,
   className = 'w-[420px]',
   variant = 'center',
   label,
-  z = 70,
   backdrop = 0.4,
 }: {
   onClose: () => void;
@@ -70,7 +77,6 @@ export function Modal({
   // optional 20 of the 21 call sites left it out and a screen reader announced a
   // nameless "dialog". Every one of them already renders a title; pass that.
   label: string;
-  z?: number;
   backdrop?: number;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -143,8 +149,8 @@ export function Modal({
     <div
       role="presentation"
       onClick={onClose}
-      className={`fixed inset-0 flex [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
-      style={{ zIndex: z, background: `rgba(11,11,12,${String(backdrop)})` }}
+      className={`fixed inset-0 z-dialog flex [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
+      style={{ background: `rgba(11,11,12,${String(backdrop)})` }}
     >
       <div
         ref={dialogRef}

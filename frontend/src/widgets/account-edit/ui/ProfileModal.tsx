@@ -20,7 +20,7 @@ import {
 } from '@/entities/account';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shared/api';
-import { ConfirmModal, FormField, Modal, toastError } from '@/shared/ui';
+import { ConfirmModal, FormField, IconButton, Modal, toastError } from '@/shared/ui';
 
 import { isUploadablePhoto, PHOTO_MAX_BYTES } from './_channelsShared';
 import { dedupeById, profileCodeText, profileErrorField, profileErrorText } from './_profileShared';
@@ -105,19 +105,19 @@ const REFRESH_LOOK = {
     path: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16',
     stroke: '2',
     labelKey: 'accounts.profile.refresh',
-    border: 'border-line-input text-ink hover:border-[#bfd6ff] hover:text-primary',
+    border: 'border-line-input text-ink hover:border-primary-line hover:text-primary',
   },
   ok: {
     path: 'M20 6 9 17l-5-5',
     stroke: '2.4',
     labelKey: 'accounts.profile.refreshOk',
-    border: 'border-[#bfe4cc] text-[#2e9e64]',
+    border: 'border-[#bfe4cc] text-success',
   },
   error: {
     path: 'M18 6 6 18M6 6l12 12',
     stroke: '2.4',
     labelKey: 'accounts.profile.refreshError',
-    border: 'border-[#f0c9c5] text-danger',
+    border: 'border-danger-line text-danger',
   },
 } as const;
 
@@ -629,7 +629,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     <>
       <Modal
         onClose={requestClose}
-        z={70}
         className="w-[580px]"
         // A fixed name, unlike the visible heading below it — the same choice as
         // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
@@ -641,7 +640,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       >
         <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
-          <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">
+          <div className="flex items-center gap-[14px] border-b border-line-row px-5 py-[18px]">
             <div
               className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-[20px] font-semibold text-white"
               style={
@@ -661,7 +660,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   this is the only place the account's identity is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
               <h2 className="truncate text-[16px] font-bold">{fullName}</h2>
-              <div className="truncate text-[12px] text-ink-subtle">
+              <div className="truncate text-[12.5px] text-ink-subtle">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}
               </div>
@@ -673,7 +672,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 onClick={() => {
                   void onRefresh();
                 }}
-                className={`inline-flex items-center gap-[6px] rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
+                className={`inline-flex items-center gap-[7px] rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
               >
                 <span
                   className={`inline-flex ${
@@ -699,15 +698,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </button>
               <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
-            <button
-              type="button"
+            <IconButton
+              size="md"
               onClick={requestClose}
               disabled={uploading}
               aria-label={t('accounts.profile.close')}
-              className="ml-[2px] h-[30px] w-[30px] shrink-0 rounded-full border border-line bg-white text-[16px] text-ink-muted disabled:opacity-50"
+              className="ml-[2px] text-[16px]"
             >
               ×
-            </button>
+            </IconButton>
           </div>
 
           {/* tabs — a real tablist: the active tab was conveyed by colour and a
@@ -717,7 +716,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               so the roving-tabindex row stays a single line. */}
           <div
             role="tablist"
-            className="tb-scroll flex gap-5 overflow-x-auto border-b border-[#f0eeeb] px-5"
+            className="tb-scroll flex gap-5 overflow-x-auto border-b border-line-row px-5"
           >
             {TABS.map((value) => (
               <button
@@ -758,10 +757,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 role="status"
                 aria-live="polite"
                 aria-label={t('accounts.profile.syncing')}
-                className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/10 [animation:ovfade_0.2s_ease]"
+                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-3 bg-black/10 [animation:ovfade_0.2s_ease]"
               >
                 <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-input border-t-primary" />
-                <span className="text-[12px] font-medium text-ink-muted">
+                <span className="text-[12.5px] font-medium text-ink-muted">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
                     : t('accounts.profile.syncing')}
@@ -769,7 +768,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
@@ -777,7 +776,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   onClick={() => {
                     void onRefresh();
                   }}
-                  className="shrink-0 rounded-full border border-[#f0c9c5] bg-white px-3 py-[4px] text-[12px] font-medium disabled:opacity-60"
+                  className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-[12.5px] font-medium disabled:opacity-60"
                 >
                   {t('accounts.profile.refresh')}
                 </button>
@@ -810,7 +809,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-[5px] block text-[11px] font-medium text-[#c0473f]"
+                          className="mt-[5px] block text-[11px] font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -841,7 +840,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-[5px] block text-[11px] font-medium text-[#c0473f]"
+                          className="mt-[5px] block text-[11px] font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -978,14 +977,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-[#f0eeeb] px-5 py-[14px]">
+          <div className="flex items-center justify-end gap-2 border-t border-line-row px-5 py-[14px]">
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null && (
               <div
                 role="alert"
                 title={saveErrorText}
-                className="mr-auto min-w-0 truncate text-[12px] font-medium text-danger"
+                className="mr-auto min-w-0 truncate text-[12.5px] font-medium text-danger"
               >
                 {saveErrorText}
               </div>
@@ -994,7 +993,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               type="button"
               onClick={requestClose}
               disabled={uploading}
-              className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink disabled:opacity-50"
+              className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink disabled:opacity-50"
             >
               {t('accounts.profile.cancel')}
             </button>
@@ -1004,15 +1003,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 void form.handleSubmit();
               }}
               disabled={updateProfile.isPending || !canSave || !isDirty}
-              className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${saved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
+              className={`rounded-full px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${saved ? 'bg-success' : 'bg-primary'}`}
             >
               {updateProfile.isPending ? (
-                <span className="inline-flex items-center gap-[6px]">
+                <span className="inline-flex items-center gap-[7px]">
                   <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                   {t('accounts.profile.saving')}
                 </span>
               ) : saved ? (
-                <span className="inline-flex items-center gap-[6px]">
+                <span className="inline-flex items-center gap-[7px]">
                   <span className="tb-swapin inline-flex">
                     <svg
                       width="15"

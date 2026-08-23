@@ -38,7 +38,7 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
   // uniqueness note and a reason do not fit beside the found-count without collapsing
   // into an ellipsis.
   return (
-    <p className="text-[11.5px] text-ink-subtle">
+    <p className="text-[11px] text-ink-subtle">
       {sources
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
@@ -118,7 +118,7 @@ function CommentsMark({ state }: { state: string }) {
   // pass is doing while the operator watches. 'unknown' and 'notChecked' are final,
   // so they stay still.
   return (
-    <span className="inline-flex items-center gap-[5px] text-[11.5px] text-ink-subtle">
+    <span className="inline-flex items-center gap-[5px] text-[11px] text-ink-subtle">
       <span
         className={`h-[6px] w-[6px] rounded-full bg-line-strong ${
           state === 'pending' ? 'animate-pulse' : ''
@@ -306,7 +306,7 @@ export function DiscoveryResults({
         const found = row.original.sources ?? [];
         const sources = found.length > 0 ? found : [row.original.source];
         return (
-          <span className="text-[11.5px] text-ink-subtle">
+          <span className="text-[11px] text-ink-subtle">
             {sources
               // The stored label outlives the build that wrote it, so an unmapped code
               // renders as itself instead of as a raw i18n key.
@@ -396,8 +396,8 @@ export function DiscoveryResults({
   }
 
   return (
-    <div className="flex flex-col gap-[9px]">
-      <div className="flex items-center justify-between gap-2 text-[11.5px] text-ink-subtle">
+    <div className="flex flex-col gap-[10px]">
+      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-subtle">
         {/* The card layout has no column headers, and select-all lives in one — so on
             a phone the operator could otherwise only tap candidates one at a time.
             Branch on the same JS query DataTable uses, not `lg:hidden`: two

@@ -29,11 +29,12 @@ const FALLBACK_POLL_MS = 30000;
 // listLogs is included so the card terminals actually pick up new events.
 const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmingChannels', 'listLogs'];
 
-// Trust 3-tier colour (design): healthy / watch / risk.
-function trustColor(trust: number): string {
-  if (trust >= 70) return '#12a150';
-  if (trust >= 45) return '#e08700';
-  return '#e5372a';
+// Trust 3-tier tone (design): healthy / watch / risk. Tokens, not hexes, so the
+// tiers read the same as every other health signal in the dashboard.
+function trustTone(trust: number): string {
+  if (trust >= 70) return 'text-success';
+  if (trust >= 45) return 'text-warning-strong';
+  return 'text-danger';
 }
 
 // Map a backend readiness reason (English, from evaluate_readiness) to its RU
@@ -55,7 +56,7 @@ function reasonKey(reason: string): string {
 function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
   return (
     <div className="text-right">
-      <div className={`text-[19px] font-bold ${cls}`}>{value}</div>
+      <div className={`text-[20px] font-bold ${cls}`}>{value}</div>
       <div className="text-[11px] text-ink-muted">{label}</div>
     </div>
   );
@@ -218,7 +219,7 @@ export function WarmingPage() {
     <div className="tb-fadeup">
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('warming.titleFull')}</h1>
-        <div className="flex items-center gap-[18px]">
+        <div className="flex items-center gap-[14px]">
           <div className="flex gap-4">
             <Counter
               value={warming.length}
@@ -240,7 +241,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className={`flex items-center gap-[7px] rounded-full px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50 ${poolOn ? 'bg-ink' : 'bg-primary'}`}
+            className={`flex items-center gap-[7px] rounded-full px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50 ${poolOn ? 'bg-ink' : 'bg-primary'}`}
           >
             {poolOn ? (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -265,7 +266,7 @@ export function WarmingPage() {
           sticky header can't follow. With minmax the feed scrolls in its own card. */}
       <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-line bg-white p-[14px]">
+          <div className="rounded-card border border-line bg-white p-[14px]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-[13px] font-semibold">{t('warming.ready.title')}</span>
               <span className="rounded-full border border-line bg-white px-2 py-[2px] text-[11px] text-ink-subtle">
@@ -274,13 +275,13 @@ export function WarmingPage() {
             </div>
             <div className="flex flex-col gap-2">
               {idle.length === 0 ? (
-                <div className="py-[26px] text-center text-[12px] text-ink-subtle">
+                <div className="py-[26px] text-center text-[12.5px] text-ink-subtle">
                   {t('warming.ready.empty')}
                 </div>
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;
-                  const tColor = trust != null ? trustColor(trust) : '#9a9893';
+                  const tTone = trust != null ? trustTone(trust) : 'text-ink-subtle';
                   const cc = account.phone_country?.toLowerCase() ?? null;
                   const pc = account.proxy_country?.toLowerCase() ?? null;
                   const ptype = account.proxy_type;
@@ -305,12 +306,12 @@ export function WarmingPage() {
                   return (
                     <div
                       key={account.account_id}
-                      className="flex items-center gap-[10px] rounded-xl border border-line bg-white px-3 py-[11px]"
+                      className="flex items-center gap-[10px] rounded-lg border border-line bg-white px-3 py-[11px]"
                     >
                       <AccountAvatar
                         account={account}
                         className="h-[30px] w-[30px] shrink-0 rounded-full"
-                        fallbackClassName="text-[12px] font-semibold bg-primary-tint text-primary"
+                        fallbackClassName="text-[12.5px] font-semibold bg-primary-tint text-primary"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-[5px]">
@@ -325,22 +326,22 @@ export function WarmingPage() {
                             {flag}
                           </div>
                         ) : null}
-                        <div className="mt-[2px] flex items-center gap-[6px]">
+                        <div className="mt-[2px] flex items-center gap-[7px]">
                           <svg
                             width="13"
                             height="13"
                             viewBox="0 0 24 24"
                             fill="none"
-                            stroke={tColor}
+                            stroke="currentColor"
                             strokeWidth="2"
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            className="shrink-0"
+                            className={`shrink-0 ${tTone}`}
                           >
                             <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
                             <path d="m9 12 2 2 4-4" />
                           </svg>
-                          <span className="text-[11px] font-semibold" style={{ color: tColor }}>
+                          <span className={`text-[11px] font-semibold ${tTone}`}>
                             {trust ?? '—'}
                           </span>
                           {ptype ? (
@@ -351,7 +352,7 @@ export function WarmingPage() {
                                   className={`fi fi-${pc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
                                 />
                               ) : null}
-                              <span className="text-[11px] text-[#9a9893]">
+                              <span className="text-[11px] text-ink-subtle">
                                 {proxyTypeLabel(ptype)}
                               </span>
                             </>
@@ -365,7 +366,7 @@ export function WarmingPage() {
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
+                        className={`rounded-full px-[14px] py-[6px] text-[12.5px] font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
@@ -377,20 +378,20 @@ export function WarmingPage() {
           </div>
 
           <CollapsibleCard
-            wrapperClassName="rounded-[13px] border border-line bg-white"
+            wrapperClassName="rounded-lg border border-line bg-white"
             header={
               <span className="text-[13px] font-semibold">{t('warming.channels.title')}</span>
             }
             label={t('warming.channels.title')}
           >
-            <div className="mb-[11px] text-[11px] leading-[1.4] text-[#9a9893]">
+            <div className="mb-[11px] text-[11px] leading-[1.4] text-ink-subtle">
               {t('warming.channels.hint')}
             </div>
             <div className="flex flex-wrap gap-[7px]">
               {channels.map((channel) => (
                 <span
                   key={channel.channel}
-                  className="inline-flex items-center gap-[6px] rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
+                  className="inline-flex items-center gap-[7px] rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                   {channel.channel}
@@ -400,7 +401,7 @@ export function WarmingPage() {
                     onClick={() => {
                       setChannelToRemove(channel.channel);
                     }}
-                    className="text-[14px] leading-none text-[#b5b3ae]"
+                    className="text-[13px] leading-none text-ink-subtle"
                   >
                     ×
                   </button>
@@ -420,7 +421,7 @@ export function WarmingPage() {
                     }}
                     placeholder={t('warming.channels.placeholderSingle')}
                     aria-label={t('warming.channels.placeholderSingle')}
-                    className="w-[150px] border-none bg-transparent text-[12px] outline-none"
+                    className="w-[150px] border-none bg-transparent text-[12.5px] outline-none"
                   />
                   <button
                     type="button"
@@ -448,7 +449,7 @@ export function WarmingPage() {
                     title={t('warming.channels.cancel')}
                     aria-label={t('warming.channels.cancel')}
                     onClick={cancelAddChannel}
-                    className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#f0eeeb] text-[14px] leading-none text-ink-muted"
+                    className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-line-row text-[13px] leading-none text-ink-muted"
                   >
                     ×
                   </button>
@@ -459,7 +460,7 @@ export function WarmingPage() {
                   onClick={() => {
                     setAddingChannel(true);
                   }}
-                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12px] text-ink-muted hover:border-primary hover:text-primary"
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12.5px] text-ink-muted hover:border-primary hover:text-primary"
                 >
                   {t('warming.channels.addPill')}
                 </button>
@@ -482,15 +483,15 @@ export function WarmingPage() {
                     height="15"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#12a150"
                     strokeWidth="2.6"
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    className="stroke-success"
                   >
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
                 </span>
-                <span className="text-[13.5px] font-bold">{t('warming.warmed.title')}</span>
+                <span className="text-[13px] font-bold">{t('warming.warmed.title')}</span>
                 <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
                   {warmed.length}
                 </span>
@@ -511,16 +512,16 @@ export function WarmingPage() {
                   />
                 ) : null;
                 return (
-                  <div key={acc.account_id} className="rounded-[14px] border border-line p-[14px]">
-                    <div className="flex items-start gap-[11px]">
+                  <div key={acc.account_id} className="rounded-lg border border-line p-[14px]">
+                    <div className="flex items-start gap-[10px]">
                       <AccountAvatar
                         account={acc}
                         className="h-8 w-8 shrink-0 rounded-full ring-2 ring-success"
-                        fallbackClassName="text-[11.5px] font-bold bg-primary-tint text-primary"
+                        fallbackClassName="text-[11px] font-bold bg-primary-tint text-primary"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-[5px]">
-                          <span className="truncate text-[14px] font-bold leading-tight">
+                          <span className="truncate text-[13px] font-bold leading-tight">
                             {name}
                           </span>
                           {showPhone ? null : flag}
@@ -533,32 +534,32 @@ export function WarmingPage() {
                             {flag}
                           </div>
                         ) : null}
-                        <div className="mt-[5px] flex items-center gap-[6px]">
+                        <div className="mt-[5px] flex items-center gap-[7px]">
                           {acc.proxy_country ? (
                             <span
                               className={`fi fi-${acc.proxy_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
                             />
                           ) : null}
-                          <span className="text-[11.5px] text-ink-subtle">
+                          <span className="text-[11px] text-ink-subtle">
                             {acc.proxy_type ? proxyTypeLabel(acc.proxy_type) : '—'}
                           </span>
                         </div>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold tracking-[0.03em] text-success">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[10.5px] font-bold tracking-[0.03em] text-success">
                         <svg
                           width="9"
                           height="9"
                           viewBox="0 0 24 24"
                           fill="none"
-                          stroke="#12a150"
                           strokeWidth="3.4"
+                          className="stroke-success"
                         >
                           <path d="M20 6 9 17l-5-5" />
                         </svg>
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
-                    <div className="mt-[13px] flex items-center rounded-[10px] bg-[#f7f6f4] px-[14px] py-[10px]">
+                    <div className="mt-[13px] flex items-center rounded-lg bg-surface px-[14px] py-[10px]">
                       <div className="flex-1">
                         <div className="text-[10.5px] text-ink-subtle">
                           {t('warming.warmed.days')}
@@ -580,14 +581,14 @@ export function WarmingPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-[13px] flex items-center gap-[9px]">
+                    <div className="mt-[13px] flex items-center gap-[10px]">
                       <button
                         type="button"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+                        className="flex flex-1 items-center justify-center gap-[7px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
                       >
                         {t('warming.warmed.toNeuro')}
                         <svg
@@ -633,19 +634,19 @@ export function WarmingPage() {
 
           <CollapsibleCard
             label={t('warming.howto.title')}
-            wrapperClassName="rounded-2xl border border-line bg-[#f6f5f2]"
+            wrapperClassName="rounded-card border border-line bg-canvas"
             header={<span className="text-[13px] font-semibold">{t('warming.howto.title')}</span>}
           >
-            <div className="mb-[13px] text-[11px] leading-[1.4] text-[#9a9893]">
+            <div className="mb-[13px] text-[11px] leading-[1.4] text-ink-subtle">
               {t('warming.howto.hint')}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-[22px] gap-y-[11px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-[14px] gap-y-[10px]">
               {[0, 1, 2, 3, 4, 5].map((index) => (
-                <div key={index} className="flex items-start gap-[9px]">
-                  <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white">
+                <div key={index} className="flex items-start gap-[10px]">
+                  <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10.5px] font-semibold text-white">
                     {index + 1}
                   </span>
-                  <span className="text-[12px] leading-[1.45] text-[#5c5c5c]">
+                  <span className="text-[12.5px] leading-[1.45] text-ink-muted">
                     {t(`warming.howto.steps.${String(index)}`)}
                   </span>
                 </div>

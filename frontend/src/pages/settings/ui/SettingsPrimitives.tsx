@@ -14,9 +14,9 @@ export function Card({
   children: ReactNode;
 }) {
   return (
-    <div className={`${mb} rounded-2xl border border-line bg-white ${className}`}>
+    <div className={`${mb} rounded-card border border-line bg-white ${className}`}>
       {title ? <div className="mb-[3px] text-[13px] font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-4 text-[12px] text-ink-subtle">{subtitle}</div> : null}
+      {subtitle ? <div className="mb-4 text-[12.5px] text-ink-subtle">{subtitle}</div> : null}
       {children}
     </div>
   );

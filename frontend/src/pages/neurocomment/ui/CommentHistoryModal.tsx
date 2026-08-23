@@ -47,7 +47,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-[130px]',
-          cellClassName: 'font-mono text-[12px] text-ink-subtle',
+          cellClassName: 'font-mono text-[12.5px] text-ink-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -78,21 +78,21 @@ export function CommentHistoryModal({
           return (
             <span className="inline-flex items-center gap-2">
               <span className="text-ink-subtle line-through">{text}</span>
-              <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+              <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10.5px] font-medium text-danger">
                 {t('neurocomment.feed.deleted')}
               </span>
             </span>
           );
         },
-        meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'text-[12.5px] text-ink-body' } satisfies DataTableColumnMeta,
       },
     ],
     [t, labelOf],
   );
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[760px]" label={t('neurocomment.history.title')}>
-      <div className="border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
+    <Modal onClose={onClose} className="w-[760px]" label={t('neurocomment.history.title')}>
+      <div className="border-b border-line-row px-6 pb-[15px] pt-5">
         <div className="text-[16px] font-bold text-ink">{t('neurocomment.history.title')}</div>
       </div>
 
@@ -110,7 +110,7 @@ export function CommentHistoryModal({
             {t('neurocomment.history.empty')}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="overflow-hidden rounded-card border border-line bg-white">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>
@@ -118,7 +118,7 @@ export function CommentHistoryModal({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
+      <div className="flex items-center justify-between border-t border-line-row px-6 pb-5 pt-[14px]">
         <div className="flex gap-2">
           <button
             type="button"

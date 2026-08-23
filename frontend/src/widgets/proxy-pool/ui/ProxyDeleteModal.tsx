@@ -19,7 +19,6 @@ export function ProxyDeleteModal({
   return (
     <Modal
       onClose={onClose}
-      z={70}
       className="w-[420px]"
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
@@ -36,7 +35,7 @@ export function ProxyDeleteModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
           >
             {t('accounts.proxyDeleteModal.cancel')}
           </button>
@@ -46,7 +45,7 @@ export function ProxyDeleteModal({
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger"
+            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-[13px] font-semibold text-danger"
           >
             {t('accounts.proxyDeleteModal.confirm')}
           </button>

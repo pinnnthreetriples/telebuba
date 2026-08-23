@@ -40,7 +40,7 @@ export function ConfirmModal({
   };
 
   return (
-    <Modal onClose={onClose} z={80} className="w-[420px]" label={title}>
+    <Modal onClose={onClose} className="w-[420px]" label={title}>
       <div className="p-6">
         <div className="mb-2 text-[16px] font-bold">{title}</div>
         <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">{body}</div>
@@ -48,7 +48,7 @@ export function ConfirmModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-[13px] font-semibold text-ink"
           >
             {cancelLabel}
           </button>
@@ -56,11 +56,11 @@ export function ConfirmModal({
             type="button"
             onClick={confirm}
             disabled={pending}
-            className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger disabled:opacity-60"
+            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-[13px] font-semibold text-danger disabled:opacity-60"
           >
             {pending ? (
-              <span className="inline-flex items-center gap-[6px]">
-                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#f0c9c5] border-t-danger" />
+              <span className="inline-flex items-center gap-[7px]">
+                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-danger-line border-t-danger" />
                 {confirmLabel}
               </span>
             ) : (

@@ -79,11 +79,11 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         <span className="font-medium text-ink-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums text-[10px] text-line-strong">
+        <span className="ml-auto shrink-0 tabular-nums text-[10.5px] text-line-strong">
           {formatLocalTime(message.created_at)}
         </span>
       </div>
-      <div className="inline-block max-w-full rounded-[10px] rounded-tl-[3px] bg-[#f7f6f4] px-[11px] py-[7px] text-[12px] leading-[1.45] text-[#3a3a3a]">
+      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-[11px] py-[7px] text-[12.5px] leading-[1.45] text-ink-body">
         {message.text}
       </div>
     </div>
@@ -95,7 +95,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-[2px] flex items-center gap-[6px] text-[10.5px] text-ink-subtle">
+    <div className="mt-[2px] flex items-center gap-[7px] text-[10.5px] text-ink-subtle">
       <span className="flex items-center gap-[3px]">
         {[0, 1, 2].map((index) => (
           <span
@@ -135,7 +135,7 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
 
   if (ordered.length === 0) {
     return (
-      <div className="py-[34px] text-center text-[12px] text-ink-subtle">
+      <div className="py-[34px] text-center text-[12.5px] text-ink-subtle">
         {t('warming.dialogues.empty')}
       </div>
     );
@@ -177,14 +177,14 @@ export function DialogueFeed() {
   const live = isFeedLive(messages);
 
   return (
-    <div className="mt-4 rounded-2xl border border-line bg-white p-4">
-      <div className="mb-[13px] flex items-center gap-[9px]">
+    <div className="mt-4 rounded-card border border-line bg-white p-4">
+      <div className="mb-[13px] flex items-center gap-[10px]">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span
           className={`h-[7px] w-[7px] shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
         />
-        <span className="text-[14px] font-bold">{t('warming.dialogues.title')}</span>
+        <span className="text-[13px] font-bold">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
           <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
             {/* One page, not a total: at the limit there is more history behind
