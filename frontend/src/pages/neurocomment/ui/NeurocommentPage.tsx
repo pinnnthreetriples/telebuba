@@ -200,7 +200,13 @@ export function NeurocommentPage() {
     refetchInterval: FALLBACK_POLL_MS,
     enabled: campaignId !== null,
   });
-  const logLines = neuroLog.data?.items ?? [];
+  // The gateway's by-request row is dropped, not labelled: `_classify.py` writes
+  // `neurocomment_onboard_join_by_request` for the same outcome, translated and with the
+  // attempt ratio. Dropped HERE and not in `core/`, where `_join_by_request_result` also
+  // serves `join_channel` for domains whose only evidence that row is.
+  const logLines = (neuroLog.data?.items ?? []).filter(
+    (line) => line.event !== 'neurocomment_telegram_join_discussion_group_by_request',
+  );
   const captchaQueue = challenges.data?.rows ?? [];
   // The captcha solver toggle reflects the campaign's per-campaign solver_enabled
   // override (null/true = on, only off when explicitly disabled).

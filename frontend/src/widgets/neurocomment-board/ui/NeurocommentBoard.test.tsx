@@ -55,7 +55,10 @@ test('renders the 4-column work table with channel and dot-pill status', () => {
   expect(screen.getByText('Отличный пост!')).toBeInTheDocument();
 });
 
-test('shows a deleted-count chip on a channel with recent deletions', () => {
+test('the deleted-count chip belongs to the account that lost the comment, not its channel', () => {
+  // Both accounts sit on @news and the CHANNEL carries 3 deletions, but only acc-1 has
+  // any of its own. Reading the channel aggregate stamped '3 удалено' onto both rows —
+  // acc-2 was accused of a deletion for a comment it never posted.
   const board: NeurocommentBoardData = {
     ...BOARD,
     channels: [
@@ -67,16 +70,26 @@ test('shows a deleted-count chip on a channel with recent deletions', () => {
         deleted_recent: 3,
       },
     ],
+    accounts: [
+      { ...BOARD.accounts![0]!, deleted_today: 1 },
+      {
+        ...BOARD.accounts![1]!,
+        deleted_today: 0,
+        readiness: [{ channel: '@news', ready: true, joined: true, captcha_passed: true }],
+      },
+    ],
   };
   render(
     <NeurocommentBoard
       board={board}
-      accountsCount={1}
+      accountsCount={2}
       onOpenAccounts={() => undefined}
       displayName={LABEL}
     />,
   );
-  expect(screen.getByText('3 удалено')).toBeInTheDocument();
+  expect(screen.getAllByText('@news')).toHaveLength(2);
+  expect(screen.getAllByText('1 удалено')).toHaveLength(1);
+  expect(screen.queryByText('3 удалено')).not.toBeInTheDocument();
 });
 
 test('an account with no readiness rows shows the no-data badge, not comments-off', () => {

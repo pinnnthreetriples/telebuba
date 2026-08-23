@@ -343,3 +343,57 @@ test('the SSE callback invalidates only this page keys, not the whole cache', as
     spy.mock.calls.every(([arg]) => typeof arg === 'object' && arg !== null && 'predicate' in arg),
   ).toBe(true);
 });
+
+test('the gateway by-request row is hidden, leaving only the translated service line', async () => {
+  // One join request, two rows: `_join_by_request_result` in the gateway and
+  // `_classify.py`'s twin. Only the twin is translated and only it carries the attempt
+  // ratio, so the gateway row reached the operator as a raw event code saying nothing new.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: 'now',
+              level: 'INFO',
+              status: 'success',
+              event: 'neurocomment_onboard_join_by_request',
+              extra: { channel: '@news', reason: '1/2' },
+            },
+            {
+              id: 2,
+              created_at: 'now',
+              level: 'INFO',
+              status: 'success',
+              event: 'neurocomment_telegram_join_discussion_group_by_request',
+              extra: { channel: '@news' },
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(
+      screen.getByText('Пускают только по заявкам. Заявка на вступление отправлена'),
+    ).toBeInTheDocument();
+  });
+  expect(
+    screen.queryByText('neurocomment_telegram_join_discussion_group_by_request'),
+  ).not.toBeInTheDocument();
+});

@@ -959,7 +959,7 @@
     "neurocomment_discovery_adopted": "Channels added from search",
     "neurocomment_channel_comments_off": "Channel comments are disabled",
     "neurocomment_channel_comments_off_dropped": "Channel dropped: its comments are disabled",
-    "neurocomment_onboard_join_by_request": "Join request sent",
+    "neurocomment_onboard_join_by_request": "Admits only by request. Join request sent",
     "neurocomment_onboard_join_request_pending": "Join request still awaiting approval",
     "neurocomment_onboard_join_request_approved": "Join request approved",
     "neurocomment_challenge_attempt": "Answering the captcha",

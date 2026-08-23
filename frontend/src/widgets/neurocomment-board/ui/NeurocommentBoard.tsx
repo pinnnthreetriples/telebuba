@@ -46,7 +46,6 @@ function deriveRows(
   displayName: (accountId: string, fallback: string) => string,
 ): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
-  const channelDeleted = new Map((board.channels ?? []).map((c) => [c.channel, c.deleted_recent]));
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
     const pins = account.pinned_channels ?? [];
@@ -98,7 +97,11 @@ function deriveRows(
         : primary?.rejoin_gave_up && !primary.ready
           ? 'rejoin_exhausted'
           : (channelStatus.get(channel) ?? 'no_data'),
-      deletedRecent: channelDeleted.get(channel) ?? 0,
+      // The ACCOUNT's own deletions, not the channel's aggregate: that put the same badge
+      // on every account sharing the channel, so one deleted comment accused all five.
+      // ponytail: `deleted_today` spans every channel while the badge sits beside the ONE
+      // the row shows — a per-pair count needs a new board field, add it if that bites.
+      deletedRecent: account.deleted_today ?? 0,
       armedReady,
       armedTarget,
     };
