@@ -22,7 +22,7 @@ interface BoardRow {
   // also falls back to it when an account's channel is absent from the board map.
   status: NeurocommentChannelRow['status'];
   // Our comments removed from this row's channel within the 24h board window.
-  deletedToday: number;
+  deletedHere: number;
   // Onboarding progress for this account: ready channels / target. While the
   // runtime reports onboarding in flight and the account is not yet fully armed,
   // the status cell animates this instead of the (misleading) static status.
@@ -97,14 +97,13 @@ function deriveRows(
         : primary?.rejoin_gave_up && !primary.ready
           ? 'rejoin_exhausted'
           : (channelStatus.get(channel) ?? 'no_data'),
-      // The ACCOUNT's own deletions, not the channel's aggregate: that put the same badge
-      // on every account sharing the channel, so one deleted comment accused all five.
-      // The channel's own number did not just move — it counts a different SET (delivered
-      // vs posted) and is what explains a back-off, so it stays on the channel chips in
-      // `CampaignsCard` rather than being dropped.
-      // ponytail: `deleted_today` spans every channel while the badge sits beside the ONE
-      // the row shows — a per-pair count needs a new board field, add it if that bites.
-      deletedToday: account.deleted_today ?? 0,
+      // THIS account in THIS channel — the pair the row actually names. The channel's own
+      // aggregate put the same chip on all five accounts sharing it, and the account's flat
+      // total put a deletion from another channel next to whichever channel the row was
+      // showing. Neither is what a chip sitting beside a channel name can mean.
+      // The channel aggregate did not just move: it counts a different SET (delivered vs
+      // posted) and is what explains a back-off, so it lives on the `CampaignsCard` chips.
+      deletedHere: account.deleted_by_channel?.[channel] ?? 0,
       armedReady,
       armedTarget,
     };
@@ -248,12 +247,9 @@ export function NeurocommentBoard({
             className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
           >
             {row.original.channel}
-            {/* Suppressed on the em-dash row: with no channel to stand beside, `— 3 удалено`
-                reads as a deletion in a channel that is not named. The account's own number
-                still reaches the operator through the «Удалено» tile. */}
-            {row.original.channel !== '—' && row.original.deletedToday > 0 ? (
+            {row.original.deletedHere > 0 ? (
               <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
-                {t('neurocomment.board.deleted', { count: row.original.deletedToday })}
+                {t('neurocomment.board.deleted', { count: row.original.deletedHere })}
               </span>
             ) : null}
           </span>

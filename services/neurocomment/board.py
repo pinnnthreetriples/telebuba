@@ -12,6 +12,7 @@ board's (the SPA reads them from ``AccountRead`` there).
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -170,6 +171,7 @@ def _build_card(
         max_comments_per_hour=max_comments_per_hour,
         comments_today=len(posted),
         deleted_today=sum(1 for c in posted if c.deleted_at),
+        deleted_by_channel=Counter(c.channel for c in posted if c.deleted_at),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
         # Same row as the text above, so the board's channel and comment columns can

@@ -124,6 +124,23 @@ async def test_card_deleted_today_outlives_the_channel_row() -> None:
 
 
 @pytest.mark.asyncio
+async def test_card_splits_its_deletions_by_channel() -> None:
+    """The chip sits beside ONE channel name, so it counts that pair, not the account."""
+    campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    for post_id, channel in enumerate(("@news", "@old"), start=1):
+        await link_channel_to_campaign(campaign.campaign_id, channel)
+        await _post_comment(channel, post_id, campaign.campaign_id, "acc-1")
+    await mark_comments_deleted("@old", [2])
+    board = await load_neurocomment_board(campaign.campaign_id)
+    assert board is not None
+    assert board.accounts[0].deleted_today == 1
+    # NOT {"@news": 1} — the flat total is silent about which channel lost the comment.
+    assert board.accounts[0].deleted_by_channel == {"@old": 1}
+
+
+@pytest.mark.asyncio
 async def test_board_basic_shape() -> None:
     campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
     await create_account(AccountCreate(account_id="acc-1", label="Account One"))

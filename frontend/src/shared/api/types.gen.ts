@@ -1732,6 +1732,12 @@ export type NeurocommentAccountCard = {
    */
   deleted_today?: number;
   /**
+   * Deleted By Channel
+   */
+  deleted_by_channel?: {
+    [key: string]: number;
+  };
+  /**
    * Last Comment At
    */
   last_comment_at?: string | null;

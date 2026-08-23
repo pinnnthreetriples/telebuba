@@ -13574,6 +13574,13 @@
             "title": "Deleted Today",
             "default": 0
           },
+          "deleted_by_channel": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Deleted By Channel"
+          },
           "last_comment_at": {
             "anyOf": [
               {

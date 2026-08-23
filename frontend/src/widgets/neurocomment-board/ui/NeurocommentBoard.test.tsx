@@ -71,7 +71,7 @@ test('the deleted-count chip belongs to the account that lost the comment, not i
       },
     ],
     accounts: [
-      { ...BOARD.accounts![0]!, deleted_today: 1 },
+      { ...BOARD.accounts![0]!, deleted_today: 1, deleted_by_channel: { '@news': 1 } },
       {
         ...BOARD.accounts![1]!,
         deleted_today: 0,
@@ -90,6 +90,41 @@ test('the deleted-count chip belongs to the account that lost the comment, not i
   expect(screen.getAllByText('@news')).toHaveLength(2);
   expect(screen.getAllByText('1 удалено')).toHaveLength(1);
   expect(screen.queryByText('3 удалено')).not.toBeInTheDocument();
+});
+
+test('the chip counts only the channel the row names, not the account total', () => {
+  // acc-1 lost one comment in @old and none in @news; the row shows @news because that is
+  // where it commented last. The flat `deleted_today: 1` would have hung the chip on
+  // @news and accused a channel where nothing was deleted.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+      { channel: '@old', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+    ],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        last_comment_channel: '@news',
+        deleted_today: 1,
+        deleted_by_channel: { '@old': 1 },
+        readiness: [
+          { channel: '@news', ready: true, joined: true, captcha_passed: true },
+          { channel: '@old', ready: true, joined: true, captcha_passed: true },
+        ],
+      },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getByText('@news')).toBeInTheDocument();
+  expect(screen.queryByText('1 удалено')).not.toBeInTheDocument();
 });
 
 test('an account with no readiness rows shows the no-data badge, not comments-off', () => {
@@ -497,11 +532,13 @@ test('falls back to the label when the account is not in the full list', () => {
 });
 
 test('an account with no channel gets no deleted chip beside the em dash', () => {
-  // `deleted_today` is account-wide, so a row that resolved no channel could pair it with
-  // the '—' placeholder and assert a deletion in a channel it does not name.
+  // The row resolved no channel, so there is no pair to look up and the '—' placeholder
+  // must not collect a count from one of the account's real channels.
   const board: NeurocommentBoardData = {
     ...BOARD,
-    accounts: [{ ...BOARD.accounts![1]!, deleted_today: 3 }],
+    accounts: [
+      { ...BOARD.accounts![1]!, deleted_today: 3, deleted_by_channel: { '@news': 3 } },
+    ],
   };
   render(
     <NeurocommentBoard
