@@ -86,6 +86,10 @@ class NeurocommentAccountCard(BaseModel):
     # Text of the most recent posted comment (None until the account comments, or
     # when the stored row has no text). Surfaces the real comment in the board.
     last_comment_text: str | None = None
+    # Whether that same comment has since been swept away. The row shows the text either
+    # way — an account whose last comment was removed has still done the work, and blanking
+    # it would read as "never commented" — so the marking is all that separates them.
+    last_comment_deleted: bool = False
     # Where that same comment went. Rides the card rather than being looked up in
     # ``NeurocommentBoard.comments``, which is a newest-first prefix capped at
     # ``board_comment_feed_limit`` (50) across the WHOLE campaign: six accounts under the

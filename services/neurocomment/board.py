@@ -171,6 +171,7 @@ def _build_card(
         deleted_today=sum(posted_deleted.values()),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
+        last_comment_deleted=bool(latest and latest.deleted_at),
         # Same row as the text above, so the board's channel and comment columns can
         # never name two different events.
         last_comment_channel=latest.channel if latest else None,

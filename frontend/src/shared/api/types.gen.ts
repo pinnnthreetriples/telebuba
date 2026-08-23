@@ -1744,6 +1744,10 @@ export type NeurocommentAccountCard = {
    */
   last_comment_text?: string | null;
   /**
+   * Last Comment Deleted
+   */
+  last_comment_deleted?: boolean;
+  /**
    * Last Comment Channel
    */
   last_comment_channel?: string | null;

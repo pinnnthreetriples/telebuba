@@ -125,7 +125,6 @@ async def test_card_deleted_today_outlives_the_channel_row() -> None:
 
 @pytest.mark.asyncio
 async def test_card_splits_its_deletions_by_channel() -> None:
-    """The chip sits beside ONE channel name, so it counts that pair, not the account."""
     campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
     await create_account(AccountCreate(account_id="acc-1"))
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
@@ -138,6 +137,7 @@ async def test_card_splits_its_deletions_by_channel() -> None:
     assert board is not None
     assert board.accounts[0].deleted_today == 1  # the flat total is silent about WHICH one
     assert {r.channel: r.deleted for r in board.accounts[0].readiness} == {"@news": 0, "@old": 1}
+    assert board.accounts[0].last_comment_deleted is True  # @old, post 2, is the newest
 
 
 @pytest.mark.asyncio

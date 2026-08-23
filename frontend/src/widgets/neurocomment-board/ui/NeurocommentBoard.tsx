@@ -24,6 +24,7 @@ interface BoardRow {
   // THIS account's comments removed from THIS row's channel in the 24h board window —
   // the pair the row names, which is the only thing a chip beside a channel can mean.
   deletedHere: number;
+  textDeleted: boolean;
   // Onboarding progress for this account: ready channels / target. While the
   // runtime reports onboarding in flight and the account is not yet fully armed,
   // the status cell animates this instead of the (misleading) static status.
@@ -86,6 +87,9 @@ function deriveRows(
       accountId: account.account_id,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
+      // Only meaningful next to real text: the placeholder and the em dash stand in for
+      // a comment the row does not have, and striking those through says nothing.
+      textDeleted: Boolean(account.last_comment_deleted && account.last_comment_text),
       // The pair's own permanent ban (#30) outranks the channel's aggregate: the
       // aggregate only turns 'banned' once NO account is ready there, so one burnt
       // account among five working ones kept reading the channel's green «Готов» —
@@ -269,7 +273,18 @@ export function NeurocommentBoard({
       {
         accessorKey: 'text',
         header: t('neurocomment.board.col.comment'),
-        cell: (info) => info.getValue<string>(),
+        // Struck through and red when the sweep found this very comment gone — the same
+        // vocabulary the expanded feed below the row already uses, minus its «удалён»
+        // pill, which a 240px truncating cell has no room for. The text stays: the account
+        // did post it, and blanking the cell would read as "never commented".
+        cell: ({ row }) =>
+          row.original.textDeleted ? (
+            <span className="text-danger line-through" title={t('neurocomment.feed.deleted')}>
+              {row.original.text}
+            </span>
+          ) : (
+            row.original.text
+          ),
         meta: {
           cellClassName:
             'max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] text-[#5c5c5c]',

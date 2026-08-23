@@ -594,3 +594,34 @@ test('an account with no channel gets no deleted chip beside the em dash', () =>
   expect(channelCell.textContent).toBe('—');
   expect(screen.queryByText('3 удалено')).not.toBeInTheDocument();
 });
+
+test('the row strikes through the last comment when the sweep found it gone', () => {
+  // The expanded feed below the row already marks a deleted comment; the row itself read
+  // as if the comment were still live, so the operator saw a working account with a
+  // deletion chip and no way to connect the two.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    accounts: [{ ...BOARD.accounts![0]!, last_comment_deleted: true }],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getByText('Отличный пост!')).toHaveClass('line-through', 'text-danger');
+});
+
+test('a live last comment is not struck through', () => {
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getByText('Отличный пост!')).not.toHaveClass('line-through');
+});
