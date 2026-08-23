@@ -427,6 +427,24 @@ async def test_remember_listener_persists_while_stopped() -> None:
 
 
 @pytest.mark.asyncio
+async def test_remember_listener_refuses_a_warming_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Save enforces what Start enforces: a saved pointer is what discovery searches on."""
+
+    async def _warming() -> set[str]:
+        return {"polina"}
+
+    monkeypatch.setattr(_runtime, "list_warming_account_ids", _warming)
+    await set_listener_account_id("alisa")
+    await set_listener_running(running=False)
+
+    with pytest.raises(_runtime.ListenerBusyWarmingError):
+        await _runtime.remember_neurocomment_listener("polina")
+    assert await get_listener_account_id() == "alisa"
+
+
+@pytest.mark.asyncio
 async def test_remember_listener_refuses_while_running() -> None:
     """A live listener is re-pointed by ``start_neurocomment``, never by a bare write."""
     await set_listener_account_id("alisa")

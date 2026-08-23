@@ -361,6 +361,26 @@ export function NeurocommentPage() {
     );
   };
 
+  // Both doors onto the listener account — the card's picker and the edit modal's
+  // "Сохранить" — go through here. A running engine is re-pointed live by /start; a
+  // stopped one still has to persist the pick, which is what used to be dropped.
+  const pickListener = (id: string) => {
+    setStartRejectedWarming(false);
+    if (running) {
+      setListener(id);
+      startListener(id);
+      return;
+    }
+    // The local id is set only once the write lands: `listenerId` falls back to it when
+    // nothing is persisted, so an optimistic set would paint an unsaved account as the
+    // listener — the same lie this whole path exists to stop telling.
+    afterSettle(saveListener.mutateAsync({ body: { listener_account_id: id } }), (ok) => {
+      if (ok) {
+        setListener(id);
+      }
+    });
+  };
+
   // GLOBAL listener start/stop (the whole engine). Kept distinct from the
   // per-campaign run/pause below.
   const toggleRuntime = () => {
@@ -537,8 +557,7 @@ export function NeurocommentPage() {
             }}
             accountOptions={listenerOptions}
             onPickListener={(id) => {
-              setStartRejectedWarming(false);
-              setListener(id);
+              pickListener(id);
               setListenerOpen(false);
             }}
           />
@@ -752,27 +771,7 @@ export function NeurocommentPage() {
           onClose={() => {
             setShowListenerEdit(false);
           }}
-          onSave={(id) => {
-            setStartRejectedWarming(false);
-            setListener(id);
-            if (running) {
-              // A live engine cannot just bookmark the pick: /start hands ownership over
-              // (and answers the warming 409 the picker's stale board can miss).
-              startListener(id);
-              return;
-            }
-            // A stopped engine still has to remember it. Without this write the pick lived
-            // in local state alone, and the persisted listener won it back on reload.
-            saveListener.mutate(
-              { body: { listener_account_id: id } },
-              {
-                onError: () => {
-                  toastError(t('neurocomment.listener.saveFailed'));
-                },
-                onSettled: invalidateNeuro,
-              },
-            );
-          }}
+          onSave={pickListener}
         />
       ) : null}
 
