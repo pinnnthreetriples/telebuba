@@ -131,13 +131,13 @@ async def test_card_splits_its_deletions_by_channel() -> None:
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
     for post_id, channel in enumerate(("@news", "@old"), start=1):
         await link_channel_to_campaign(campaign.campaign_id, channel)
+        await upsert_readiness("acc-1", channel, joined=True, captcha_passed=True, ready=True)
         await _post_comment(channel, post_id, campaign.campaign_id, "acc-1")
     await mark_comments_deleted("@old", [2])
     board = await load_neurocomment_board(campaign.campaign_id)
     assert board is not None
-    assert board.accounts[0].deleted_today == 1
-    # NOT {"@news": 1} — the flat total is silent about which channel lost the comment.
-    assert board.accounts[0].deleted_by_channel == {"@old": 1}
+    assert board.accounts[0].deleted_today == 1  # the flat total is silent about WHICH one
+    assert {r.channel: r.deleted for r in board.accounts[0].readiness} == {"@news": 0, "@old": 1}
 
 
 @pytest.mark.asyncio

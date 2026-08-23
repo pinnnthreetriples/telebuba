@@ -21,7 +21,8 @@ interface BoardRow {
   // 'no_data' (no readiness rows yet) is now a real backend status; deriveRows
   // also falls back to it when an account's channel is absent from the board map.
   status: NeurocommentChannelRow['status'];
-  // Our comments removed from this row's channel within the 24h board window.
+  // THIS account's comments removed from THIS row's channel in the 24h board window —
+  // the pair the row names, which is the only thing a chip beside a channel can mean.
   deletedHere: number;
   // Onboarding progress for this account: ready channels / target. While the
   // runtime reports onboarding in flight and the account is not yet fully armed,
@@ -97,13 +98,13 @@ function deriveRows(
         : primary?.rejoin_gave_up && !primary.ready
           ? 'rejoin_exhausted'
           : (channelStatus.get(channel) ?? 'no_data'),
-      // THIS account in THIS channel — the pair the row actually names. The channel's own
-      // aggregate put the same chip on all five accounts sharing it, and the account's flat
-      // total put a deletion from another channel next to whichever channel the row was
-      // showing. Neither is what a chip sitting beside a channel name can mean.
+      // THIS account in THIS channel, off the very readiness row `primary` already is —
+      // the pair the chip sits beside. The channel's own aggregate put the same chip on all
+      // five accounts sharing it, and the account's flat total put a deletion from another
+      // channel next to whichever channel the row happened to show.
       // The channel aggregate did not just move: it counts a different SET (delivered vs
       // posted) and is what explains a back-off, so it lives on the `CampaignsCard` chips.
-      deletedHere: account.deleted_by_channel?.[channel] ?? 0,
+      deletedHere: primary?.deleted ?? 0,
       armedReady,
       armedTarget,
     };
@@ -247,8 +248,15 @@ export function NeurocommentBoard({
             className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
           >
             {row.original.channel}
+            {/* The hover text carries the scope: the identical «N удалено» string also sits
+                on the channel pills in `CampaignsCard`, where it counts every account, and
+                a chip that reads 0 here beside a pill that reads 1 is otherwise unexplained
+                — the pill also counts a delivered comment the send recorded `failed`. */}
             {row.original.deletedHere > 0 ? (
-              <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+              <span
+                title={t('neurocomment.board.deletedHint')}
+                className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger"
+              >
                 {t('neurocomment.board.deleted', { count: row.original.deletedHere })}
               </span>
             ) : null}

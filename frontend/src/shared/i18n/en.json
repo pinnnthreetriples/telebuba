@@ -1321,6 +1321,7 @@
       "commentPlaceholder": "Comment sent",
       "empty": "No work yet",
       "deleted": "{{count}} deleted",
+      "deletedHint": "This account's comments deleted in this channel in the last 24h. The number on the channel itself, in the list on the left, counts every account.",
       "col": {
         "account": "Account",
         "channel": "Channel",

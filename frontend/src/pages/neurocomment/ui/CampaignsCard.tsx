@@ -280,11 +280,11 @@ export function CampaignsCard({
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
-                {/* The channel's OWN deletions in the last 24h — a different number from the
-                    board row's per-account chip, and a different set: this one counts every
-                    delivered comment the sweep found gone, including one recorded `failed`
-                    mid-send. It is the number that has to explain a back-off, so it lives on
-                    the channel and not on the accounts that happen to work there. */}
+                {/* The channel's OWN deletions in the last 24h, across every account — the
+                    board row's chip counts one (account, channel) pair. A different set, too:
+                    this one counts every delivered comment the sweep found gone, including one
+                    recorded `failed` mid-send. It is the number that has to explain a back-off,
+                    so it lives on the channel and not on the accounts working there. */}
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}

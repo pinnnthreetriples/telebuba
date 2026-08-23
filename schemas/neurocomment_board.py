@@ -56,6 +56,11 @@ class AccountChannelReadiness(BaseModel):
     # This account spent its whole re-join budget here and left the chat. Same reason as
     # ``banned`` above, and the same shape of remedy.
     rejoin_gave_up: bool = False
+    # This account's comments removed from THIS channel in the 24h board window. Per-pair
+    # for the same reason as the two flags above: the board row names one channel per
+    # account, so the chip beside it can only honestly mean this pair. The card's flat
+    # ``deleted_today`` stays — the «Удалено» tile sums whole accounts, not pairs.
+    deleted: int = 0
 
 
 class NeurocommentAccountCard(BaseModel):
@@ -77,12 +82,6 @@ class NeurocommentAccountCard(BaseModel):
     # a per-channel sum could, because a channel row disappears when the operator
     # unlinks it while the comments it hosted stay on the account.
     deleted_today: int = 0
-    # The same deletions split by the channel they happened in. The board row names ONE
-    # channel per account, so the chip beside it has to mean "this account, that channel"
-    # — the flat total above put a deletion from another channel next to whichever channel
-    # the row happened to be showing. Absent keys are zero; the flat total stays because
-    # the «Удалено» tile sums whole accounts, not pairs.
-    deleted_by_channel: dict[str, int] = Field(default_factory=dict)
     last_comment_at: str | None = None
     # Text of the most recent posted comment (None until the account comments, or
     # when the stored row has no text). Surfaces the real comment in the board.

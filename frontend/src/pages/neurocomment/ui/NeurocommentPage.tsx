@@ -344,7 +344,8 @@ export function NeurocommentPage() {
     // number that has to explain a channel back-off — and it means a channel may
     // legitimately read `deleted_recent` higher than its own `posted` count. Do not
     // "reconcile" them by narrowing the chip; the back-off reads its own scan set either
-    // way. The board row's own chip is a third thing again: that one is per-ACCOUNT.
+    // way. The board row's own chip is a third thing again: that one is per (account,
+    // channel) and, like this tile, counts `posted`.
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),

@@ -55,7 +55,7 @@ test('renders the 4-column work table with channel and dot-pill status', () => {
   expect(screen.getByText('Отличный пост!')).toBeInTheDocument();
 });
 
-test('the deleted-count chip belongs to the account that lost the comment, not its channel', () => {
+test('the deleted-count chip belongs to the account that lost the comment, not the channel', () => {
   // Both accounts sit on @news and the CHANNEL carries 3 deletions, but only acc-1 has
   // any of its own. Reading the channel aggregate stamped '3 удалено' onto both rows —
   // acc-2 was accused of a deletion for a comment it never posted.
@@ -71,7 +71,13 @@ test('the deleted-count chip belongs to the account that lost the comment, not i
       },
     ],
     accounts: [
-      { ...BOARD.accounts![0]!, deleted_today: 1, deleted_by_channel: { '@news': 1 } },
+      {
+        ...BOARD.accounts![0]!,
+        deleted_today: 1,
+        readiness: [
+          { channel: '@news', ready: true, joined: true, captcha_passed: true, deleted: 1 },
+        ],
+      },
       {
         ...BOARD.accounts![1]!,
         deleted_today: 0,
@@ -107,10 +113,9 @@ test('the chip counts only the channel the row names, not the account total', ()
         ...BOARD.accounts![0]!,
         last_comment_channel: '@news',
         deleted_today: 1,
-        deleted_by_channel: { '@old': 1 },
         readiness: [
           { channel: '@news', ready: true, joined: true, captcha_passed: true },
-          { channel: '@old', ready: true, joined: true, captcha_passed: true },
+          { channel: '@old', ready: true, joined: true, captcha_passed: true, deleted: 1 },
         ],
       },
     ],
@@ -125,6 +130,42 @@ test('the chip counts only the channel the row names, not the account total', ()
   );
   expect(screen.getByText('@news')).toBeInTheDocument();
   expect(screen.queryByText('1 удалено')).not.toBeInTheDocument();
+});
+
+test('the chip shows for the pinned channel the row displays, not the last-commented one', () => {
+  // The positive half of the pair above, and the case the operator actually reads: a pin
+  // outranks the last-comment channel, so the row names @old while the account's newest
+  // comment went to @news. The chip must follow the NAMED channel — which is the one that
+  // lost comments here. A negative-only pair of tests would pass on a hardcoded 0.
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+      { channel: '@old', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+    ],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        pinned_channels: ['@old'],
+        last_comment_channel: '@news',
+        deleted_today: 2,
+        readiness: [
+          { channel: '@news', ready: true, joined: true, captcha_passed: true },
+          { channel: '@old', ready: true, joined: true, captcha_passed: true, deleted: 2 },
+        ],
+      },
+    ],
+  };
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+  expect(screen.getByText('@old')).toBeInTheDocument();
+  expect(screen.getByText('2 удалено')).toBeInTheDocument();
 });
 
 test('an account with no readiness rows shows the no-data badge, not comments-off', () => {
@@ -532,13 +573,11 @@ test('falls back to the label when the account is not in the full list', () => {
 });
 
 test('an account with no channel gets no deleted chip beside the em dash', () => {
-  // The row resolved no channel, so there is no pair to look up and the '—' placeholder
-  // must not collect a count from one of the account's real channels.
+  // The row resolved no readiness row at all, so there is no pair to read a count off and
+  // the '—' placeholder cannot inherit one from the account's flat total.
   const board: NeurocommentBoardData = {
     ...BOARD,
-    accounts: [
-      { ...BOARD.accounts![1]!, deleted_today: 3, deleted_by_channel: { '@news': 3 } },
-    ],
+    accounts: [{ ...BOARD.accounts![1]!, deleted_today: 3 }],
   };
   render(
     <NeurocommentBoard
@@ -548,6 +587,10 @@ test('an account with no channel gets no deleted chip beside the em dash', () =>
       displayName={LABEL}
     />,
   );
-  expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  // Anchored on the channel cell specifically: the comment cell also renders '—' for an
+  // account that never posted, so a bare `getAllByText('—')` would pass without the
+  // channel column having rendered anything at all.
+  const channelCell = screen.getByText('—', { selector: 'span.tb-swapin' });
+  expect(channelCell.textContent).toBe('—');
   expect(screen.queryByText('3 удалено')).not.toBeInTheDocument();
 });
