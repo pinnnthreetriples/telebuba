@@ -412,3 +412,25 @@ async def test_switch_mid_onboarding_fences_next_telegram_rpc(
         await task
 
     assert calls == ["member-1"]
+
+
+@pytest.mark.asyncio
+async def test_remember_listener_persists_while_stopped() -> None:
+    """The edit modal's "Сохранить" writes the pointer with the engine stopped."""
+    await set_listener_account_id("alisa")
+    await set_listener_running(running=False)
+
+    assert await _runtime.remember_neurocomment_listener("polina") is True
+    assert await get_listener_account_id() == "polina"
+    # Remembering is not starting: the engine stays where the operator left it.
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_remember_listener_refuses_while_running() -> None:
+    """A live listener is re-pointed by ``start_neurocomment``, never by a bare write."""
+    await set_listener_account_id("alisa")
+    await set_listener_running(running=True)
+
+    assert await _runtime.remember_neurocomment_listener("polina") is False
+    assert await get_listener_account_id() == "alisa"

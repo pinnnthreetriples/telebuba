@@ -1269,6 +1269,7 @@
       "resume": "Resume",
       "edit": "Change account",
       "remove": "Remove listener",
+      "saveFailed": "Could not save the listener",
       "actions": "Actions",
       "activeCampaigns": "active campaigns",
       "warmingBlocked": "This account is currently warming — it can't be the listener",

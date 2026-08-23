@@ -102,6 +102,7 @@ import {
   setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
+  setNeurocommentListener,
   setNeuroshillingScenario,
   skipNeurocommentPair,
   spamCheckAccount,
@@ -400,6 +401,9 @@ import type {
   SetCampaignStatusData,
   SetCampaignStatusError,
   SetCampaignStatusResponse,
+  SetNeurocommentListenerData,
+  SetNeurocommentListenerError,
+  SetNeurocommentListenerResponse,
   SetNeuroshillingScenarioData,
   SetNeuroshillingScenarioError,
   SetNeuroshillingScenarioResponse,
@@ -3242,6 +3246,35 @@ export const stopNeurocommentMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Listener
+ *
+ * Remember the picked listener without starting the engine ("Сохранить" in the modal).
+ */
+export const setNeurocommentListenerMutation = (
+  options?: Partial<Options<SetNeurocommentListenerData>>,
+): UseMutationOptions<
+  SetNeurocommentListenerResponse,
+  SetNeurocommentListenerError,
+  Options<SetNeurocommentListenerData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetNeurocommentListenerResponse,
+    SetNeurocommentListenerError,
+    Options<SetNeurocommentListenerData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setNeurocommentListener({
         ...options,
         ...fnOptions,
         throwOnError: true,

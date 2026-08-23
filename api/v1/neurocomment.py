@@ -303,6 +303,21 @@ async def stop() -> NeurocommentRuntimeStatus:
 
 
 @router.post(
+    "/listener",
+    response_model=NeurocommentRuntimeStatus,
+    operation_id="setNeurocommentListener",
+    responses=error_responses(409),
+)
+async def set_listener(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
+    """Remember the picked listener without starting the engine ("Сохранить" in the modal)."""
+    if await nc_service.remember_neurocomment_listener(body.listener_account_id):
+        return await nc_service.neurocomment_runtime_status()
+    # The engine is running, so this is a live hand-off rather than a bookmark: /start
+    # owns both the ownership swap and the translation of its three conflicts.
+    return await start(body)
+
+
+@router.post(
     "/listener/clear",
     response_model=NeurocommentRuntimeStatus,
     operation_id="clearNeurocommentListener",

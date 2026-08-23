@@ -24,6 +24,7 @@ import {
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
+  setNeurocommentListenerMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,
@@ -213,6 +214,7 @@ export function NeurocommentPage() {
   const setSolver = useMutation(setCampaignSolverMutation());
   const setStatus = useMutation(setCampaignStatusMutation());
   const clearListener = useMutation(clearNeurocommentListenerMutation());
+  const saveListener = useMutation(setNeurocommentListenerMutation());
   const deleteCampaign = useMutation(deleteCampaignMutation());
   const removeChannel = useMutation(removeCampaignChannelMutation());
   const removeAccount = useMutation(removeCampaignAccountMutation());
@@ -753,9 +755,23 @@ export function NeurocommentPage() {
           onSave={(id) => {
             setStartRejectedWarming(false);
             setListener(id);
-            if (running && !warmingIds.has(id)) {
+            if (running) {
+              // A live engine cannot just bookmark the pick: /start hands ownership over
+              // (and answers the warming 409 the picker's stale board can miss).
               startListener(id);
+              return;
             }
+            // A stopped engine still has to remember it. Without this write the pick lived
+            // in local state alone, and the persisted listener won it back on reload.
+            saveListener.mutate(
+              { body: { listener_account_id: id } },
+              {
+                onError: () => {
+                  toastError(t('neurocomment.listener.saveFailed'));
+                },
+                onSettled: invalidateNeuro,
+              },
+            );
           }}
         />
       ) : null}

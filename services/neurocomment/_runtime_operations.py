@@ -224,6 +224,23 @@ async def stop_neurocomment() -> None:
         await _teardown_listener_locked(listener_account_id, clear_account=False)
 
 
+async def remember_neurocomment_listener(listener_account_id: str) -> bool:
+    """Persist the picked listener without starting anything ("Сохранить" in the modal).
+
+    Returns ``False`` without writing when the engine is running: re-pointing a live
+    listener is an ownership hand-off, and ``start_neurocomment`` is the only thing that
+    performs one. The read and the write share the lifecycle lock, so a Start cannot land
+    between them and leave the pointer naming an account no runtime owner ever took.
+    """
+    from services.neurocomment import _runtime  # noqa: PLC0415
+
+    async with _runtime.neurocomment_lifecycle():
+        if await _runtime.get_listener_running():
+            return False
+        await set_listener_account_id(listener_account_id)
+        return True
+
+
 async def clear_neurocomment_listener() -> None:
     from services.neurocomment import _runtime  # noqa: PLC0415
 

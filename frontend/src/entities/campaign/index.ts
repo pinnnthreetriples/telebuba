@@ -19,6 +19,7 @@ export {
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
+  setNeurocommentListenerMutation,
   startCampaignDiscoveryMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
