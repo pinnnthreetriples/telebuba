@@ -161,7 +161,7 @@ export function ChannelEditModal({
         label={t('accounts.channel.dialog')}
       >
         <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
-          <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="mb-4 flex items-center justify-between gap-md">
             <div className="min-w-0">
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
@@ -191,7 +191,7 @@ export function ChannelEditModal({
           </div>
 
           {detail.isError && (
-            <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+            <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <button
                 type="button"
@@ -251,7 +251,7 @@ export function ChannelEditModal({
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-sm">
                 <button
                   type="button"
                   onClick={() => photoInput.current?.click()}
@@ -259,7 +259,7 @@ export function ChannelEditModal({
                   className="rounded-full border border-line-input bg-white px-4 py-[8px] text-[13px] font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
-                    <span className="inline-flex items-center gap-[7px]">
+                    <span className="inline-flex items-center gap-sm">
                       <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
                       {t('accounts.channel.avatarUpload')}
                     </span>
@@ -275,7 +275,7 @@ export function ChannelEditModal({
                   className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60"
                 >
                   {update.isPending ? (
-                    <span className="inline-flex items-center gap-[7px]">
+                    <span className="inline-flex items-center gap-sm">
                       <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                       {t('accounts.channel.saving')}
                     </span>

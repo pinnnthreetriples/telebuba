@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { CollapsibleCard, HelpHint, Switch } from '@/shared/ui';
+import { CollapsibleCard, HelpHint, Select, Switch } from '@/shared/ui';
 
 import type { DraftRole, DraftStep, ScenarioDraft } from './scenarioDraft';
 import {
@@ -19,7 +19,7 @@ const FIELD =
   'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] outline-none focus:border-primary';
 const PICK = 'rounded-md border border-line-input bg-white px-[9px] py-[6px] text-[12.5px]';
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-[5px] rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
+  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
 
 function Stepper({
   label,
@@ -36,7 +36,7 @@ function Stepper({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="flex items-center gap-[7px]">
+    <div className="flex items-center gap-sm">
       <span className="text-[12.5px] text-ink-muted">{label}</span>
       <div className="inline-flex items-center gap-[2px] rounded-full border border-line-input bg-white px-[4px] py-[2px]">
         <button
@@ -94,25 +94,23 @@ function StepRow({
 
   return (
     <div className="rounded-lg border border-line bg-white p-[11px]">
-      <div className="mb-[8px] flex items-center gap-[7px]">
+      <div className="mb-[8px] flex items-center gap-sm">
         <span className="rounded-full bg-track px-[8px] py-[2px] text-[11px] font-semibold tabular-nums text-ink-muted">
           {t('neuroshilling.scenario.steps.position', { position })}
         </span>
-        <select
-          value={step.roleId ?? ''}
-          aria-label={t('neuroshilling.scenario.steps.role', { position })}
-          onChange={(event) => {
-            onChange({ roleId: event.target.value || null });
-          }}
-          className={`${PICK} min-w-0 flex-1`}
-        >
-          <option value="">{t('neuroshilling.scenario.steps.rolePick')}</option>
-          {roles.map((role) => (
-            <option key={role.roleId} value={role.roleId}>
-              {role.name}
-            </option>
-          ))}
-        </select>
+        <div className="min-w-0 flex-1">
+          <Select
+            value={step.roleId ?? ''}
+            onChange={(value) => {
+              onChange({ roleId: value || null });
+            }}
+            options={[
+              { value: '', label: t('neuroshilling.scenario.steps.rolePick') },
+              ...roles.map((role) => ({ value: role.roleId, label: role.name })),
+            ]}
+            ariaLabel={t('neuroshilling.scenario.steps.role', { position })}
+          />
+        </div>
         <button
           type="button"
           aria-label={t('neuroshilling.scenario.steps.remove', { position })}
@@ -139,7 +137,7 @@ function StepRow({
         <div
           role="radiogroup"
           aria-label={t('neuroshilling.scenario.steps.emoji', { position })}
-          className="mb-[8px] flex flex-wrap gap-[5px]"
+          className="mb-[8px] flex flex-wrap gap-tight"
         >
           {REACTIONS.map((emoji) => (
             <button
@@ -159,30 +157,33 @@ function StepRow({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-[10px]">
-        <select
-          value={link === null ? '' : String(link)}
-          aria-label={linkLabel}
-          onChange={(event) => {
-            const next = event.target.value === '' ? null : Number(event.target.value);
-            onChange(
-              step.kind === 'reaction' ? { targetPosition: next } : { replyToPosition: next },
-            );
-          }}
-          className={PICK}
-        >
-          <option value="">
-            {step.kind === 'reaction'
-              ? t('neuroshilling.scenario.steps.targetNone')
-              : t('neuroshilling.scenario.steps.replyNone')}
-          </option>
-          {earlier.map((value) => (
-            <option key={value} value={String(value)}>
-              {t('neuroshilling.scenario.steps.position', { position: value })}
-            </option>
-          ))}
-        </select>
-        <div className="flex items-center gap-[5px] text-[11px] text-ink-subtle">
+      <div className="flex flex-wrap items-center gap-md">
+        <div className="w-[150px]">
+          <Select
+            value={link === null ? '' : String(link)}
+            onChange={(value) => {
+              const next = value === '' ? null : Number(value);
+              onChange(
+                step.kind === 'reaction' ? { targetPosition: next } : { replyToPosition: next },
+              );
+            }}
+            options={[
+              {
+                value: '',
+                label:
+                  step.kind === 'reaction'
+                    ? t('neuroshilling.scenario.steps.targetNone')
+                    : t('neuroshilling.scenario.steps.replyNone'),
+              },
+              ...earlier.map((value) => ({
+                value: String(value),
+                label: t('neuroshilling.scenario.steps.position', { position: value }),
+              })),
+            ]}
+            ariaLabel={linkLabel}
+          />
+        </div>
+        <div className="flex items-center gap-tight text-[11px] text-ink-subtle">
           <span>{t('neuroshilling.scenario.steps.delay')}</span>
           <input
             type="number"
@@ -338,7 +339,7 @@ export function ScenarioCard({
         </span>
       }
     >
-      <div className="mb-[12px] flex items-center gap-[7px]">
+      <div className="mb-[12px] flex items-center gap-sm">
         <div
           role="radiogroup"
           aria-label={t('neuroshilling.scenario.mode.label')}
@@ -365,7 +366,7 @@ export function ScenarioCard({
       {/* A <span>, not a <label>: the control carries its own `aria-label`, and a
           second label element for the same field only makes the accessible name
           ambiguous. */}
-      <span className="mb-[5px] flex items-center gap-[7px] text-[12.5px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-sm text-[12.5px] font-medium text-ink-muted">
         {t('neuroshilling.scenario.topic.label')}
         <HelpHint text={t('neuroshilling.scenario.topic.hint')} />
       </span>
@@ -381,7 +382,7 @@ export function ScenarioCard({
         className={`${FIELD} mb-[12px] resize-none font-[inherit] leading-[1.5]`}
       />
 
-      <div className="mb-[12px] flex flex-wrap items-center gap-[14px] rounded-lg border border-line bg-surface p-[11px]">
+      <div className="mb-[12px] flex flex-wrap items-center gap-lg rounded-lg border border-line bg-surface p-[11px]">
         <Stepper
           label={t('neuroshilling.scenario.generate.personas')}
           value={personaCount}
@@ -407,14 +408,14 @@ export function ScenarioCard({
         <HelpHint text={t('neuroshilling.scenario.generate.hint')} />
       </div>
 
-      <div className="mb-[12px] flex flex-col gap-[10px]">
+      <div className="mb-[12px] flex flex-col gap-md">
         {(
           [
             ['uniqueMessages', 'unique'],
             ['useChatContext', 'context'],
           ] as const
         ).map(([field, key]) => (
-          <div key={key} className="flex items-center gap-[7px]">
+          <div key={key} className="flex items-center gap-sm">
             <Switch
               checked={draft[field]}
               label={t(`neuroshilling.scenario.${key}.label`)}
@@ -428,11 +429,11 @@ export function ScenarioCard({
         ))}
       </div>
 
-      <span className="mb-[5px] flex items-center gap-[7px] text-[12.5px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-sm text-[12.5px] font-medium text-ink-muted">
         {t('neuroshilling.scenario.media.label')}
         <HelpHint text={t('neuroshilling.scenario.media.hint')} />
       </span>
-      <div className="mb-[14px] flex flex-wrap items-center gap-[7px]">
+      <div className="mb-[14px] flex flex-wrap items-center gap-sm">
         <input
           value={draft.mediaMessageLink}
           maxLength={500}
@@ -443,42 +444,44 @@ export function ScenarioCard({
           }}
           className={`${FIELD} min-w-[220px] flex-1`}
         />
-        <select
-          value={draft.mediaStepPosition === null ? '' : String(draft.mediaStepPosition)}
-          aria-label={t('neuroshilling.scenario.media.step')}
-          onChange={(event) => {
-            onDraft({
-              ...draft,
-              mediaStepPosition: event.target.value === '' ? null : Number(event.target.value),
-            });
-          }}
-          className={PICK}
-        >
-          <option value="">{t('neuroshilling.scenario.media.stepNone')}</option>
-          {/* Messages only: the media rides along with the step's own send, and a
-              reaction sends nothing to carry it. Approval refuses such a slot with
-              `media_step_not_message`, read off the KIND of the step at that position
-              and never off its identity — which is why a generation drops the slot
-              rather than leaving it over a line the operator has never read. */}
-          {draft.steps.flatMap((step, index) =>
-            step.kind === 'message'
-              ? [
-                  <option key={step.key} value={String(index + 1)}>
-                    {t('neuroshilling.scenario.steps.position', { position: index + 1 })}
-                  </option>,
-                ]
-              : [],
-          )}
-        </select>
+        <div className="w-[150px]">
+          <Select
+            value={draft.mediaStepPosition === null ? '' : String(draft.mediaStepPosition)}
+            onChange={(value) => {
+              onDraft({ ...draft, mediaStepPosition: value === '' ? null : Number(value) });
+            }}
+            options={[
+              { value: '', label: t('neuroshilling.scenario.media.stepNone') },
+              // Messages only: the media rides along with the step's own send, and a
+              // reaction sends nothing to carry it. Approval refuses such a slot with
+              // `media_step_not_message`, read off the KIND of the step at that position
+              // and never off its identity — which is why a generation drops the slot
+              // rather than leaving it over a line the operator has never read.
+              ...draft.steps.flatMap((step, index) =>
+                step.kind === 'message'
+                  ? [
+                      {
+                        value: String(index + 1),
+                        label: t('neuroshilling.scenario.steps.position', {
+                          position: index + 1,
+                        }),
+                      },
+                    ]
+                  : [],
+              ),
+            ]}
+            ariaLabel={t('neuroshilling.scenario.media.step')}
+          />
+        </div>
       </div>
 
-      <div className="mb-[7px] flex items-center gap-[7px] text-[12.5px] font-semibold">
+      <div className="mb-[7px] flex items-center gap-sm text-[12.5px] font-semibold">
         {t('neuroshilling.scenario.roles.title')}
         <HelpHint text={t('neuroshilling.scenario.roles.hint')} />
       </div>
-      <div className="mb-[9px] flex flex-col gap-[7px]">
+      <div className="mb-[9px] flex flex-col gap-sm">
         {draft.roles.map((role, index) => (
-          <div key={role.roleId} className="flex items-center gap-[7px]">
+          <div key={role.roleId} className="flex items-center gap-sm">
             <span className={`h-[9px] w-[9px] shrink-0 rounded-full ${roleTone(index).bg}`} />
             <input
               value={role.name}
@@ -551,11 +554,11 @@ export function ScenarioCard({
         {t('neuroshilling.scenario.roles.add')}
       </button>
 
-      <div className="mb-[7px] flex items-center gap-[7px] text-[12.5px] font-semibold">
+      <div className="mb-[7px] flex items-center gap-sm text-[12.5px] font-semibold">
         {t('neuroshilling.scenario.steps.title')}
         <HelpHint text={t('neuroshilling.scenario.steps.hint')} />
       </div>
-      <div className="mb-[9px] flex flex-col gap-[7px]">
+      <div className="mb-[9px] flex flex-col gap-sm">
         {draft.steps.map((step, index) => (
           <StepRow
             key={step.key}
@@ -581,7 +584,7 @@ export function ScenarioCard({
           </div>
         ) : null}
       </div>
-      <div className="mb-[14px] flex gap-[7px]">
+      <div className="mb-[14px] flex gap-sm">
         {(['message', 'reaction'] as const).map((kind) => (
           <button
             key={kind}
@@ -597,7 +600,7 @@ export function ScenarioCard({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center justify-end gap-[7px]">
+      <div className="flex flex-wrap items-center justify-end gap-sm">
         {namelessRole ? (
           <span className="mr-auto text-[11px] text-danger">
             {t('neuroshilling.scenario.roles.nameRequired')}

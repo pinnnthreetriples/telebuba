@@ -34,12 +34,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 inline-flex items-center gap-[7px] bg-transparent p-0 text-[13px] font-medium text-ink-muted hover:text-ink"
+        className="mb-4 inline-flex items-center gap-sm bg-transparent p-0 text-[13px] font-medium text-ink-muted hover:text-ink"
       >
         ← {t('accounts.edit.back')}
       </button>
 
-      <div className="mb-[14px] flex flex-wrap items-center gap-[14px] rounded-card border border-line bg-white px-5 py-[18px]">
+      <div className="mb-[14px] flex flex-wrap items-center gap-lg rounded-card border border-line bg-white px-5 py-[18px]">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[16px] font-semibold text-primary">
           {mono(account)}
         </div>
@@ -51,7 +51,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         </div>
         <StatusBadge status={account.status} />
         <div className="min-w-[130px]">
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-sm">
             <span className="text-[12.5px] text-ink-muted">{t('accounts.edit.trust')}</span>
             <span className={`text-[16px] font-bold ${tTone}`}>{trust}/100</span>
           </div>
@@ -64,12 +64,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         </div>
       </div>
 
-      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[14px]">
+      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-lg">
         <SessionSection account={account} />
         <ProxySection account={account} />
       </div>
 
-      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[14px]">
+      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-lg">
         <DeviceSection account={account} />
         <SignalsSection account={account} />
       </div>
@@ -78,7 +78,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           "who can take this account" that the session card starts, and the actions
           card is what taking it away looks like. No bottom margin — the last row
           owns the page's bottom edge. */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <TwoFactorSection account={account} />
         <ActionsSection account={account} onBack={onBack} />
       </div>

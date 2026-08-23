@@ -175,7 +175,7 @@ test('generating drops the media step the operator picked for the old dialogue',
   routeApi([campaign], SCENARIO, { ...BOARD, campaign });
   renderPage();
   await waitFor(() => {
-    expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('1');
+    expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('#1');
   });
 
   await userEvent.click(screen.getByText('Перегенерировать'));
@@ -187,7 +187,7 @@ test('generating drops the media step the operator picked for the old dialogue',
   // the generated dialogue is a message, so it is still an offered option: only the
   // adoption tells the two apart.
   await waitFor(() => {
-    expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('');
+    expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('Без медиа');
   });
   // Only the position went: the link names a message in another chat and is still
   // the one the operator pasted.

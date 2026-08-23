@@ -404,7 +404,7 @@ export function NeuroshillingPage() {
         {t('neuroshilling.title')}
       </h1>
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-lg">
         <CampaignsCard
           campaignList={campaignList}
           campaignId={campaignId}

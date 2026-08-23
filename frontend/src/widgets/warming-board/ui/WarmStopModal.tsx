@@ -23,14 +23,14 @@ export function WarmStopModal({
         <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
           {t('warming.stopModal.body', { phone })}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           <button
             type="button"
             onClick={() => {
               onFinish();
               onClose();
             }}
-            className="flex flex-1 items-center justify-center gap-[5px] whitespace-nowrap rounded-full border border-primary bg-primary px-3 py-[9px] text-[13px] font-semibold text-white transition-colors hover:bg-primary-press"
+            className="flex flex-1 items-center justify-center gap-tight whitespace-nowrap rounded-full border border-primary bg-primary px-3 py-[9px] text-[13px] font-semibold text-white transition-colors hover:bg-primary-press"
           >
             <svg
               width="13"

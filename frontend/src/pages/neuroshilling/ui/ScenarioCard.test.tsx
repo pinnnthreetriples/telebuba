@@ -75,13 +75,31 @@ function renderCard(options: Options = {}) {
   return render(<Harness options={options} />);
 }
 
+// Every Select keeps its own option list in the DOM (collapsed and inert), and this
+// card has one per step, so both helpers scope to the list the named trigger owns
+// instead of to the whole card.
+function panelOf(label: string): HTMLElement {
+  return screen.getByLabelText(label).parentElement!;
+}
+
+function optionLabels(label: string): (string | null)[] {
+  return within(panelOf(label))
+    .getAllByRole('option')
+    .map((option) => option.textContent);
+}
+
+async function pick(label: string, option: string) {
+  await userEvent.click(screen.getByLabelText(label));
+  await userEvent.click(within(panelOf(label)).getByRole('option', { name: option }));
+}
+
 test('the roles and the dialogue are laid out in order', () => {
   renderCard();
 
   expect(screen.getByLabelText('Название роли 1')).toHaveValue('Скептик');
   expect(screen.getByLabelText('Персона роли 2')).toHaveValue('делится опытом');
   expect(screen.getByLabelText('Текст шага 1')).toHaveValue('текст s1');
-  expect(screen.getByLabelText('Роль шага 2')).toHaveValue('r2');
+  expect(screen.getByLabelText('Роль шага 2')).toHaveTextContent('Клиент');
 });
 
 test('an approved scenario says on THIS card that editing it will drop the approval', () => {
@@ -104,7 +122,7 @@ test('a new message step inherits the first role and lands at the end', async ()
 
   await userEvent.click(screen.getByText('+ Реплика'));
 
-  expect(screen.getByLabelText('Роль шага 3')).toHaveValue('r1');
+  expect(screen.getByLabelText('Роль шага 3')).toHaveTextContent('Скептик');
   expect(screen.getByLabelText('Текст шага 3')).toHaveValue('');
 });
 
@@ -126,16 +144,9 @@ test('a step may only point at a step above it', async () => {
   renderCard();
   await userEvent.click(screen.getByText('+ Реплика'));
 
-  const select = screen.getByLabelText('Шаг 3 отвечает на');
-  expect([...select.querySelectorAll('option')].map((option) => option.value)).toEqual([
-    '',
-    '1',
-    '2',
-  ]);
+  expect(optionLabels('Шаг 3 отвечает на')).toEqual(['Не ответ', '#1', '#2']);
   // Step 1 has nothing above it at all.
-  expect([...screen.getByLabelText('Шаг 1 отвечает на').querySelectorAll('option')]).toHaveLength(
-    1,
-  );
+  expect(optionLabels('Шаг 1 отвечает на')).toEqual(['Не ответ']);
 });
 
 test('removing a step renumbers every link that pointed past it', async () => {
@@ -156,10 +167,10 @@ test('removing a step renumbers every link that pointed past it', async () => {
   await userEvent.click(screen.getByLabelText('Удалить шаг 2'));
 
   // The link AT the removed step is dropped; the one past it slides down.
-  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveValue('');
-  expect(screen.getByLabelText('Шаг 3 отвечает на')).toHaveValue('2');
+  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('Не ответ');
+  expect(screen.getByLabelText('Шаг 3 отвечает на')).toHaveTextContent('#2');
   // The media slot is a one-based position into the same list.
-  expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('2');
+  expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('#2');
 });
 
 test('removing a role unassigns the steps that spoke as it', async () => {
@@ -167,7 +178,7 @@ test('removing a role unassigns the steps that spoke as it', async () => {
 
   await userEvent.click(screen.getByLabelText('Удалить роль 2'));
 
-  expect(screen.getByLabelText('Роль шага 2')).toHaveValue('');
+  expect(screen.getByLabelText('Роль шага 2')).toHaveTextContent('Выберите роль');
   expect(screen.queryByLabelText('Название роли 2')).not.toBeInTheDocument();
 });
 
@@ -284,8 +295,8 @@ test('the media slot offers a message step by position', async () => {
   renderCard();
 
   await userEvent.type(screen.getByLabelText('Ссылка на сообщение с медиа'), 'https://t.me/c/1');
-  await userEvent.selectOptions(screen.getByLabelText('Шаг с медиа'), '2');
-  expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('2');
+  await pick('Шаг с медиа', '#2');
+  expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('#2');
 });
 
 test('the media slot skips a reaction step without renumbering the rest', async () => {
@@ -302,11 +313,10 @@ test('the media slot skips a reaction step without renumbering the rest', async 
   // carry it and position 2 is not offered — the same filter the reaction target
   // picker applies. The third step stays "#3": a position is an index into the
   // whole list, so filtering must not renumber what is left.
-  const options = within(screen.getByLabelText('Шаг с медиа')).getAllByRole('option');
-  expect(options.map((option) => option.textContent)).toEqual(['Без медиа', '#1', '#3']);
+  expect(optionLabels('Шаг с медиа')).toEqual(['Без медиа', '#1', '#3']);
 
-  await userEvent.selectOptions(screen.getByLabelText('Шаг с медиа'), '3');
-  expect(screen.getByLabelText('Шаг с медиа')).toHaveValue('3');
+  await pick('Шаг с медиа', '#3');
+  expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('#3');
 });
 
 test('an empty scenario says so rather than showing an empty list', () => {
@@ -327,11 +337,11 @@ test('a new role starts empty and unnamed', async () => {
 test('a reply link is chosen by position and kept', async () => {
   renderCard();
 
-  await userEvent.selectOptions(screen.getByLabelText('Шаг 2 отвечает на'), '1');
-  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveValue('1');
+  await pick('Шаг 2 отвечает на', '#1');
+  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('#1');
 
-  await userEvent.selectOptions(screen.getByLabelText('Шаг 2 отвечает на'), '');
-  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveValue('');
+  await pick('Шаг 2 отвечает на', 'Не ответ');
+  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('Не ответ');
 });
 
 test('a reaction points at its target through its own select', async () => {
@@ -339,6 +349,6 @@ test('a reaction points at its target through its own select', async () => {
     draft: { ...DRAFT, steps: [step('s1'), step('s2', { kind: 'reaction', emoji: '🔥' })] },
   });
 
-  await userEvent.selectOptions(screen.getByLabelText('Шаг 2 реагирует на'), '1');
-  expect(screen.getByLabelText('Шаг 2 реагирует на')).toHaveValue('1');
+  await pick('Шаг 2 реагирует на', '#1');
+  expect(screen.getByLabelText('Шаг 2 реагирует на')).toHaveTextContent('#1');
 });

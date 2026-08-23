@@ -24,7 +24,7 @@ export function StoriesTab({
   return (
     <div>
       <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.profile.storiesHint')}</div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
         {stories.map((story) => (
           <div key={story.story_id} className="relative">
             <div
@@ -32,7 +32,7 @@ export function StoriesTab({
               style={tileStyle(story.thumb_url, '9 / 16')}
             />
             {(story.views != null || story.reactions != null) && (
-              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-[7px] rounded-sm bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[10.5px] font-medium text-white">
+              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[10.5px] font-medium text-white">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}

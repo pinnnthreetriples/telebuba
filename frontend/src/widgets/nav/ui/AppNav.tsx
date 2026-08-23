@@ -102,7 +102,7 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-3 px-4 lg:gap-7 lg:px-6">
+      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-md px-4 lg:gap-[28px] lg:px-6">
         <IconButton
           size="touch"
           aria-label={t('shell.menu')}
@@ -125,7 +125,7 @@ export function AppNav() {
           </svg>
         </IconButton>
 
-        <div className="flex shrink-0 items-center gap-[10px]">
+        <div className="flex shrink-0 items-center gap-md">
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
           </div>
@@ -134,7 +134,7 @@ export function AppNav() {
 
         <nav
           ref={navRef}
-          className="relative hidden flex-1 items-center gap-[14px] self-stretch lg:flex"
+          className="relative hidden flex-1 items-center gap-lg self-stretch lg:flex"
         >
           {LINKS.map((link, index) => (
             <Link
@@ -163,9 +163,9 @@ export function AppNav() {
 
         {/* ml-auto: the hidden nav no longer contributes the flex-1 that pushed
             this cluster right below `lg`. */}
-        <div className="ml-auto flex shrink-0 items-center gap-[10px]">
+        <div className="ml-auto flex shrink-0 items-center gap-md">
           <div
-            className={`flex items-center gap-[7px] rounded-full px-[9px] py-[9px] lg:px-[11px] lg:py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
+            className={`flex items-center gap-sm rounded-full px-[9px] py-[9px] lg:px-[11px] lg:py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
           >
             <span
               className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
@@ -242,7 +242,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-[7px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-[#faf2f1]"
+                    className="flex w-full items-center gap-sm px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-[#faf2f1]"
                   >
                     <svg
                       width="15"

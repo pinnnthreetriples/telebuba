@@ -38,7 +38,7 @@ export function CodeLoginStep({
   return (
     <>
       {!requestCode.isSuccess ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-md">
           <div className="rounded-lg border border-line bg-white px-4 py-[14px] text-[12.5px] text-ink-subtle">
             {phone}
           </div>
@@ -61,7 +61,7 @@ export function CodeLoginStep({
           )}
         </div>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-md">
           <div className="rounded-lg bg-success-tint px-3 py-[10px] text-[12.5px] font-medium text-success">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
@@ -98,7 +98,7 @@ export function CodeLoginStep({
           )}
         </div>
       )}
-      <div className="mt-5 flex justify-end gap-2">
+      <div className="mt-5 flex justify-end gap-sm">
         <button
           type="button"
           onClick={onConfirmLogin}

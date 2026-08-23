@@ -79,8 +79,8 @@ export function ProxyForm({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-[10px]">
+    <div className="flex flex-col gap-md">
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-md">
         <form.Field name="host">
           {(field) => (
             <FormField
@@ -103,7 +103,7 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
         <form.Field name="username">
           {(field) => (
             <FormField
@@ -177,7 +177,7 @@ export function ProxyForm({
         <span className={LABEL}>{t('accounts.proxyForm.type')}</span>
         <form.Field name="proxy_type">
           {(field) => (
-            <div className="flex gap-1 rounded-lg bg-canvas p-1">
+            <div className="flex gap-tight rounded-lg bg-canvas p-1">
               {(['socks5', 'https'] as const).map((option) => (
                 <button
                   key={option}
@@ -194,12 +194,12 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-md">
         <button
           type="button"
           onClick={runDetect}
           disabled={!canProbe}
-          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
+          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
         >
           {detect === 'loading' ? (
             <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />
@@ -222,7 +222,7 @@ export function ProxyForm({
           <span className="text-[12.5px] text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
         )}
         {detect === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-[7px] rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
+          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
             {country ? (
               <span
                 className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
@@ -232,7 +232,7 @@ export function ProxyForm({
           </span>
         )}
         {detect === 'err' && (
-          <span className="inline-flex items-center gap-[7px] text-[12.5px] font-medium text-danger">
+          <span className="inline-flex items-center gap-sm text-[12.5px] font-medium text-danger">
             <svg
               width="14"
               height="14"

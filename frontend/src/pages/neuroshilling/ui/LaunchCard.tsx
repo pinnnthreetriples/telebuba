@@ -160,7 +160,7 @@ export function LaunchCard({
         <>
           <span className="text-[13px] font-semibold">{t('neuroshilling.launch.title')}</span>
           {live ? (
-            <span className="inline-flex items-center gap-[5px] rounded-full bg-success-tint px-[9px] py-[2px] text-[10.5px] font-bold text-success">
+            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[2px] text-[10.5px] font-bold text-success">
               <span className="tb-livedot h-[6px] w-[6px] rounded-full bg-success" />
               LIVE
             </span>
@@ -178,7 +178,7 @@ export function LaunchCard({
         </span>
       }
     >
-      <div className="mb-[12px] grid grid-cols-3 gap-[7px] sm:grid-cols-5">
+      <div className="mb-[12px] grid grid-cols-3 gap-sm sm:grid-cols-5">
         <Tile label={t('neuroshilling.launch.tile.accounts')} value={String(roster.length)} />
         <Tile label={t('neuroshilling.launch.tile.targets')} value={String(targets.length)} />
         <Tile label={t('neuroshilling.launch.tile.roles')} value={String(roles.length)} />
@@ -189,9 +189,9 @@ export function LaunchCard({
         />
       </div>
 
-      <div className="mb-[7px] flex flex-wrap items-center gap-[7px]">
+      <div className="mb-[7px] flex flex-wrap items-center gap-sm">
         <span
-          className={`inline-flex items-center gap-[5px] text-[11px] font-medium ${STATUS_TONE[status]}`}
+          className={`inline-flex items-center gap-tight text-[11px] font-medium ${STATUS_TONE[status]}`}
         >
           {/* `bg-current` — the dot can never disagree with its label. */}
           <span className="h-[6px] w-[6px] rounded-full bg-current" />
@@ -234,7 +234,7 @@ export function LaunchCard({
           campaign row already, and what the operator cannot see from there is
           whether anything is acting on them right now. */}
       {run.listening === true ? (
-        <div className="mb-[12px] flex flex-wrap items-center gap-[7px] rounded-lg bg-track px-[11px] py-[7px] text-[11px] tabular-nums text-ink-muted">
+        <div className="mb-[12px] flex flex-wrap items-center gap-sm rounded-lg bg-track px-[11px] py-[7px] text-[11px] tabular-nums text-ink-muted">
           <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
           <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
           <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>
@@ -263,7 +263,7 @@ export function LaunchCard({
         </ul>
       ) : null}
 
-      <div className="mb-[14px] flex flex-wrap items-center justify-end gap-[7px]">
+      <div className="mb-[14px] flex flex-wrap items-center justify-end gap-sm">
         {live ? (
           <button
             type="button"

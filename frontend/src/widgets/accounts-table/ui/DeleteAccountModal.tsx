@@ -26,7 +26,7 @@ export function DeleteAccountModal({
         <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
           {t('accounts.deleteModal.body')}
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}

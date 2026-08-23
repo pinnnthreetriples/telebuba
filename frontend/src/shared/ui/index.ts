@@ -7,6 +7,8 @@ export { FieldError, FormField } from './FormField';
 export { HelpHint, HintBubble } from './HelpHint';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';
+export { Select } from './Select';
+export type { SelectOption } from './Select';
 export { StatusIcon } from './StatusIcon';
 export { SurfHover } from './SurfHover';
 export { Switch } from './Switch';

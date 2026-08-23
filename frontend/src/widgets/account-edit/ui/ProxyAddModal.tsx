@@ -56,7 +56,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
           </IconButton>
         </div>
         <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}

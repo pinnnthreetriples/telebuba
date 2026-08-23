@@ -52,9 +52,9 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-[#e4ecfa] bg-[#f7faff] px-[18px] py-4 text-ink">
-      <div className="mb-[14px] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-[10px]">
+    <div className="rounded-card border border-[#e4ecfa] bg-primary-wash px-[18px] py-4 text-ink">
+      <div className="mb-[14px] flex flex-wrap items-center justify-between gap-md">
+        <div className="flex items-center gap-md">
           <span className="text-[13px] font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
             className={`rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${running ? 'tb-pulse bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
@@ -66,7 +66,7 @@ export function PipelineCard({
           type="button"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`flex items-center gap-[7px] rounded-full px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
+          className={`flex items-center gap-sm rounded-full px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
         >
           {running ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -92,7 +92,7 @@ export function PipelineCard({
           with nothing to fail. */}
       <div className="relative mb-3">
         <div
-          className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]"
+          className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-primary-line"
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
         >
           <div
@@ -126,7 +126,7 @@ export function PipelineCard({
                 ) : index === activeCell ? (
                   <span className="tb-livedot h-[11px] w-[11px] rounded-full bg-primary" />
                 ) : (
-                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-[#c9d2e0] bg-white" />
+                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-primary-line bg-white" />
                 )}
               </div>
               {/* No `min-w-0`: the cells then refuse to shrink under the widest label,
@@ -156,7 +156,7 @@ export function PipelineCard({
         </div>
       ) : null}
 
-      <div className="mb-[14px] flex items-center gap-[10px] rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
+      <div className="mb-[14px] flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
         <span className="tb-pulse text-[12.5px] font-medium text-primary">
           {running

@@ -34,7 +34,7 @@ export function CreateCampaignModal({
       className="w-[540px]"
       label={t('neurocomment.modal.createCampaign.title')}
     >
-      <div className="flex items-center gap-[10px] border-b border-line-row px-6 pb-[15px] pt-5">
+      <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="18"
@@ -92,11 +92,11 @@ export function CreateCampaignModal({
           {t('neurocomment.modal.createCampaign.channelsHint')}
         </div>
         {channels.length > 0 ? (
-          <div className="mb-3 flex flex-wrap gap-[7px]">
+          <div className="mb-3 flex flex-wrap gap-sm">
             {channels.map((channel, index) => (
               <span
                 key={`${channel}-${String(index)}`}
-                className="inline-flex items-center gap-[7px] rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
+                className="inline-flex items-center gap-sm rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
               >
                 {channel}
                 <button
@@ -113,7 +113,7 @@ export function CreateCampaignModal({
             ))}
           </div>
         ) : null}
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           <input
             value={channelInput}
             onChange={(event) => {
@@ -139,7 +139,7 @@ export function CreateCampaignModal({
         </div>
       </div>
 
-      <div className="flex gap-2 border-t border-line-row px-6 pb-5 pt-[15px]">
+      <div className="flex gap-sm border-t border-line-row px-6 pb-5 pt-[15px]">
         <button
           type="button"
           disabled={!name.trim() || !prompt.trim()}

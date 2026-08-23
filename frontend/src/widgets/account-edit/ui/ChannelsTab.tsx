@@ -42,7 +42,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isError && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+        <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
           <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
           <button
             type="button"
@@ -63,19 +63,19 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {items.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-sm">
           {items.map((channel) => (
             <div
               key={channel.channel_id}
-              className="flex items-center gap-[14px] rounded-lg border border-line px-[14px] py-3"
+              className="flex items-center gap-lg rounded-lg border border-line px-[14px] py-3"
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[13px] font-semibold">{channel.title}</div>
-                <div className="mt-[2px] flex items-center gap-[7px] text-[11px] text-ink-subtle">
+                <div className="mt-[2px] flex items-center gap-sm text-[11px] text-ink-subtle">
                   <span
                     className={`rounded-sm px-[6px] py-[1px] font-medium ${
                       channel.username != null
-                        ? 'bg-[#e8f1ff] text-primary'
+                        ? 'bg-primary-tint text-primary'
                         : 'bg-canvas text-ink-muted'
                     }`}
                   >

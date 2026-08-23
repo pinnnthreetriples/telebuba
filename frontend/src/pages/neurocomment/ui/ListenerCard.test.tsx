@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
 
@@ -13,9 +14,8 @@ const OPTIONS: AccountRead[] = [
   { account_id: 'a2', status: 'alive', first_name: 'Boris', created_at: 'now', updated_at: 'now' },
 ];
 
-// No listener set yet, so the card renders the account-picking dropdown. `listenerOpen`
-// is owned by the page, so opening the list is a rerender, not a click.
-function card(listenerOpen: boolean): ReactElement {
+// No listener set yet, so the card renders the account-picking dropdown.
+function card(): ReactElement {
   return (
     <ListenerCard
       listenerId=""
@@ -28,8 +28,6 @@ function card(listenerOpen: boolean): ReactElement {
       onToggleRuntime={vi.fn()}
       onEdit={vi.fn()}
       onRemove={vi.fn()}
-      listenerOpen={listenerOpen}
-      onToggleOpen={vi.fn()}
       accountOptions={OPTIONS}
       onPickListener={vi.fn()}
     />
@@ -54,8 +52,6 @@ function plaque(
       onToggleRuntime={vi.fn()}
       onEdit={vi.fn()}
       onRemove={vi.fn()}
-      listenerOpen={false}
-      onToggleOpen={vi.fn()}
       accountOptions={OPTIONS}
       onPickListener={vi.fn()}
     />
@@ -88,15 +84,15 @@ test('a paused listener still reads as paused', () => {
 // are rendered and kept their tab stops while the list was closed. `inert` is what
 // keeps a keyboard operator out; happy-dom honours it for focus, which is exactly the
 // property under test.
-test('a closed listener dropdown takes no focus, an open one does', () => {
-  const view = render(card(false));
+test('a closed listener dropdown takes no focus, an open one does', async () => {
+  render(card());
 
-  const closed = screen.getByRole('button', { name: 'Boris' });
+  const closed = screen.getByRole('option', { name: 'Boris' });
   closed.focus();
   expect(closed).not.toHaveFocus();
 
-  view.rerender(card(true));
-  const open = screen.getByRole('button', { name: 'Boris' });
+  await userEvent.click(screen.getByRole('button', { name: 'Аккаунт-слушатель' }));
+  const open = screen.getByRole('option', { name: 'Boris' });
   open.focus();
   expect(open).toHaveFocus();
 });

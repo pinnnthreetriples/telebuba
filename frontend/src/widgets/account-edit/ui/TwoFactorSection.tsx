@@ -20,7 +20,7 @@ import { FIELD_READONLY } from './_styles';
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line-row py-[9px]">
+    <div className="flex items-center justify-between gap-md border-b border-line-row py-[9px]">
       <span className="text-[12.5px] text-ink-muted">{label}</span>
       <span className="text-right text-[12.5px] font-medium text-ink">{value}</span>
     </div>

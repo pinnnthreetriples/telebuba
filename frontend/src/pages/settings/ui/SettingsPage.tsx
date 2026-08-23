@@ -207,9 +207,9 @@ function SettingsForm({
               setOpenaiKey('');
             }}
           />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             <label className="block">
-              <span className={`${FIELD_LABEL} flex items-center gap-[7px]`}>
+              <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
                 {t('settings.api.geminiRetries')}
                 <HelpHint
                   text={t('settings.api.geminiRetriesHelp')}
@@ -230,7 +230,7 @@ function SettingsForm({
               />
             </label>
             <label className="block">
-              <span className={`${FIELD_LABEL} flex items-center gap-[7px]`}>
+              <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
                 {t('settings.api.geminiInterval')}
                 <HelpHint
                   text={t('settings.api.geminiIntervalHelp')}
@@ -256,7 +256,7 @@ function SettingsForm({
       </Card>
 
       <Card title={t('settings.captchaLlm.title')} subtitle={t('settings.captchaLlm.subtitle')}>
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           {(['gemini', 'openai'] as const).map((option) => (
             <button
               key={option}
@@ -284,7 +284,7 @@ function SettingsForm({
       </Card>
 
       <Card title={t('settings.neuroLimits.title')} subtitle={t('settings.neuroLimits.subtitle')}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <form.Field name="cpd">
             {(field) => (
               <FormField field={field} label={t('settings.neuroLimits.cpd')} inputMode="numeric" />
@@ -292,10 +292,10 @@ function SettingsForm({
           </form.Field>
           <div className="min-w-0">
             <span className={FIELD_LABEL}>{t('settings.neuroLimits.delay')}</span>
-            <div className="flex items-center gap-[10px]">
+            <div className="flex items-center gap-md">
               <form.Field name="delayFrom">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-lg border border-line-input bg-white px-3 py-[9px]">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-3 py-[9px]">
                     <span className="shrink-0 text-[11px] text-ink-subtle">
                       {t('settings.range.from')}
                     </span>
@@ -314,7 +314,7 @@ function SettingsForm({
               </form.Field>
               <form.Field name="delayTo">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-lg border border-line-input bg-white px-3 py-[9px]">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-3 py-[9px]">
                     <span className="shrink-0 text-[11px] text-ink-subtle">
                       {t('settings.range.to')}
                     </span>
@@ -359,7 +359,7 @@ function SettingsForm({
         {WARMING_TOGGLES.map((flag) => (
           <div
             key={flag}
-            className="flex items-center justify-between gap-3 border-b border-line-row py-[13px]"
+            className="flex items-center justify-between gap-md border-b border-line-row py-[13px]"
           >
             <div>
               <div className="text-[13px] font-medium">{t(`settings.flag.${flag}.label`)}</div>
@@ -378,7 +378,7 @@ function SettingsForm({
         ))}
       </Card>
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end gap-sm">
         <button
           type="button"
           onClick={onCancel}
@@ -392,7 +392,7 @@ function SettingsForm({
           className={`rounded-full px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-success' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
         >
           {justSaved ? (
-            <span className="inline-flex items-center gap-[7px]">
+            <span className="inline-flex items-center gap-sm">
               <span className="tb-swapin inline-flex">
                 <svg
                   width="15"
@@ -410,7 +410,7 @@ function SettingsForm({
               </span>
             </span>
           ) : saveFailed ? (
-            <span className="inline-flex items-center gap-[7px]">
+            <span className="inline-flex items-center gap-sm">
               <span className="tb-swapin inline-flex">
                 <svg
                   width="15"

@@ -190,7 +190,7 @@ export function TwoFactorEmail({
         // "not attached" while a verification is pending, which is where the parent's
         // row used to be the only one.
         <div
-          className={`flex items-center justify-between gap-3 ${
+          className={`flex items-center justify-between gap-md ${
             pending || !hasRecovery ? 'mb-[10px]' : ''
           }`}
         >
@@ -231,7 +231,7 @@ export function TwoFactorEmail({
               className={`${FIELD} font-mono tracking-[0.18em]`}
             />
           </label>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-sm">
             <button
               type="button"
               onClick={onConfirmCode}

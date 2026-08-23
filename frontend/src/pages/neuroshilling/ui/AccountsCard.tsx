@@ -23,7 +23,7 @@ export function AccountsCard({
         <span className="text-[13px] font-semibold">{t('neuroshilling.accounts.title')}</span>
       }
     >
-      <div className="mb-[10px] flex items-center gap-[7px]">
+      <div className="mb-[10px] flex items-center gap-sm">
         <span className="rounded-full border border-line bg-track px-[11px] py-[4px] text-[11px] font-medium text-ink-body">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
@@ -36,7 +36,7 @@ export function AccountsCard({
       </div>
 
       {accounts.length > 0 ? (
-        <div className="mb-[10px] flex flex-wrap gap-[7px]">
+        <div className="mb-[10px] flex flex-wrap gap-sm">
           {accounts.map((account) => (
             <span
               key={account.account_id}
@@ -55,7 +55,7 @@ export function AccountsCard({
       <button
         type="button"
         onClick={onPick}
-        className="flex w-full items-center justify-center gap-[5px] rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
+        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
       >
         {t('neuroshilling.accounts.pick')}
       </button>

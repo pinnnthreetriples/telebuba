@@ -86,7 +86,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
   return (
     <>
       <Section title={t('accounts.edit.actions')} bodyClassName="px-5 pb-[6px]">
-        <div className="flex items-center justify-between gap-3 border-b border-line-row py-[14px]">
+        <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
           <div>
             <div className="text-[13px] font-medium">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
@@ -171,14 +171,14 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             )}
           </button>
         </div>
-        <div className="flex items-center justify-between gap-3 border-b border-line-row py-[14px]">
+        <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
           <div>
             <div className="text-[13px] font-medium">{t('accounts.edit.resetSession')}</div>
             <div className="mt-px text-[11px] text-ink-subtle">
               {t('accounts.edit.resetSessionHint')}
             </div>
           </div>
-          <span className="flex shrink-0 items-center gap-[7px]">
+          <span className="flex shrink-0 items-center gap-sm">
             <FeedbackMark
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
@@ -192,7 +192,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             </button>
           </span>
         </div>
-        <div className="flex items-center justify-between gap-3 py-[14px]">
+        <div className="flex items-center justify-between gap-md py-[14px]">
           <div>
             <div className="text-[13px] font-medium">{t('accounts.edit.deleteAccount')}</div>
             <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.deleteHint')}</div>

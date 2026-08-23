@@ -83,8 +83,8 @@ function AccountRow({
   };
 
   return (
-    <div className="border-b border-[#f4f2ef] py-[11px]">
-      <div className="flex flex-wrap items-center gap-[10px]">
+    <div className="border-b border-line-row py-[11px]">
+      <div className="flex flex-wrap items-center gap-md">
         <FeedbackMark result={result} />
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
           {account.name}
@@ -107,7 +107,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-2 rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink sm:w-[180px]"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink sm:w-[180px]"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
@@ -179,7 +179,7 @@ function AccountRow({
           // .tb-dd collapses visually only; without this every channel option of
           // every linked row kept its tab stop while closed. See the note in LogsPage.
           inert={!open}
-          className={`tb-dd ${open ? 'open mt-2 rounded-lg border border-line bg-white p-1' : ''}`}
+          className={`tb-dd ${open ? 'open mt-2 rounded-lg border border-line bg-white p-1 shadow-pop' : ''}`}
         >
           <button
             key={ALL_CHANNELS}
@@ -189,8 +189,8 @@ function AccountRow({
             onClick={() => {
               onChannelChange(account.account_id, []);
             }}
-            className={`flex w-full items-center justify-between gap-2 rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-wash ${
-              selected.length === 0 ? 'bg-primary-wash font-semibold text-primary' : 'text-ink'
+            className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-tint ${
+              selected.length === 0 ? 'font-medium text-primary' : 'text-ink'
             }`}
           >
             <span className="min-w-0 truncate">{allChannels}</span>
@@ -207,8 +207,8 @@ function AccountRow({
                 onClick={() => {
                   toggleChannel(channel);
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-wash ${
-                  isSelected ? 'bg-primary-wash font-semibold text-primary' : 'text-ink'
+                className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-tint ${
+                  isSelected ? 'font-medium text-primary' : 'text-ink'
                 }`}
                 title={channel}
               >
@@ -264,7 +264,7 @@ export function NeuroAccountsModal({
       className="w-[560px]"
       label={t('neurocomment.modal.neuroAccounts.title')}
     >
-      <div className="flex items-center gap-[10px] border-b border-line-row px-6 pb-[15px] pt-5">
+      <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="18"

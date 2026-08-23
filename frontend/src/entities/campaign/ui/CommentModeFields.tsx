@@ -50,7 +50,7 @@ export function CommentModeFields({
         <div className="mb-[7px] text-[12.5px] font-medium text-ink-body">
           {t('neurocomment.mode.label')}
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-tight">
           {MODES.map((option) => (
             // `group relative` is what anchors the bubble; the wrapper carries the `flex-1`
             // the button used to, so the two options still split the row evenly. The hint
@@ -95,7 +95,7 @@ export function CommentModeFields({
           <span className="mb-[7px] block text-[12.5px] font-medium text-ink-body">
             {t('neurocomment.mode.waitLabel')}
           </span>
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-sm">
             <input
               type="number"
               min={WAIT_MIN}

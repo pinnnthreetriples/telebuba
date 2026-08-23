@@ -111,14 +111,35 @@ test('a closed dropdown takes no focus, an open one does', async () => {
   routeSettings();
   renderModal();
 
-  const closed = screen.getByRole('button', { name: 'Maria Sidorova' });
+  const closed = screen.getByRole('option', { name: 'Maria Sidorova' });
   closed.focus();
   expect(closed).not.toHaveFocus();
 
   await userEvent.click(screen.getByText('Выберите аккаунт…'));
-  const open = screen.getByRole('button', { name: 'Maria Sidorova' });
+  const open = screen.getByRole('option', { name: 'Maria Sidorova' });
   open.focus();
   expect(open).toHaveFocus();
+});
+
+// The dropdown and the dialog both answer Escape, and Modal listens on `document`.
+// One key must not both close the list and throw the whole modal away.
+test('Escape closes the open dropdown without closing the modal', async () => {
+  routeSettings();
+  const { onClose } = renderModal();
+  const trigger = screen.getByRole('button', {
+    name: 'Аккаунт',
+  });
+
+  await userEvent.click(trigger);
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+  await userEvent.keyboard('{Escape}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(onClose).not.toHaveBeenCalled();
+
+  // With the list closed the same key belongs to the dialog again.
+  await userEvent.keyboard('{Escape}');
+  expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 test('cancel closes without saving', async () => {

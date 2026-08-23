@@ -30,7 +30,7 @@ export function DeviceSection({ account }: { account: AccountRead }) {
       <div className="mb-[14px] text-[12.5px] text-ink-subtle">
         {t('accounts.edit.deviceLocked')}
       </div>
-      <div className="flex flex-col gap-[10px]">
+      <div className="flex flex-col gap-md">
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>
           <input value={account.device_model ?? '—'} disabled className={FIELD_LOCKED} />

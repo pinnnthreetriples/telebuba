@@ -123,7 +123,7 @@ test('picking a listener account enables the start button', async () => {
   });
   // Listener is a custom dropdown; open it and choose the account.
   await userEvent.click(screen.getByText('Выберите аккаунт…'));
-  const option = await screen.findByRole('button', { name: '+79261112233' });
+  const option = await screen.findByRole('option', { name: '+79261112233' });
   await userEvent.click(option);
   // Start button uses the existing runtime.start key ("Запустить").
   await userEvent.click(screen.getByText('Запустить'));
@@ -191,8 +191,8 @@ test('an actively-warming account is not offered as a listener', async () => {
   });
   await userEvent.click(screen.getByText('Выберите аккаунт…'));
   // acc-1 is offered; the actively-warming acc-2 is filtered out of the picker.
-  expect(await screen.findByRole('button', { name: '+79261112233' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '+79261119999' })).not.toBeInTheDocument();
+  expect(await screen.findByRole('option', { name: '+79261112233' })).toBeInTheDocument();
+  expect(screen.queryByRole('option', { name: '+79261119999' })).not.toBeInTheDocument();
 });
 
 test('surfaces the backend 409 when a picked listener turns out to be warming', async () => {
@@ -245,7 +245,7 @@ test('surfaces the backend 409 when a picked listener turns out to be warming', 
     expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
   await userEvent.click(screen.getByText('Выберите аккаунт…'));
-  await userEvent.click(await screen.findByRole('button', { name: '+79261112233' }));
+  await userEvent.click(await screen.findByRole('option', { name: '+79261112233' }));
   await userEvent.click(screen.getByText('Запустить'));
   // The swallowed 409 is now reflected as the localized warming banner.
   await waitFor(() => {

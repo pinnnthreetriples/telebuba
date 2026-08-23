@@ -111,7 +111,7 @@ const REFRESH_LOOK = {
     path: 'M20 6 9 17l-5-5',
     stroke: '2.4',
     labelKey: 'accounts.profile.refreshOk',
-    border: 'border-[#bfe4cc] text-success',
+    border: 'border-success-line text-success',
   },
   error: {
     path: 'M18 6 6 18M6 6l12 12',
@@ -640,7 +640,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       >
         <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
-          <div className="flex items-center gap-[14px] border-b border-line-row px-5 py-[18px]">
+          <div className="flex items-center gap-lg border-b border-line-row px-5 py-[18px]">
             <div
               className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-[20px] font-semibold text-white"
               style={
@@ -665,14 +665,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 {account.phone ?? account.account_id}
               </div>
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-[5px]">
+            <div className="flex shrink-0 flex-col items-end gap-tight">
               <button
                 type="button"
                 disabled={refreshState === 'loading' || syncing}
                 onClick={() => {
                   void onRefresh();
                 }}
-                className={`inline-flex items-center gap-[7px] rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
+                className={`inline-flex items-center gap-sm rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
               >
                 <span
                   className={`inline-flex ${
@@ -716,7 +716,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               so the roving-tabindex row stays a single line. */}
           <div
             role="tablist"
-            className="tb-scroll flex gap-5 overflow-x-auto border-b border-line-row px-5"
+            className="tb-scroll flex gap-[20px] overflow-x-auto border-b border-line-row px-5"
           >
             {TABS.map((value) => (
               <button
@@ -757,7 +757,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 role="status"
                 aria-live="polite"
                 aria-label={t('accounts.profile.syncing')}
-                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-3 bg-black/10 [animation:ovfade_0.2s_ease]"
+                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 [animation:ovfade_0.2s_ease]"
               >
                 <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-input border-t-primary" />
                 <span className="text-[12.5px] font-medium text-ink-muted">
@@ -768,7 +768,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+              <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
@@ -783,8 +783,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {tab === 'text' && (
-              <div className="flex flex-col gap-[14px]">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
                   <form.Field name="first_name">
                     {(field) => <FormField field={field} label={t('accounts.profile.firstName')} />}
                   </form.Field>
@@ -849,7 +849,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         <span
                           role="alert"
                           data-testid="bio-not-applied"
-                          className="mt-[5px] block text-[11px] font-medium text-[#9a6700]"
+                          className="mt-[5px] block text-[11px] font-medium text-warning-deep"
                         >
                           {t('accounts.profile.bioNotApplied')}
                         </span>
@@ -977,7 +977,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex items-center justify-end gap-2 border-t border-line-row px-5 py-[14px]">
+          <div className="flex items-center justify-end gap-sm border-t border-line-row px-5 py-[14px]">
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null && (
@@ -1006,12 +1006,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               className={`rounded-full px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors disabled:opacity-60 ${saved ? 'bg-success' : 'bg-primary'}`}
             >
               {updateProfile.isPending ? (
-                <span className="inline-flex items-center gap-[7px]">
+                <span className="inline-flex items-center gap-sm">
                   <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                   {t('accounts.profile.saving')}
                 </span>
               ) : saved ? (
-                <span className="inline-flex items-center gap-[7px]">
+                <span className="inline-flex items-center gap-sm">
                   <span className="tb-swapin inline-flex">
                     <svg
                       width="15"

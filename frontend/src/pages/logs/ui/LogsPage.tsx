@@ -1,12 +1,12 @@
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
-import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import { DataTable, type DataTableColumnMeta, Select } from '@/shared/ui';
 import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
@@ -29,7 +29,6 @@ export function LogsPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [account, setAccount] = useState('');
-  const [accountOpen, setAccountOpen] = useState(false);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
@@ -83,8 +82,12 @@ export function LogsPage() {
     setCursorStack([null]);
   };
 
-  const accountLabel = account ? resolveAccount(account) : t('logs.filter.account');
-  const accountIds = [...accountLabels.keys()];
+  // '' is a real choice here — "every account" — so it is the first option rather
+  // than a placeholder.
+  const accountOptions = [
+    { value: '', label: t('logs.filter.allAccounts') },
+    ...[...accountLabels.keys()].map((id) => ({ value: id, label: resolveAccount(id) })),
+  ];
 
   const columns = useMemo<ColumnDef<LogEntry>[]>(
     () => [
@@ -182,24 +185,8 @@ export function LogsPage() {
     };
   }, [activeIdx]);
 
-  // Close the account dropdown on outside click.
-  const accountRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!accountOpen) return;
-    const onDown = (event: MouseEvent) => {
-      if (accountRef.current && !accountRef.current.contains(event.target as Node)) {
-        setAccountOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-    };
-  }, [accountOpen]);
-
   const pickAccount = (value: string) => {
     setAccount(value);
-    setAccountOpen(false);
     resetPaging();
   };
 
@@ -207,8 +194,8 @@ export function LogsPage() {
     <div className="tb-fadeup">
       <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
 
-      <div className="mb-[14px] flex flex-wrap items-center gap-2">
-        <div ref={pillsRef} className="relative flex gap-0 rounded-full bg-white p-[3px]">
+      <div className="mb-[14px] flex flex-wrap items-center gap-sm">
+        <div ref={pillsRef} className="relative flex rounded-full bg-white p-[3px]">
           <span
             aria-hidden
             className="absolute top-[3px] z-0 rounded-full bg-primary shadow-[0_1px_2px_rgba(0,102,255,0.3)] transition-[left,width] duration-[250ms]"
@@ -229,71 +216,13 @@ export function LogsPage() {
           ))}
         </div>
         <div className="flex-1" />
-        <div ref={accountRef} className="relative w-full shrink-0 sm:w-[200px]">
-          <button
-            type="button"
-            aria-label={t('logs.filter.account')}
-            onClick={() => {
-              setAccountOpen((open) => !open);
-            }}
-            className="tb-time flex w-full items-center justify-between gap-2 rounded-full border border-line bg-white px-4 py-[7px] text-[13px] outline-none"
-          >
-            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{accountLabel}</span>
-            <span
-              className={`tb-ddchev flex shrink-0 text-ink-subtle${accountOpen ? ' open' : ''}`}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div
-            // .tb-dd only collapses VISUALLY (max-height:0 + opacity:0), so every
-            // option below stayed focusable and in the a11y tree while closed.
-            // `inert` is the real thing and, unlike `hidden`, keeps the open/close
-            // transition (a not-yet-rendered element has no before-change style).
-            inert={!accountOpen}
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop max-h-[280px] overflow-y-auto rounded-lg border border-line bg-white shadow-[0_10px_28px_rgba(0,0,0,0.13)]${accountOpen ? ' open' : ''}`}
-          >
-            <div className="p-1">
-              {['', ...accountIds].map((value) => {
-                const selected = value === account;
-                return (
-                  <button
-                    key={value || 'all'}
-                    type="button"
-                    onClick={() => {
-                      pickAccount(value);
-                    }}
-                    className="flex w-full items-center justify-between rounded-sm px-[10px] py-[8px] text-[13px] hover:bg-surface"
-                  >
-                    {value ? resolveAccount(value) : t('logs.filter.allAccounts')}
-                    {selected && (
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        strokeWidth="2.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="shrink-0 stroke-primary"
-                      >
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+        <div className="w-full shrink-0 sm:w-[200px]">
+          <Select
+            value={account}
+            onChange={pickAccount}
+            options={accountOptions}
+            ariaLabel={t('logs.filter.account')}
+          />
         </div>
       </div>
 
@@ -314,7 +243,7 @@ export function LogsPage() {
               <DataTable data={items} columns={columns} />
             </div>
           </div>
-          <div className="mt-4 flex items-center justify-end gap-2">
+          <div className="mt-4 flex items-center justify-end gap-sm">
             <button
               type="button"
               disabled={!hasPrev}

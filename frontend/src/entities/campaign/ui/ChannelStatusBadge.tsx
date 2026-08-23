@@ -33,7 +33,7 @@ export function ChannelStatusBadge({ status }: { status: ChannelStatus }) {
   const { t } = useTranslation();
   return (
     <span
-      className={`inline-flex items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-medium ${STATUS_TONE[status]}`}
+      className={`inline-flex items-center gap-tight rounded-full px-[9px] py-[3px] text-[11px] font-medium ${STATUS_TONE[status]}`}
     >
       <span className="h-[5px] w-[5px] rounded-full bg-current" />
       {t(`neurocomment.channelStatus.${status}`)}

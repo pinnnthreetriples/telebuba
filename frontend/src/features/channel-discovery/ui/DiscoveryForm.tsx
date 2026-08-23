@@ -26,7 +26,7 @@ const LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
 // control needs an id: a label click activates its control, and on a phone tapping the
 // badge is the only way to open a hover tooltip — which silently joined the tooltip
 // prose to the field's accessible name.
-const LABEL_ROW = `${LABEL} flex items-center gap-[7px]`;
+const LABEL_ROW = `${LABEL} flex items-center gap-sm`;
 const HINT = 'mt-[5px] block text-[11px] text-ink-subtle';
 
 // Same contract as DiscoveryResults' reasonKey: the server sends short locale-neutral
@@ -83,7 +83,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
 
   return (
     <form
-      className="flex flex-col gap-[14px]"
+      className="flex flex-col gap-lg"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit(form) && !submitting) onSubmit();
@@ -95,7 +95,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         <label htmlFor={keywordsId} className={LABEL}>
           {t('neurocomment.modal.discovery.form.keywords')}
         </label>
-        <div className="flex items-start gap-[7px]">
+        <div className="flex items-start gap-sm">
           <input
             id={keywordsId}
             autoFocus
@@ -164,7 +164,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-[14px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <label className="block">
           <span className={LABEL}>{t('neurocomment.modal.discovery.form.minSubscribers')}</span>
           <input
@@ -223,7 +223,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         />
       </div>
 
-      <div className="flex items-center justify-end gap-[10px] pt-[3px]">
+      <div className="flex items-center justify-end gap-md pt-[3px]">
         <button
           type="button"
           onClick={() => {

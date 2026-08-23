@@ -244,7 +244,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         ) : null}
 
         {submitted ? (
-          <div className="mt-[15px] flex items-center justify-between gap-2 border-t border-line pt-[13px]">
+          <div className="mt-[15px] flex items-center justify-between gap-sm border-t border-line pt-[13px]">
             <button
               type="button"
               onClick={() => {
@@ -257,7 +257,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             >
               {t('neurocomment.modal.discovery.results.back')}
             </button>
-            <div className="flex items-center gap-[10px]">
+            <div className="flex items-center gap-md">
               <button
                 type="button"
                 onClick={onClose}
@@ -276,7 +276,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                   (adopted !== null && adopted.failed === 0)
                 }
                 onClick={submitAdopt}
-                className="inline-flex items-center gap-[7px] rounded-lg bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50"
+                className="inline-flex items-center gap-sm rounded-lg bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50"
               >
                 {adopted === null ? (
                   t('neurocomment.modal.discovery.add', { count: picks.length })

@@ -44,7 +44,7 @@ function NumberField({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-[7px]">
+    <div className="flex items-center gap-sm">
       {/* A <span>, not a <label>: the input carries its own `aria-label`, and a
           second label element for the same field only makes the name ambiguous. */}
       <span className="min-w-0 flex-1 text-[12.5px]">{label}</span>
@@ -120,7 +120,7 @@ export function CampaignSetupCard({
         </div>
       ) : null}
 
-      <span className="mb-[5px] flex items-center gap-[7px] text-[12.5px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-sm text-[12.5px] font-medium text-ink-muted">
         {t('neuroshilling.setup.targets.label')}
         <HelpHint text={t('neuroshilling.setup.targets.hint')} />
         <span className="ml-auto rounded-full bg-track px-[9px] py-[2px] text-[11px] font-medium tabular-nums text-ink-muted">
@@ -148,7 +148,7 @@ export function CampaignSetupCard({
       <div
         role="radiogroup"
         aria-label={t('neuroshilling.setup.runMode.label')}
-        className="mb-[14px] grid gap-[7px] sm:grid-cols-2"
+        className="mb-[14px] grid gap-sm sm:grid-cols-2"
       >
         {(['sequential', 'parallel'] as const).map((mode) => {
           const unavailable = mode === 'parallel';
@@ -187,13 +187,13 @@ export function CampaignSetupCard({
       {/* «Пауза между целями, сек», not the mockup's «Пауза (мин)» / «Пауза (макс)»:
           the two numbers are a MINIMUM and a MAXIMUM, and the unit is seconds. The
           mockup's wording reads as minutes beside a value like `10с`. */}
-      <span className="mb-[5px] flex items-center gap-[7px] text-[12.5px] font-medium text-ink-muted">
+      <span className="mb-[5px] flex items-center gap-sm text-[12.5px] font-medium text-ink-muted">
         {t('neuroshilling.setup.pause.label')}
         <HelpHint text={t('neuroshilling.setup.pause.hint')} />
       </span>
-      <div className="mb-[14px] flex flex-wrap items-center gap-[10px]">
+      <div className="mb-[14px] flex flex-wrap items-center gap-md">
         {(['min', 'max'] as const).map((bound) => (
-          <span key={bound} className="flex items-center gap-[7px] text-[11px] text-ink-subtle">
+          <span key={bound} className="flex items-center gap-sm text-[11px] text-ink-subtle">
             {t(`neuroshilling.setup.pause.${bound}`)}
             <input
               type="number"
@@ -232,7 +232,7 @@ export function CampaignSetupCard({
         onClick={() => {
           setAdvanced((value) => !value);
         }}
-        className="mb-[10px] flex w-full items-center gap-[7px] rounded-lg border border-line bg-surface px-[11px] py-[8px] text-[12.5px] font-medium"
+        className="mb-[10px] flex w-full items-center gap-sm rounded-lg border border-line bg-surface px-[11px] py-[8px] text-[12.5px] font-medium"
       >
         {t('neuroshilling.setup.advanced.title')}
         {changed > 0 ? (
@@ -244,7 +244,7 @@ export function CampaignSetupCard({
       </button>
 
       {advanced ? (
-        <div className="mb-[14px] flex flex-col gap-[10px] rounded-lg border border-line bg-white p-[12px]">
+        <div className="mb-[14px] flex flex-col gap-md rounded-lg border border-line bg-white p-[12px]">
           <NumberField
             label={t('neuroshilling.setup.perHour.label')}
             hint={t('neuroshilling.setup.perHour.hint')}
@@ -291,7 +291,7 @@ export function CampaignSetupCard({
               });
             }}
           />
-          <div className="flex items-center gap-[7px]">
+          <div className="flex items-center gap-sm">
             <Switch
               checked={draft.reserveEnabled}
               disabled={live}
@@ -312,7 +312,7 @@ export function CampaignSetupCard({
 
           {/* The listening block: the three switches that let the run READ its
               target chats, and the window it keeps reading for. */}
-          <div className="mt-[2px] flex items-center gap-[7px] border-t border-line pt-[11px] text-[12.5px] font-semibold">
+          <div className="mt-[2px] flex items-center gap-sm border-t border-line pt-[11px] text-[12.5px] font-semibold">
             {t('neuroshilling.setup.listening.title')}
             <HelpHint text={t('neuroshilling.setup.listening.hint')} />
           </div>
@@ -323,7 +323,7 @@ export function CampaignSetupCard({
               ['replyActivity', ['calm', 'medium', 'active'], draft.replyActivity],
             ] as const
           ).map(([field, options, current]) => (
-            <div key={field} className="flex flex-wrap items-center gap-[7px]">
+            <div key={field} className="flex flex-wrap items-center gap-sm">
               <span className="min-w-0 flex-1 text-[12.5px]">
                 {t(`neuroshilling.setup.${field}.label`)}
               </span>
@@ -355,7 +355,7 @@ export function CampaignSetupCard({
             </div>
           ))}
 
-          <div className="flex items-center gap-[7px]">
+          <div className="flex items-center gap-sm">
             <Switch
               disabled={live}
               checked={draft.replyToHumans}

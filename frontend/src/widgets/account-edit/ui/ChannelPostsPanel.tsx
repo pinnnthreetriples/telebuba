@@ -204,7 +204,7 @@ export function ChannelPostsPanel({
           className={`${FIELD} resize-none [font-family:inherit]`}
         />
         {file && (
-          <div className="mt-2 flex items-center gap-[10px] rounded-lg border border-line bg-[#f8f7f5] px-[10px] py-2">
+          <div className="mt-2 flex items-center gap-md rounded-lg border border-line bg-surface px-[10px] py-2">
             {preview ? (
               <img
                 src={preview}
@@ -247,7 +247,7 @@ export function ChannelPostsPanel({
           </div>
         )}
         <div className="mt-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-sm">
             <IconButton
               size="md"
               onClick={() => fileInput.current?.click()}
@@ -276,7 +276,7 @@ export function ChannelPostsPanel({
             className="rounded-full bg-primary px-4 py-[7px] text-[12.5px] font-medium text-white disabled:opacity-50"
           >
             {busy ? (
-              <span className="inline-flex items-center gap-[7px]">
+              <span className="inline-flex items-center gap-sm">
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.publishing')}
               </span>
@@ -305,7 +305,7 @@ export function ChannelPostsPanel({
         </div>
       )}
       {posts.isError && (
-        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+        <div className="mt-3 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <button
             type="button"
@@ -324,10 +324,10 @@ export function ChannelPostsPanel({
         </div>
       )}
       {items.length > 0 && (
-        <div className="mt-3 flex flex-col gap-2">
+        <div className="mt-3 flex flex-col gap-sm">
           {items.map((post) => (
             <div key={post.post_id} className="rounded-lg border border-line px-[14px] py-3">
-              <div className="flex items-center gap-2 text-[11px] text-ink-subtle">
+              <div className="flex items-center gap-sm text-[11px] text-ink-subtle">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
                   <span className="rounded-sm bg-canvas px-[6px] py-[1px] font-medium text-ink-muted">
@@ -378,7 +378,7 @@ export function ChannelPostsPanel({
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </div>
                   )}
-                  <div className="mt-2 flex items-center justify-end gap-2">
+                  <div className="mt-2 flex items-center justify-end gap-sm">
                     {/* The same readout the composer carries: without it the box
                         just stops accepting input at the media-aware cap with
                         nothing on screen explaining why. */}
@@ -426,7 +426,7 @@ export function ChannelPostsPanel({
           className="mt-3 w-full rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold text-ink disabled:opacity-50"
         >
           {loadingMore ? (
-            <span className="inline-flex items-center gap-[7px]">
+            <span className="inline-flex items-center gap-sm">
               <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
               {t('accounts.channel.loading')}
             </span>

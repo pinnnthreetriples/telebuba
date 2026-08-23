@@ -22,7 +22,7 @@ export function SessionErrorPanel() {
   return (
     <div role="alert" className="p-8">
       <p className="text-[13px] text-ink">{i18n.t('shell.sessionError')}</p>
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex items-center gap-sm">
         <button
           type="button"
           disabled={retrying}

@@ -50,7 +50,7 @@ export function CampaignsCard({
         <span className="text-[13px] font-semibold">{t('neuroshilling.campaigns.title')}</span>
       }
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           const status = campaign.status ?? 'idle';
@@ -68,11 +68,11 @@ export function CampaignsCard({
               // `bg-white` would beat the selected tint.
               className={`cursor-pointer rounded-lg border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
-              <div className="flex justify-between gap-[10px]">
+              <div className="flex justify-between gap-md">
                 <div className="min-w-0 flex-1 text-[13px] font-semibold">{campaign.name}</div>
-                <div className="flex shrink-0 items-center gap-[10px]">
+                <div className="flex shrink-0 items-center gap-md">
                   <span
-                    className={`inline-flex items-center gap-[5px] text-[11px] font-medium ${tone}`}
+                    className={`inline-flex items-center gap-tight text-[11px] font-medium ${tone}`}
                   >
                     {/* `bg-current` — the dot can never disagree with its label. */}
                     <span className="h-[6px] w-[6px] rounded-full bg-current" />
@@ -114,7 +114,7 @@ export function CampaignsCard({
       {creating ? (
         // Inline, not a modal: creating asks for a name and nothing else, and the
         // app already spells that shape this way (the channel "add" pill).
-        <div className="mt-[9px] flex items-center gap-2">
+        <div className="mt-[9px] flex items-center gap-sm">
           <input
             autoFocus
             value={createName}
@@ -150,7 +150,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-[9px] flex w-full items-center justify-center gap-[5px] rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
+          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-primary-wash"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { IconButton, SurfHover } from '@/shared/ui';
+import { IconButton, Select, SurfHover } from '@/shared/ui';
 
 // The listener-account card: shows the active listener with pause/edit/remove
 // actions (revealed via SurfHover), or a dropdown to choose one when none is set.
@@ -17,8 +17,6 @@ export function ListenerCard({
   onToggleRuntime,
   onEdit,
   onRemove,
-  listenerOpen,
-  onToggleOpen,
   accountOptions,
   onPickListener,
 }: {
@@ -32,8 +30,6 @@ export function ListenerCard({
   onToggleRuntime: () => void;
   onEdit: () => void;
   onRemove: () => void;
-  listenerOpen: boolean;
-  onToggleOpen: () => void;
   accountOptions: AccountRead[];
   onPickListener: (accountId: string) => void;
 }) {
@@ -58,7 +54,7 @@ export function ListenerCard({
       : t('neurocomment.listener.paused');
   return (
     <div className="relative z-raised rounded-card border border-line bg-white px-[14px] py-[13px]">
-      <div className="mb-[3px] flex items-center gap-[10px]">
+      <div className="mb-[3px] flex items-center gap-md">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="15"
@@ -151,9 +147,9 @@ export function ListenerCard({
               // Running = the success tone, idle = the neutral surface; both sides
               // come from tokens so the card can't drift from the rest of the design.
               <div
-                className={`flex items-center justify-between gap-2 rounded-lg border px-[10px] py-2 ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
+                className={`flex items-center justify-between gap-sm rounded-lg border px-[10px] py-2 ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-sm">
                   <span
                     className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
@@ -197,53 +193,18 @@ export function ListenerCard({
           />
         </div>
       ) : (
-        <div className="relative mt-[9px]">
-          <button
-            type="button"
-            onClick={onToggleOpen}
-            className="tb-time flex w-full items-center justify-between rounded-lg border border-line-input bg-white px-[13px] py-[10px] text-[13px]"
-          >
-            <span className="text-ink-subtle">{t('neurocomment.listener.choose')}</span>
-            <span
-              className={`tb-ddchev flex shrink-0 text-ink-subtle ${listenerOpen ? 'open' : ''}`}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div
-            // .tb-dd collapses visually only; without this the account buttons kept
-            // their tab stops while the list was closed. See the note in LogsPage.
-            inert={!listenerOpen}
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop rounded-lg border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${listenerOpen ? 'open' : ''}`}
-          >
-            {accountOptions.length === 0 ? (
-              <div className="px-[10px] py-2 text-[12.5px] text-ink-subtle">
-                {t('neurocomment.listener.noAccounts')}
-              </div>
-            ) : (
-              accountOptions.map((account) => (
-                <button
-                  key={account.account_id}
-                  type="button"
-                  onClick={() => {
-                    onPickListener(account.account_id);
-                  }}
-                  className="flex w-full items-center justify-between gap-2 rounded-sm px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-primary-wash"
-                >
-                  <span className="font-medium">{accountDisplayName(account)}</span>
-                </button>
-              ))
-            )}
-          </div>
+        <div className="mt-[9px]">
+          <Select
+            value=""
+            onChange={onPickListener}
+            options={accountOptions.map((account) => ({
+              value: account.account_id,
+              label: accountDisplayName(account),
+            }))}
+            placeholder={t('neurocomment.listener.choose')}
+            ariaLabel={t('neurocomment.listener.title')}
+            emptyLabel={t('neurocomment.listener.noAccounts')}
+          />
         </div>
       )}
 

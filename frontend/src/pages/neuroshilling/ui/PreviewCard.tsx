@@ -76,7 +76,7 @@ export function PreviewCard({
             return (
               <div key={`${String(play)}-${step.step_id}`}>
                 {index > 0 ? (
-                  <div className="my-[7px] flex items-center gap-[7px]">
+                  <div className="my-[7px] flex items-center gap-sm">
                     <span className="h-px flex-1 bg-line" />
                     <span className="text-[10.5px] tabular-nums text-ink-subtle">
                       {t('neuroshilling.preview.pause', {
@@ -88,7 +88,7 @@ export function PreviewCard({
                   </div>
                 ) : null}
                 <div
-                  className="tb-fadeup flex gap-[10px]"
+                  className="tb-fadeup flex gap-md"
                   style={{ animationDelay: `${String(index * 0.12)}s` }}
                 >
                   <span
@@ -97,7 +97,7 @@ export function PreviewCard({
                     {(role?.name ?? '?').slice(0, 1).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="mb-[3px] flex items-center gap-[7px]">
+                    <div className="mb-[3px] flex items-center gap-sm">
                       <span className={`text-[12.5px] font-semibold ${tone.text}`}>
                         {role?.name ?? t('neuroshilling.preview.noRole')}
                       </span>
@@ -106,7 +106,7 @@ export function PreviewCard({
                       </span>
                     </div>
                     {step.kind === 'reaction' ? (
-                      <span className="inline-flex items-center gap-[5px] rounded-full border border-line bg-white px-[9px] py-[4px] text-[11px] text-ink-muted">
+                      <span className="inline-flex items-center gap-tight rounded-full border border-line bg-white px-[9px] py-[4px] text-[11px] text-ink-muted">
                         <span aria-hidden="true">{step.emoji ?? '·'}</span>
                         {step.target_position === null || step.target_position === undefined
                           ? t('neuroshilling.preview.reactionLoose')
@@ -132,7 +132,7 @@ export function PreviewCard({
         </div>
       )}
 
-      <div className="mt-[14px] flex flex-wrap items-center gap-[7px]">
+      <div className="mt-[14px] flex flex-wrap items-center gap-sm">
         <span className="mr-auto text-[11px] tabular-nums text-ink-subtle">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>

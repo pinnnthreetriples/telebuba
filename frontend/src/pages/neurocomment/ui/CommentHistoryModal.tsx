@@ -76,7 +76,7 @@ export function CommentHistoryModal({
           const text = row.original.comment_text ?? '—';
           if (!row.original.deleted_at) return text;
           return (
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-sm">
               <span className="text-ink-subtle line-through">{text}</span>
               <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10.5px] font-medium text-danger">
                 {t('neurocomment.feed.deleted')}
@@ -119,7 +119,7 @@ export function CommentHistoryModal({
       </div>
 
       <div className="flex items-center justify-between border-t border-line-row px-6 pb-5 pt-[14px]">
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           <button
             type="button"
             disabled={!hasPrev}

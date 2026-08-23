@@ -44,7 +44,7 @@ const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
 const AVATAR_CLASS: Record<DesignStatus, string> = {
   active: 'bg-primary-tint text-primary',
   spam: 'bg-warning-tint text-warning',
-  code: 'bg-[#edebe7] text-ink-muted',
+  code: 'bg-track text-ink-muted',
   banned: 'bg-danger-tint text-danger',
 };
 
@@ -121,7 +121,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return (
-          <div className="flex items-center gap-[10px]">
+          <div className="flex items-center gap-md">
             <RowAvatar account={account} />
             <div>
               <div className="text-[13px] font-semibold">{accountDisplayName(account)}</div>
@@ -146,7 +146,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return account.proxy_id ? (
-          <div className="flex items-center gap-[7px]">
+          <div className="flex items-center gap-sm">
             <span
               className={`h-[7px] w-[7px] shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
             />
@@ -179,7 +179,7 @@ export function AccountsTable({
         return trust == null ? (
           <span className="text-[12.5px] text-ink-subtle">—</span>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-sm">
             <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
               <div
                 className={`h-full rounded-full bg-current ${trustTone(trust)}`}
@@ -202,7 +202,7 @@ export function AccountsTable({
         const busy = busyIds.has(account.account_id);
         const checked = checkResults[account.account_id];
         return (
-          <div className="flex items-center justify-end gap-[7px]">
+          <div className="flex items-center justify-end gap-sm">
             <button
               type="button"
               title={t('accounts.actions.check')}

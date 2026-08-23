@@ -19,7 +19,7 @@ export function Toaster() {
 
   if (items.length === 0) return null;
   return createPortal(
-    <div className="pointer-events-none fixed bottom-5 left-1/2 z-dialog flex -translate-x-1/2 flex-col items-center gap-[10px]">
+    <div className="pointer-events-none fixed bottom-5 left-1/2 z-dialog flex -translate-x-1/2 flex-col items-center gap-md">
       {items.map((toast) => (
         <div
           key={toast.id}

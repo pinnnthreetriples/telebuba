@@ -59,7 +59,7 @@ export function ApiKeyField({
   return (
     <label className="block">
       <span className={FIELD_LABEL}>{label}</span>
-      <div className="flex gap-2">
+      <div className="flex gap-sm">
         <input
           type={show ? 'text' : 'password'}
           // A provider API key, not a credential of this origin: `new-password`

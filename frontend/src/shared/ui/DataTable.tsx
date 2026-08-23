@@ -157,7 +157,7 @@ export function DataTable<TData>({
               className={join(CARD, rowProps?.className)}
             >
               {head.length > 0 ? (
-                <div className="flex items-center gap-[10px]">
+                <div className="flex items-center gap-md">
                   {head.map((cell) => (
                     <div
                       key={cell.id}
@@ -173,7 +173,7 @@ export function DataTable<TData>({
                 return (
                   <div
                     key={cell.id}
-                    className="mt-[9px] flex items-baseline justify-between gap-3 first:mt-0"
+                    className="mt-[9px] flex items-baseline justify-between gap-md first:mt-0"
                   >
                     <span className={CARD_LABEL}>
                       {header

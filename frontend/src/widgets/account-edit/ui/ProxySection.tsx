@@ -12,11 +12,17 @@ import {
   unassignProxyMutation,
 } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { ConfirmModal, FormField } from '@/shared/ui';
+import { ConfirmModal, FormField, Select, type SelectOption } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { Section, Spinner } from './_shared';
 import { FIELD, LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
+
+// Protocol names, not copy — nothing to translate.
+const PROXY_TYPES: SelectOption[] = [
+  { value: 'socks5', label: 'SOCKS5' },
+  { value: 'https', label: 'HTTPS' },
+];
 
 // Proxy-connection dot per proxy_status, as the tokens the states MEAN (the same
 // three the accounts table paints). No proxy_id → unassigned (grey);
@@ -199,8 +205,8 @@ export function ProxySection({ account }: { account: AccountRead }) {
   return (
     <Section title={t('accounts.edit.proxy')}>
       <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
-      <div className="mb-3 flex items-center justify-between gap-2 rounded-lg bg-canvas px-3 py-[10px]">
-        <span className="flex items-center gap-2">
+      <div className="mb-3 flex items-center justify-between gap-sm rounded-lg bg-canvas px-3 py-[10px]">
+        <span className="flex items-center gap-sm">
           <span className={`h-2 w-2 rounded-full ${proxyDot}`} />
           <span className="text-[12.5px] text-ink-body">{proxyStateText}</span>
         </span>
@@ -241,7 +247,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-[10px] grid grid-cols-1 md:grid-cols-2 gap-[10px]">
+          <div className="mb-[10px] grid grid-cols-1 md:grid-cols-2 gap-md">
             <proxyForm.Field name="port">
               {(field) => (
                 <FormField
@@ -254,23 +260,21 @@ export function ProxySection({ account }: { account: AccountRead }) {
             </proxyForm.Field>
             <proxyForm.Field name="proxy_type">
               {(field) => (
-                <label className="block">
+                <div>
                   <span className={LABEL}>{t('accounts.edit.type')}</span>
-                  <select
+                  <Select
                     value={field.state.value}
-                    onChange={(event) => {
-                      field.handleChange(event.target.value as ProxyFormValue['proxy_type']);
+                    onChange={(value) => {
+                      field.handleChange(value as ProxyFormValue['proxy_type']);
                     }}
-                    className={FIELD}
-                  >
-                    <option value="socks5">SOCKS5</option>
-                    <option value="https">HTTPS</option>
-                  </select>
-                </label>
+                    options={PROXY_TYPES}
+                    ariaLabel={t('accounts.edit.type')}
+                  />
+                </div>
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[10px]">
+          <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-md">
             <proxyForm.Field name="username">
               {/* FormField emits name="username" — next to a password input that
                   is the formless login shape Chrome's password parser matches,
@@ -338,31 +342,27 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </div>
         </>
       ) : (
-        <label className="mb-[14px] block">
+        <div className="mb-[14px]">
           <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
-          <select
+          <Select
             value={account.proxy_id ?? ''}
             disabled={proxyBusy}
-            onChange={(event) => {
-              assignFromPool(event.target.value);
-            }}
-            className={FIELD}
-          >
-            <option value="">{t('accounts.edit.choosePoolProxy')}</option>
-            {poolChoices.map((proxy) => (
-              <option key={proxy.id} value={proxy.id}>
-                {proxy.host}:{proxy.port}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={assignFromPool}
+            options={poolChoices.map((proxy) => ({
+              value: proxy.id,
+              label: `${proxy.host}:${String(proxy.port)}`,
+            }))}
+            placeholder={t('accounts.edit.choosePoolProxy')}
+            ariaLabel={t('accounts.proxyPool.title')}
+          />
+        </div>
       )}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-md">
         <button
           type="button"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
-          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
+          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-[12.5px] font-semibold disabled:opacity-50"
         >
           {proxyCheck === 'loading' ? (
             <Spinner size={13} />
@@ -387,7 +387,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
         )}
         {proxyCheck === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-[7px] rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
+          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-3 py-[5px] text-[12.5px] font-medium text-success">
             {proxyResult?.country_code ? (
               <span
                 className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
@@ -399,7 +399,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </span>
         )}
         {proxyCheck === 'err' && (
-          <span className="inline-flex items-center gap-[7px] text-[12.5px] font-medium text-danger">
+          <span className="inline-flex items-center gap-sm text-[12.5px] font-medium text-danger">
             <svg
               width="14"
               height="14"

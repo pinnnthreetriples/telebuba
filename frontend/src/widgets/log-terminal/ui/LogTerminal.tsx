@@ -40,7 +40,7 @@ function LogLine({
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-[10px]" title={hint || undefined}>
+    <div className="flex gap-md" title={hint || undefined}>
       <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>

@@ -20,7 +20,7 @@ export const FIELD_READONLY = `${FIELD_FLAT} text-ink`;
 // is telling the truth and the value is a fact nobody has to transcribe.
 export const FIELD_LOCKED = `cursor-not-allowed ${FIELD_FLAT} text-ink-subtle`;
 export const LABEL = 'mb-[6px] block text-[12.5px] font-medium text-ink-body';
-export const SEG_WRAP = 'mb-[10px] flex gap-1 rounded-lg bg-canvas p-1';
+export const SEG_WRAP = 'mb-[10px] flex gap-tight rounded-lg bg-canvas p-1';
 export const seg = (on: boolean): string =>
   `flex-1 rounded-sm py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
 

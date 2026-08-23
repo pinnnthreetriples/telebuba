@@ -8,9 +8,9 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-center gap-[10px] rounded-lg border border-warning-line bg-warning-tint px-[14px] py-3 text-left transition-colors hover:bg-[#fdf6e3]"
+      className="flex items-center gap-md rounded-lg border border-warning-line bg-warning-tint px-[14px] py-3 text-left transition-colors hover:border-warning"
     >
-      <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md bg-[#fbefcb] text-warning">
+      <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md bg-warning-line text-warning-deep">
         <svg
           width="16"
           height="16"
@@ -26,12 +26,12 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[12.5px] font-bold leading-[1.25] text-[#7a5e12]">
+        <div className="text-[12.5px] font-bold leading-[1.25] text-warning-deep">
           {t('neurocomment.idle.label', { count })}
         </div>
-        <div className="mt-px text-[11px] text-[#a98a2e]">{t('neurocomment.idle.sub')}</div>
+        <div className="mt-px text-[11px] text-warning">{t('neurocomment.idle.sub')}</div>
       </div>
-      <span className="flex shrink-0 text-[#b8922f]">
+      <span className="flex shrink-0 text-warning">
         <svg
           width="16"
           height="16"

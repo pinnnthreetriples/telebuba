@@ -70,8 +70,8 @@ export function NeuroshillingAccountsModal({
           const isPicked = picked.has(account.account_id);
           const held = heldBy(account);
           return (
-            <div key={account.account_id} className="border-b border-[#f4f2ef] py-[11px]">
-              <div className="flex flex-wrap items-center gap-[10px]">
+            <div key={account.account_id} className="border-b border-line-row py-[11px]">
+              <div className="flex flex-wrap items-center gap-md">
                 <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
                   {account.title}
                 </span>
@@ -105,7 +105,7 @@ export function NeuroshillingAccountsModal({
         ) : null}
       </div>
 
-      <div className="flex justify-end gap-2 border-t border-line-row px-6 pb-5 pt-[14px]">
+      <div className="flex justify-end gap-sm border-t border-line-row px-6 pb-5 pt-[14px]">
         <button
           type="button"
           onClick={onClose}

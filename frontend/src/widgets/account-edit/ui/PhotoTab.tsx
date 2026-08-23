@@ -68,7 +68,7 @@ export function PhotoTab({
         </div>
       )}
       <div className="mb-3 text-[12.5px] text-ink-subtle">{t('accounts.profile.photoHint')}</div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
         {photos.map((photo) => (
           <div key={photo.photo_id} className="relative">
             <div

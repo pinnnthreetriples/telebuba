@@ -62,7 +62,7 @@ function participant(
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
-      <div className="mb-[3px] flex items-center gap-[5px] text-[10.5px] text-ink-subtle">
+      <div className="mb-[3px] flex items-center gap-tight text-[10.5px] text-ink-subtle">
         <span className="font-medium text-ink-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
@@ -95,7 +95,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-[2px] flex items-center gap-[7px] text-[10.5px] text-ink-subtle">
+    <div className="mt-[2px] flex items-center gap-sm text-[10.5px] text-ink-subtle">
       <span className="flex items-center gap-[3px]">
         {[0, 1, 2].map((index) => (
           <span
@@ -142,7 +142,7 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
   }
 
   return (
-    <div className="tb-scroll flex max-h-[260px] flex-col gap-[10px] overflow-y-auto pr-1">
+    <div className="tb-scroll flex max-h-[260px] flex-col gap-md overflow-y-auto pr-1">
       {ordered.map((message) => {
         const key = messageKey(message);
         return <DialogueRow key={key} message={message} isNew={isNew(key)} />;
@@ -178,7 +178,7 @@ export function DialogueFeed() {
 
   return (
     <div className="mt-4 rounded-card border border-line bg-white p-4">
-      <div className="mb-[13px] flex items-center gap-[10px]">
+      <div className="mb-[13px] flex items-center gap-md">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span

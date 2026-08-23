@@ -63,7 +63,7 @@ export function WarmDaysModal({
   return (
     <Modal onClose={onClose} className="w-[440px]" label={t('warming.days.title')}>
       <div className="p-6">
-        <div className="mb-1 flex items-start gap-[10px]">
+        <div className="mb-1 flex items-start gap-md">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
             <svg
               width="17"
@@ -83,7 +83,7 @@ export function WarmDaysModal({
               type="button"
               disabled={spam === 'loading'}
               onClick={runSpamCheck}
-              className={`inline-flex items-center gap-[7px] rounded-full border bg-white px-[11px] py-[6px] text-[12.5px] font-medium disabled:opacity-60 ${
+              className={`inline-flex items-center gap-sm rounded-full border bg-white px-[11px] py-[6px] text-[12.5px] font-medium disabled:opacity-60 ${
                 spam === 'clean'
                   ? 'border-success text-success'
                   : spam === 'limited'
@@ -170,7 +170,7 @@ export function WarmDaysModal({
           <span>{t('warming.days.max')}</span>
         </div>
 
-        <div className="mb-[22px] flex gap-[7px]">
+        <div className="mb-[22px] flex gap-sm">
           {PRESETS.map((n) => (
             <button
               key={n}
@@ -189,7 +189,7 @@ export function WarmDaysModal({
           ))}
         </div>
 
-        <div className="mb-[8px] flex items-center gap-[7px] text-[12.5px] font-semibold">
+        <div className="mb-[8px] flex items-center gap-sm text-[12.5px] font-semibold">
           {t('warming.persona.label')}
           <span className="tb-tip inline-flex">
             <button
@@ -202,7 +202,7 @@ export function WarmDaysModal({
             <span className="tb-tip-pop">{t('warming.persona.tip')}</span>
           </span>
         </div>
-        <div className="mb-[22px] flex gap-[7px]">
+        <div className="mb-[22px] flex gap-sm">
           {PERSONAS.map((p) => (
             <button
               key={p}
@@ -224,7 +224,7 @@ export function WarmDaysModal({
           ))}
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-sm">
           <button
             type="button"
             onClick={() => {

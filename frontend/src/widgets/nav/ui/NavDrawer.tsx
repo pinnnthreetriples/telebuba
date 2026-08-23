@@ -25,7 +25,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
       className="flex w-[min(84vw,300px)] flex-col"
     >
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
-        <div className="flex items-center gap-[10px]">
+        <div className="flex items-center gap-md">
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
           </div>
@@ -51,7 +51,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
         </button>
       </div>
 
-      <nav className="flex flex-col gap-1 p-2">
+      <nav className="flex flex-col gap-tight p-2">
         {NAV_LINKS.map((link, index) => (
           <Link
             key={link.to}

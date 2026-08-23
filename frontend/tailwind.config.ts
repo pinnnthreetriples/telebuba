@@ -30,6 +30,17 @@ export default {
       card: '16px',
       full: '9999px',
     },
+    // Four rungs of breathing room, replacing Tailwind's 4/8/12/16 scale outright for
+    // the same reason the radii are replaced: the numeric names resolved to values the
+    // canon does not have, so `gap-2` and `gap-[7px]` sat side by side in one row and
+    // disagreed by a pixel. Gone, they cannot come back. `tight` separates parts of one
+    // thing (a dot from its label, an icon from its number), `sm` is the default inside
+    // a control or a row, `md` separates rows and fields inside a card, `lg` separates
+    // the blocks of a card or a form. `0` and `px` stay because they are not steps —
+    // `px` is the hairline a grid uses for its own dividers. Denser rows keep their own
+    // arbitrary `gap-[2px]`/`gap-[3px]` (arbitrary values still work with a replaced
+    // scale): snapping a 2px stack of counters up to 5px would re-lay it out.
+    gap: { 0: '0px', px: '1px', tight: '5px', sm: '7px', md: '10px', lg: '14px' },
     // Four stacking layers, lowest to highest, so a component never has to guess a
     // number: `raised` lifts content over its own siblings, `sticky` is the app
     // header that survives scrolling, `pop` is anything that floats over the page
@@ -59,7 +70,18 @@ export default {
           line: '#cbd7ec',
         },
         success: { DEFAULT: '#12a150', tint: '#ddf7e9', line: '#b8ecce', dot: '#16b364' },
-        warning: { DEFAULT: '#9a7b22', strong: '#c47d12', tint: '#fff0d2', line: '#efd79a' },
+        // `deep` is the one amber the set lacked: the darkest rung, for a heading or a
+        // small icon sitting ON an amber chip, where DEFAULT is the subtitle beside it.
+        // Two notices needed it — neurocomment's IdleBanner (heading over subtitle) and
+        // the proxy pool's geo-conflict chip — plus ProfileModal's "bio not applied"
+        // line, where DEFAULT only measures 4.0:1 on white and this measures 6.1:1.
+        warning: {
+          DEFAULT: '#9a7b22',
+          deep: '#7a5e12',
+          strong: '#c47d12',
+          tint: '#fff0d2',
+          line: '#efd79a',
+        },
         danger: { DEFAULT: '#c0473f', tint: '#fbecec', line: '#f0c9c5' },
         term: {
           DEFAULT: '#16161a',

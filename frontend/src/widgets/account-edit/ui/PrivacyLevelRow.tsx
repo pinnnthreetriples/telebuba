@@ -33,7 +33,7 @@ export function PrivacyLevelRow({
     <div
       role="group"
       aria-label={label}
-      className="flex items-center gap-3 rounded-lg border border-line px-[14px] py-3"
+      className="flex items-center gap-md rounded-lg border border-line px-[14px] py-3"
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-semibold">{label}</div>
@@ -48,7 +48,7 @@ export function PrivacyLevelRow({
           </div>
         )}
       </div>
-      <div className="flex shrink-0 gap-1">
+      <div className="flex shrink-0 gap-tight">
         {PRIVACY_LEVELS.map((level) => (
           <button
             key={level}

@@ -197,7 +197,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
       {reason != null && (
         <div
           role="alert"
-          className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger"
+          className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger"
         >
           <span>{t('accounts.profile.privacy.loadError', { reason })}</span>
           <button
@@ -216,7 +216,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         <div
           role="status"
           aria-live="polite"
-          className="mb-4 rounded-lg border border-line bg-[#fdf8ee] px-3 py-[10px] text-[12.5px] text-ink-muted"
+          className="mb-4 rounded-lg border border-line bg-warning-tint px-3 py-[10px] text-[12.5px] text-ink-muted"
         >
           {t('accounts.profile.privacy.writeReadError', { reason: writeReadError })}
         </div>
@@ -224,7 +224,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
 
       {settings && (
         <>
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-sm">
             {KEYS.map((key) => (
               <PrivacyLevelRow
                 key={key}
@@ -240,7 +240,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex flex-wrap items-center gap-sm">
             <button
               type="button"
               disabled={locked}
@@ -276,7 +276,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           aria-live="polite"
           className="mt-4 rounded-lg border border-line bg-white px-[14px] py-3 text-[12.5px]"
         >
-          <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <div className="flex flex-wrap gap-x-lg gap-y-tight">
             <span>{t('accounts.profile.privacy.bulkOk', { n: bulk.ok })}</span>
             <span className={bulk.failed > 0 ? 'text-danger' : undefined}>
               {t('accounts.profile.privacy.bulkFailed', { n: bulk.failed })}
@@ -286,7 +286,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </span>
           </div>
           {bulk.outcomes.some((outcome) => outcome.status !== 'ok') && (
-            <ul className="mt-2 flex flex-col gap-1 border-t border-line-row pt-2 text-[11px] text-ink-subtle">
+            <ul className="mt-2 flex flex-col gap-tight border-t border-line-row pt-2 text-[11px] text-ink-subtle">
               {/* Both non-ok kinds are listed with their reason: a skipped
                   account carries the status that disqualified it, and "3
                   skipped" with no names is not actionable. */}

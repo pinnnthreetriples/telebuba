@@ -167,9 +167,9 @@ export function AccountsPage() {
         }}
       />
 
-      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="flex w-full items-center gap-sm sm:w-auto">
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
             <svg
@@ -206,7 +206,7 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-[10px]">
+      <div className="mb-4 flex flex-wrap gap-md">
         {stats.map((stat) => (
           <div
             key={stat.label}
@@ -250,7 +250,7 @@ export function AccountsPage() {
               else-branch the only ways back were the search box and a reload.
               A genuinely empty FIRST page still shows the bare empty state. */}
           {items.length > 0 || hasPrev ? (
-            <div className="mt-4 flex items-center justify-end gap-2">
+            <div className="mt-4 flex items-center justify-end gap-sm">
               <button
                 type="button"
                 disabled={!hasPrev}

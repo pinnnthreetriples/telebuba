@@ -15,7 +15,7 @@ export function StatusBadge({ status }: { status: AccountStatus }) {
   const { t } = useTranslation();
   return (
     <span
-      className={`inline-flex items-center gap-[7px] rounded-full px-[10px] py-[3px] text-[12.5px] font-medium ${STATUS_CLASS[accountDesignStatus(status)]}`}
+      className={`inline-flex items-center gap-sm rounded-full px-[10px] py-[3px] text-[12.5px] font-medium ${STATUS_CLASS[accountDesignStatus(status)]}`}
     >
       <span className="h-[6px] w-[6px] rounded-full bg-current" />
       {t(`accounts.status.${status}`)}

@@ -24,8 +24,8 @@ export function CaptchaSolverCard({
   const { t } = useTranslation();
   return (
     <div className="rounded-card border border-line bg-white">
-      <div className="flex items-center justify-between gap-[10px] px-[14px] py-3">
-        <div className="flex min-w-0 items-center gap-[10px]">
+      <div className="flex items-center justify-between gap-md px-[14px] py-3">
+        <div className="flex min-w-0 items-center gap-md">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
             <svg
               width="15"
@@ -40,7 +40,7 @@ export function CaptchaSolverCard({
             </svg>
           </span>
           <div className="min-w-0">
-            <div className="flex items-center gap-[7px]">
+            <div className="flex items-center gap-sm">
               <span className="text-[12.5px] font-semibold text-ink">
                 {t('neurocomment.captcha.title')}
               </span>
@@ -67,7 +67,7 @@ export function CaptchaSolverCard({
       </div>
       {solverEnabled && captchaQueue.length > 0 ? (
         <div className="px-[14px] pb-[14px]">
-          <div className="mb-[9px] flex items-center gap-[7px] border-t border-[#f0eeea] pt-[11px]">
+          <div className="mb-[9px] flex items-center gap-sm border-t border-line-row pt-[11px]">
             <svg
               width="13"
               height="13"

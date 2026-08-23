@@ -3,16 +3,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { IconButton, Modal, toastError } from '@/shared/ui';
+import { IconButton, Modal, Select, toastError } from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
   updateNeurocommentSettingsMutation,
 } from '../api/campaign.queries';
 import { type CommentMode, CommentModeFields } from './CommentModeFields';
-
-const TRIGGER =
-  'tb-time flex w-full cursor-pointer items-center justify-between rounded-lg border border-line-input bg-white px-[13px] py-[10px] text-[13px]';
 
 // Design modal: listener-edit (L1387-1422) — pick the listener account from a
 // custom dropdown, save with a check→"Сохранено" swap. Also the home of the fleet-wide
@@ -35,14 +32,12 @@ export function ListenerEditModal({
   const saveSettings = useMutation(updateNeurocommentSettingsMutation());
   const stored = settings.data;
   const [pick, setPick] = useState(selected);
-  const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   // `null` means "untouched", which is also how the draft survives a read that lands after
   // the modal opened: no effect syncing query into state, and nothing to compare when the
   // operator never touched the fields.
   const [mode, setMode] = useState<CommentMode | null>(null);
   const [wait, setWait] = useState<number | null>(null);
-  const current = options.find((o) => o.id === pick);
 
   const finish = () => {
     setSaved(true);
@@ -102,7 +97,7 @@ export function ListenerEditModal({
   return (
     <Modal onClose={onClose} className="w-[440px]" label={t('neurocomment.listener.title')}>
       <div className="p-6">
-        <div className="mb-[6px] flex items-center gap-[10px]">
+        <div className="mb-[6px] flex items-center gap-md">
           <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
             <svg
               width="17"
@@ -139,65 +134,13 @@ export function ListenerEditModal({
         <div className="mb-[7px] mt-[18px] text-[12.5px] font-medium text-ink-body">
           {t('neurocomment.modal.listenerEdit.account')}
         </div>
-        <div className="relative">
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              setOpen((v) => !v);
-            }}
-            className={TRIGGER}
-          >
-            <span className="font-medium text-ink">
-              {current?.name ?? t('neurocomment.listener.choose')}
-            </span>
-            <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </div>
-          <div
-            // .tb-dd collapses visually only, so these role="button" options kept
-            // their tab stop while the list was closed. See the note in LogsPage.
-            inert={!open}
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop rounded-lg border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
-          >
-            {options.map((o) => (
-              <div
-                key={o.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  setPick(o.id);
-                  setOpen(false);
-                }}
-                className="flex cursor-pointer items-center justify-between gap-2 rounded-sm px-[11px] py-[9px] text-[13px] transition-colors hover:bg-primary-wash"
-              >
-                <span className="font-medium">{o.name}</span>
-                {o.id === pick ? (
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="2.4"
-                    className="stroke-primary"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
+        <Select
+          value={pick ?? ''}
+          onChange={setPick}
+          options={options.map((o) => ({ value: o.id, label: o.name }))}
+          placeholder={t('neurocomment.listener.choose')}
+          ariaLabel={t('neurocomment.modal.listenerEdit.account')}
+        />
 
         {/* Until the read lands, the backend's own fallbacks, so the control never renders
             with nothing pressed — which would read as a third state. */}
@@ -209,7 +152,7 @@ export function ListenerEditModal({
           onWaitChange={setWait}
         />
 
-        <div className="mt-[22px] flex justify-end gap-2">
+        <div className="mt-[22px] flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}
@@ -225,7 +168,7 @@ export function ListenerEditModal({
             className={`rounded-full border px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
           >
             {saved ? (
-              <span className="inline-flex items-center gap-[7px]">
+              <span className="inline-flex items-center gap-sm">
                 <span className="inline-flex [animation:swapin_0.3s_ease_both]">
                   <svg
                     width="15"

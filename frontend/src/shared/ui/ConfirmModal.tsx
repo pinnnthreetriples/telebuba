@@ -44,7 +44,7 @@ export function ConfirmModal({
       <div className="p-6">
         <div className="mb-2 text-[16px] font-bold">{title}</div>
         <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">{body}</div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}
@@ -59,7 +59,7 @@ export function ConfirmModal({
             className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-[13px] font-semibold text-danger disabled:opacity-60"
           >
             {pending ? (
-              <span className="inline-flex items-center gap-[7px]">
+              <span className="inline-flex items-center gap-sm">
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-danger-line border-t-danger" />
                 {confirmLabel}
               </span>

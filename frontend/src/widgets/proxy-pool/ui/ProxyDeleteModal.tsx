@@ -31,7 +31,7 @@ export function ProxyDeleteModal({
             ? t('accounts.proxyDeleteModal.bodyAssigned', { count: used })
             : t('accounts.proxyDeleteModal.body')}
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}

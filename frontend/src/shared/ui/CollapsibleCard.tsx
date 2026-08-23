@@ -90,13 +90,13 @@ export function CollapsibleCard({
 
   return (
     <div className={`overflow-hidden ${wrapperClassName}`}>
-      <div className={`flex items-center gap-[10px] ${headerClassName}`}>
+      <div className={`flex items-center gap-md ${headerClassName}`}>
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
           aria-controls={bodyId}
-          className="flex min-w-0 flex-1 items-center gap-[10px] text-left"
+          className="flex min-w-0 flex-1 items-center gap-md text-left"
         >
           {header}
         </button>

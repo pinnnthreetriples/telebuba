@@ -121,7 +121,6 @@ export function NeurocommentPage() {
 
   const [selected, setSelected] = useState<string | null>(null);
   const [listener, setListener] = useState('');
-  const [listenerOpen, setListenerOpen] = useState(false);
   // Gear-driven action-row reveals (click fallback for hover; finding #6).
   const [listenerActionsOpen, setListenerActionsOpen] = useState(false);
   const [openCampaignActions, setOpenCampaignActions] = useState<string | null>(null);
@@ -484,9 +483,9 @@ export function NeurocommentPage() {
           `overflow-x-auto` on its card does not stop min-content propagating — and the
           page picked up a horizontal scroll the viewport-wide sticky header can't follow,
           which is every card hanging out past the top bar on the right. */}
-      <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
-        <div className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1">
+        <div className="flex flex-col gap-lg lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
             canStart={Boolean(listenerId)}
@@ -520,7 +519,7 @@ export function NeurocommentPage() {
         </div>
 
         {/* LEFT column */}
-        <div className="flex flex-col gap-4 lg:col-start-1 lg:row-start-1">
+        <div className="flex flex-col gap-lg lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}
@@ -551,15 +550,8 @@ export function NeurocommentPage() {
               setListenerActionsOpen(false);
               removeListener();
             }}
-            listenerOpen={listenerOpen}
-            onToggleOpen={() => {
-              setListenerOpen((v) => !v);
-            }}
             accountOptions={listenerOptions}
-            onPickListener={(id) => {
-              pickListener(id);
-              setListenerOpen(false);
-            }}
+            onPickListener={pickListener}
           />
           {showWarmingBlock ? (
             <p className="mt-2 text-[11px] font-medium text-danger">

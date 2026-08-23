@@ -77,7 +77,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
           <button
             type="button"
             onClick={runSpamCheck}
-            className={`inline-flex items-center gap-[7px] rounded-full px-3 py-[5px] text-[12.5px] font-medium transition-[background-color,border-color,color] duration-[250ms] ${
+            className={`inline-flex items-center gap-sm rounded-full px-3 py-[5px] text-[12.5px] font-medium transition-[background-color,border-color,color] duration-[250ms] ${
               spamCheck === 'ok'
                 ? 'border border-success bg-success text-white'
                 : spamCheck === 'err'
@@ -130,9 +130,9 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         {signals.map((signal) => (
           <div
             key={signal.label}
-            className="flex items-center justify-between gap-3 border-b border-line-row py-[11px]"
+            className="flex items-center justify-between gap-md border-b border-line-row py-[11px]"
           >
-            <span className="flex items-center gap-2 text-[12.5px] text-ink-muted">
+            <span className="flex items-center gap-sm text-[12.5px] text-ink-muted">
               <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>

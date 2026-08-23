@@ -85,11 +85,11 @@ export function CampaignPromptModal({
           </span>
         </div>
         {accounts.length > 0 ? (
-          <div className="tb-scroll flex max-h-[184px] flex-col gap-[7px] overflow-y-auto rounded-lg border border-track bg-surface p-[6px]">
+          <div className="tb-scroll flex max-h-[184px] flex-col gap-sm overflow-y-auto rounded-lg border border-track bg-surface p-[6px]">
             {accounts.map((account) => (
               <div
                 key={account.account_id}
-                className="flex items-center gap-[10px] rounded-md border border-track bg-white px-[10px] py-2"
+                className="flex items-center gap-md rounded-md border border-track bg-white px-[10px] py-2"
               >
                 <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-[11px] font-bold text-primary">
                   {account.initials}
@@ -123,19 +123,19 @@ export function CampaignPromptModal({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-[#e0dfdb] bg-surface p-[14px] text-center text-[12.5px] text-ink-subtle">
+          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-[14px] text-center text-[12.5px] text-ink-subtle">
             {t('neurocomment.modal.campaignPrompt.empty')}
           </div>
         )}
 
-        <div className="mt-[18px] flex justify-end gap-2">
+        <div className="mt-[18px] flex justify-end gap-sm">
           <button
             type="button"
             onClick={save}
             className={`rounded-full border px-[22px] py-[9px] text-[13px] font-semibold text-white ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
           >
             {saved ? (
-              <span className="inline-flex items-center gap-[7px]">
+              <span className="inline-flex items-center gap-sm">
                 <span className="inline-flex [animation:swapin_0.3s_ease_both]">
                   <svg
                     width="15"
@@ -184,7 +184,7 @@ export function CampaignPromptModal({
                 channel: confirm.channel,
               })}
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-sm">
               <button
                 type="button"
                 onClick={() => {

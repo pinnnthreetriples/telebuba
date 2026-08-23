@@ -111,7 +111,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-medium text-primary">
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-medium text-primary">
       <span className="h-[5px] w-[5px] rounded-full bg-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -132,7 +132,7 @@ function AccountComments({
   return (
     <div className="border-t border-line-row bg-surface px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-sm">
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
           <span className="text-[12.5px] font-semibold">{t('neurocomment.feed.title')}</span>
           <span className="rounded-full bg-track px-2 py-[2px] text-[11px] font-medium text-ink-muted">
@@ -160,7 +160,7 @@ function AccountComments({
             return (
               <div
                 key={`${c.channel}:${String(c.post_id)}`}
-                className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[2px] border-b border-[#f4f2ef] py-[7px] text-[12.5px] last:border-b-0"
+                className="flex flex-wrap items-baseline gap-x-md gap-y-[2px] border-b border-line-row py-[7px] text-[12.5px] last:border-b-0"
               >
                 <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
                 {/* Was shrink-0, which let a long channel (a t.me invite link) push the
@@ -239,7 +239,7 @@ export function NeurocommentBoard({
           // changes under the operator's eyes should say so.
           <span
             key={row.original.channel}
-            className="tb-swapin inline-flex items-center gap-[7px] whitespace-nowrap"
+            className="tb-swapin inline-flex items-center gap-sm whitespace-nowrap"
           >
             {row.original.channel}
             {row.original.deletedRecent > 0 ? (
@@ -332,9 +332,9 @@ export function NeurocommentBoard({
         </>
       }
       trailing={
-        <div className="flex shrink-0 items-center gap-[10px]">
+        <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary">
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>

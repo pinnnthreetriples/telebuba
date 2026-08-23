@@ -40,11 +40,11 @@ export function MusicTab({
   return (
     <div>
       {music.length > 0 ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-sm">
           {music.map((track) => (
             <div
               key={track.file_id}
-              className="flex items-center gap-[14px] rounded-lg border border-line px-[14px] py-3"
+              className="flex items-center gap-lg rounded-lg border border-line px-[14px] py-3"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">

@@ -276,7 +276,7 @@ export function AddStoryModal({
         <div className="mb-[6px] text-[12.5px] font-medium text-ink-body">
           {t('accounts.addStory.audience')}
         </div>
-        <div className="mb-[14px] flex gap-1 rounded-lg bg-canvas p-1">
+        <div className="mb-[14px] flex gap-tight rounded-lg bg-canvas p-1">
           {(['contacts', 'closeFriends', 'public'] as const).map((value) => (
             <button
               key={value}
@@ -314,7 +314,7 @@ export function AddStoryModal({
           onClick={() => {
             setNoForward((value) => !value);
           }}
-          className="mb-4 flex w-full items-center gap-[10px] text-left"
+          className="mb-4 flex w-full items-center gap-md text-left"
         >
           <span
             className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
@@ -358,7 +358,7 @@ export function AddStoryModal({
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy || done}
-            className="flex w-full items-center gap-[10px] rounded-lg border border-dashed border-line bg-white px-4 py-[14px] text-left disabled:opacity-50"
+            className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-white px-4 py-[14px] text-left disabled:opacity-50"
           >
             <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
               <svg
@@ -385,7 +385,7 @@ export function AddStoryModal({
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-[#f8f7f5] px-4 py-3 text-[11px] text-ink-subtle">
+          <div className="rounded-lg border border-line bg-surface px-4 py-3 text-[11px] text-ink-subtle">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -401,7 +401,7 @@ export function AddStoryModal({
         {/* Image tiles: ordered previews with reorder (◀ ▶) + remove (×). The
             tile order is the collage cell order sent to the backend. */}
         {video === null && count > 0 && (
-          <div className="mt-[10px] flex flex-wrap gap-2">
+          <div className="mt-[10px] flex flex-wrap gap-sm">
             {images.map((image, index) => (
               <div
                 key={`${image.name}-${index}`}
@@ -437,7 +437,7 @@ export function AddStoryModal({
                     </svg>
                   </button>
                 </div>
-                <div className="flex items-stretch gap-1">
+                <div className="flex items-stretch gap-tight">
                   <button
                     type="button"
                     onClick={() => {
@@ -495,7 +495,7 @@ export function AddStoryModal({
             <div className="mb-[7px] text-[12.5px] font-medium text-ink-body">
               {t('accounts.addStory.layout')}
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-sm">
               {layoutsForCount(count).map((layout) => {
                 const selected = collageLayout === layout.id;
                 return (
@@ -520,7 +520,7 @@ export function AddStoryModal({
         {/* Single-video row: filename + size + remove (mirrors the photo path). */}
         {video !== null && (
           <div className="mt-[9px] tb-fadeup rounded-lg border border-line bg-white px-[11px] py-[10px]">
-            <div className="flex items-center gap-[10px]">
+            <div className="flex items-center gap-md">
               <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
                 <svg
                   width="16"
@@ -567,7 +567,7 @@ export function AddStoryModal({
         {/* Per-publish status: uploading spinner + bar → success check + full
             bar → error icon (hover = reason) + retry. Shared by both modes. */}
         {hasMedia && (busy || done || failed) && (
-          <div className="mt-[10px] tb-fadeup flex items-center gap-[10px] rounded-lg border border-line bg-white px-[12px] py-[10px]">
+          <div className="mt-[10px] tb-fadeup flex items-center gap-md rounded-lg border border-line bg-white px-[12px] py-[10px]">
             <div className="min-w-0 flex-1">
               <div className={`text-[11px] font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
@@ -642,7 +642,7 @@ export function AddStoryModal({
           </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}

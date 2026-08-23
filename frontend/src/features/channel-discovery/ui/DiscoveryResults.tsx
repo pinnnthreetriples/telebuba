@@ -118,7 +118,7 @@ function CommentsMark({ state }: { state: string }) {
   // pass is doing while the operator watches. 'unknown' and 'notChecked' are final,
   // so they stay still.
   return (
-    <span className="inline-flex items-center gap-[5px] text-[11px] text-ink-subtle">
+    <span className="inline-flex items-center gap-tight text-[11px] text-ink-subtle">
       <span
         className={`h-[6px] w-[6px] rounded-full bg-line-strong ${
           state === 'pending' ? 'animate-pulse' : ''
@@ -396,14 +396,14 @@ export function DiscoveryResults({
   }
 
   return (
-    <div className="flex flex-col gap-[10px]">
-      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-subtle">
+    <div className="flex flex-col gap-md">
+      <div className="flex items-center justify-between gap-sm text-[11px] text-ink-subtle">
         {/* The card layout has no column headers, and select-all lives in one — so on
             a phone the operator could otherwise only tap candidates one at a time.
             Branch on the same JS query DataTable uses, not `lg:hidden`: two
             select-alls in the DOM would both answer every query by accessible name. */}
         {wide ? null : (
-          <label className="flex items-center gap-[7px]">
+          <label className="flex items-center gap-sm">
             <input
               type="checkbox"
               checked={allChecked}

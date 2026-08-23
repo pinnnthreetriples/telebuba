@@ -290,7 +290,7 @@ export function ChannelCreateModal({
           </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}
@@ -316,7 +316,7 @@ export function ChannelCreateModal({
             {createdId !== null ? (
               t('accounts.channel.edit')
             ) : busy ? (
-              <span className="inline-flex items-center gap-[7px]">
+              <span className="inline-flex items-center gap-sm">
                 <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.creating')}
               </span>

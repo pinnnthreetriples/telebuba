@@ -51,7 +51,7 @@ function ToggleRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-[14px]">
+    <div className="flex items-start justify-between gap-lg">
       <div className="min-w-0 flex-1">
         <div className="text-[13px] font-semibold">{title}</div>
         <div className="mt-[2px] text-[11px] leading-[1.45] text-ink-subtle">{desc}</div>
@@ -137,7 +137,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
 
   return (
     <Modal onClose={onClose} className="w-[540px]" label={t('warming.cfg.title')}>
-      <div className="flex items-center gap-[10px] border-b border-line-row px-6 pb-[15px] pt-5">
+      <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="18"
@@ -161,7 +161,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
         <div className="mb-[14px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('warming.cfg.behaviorTitle')}
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-lg">
           {BEHAVIOR_KEYS.map((key) => (
             <ToggleRow
               key={key}
@@ -180,7 +180,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
         <div className="mb-[14px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('warming.cfg.limitsTitle')}
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-lg">
           <ToggleRow
             title={t('warming.cfg.toggle.enforce_readiness.title')}
             desc={t('warming.cfg.toggle.enforce_readiness.desc')}
@@ -204,7 +204,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             <div className="mb-[10px] text-right text-[11px] font-semibold text-ink-muted">
               {t('warming.cfg.quietHours')}
             </div>
-            <div className="flex items-center justify-end gap-[10px]">
+            <div className="flex items-center justify-end gap-md">
               <input
                 value={from}
                 onChange={(e) => {
@@ -235,7 +235,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
       </div>
 
       <div className="border-t border-line-row px-6 pb-5 pt-[15px]">
-        <div className="mb-[14px] flex gap-[7px] rounded-lg bg-line-row p-[3px]">
+        <div className="mb-[14px] flex gap-sm rounded-lg bg-line-row p-[3px]">
           <button
             type="button"
             title={t('warming.cfg.scopeOneNote')}
@@ -269,7 +269,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             {mutationErrorText(save.error)}
           </div>
         ) : null}
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           <button
             type="button"
             disabled={save.isPending || scope === 'one' || !settings}

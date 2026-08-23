@@ -217,10 +217,10 @@ export function WarmingPage() {
 
   return (
     <div className="tb-fadeup">
-      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('warming.titleFull')}</h1>
-        <div className="flex items-center gap-[14px]">
-          <div className="flex gap-4">
+        <div className="flex items-center gap-lg">
+          <div className="flex gap-lg">
             <Counter
               value={warming.length}
               label={t('warming.counter.warming')}
@@ -241,7 +241,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className={`flex items-center gap-[7px] rounded-full px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50 ${poolOn ? 'bg-ink' : 'bg-primary'}`}
+            className={`flex items-center gap-sm rounded-full px-[18px] py-[7px] text-[12.5px] font-semibold text-white disabled:opacity-50 ${poolOn ? 'bg-ink' : 'bg-primary'}`}
           >
             {poolOn ? (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -264,8 +264,8 @@ export function WarmingPage() {
           accounts wrote — one unwrappable line measured the track open to 1227px and the
           page to scrollWidth 1607 against clientWidth 1024, a scroll the viewport-wide
           sticky header can't follow. With minmax the feed scrolls in its own card. */}
-      <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="flex flex-col gap-4">
+      <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="flex flex-col gap-lg">
           <div className="rounded-card border border-line bg-white p-[14px]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-[13px] font-semibold">{t('warming.ready.title')}</span>
@@ -273,7 +273,7 @@ export function WarmingPage() {
                 {idle.length}
               </span>
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-sm">
               {idle.length === 0 ? (
                 <div className="py-[26px] text-center text-[12.5px] text-ink-subtle">
                   {t('warming.ready.empty')}
@@ -306,7 +306,7 @@ export function WarmingPage() {
                   return (
                     <div
                       key={account.account_id}
-                      className="flex items-center gap-[10px] rounded-lg border border-line bg-white px-3 py-[11px]"
+                      className="flex items-center gap-md rounded-lg border border-line bg-white px-3 py-[11px]"
                     >
                       <AccountAvatar
                         account={account}
@@ -314,19 +314,19 @@ export function WarmingPage() {
                         fallbackClassName="text-[12.5px] font-semibold bg-primary-tint text-primary"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-[5px]">
+                        <div className="flex items-center gap-tight">
                           <span className="truncate text-[13px] font-semibold">{name}</span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
-                          <div className="mt-[1px] flex items-center gap-[5px]">
+                          <div className="mt-[1px] flex items-center gap-tight">
                             <span className="truncate text-[11px] text-ink-subtle">
                               {account.phone}
                             </span>
                             {flag}
                           </div>
                         ) : null}
-                        <div className="mt-[2px] flex items-center gap-[7px]">
+                        <div className="mt-[2px] flex items-center gap-sm">
                           <svg
                             width="13"
                             height="13"
@@ -387,11 +387,11 @@ export function WarmingPage() {
             <div className="mb-[11px] text-[11px] leading-[1.4] text-ink-subtle">
               {t('warming.channels.hint')}
             </div>
-            <div className="flex flex-wrap gap-[7px]">
+            <div className="flex flex-wrap gap-sm">
               {channels.map((channel) => (
                 <span
                   key={channel.channel}
-                  className="inline-flex items-center gap-[7px] rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
+                  className="inline-flex items-center gap-sm rounded-full border border-line bg-track px-[11px] py-[5px] text-[12.5px] text-ink-body"
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                   {channel.channel}
@@ -408,7 +408,7 @@ export function WarmingPage() {
                 </span>
               ))}
               {addingChannel ? (
-                <span className="inline-flex items-center gap-1 rounded-full border border-primary bg-white py-[3px] pl-[11px] pr-1">
+                <span className="inline-flex items-center gap-tight rounded-full border border-primary bg-white py-[3px] pl-[11px] pr-1">
                   <input
                     autoFocus
                     value={channelInput}
@@ -460,7 +460,7 @@ export function WarmingPage() {
                   onClick={() => {
                     setAddingChannel(true);
                   }}
-                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12.5px] text-ink-muted hover:border-primary hover:text-primary"
+                  className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12.5px] text-ink-muted hover:border-primary hover:text-primary"
                 >
                   {t('warming.channels.addPill')}
                 </button>
@@ -498,7 +498,7 @@ export function WarmingPage() {
               </>
             }
           >
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-md">
               {warmed.map((acc) => {
                 // Telegram name on top; the phone (with its country flag) drops
                 // to a subtitle — same pattern as the ready card. When there is
@@ -513,28 +513,28 @@ export function WarmingPage() {
                 ) : null;
                 return (
                   <div key={acc.account_id} className="rounded-lg border border-line p-[14px]">
-                    <div className="flex items-start gap-[10px]">
+                    <div className="flex items-start gap-md">
                       <AccountAvatar
                         account={acc}
                         className="h-8 w-8 shrink-0 rounded-full ring-2 ring-success"
                         fallbackClassName="text-[11px] font-bold bg-primary-tint text-primary"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-[5px]">
+                        <div className="flex items-center gap-tight">
                           <span className="truncate text-[13px] font-bold leading-tight">
                             {name}
                           </span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
-                          <div className="mt-[1px] flex items-center gap-[5px]">
+                          <div className="mt-[1px] flex items-center gap-tight">
                             <span className="truncate text-[11px] text-ink-subtle">
                               {acc.phone}
                             </span>
                             {flag}
                           </div>
                         ) : null}
-                        <div className="mt-[5px] flex items-center gap-[7px]">
+                        <div className="mt-[5px] flex items-center gap-sm">
                           {acc.proxy_country ? (
                             <span
                               className={`fi fi-${acc.proxy_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
@@ -545,7 +545,7 @@ export function WarmingPage() {
                           </span>
                         </div>
                       </div>
-                      <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[10.5px] font-bold tracking-[0.03em] text-success">
+                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[3px] text-[10.5px] font-bold tracking-[0.03em] text-success">
                         <svg
                           width="9"
                           height="9"
@@ -571,7 +571,7 @@ export function WarmingPage() {
                           })}
                         </div>
                       </div>
-                      <span className="h-[26px] w-px bg-[#e4e2de]" />
+                      <span className="h-[26px] w-px bg-line" />
                       <div className="flex-1 pl-[14px]">
                         <div className="text-[10.5px] text-ink-subtle">
                           {t('warming.warmed.trust')}
@@ -581,14 +581,14 @@ export function WarmingPage() {
                         </div>
                       </div>
                     </div>
-                    <div className="mt-[13px] flex items-center gap-[10px]">
+                    <div className="mt-[13px] flex items-center gap-md">
                       <button
                         type="button"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex flex-1 items-center justify-center gap-[7px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+                        className="flex flex-1 items-center justify-center gap-sm rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
                       >
                         {t('warming.warmed.toNeuro')}
                         <svg
@@ -640,9 +640,9 @@ export function WarmingPage() {
             <div className="mb-[13px] text-[11px] leading-[1.4] text-ink-subtle">
               {t('warming.howto.hint')}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-[14px] gap-y-[10px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
-                <div key={index} className="flex items-start gap-[10px]">
+                <div key={index} className="flex items-start gap-md">
                   <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10.5px] font-semibold text-white">
                     {index + 1}
                   </span>

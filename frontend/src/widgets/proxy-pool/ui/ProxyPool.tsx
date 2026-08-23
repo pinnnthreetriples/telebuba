@@ -78,7 +78,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
 
   return (
     <div className="mb-4 rounded-card border border-line bg-white px-[18px] py-4">
-      <div className="mb-[13px] flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-[13px] flex flex-wrap items-center justify-between gap-md">
         <div>
           <span className="text-[13px] font-semibold">{t('accounts.proxyPool.title')}</span>
           <span className="ml-2 text-[12.5px] text-ink-subtle">
@@ -89,7 +89,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-[7px] rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white"
+            className="inline-flex items-center gap-sm rounded-full bg-primary px-[15px] py-[7px] text-[11px] font-semibold text-white"
           >
             <svg
               width="13"
@@ -127,7 +127,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-[7px] rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
+            className="inline-flex items-center gap-sm rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
           >
             <svg
               width="15"
@@ -143,7 +143,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-[10px]">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-md">
           {proxies.map((proxy: ProxyRead) => (
             <ProxyCard
               key={proxy.id}
@@ -200,15 +200,15 @@ function ProxyCard({
   const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-[10px] rounded-lg border px-[14px] py-[13px] ${
+      className={`flex flex-col gap-md rounded-lg border px-[14px] py-[13px] ${
         problem
           ? 'border-danger-line bg-danger-tint'
           : geoConflict
-            ? 'border-[#ead9a8] bg-[#fffaf0]'
+            ? 'border-warning-line bg-warning-tint'
             : 'border-line bg-white'
       }`}
     >
-      <div className="flex items-center gap-[10px]">
+      <div className="flex items-center gap-md">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
@@ -218,7 +218,7 @@ function ProxyCard({
           <span
             data-testid="geo-conflict"
             title={geoTitle}
-            className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-[#fff0c2] text-[#9a6700]"
+            className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-warning-line text-warning-deep"
           >
             <svg
               width="11"
@@ -251,7 +251,7 @@ function ProxyCard({
           <div className="truncate text-[12.5px] font-semibold">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex items-center gap-[5px] text-[11px] text-ink-subtle">
+          <div className="mt-px flex items-center gap-tight text-[11px] text-ink-subtle">
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
             <span className="text-line-strong">·</span>
             <span
