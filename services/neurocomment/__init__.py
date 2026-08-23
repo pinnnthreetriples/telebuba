@@ -59,6 +59,7 @@ from services.neurocomment.discovery import (
     start_discovery,
 )
 from services.neurocomment.engine import handle_new_post
+from services.neurocomment.limits import load_account_limits, save_account_limits
 from services.neurocomment.onboarding import onboard_account_channel, onboard_campaign
 from services.neurocomment.settings_store import (
     load_settings as load_neurocomment_settings,
@@ -90,6 +91,7 @@ __all__ = [
     "list_campaigns",
     "list_channel_challenges",
     "list_comments_page",
+    "load_account_limits",
     "load_discovery",
     "load_neurocomment_board",
     "load_neurocomment_settings",
@@ -101,6 +103,7 @@ __all__ = [
     "reconcile_neurocomment_runtime",
     "remember_neurocomment_listener",
     "remove_account_from_campaign",
+    "save_account_limits",
     "save_neurocomment_settings",
     "set_account_channels",
     "set_campaign_status",

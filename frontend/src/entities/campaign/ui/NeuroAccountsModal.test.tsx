@@ -1,10 +1,51 @@
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test, vi } from 'vitest';
+import type { ReactElement } from 'react';
+import { beforeEach, expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
 import { NeuroAccountsModal, type NeuroAccountRow } from './NeuroAccountsModal';
+
+// Every row now carries a limits chip, which reads GET /accounts/{id}/limits. One stub
+// answers for all of them: the rows differ by account, the caps in these tests do not.
+const LIMITS = {
+  account_id: 'a1',
+  joins: { limit: 20, used: 8, fleet_default: 20, overridden: false, resets_at: null },
+  comments_per_hour: { limit: 10, used: 1, fleet_default: 10, overridden: false, resets_at: null },
+  comments_per_channel_per_day: {
+    limit: 3,
+    used: 0,
+    fleet_default: 3,
+    overridden: false,
+    resets_at: null,
+  },
+  busiest_channel: null,
+};
+
+function renderWithClient(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
+beforeEach(() => {
+  // The suite-wide setup stubs fetch as a vi.fn and resets it after each test, so the
+  // response is set per test rather than by stubbing the global again.
+  vi.mocked(fetch).mockImplementation(
+    () =>
+      Promise.resolve(
+        new Response(JSON.stringify(LIMITS), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ) as Promise<Response>,
+  );
+});
 
 const ACCOUNTS: NeuroAccountRow[] = [
   { account_id: 'a1', name: 'Vika Ix', linked: true, pinned_channels: ['@crypto'] },
@@ -16,7 +57,7 @@ test('assigns an idle account, confirms removal, and closes', async () => {
   const onClose = vi.fn();
   const onPick = vi.fn();
   const onRemove = vi.fn();
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
       channels={CHANNELS}
@@ -50,7 +91,7 @@ test('assigns an idle account, confirms removal, and closes', async () => {
 });
 
 test('the dropdown reflects the account subset and offers all channels', async () => {
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
       channels={CHANNELS}
@@ -72,7 +113,7 @@ test('the dropdown reflects the account subset and offers all channels', async (
 });
 
 test('an empty subset shows and selects "all channels"', async () => {
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={[{ account_id: 'a3', name: '+79990000003', linked: true, pinned_channels: [] }]}
       channels={CHANNELS}
@@ -92,7 +133,7 @@ test('an empty subset shows and selects "all channels"', async () => {
 // .tb-dd class only collapses it visually), so `inert` is what keeps a keyboard
 // operator from tabbing through the options of every collapsed row on the page.
 test('a collapsed channel list takes no focus, an expanded one does', async () => {
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
       channels={CHANNELS}
@@ -113,7 +154,7 @@ test('a collapsed channel list takes no focus, an expanded one does', async () =
 });
 
 test('a multi-channel subset shows a count in the trigger', () => {
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={[
         {
@@ -135,7 +176,7 @@ test('a multi-channel subset shows a count in the trigger', () => {
 
 test('toggling channels adds/removes; "all channels" clears the subset', async () => {
   const onChannelChange = vi.fn();
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={[
         { account_id: 'a3', name: '+79990000003', linked: true, pinned_channels: ['@crypto'] },
@@ -166,7 +207,7 @@ test('toggling channels adds/removes; "all channels" clears the subset', async (
 test('a t.me channel is labelled by the part that tells it apart', async () => {
   // Channels entered as full links share their first 13 characters, so a truncating
   // label used to keep only "https://t.me/…" — the identical half. Full link on hover.
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={[
         {
@@ -200,7 +241,7 @@ test('a t.me channel is labelled by the part that tells it apart', async () => {
 });
 
 test('empty list shows the empty hint', () => {
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={[]}
       onClose={vi.fn()}
@@ -215,7 +256,7 @@ test('empty list shows the empty hint', () => {
 test('shows a success or error mark from the feedback map', () => {
   // Modal content is rendered via a portal onto document.body, not inside
   // the render() container — query the document instead.
-  const { rerender } = render(
+  const { rerender } = renderWithClient(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
       onClose={vi.fn()}
@@ -244,7 +285,7 @@ test('names the channels an account is banned in for good', () => {
   // A per-pair ban is permanent and the channel row hides it (a sibling account still
   // posts there), so this modal is the only place the operator learns WHO is burnt
   // WHERE — right next to the button that adds a replacement account.
-  render(
+  renderWithClient(
     <NeuroAccountsModal
       accounts={[
         { ...ACCOUNTS[0]!, banned_channels: ['https://t.me/news', '@crypto'] },
@@ -258,4 +299,28 @@ test('names the channels an account is banned in for good', () => {
     />,
   );
   expect(screen.getByText('Забанен навсегда: news, @crypto')).toBeInTheDocument();
+});
+
+test('the limits chip reports the tightest cap and opens the limits modal', async () => {
+  // The chip is the at-a-glance: without opening anything the operator sees which cap is
+  // closest to binding — here 8 of 20 joins, the highest share of the three.
+  renderWithClient(
+    <NeuroAccountsModal
+      accounts={ACCOUNTS}
+      channels={CHANNELS}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+      onChannelChange={vi.fn()}
+    />,
+  );
+  const chips = await screen.findAllByRole('button', { name: 'Лимиты' });
+  await waitFor(() => {
+    expect(chips[0]).toHaveTextContent('8/20');
+  });
+
+  await userEvent.click(chips[0]!);
+
+  expect(await screen.findByText('Лимиты · Vika Ix')).toBeInTheDocument();
+  expect(screen.getByLabelText('Вступления в каналы')).toHaveValue(null);
 });

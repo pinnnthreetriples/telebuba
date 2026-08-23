@@ -51,6 +51,81 @@ export type AccountCheckRequest = {
 };
 
 /**
+ * AccountLimitGauge
+ *
+ * One cap as the operator reads it: the number, what is spent, when a slot returns.
+ *
+ * ``resets_at`` is the moment the OLDEST counted row leaves the rolling window, i.e.
+ * when the account gets one slot back — not a midnight reset, which no cap here has.
+ * ``None`` when nothing is counted, because then there is nothing to wait for.
+ */
+export type AccountLimitGauge = {
+  /**
+   * Limit
+   */
+  limit: number;
+  /**
+   * Used
+   */
+  used: number;
+  /**
+   * Fleet Default
+   */
+  fleet_default: number;
+  /**
+   * Overridden
+   */
+  overridden?: boolean;
+  /**
+   * Resets At
+   */
+  resets_at?: string | null;
+};
+
+/**
+ * AccountLimitsUpdate
+ *
+ * The operator's edit — a full replace of the override row.
+ *
+ * Every field is sent every time: ``None`` is how the modal's "Сбросить" says *drop
+ * this override and follow the fleet again*, so an omitted field cannot be allowed to
+ * mean "keep whatever was stored" — that would leave no way to clear one cap.
+ */
+export type AccountLimitsUpdate = {
+  /**
+   * Max Joins Per Day
+   */
+  max_joins_per_day?: number | null;
+  /**
+   * Max Comments Per Hour
+   */
+  max_comments_per_hour?: number | null;
+  /**
+   * Max Comments Per Channel Per Day
+   */
+  max_comments_per_channel_per_day?: number | null;
+};
+
+/**
+ * AccountLimitsView
+ *
+ * Every cap of one account, for the "Лимиты" modal.
+ */
+export type AccountLimitsView = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  joins: AccountLimitGauge;
+  comments_per_hour: AccountLimitGauge;
+  comments_per_channel_per_day: AccountLimitGauge;
+  /**
+   * Busiest Channel
+   */
+  busiest_channel?: string | null;
+};
+
+/**
  * AccountPrivacyOutcome
  *
  * One account's result in the fleet-wide apply.
@@ -8158,6 +8233,83 @@ export type UpdateNeurocommentSettingsResponses = {
 
 export type UpdateNeurocommentSettingsResponse =
   UpdateNeurocommentSettingsResponses[keyof UpdateNeurocommentSettingsResponses];
+
+export type GetAccountLimitsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/accounts/{account_id}/limits';
+};
+
+export type GetAccountLimitsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetAccountLimitsError = GetAccountLimitsErrors[keyof GetAccountLimitsErrors];
+
+export type GetAccountLimitsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountLimitsView;
+};
+
+export type GetAccountLimitsResponse = GetAccountLimitsResponses[keyof GetAccountLimitsResponses];
+
+export type UpdateAccountLimitsData = {
+  body: AccountLimitsUpdate;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/accounts/{account_id}/limits';
+};
+
+export type UpdateAccountLimitsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type UpdateAccountLimitsError = UpdateAccountLimitsErrors[keyof UpdateAccountLimitsErrors];
+
+export type UpdateAccountLimitsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountLimitsView;
+};
+
+export type UpdateAccountLimitsResponse =
+  UpdateAccountLimitsResponses[keyof UpdateAccountLimitsResponses];
 
 export type ClearLogsData = {
   body?: never;

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-17
+last_updated: 2026-08-23
 edges:
   - target: context/runtime-discovery.md
     condition: where the campaign's channels came from
@@ -24,6 +24,7 @@ grounds_to:
 - Pipeline: filter → eligible account → atomic claim → generate/deduplicate → delay → comment → persist. Durable cooldown/ban/access/challenge state gates later selection. Unknown delivery fails closed.
 - One readiness row yields one blocked-reason ladder, read by both the channel badge and the selection-miss log, so the two cannot disagree about a pair; the operator skip is the deliberate exception, a per-pair fact the channel does not show. Miss reasons rank by distance, then terminal before transient: a transient block announces itself once the channel works, a permanent loss never does.
 - Joins are paced against a persisted rolling per-account budget; already-participant no-ops do not spend it and warming uses another domain. Neuroshilling charges this same log deliberately, because Telegram counts joins per account and not per feature, so a running campaign brings this cap nearer. Read-cap, join and charge is one critical section under a per-account join mutex shared with neuroshilling, re-counting once held; the pacer cannot serve as that mutex because it releases its own lock the moment it grants a slot. Reconcile publishes watched gaps atomically; one background join pass re-subscribes after late joins resolve.
+- Fleet caps are a default, not the rule: an account may carry its own join, per-hour and per-channel-day caps. Absence, not zero, means "follow the fleet" — zero is a real value on two of the three. One resolver serves every gate and the operator's gauge, so a cap the board shows is always the cap the engine applies; the join override governs neuroshilling too, since the budget it spends is the account's, not the feature's.
 - Captcha queue membership means the automatic rule still owns the pair, not that an operator controls it. Apply exclusions in the SQL before `LIMIT`. Chat restrictions and bot challenges remain distinct.
 - Terminal marks are one-way until a deliberate operator action: one authorised captcha retry, bounded re-join attempts, and comments-off retirement. Readers use the terminal mark, never counter freshness; readiness rows are not deleted.
 - Leave only when durable state says the account remains in the chat. Lost challenges and retired authors leave; the listener does not. Re-link restores attempt budgets except sticky bans and operator skips.

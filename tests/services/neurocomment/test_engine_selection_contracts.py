@@ -9,12 +9,22 @@ import pytest
 from core.db import fetch_active_campaign_for_channel
 from schemas.accounts import AccountRead
 from schemas.neurocomment import NeurocommentReadiness, NeurocommentSettings
+from schemas.neurocomment_limits import EffectiveAccountLimits
 from services import _account_owner
 from services.neurocomment import _gates, _pair_status, _state, engine
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from tests.services.neurocomment.engine_support import _make_campaign
 
 pytestmark = pytest.mark.usefixtures("isolate_engine")
+
+
+def _caps(*, hourly: int = 5, daily: int = 3) -> EffectiveAccountLimits:
+    """The per-account caps the quota gate now reads, resolved (#58)."""
+    return EffectiveAccountLimits(
+        max_joins_per_day=20,
+        max_comments_per_hour=hourly,
+        max_comments_per_channel_per_day=daily,
+    )
 
 
 def _limits(*, hourly: int = 5, daily: int = 3) -> NeurocommentSettings:
@@ -39,14 +49,14 @@ def _limits(*, hourly: int = 5, daily: int = 3) -> NeurocommentSettings:
 )
 def test_quota_boundaries(hourly: int, daily: int, expected: str | None) -> None:
     assert (
-        _gates._quota_block_reason("account", _limits(), {"account": hourly}, {"account": daily})
+        _gates._quota_block_reason("account", _caps(), {"account": hourly}, {"account": daily})
         == expected
     )
 
 
 def test_zero_daily_cap_is_an_off_switch() -> None:
     assert (
-        _gates._quota_block_reason("account", _limits(daily=0), {"account": 0}, {"account": 999})
+        _gates._quota_block_reason("account", _caps(daily=0), {"account": 0}, {"account": 999})
         is None
     )
 
@@ -78,6 +88,7 @@ def _pool() -> engine._SelectionPool:
         fingerprints={},
         hourly_counts={},
         daily_counts={},
+        overrides={},
         limits=_limits(),
     )
 

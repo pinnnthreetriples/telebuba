@@ -1,7 +1,12 @@
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { AccountLimitGauge } from '@/shared/api';
 import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
+
+import { accountLimitsQueryOptions } from '../api/campaign.queries';
+import { AccountLimitsModal } from './AccountLimitsModal';
 
 export interface NeuroAccountRow {
   account_id: string;
@@ -40,6 +45,65 @@ function CheckIcon() {
   );
 }
 
+// The three caps in the order they bind — same order as the limits modal's rows.
+const GAUGES = ['joins', 'comments_per_hour', 'comments_per_channel_per_day'] as const;
+
+// Optional on purpose: this reads a payload off the network, and a chip that throws
+// would take the whole accounts modal down with it over a cosmetic number.
+function share(gauge: AccountLimitGauge | undefined): number {
+  return gauge && gauge.limit > 0 ? Math.min(1, gauge.used / gauge.limit) : 0;
+}
+
+// The row's at-a-glance: three micro-bars (one per cap, height = how much is spent) and
+// the number of the TIGHTEST one, which is the cap that will actually stop this account.
+// A colour change is reserved for the two states worth interrupting a scan for — at the
+// cap, and within a fifth of it.
+// ponytail: one request per row. The roster is a campaign's accounts, so this is tens at
+// worst; if it ever grows, add a bulk `/limits?account_ids=` read rather than a cache here.
+function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => void }) {
+  const { t } = useTranslation();
+  const { data } = useQuery(accountLimitsQueryOptions({ path: { account_id: accountId } }));
+  const tightest = data
+    ? GAUGES.reduce((best, key) => (share(data[key]) > share(data[best]) ? key : best))
+    : null;
+  const worst = share(tightest ? data?.[tightest] : undefined);
+  const binding = tightest ? data?.[tightest] : undefined;
+  const skin =
+    worst >= 1
+      ? 'border-[#f0c9c5] bg-danger-tint text-danger'
+      : worst >= 0.8
+        ? 'border-[#eadfba] bg-[#fbf3dd] text-warning'
+        : 'border-line-input bg-white text-ink-muted hover:border-line-strong';
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={t('neurocomment.modal.neuroAccounts.limits')}
+      aria-label={t('neurocomment.modal.neuroAccounts.limits')}
+      className={`flex shrink-0 items-center gap-[7px] rounded-[9px] border px-[10px] py-[7px] text-[12px] font-medium ${skin}`}
+    >
+      <span className="flex h-3 items-end gap-[2px]">
+        {GAUGES.map((key) => {
+          const spent = data ? share(data[key]) : 0;
+          return (
+            <i
+              key={key}
+              style={{ height: `${Math.max(3, Math.round(spent * 12))}px` }}
+              className={`block w-[3px] rounded-[1px] ${spent > 0 ? 'bg-current' : 'bg-track'}`}
+            />
+          );
+        })}
+      </span>
+      <span className="font-mono text-[11.5px] font-semibold tabular-nums">
+        {binding
+          ? `${binding.used}/${binding.limit > 0 ? binding.limit : '∞'}`
+          : t('neurocomment.modal.neuroAccounts.limits')}
+      </span>
+    </button>
+  );
+}
+
 function AccountRow({
   account,
   channels,
@@ -57,6 +121,7 @@ function AccountRow({
 }) {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [limitsOpen, setLimitsOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const banned = account.banned_channels ?? [];
 
@@ -89,6 +154,12 @@ function AccountRow({
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
           {account.name}
         </span>
+        <LimitsChip
+          accountId={account.account_id}
+          onOpen={() => {
+            setLimitsOpen(true);
+          }}
+        />
         {account.linked ? (
           // Each linked account gets a ~180px multi-select of the campaign's channels;
           // an empty selection ("Все каналы") = comment on all. Custom tb-dd list (not a
@@ -218,6 +289,15 @@ function AccountRow({
             );
           })}
         </div>
+      ) : null}
+      {limitsOpen ? (
+        <AccountLimitsModal
+          accountId={account.account_id}
+          name={account.name}
+          onClose={() => {
+            setLimitsOpen(false);
+          }}
+        />
       ) : null}
       {confirmRemove ? (
         <ConfirmModal

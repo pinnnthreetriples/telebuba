@@ -279,6 +279,9 @@ from core.repositories.logs import (  # noqa: E402, F401
 )
 from core.repositories.neurocomment import (  # noqa: E402, F401
     ChannelAlreadyAssignedError,
+    account_busiest_channel_window,
+    account_comment_window,
+    account_join_window,
     assign_account_to_campaign,
     bump_channel_pause,
     checkpoint_backfill,
@@ -337,6 +340,8 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_posted_comments_since,
     list_silent_watch_channels,
     list_waiting_comments,
+    load_account_limit_override,
+    load_account_limit_overrides,
     load_neurocomment_settings,
     lookup_cached_decision,
     mark_captcha_gave_up,
@@ -364,6 +369,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     requeue_processing_posts,
     resolve_pending_outcome,
     return_claimed_posts,
+    save_account_limit_override,
     save_neurocomment_settings,
     set_comment_dispatch_stage,
     set_listener_account_id,

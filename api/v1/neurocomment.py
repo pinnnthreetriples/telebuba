@@ -34,6 +34,7 @@ from schemas.neurocomment import (
 from schemas.neurocomment_bans import ChannelBanCheckList
 from schemas.neurocomment_board import NeurocommentBoard
 from schemas.neurocomment_discovery import DISCOVERY_BUSY_CODE
+from schemas.neurocomment_limits import AccountLimitsUpdate, AccountLimitsView
 from services import neurocomment as nc_service
 
 if TYPE_CHECKING:
@@ -363,3 +364,23 @@ async def get_settings() -> NeurocommentSettings:
 )
 async def update_settings(body: NeurocommentSettingsUpdate) -> NeurocommentSettings:
     return await nc_service.save_neurocomment_settings(body)
+
+
+@router.get(
+    "/accounts/{account_id}/limits",
+    response_model=AccountLimitsView,
+    operation_id="getAccountLimits",
+)
+async def get_account_limits(account_id: str) -> AccountLimitsView:
+    """One account's caps, what each window has spent, and when a slot comes back."""
+    return await nc_service.load_account_limits(account_id)
+
+
+@router.put(
+    "/accounts/{account_id}/limits",
+    response_model=AccountLimitsView,
+    operation_id="updateAccountLimits",
+)
+async def update_account_limits(account_id: str, body: AccountLimitsUpdate) -> AccountLimitsView:
+    """Replace the account's overrides — a null field drops back to the fleet cap."""
+    return await nc_service.save_account_limits(account_id, body)
