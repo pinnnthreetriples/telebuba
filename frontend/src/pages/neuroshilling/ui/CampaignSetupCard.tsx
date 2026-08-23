@@ -20,7 +20,9 @@ const FIELD =
   'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-body outline-none focus:border-primary disabled:bg-track disabled:text-ink-subtle';
 const NUMBER =
   'w-[78px] rounded-md border border-line-input bg-white px-[9px] py-[6px] text-body tabular-nums outline-none focus:border-primary disabled:bg-track disabled:text-ink-subtle';
-const SEGMENT = 'rounded-full px-[13px] py-[5px] text-body font-medium disabled:opacity-60';
+// The filter-pill rung (`6px 14px`), shared with the logs level filter and the
+// warming board's state filter — the same control in a different card.
+const SEGMENT = 'rounded-full px-[14px] py-[6px] text-body font-medium disabled:opacity-60';
 
 // One labelled numeric box. Inline rather than a shared primitive: five of them
 // live on this card and nowhere else, and `shared/ui` has no numeric field.
@@ -123,7 +125,7 @@ export function CampaignSetupCard({
       <span className="mb-[5px] flex items-center gap-sm text-body font-medium text-ink-muted">
         {t('neuroshilling.setup.targets.label')}
         <HelpHint text={t('neuroshilling.setup.targets.hint')} />
-        <span className="ml-auto rounded-full bg-track px-[9px] py-[2px] text-tiny font-medium tabular-nums text-ink-muted">
+        <span className="ml-auto rounded-full bg-track px-[8px] py-[2px] text-micro font-medium tabular-nums text-ink-muted">
           {/* `n`, not `count`: an i18next `count` switches on plural forms this
               key does not carry, and Russian would need four of them to read right. */}
           {t('neuroshilling.setup.targets.count', { n: targets })}
@@ -236,7 +238,7 @@ export function CampaignSetupCard({
       >
         {t('neuroshilling.setup.advanced.title')}
         {changed > 0 ? (
-          <span className="rounded-full bg-primary-tint px-[8px] py-[1px] text-tiny font-semibold tabular-nums text-primary">
+          <span className="rounded-full bg-primary-tint px-[8px] py-[2px] text-micro font-semibold tabular-nums text-primary">
             {changed}
           </span>
         ) : null}
@@ -305,7 +307,7 @@ export function CampaignSetupCard({
             {/* The pool as it stands NOW, not as the roster was arranged: a promoted
                 account has its reserve flag cleared, so this drops by one on every
                 substitution and reaching zero is the warning the operator needs. */}
-            <span className="ml-auto rounded-full bg-track px-[9px] py-[2px] text-tiny font-medium tabular-nums text-ink-muted">
+            <span className="ml-auto rounded-full bg-track px-[8px] py-[2px] text-micro font-medium tabular-nums text-ink-muted">
               {t('neuroshilling.setup.reserve.count', { n: reserveCount })}
             </span>
           </div>

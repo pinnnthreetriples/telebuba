@@ -201,7 +201,7 @@ export function LaunchCard({
             row a substitution writes is the campaign's and outlives the run. Shown at
             zero too: "nobody has been replaced" is the answer the operator is
             checking for. */}
-        <span className="rounded-full bg-track px-[9px] py-[2px] text-tiny font-medium tabular-nums text-ink-muted">
+        <span className="rounded-full bg-track px-[8px] py-[2px] text-micro font-medium tabular-nums text-ink-muted">
           {t('neuroshilling.launch.substitutions', { n: run.substitutions ?? 0 })}
         </span>
         {/* `sent` / `total` counts MESSAGE steps only: reactions are journalled but
@@ -224,7 +224,7 @@ export function LaunchCard({
           className="mb-[12px] h-[7px] w-full overflow-hidden rounded-full bg-track"
         >
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-[420ms]"
+            className="h-full rounded-full bg-primary transition-[width] duration-reveal"
             style={{ width: `${String(percent)}%` }}
           />
         </div>

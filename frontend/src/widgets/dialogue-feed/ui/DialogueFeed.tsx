@@ -186,7 +186,7 @@ export function DialogueFeed() {
         />
         <span className="text-lead font-bold">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
-          <span className="rounded-full bg-success-tint px-2 py-[2px] text-micro font-bold text-success">
+          <span className="rounded-full bg-success-tint px-[8px] py-[2px] text-micro font-bold text-success">
             {/* One page, not a total: at the limit there is more history behind
                 it, so say "30+" instead of freezing at a wrong-looking "30". */}
             {messages.length === FEED_LIMIT ? `${FEED_LIMIT}+` : messages.length}

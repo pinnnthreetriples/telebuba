@@ -7,6 +7,7 @@ import { probeProxyMutation } from '@/entities/proxy';
 import { FormField } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
+import { seg } from './_styles';
 
 // Shared proxy-form fields (host / port / type / login / password+eye + a real
 // connectivity probe), now on @tanstack/react-form + zod. The form owns field
@@ -50,8 +51,6 @@ export function ProxyForm({
     onValidityChange?.(canSubmit);
   }, [canSubmit, onValidityChange]);
 
-  const seg = (on: boolean): string =>
-    `flex-1 rounded-sm py-[7px] text-body font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
   const canProbe = detect !== 'loading' && values.host.trim() !== '' && values.port !== '';
 
   const runDetect = () => {
@@ -225,7 +224,7 @@ export function ProxyForm({
           <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
             {country ? (
               <span
-                className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
+                className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-ring`}
               />
             ) : null}
             {country ?? t('accounts.proxyForm.resultOk')}

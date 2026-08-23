@@ -152,7 +152,7 @@ export function AccountsTable({
             />
             {account.proxy_country_code ? (
               <span
-                className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-ring`}
               />
             ) : null}
             <span className="text-body text-ink-body">{proxyMeta(account)}</span>
@@ -211,7 +211,7 @@ export function AccountsTable({
                 event.stopPropagation();
                 onCheck(account.account_id);
               }}
-              className={`${ACTION_BTN} transition-colors duration-[250ms] ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
+              className={`${ACTION_BTN} transition-colors duration-enter ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
             >
               {busy ? (
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />

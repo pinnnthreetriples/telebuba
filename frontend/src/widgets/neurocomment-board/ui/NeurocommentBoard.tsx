@@ -111,7 +111,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[9px] py-[3px] text-tiny font-medium text-primary">
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-medium text-primary">
       <span className="h-[5px] w-[5px] rounded-full bg-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -175,7 +175,7 @@ function AccountComments({
                   {c.comment_text ?? '—'}
                 </span>
                 {deleted ? (
-                  <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-micro font-medium text-danger">
+                  <span className="shrink-0 rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
                     {t('neurocomment.feed.deleted')}
                   </span>
                 ) : null}
@@ -243,7 +243,7 @@ export function NeurocommentBoard({
           >
             {row.original.channel}
             {row.original.deletedRecent > 0 ? (
-              <span className="rounded-full bg-danger-tint px-[7px] py-px text-micro font-medium text-danger">
+              <span className="rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
                 {t('neurocomment.board.deleted', { count: row.original.deletedRecent })}
               </span>
             ) : null}
@@ -288,7 +288,7 @@ export function NeurocommentBoard({
             // The row's only control, and a 16px glyph is not a thumb target — the
             // padding/negative-margin pair grows the hit box to 40px without moving the
             // chevron or widening the column it is sized to.
-            className={`-m-3 flex p-3 text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+            className={`-m-3 flex p-3 text-ink-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
           >
             <svg
               width="16"
@@ -334,7 +334,7 @@ export function NeurocommentBoard({
       trailing={
         <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[9px] py-[3px] text-tiny font-semibold text-primary">
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-semibold text-primary">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>

@@ -43,7 +43,7 @@ export function SurfHover({
           this and keeps its intended colour. */}
       <div
         id={surfaceId}
-        className={`relative rounded-lg bg-white transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
+        className={`relative rounded-lg bg-white transition-transform duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
         style={{ ['--shift' as string]: `${String(shift)}px` }}
       >
         {surface}

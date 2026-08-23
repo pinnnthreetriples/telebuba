@@ -95,7 +95,7 @@ function StepRow({
   return (
     <div className="rounded-lg border border-line bg-white p-[11px]">
       <div className="mb-[8px] flex items-center gap-sm">
-        <span className="rounded-full bg-track px-[8px] py-[2px] text-tiny font-semibold tabular-nums text-ink-muted">
+        <span className="rounded-full bg-track px-[8px] py-[2px] text-micro font-semibold tabular-nums text-ink-muted">
           {t('neuroshilling.scenario.steps.position', { position })}
         </span>
         <div className="min-w-0 flex-1">
@@ -352,7 +352,7 @@ export function ScenarioCard({
               onClick={() => {
                 onDraft({ ...draft, mode });
               }}
-              className={`rounded-full px-[13px] py-[5px] text-body font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
+              className={`rounded-full px-[14px] py-[6px] text-body font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
             >
               {t(`neuroshilling.scenario.mode.${mode}`)}
             </button>

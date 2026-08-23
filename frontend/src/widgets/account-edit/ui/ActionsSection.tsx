@@ -110,7 +110,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             disabled={aliveMutation.isPending}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
-            className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-[250ms] ${
+            className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-enter ${
               aliveCheck === 'ok'
                 ? 'border-success bg-success text-white'
                 : aliveCheck === 'err'

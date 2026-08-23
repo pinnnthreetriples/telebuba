@@ -688,7 +688,7 @@ export function AddAccountModal({
                   >
                     {proxy.country_code ? (
                       <span
-                        className={`fi fi-${proxy.country_code.toLowerCase()} block h-[17px] w-6 shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                        className={`fi fi-${proxy.country_code.toLowerCase()} block h-[17px] w-6 shrink-0 rounded-[3px] shadow-ring`}
                       />
                     ) : null}
                     <span className="flex-1">

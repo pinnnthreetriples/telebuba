@@ -51,6 +51,32 @@ export default {
       card: '16px',
       full: '9999px',
     },
+    // Four motion rungs, replacing Tailwind's `duration-75…1000` scale outright for the
+    // same reason the type scale went: nothing used a single one of those names, and the
+    // numbers were what people copied. `state` is a hover or a colour change — something
+    // already on screen reacting; `enter` is something arriving (a toast, an opacity
+    // fade-in); `reveal` is a panel opening and every part of that one gesture, chevron
+    // included; `roll` is the odometer counting. A gesture that spans two elements must
+    // spend ONE rung on both halves — the dropdown's panel and its chevron used to run
+    // 420ms against 400ms, which is a 20ms stagger nobody chose.
+    transitionDuration: {
+      state: '150ms',
+      enter: '250ms',
+      reveal: '420ms',
+      roll: '900ms',
+    },
+    // Two curves, replacing Tailwind's `ease-linear/in/out/in-out` outright — none of
+    // which was used, and `out` deliberately takes the name `ease-out` so that the one
+    // "settle" curve in the app is the one a component reaches for. `out` decelerates
+    // hard and stops (a rail filling, a number rolling); `spring` overshoots slightly
+    // and settles back (a panel opening, a chevron flipping). The CSS side carried a
+    // third curve, `cubic-bezier(.34,1.4,.6,1)`, 0.05 of overshoot away from `spring`
+    // and used on the very panel whose chevron used `spring` — that is drift, not a
+    // third intention, so it is gone.
+    transitionTimingFunction: {
+      out: 'cubic-bezier(.16,1,.3,1)',
+      spring: 'cubic-bezier(.34,1.45,.6,1)',
+    },
     // Four rungs of breathing room, replacing Tailwind's 4/8/12/16 scale outright for
     // the same reason the radii are replaced: the numeric names resolved to values the
     // canon does not have, so `gap-2` and `gap-[7px]` sat side by side in one row and
@@ -136,13 +162,18 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
-      // Three elevations, one per purpose: `pop` for anything that floats over the
-      // page (dropdown, tooltip, toast, menu), `ring` for the hairline outline that
-      // stands in for a border on a tinted pill, `thumb` for the switch knob.
+      // Four elevations, one per purpose: `pop` for anything that floats over the page
+      // (dropdown, tooltip, toast, menu — ALL of them, which is the point: these four
+      // things had four different shadows), `ring` for the hairline outline that stands
+      // in for a border on a tinted pill, `thumb` for a knob you can drag (the switch,
+      // and the warming-days slider), `focus` for the ring a focused control wears —
+      // the one recipe shared by `shared/ui/Select`'s trigger and index.css's
+      // `.tb-time:focus-within`, which is what makes it a role rather than a one-off.
       boxShadow: {
         pop: '0 10px 30px rgba(11,11,12,0.12)',
         ring: '0 0 0 1px rgba(11,11,12,0.07)',
         thumb: '0 1px 3px rgba(0,0,0,0.3)',
+        focus: '0 0 0 3px rgba(0,102,255,0.12)',
       },
     },
   },

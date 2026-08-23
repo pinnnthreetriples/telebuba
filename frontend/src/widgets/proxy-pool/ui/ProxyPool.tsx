@@ -209,7 +209,7 @@ function ProxyCard({
       <div className="flex items-center gap-md">
         {proxy.country_code ? (
           <span
-            className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+            className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-ring`}
             title={geoTitle}
           />
         ) : geoConflict ? (

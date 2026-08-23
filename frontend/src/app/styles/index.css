@@ -226,12 +226,12 @@
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+    opacity theme('transitionDuration.state') ease,
+    transform theme('transitionDuration.state') ease;
   /* The `pop` rung of tailwind.config.ts's z ladder, as a literal: this tooltip is
      a pseudo-element-bearing plain-CSS component, so it cannot take `z-pop`. */
   z-index: 20;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  box-shadow: theme('boxShadow.pop');
 }
 .tb-tip:hover .tb-tip-pop {
   opacity: 1;
@@ -285,8 +285,8 @@
   max-height: 0;
   opacity: 0;
   transition:
-    max-height 0.5s cubic-bezier(0.34, 1.4, 0.6, 1),
-    opacity 0.35s ease;
+    max-height theme('transitionDuration.reveal') theme('transitionTimingFunction.spring'),
+    opacity theme('transitionDuration.enter') ease;
 }
 .tb-collapse.tb-open {
   max-height: var(--mh, 600px);
@@ -339,7 +339,8 @@
 .tb-subrow {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  transition: grid-template-rows 0.42s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: grid-template-rows theme('transitionDuration.reveal')
+    theme('transitionTimingFunction.out');
 }
 @starting-style {
   .tb-subrow {
@@ -364,7 +365,7 @@
   overflow: hidden;
 }
 .tb-sw-thumb {
-  transition: transform 0.18s ease;
+  transition: transform theme('transitionDuration.state') ease;
 }
 .tb-sw:active .tb-sw-thumb {
   transform: scale(0.86);
@@ -374,8 +375,8 @@
   opacity: 0;
   overflow: hidden;
   transition:
-    max-height 0.42s cubic-bezier(0.34, 1.4, 0.6, 1),
-    opacity 0.22s ease;
+    max-height theme('transitionDuration.reveal') theme('transitionTimingFunction.spring'),
+    opacity theme('transitionDuration.enter') ease;
 }
 .tb-dd.open {
   max-height: 240px;
@@ -383,17 +384,17 @@
   overflow-y: auto;
 }
 .tb-ddchev {
-  transition: transform 0.4s cubic-bezier(0.34, 1.45, 0.6, 1);
+  transition: transform theme('transitionDuration.reveal') theme('transitionTimingFunction.spring');
 }
 .tb-ddchev.open {
   transform: rotate(180deg);
 }
 .tb-time {
   transition:
-    border-color 0.18s ease,
-    box-shadow 0.18s ease;
+    border-color theme('transitionDuration.state') ease,
+    box-shadow theme('transitionDuration.state') ease;
 }
 .tb-time:focus-within {
   border-color: theme('colors.primary.DEFAULT') !important;
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.12);
+  box-shadow: theme('boxShadow.focus');
 }

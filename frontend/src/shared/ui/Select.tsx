@@ -7,7 +7,7 @@ export type SelectOption = { value: string; label: string; disabled?: boolean };
 // input in the same dialog it reads as a different application; the six sites that
 // needed this each grew their own panel instead, with their own literal shadow.
 const TRIGGER =
-  'flex w-full items-center justify-between gap-[8px] rounded-lg border bg-white px-[13px] py-[9px] text-left text-lead text-ink outline-none hover:border-line-strong focus-visible:border-primary focus-visible:shadow-[0_0_0_3px_rgba(0,102,255,0.12)] disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-ink-subtle';
+  'flex w-full items-center justify-between gap-[8px] rounded-lg border bg-white px-[13px] py-[9px] text-left text-lead text-ink outline-none hover:border-line-strong focus-visible:border-primary focus-visible:shadow-focus disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-ink-subtle';
 const OPTION =
   'flex w-full items-center justify-between gap-[8px] rounded-sm border-none px-[10px] py-[8px] text-left text-body hover:bg-primary-tint disabled:text-ink-subtle';
 

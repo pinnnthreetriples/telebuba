@@ -24,7 +24,7 @@ export function Odometer({ value, tone }: { value: number; tone: string }) {
         .map((ch, index) => (
           <span key={index} className="inline-block h-[1.1em] overflow-hidden">
             <span
-              className="flex flex-col transition-transform duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
+              className="flex flex-col transition-transform duration-roll ease-out"
               style={{ transform: `translateY(${(armed ? -(Number(ch) * 1.1) : 0).toFixed(2)}em)` }}
             >
               {Array.from({ length: 10 }, (_, digit) => (

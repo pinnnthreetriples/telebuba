@@ -6,7 +6,7 @@ import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 function Chevron({ open }: { open: boolean }) {
   return (
     <span
-      className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${open ? 'rotate-180' : ''}`}
+      className={`flex text-ink-subtle transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
     >
       <svg
         width="16"

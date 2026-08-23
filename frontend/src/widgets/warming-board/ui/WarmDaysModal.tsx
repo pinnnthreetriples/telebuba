@@ -161,7 +161,7 @@ export function WarmDaysModal({
             ))}
           </div>
           <div
-            className="absolute top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[2px] border-primary bg-white shadow-[0_1px_4px_rgba(0,0,0,0.2)]"
+            className="absolute top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[2px] border-primary bg-white shadow-thumb"
             style={{ left: `${String(pct)}%` }}
           />
         </div>

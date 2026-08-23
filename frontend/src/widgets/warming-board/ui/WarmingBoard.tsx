@@ -356,7 +356,7 @@ function WarmingCard({
               key={index}
               // Days done, the day in progress, days to come — tokens, so the bar
               // reads the same green/blue/grey as the rest of the board.
-              className={`h-[22px] flex-1 rounded-[1.5px] transition-[background] duration-[420ms] ${index < filled ? 'bg-success' : index === filled ? 'bg-primary' : 'bg-line'}`}
+              className={`h-[22px] flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-primary' : 'bg-line'}`}
             />
           ))}
         </div>
@@ -383,7 +383,7 @@ function WarmingCard({
             }}
           >
             <div
-              className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-[420ms]"
+              className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-reveal"
               style={{ width: `${String(connectorPct)}%` }}
             />
           </div>
@@ -452,7 +452,7 @@ function WarmingCard({
           >
             {t('warming.card.logToggle')}
             <span
-              className={`flex transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${open ? 'rotate-180' : ''}`}
+              className={`flex transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
             >
               <svg
                 width="12"

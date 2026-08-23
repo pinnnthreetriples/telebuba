@@ -196,9 +196,13 @@ export function LogsPage() {
 
       <div className="mb-[14px] flex flex-wrap items-center gap-sm">
         <div ref={pillsRef} className="relative flex rounded-full bg-white p-[3px]">
+          {/* The one shadow with no name and no second site: a BLUE glow that belongs to
+              this sliding capsule alone, tinting the filled pill it sits under rather
+              than lifting anything off the page. `pop`/`ring`/`thumb` are all neutral
+              greys, and a token for one call site is not an improvement. */}
           <span
             aria-hidden
-            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-[0_1px_2px_rgba(0,102,255,0.3)] transition-[left,width] duration-[250ms]"
+            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-[0_1px_2px_rgba(0,102,255,0.3)] transition-[left,width] duration-enter"
             style={{ left: indicator.left, width: indicator.width, height: indicator.height }}
           />
           {STATUS_FILTERS.map((value) => (

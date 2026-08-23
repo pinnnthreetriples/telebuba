@@ -147,7 +147,7 @@ export function AppNav() {
           ))}
           <span
             aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-[2px] rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
+            className="pointer-events-none absolute left-0 top-0 h-[2px] rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-reveal ease-spring"
             style={{
               width: indicator.width,
               // Position via GPU transform (matches the design's layoutId slide),
@@ -222,7 +222,7 @@ export function AppNav() {
                   }}
                   className="fixed inset-0 z-raised cursor-default"
                 />
-                <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)] lg:top-[42px]">
+                <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-pop lg:top-[42px]">
                   {me.data ? (
                     <div className="truncate border-b border-line-row px-[10px] py-[8px] text-body text-ink-muted">
                       {me.data.username}

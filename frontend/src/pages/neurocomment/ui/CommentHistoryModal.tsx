@@ -78,7 +78,7 @@ export function CommentHistoryModal({
           return (
             <span className="inline-flex items-center gap-sm">
               <span className="text-ink-subtle line-through">{text}</span>
-              <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-micro font-medium text-danger">
+              <span className="shrink-0 rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
                 {t('neurocomment.feed.deleted')}
               </span>
             </span>

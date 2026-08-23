@@ -77,7 +77,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
           <button
             type="button"
             onClick={runSpamCheck}
-            className={`inline-flex items-center gap-sm rounded-full px-3 py-[5px] text-body font-medium transition-[background-color,border-color,color] duration-[250ms] ${
+            className={`inline-flex items-center gap-sm rounded-full px-3 py-[5px] text-body font-medium transition-[background-color,border-color,color] duration-enter ${
               spamCheck === 'ok'
                 ? 'border border-success bg-success text-white'
                 : spamCheck === 'err'

@@ -613,7 +613,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-[10px] py-[7px] text-left text-tiny font-normal leading-[1.5] text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-[10px] py-[7px] text-left text-tiny font-normal leading-[1.5] text-white shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>

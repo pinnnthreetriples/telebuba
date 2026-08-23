@@ -96,11 +96,11 @@ export function PipelineCard({
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
         >
           <div
-            className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
+            className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-roll ease-out"
             style={{ width: `${String(greenPct)}%` }}
           />
           <div
-            className="absolute left-0 top-0 h-full rounded-[2px] bg-primary transition-[width] duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
+            className="absolute left-0 top-0 h-full rounded-[2px] bg-primary transition-[width] duration-roll ease-out"
             style={{ width: `${String(bluePct)}%` }}
           />
         </div>

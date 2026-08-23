@@ -300,7 +300,7 @@ export function WarmingPage() {
                   const showPhone = account.phone != null && account.phone !== name;
                   const flag = cc ? (
                     <span
-                      className={`fi fi-${cc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                      className={`fi fi-${cc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}
                     />
                   ) : null;
                   return (
@@ -347,7 +347,7 @@ export function WarmingPage() {
                               <span className="text-tiny text-line-strong">·</span>
                               {pc ? (
                                 <span
-                                  className={`fi fi-${pc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                                  className={`fi fi-${pc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}
                                 />
                               ) : null}
                               <span className="text-tiny text-ink-subtle">
@@ -488,7 +488,7 @@ export function WarmingPage() {
                   </svg>
                 </span>
                 <span className="text-lead font-bold">{t('warming.warmed.title')}</span>
-                <span className="rounded-full bg-success-tint px-2 py-[2px] text-micro font-bold text-success">
+                <span className="rounded-full bg-success-tint px-[8px] py-[2px] text-micro font-bold text-success">
                   {warmed.length}
                 </span>
               </>
@@ -504,7 +504,7 @@ export function WarmingPage() {
                 const showPhone = acc.phone != null && acc.phone !== name;
                 const flag = acc.phone_country ? (
                   <span
-                    className={`fi fi-${acc.phone_country.toLowerCase()} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                    className={`fi fi-${acc.phone_country.toLowerCase()} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}
                   />
                 ) : null;
                 return (

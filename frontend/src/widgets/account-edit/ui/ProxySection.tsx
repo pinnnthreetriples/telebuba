@@ -390,7 +390,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
             {proxyResult?.country_code ? (
               <span
-                className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
+                className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-ring`}
               />
             ) : null}
             {[proxyResult?.country_code?.toUpperCase(), proxyResult?.exit_ip]
