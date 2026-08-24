@@ -25,7 +25,7 @@ import {
 } from './scenarioDraft';
 
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
+  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash disabled:opacity-50';
 
 function Stepper({
   label,

@@ -81,7 +81,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             onClick={runSpamCheck}
             className={`gap-sm rounded-full ${
               spamCheck === 'ok'
-                ? 'border-success bg-success text-white hover:border-success'
+                ? 'border-success bg-success-deep text-white hover:border-success'
                 : spamCheck === 'err'
                   ? 'border-danger bg-danger text-white hover:border-danger'
                   : 'text-ink-muted'
