@@ -191,7 +191,6 @@ export default {
           press: '#0e8c45',
           tint: '#ddf7e9',
           line: '#b8ecce',
-          dot: '#16b364',
         },
         // `deep` is the one amber the set lacked: the darkest rung, for a heading or a
         // small icon sitting ON an amber chip, where DEFAULT is the subtitle beside it.
