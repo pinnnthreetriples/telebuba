@@ -45,9 +45,9 @@ export function CommentModeFields({
   };
 
   return (
-    <div className="mt-[18px]">
+    <div className="mt-xl">
       <div role="group" aria-label={t('neurocomment.mode.label')}>
-        <div className="mb-[7px] text-body font-medium text-ink-body">
+        <div className="mb-sm text-body font-medium text-ink-body">
           {t('neurocomment.mode.label')}
         </div>
         <div className="flex gap-tight">
@@ -71,7 +71,7 @@ export function CommentModeFields({
                 // `title` is the native fallback the styled bubble does not replace: it is
                 // what a touch device and a screen reader get, since neither hovers.
                 title={`${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`}
-                className={`w-full rounded-md border px-[10px] py-[6px] text-body font-medium transition-colors disabled:opacity-60 ${
+                className={`w-full rounded-md border px-md py-tight text-body font-medium transition-colors disabled:opacity-60 ${
                   mode === option
                     ? 'border-primary bg-primary-wash text-primary-deep'
                     : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
@@ -91,8 +91,8 @@ export function CommentModeFields({
       {/* Only in reply mode, because that is the only mode the wait exists in: shown beside
           "пишем первыми" it would be a number the operator turns to no effect. */}
       {mode === 'reply' ? (
-        <label className="mt-[13px] block">
-          <span className="mb-[7px] block text-body font-medium text-ink-body">
+        <label className="mt-lg block">
+          <span className="mb-sm block text-body font-medium text-ink-body">
             {t('neurocomment.mode.waitLabel')}
           </span>
           <span className="flex items-center gap-sm">
@@ -115,7 +115,7 @@ export function CommentModeFields({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={t('neurocomment.mode.waitLabel')}
-              className="tb-time w-[68px] rounded-md border border-line-input bg-white px-[10px] py-[6px] text-body font-medium text-ink disabled:opacity-60"
+              className="tb-time w-[68px] rounded-md border border-line-input bg-white px-md py-tight text-body font-medium text-ink disabled:opacity-60"
             />
             <span className="text-tiny text-ink-subtle">{t('neurocomment.mode.waitHint')}</span>
           </span>

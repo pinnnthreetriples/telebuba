@@ -24,7 +24,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
       backdrop={0.45}
       className="flex w-[min(84vw,300px)] flex-col"
     >
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-4">
+      <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-lg">
         <div className="flex items-center gap-md">
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
@@ -35,7 +35,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           type="button"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-muted"
+          className="-mr-sm flex h-11 w-11 items-center justify-center rounded-full text-ink-muted"
         >
           <svg
             width="18"
@@ -51,13 +51,13 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
         </button>
       </div>
 
-      <nav className="flex flex-col gap-tight p-2">
+      <nav className="flex flex-col gap-tight p-sm">
         {NAV_LINKS.map((link, index) => (
           <Link
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-[44px] items-center rounded-lg px-3 text-lead font-medium transition-colors ${
+            className={`flex min-h-[44px] items-center rounded-lg px-md text-lead font-medium transition-colors ${
               activeIdx === index ? 'bg-primary-tint text-primary-deep' : 'text-ink-muted'
             }`}
           >

@@ -22,8 +22,8 @@ const TONE = {
 // `sm` is the chip that rides beside a value in a table row; `md` the standalone
 // label in a card header.
 const SIZE = {
-  sm: 'px-[8px] py-[2px] text-micro',
-  md: 'px-[11px] py-[5px] text-body',
+  sm: 'px-sm py-hair text-micro',
+  md: 'px-md py-tight text-body',
 } as const;
 
 export function Badge({

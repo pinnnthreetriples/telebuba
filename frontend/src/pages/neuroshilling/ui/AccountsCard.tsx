@@ -17,12 +17,12 @@ export function AccountsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.accounts.title')}
-      headerClassName="px-4 py-[15px]"
-      bodyClassName="px-4 pb-[15px]"
+      headerClassName="px-lg py-lg"
+      bodyClassName="px-lg pb-lg"
       header={<span className="text-lead font-semibold">{t('neuroshilling.accounts.title')}</span>}
     >
-      <div className="mb-[10px] flex items-center gap-sm">
-        <span className="rounded-full border border-line bg-track px-[11px] py-[4px] text-tiny font-medium text-ink-body">
+      <div className="mb-md flex items-center gap-sm">
+        <span className="rounded-full border border-line bg-track px-md py-xs text-tiny font-medium text-ink-body">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
         {/* The hint carries two rules. The picker enforces the second one — a held
@@ -34,7 +34,7 @@ export function AccountsCard({
       </div>
 
       {accounts.length > 0 ? (
-        <div className="mb-[10px] flex flex-wrap gap-sm">
+        <div className="mb-md flex flex-wrap gap-sm">
           {accounts.map((account) => (
             <Badge size="md" className="border border-line text-ink-body" key={account.account_id}>
               {account.title}
@@ -42,15 +42,13 @@ export function AccountsCard({
           ))}
         </div>
       ) : (
-        <div className="mb-[10px] text-body text-ink-subtle">
-          {t('neuroshilling.accounts.none')}
-        </div>
+        <div className="mb-md text-body text-ink-subtle">{t('neuroshilling.accounts.none')}</div>
       )}
 
       <button
         type="button"
         onClick={onPick}
-        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
+        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
       >
         {t('neuroshilling.accounts.pick')}
       </button>

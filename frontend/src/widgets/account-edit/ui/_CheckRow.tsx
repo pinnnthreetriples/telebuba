@@ -19,7 +19,7 @@ export function CheckRow({
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
-      className="mb-[14px] flex w-full items-center gap-md text-left disabled:opacity-60"
+      className="mb-lg flex w-full items-center gap-md text-left disabled:opacity-60"
     >
       <span
         className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${on ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}

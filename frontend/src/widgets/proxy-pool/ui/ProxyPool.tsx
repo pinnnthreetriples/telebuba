@@ -79,17 +79,19 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <Card className="mb-4 px-[18px] py-4">
-      <div className="mb-[13px] flex flex-wrap items-center justify-between gap-md">
+    <Card className="mb-lg px-xl py-lg">
+      <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div>
           <span className="text-lead font-semibold">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-2 text-body text-ink-subtle">{t('accounts.proxyPool.subtitle')}</span>
+          <span className="ml-sm text-body text-ink-subtle">
+            {t('accounts.proxyPool.subtitle')}
+          </span>
         </div>
         {!empty && (
           <button
             type="button"
             onClick={onAdd}
-            className="inline-flex items-center gap-sm rounded-full bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white"
+            className="inline-flex items-center gap-sm rounded-full bg-primary px-lg py-sm text-tiny font-semibold text-white"
           >
             <svg
               width="13"
@@ -106,8 +108,8 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
         )}
       </div>
       {empty ? (
-        <div className="flex flex-col items-center justify-center px-4 pb-[30px] pt-[34px] text-center">
-          <div className="mb-[13px] flex h-[46px] w-[46px] items-center justify-center rounded-lg bg-canvas text-ink-subtle">
+        <div className="flex flex-col items-center justify-center px-lg pb-4xl pt-4xl text-center">
+          <div className="mb-lg flex h-[46px] w-[46px] items-center justify-center rounded-lg bg-canvas text-ink-subtle">
             <svg
               width="22"
               height="22"
@@ -120,8 +122,8 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-1 text-lead font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
-          <div className="mb-4 max-w-[300px] text-body text-ink-subtle">
+          <div className="mb-xs text-lead font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-lg max-w-[300px] text-body text-ink-subtle">
             {t('accounts.proxyPool.emptyBody')}
           </div>
           <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
@@ -196,7 +198,7 @@ function ProxyCard({
   const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-md rounded-lg border px-[14px] py-[13px] ${
+      className={`flex flex-col gap-md rounded-lg border px-lg py-lg ${
         problem
           ? 'border-danger-line bg-danger-tint'
           : geoConflict
@@ -251,7 +253,7 @@ function ProxyCard({
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
             <span className="text-ink-subtle">·</span>
             <span
-              className={`inline-flex items-center gap-[4px] font-medium ${statusTone}`}
+              className={`inline-flex items-center gap-xs font-medium ${statusTone}`}
               title={proxy.last_error ?? undefined}
             >
               {/* `bg-current` — the dot can never disagree with its label. */}
@@ -303,7 +305,7 @@ function ProxyCard({
         </button>
       </div>
       <div>
-        <div className="mb-[5px] flex items-center justify-between">
+        <div className="mb-tight flex items-center justify-between">
           <span className="text-tiny text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
           <span
             className={`text-tiny font-semibold ${full ? 'text-danger-deep' : 'text-success-deep'}`}
@@ -317,7 +319,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-[5px] text-micro ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
+        <div className={`mt-tight text-micro ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

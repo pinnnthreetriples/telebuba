@@ -212,8 +212,8 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.proxy')}>
-      <div className="mb-3 text-body text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
-      <div className="mb-3 flex items-center justify-between gap-sm rounded-lg bg-canvas px-3 py-[10px]">
+      <div className="mb-md text-body text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
+      <div className="mb-md flex items-center justify-between gap-sm rounded-lg bg-canvas px-md py-md">
         <span className="flex items-center gap-sm">
           <span className={`h-2 w-2 rounded-full ${proxyDot}`} />
           <span className="text-body text-ink-body">{proxyStateText}</span>
@@ -230,7 +230,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
         ) : null}
       </div>
       {unassignProxy.isError ? (
-        <div className="mb-3 text-tiny text-danger">{t('accounts.edit.proxyDetachErr')}</div>
+        <div className="mb-md text-tiny text-danger">{t('accounts.edit.proxyDetachErr')}</div>
       ) : null}
       <div className={SEG_WRAP}>
         {(['pool', 'manual'] as const).map((mode) => (
@@ -248,14 +248,14 @@ export function ProxySection({ account }: { account: AccountRead }) {
       </div>
       {proxyMode === 'manual' ? (
         <>
-          <div className="mb-[10px]">
+          <div className="mb-md">
             <proxyForm.Field name="host">
               {(field) => (
                 <FormField field={field} label={t('accounts.edit.host')} className="font-mono" />
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-[10px] grid grid-cols-1 md:grid-cols-2 gap-md">
+          <div className="mb-md grid grid-cols-1 md:grid-cols-2 gap-md">
             <proxyForm.Field name="port">
               {(field) => (
                 <FormField
@@ -282,7 +282,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-md">
+          <div className="mb-lg grid grid-cols-1 md:grid-cols-2 gap-md">
             <proxyForm.Field name="username">
               {/* FormField emits name="username" — next to a password input that
                   is the formless login shape Chrome's password parser matches,
@@ -298,7 +298,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
                   <span className={LABEL}>{t('accounts.edit.password')}</span>
                   <div className="relative">
                     <Input
-                      className="pr-9"
+                      className="pr-[36px]"
                       value={field.state.value}
                       onChange={(event) => {
                         field.handleChange(event.target.value);
@@ -350,7 +350,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </div>
         </>
       ) : (
-        <div className="mb-[14px]">
+        <div className="mb-lg">
           <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
           <Select
             value={account.proxy_id ?? ''}

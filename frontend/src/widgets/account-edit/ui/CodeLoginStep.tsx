@@ -41,7 +41,7 @@ export function CodeLoginStep({
     <>
       {!requestCode.isSuccess ? (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg border border-line bg-white px-4 py-[14px] text-body text-ink-subtle">
+          <div className="rounded-lg border border-line bg-white px-lg py-lg text-body text-ink-subtle">
             {phone}
           </div>
           <Button
@@ -64,7 +64,7 @@ export function CodeLoginStep({
         </div>
       ) : (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg bg-success-tint px-3 py-[10px] text-body font-medium text-success-deep">
+          <div className="rounded-lg bg-success-tint px-md py-md text-body font-medium text-success-deep">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
           <label className="block text-tiny font-medium text-ink-subtle">
@@ -77,7 +77,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-[6px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead font-normal text-ink outline-none focus:border-primary"
+              className="mt-tight w-full rounded-lg border border-line-input bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
           <label className="block text-tiny font-medium text-ink-subtle">
@@ -92,7 +92,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-[6px] w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead font-normal text-ink outline-none focus:border-primary"
+              className="mt-tight w-full rounded-lg border border-line-input bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
           {submitCode.isError && (
@@ -100,7 +100,7 @@ export function CodeLoginStep({
           )}
         </div>
       )}
-      <div className="mt-5 flex justify-end gap-sm">
+      <div className="mt-xl flex justify-end gap-sm">
         <Button
           variant="primary"
           onClick={onConfirmLogin}

@@ -64,7 +64,7 @@ function participant(
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
-      <div className="mb-[3px] flex items-center gap-tight text-micro text-ink-subtle">
+      <div className="mb-xs flex items-center gap-tight text-micro text-ink-subtle">
         <span className="font-medium text-ink-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
@@ -85,7 +85,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
           {formatLocalTime(message.created_at)}
         </span>
       </div>
-      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-[11px] py-[7px] text-body leading-[1.45] text-ink-body">
+      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-md py-sm text-body leading-[1.45] text-ink-body">
         {message.text}
       </div>
     </div>
@@ -97,8 +97,8 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-[2px] flex items-center gap-sm text-micro text-ink-subtle">
-      <span className="flex items-center gap-[3px]">
+    <div className="mt-hair flex items-center gap-sm text-micro text-ink-subtle">
+      <span className="flex items-center gap-xs">
         {[0, 1, 2].map((index) => (
           <span
             key={index}
@@ -137,14 +137,14 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
 
   if (ordered.length === 0) {
     return (
-      <div className="py-[34px] text-center text-body text-ink-subtle">
+      <div className="py-4xl text-center text-body text-ink-subtle">
         {t('warming.dialogues.empty')}
       </div>
     );
   }
 
   return (
-    <div className="tb-scroll flex max-h-[260px] flex-col gap-md overflow-y-auto pr-1">
+    <div className="tb-scroll flex max-h-[260px] flex-col gap-md overflow-y-auto pr-xs">
       {ordered.map((message) => {
         const key = messageKey(message);
         return <DialogueRow key={key} message={message} isNew={isNew(key)} />;
@@ -179,8 +179,8 @@ export function DialogueFeed() {
   const live = isFeedLive(messages);
 
   return (
-    <Card className="mt-4 p-4">
-      <div className="mb-[13px] flex items-center gap-md">
+    <Card className="mt-lg p-lg">
+      <div className="mb-lg flex items-center gap-md">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span

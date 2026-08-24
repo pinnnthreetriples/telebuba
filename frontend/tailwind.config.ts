@@ -97,17 +97,6 @@ export default {
       out: 'cubic-bezier(.16,1,.3,1)',
       spring: 'cubic-bezier(.34,1.45,.6,1)',
     },
-    // Four rungs of breathing room, replacing Tailwind's 4/8/12/16 scale outright for
-    // the same reason the radii are replaced: the numeric names resolved to values the
-    // canon does not have, so `gap-2` and `gap-[7px]` sat side by side in one row and
-    // disagreed by a pixel. Gone, they cannot come back. `tight` separates parts of one
-    // thing (a dot from its label, an icon from its number), `sm` is the default inside
-    // a control or a row, `md` separates rows and fields inside a card, `lg` separates
-    // the blocks of a card or a form. `0` and `px` stay because they are not steps —
-    // `px` is the hairline a grid uses for its own dividers. Denser rows keep their own
-    // arbitrary `gap-[2px]`/`gap-[3px]` (arbitrary values still work with a replaced
-    // scale): snapping a 2px stack of counters up to 5px would re-lay it out.
-    gap: { 0: '0px', px: '1px', tight: '5px', sm: '7px', md: '10px', lg: '14px' },
     // Five stacking layers, lowest to highest, so a component never has to guess a
     // number: `raised` lifts content over its own siblings, `sticky` is the app
     // header that survives scrolling, `pop` is anything that floats over the page
@@ -132,6 +121,38 @@ export default {
       toast: '40',
     },
     extend: {
+      // One rhythm for every gap, padding and margin in the app, replacing the four-rung
+      // `gap` scale that used to live here on its own — a gap and a padding are the same
+      // measurement seen from two sides, and keeping them in separate scales is how
+      // `gap-md` (10px) ended up beside `px-3` (12px) in one row. The numbers are the
+      // design's own, not a 4px grid: the app had two rhythms, its designer's and
+      // Tailwind's, and the design source is the one that wins.
+      //
+      // `hair` and `xs` separate stacked hairlines (a counter over its label); `tight`
+      // separates parts of one thing (a dot from its label); `sm` is the default inside a
+      // control or a row; `md` separates rows and fields inside a card; `lg` the blocks of
+      // a card or form; `xl` and `2xl` are a control's own horizontal padding; `3xl` and
+      // up are a page's own breathing room and an empty state's. `0` and `px` stay because
+      // they are not steps — `px` is the hairline a grid uses for its own dividers.
+      //
+      // Added rather than replacing Tailwind's numeric scale outright, because `spacing`
+      // also feeds `w-*`/`h-*`, and a 34px avatar or a 6px progress bar is a component's
+      // dimension, not a rung of this rhythm. What keeps `p-4` from coming back beside
+      // `px-xl` is the lint rule that forbids it (eslint.config.js), not the absence of
+      // the key.
+      spacing: {
+        hair: '2px',
+        xs: '3px',
+        tight: '5px',
+        sm: '7px',
+        md: '10px',
+        lg: '14px',
+        xl: '18px',
+        '2xl': '22px',
+        '3xl': '26px',
+        '4xl': '32px',
+        '5xl': '64px',
+      },
       colors: {
         canvas: '#f1efed',
         surface: '#faf9f7',

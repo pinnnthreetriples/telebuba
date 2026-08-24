@@ -56,21 +56,21 @@ export function NeuroshillingAccountsModal({
 
   return (
     <Modal onClose={onClose} className="w-[560px]" label={t('neuroshilling.modal.accounts.title')}>
-      <div className="border-b border-line-row px-6 pb-[15px] pt-5">
+      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="text-title font-bold text-ink">
           {t('neuroshilling.modal.accounts.title')}
         </div>
-        <div className="mt-[2px] text-body text-ink-subtle">
+        <div className="mt-hair text-body text-ink-subtle">
           {t('neuroshilling.modal.accounts.sub', { count: accounts.length })}
         </div>
       </div>
 
-      <div className="px-6 pb-4 pt-2">
+      <div className="px-2xl pb-lg pt-sm">
         {accounts.map((account) => {
           const isPicked = picked.has(account.account_id);
           const held = heldBy(account);
           return (
-            <div key={account.account_id} className="border-b border-line-row py-[11px]">
+            <div key={account.account_id} className="border-b border-line-row py-md">
               <div className="flex flex-wrap items-center gap-md">
                 <span className="min-w-0 flex-1 truncate text-lead font-semibold text-ink">
                   {account.title}
@@ -83,7 +83,7 @@ export function NeuroshillingAccountsModal({
                   onClick={() => {
                     toggle(account.account_id);
                   }}
-                  className={`w-full shrink-0 rounded-md border px-[11px] py-[8px] text-body font-medium disabled:opacity-50 sm:w-[180px] ${
+                  className={`w-full shrink-0 rounded-md border px-md py-sm text-body font-medium disabled:opacity-50 sm:w-[180px] ${
                     isPicked
                       ? 'border-danger-line bg-danger-tint text-danger-deep'
                       : 'border-dashed border-line-strong bg-white text-primary hover:border-primary'
@@ -94,18 +94,18 @@ export function NeuroshillingAccountsModal({
                     : t('neuroshilling.modal.accounts.add')}
                 </button>
               </div>
-              {held ? <div className="mt-[6px] text-tiny text-ink-subtle">{held}</div> : null}
+              {held ? <div className="mt-tight text-tiny text-ink-subtle">{held}</div> : null}
             </div>
           );
         })}
         {accounts.length === 0 ? (
-          <div className="px-[10px] py-8 text-center text-lead text-ink-subtle">
+          <div className="px-md py-4xl text-center text-lead text-ink-subtle">
             {t('neuroshilling.modal.accounts.empty')}
           </div>
         ) : null}
       </div>
 
-      <div className="flex justify-end gap-sm border-t border-line-row px-6 pb-5 pt-[14px]">
+      <div className="flex justify-end gap-sm border-t border-line-row px-2xl pb-xl pt-lg">
         <Button onClick={onClose}>{t('neuroshilling.modal.accounts.cancel')}</Button>
         <Button variant="primary" onClick={commit}>
           {t('neuroshilling.modal.accounts.done')}

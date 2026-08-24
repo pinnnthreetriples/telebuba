@@ -42,12 +42,12 @@ interface DataTableProps<TData> {
 // text-left so headers sit directly above their left-aligned cells; a column that
 // wants a different alignment sets it via meta.className (text-right wins over this).
 const TH =
-  'px-4 py-[11px] text-left text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle';
+  'px-lg py-md text-left text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle';
 const ROW = 'tb-row border-t border-line-row transition-colors';
 
 // Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
 // element-agnostic, so cards get the same hover tint for free.
-const CARD = 'tb-row overflow-hidden border-t border-line-row px-4 py-[13px] first:border-t-0';
+const CARD = 'tb-row overflow-hidden border-t border-line-row px-lg py-lg first:border-t-0';
 const CARD_LABEL = 'shrink-0 text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle';
 const CARD_VALUE = 'min-w-0 break-words text-right text-body text-ink-body';
 
@@ -173,7 +173,7 @@ export function DataTable<TData>({
                 return (
                   <div
                     key={cell.id}
-                    className="mt-[9px] flex items-baseline justify-between gap-md first:mt-0"
+                    className="mt-md flex items-baseline justify-between gap-md first:mt-0"
                   >
                     <span className={CARD_LABEL}>
                       {header
@@ -189,7 +189,7 @@ export function DataTable<TData>({
               {/* Bled out of the card's padding: sub-row content already carries its
                   own border-t/tint designed to sit flush under a table row. */}
               {renderSubRow ? (
-                <SubRow open={row.getIsExpanded()} className="-mx-4 -mb-[13px] mt-[11px]">
+                <SubRow open={row.getIsExpanded()} className="-mx-lg -mb-lg mt-md">
                   {renderSubRow(row)}
                 </SubRow>
               ) : null}
@@ -230,7 +230,7 @@ export function DataTable<TData>({
                     <td
                       key={cell.id}
                       className={join(
-                        'px-4 py-3',
+                        'px-lg py-md',
                         (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
                       )}
                     >

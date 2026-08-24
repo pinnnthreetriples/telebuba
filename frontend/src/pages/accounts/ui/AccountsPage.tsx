@@ -169,7 +169,7 @@ export function AccountsPage() {
         }}
       />
 
-      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-lg">
+      <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 text-display font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
         <div className="flex w-full items-center gap-sm sm:w-auto">
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
@@ -193,7 +193,7 @@ export function AccountsPage() {
                 setCursorStack([null]);
               }}
               placeholder={t('accounts.searchPlaceholder')}
-              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-lead outline-none sm:w-[220px]"
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-[36px] pr-md text-lead outline-none sm:w-[220px]"
             />
           </div>
           <Button
@@ -208,11 +208,11 @@ export function AccountsPage() {
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-md">
+      <div className="mb-lg flex flex-wrap gap-md">
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-w-[120px] rounded-lg border border-line bg-white px-4 py-[11px]"
+            className="min-w-[120px] rounded-lg border border-line bg-white px-lg py-md"
           >
             <div className={`text-stat font-bold ${stat.cls}`}>{stat.value}</div>
             <div className="mt-px text-tiny text-ink-muted">{stat.label}</div>
@@ -229,7 +229,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-4 py-16 text-center text-lead text-ink-subtle">
+            <Card className="px-lg py-5xl text-center text-lead text-ink-subtle">
               {t('accounts.empty')}
             </Card>
           ) : (
@@ -252,14 +252,14 @@ export function AccountsPage() {
               else-branch the only ways back were the search box and a reload.
               A genuinely empty FIRST page still shows the bare empty state. */}
           {items.length > 0 || hasPrev ? (
-            <div className="mt-4 flex items-center justify-end gap-sm">
+            <div className="mt-lg flex items-center justify-end gap-sm">
               <button
                 type="button"
                 disabled={!hasPrev}
                 onClick={() => {
                   setCursorStack((stack) => stack.slice(0, -1));
                 }}
-                className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.prev')}
               </button>
@@ -269,7 +269,7 @@ export function AccountsPage() {
                 onClick={() => {
                   setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
                 }}
-                className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.next')}
               </button>

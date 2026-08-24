@@ -14,7 +14,7 @@ import { Button, Card, FieldError, FormField, HelpHint, Input, Switch } from '@/
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
 
-const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
+const FIELD_LABEL = 'mb-tight block text-body font-medium text-ink-body';
 
 // The three real, engine-used warming toggles surfaced as the design's flag rows.
 const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
@@ -150,8 +150,8 @@ function SettingsForm({
         void form.handleSubmit();
       }}
     >
-      <Card mb="mb-[14px]" title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
-        <div className="space-y-4">
+      <Card mb="mb-lg" title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
+        <div className="space-y-lg">
           <ApiKeyField
             label={t('settings.api.geminiKey')}
             value={geminiKey}
@@ -251,7 +251,7 @@ function SettingsForm({
       </Card>
 
       <Card
-        mb="mb-[14px]"
+        mb="mb-lg"
         title={t('settings.captchaLlm.title')}
         subtitle={t('settings.captchaLlm.subtitle')}
       >
@@ -264,7 +264,7 @@ function SettingsForm({
               onClick={() => {
                 setProvider(option);
               }}
-              className={`flex-1 rounded-lg border px-3 py-[9px] text-lead font-medium transition-colors ${
+              className={`flex-1 rounded-lg border px-md py-md text-lead font-medium transition-colors ${
                 provider === option
                   ? 'border-primary bg-primary-wash text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
@@ -277,17 +277,17 @@ function SettingsForm({
       </Card>
 
       <Card
-        mb="mb-[14px]"
+        mb="mb-lg"
         title={t('settings.warmLimits.title')}
         subtitle={t('settings.warmLimits.subtitle')}
       >
-        <div className="rounded-lg border border-dashed border-line-input bg-surface px-4 py-3 text-body leading-relaxed text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line-input bg-surface px-lg py-md text-body leading-relaxed text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
 
       <Card
-        mb="mb-[14px]"
+        mb="mb-lg"
         title={t('settings.neuroLimits.title')}
         subtitle={t('settings.neuroLimits.subtitle')}
       >
@@ -302,7 +302,7 @@ function SettingsForm({
             <div className="flex items-center gap-md">
               <form.Field name="delayFrom">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-3 py-[9px]">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-md py-md">
                     <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.from')}
                     </span>
@@ -321,7 +321,7 @@ function SettingsForm({
               </form.Field>
               <form.Field name="delayTo">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-3 py-[9px]">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-md py-md">
                     <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.to')}
                     </span>
@@ -362,11 +362,11 @@ function SettingsForm({
         </div>
       </Card>
 
-      <Card className="px-5 py-[6px]" mb="mb-[18px]">
+      <Card className="px-xl py-tight" mb="mb-xl">
         {WARMING_TOGGLES.map((flag) => (
           <div
             key={flag}
-            className="flex items-center justify-between gap-md border-b border-line-row py-[13px]"
+            className="flex items-center justify-between gap-md border-b border-line-row py-lg"
           >
             <div>
               <div className="text-lead font-medium">{t(`settings.flag.${flag}.label`)}</div>
@@ -454,9 +454,7 @@ export function SettingsPage() {
 
   return (
     <div className="tb-fadeup max-w-[760px]">
-      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">
-        {t('settings.title')}
-      </h1>
+      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">{t('settings.title')}</h1>
       {loading ? (
         <p className="text-ink-muted">{t('settings.loading')}</p>
       ) : failed ? (

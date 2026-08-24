@@ -180,7 +180,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      <div className="mb-3 text-body leading-relaxed text-ink-subtle">
+      <div className="mb-md text-body leading-relaxed text-ink-subtle">
         {t('accounts.profile.privacy.hint')}
       </div>
 
@@ -188,7 +188,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         <div
           role="status"
           aria-label={t('accounts.profile.privacy.loading')}
-          className="flex justify-center py-6"
+          className="flex justify-center py-2xl"
         >
           <span className="tb-spin inline-block h-6 w-6 rounded-full border-2 border-line-input border-t-primary" />
         </div>
@@ -197,7 +197,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
       {reason != null && (
         <Notice
           tone="danger"
-          className="mb-4 flex items-center justify-between gap-md"
+          className="mb-lg flex items-center justify-between gap-md"
           role="alert"
         >
           <span>{t('accounts.profile.privacy.loadError', { reason })}</span>
@@ -206,7 +206,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             onClick={() => {
               void privacy.refetch();
             }}
-            className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium"
+            className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
           >
             {t('accounts.profile.privacy.retry')}
           </button>
@@ -220,7 +220,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           // Prose on an amber surface, so `ink-body` rather than `ink-muted`: moving this
           // notice onto `warning-tint` left the muted grey at 4.26:1, just under the AA
           // floor it used to clear at 4.53:1 on the literal it replaced.
-          className="mb-4 rounded-lg border border-line bg-warning-tint px-3 py-[10px] text-body text-ink-body"
+          className="mb-lg rounded-lg border border-line bg-warning-tint px-md py-md text-body text-ink-body"
         >
           {t('accounts.profile.privacy.writeReadError', { reason: writeReadError })}
         </div>
@@ -244,7 +244,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             ))}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-sm">
+          <div className="mt-lg flex flex-wrap items-center gap-sm">
             <Button
               variant="primary"
               size="sm"
@@ -277,7 +277,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         <div
           role="status"
           aria-live="polite"
-          className="mt-4 rounded-lg border border-line bg-white px-[14px] py-3 text-body"
+          className="mt-lg rounded-lg border border-line bg-white px-lg py-md text-body"
         >
           <div className="flex flex-wrap gap-x-lg gap-y-tight">
             <span>{t('accounts.profile.privacy.bulkOk', { n: bulk.ok })}</span>
@@ -289,7 +289,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </span>
           </div>
           {bulk.outcomes.some((outcome) => outcome.status !== 'ok') && (
-            <ul className="mt-2 flex flex-col gap-tight border-t border-line-row pt-2 text-tiny text-ink-subtle">
+            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm text-tiny text-ink-subtle">
               {/* Both non-ok kinds are listed with their reason: a skipped
                   account carries the status that disqualified it, and "3
                   skipped" with no names is not actionable. */}

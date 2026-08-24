@@ -11,7 +11,7 @@ import { cn } from '@/shared/lib/cn';
 export function Card({
   title,
   subtitle,
-  className = 'px-5 py-[18px]',
+  className = 'px-xl py-xl',
   mb = '',
   children,
   ...rest
@@ -27,8 +27,8 @@ export function Card({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'title'>) {
   return (
     <div className={cn('rounded-card border border-line bg-white', mb, className)} {...rest}>
-      {title ? <div className="mb-[3px] text-lead font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-4 text-body text-ink-subtle">{subtitle}</div> : null}
+      {title ? <div className="mb-xs text-lead font-semibold">{title}</div> : null}
+      {subtitle ? <div className="mb-lg text-body text-ink-subtle">{subtitle}</div> : null}
       {children}
     </div>
   );

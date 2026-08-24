@@ -1,6 +1,6 @@
 import { Input } from '@/shared/ui';
 
-const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
+const FIELD_LABEL = 'mb-tight block text-body font-medium text-ink-body';
 
 function EyeIcon({ off }: { off: boolean }) {
   return off ? (
@@ -85,7 +85,7 @@ export function ApiKeyField({
         <button
           type="button"
           onClick={onClear}
-          className="mt-[9px] text-body font-medium text-danger transition-colors hover:underline"
+          className="mt-md text-body font-medium text-danger transition-colors hover:underline"
         >
           {clearLabel}
         </button>

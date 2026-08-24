@@ -60,7 +60,7 @@ export function Section({
   title,
   icon,
   right,
-  bodyClassName = 'px-5 pb-[18px]',
+  bodyClassName = 'px-xl pb-xl',
   onOpenChange,
   children,
 }: {
@@ -79,7 +79,7 @@ export function Section({
       trailing={right}
       onOpenChange={onOpenChange}
       wrapperClassName="self-start rounded-card border border-line bg-white"
-      headerClassName="px-5 py-4"
+      headerClassName="px-xl py-lg"
       bodyClassName={bodyClassName}
       header={
         <span className="flex items-center gap-sm text-lead font-semibold text-ink">

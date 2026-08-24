@@ -36,12 +36,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 inline-flex items-center gap-sm bg-transparent p-0 text-lead font-medium text-ink-muted hover:text-ink"
+        className="mb-lg inline-flex items-center gap-sm bg-transparent p-0 text-lead font-medium text-ink-muted hover:text-ink"
       >
         ← {t('accounts.edit.back')}
       </button>
 
-      <Card className="mb-[14px] flex flex-wrap items-center gap-lg px-5 py-[18px]">
+      <Card className="mb-lg flex flex-wrap items-center gap-lg px-xl py-xl">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary-deep">
           {mono(account)}
         </div>
@@ -57,7 +57,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="text-body text-ink-muted">{t('accounts.edit.trust')}</span>
             <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
           </div>
-          <div className="mt-[6px] h-[6px] overflow-hidden rounded-full bg-track">
+          <div className="mt-tight h-[6px] overflow-hidden rounded-full bg-track">
             <div
               className={`h-full rounded-full bg-current ${tTone}`}
               style={{ width: `${String(trust)}%` }}
@@ -66,12 +66,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         </div>
       </Card>
 
-      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-lg">
+      <div className="mb-lg grid grid-cols-1 md:grid-cols-2 gap-lg">
         <SessionSection account={account} />
         <ProxySection account={account} />
       </div>
 
-      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-lg">
+      <div className="mb-lg grid grid-cols-1 md:grid-cols-2 gap-lg">
         <DeviceSection account={account} />
         <SignalsSection account={account} />
       </div>

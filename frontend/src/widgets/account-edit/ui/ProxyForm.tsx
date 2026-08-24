@@ -15,7 +15,7 @@ import { seg } from './_styles';
 // (the add-proxy modal owns the value + the create call), so the parent's footer
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
-const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
+const LABEL = 'mb-tight block text-body font-medium text-ink-body';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -127,7 +127,7 @@ export function ProxyForm({
                   type={showPass ? 'text' : 'password'}
                   autoComplete="new-password"
                   placeholder={t('accounts.proxyForm.passwordPlaceholder')}
-                  className="pr-9"
+                  className="pr-[36px]"
                 />
                 <button
                   type="button"
@@ -174,7 +174,7 @@ export function ProxyForm({
         <span className={LABEL}>{t('accounts.proxyForm.type')}</span>
         <form.Field name="proxy_type">
           {(field) => (
-            <div className="flex gap-tight rounded-lg bg-canvas p-1">
+            <div className="flex gap-tight rounded-lg bg-canvas p-xs">
               {(['socks5', 'https'] as const).map((option) => (
                 <button
                   key={option}

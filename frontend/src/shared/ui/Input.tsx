@@ -18,9 +18,9 @@ const BASE = 'tb-time w-full rounded-lg border bg-white outline-none';
 // set the row height; `xs` the numeric stepper a value is typed into beside its
 // unit.
 const SIZE = {
-  md: 'px-3 py-[9px] text-lead',
-  sm: 'px-[11px] py-[8px] text-body',
-  xs: 'rounded-md px-[9px] py-[6px] text-body',
+  md: 'px-md py-md text-lead',
+  sm: 'px-md py-sm text-body',
+  xs: 'rounded-md px-md py-tight text-body',
 } as const;
 
 // `flat` is the field that is not for typing into — a fact being displayed, or a

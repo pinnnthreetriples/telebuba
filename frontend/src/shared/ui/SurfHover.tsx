@@ -29,7 +29,7 @@ export function SurfHover({
     // nothing below moves. Measured: clip 2px under the card, card and actions
     // unmoved. A 5px border survived where a 1px one did not, which is what says
     // this is the boundary and not a missing border.
-    <div className="group relative -mb-[2px] overflow-hidden rounded-lg pb-[2px]">
+    <div className="group relative -mb-hair overflow-hidden rounded-lg pb-hair">
       {/* `bottom-[2px]`, not `inset-0`: the padding above is behind the card, and an
           action layer stretched into it would show a grey sliver under every row. */}
       <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-stretch justify-end rounded-lg bg-canvas">

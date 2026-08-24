@@ -31,7 +31,7 @@ export function CreateCampaignModal({
       className="w-[540px]"
       label={t('neurocomment.modal.createCampaign.title')}
     >
-      <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
+      <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="18"
@@ -48,18 +48,18 @@ export function CreateCampaignModal({
           <div className="text-title font-bold text-ink">
             {t('neurocomment.modal.createCampaign.title')}
           </div>
-          <div className="mt-[2px] text-body text-ink-subtle">
+          <div className="mt-hair text-body text-ink-subtle">
             {t('neurocomment.modal.createCampaign.sub')}
           </div>
         </div>
       </div>
 
-      <div className="px-6 pb-5 pt-[18px]">
-        <div className="mb-[7px] text-body font-semibold text-ink">
+      <div className="px-2xl pb-xl pt-xl">
+        <div className="mb-sm text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.nameLabel')}
         </div>
         <Input
-          className="mb-4"
+          className="mb-lg"
           value={name}
           onChange={(event) => {
             setName(event.target.value);
@@ -68,11 +68,11 @@ export function CreateCampaignModal({
           aria-label={t('neurocomment.modal.createCampaign.nameLabel')}
         />
 
-        <div className="mb-[7px] text-body font-semibold text-ink">
+        <div className="mb-sm text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <Textarea
-          className="mb-4 resize-y font-[inherit] leading-[1.5]"
+          className="mb-lg resize-y font-[inherit] leading-[1.5]"
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
@@ -82,14 +82,14 @@ export function CreateCampaignModal({
           aria-label={t('neurocomment.modal.createCampaign.promptLabel')}
         />
 
-        <div className="mb-[7px] text-body font-semibold text-ink">
+        <div className="mb-sm text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.channelsLabel')}
         </div>
-        <div className="mb-[10px] text-tiny text-ink-subtle">
+        <div className="mb-md text-tiny text-ink-subtle">
           {t('neurocomment.modal.createCampaign.channelsHint')}
         </div>
         {channels.length > 0 ? (
-          <div className="mb-3 flex flex-wrap gap-sm">
+          <div className="mb-md flex flex-wrap gap-sm">
             {channels.map((channel, index) => (
               <Badge
                 size="md"
@@ -138,7 +138,7 @@ export function CreateCampaignModal({
         </div>
       </div>
 
-      <div className="flex gap-sm border-t border-line-row px-6 pb-5 pt-[15px]">
+      <div className="flex gap-sm border-t border-line-row px-2xl pb-xl pt-lg">
         <button
           type="button"
           disabled={!name.trim() || !prompt.trim()}
@@ -146,14 +146,14 @@ export function CreateCampaignModal({
             onCreate({ name: name.trim(), prompt: prompt.trim(), channels });
             onClose();
           }}
-          className="flex-1 rounded-full border border-primary bg-primary px-[14px] py-[10px] text-lead font-semibold text-white disabled:opacity-50"
+          className="flex-1 rounded-full border border-primary bg-primary px-lg py-md text-lead font-semibold text-white disabled:opacity-50"
         >
           {t('neurocomment.modal.createCampaign.confirm')}
         </button>
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-lead font-semibold text-ink"
+          className="flex-1 rounded-full border border-line-input bg-white px-lg py-md text-lead font-semibold text-ink"
         >
           {t('neurocomment.modal.cancel')}
         </button>

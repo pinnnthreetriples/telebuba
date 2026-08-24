@@ -106,8 +106,8 @@ export function LogTerminal({
     <CollapsibleCard
       defaultOpen
       label={title}
-      headerClassName="px-4 py-[13px]"
-      bodyClassName="px-[14px] pb-[14px]"
+      headerClassName="px-lg py-lg"
+      bodyClassName="px-lg pb-lg"
       trailing={
         <>
           {onlyAccount ? (
@@ -121,7 +121,7 @@ export function LogTerminal({
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-medium text-primary-deep hover:bg-danger-line hover:text-danger"
+              className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-medium text-primary-deep hover:bg-danger-line hover:text-danger"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,
@@ -155,13 +155,13 @@ export function LogTerminal({
         <>
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
           <span className="text-lead font-semibold">{title}</span>
-          <span className="rounded-full bg-track px-2 py-[2px] text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-track px-sm py-hair text-tiny font-medium text-ink-muted">
             {shown.length}
           </span>
         </>
       }
     >
-      <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-lg bg-term px-[14px] py-3 font-mono text-tiny leading-[1.85]">
+      <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-lg bg-term px-lg py-md font-mono text-tiny leading-[1.85]">
         {shown.length === 0 ? (
           <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (

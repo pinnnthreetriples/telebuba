@@ -2,7 +2,7 @@ import { type RefObject, useLayoutEffect, useState, useSyncExternalStore } from 
 
 // The width at which DataTable shows a table rather than cards. 880px is the table's
 // own minimum and the shell gives content viewport−48px (AppShell: mx-auto
-// max-w-[1340px] px-4/px-6), so 1024 is the narrowest viewport where a full-width
+// max-w-[1340px] px-lg/px-2xl), so 1024 is the narrowest viewport where a full-width
 // page table fits without horizontal scroll. Only a fallback since useWideContainer
 // below exists: a viewport query cannot see that the table's own box is narrower than
 // the viewport (a column, a modal).

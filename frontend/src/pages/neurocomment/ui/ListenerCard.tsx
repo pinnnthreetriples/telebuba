@@ -53,8 +53,8 @@ export function ListenerCard({
       ? t('neurocomment.listener.listeningNoChannels')
       : t('neurocomment.listener.paused');
   return (
-    <Card className="relative z-raised px-[14px] py-[13px]">
-      <div className="mb-[3px] flex items-center gap-md">
+    <Card className="relative z-raised px-lg py-lg">
+      <div className="mb-xs flex items-center gap-md">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="15"
@@ -78,7 +78,7 @@ export function ListenerCard({
       </div>
 
       {listenerId ? (
-        <div className="mt-[9px]">
+        <div className="mt-md">
           <SurfHover
             shift={144}
             surfaceId="lsn-surf"
@@ -145,7 +145,7 @@ export function ListenerCard({
               // Running = the success tone, idle = the neutral surface; both sides
               // come from tokens so the card can't drift from the rest of the design.
               <div
-                className={`flex items-center justify-between gap-sm rounded-lg border px-[10px] py-2 ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
+                className={`flex items-center justify-between gap-sm rounded-lg border px-md py-sm ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
               >
                 <div className="flex min-w-0 items-center gap-sm">
                   <span
@@ -161,7 +161,7 @@ export function ListenerCard({
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
+                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-tight text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>
@@ -194,7 +194,7 @@ export function ListenerCard({
           />
         </div>
       ) : (
-        <div className="mt-[9px]">
+        <div className="mt-md">
           <Select
             value=""
             onChange={onPickListener}
@@ -213,7 +213,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-2 text-tiny font-medium text-danger">
+        <p className="mt-sm text-tiny font-medium text-danger">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

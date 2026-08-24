@@ -62,8 +62,8 @@ export function WarmDaysModal({
 
   return (
     <Modal onClose={onClose} className="w-[440px]" label={t('warming.days.title')}>
-      <div className="p-6">
-        <div className="mb-1 flex items-start gap-md">
+      <div className="p-2xl">
+        <div className="mb-xs flex items-start gap-md">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
               width="17"
@@ -83,7 +83,7 @@ export function WarmDaysModal({
               type="button"
               disabled={spam === 'loading'}
               onClick={runSpamCheck}
-              className={`inline-flex items-center gap-sm rounded-full border bg-white px-[11px] py-[6px] text-body font-medium disabled:opacity-60 ${
+              className={`inline-flex items-center gap-sm rounded-full border bg-white px-md py-tight text-body font-medium disabled:opacity-60 ${
                 spam === 'clean'
                   ? 'border-success text-success-deep'
                   : spam === 'limited'
@@ -115,15 +115,15 @@ export function WarmDaysModal({
             <span className="tb-tip-pop">{t('warming.days.spamTip')}</span>
           </span>
         </div>
-        <div className="mb-[22px] text-lead text-ink-muted">
+        <div className="mb-2xl text-lead text-ink-muted">
           {t('warming.days.subtitle', { phone })}
         </div>
 
-        <div className="mb-[18px] text-center">
+        <div className="mb-xl text-center">
           <div className="text-hero font-bold leading-none tracking-[-0.02em] text-primary">
             {days}
           </div>
-          <div className="mt-1 text-lead text-ink-muted">
+          <div className="mt-xs text-lead text-ink-muted">
             {t('warming.days.label', { count: days })}
           </div>
         </div>
@@ -146,7 +146,7 @@ export function WarmDaysModal({
             if (e.key === 'ArrowLeft') setDays((d) => Math.max(MIN, d - 1));
             if (e.key === 'ArrowRight') setDays((d) => Math.min(MAX, d + 1));
           }}
-          className="relative mx-[11px] mb-[6px] h-[30px] cursor-grab touch-none select-none outline-none"
+          className="relative mx-md mb-tight h-[30px] cursor-grab touch-none select-none outline-none"
         >
           <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-track">
             <div className="h-full rounded-full bg-primary" style={{ width: `${String(pct)}%` }} />
@@ -165,12 +165,12 @@ export function WarmDaysModal({
             style={{ left: `${String(pct)}%` }}
           />
         </div>
-        <div className="mx-[11px] mb-[18px] flex justify-between text-tiny text-ink-subtle">
+        <div className="mx-md mb-xl flex justify-between text-tiny text-ink-subtle">
           <span>{t('warming.days.min')}</span>
           <span>{t('warming.days.max')}</span>
         </div>
 
-        <div className="mb-[22px] flex gap-sm">
+        <div className="mb-2xl flex gap-sm">
           {PRESETS.map((n) => (
             <button
               key={n}
@@ -178,7 +178,7 @@ export function WarmDaysModal({
               onClick={() => {
                 setDays(n);
               }}
-              className={`flex-1 rounded-lg border py-2 text-body font-medium transition-colors ${
+              className={`flex-1 rounded-lg border py-sm text-body font-medium transition-colors ${
                 days === n
                   ? 'border-primary bg-primary-tint text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:bg-surface'
@@ -189,7 +189,7 @@ export function WarmDaysModal({
           ))}
         </div>
 
-        <div className="mb-[8px] flex items-center gap-sm text-body font-semibold">
+        <div className="mb-sm flex items-center gap-sm text-body font-semibold">
           {t('warming.persona.label')}
           <span className="tb-tip inline-flex">
             <button
@@ -202,7 +202,7 @@ export function WarmDaysModal({
             <span className="tb-tip-pop">{t('warming.persona.tip')}</span>
           </span>
         </div>
-        <div className="mb-[22px] flex gap-sm">
+        <div className="mb-2xl flex gap-sm">
           {PERSONAS.map((p) => (
             <button
               key={p}
@@ -210,14 +210,14 @@ export function WarmDaysModal({
               onClick={() => {
                 setPersona(p);
               }}
-              className={`flex-1 rounded-lg border px-2 py-[9px] text-center transition-colors ${
+              className={`flex-1 rounded-lg border px-sm py-md text-center transition-colors ${
                 persona === p
                   ? 'border-primary bg-primary-tint text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:bg-surface'
               }`}
             >
               <div className="text-body font-semibold">{t(`warming.persona.${p}.name`)}</div>
-              <div className="mt-[2px] text-tiny text-ink-subtle">
+              <div className="mt-hair text-tiny text-ink-subtle">
                 {t(`warming.persona.${p}.hint`)}
               </div>
             </button>

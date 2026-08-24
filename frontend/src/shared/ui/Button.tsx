@@ -20,9 +20,9 @@ const BASE =
 // table row beside a value, and the only rung that is not a pill — at 22px tall a
 // full radius and a rectangle are the same shape anyway.
 const SIZE = {
-  md: 'rounded-full px-[22px] py-[9px] text-lead font-semibold',
-  sm: 'rounded-full px-[18px] py-[7px] text-body font-semibold',
-  xs: 'rounded-md px-3 py-[5px] text-body font-medium',
+  md: 'rounded-full px-2xl py-md text-lead font-semibold',
+  sm: 'rounded-full px-xl py-sm text-body font-semibold',
+  xs: 'rounded-md px-md py-tight text-body font-medium',
 } as const;
 
 // `primary` is the one committing action on a screen and `secondary` everything

@@ -177,7 +177,7 @@ export function TwoFactorEmail({
     });
 
   return (
-    <div className="mt-3 border-t border-line-row pt-3">
+    <div className="mt-md border-t border-line-row pt-md">
       {/* Both rows when Telegram reports both, and the pending one is NOT hidden
           behind the confirmed one. Telegram answers with a confirmed address and a
           freshly pending one whenever the operator swaps the recovery address from
@@ -191,7 +191,7 @@ export function TwoFactorEmail({
         // row used to be the only one.
         <div
           className={`flex items-center justify-between gap-md ${
-            pending || !hasRecovery ? 'mb-[10px]' : ''
+            pending || !hasRecovery ? 'mb-md' : ''
           }`}
         >
           <span className="text-body text-ink-muted">
@@ -214,10 +214,10 @@ export function TwoFactorEmail({
       )}
       {pending ? (
         <>
-          <div className="mb-[10px] text-body text-ink-muted">
+          <div className="mb-md text-body text-ink-muted">
             {t('accounts.edit.twofaEmailSent', { pattern: pending })}
           </div>
-          <label className="mb-[10px] block">
+          <label className="mb-md block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailCode')}</span>
             <Input
               className="font-mono tracking-[0.18em]"
@@ -236,7 +236,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onConfirmCode}
               disabled={confirmEmail.isPending || !code.trim()}
-              className="rounded-lg border border-line-input bg-white px-4 py-[7px] text-body font-medium disabled:opacity-50"
+              className="rounded-lg border border-line-input bg-white px-lg py-sm text-body font-medium disabled:opacity-50"
             >
               {confirmEmail.isPending ? (
                 <Spinner size={13} />
@@ -267,7 +267,7 @@ export function TwoFactorEmail({
         <>
           {/* Only `false` invites an attach. `null` is "we could not read whether one
               is attached", and offering to attach one over that is a guess. */}
-          <label className="mb-[6px] block">
+          <label className="mb-tight block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailAddress')}</span>
             <Input
               value={address}
@@ -279,19 +279,17 @@ export function TwoFactorEmail({
               maxLength={MAX_EMAIL_LENGTH}
             />
             {email && !addressValid ? (
-              <span className="mt-[5px] block text-tiny font-medium text-danger">
+              <span className="mt-tight block text-tiny font-medium text-danger">
                 {t('accounts.edit.twofaEmailErrShape')}
               </span>
             ) : null}
           </label>
-          <div className="mb-[12px] text-tiny text-ink-subtle">
-            {t('accounts.edit.twofaEmailWarn')}
-          </div>
+          <div className="mb-md text-tiny text-ink-subtle">{t('accounts.edit.twofaEmailWarn')}</div>
           <button
             type="button"
             onClick={onAttach}
             disabled={setEmail.isPending || !addressValid || !hasStored}
-            className="w-full rounded-lg border border-line-input bg-white py-[9px] text-lead font-medium disabled:opacity-50"
+            className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium disabled:opacity-50"
           >
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
           </button>

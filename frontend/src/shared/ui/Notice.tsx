@@ -35,7 +35,7 @@ export function Notice({
   return (
     <div
       className={cn(
-        'rounded-lg px-3 py-[10px] text-body leading-[1.5]',
+        'rounded-lg px-md py-md text-body leading-[1.5]',
         bordered && 'border',
         TONE[tone],
         className,
