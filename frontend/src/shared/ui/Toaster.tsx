@@ -6,20 +6,23 @@ import { getToasts, subscribe, type Toast } from './toast';
 // Renders the toast queue (see toast.ts). Mounted once at the app root; styling
 // matches the design's dark tooltip (#16161A).
 //
-// Portalled into document.body, and NOT rendered in place: toasts share the
-// `dialog` z rung with Modal (there is no fifth layer above it), so the tie is
-// broken by document order. Modal portals to body too, and a toast is almost
-// always raised by an action taken inside an open dialog — mounting the stack
-// into body at that moment puts it after the dialog, i.e. on top. Left in the
-// app root it would sit inside #root, which precedes every modal portal, and
-// every toast a modal fired would be lost behind that modal's backdrop.
+// Portalled into document.body rather than rendered in place: the stack is `fixed`,
+// and a `fixed` element inside an ancestor that has a transform or a filter is
+// positioned against that ancestor instead of the viewport. Nothing on the page
+// does that today, but a page-level animation is one class away from it, and a
+// toast that lands in the middle of a card rather than at the bottom of the screen
+// is a hard thing to trace back to a class on an ancestor.
+//
+// The stack sits on its own `z-toast` rung, one above `z-dialog`: a toast reports
+// the outcome of an action, and the dialog that action was taken in is usually
+// still open behind it.
 export function Toaster() {
   const [items, setItems] = useState<Toast[]>(getToasts);
   useEffect(() => subscribe(setItems), []);
 
   if (items.length === 0) return null;
   return createPortal(
-    <div className="pointer-events-none fixed bottom-5 left-1/2 z-dialog flex -translate-x-1/2 flex-col items-center gap-md">
+    <div className="pointer-events-none fixed bottom-5 left-1/2 z-toast flex -translate-x-1/2 flex-col items-center gap-md">
       {items.map((toast) => (
         <div
           key={toast.id}
