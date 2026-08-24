@@ -2,8 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-
-import { SurfHover } from './SurfHover';
+import { IconButton, Select, SurfHover } from '@/shared/ui';
 
 // The listener-account card: shows the active listener with pause/edit/remove
 // actions (revealed via SurfHover), or a dropdown to choose one when none is set.
@@ -18,8 +17,6 @@ export function ListenerCard({
   onToggleRuntime,
   onEdit,
   onRemove,
-  listenerOpen,
-  onToggleOpen,
   accountOptions,
   onPickListener,
 }: {
@@ -33,8 +30,6 @@ export function ListenerCard({
   onToggleRuntime: () => void;
   onEdit: () => void;
   onRemove: () => void;
-  listenerOpen: boolean;
-  onToggleOpen: () => void;
   accountOptions: AccountRead[];
   onPickListener: (accountId: string) => void;
 }) {
@@ -58,8 +53,8 @@ export function ListenerCard({
       ? t('neurocomment.listener.listeningNoChannels')
       : t('neurocomment.listener.paused');
   return (
-    <div className="relative z-[5] rounded-2xl border border-line bg-white px-[14px] py-[13px]">
-      <div className="mb-[3px] flex items-center gap-[9px]">
+    <div className="relative z-raised rounded-card border border-line bg-white px-[14px] py-[13px]">
+      <div className="mb-[3px] flex items-center gap-md">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="15"
@@ -78,9 +73,7 @@ export function ListenerCard({
           </svg>
         </span>
         <div className="min-w-0">
-          <div className="text-[12.5px] font-semibold text-ink">
-            {t('neurocomment.listener.title')}
-          </div>
+          <div className="text-body font-semibold text-ink">{t('neurocomment.listener.title')}</div>
         </div>
       </div>
 
@@ -98,7 +91,7 @@ export function ListenerCard({
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
-                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-[#c47d12]' : 'text-success'}`}
+                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-strong' : 'text-success'}`}
                 >
                   {running ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -149,34 +142,33 @@ export function ListenerCard({
               </>
             }
             surface={
+              // Running = the success tone, idle = the neutral surface; both sides
+              // come from tokens so the card can't drift from the rest of the design.
               <div
-                className="flex items-center justify-between gap-2 rounded-[10px] border px-[10px] py-2"
-                style={{
-                  background: working ? '#ddf7e9' : '#f7f6f4',
-                  borderColor: working ? '#b8ecce' : '#e6e5e3',
-                }}
+                className={`flex items-center justify-between gap-sm rounded-lg border px-[10px] py-2 ${working ? 'border-success-line bg-success-tint' : 'border-line bg-surface'}`}
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 items-center gap-sm">
                   <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot' : ''}`}
-                    style={{ background: working ? '#12a150' : '#9a9893' }}
+                    className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
                   <span
-                    className={`text-[12.5px] font-semibold ${working ? 'tb-pulse' : ''}`}
-                    style={{ color: working ? '#12a150' : '#74726e' }}
+                    className={`text-body font-semibold ${working ? 'tb-pulse text-success' : 'text-ink-muted'}`}
                   >
                     {statusLabel}
                   </span>
+                  {/* Off the status-pill rung on purpose: a counter, not a state label. The
+                      18px square minimum is what keeps a single digit CIRCULAR, and the
+                      canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className="inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-[10.5px] font-bold text-white"
-                    style={{ background: working ? '#12a150' : '#74726e' }}
+                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-micro font-bold text-white ${working ? 'bg-success' : 'bg-ink-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>
                 </div>
-                <button
-                  type="button"
+                <IconButton
+                  size="sm"
+                  tone="primary"
                   title={t('neurocomment.listener.actions')}
                   aria-label={t('neurocomment.listener.actions')}
                   aria-expanded={listenerActionsOpen}
@@ -184,7 +176,6 @@ export function ListenerCard({
                     event.stopPropagation();
                     onToggleActions();
                   }}
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border border-line bg-white text-ink-subtle transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
                 >
                   <svg
                     width="13"
@@ -197,59 +188,24 @@ export function ListenerCard({
                     <circle cx="12" cy="12" r="3" />
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                   </svg>
-                </button>
+                </IconButton>
               </div>
             }
           />
         </div>
       ) : (
-        <div className="relative mt-[9px]">
-          <button
-            type="button"
-            onClick={onToggleOpen}
-            className="tb-time flex w-full items-center justify-between rounded-[10px] border border-line-input bg-white px-[13px] py-[10px] text-[13px]"
-          >
-            <span className="text-ink-subtle">{t('neurocomment.listener.choose')}</span>
-            <span
-              className={`tb-ddchev flex shrink-0 text-ink-subtle ${listenerOpen ? 'open' : ''}`}
-            >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </span>
-          </button>
-          <div
-            // .tb-dd collapses visually only; without this the account buttons kept
-            // their tab stops while the list was closed. See the note in LogsPage.
-            inert={!listenerOpen}
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${listenerOpen ? 'open' : ''}`}
-          >
-            {accountOptions.length === 0 ? (
-              <div className="px-[10px] py-2 text-[12.5px] text-ink-subtle">
-                {t('neurocomment.listener.noAccounts')}
-              </div>
-            ) : (
-              accountOptions.map((account) => (
-                <button
-                  key={account.account_id}
-                  type="button"
-                  onClick={() => {
-                    onPickListener(account.account_id);
-                  }}
-                  className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
-                >
-                  <span className="font-medium">{accountDisplayName(account)}</span>
-                </button>
-              ))
-            )}
-          </div>
+        <div className="mt-[9px]">
+          <Select
+            value=""
+            onChange={onPickListener}
+            options={accountOptions.map((account) => ({
+              value: account.account_id,
+              label: accountDisplayName(account),
+            }))}
+            placeholder={t('neurocomment.listener.choose')}
+            ariaLabel={t('neurocomment.listener.title')}
+            emptyLabel={t('neurocomment.listener.noAccounts')}
+          />
         </div>
       )}
 
@@ -257,7 +213,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-2 text-[11.5px] font-medium text-danger">
+        <p className="mt-2 text-tiny font-medium text-danger">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

@@ -4,7 +4,7 @@ import { expect, test } from 'vitest';
 import { AccountAvatar } from './AccountAvatar';
 
 const CLASS = 'h-8 w-8 shrink-0 rounded-full';
-const FALLBACK = 'text-[12px] font-semibold';
+const FALLBACK = 'text-body font-semibold';
 
 test('renders the cached photo when an avatar etag is set', () => {
   const { container } = render(

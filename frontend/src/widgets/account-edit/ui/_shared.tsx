@@ -24,7 +24,7 @@ export function DashedAdd({
       disabled={disabled}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
-      className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
+      className="flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-white text-body font-medium text-ink-muted disabled:opacity-60"
     >
       <svg
         width="20"
@@ -44,7 +44,7 @@ export function DashedAdd({
 export function Spinner({ size }: { size: number }) {
   return (
     <span
-      className="tb-spin inline-block rounded-full border-2 border-[#c8c6c2] border-t-primary"
+      className="tb-spin inline-block rounded-full border-2 border-line-strong border-t-primary"
       style={{ width: size, height: size }}
     />
   );
@@ -78,11 +78,11 @@ export function Section({
       label={title}
       trailing={right}
       onOpenChange={onOpenChange}
-      wrapperClassName="self-start rounded-2xl border border-line bg-white"
+      wrapperClassName="self-start rounded-card border border-line bg-white"
       headerClassName="px-5 py-4"
       bodyClassName={bodyClassName}
       header={
-        <span className="flex items-center gap-[7px] text-[13px] font-semibold text-ink">
+        <span className="flex items-center gap-sm text-lead font-semibold text-ink">
           {title}
           {icon}
         </span>

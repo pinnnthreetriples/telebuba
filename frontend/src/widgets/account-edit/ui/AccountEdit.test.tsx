@@ -69,8 +69,8 @@ test('renders the hero and every section header', () => {
 // matching. Throw on a miss: otherwise the comparisons below hold two nulls
 // against each other and pass while asserting nothing.
 function cardWrapper(title: string): HTMLElement {
-  const el = screen.getByText(title).closest<HTMLElement>('.rounded-2xl');
-  if (!el) throw new Error(`no .rounded-2xl card wrapper around "${title}"`);
+  const el = screen.getByText(title).closest<HTMLElement>('.rounded-card');
+  if (!el) throw new Error(`no .rounded-card card wrapper around "${title}"`);
   return el;
 }
 
@@ -88,7 +88,7 @@ test('the two security cards are the page\'s last row, 2FA left of "Действ
   // every asserted class still present. The class list also pins the ABSENCE
   // of mb-[14px] — the row is last and owns the page's bottom edge, and a
   // margin re-added here is the gap the row above it already provides.
-  expect(row).toHaveAttribute('class', 'grid grid-cols-1 md:grid-cols-2 gap-[14px]');
+  expect(row).toHaveAttribute('class', 'grid grid-cols-1 md:grid-cols-2 gap-lg');
   // Last child of the page root, so the row is neither wrapped in another grid
   // nor moved above a row whose bottom margin it would then have to supply.
   const page = container.firstElementChild;
@@ -209,7 +209,8 @@ test('proxy: manual creates+assigns, pool select assigns', async () => {
   await userEvent.type(screen.getByLabelText('Порт'), '1080');
   await userEvent.type(screen.getByLabelText('Логин'), 'u');
   await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'p');
-  await userEvent.selectOptions(screen.getByLabelText('Тип'), 'https');
+  await userEvent.click(screen.getByRole('button', { name: 'Тип' }));
+  await userEvent.click(screen.getByRole('option', { name: 'HTTPS' }));
   // Manual mode creates + assigns (it never was a "check"), and ACCOUNT already
   // has a proxy, so the replacement is confirmed first.
   await userEvent.click(screen.getByRole('button', { name: 'Добавить и назначить' }));
@@ -227,7 +228,7 @@ test('proxy: manual creates+assigns, pool select assigns', async () => {
   await waitFor(() => {
     expect(screen.getByRole('option', { name: '9.9.9.9:1080' })).toBeInTheDocument();
   });
-  await userEvent.selectOptions(screen.getByRole('combobox'), 'pool-1');
+  await userEvent.click(screen.getByRole('option', { name: '9.9.9.9:1080' }));
   await waitFor(() => {
     const assigned = vi
       .mocked(fetch)
@@ -541,7 +542,8 @@ test('the pool select still lists the proxy this account already holds at capaci
   await userEvent.click(screen.getByText('Из пула'));
 
   expect(await screen.findByRole('option', { name: '7.7.7.7:1080' })).toBeInTheDocument();
-  expect(screen.getByRole('combobox')).toHaveValue('p1');
+  // The trigger names the assigned proxy rather than falling back to «Выберите из пула».
+  expect(screen.getByRole('button', { name: 'Прокси-пул' })).toHaveTextContent('7.7.7.7:1080');
 });
 
 test('a proxyless account shows the unassigned state and no detach control', () => {

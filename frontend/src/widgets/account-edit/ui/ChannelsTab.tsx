@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountChannelsQueryOptions, deleteAccountChannelMutation } from '@/entities/account';
 import type { ChannelView } from '@/shared/api';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, IconButton } from '@/shared/ui';
 
 import { channelErrorText } from './_channelsShared';
 import { ChannelCreateModal } from './ChannelCreateModal';
@@ -29,7 +29,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.channel.hint')}</div>
+      <div className="mb-3 text-body text-ink-subtle">{t('accounts.channel.hint')}</div>
 
       {channels.isPending && (
         <div
@@ -42,14 +42,14 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isError && (
-        <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+        <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
           <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
           <button
             type="button"
             onClick={() => {
               void channels.refetch();
             }}
-            className="shrink-0 rounded-full border border-[#f0c9c5] bg-white px-3 py-[4px] text-[12px] font-medium"
+            className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium"
           >
             {t('accounts.channel.retry')}
           </button>
@@ -57,26 +57,26 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isSuccess && items.length === 0 && (
-        <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
           {t('accounts.channel.empty')}
         </div>
       )}
 
       {items.length > 0 && (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-sm">
           {items.map((channel) => (
             <div
               key={channel.channel_id}
-              className="flex items-center gap-[13px] rounded-[12px] border border-line px-[14px] py-3"
+              className="flex items-center gap-lg rounded-lg border border-line px-[14px] py-3"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold">{channel.title}</div>
-                <div className="mt-[2px] flex items-center gap-[8px] text-[11.5px] text-ink-subtle">
+                <div className="truncate text-lead font-semibold">{channel.title}</div>
+                <div className="mt-[2px] flex items-center gap-sm text-tiny text-ink-subtle">
                   <span
-                    className={`rounded-[6px] px-[6px] py-[1px] font-medium ${
+                    className={`rounded-sm px-[6px] py-[1px] font-medium ${
                       channel.username != null
-                        ? 'bg-[#e8f1ff] text-primary'
-                        : 'bg-[#f1efed] text-ink-muted'
+                        ? 'bg-primary-tint text-primary'
+                        : 'bg-canvas text-ink-muted'
                     }`}
                   >
                     {channel.username != null
@@ -98,20 +98,20 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                 onClick={() => {
                   setEditingId(channel.channel_id);
                 }}
-                className="shrink-0 rounded-full border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink hover:border-[#bfd6ff] hover:text-primary"
+                className="shrink-0 rounded-full border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink hover:border-primary-line hover:text-primary"
               >
                 {t('accounts.channel.edit')}
               </button>
-              <button
-                type="button"
+              <IconButton
+                size="md"
                 onClick={() => {
                   setConfirmDelete(channel);
                 }}
                 aria-label={t('accounts.channel.delete')}
-                className="h-[28px] w-[28px] shrink-0 rounded-full border border-line bg-white text-[14px] text-ink-subtle"
+                className="text-lead"
               >
                 ×
-              </button>
+              </IconButton>
             </div>
           ))}
         </div>
@@ -123,7 +123,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           onClick={() => {
             setCreateOpen(true);
           }}
-          className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
+          className="mt-3 rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold"
         >
           {t('accounts.channel.create')}
         </button>

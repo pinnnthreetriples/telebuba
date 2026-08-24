@@ -1,0 +1,111 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { expect, test, vi } from 'vitest';
+
+import { IconButton } from './IconButton';
+
+test('is reachable by its accessible name and defaults to a non-submitting button', async () => {
+  const onClick = vi.fn();
+  render(
+    <form
+      onSubmit={() => {
+        throw new Error('an icon button must not submit its form');
+      }}
+    >
+      <IconButton aria-label="Удалить" onClick={onClick}>
+        <svg />
+      </IconButton>
+    </form>,
+  );
+
+  const button = screen.getByRole('button', { name: 'Удалить' });
+  expect(button).toHaveAttribute('type', 'button');
+  await userEvent.click(button);
+  expect(onClick).toHaveBeenCalledTimes(1);
+});
+
+test('size picks both the box and its shape, so 34 is the only circle', () => {
+  const { rerender } = render(
+    <IconButton aria-label="a" size="sm">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-6', 'w-6', 'rounded-sm');
+
+  rerender(
+    <IconButton aria-label="a" size="md">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-7', 'w-7', 'rounded-md');
+
+  rerender(
+    <IconButton aria-label="a" size="lg">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-[34px]', 'rounded-full');
+
+  rerender(
+    <IconButton aria-label="a" size="touch">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-11', 'w-11', 'rounded-md');
+});
+
+test('tone paints the hover, and neutral deliberately has none', () => {
+  const { rerender } = render(
+    <IconButton aria-label="a">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' }).className).not.toMatch(/hover:/);
+
+  rerender(
+    <IconButton aria-label="a" tone="primary">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
+    'hover:border-primary-line',
+    'hover:bg-primary-wash',
+    'hover:text-primary',
+  );
+
+  rerender(
+    <IconButton aria-label="a" tone="danger">
+      <svg />
+    </IconButton>,
+  );
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
+    'hover:border-danger-line',
+    'hover:bg-danger-tint',
+    'hover:text-danger',
+  );
+});
+
+test('disabled is inert and dimmed, so a pending action cannot be fired twice', async () => {
+  const onClick = vi.fn();
+  render(
+    <IconButton aria-label="Обновить" disabled onClick={onClick}>
+      <svg />
+    </IconButton>,
+  );
+
+  const button = screen.getByRole('button', { name: 'Обновить' });
+  expect(button).toBeDisabled();
+  expect(button).toHaveClass('disabled:opacity-50');
+  await userEvent.click(button);
+  expect(onClick).not.toHaveBeenCalled();
+});
+
+test('extra classes are appended, so a caller can size the glyph it puts inside', () => {
+  render(
+    <IconButton aria-label="Закрыть" className="text-title">
+      ×
+    </IconButton>,
+  );
+
+  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-title', 'h-7');
+});

@@ -86,15 +86,12 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
   return (
     <>
       <Section title={t('accounts.edit.actions')} bodyClassName="px-5 pb-[6px]">
-        <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[14px]">
+        <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
           <div>
-            <div className="text-[13px] font-medium">{t('accounts.edit.aliveTitle')}</div>
+            <div className="text-lead font-medium">{t('accounts.edit.aliveTitle')}</div>
+            {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className="mt-px text-[11.5px]"
-              style={{
-                color:
-                  aliveCheck === 'ok' ? '#2e9e64' : aliveCheck === 'err' ? '#c0473f' : '#9a9893',
-              }}
+              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')
@@ -113,14 +110,13 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             disabled={aliveMutation.isPending}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
-            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-300"
-            style={{
-              borderColor:
-                aliveCheck === 'ok' ? '#2e9e64' : aliveCheck === 'err' ? '#c0473f' : '#e6e5e3',
-              background:
-                aliveCheck === 'ok' ? '#2e9e64' : aliveCheck === 'err' ? '#c0473f' : '#fff',
-              color: aliveCheck === 'ok' || aliveCheck === 'err' ? '#fff' : '#74726e',
-            }}
+            className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-enter ${
+              aliveCheck === 'ok'
+                ? 'border-success bg-success text-white'
+                : aliveCheck === 'err'
+                  ? 'border-danger bg-danger text-white'
+                  : 'border-line bg-white text-ink-muted'
+            }`}
           >
             {aliveCheck === 'idle' && (
               <span className="tb-blur inline-flex">
@@ -175,14 +171,14 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             )}
           </button>
         </div>
-        <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[14px]">
+        <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
           <div>
-            <div className="text-[13px] font-medium">{t('accounts.edit.resetSession')}</div>
-            <div className="mt-px text-[11.5px] text-ink-subtle">
+            <div className="text-lead font-medium">{t('accounts.edit.resetSession')}</div>
+            <div className="mt-px text-tiny text-ink-subtle">
               {t('accounts.edit.resetSessionHint')}
             </div>
           </div>
-          <span className="flex shrink-0 items-center gap-[7px]">
+          <span className="flex shrink-0 items-center gap-sm">
             <FeedbackMark
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
@@ -190,25 +186,23 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
               type="button"
               onClick={onReset}
               disabled={resetSession.isPending}
-              className="rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
+              className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
             >
               {resetCheck === 'loading' ? <Spinner size={14} /> : t('accounts.edit.reset')}
             </button>
           </span>
         </div>
-        <div className="flex items-center justify-between gap-3 py-[14px]">
+        <div className="flex items-center justify-between gap-md py-[14px]">
           <div>
-            <div className="text-[13px] font-medium">{t('accounts.edit.deleteAccount')}</div>
-            <div className="mt-px text-[11.5px] text-ink-subtle">
-              {t('accounts.edit.deleteHint')}
-            </div>
+            <div className="text-lead font-medium">{t('accounts.edit.deleteAccount')}</div>
+            <div className="mt-px text-tiny text-ink-subtle">{t('accounts.edit.deleteHint')}</div>
           </div>
           <button
             type="button"
             onClick={() => {
               setConfirmDelete(true);
             }}
-            className="shrink-0 px-1 py-2 text-[13px] font-medium text-[#c0473f]"
+            className="shrink-0 px-1 py-2 text-lead font-medium text-danger"
           >
             {t('accounts.edit.deleteAccount')}
           </button>

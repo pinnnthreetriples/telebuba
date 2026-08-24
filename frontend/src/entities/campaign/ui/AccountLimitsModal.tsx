@@ -83,11 +83,11 @@ function LimitRow({
   const value = draft === undefined ? (gauge.overridden ? gauge.limit : '') : draft;
 
   return (
-    <div className="border-b border-[#f4f2ef] py-[15px] last:border-b-0">
+    <div className="border-b border-line-row py-[15px] last:border-b-0">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[13px] font-semibold text-ink">{label}</span>
+        <span className="text-lead font-semibold text-ink">{label}</span>
         <span
-          className={`font-mono text-[12.5px] font-semibold tabular-nums ${
+          className={`font-mono text-body font-semibold tabular-nums ${
             state === 'full' ? 'text-danger' : 'text-ink-muted'
           }`}
         >
@@ -98,7 +98,7 @@ function LimitRow({
         <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
       </div>
       <div className="mt-[9px] flex flex-wrap items-center justify-between gap-3">
-        <span className="min-w-[11rem] flex-1 text-[11.5px] text-ink-subtle">
+        <span className="min-w-[11rem] flex-1 text-tiny text-ink-subtle">
           {hint}
           {resets ? ` · ${t('neurocomment.modal.limits.resetsAt', { at: resets })}` : ''}
         </span>
@@ -120,10 +120,10 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-[74px] rounded-[9px] border border-line-input bg-white px-[9px] py-[6px] text-right font-mono text-[12.5px] font-semibold text-ink"
+          className="w-[74px] rounded-md border border-line-input bg-white px-[9px] py-[6px] text-right font-mono text-body font-semibold text-ink"
         />
       </div>
-      <div className="mt-[6px] text-[11px] text-ink-subtle">
+      <div className="mt-[6px] text-tiny text-ink-subtle">
         {value === ''
           ? t('neurocomment.modal.limits.fleetValue', { value: gauge.fleet_default })
           : t('neurocomment.modal.limits.ownValue', { value: gauge.fleet_default })}
@@ -200,12 +200,11 @@ export function AccountLimitsModal({
   return (
     <Modal
       onClose={onClose}
-      z={74}
       className="w-[440px]"
       label={t('neurocomment.modal.limits.title', { name })}
     >
-      <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
+      <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="18"
             height="18"
@@ -220,10 +219,10 @@ export function AccountLimitsModal({
           </svg>
         </span>
         <div>
-          <div className="text-[16px] font-bold text-ink">
+          <div className="text-title font-bold text-ink">
             {t('neurocomment.modal.limits.title', { name })}
           </div>
-          <div className="mt-[2px] text-[12.5px] text-ink-subtle">
+          <div className="mt-[2px] text-body text-ink-subtle">
             {t('neurocomment.modal.limits.sub')}
           </div>
         </div>
@@ -245,7 +244,7 @@ export function AccountLimitsModal({
             />
           ))
         ) : (
-          <div className="px-[10px] py-8 text-center text-[13px] text-ink-subtle">
+          <div className="px-[10px] py-8 text-center text-lead text-ink-subtle">
             {query.isError
               ? t('neurocomment.modal.limits.loadFailed')
               : t('neurocomment.modal.limits.loading')}
@@ -253,17 +252,17 @@ export function AccountLimitsModal({
         )}
       </div>
 
-      <div className="mx-6 mb-1 rounded-[10px] border border-line bg-surface px-3 py-[10px] text-[11.5px] text-ink-muted">
+      <div className="mx-6 mb-1 rounded-lg border border-line bg-surface px-3 py-[10px] text-tiny text-ink-muted">
         {t('neurocomment.modal.limits.sharedJoins')}
       </div>
 
-      <div className="flex justify-between gap-3 border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
+      <div className="flex justify-between gap-3 border-t border-line-row px-6 pb-5 pt-[14px]">
         <button
           type="button"
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
           }}
-          className="rounded-full border border-line-strong bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink-muted"
+          className="rounded-full border border-line-strong bg-white px-[18px] py-[9px] text-lead font-medium text-ink-muted"
         >
           {t('neurocomment.modal.limits.resetAll')}
         </button>
@@ -271,7 +270,7 @@ export function AccountLimitsModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-strong bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink-muted"
+            className="rounded-full border border-line-strong bg-white px-[18px] py-[9px] text-lead font-medium text-ink-muted"
           >
             {t('neurocomment.modal.cancel')}
           </button>
@@ -281,7 +280,7 @@ export function AccountLimitsModal({
               void submit();
             }}
             disabled={!view || save.isPending}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {t('neurocomment.modal.limits.save')}
           </button>

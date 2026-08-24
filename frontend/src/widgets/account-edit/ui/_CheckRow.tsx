@@ -19,18 +19,25 @@ export function CheckRow({
       aria-checked={on}
       disabled={disabled}
       onClick={onToggle}
-      className="mb-[14px] flex w-full items-center gap-[10px] text-left disabled:opacity-60"
+      className="mb-[14px] flex w-full items-center gap-md text-left disabled:opacity-60"
     >
       <span
-        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border ${on ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
+        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${on ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
       >
         {on && (
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            className="stroke-white"
+            strokeWidth="3"
+          >
             <path d="M20 6 9 17l-5-5" />
           </svg>
         )}
       </span>
-      <span className="text-[13px] text-[#3a3a3a]">{label}</span>
+      <span className="text-lead text-ink-body">{label}</span>
     </button>
   );
 }

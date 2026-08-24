@@ -272,7 +272,7 @@ test('checking channels colours banned chips red and healthy chips green', async
   await waitFor(() => {
     expect(chip('@news')?.className).toContain('text-danger');
   });
-  expect(chip('@promo')?.className).toContain('text-[#2e9e64]');
+  expect(chip('@promo')?.className).toContain('text-success');
 });
 
 test('the channel chip carries the channel-scoped deleted count', async () => {

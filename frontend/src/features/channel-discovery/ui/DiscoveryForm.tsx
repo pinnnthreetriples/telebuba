@@ -20,14 +20,14 @@ import {
 // The project has no shared input primitive; this literal is the established
 // convention (duplicated in _styles.ts, ApiKeyField.tsx, SettingsPage.tsx).
 const FIELD =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
+const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 // A HelpHint must sit OUTSIDE the <label>, so the label text needs its own row and the
 // control needs an id: a label click activates its control, and on a phone tapping the
 // badge is the only way to open a hover tooltip — which silently joined the tooltip
 // prose to the field's accessible name.
-const LABEL_ROW = `${LABEL} flex items-center gap-[6px]`;
-const HINT = 'mt-[5px] block text-[11.5px] text-ink-subtle';
+const LABEL_ROW = `${LABEL} flex items-center gap-sm`;
+const HINT = 'mt-[5px] block text-tiny text-ink-subtle';
 
 // Same contract as DiscoveryResults' reasonKey: the server sends short locale-neutral
 // codes, and an unmapped one falls back to the code itself so a value added later
@@ -83,7 +83,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
 
   return (
     <form
-      className="flex flex-col gap-[13px]"
+      className="flex flex-col gap-lg"
       onSubmit={(event) => {
         event.preventDefault();
         if (canSubmit(form) && !submitting) onSubmit();
@@ -95,7 +95,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         <label htmlFor={keywordsId} className={LABEL}>
           {t('neurocomment.modal.discovery.form.keywords')}
         </label>
-        <div className="flex items-start gap-[7px]">
+        <div className="flex items-start gap-sm">
           <input
             id={keywordsId}
             autoFocus
@@ -113,7 +113,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
             type="button"
             onClick={suggest}
             disabled={topic === '' || topicTooLong || expand.isPending}
-            className="shrink-0 whitespace-nowrap rounded-[10px] border border-line-input bg-white px-[13px] py-[9px] text-[12.5px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-line-input bg-white px-[13px] py-[9px] text-body font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
           >
             {expand.isPending
               ? t('neurocomment.modal.discovery.form.expanding')
@@ -142,7 +142,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         {/* Say why the button went dead rather than truncating a topic the operator
             wrote — a silent cut would ask the model about something else. */}
         {topicTooLong ? (
-          <p role="status" className="mt-[5px] text-[11.5px] text-danger">
+          <p role="status" className="mt-[5px] text-tiny text-danger">
             {t('neurocomment.modal.discovery.form.expandTooLong', { max: KEYWORD_MAX_LENGTH })}
           </p>
         ) : null}
@@ -150,7 +150,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         {/* A 200 carrying a code: nothing was expanded, and each code points at a
             different fix. Unmapped codes fall back to the raw code. */}
         {expand.data?.error != null ? (
-          <p role="status" className="mt-[5px] text-[11.5px] text-danger">
+          <p role="status" className="mt-[5px] text-tiny text-danger">
             {t(expandErrorKey(expand.data.error), { defaultValue: expand.data.error })}
           </p>
         ) : null}
@@ -158,13 +158,13 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         {/* The request itself never landed, so there is no code to translate — and the
             button silently re-enabling would read as "the model had nothing to say". */}
         {expand.isError ? (
-          <p role="status" className="mt-[5px] text-[11.5px] text-danger">
+          <p role="status" className="mt-[5px] text-tiny text-danger">
             {t('neurocomment.modal.discovery.form.expandFailed')}
           </p>
         ) : null}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-[13px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <label className="block">
           <span className={LABEL}>{t('neurocomment.modal.discovery.form.minSubscribers')}</span>
           <input
@@ -202,7 +202,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
       {/* The API refuses members_min > members_max, and canSubmit blocks it — without
           this the Search button would just go dead naming no field. */}
       {inverted ? (
-        <p className="text-[11.5px] text-danger">
+        <p className="text-tiny text-danger">
           {t('neurocomment.modal.discovery.form.boundsInverted')}
         </p>
       ) : null}
@@ -223,20 +223,20 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         />
       </div>
 
-      <div className="flex items-center justify-end gap-[9px] pt-[3px]">
+      <div className="flex items-center justify-end gap-md pt-[3px]">
         <button
           type="button"
           onClick={() => {
             onChange(EMPTY_FORM);
           }}
-          className="rounded-[10px] px-[13px] py-[8px] text-[12.5px] text-ink-muted hover:text-primary"
+          className="rounded-lg px-[13px] py-[8px] text-body text-ink-muted hover:text-primary"
         >
           {t('neurocomment.modal.discovery.form.reset')}
         </button>
         <button
           type="submit"
           disabled={!canSubmit(form) || submitting}
-          className="rounded-[10px] bg-primary px-[15px] py-[8px] text-[12.5px] font-medium text-white disabled:opacity-50"
+          className="rounded-lg bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white disabled:opacity-50"
         >
           {submitting
             ? t('neurocomment.modal.discovery.form.searching')

@@ -128,7 +128,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11.5px] font-medium text-primary">
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-medium text-primary">
       <span className="h-[5px] w-[5px] rounded-full bg-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -147,12 +147,12 @@ function AccountComments({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="border-t border-[#f0eeeb] bg-[#faf9f7] px-4 py-3">
+    <div className="border-t border-line-row bg-surface px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-sm">
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
-          <span className="text-[12px] font-semibold">{t('neurocomment.feed.title')}</span>
-          <span className="rounded-full bg-[#f2f1ee] px-2 py-[2px] text-[11px] font-medium text-ink-muted">
+          <span className="text-body font-semibold">{t('neurocomment.feed.title')}</span>
+          <span className="rounded-full bg-track px-2 py-[2px] text-tiny font-medium text-ink-muted">
             {comments.length}
           </span>
         </div>
@@ -160,14 +160,14 @@ function AccountComments({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="rounded-full border border-line bg-white px-3 py-[4px] text-[11.5px] font-medium text-primary hover:border-primary"
+            className="rounded-full border border-line bg-white px-3 py-[4px] text-tiny font-medium text-primary hover:border-primary"
           >
             {t('neurocomment.feed.history')}
           </button>
         ) : null}
       </div>
       {comments.length === 0 ? (
-        <div className="py-4 text-center text-[12.5px] text-ink-subtle">
+        <div className="py-4 text-center text-body text-ink-subtle">
           {t('neurocomment.feed.empty')}
         </div>
       ) : (
@@ -177,7 +177,7 @@ function AccountComments({
             return (
               <div
                 key={`${c.channel}:${String(c.post_id)}`}
-                className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[2px] border-b border-[#f4f2ef] py-[7px] text-[12.5px] last:border-b-0"
+                className="flex flex-wrap items-baseline gap-x-md gap-y-[2px] border-b border-line-row py-[7px] text-body last:border-b-0"
               >
                 <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
                 {/* Was shrink-0, which let a long channel (a t.me invite link) push the
@@ -187,12 +187,12 @@ function AccountComments({
                   // Own line, wrapped, on a phone: sharing one line with the time and
                   // the channel left the comment about a dozen characters of ellipsis,
                   // and the comment is what the operator expanded the row to read.
-                  className={`w-full min-w-0 sm:w-auto sm:flex-1 sm:truncate ${deleted ? 'text-ink-subtle line-through' : 'text-[#5c5c5c]'}`}
+                  className={`w-full min-w-0 sm:w-auto sm:flex-1 sm:truncate ${deleted ? 'text-ink-subtle line-through' : 'text-ink-muted'}`}
                 >
                   {c.comment_text ?? '—'}
                 </span>
                 {deleted ? (
-                  <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+                  <span className="shrink-0 rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
                     {t('neurocomment.feed.deleted')}
                   </span>
                 ) : null}
@@ -243,7 +243,7 @@ export function NeurocommentBoard({
         header: t('neurocomment.board.col.account'),
         cell: (info) => info.getValue<string>(),
         meta: {
-          cellClassName: 'whitespace-nowrap text-[12.5px] font-medium',
+          cellClassName: 'whitespace-nowrap text-body font-medium',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -256,7 +256,7 @@ export function NeurocommentBoard({
           // changes under the operator's eyes should say so.
           <span
             key={row.original.channel}
-            className="tb-swapin inline-flex items-center gap-[6px] whitespace-nowrap"
+            className="tb-swapin inline-flex items-center gap-sm whitespace-nowrap"
           >
             {row.original.channel}
             {/* The hover text carries the scope: the identical «N удалено» string also sits
@@ -266,7 +266,7 @@ export function NeurocommentBoard({
             {row.original.deletedHere > 0 ? (
               <span
                 title={t('neurocomment.board.deletedHint')}
-                className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger"
+                className="rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger"
               >
                 {t('neurocomment.board.deleted', { count: row.original.deletedHere })}
               </span>
@@ -274,7 +274,7 @@ export function NeurocommentBoard({
           </span>
         ),
         meta: {
-          cellClassName: 'whitespace-nowrap text-[12.5px] text-primary',
+          cellClassName: 'whitespace-nowrap text-body text-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -301,7 +301,7 @@ export function NeurocommentBoard({
           ),
         meta: {
           cellClassName:
-            'max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] text-[#5c5c5c]',
+            'max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-body text-ink-muted',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -330,7 +330,7 @@ export function NeurocommentBoard({
             // The row's only control, and a 16px glyph is not a thumb target — the
             // padding/negative-margin pair grows the hit box to 40px without moving the
             // chevron or widening the column it is sized to.
-            className={`-m-3 flex p-3 text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+            className={`-m-3 flex p-3 text-ink-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
           >
             <svg
               width="16"
@@ -363,20 +363,20 @@ export function NeurocommentBoard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.board.title')}
-      headerClassName="border-b border-[#f0eeeb] px-4 py-[14px]"
+      headerClassName="border-b border-line-row px-4 py-[14px]"
       bodyClassName="tb-scroll overflow-x-auto"
       header={
         <>
-          <span className="text-[13px] font-semibold">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-[11px] font-semibold text-primary">
+          <span className="text-lead font-semibold">{t('neurocomment.board.title')}</span>
+          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
         </>
       }
       trailing={
-        <div className="flex shrink-0 items-center gap-[10px]">
+        <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary">
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-semibold text-primary">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>
@@ -384,7 +384,7 @@ export function NeurocommentBoard({
             // Hidden on a phone: the header already carries a title, a count pill, the
             // gear and the chevron, and this static label is the one part of it that
             // says nothing actionable — keeping it forced the row to wrap.
-            <span className="hidden text-[11px] text-ink-muted sm:inline">
+            <span className="hidden text-tiny text-ink-muted sm:inline">
               {t('neurocomment.board.updated')}
             </span>
           )}
@@ -393,7 +393,7 @@ export function NeurocommentBoard({
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary lg:h-7 lg:w-7"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary lg:h-7 lg:w-7"
           >
             <svg
               width="15"
@@ -424,7 +424,7 @@ export function NeurocommentBoard({
           )}
         />
       ) : (
-        <div className="px-4 py-8 text-center text-[12.5px] text-ink-subtle">
+        <div className="px-4 py-8 text-center text-body text-ink-subtle">
           {t('neurocomment.board.empty')}
         </div>
       )}

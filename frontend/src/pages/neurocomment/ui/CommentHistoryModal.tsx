@@ -47,7 +47,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-[130px]',
-          cellClassName: 'font-mono text-[12px] text-ink-subtle',
+          cellClassName: 'font-mono text-body text-ink-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -57,7 +57,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => labelOf.get(row.original.account_id) ?? row.original.account_id,
         meta: {
           className: 'w-[150px]',
-          cellClassName: 'text-[12.5px] font-medium text-ink',
+          cellClassName: 'text-body font-medium text-ink',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -66,7 +66,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => row.original.channel,
         meta: {
           className: 'w-[150px]',
-          cellClassName: 'text-[12.5px] text-primary',
+          cellClassName: 'text-body text-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -76,41 +76,41 @@ export function CommentHistoryModal({
           const text = row.original.comment_text ?? '—';
           if (!row.original.deleted_at) return text;
           return (
-            <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-sm">
               <span className="text-ink-subtle line-through">{text}</span>
-              <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+              <span className="shrink-0 rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
                 {t('neurocomment.feed.deleted')}
               </span>
             </span>
           );
         },
-        meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'text-body text-ink-body' } satisfies DataTableColumnMeta,
       },
     ],
     [t, labelOf],
   );
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[760px]" label={t('neurocomment.history.title')}>
-      <div className="border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
-        <div className="text-[16px] font-bold text-ink">{t('neurocomment.history.title')}</div>
+    <Modal onClose={onClose} className="w-[760px]" label={t('neurocomment.history.title')}>
+      <div className="border-b border-line-row px-6 pb-[15px] pt-5">
+        <div className="text-title font-bold text-ink">{t('neurocomment.history.title')}</div>
       </div>
 
       <div className="px-6 pb-4 pt-3">
         {isPending ? (
-          <p className="py-10 text-center text-[13px] text-ink-muted">
+          <p className="py-10 text-center text-lead text-ink-muted">
             {t('neurocomment.history.loading')}
           </p>
         ) : isError ? (
-          <p role="alert" className="py-10 text-center text-[13px] text-danger">
+          <p role="alert" className="py-10 text-center text-lead text-danger">
             {t('neurocomment.history.error')}
           </p>
         ) : items.length === 0 ? (
-          <div className="py-12 text-center text-[13px] text-ink-subtle">
+          <div className="py-12 text-center text-lead text-ink-subtle">
             {t('neurocomment.history.empty')}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="overflow-hidden rounded-card border border-line bg-white">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>
@@ -118,15 +118,15 @@ export function CommentHistoryModal({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-[#f0eeeb] px-6 pb-5 pt-[14px]">
-        <div className="flex gap-2">
+      <div className="flex items-center justify-between border-t border-line-row px-6 pb-5 pt-[14px]">
+        <div className="flex gap-sm">
           <button
             type="button"
             disabled={!hasPrev}
             onClick={() => {
               setCursorStack((stack) => stack.slice(0, -1));
             }}
-            className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+            className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
           >
             {t('neurocomment.history.prev')}
           </button>
@@ -136,7 +136,7 @@ export function CommentHistoryModal({
             onClick={() => {
               setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
             }}
-            className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+            className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
           >
             {t('neurocomment.history.next')}
           </button>
@@ -144,7 +144,7 @@ export function CommentHistoryModal({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white"
+          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
         >
           {t('neurocomment.history.done')}
         </button>

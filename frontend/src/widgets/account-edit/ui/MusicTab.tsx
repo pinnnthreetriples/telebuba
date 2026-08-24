@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileMusicView } from '@/shared/api';
+import { IconButton } from '@/shared/ui';
 
 // The profile modal's music tab: the saved-music list with remove, a picker
 // for a new track, and the "unsupported" note for older Telethon builds that
@@ -24,7 +25,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+      <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );
@@ -39,11 +40,11 @@ export function MusicTab({
   return (
     <div>
       {music.length > 0 ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-sm">
           {music.map((track) => (
             <div
               key={track.file_id}
-              className="flex items-center gap-[13px] rounded-[12px] border border-line px-[14px] py-3"
+              className="flex items-center gap-lg rounded-lg border border-line px-[14px] py-3"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -51,29 +52,29 @@ export function MusicTab({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold">
+                <div className="truncate text-lead font-semibold">
                   {track.title ?? t('accounts.profile.trackTitle')}
                 </div>
-                <div className="truncate text-[12px] text-ink-subtle">
+                <div className="truncate text-body text-ink-subtle">
                   {track.performer ?? t('accounts.profile.trackArtist')}
                 </div>
               </div>
-              <button
-                type="button"
+              <IconButton
+                size="md"
                 disabled={!track.file_reference}
                 onClick={() => {
                   onRemove(track);
                 }}
                 aria-label={t('accounts.profile.removeMusic')}
-                className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[15px] text-ink-subtle disabled:opacity-50"
+                className="text-title"
               >
                 ×
-              </button>
+              </IconButton>
             </div>
           ))}
         </div>
       ) : (
-        <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
           {t('accounts.profile.noMusic')}
         </div>
       )}
@@ -81,7 +82,7 @@ export function MusicTab({
         type="button"
         disabled={busy}
         onClick={() => musicInput.current?.click()}
-        className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-60"
+        className="mt-3 rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-60"
       >
         {t('accounts.profile.pickTrack')}
       </button>

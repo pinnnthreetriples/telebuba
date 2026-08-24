@@ -18,12 +18,13 @@ import { FeedbackMark } from '@/shared/ui';
 import { Section, Spinner } from './_shared';
 import { FIELD, LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
 
-// Session-state dot colour keyed on the backend health (ok/warn/fail), so the
-// card shows the real session state — not a hardcoded green "active".
+// Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
+// shows the real session state — not a hardcoded green "active". Tokens, so the
+// three tiers read the same as every other health signal.
 const HEALTH_DOT: Record<ReturnType<typeof accountHealth>, string> = {
-  ok: '#2e9e64',
-  warn: '#e08700',
-  fail: '#c0473f',
+  ok: 'bg-success',
+  warn: 'bg-warning-strong',
+  fail: 'bg-danger',
 };
 
 // One queued/finished import in the dropzone's file list. `id` is per enqueue,
@@ -152,12 +153,12 @@ export function SessionSection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.session')}>
-      <div className="mb-[10px] flex items-center justify-between gap-[10px] rounded-[10px] bg-[#f6f5f2] px-3 py-[10px]">
-        <span className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full" style={{ background: sessionDot }} />
-          <span className="text-[12.5px] text-[#3a3a3a]">{sessionText}</span>
+      <div className="mb-[10px] flex items-center justify-between gap-md rounded-lg bg-canvas px-3 py-[10px]">
+        <span className="flex items-center gap-sm">
+          <span className={`h-2 w-2 rounded-full ${sessionDot}`} />
+          <span className="text-body text-ink-body">{sessionText}</span>
         </span>
-        <span className="flex items-center gap-[7px]">
+        <span className="flex items-center gap-sm">
           <FeedbackMark
             result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck}
           />
@@ -165,26 +166,26 @@ export function SessionSection({ account }: { account: AccountRead }) {
             type="button"
             onClick={onLogout}
             disabled={logout.isPending}
-            className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
+            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
           >
             {logoutCheck === 'loading' ? <Spinner size={12} /> : t('accounts.edit.logout')}
           </button>
         </span>
       </div>
-      <div className="mb-[9px] mt-4 flex items-center justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+      <div className="mb-[9px] mt-4 flex items-center justify-between gap-sm">
+        <span className="text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('accounts.edit.loginByCode')}
         </span>
         <button
           type="button"
           onClick={onRequestCode}
           disabled={requestCode.isPending}
-          className="rounded-full border border-line-input bg-white px-3 py-[4px] text-[11.5px] font-medium text-primary disabled:opacity-50"
+          className="rounded-full border border-line-input bg-white px-3 py-[4px] text-tiny font-medium text-primary disabled:opacity-50"
         >
           {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
         </button>
       </div>
-      <div className="mb-[9px] grid grid-cols-1 md:grid-cols-2 gap-[10px]">
+      <div className="mb-[9px] grid grid-cols-1 md:grid-cols-2 gap-md">
         <label>
           <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
           <input
@@ -219,12 +220,12 @@ export function SessionSection({ account }: { account: AccountRead }) {
         type="button"
         onClick={onConfirmLogin}
         disabled={submitCode.isPending || !code}
-        className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
+        className="w-full rounded-lg border border-line-input bg-white py-[9px] text-lead font-medium disabled:opacity-50"
       >
         {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
       </button>
-      {loginNote ? <div className="mt-[8px] text-[11.5px] text-ink-muted">{loginNote}</div> : null}
-      <div className="mb-[9px] mt-[18px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+      {loginNote ? <div className="mt-[8px] text-tiny text-ink-muted">{loginNote}</div> : null}
+      <div className="mb-[9px] mt-[18px] text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
         {t('accounts.edit.import')}
       </div>
       <div className={SEG_WRAP}>
@@ -244,9 +245,9 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <button
         type="button"
         onClick={() => uploadInput.current?.click()}
-        className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-canvas/40 px-4 py-[14px] text-left"
+        className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-canvas/40 px-4 py-[14px] text-left"
       >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-line bg-white text-primary">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
           <svg
             width="19"
             height="19"
@@ -260,8 +261,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
           </svg>
         </div>
         <div className="min-w-0">
-          <div className="text-[12.5px] font-semibold">{t('accounts.edit.dropTitle')}</div>
-          <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.dropHint')}</div>
+          <div className="text-body font-semibold">{t('accounts.edit.dropTitle')}</div>
+          <div className="mt-px text-tiny text-ink-subtle">{t('accounts.edit.dropHint')}</div>
         </div>
       </button>
       <input
@@ -271,14 +272,14 @@ export function SessionSection({ account }: { account: AccountRead }) {
         className="hidden"
         onChange={onUploadFile}
       />
-      <div className="mt-[9px] flex flex-col gap-2">
+      <div className="mt-[9px] flex flex-col gap-sm">
         {uploads.map((file) => (
           <div
             key={file.id}
-            className="tb-fadeup rounded-[11px] border border-line bg-white px-[11px] py-[10px]"
+            className="tb-fadeup rounded-lg border border-line bg-white px-[11px] py-[10px]"
           >
-            <div className="flex items-center gap-[10px]">
-              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-[#f4f3f0] text-ink-muted">
+            <div className="flex items-center gap-md">
+              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
                 {file.archive ? (
                   <svg
                     width="16"
@@ -306,16 +307,16 @@ export function SessionSection({ account }: { account: AccountRead }) {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start justify-between gap-sm">
                   <div className="min-w-0">
-                    <div className="truncate text-[12px] font-semibold">{file.name}</div>
-                    <div className="mt-px text-[10.5px] text-ink-subtle">
+                    <div className="truncate text-body font-semibold">{file.name}</div>
+                    <div className="mt-px text-micro text-ink-subtle">
                       {t(`accounts.edit.upload.${file.status}`)}
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-[2px]">
                     {file.status === 'done' ? (
-                      <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
+                      <span className="tb-pop m-[3px] inline-flex text-success">
                         <svg
                           width="17"
                           height="17"
@@ -329,7 +330,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                         </svg>
                       </span>
                     ) : file.status === 'error' ? (
-                      <span className="m-[3px] inline-flex text-[#c0473f]">
+                      <span className="m-[3px] inline-flex text-danger">
                         <svg
                           width="17"
                           height="17"

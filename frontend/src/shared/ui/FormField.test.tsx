@@ -44,7 +44,7 @@ test('renders the label and the input, and shows the translated error once touch
     expect(screen.getByText('Укажите имя')).toBeInTheDocument();
   });
   // The invalid input carries the error border.
-  expect(input.className).toContain('border-[#c0473f]');
+  expect(input.className).toContain('border-danger');
 });
 
 // Pins the contract react-form 1.x changed. 0.x comma-joined a field's issues into

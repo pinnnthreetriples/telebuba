@@ -19,24 +19,23 @@ export function ProxyDeleteModal({
   return (
     <Modal
       onClose={onClose}
-      z={70}
       className="w-[420px]"
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
       <div className="p-6">
-        <div className="mb-2 text-[16px] font-bold">
+        <div className="mb-2 text-title font-bold">
           {t('accounts.proxyDeleteModal.title', { endpoint })}
         </div>
-        <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
+        <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">
           {used > 0
             ? t('accounts.proxyDeleteModal.bodyAssigned', { count: used })
             : t('accounts.proxyDeleteModal.body')}
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-sm">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
           >
             {t('accounts.proxyDeleteModal.cancel')}
           </button>
@@ -46,7 +45,7 @@ export function ProxyDeleteModal({
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger"
+            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger"
           >
             {t('accounts.proxyDeleteModal.confirm')}
           </button>

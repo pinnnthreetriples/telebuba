@@ -1,15 +1,16 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { CollapsibleCard } from '@/shared/ui';
+import { CollapsibleCard, IconButton } from '@/shared/ui';
 
-// Status dot colours, in the palette the neurocomment campaign rows already use.
-const STATUS_COLOR = {
-  idle: '#74726e',
-  running: '#12a150',
-  stopping: '#c47d12',
-  done: '#0066ff',
-  failed: '#c0473f',
+// Status tone, in the tokens the neurocomment campaign rows already use — the
+// meaning of the status, not a hex, so the two cards cannot drift apart.
+const STATUS_TONE = {
+  idle: 'text-ink-muted',
+  running: 'text-success',
+  stopping: 'text-warning-strong',
+  done: 'text-primary',
+  failed: 'text-danger',
 } as const;
 
 // The campaigns card: the page's entry point — pick one, make one, delete one.
@@ -45,15 +46,13 @@ export function CampaignsCard({
       label={t('neuroshilling.campaigns.title')}
       headerClassName="px-4 py-[15px]"
       bodyClassName="px-4 pb-[15px]"
-      header={
-        <span className="text-[13px] font-semibold">{t('neuroshilling.campaigns.title')}</span>
-      }
+      header={<span className="text-lead font-semibold">{t('neuroshilling.campaigns.title')}</span>}
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           const status = campaign.status ?? 'idle';
-          const color = STATUS_COLOR[status];
+          const tone = STATUS_TONE[status];
           return (
             <div
               key={campaign.campaign_id}
@@ -65,27 +64,27 @@ export function CampaignsCard({
               // Background in both branches, never in the base: two `bg-*` utilities
               // in one class list are resolved by stylesheet order, so a base
               // `bg-white` would beat the selected tint.
-              className={`cursor-pointer rounded-[11px] border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
+              className={`cursor-pointer rounded-lg border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
-              <div className="flex justify-between gap-[10px]">
-                <div className="min-w-0 flex-1 text-[13px] font-semibold">{campaign.name}</div>
-                <div className="flex shrink-0 items-center gap-[10px]">
+              <div className="flex justify-between gap-md">
+                <div className="min-w-0 flex-1 text-lead font-semibold">{campaign.name}</div>
+                <div className="flex shrink-0 items-center gap-md">
                   <span
-                    className="inline-flex items-center gap-[5px] text-[11px] font-medium"
-                    style={{ color }}
+                    className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
                   >
-                    <span className="h-[6px] w-[6px] rounded-full" style={{ background: color }} />
+                    {/* `bg-current` — the dot can never disagree with its label. */}
+                    <span className="h-[6px] w-[6px] rounded-full bg-current" />
                     {t(`neuroshilling.campaign.status.${status}`)}
                   </span>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    tone="danger"
                     title={t('neuroshilling.campaign.delete')}
                     aria-label={t('neuroshilling.campaign.delete')}
                     onClick={(event) => {
                       event.stopPropagation();
                       onDelete(campaign);
                     }}
-                    className="flex h-6 w-6 items-center justify-center rounded-[7px] border border-line bg-white text-ink-subtle transition-colors hover:border-[#f0c9c5] hover:bg-danger-tint hover:text-danger"
                   >
                     <svg
                       width="13"
@@ -97,14 +96,14 @@ export function CampaignsCard({
                     >
                       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
                     </svg>
-                  </button>
+                  </IconButton>
                 </div>
               </div>
             </div>
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-[18px] text-center text-[12px] text-ink-subtle">
+          <div className="py-[18px] text-center text-body text-ink-subtle">
             {t('neuroshilling.campaigns.none')}
           </div>
         ) : null}
@@ -113,7 +112,7 @@ export function CampaignsCard({
       {creating ? (
         // Inline, not a modal: creating asks for a name and nothing else, and the
         // app already spells that shape this way (the channel "add" pill).
-        <div className="mt-[9px] flex items-center gap-2">
+        <div className="mt-[9px] flex items-center gap-sm">
           <input
             autoFocus
             value={createName}
@@ -126,13 +125,13 @@ export function CampaignsCard({
             }}
             placeholder={t('neuroshilling.campaigns.namePlaceholder')}
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
-            className="min-w-0 flex-1 rounded-[10px] border border-primary bg-white px-3 py-[8px] text-[12.5px] outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-3 py-[8px] text-body outline-none"
           />
           <button
             type="button"
             disabled={!createName.trim()}
             onClick={onCreate}
-            className="shrink-0 rounded-full bg-primary px-[14px] py-[8px] text-[12.5px] font-semibold text-white disabled:opacity-50"
+            className="shrink-0 rounded-full bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white disabled:opacity-50"
           >
             {t('neuroshilling.campaigns.confirm')}
           </button>
@@ -140,7 +139,7 @@ export function CampaignsCard({
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
             onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line-input bg-white px-[12px] py-[8px] text-[12.5px] text-ink-muted"
+            className="shrink-0 rounded-full border border-line-input bg-white px-[12px] py-[8px] text-body text-ink-muted"
           >
             ×
           </button>
@@ -149,7 +148,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-[9px] flex w-full items-center justify-center gap-[5px] rounded-[10px] border border-dashed border-[#c7d6f0] bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-[#f2f6ff]"
+          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

@@ -52,12 +52,12 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-2xl border border-[#e4ecfa] bg-[#f7faff] px-[18px] py-4 text-ink">
-      <div className="mb-[14px] flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-[10px]">
-          <span className="text-[14px] font-semibold">{t('neurocomment.pipeline.title')}</span>
+    <div className="rounded-card border border-primary-hairline bg-primary-wash px-[18px] py-4 text-ink">
+      <div className="mb-[14px] flex flex-wrap items-center justify-between gap-md">
+        <div className="flex items-center gap-md">
+          <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-[10px] py-[3px] text-[11px] font-semibold ${running ? 'tb-pulse bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
+            className={`rounded-full px-[10px] py-[3px] text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -66,7 +66,7 @@ export function PipelineCard({
           type="button"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`flex items-center gap-[7px] rounded-full px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
+          className={`flex items-center gap-sm rounded-full px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
         >
           {running ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -92,15 +92,15 @@ export function PipelineCard({
           with nothing to fail. */}
       <div className="relative mb-3">
         <div
-          className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-[#dce2ec]"
+          className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-primary-line"
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
         >
           <div
-            className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
+            className="absolute left-0 top-0 h-full rounded-[2px] bg-success transition-[width] duration-roll ease-out"
             style={{ width: `${String(greenPct)}%` }}
           />
           <div
-            className="absolute left-0 top-0 h-full rounded-[2px] bg-primary transition-[width] duration-[900ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)]"
+            className="absolute left-0 top-0 h-full rounded-[2px] bg-primary transition-[width] duration-roll ease-out"
             style={{ width: `${String(bluePct)}%` }}
           />
         </div>
@@ -115,7 +115,7 @@ export function PipelineCard({
                       height="10"
                       viewBox="0 0 24 24"
                       fill="none"
-                      stroke="#fff"
+                      className="stroke-white"
                       strokeWidth="3.4"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -126,7 +126,7 @@ export function PipelineCard({
                 ) : index === activeCell ? (
                   <span className="tb-livedot h-[11px] w-[11px] rounded-full bg-primary" />
                 ) : (
-                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-[#c9d2e0] bg-white" />
+                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-primary-line bg-white" />
                 )}
               </div>
               {/* No `min-w-0`: the cells then refuse to shrink under the widest label,
@@ -135,7 +135,7 @@ export function PipelineCard({
                   instead — the dots stay at every width and would otherwise mean
                   nothing on their own. */}
               <span
-                className={`hidden whitespace-nowrap text-[11px] md:block ${
+                className={`hidden whitespace-nowrap text-tiny md:block ${
                   index < activeCell
                     ? 'font-medium text-success'
                     : index === activeCell
@@ -151,28 +151,28 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-3 text-center text-[11px] font-semibold text-primary md:hidden">
+        <div className="mb-3 text-center text-tiny font-semibold text-primary md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
-      <div className="mb-[14px] flex items-center gap-[9px] rounded-[10px] border border-[#dce7fb] bg-[#eef4ff] px-[13px] py-[10px]">
+      <div className="mb-[14px] flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
-        <span className="tb-pulse text-[12.5px] font-medium text-primary">
+        <span className="tb-pulse text-body font-medium text-primary">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-[#e4ecfa] bg-[#e4ecfa] md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-primary-hairline bg-primary-hairline md:grid-cols-6">
         {stats.map((stat) => (
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
           // tile across both columns, and stays right as stats are added or removed.
           <div key={stat.label} className="bg-white px-4 py-[14px] max-md:odd:last:col-span-2">
-            <Odometer value={stat.value} color={stat.color} />
-            <div className="mt-[2px] text-[11px] text-ink-subtle">{stat.label}</div>
+            <Odometer value={stat.value} tone={stat.color} />
+            <div className="mt-[2px] text-tiny text-ink-subtle">{stat.label}</div>
           </div>
         ))}
       </div>

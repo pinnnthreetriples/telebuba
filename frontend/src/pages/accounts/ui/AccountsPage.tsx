@@ -125,8 +125,8 @@ export function AccountsPage() {
   // query, not the current page, so they hold across pagination and search.
   const stats: { label: string; value: number; cls: string }[] = [
     { label: t('accounts.stats.total'), value: fleetStats?.total ?? 0, cls: 'text-ink' },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-[#2e7d55]' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-[#9a7b22]' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning' },
     { label: t('accounts.stats.code'), value: fleetStats?.needs_code ?? 0, cls: 'text-primary' },
     { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
   ];
@@ -167,9 +167,9 @@ export function AccountsPage() {
         }}
       />
 
-      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
-        <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-lg">
+        <h1 className="m-0 text-display font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
+        <div className="flex w-full items-center gap-sm sm:w-auto">
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
             <svg
@@ -191,7 +191,7 @@ export function AccountsPage() {
                 setCursorStack([null]);
               }}
               placeholder={t('accounts.searchPlaceholder')}
-              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-[13px] outline-none sm:w-[220px]"
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-lead outline-none sm:w-[220px]"
             />
           </div>
           <button
@@ -199,21 +199,21 @@ export function AccountsPage() {
             onClick={() => {
               setAdding(true);
             }}
-            className="rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-white"
+            className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white"
           >
             + {t('accounts.actions.add')}
           </button>
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-[10px]">
+      <div className="mb-4 flex flex-wrap gap-md">
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-w-[120px] rounded-xl border border-line bg-white px-4 py-[11px]"
+            className="min-w-[120px] rounded-lg border border-line bg-white px-4 py-[11px]"
           >
-            <div className={`text-[20px] font-bold ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px text-[11px] text-ink-muted">{stat.label}</div>
+            <div className={`text-stat font-bold ${stat.cls}`}>{stat.value}</div>
+            <div className="mt-px text-tiny text-ink-muted">{stat.label}</div>
           </div>
         ))}
       </div>
@@ -227,7 +227,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+            <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-lead text-ink-subtle">
               {t('accounts.empty')}
             </div>
           ) : (
@@ -250,14 +250,14 @@ export function AccountsPage() {
               else-branch the only ways back were the search box and a reload.
               A genuinely empty FIRST page still shows the bare empty state. */}
           {items.length > 0 || hasPrev ? (
-            <div className="mt-4 flex items-center justify-end gap-2">
+            <div className="mt-4 flex items-center justify-end gap-sm">
               <button
                 type="button"
                 disabled={!hasPrev}
                 onClick={() => {
                   setCursorStack((stack) => stack.slice(0, -1));
                 }}
-                className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.prev')}
               </button>
@@ -267,7 +267,7 @@ export function AccountsPage() {
                 onClick={() => {
                   setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
                 }}
-                className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.next')}
               </button>

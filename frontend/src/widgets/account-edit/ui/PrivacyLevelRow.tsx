@@ -33,22 +33,22 @@ export function PrivacyLevelRow({
     <div
       role="group"
       aria-label={label}
-      className="flex items-center gap-3 rounded-[12px] border border-line px-[14px] py-3"
+      className="flex items-center gap-md rounded-lg border border-line px-[14px] py-3"
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] font-semibold">{label}</div>
-        <div className="mt-[2px] text-[11.5px] text-ink-subtle">
+        <div className="truncate text-lead font-semibold">{label}</div>
+        <div className="mt-[2px] text-tiny text-ink-subtle">
           {t('accounts.profile.privacy.current', {
             value: t(`accounts.profile.privacy.level.${current}`),
           })}
         </div>
         {current === 'unknown' && (
-          <div className="mt-[2px] text-[11.5px] text-ink-muted">
+          <div className="mt-[2px] text-tiny text-ink-muted">
             {t('accounts.profile.privacy.unknownNote')}
           </div>
         )}
       </div>
-      <div className="flex shrink-0 gap-1">
+      <div className="flex shrink-0 gap-tight">
         {PRIVACY_LEVELS.map((level) => (
           <button
             key={level}
@@ -62,10 +62,10 @@ export function PrivacyLevelRow({
             onClick={() => {
               onPick(level);
             }}
-            className={`rounded-[8px] border px-[10px] py-[5px] text-[12px] font-medium transition-colors disabled:opacity-60 ${
+            className={`rounded-md border px-[10px] py-[5px] text-body font-medium transition-colors disabled:opacity-60 ${
               current === level
-                ? 'border-primary bg-[#f2f6ff] text-primary'
-                : 'border-line-input bg-white text-ink-muted hover:border-[#c8c6c2] hover:bg-[#f7f6f4]'
+                ? 'border-primary bg-primary-wash text-primary'
+                : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
             }`}
           >
             {t(`accounts.profile.privacy.level.${level}`)}

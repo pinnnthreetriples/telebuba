@@ -67,12 +67,12 @@ test('the check button is disabled when no campaign is selected', () => {
 test('banned channels render red, ok channels render green, others gray', () => {
   renderCard({ channelCheckStatus: { '@a': 'banned', '@b': 'ok' } });
   expect(chipFor('@a').className).toContain('text-danger');
-  expect(chipFor('@b').className).toContain('text-[#2e9e64]');
+  expect(chipFor('@b').className).toContain('text-success');
 });
 
 test('with no verdicts the chips stay the default gray', () => {
   renderCard();
-  expect(chipFor('@a').className).toContain('bg-[#f4f3f0]');
+  expect(chipFor('@a').className).toContain('bg-track');
 });
 
 const CAMPAIGN = {

@@ -201,7 +201,7 @@ test('the account filter lists all accounts, independent of the current log page
   });
   await userEvent.click(screen.getByLabelText('Аккаунт'));
   // acc-2 has no rows on the page yet is still offered by the dropdown
-  expect(screen.getByRole('button', { name: '+79995554433' })).toBeInTheDocument();
+  expect(screen.getByRole('option', { name: '+79995554433' })).toBeInTheDocument();
 });
 
 // .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so every option below
@@ -215,12 +215,12 @@ test('a closed account filter takes no focus, an open one does', async () => {
     expect(screen.getAllByText('+79990001122').length).toBeGreaterThan(0);
   });
 
-  const closed = screen.getByRole('button', { name: '+79995554433' });
+  const closed = screen.getByRole('option', { name: '+79995554433' });
   closed.focus();
   expect(closed).not.toHaveFocus();
 
   await userEvent.click(screen.getByLabelText('Аккаунт'));
-  const open = screen.getByRole('button', { name: '+79995554433' });
+  const open = screen.getByRole('option', { name: '+79995554433' });
   open.focus();
   expect(open).toHaveFocus();
 });
@@ -298,7 +298,7 @@ test('applies the status and account filters', async () => {
   });
   await userEvent.click(screen.getAllByText('Ошибка')[0]!);
   await userEvent.click(screen.getByLabelText('Аккаунт'));
-  await userEvent.click(screen.getByRole('button', { name: '+79990001122' }));
+  await userEvent.click(screen.getByRole('option', { name: '+79990001122' }));
   await waitFor(() => {
     const filtered = vi.mocked(fetch).mock.calls.some(([input]) => {
       const url = new URL((input as Request).url);

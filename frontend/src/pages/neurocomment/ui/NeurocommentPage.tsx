@@ -121,7 +121,6 @@ export function NeurocommentPage() {
 
   const [selected, setSelected] = useState<string | null>(null);
   const [listener, setListener] = useState('');
-  const [listenerOpen, setListenerOpen] = useState(false);
   // Gear-driven action-row reveals (click fallback for hover; finding #6).
   const [listenerActionsOpen, setListenerActionsOpen] = useState(false);
   const [openCampaignActions, setOpenCampaignActions] = useState<string | null>(null);
@@ -321,17 +320,17 @@ export function NeurocommentPage() {
   const idleCount = warmedAccounts.filter((a) => !linkedIds.has(a.account_id)).length;
 
   const stats: { label: string; value: number; color: string }[] = [
-    { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: '#0b0b0c' },
+    { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: 'text-ink' },
     {
       label: t('neurocomment.stat.channels'),
       value: runtime.data?.active_channels ?? boardChannels.length,
-      color: '#0066ff',
+      color: 'text-primary',
     },
-    { label: t('neurocomment.stat.accounts'), value: boardAccounts.length, color: '#0b0b0c' },
+    { label: t('neurocomment.stat.accounts'), value: boardAccounts.length, color: 'text-ink' },
     {
       label: t('neurocomment.stat.comments'),
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
-      color: '#12a150',
+      color: 'text-success',
     },
     // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
     // both tiles read the account's 24h window. Summing the channels' `deleted_recent`
@@ -349,10 +348,10 @@ export function NeurocommentPage() {
     {
       label: t('neurocomment.stat.deleted'),
       value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),
-      color: '#c0473f',
+      color: 'text-danger',
     },
     // The design's red "ошибок" odometer (#E5372A): today's error-level events.
-    { label: t('neurocomment.stat.errors'), value: errorCount, color: '#e5372a' },
+    { label: t('neurocomment.stat.errors'), value: errorCount, color: 'text-danger' },
   ];
 
   const activeCampaignCount = campaignList.filter((c) => c.status === 'active').length;
@@ -485,7 +484,7 @@ export function NeurocommentPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
+      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">
         {t('neurocomment.title')}
       </h1>
 
@@ -498,9 +497,9 @@ export function NeurocommentPage() {
           `overflow-x-auto` on its card does not stop min-content propagating — and the
           page picked up a horizontal scroll the viewport-wide sticky header can't follow,
           which is every card hanging out past the top bar on the right. */}
-      <div className="grid items-start gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
-        <div className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1">
+        <div className="flex flex-col gap-lg lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
             canStart={Boolean(listenerId)}
@@ -534,7 +533,7 @@ export function NeurocommentPage() {
         </div>
 
         {/* LEFT column */}
-        <div className="flex flex-col gap-4 lg:col-start-1 lg:row-start-1">
+        <div className="flex flex-col gap-lg lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}
@@ -565,18 +564,11 @@ export function NeurocommentPage() {
               setListenerActionsOpen(false);
               removeListener();
             }}
-            listenerOpen={listenerOpen}
-            onToggleOpen={() => {
-              setListenerOpen((v) => !v);
-            }}
             accountOptions={listenerOptions}
-            onPickListener={(id) => {
-              pickListener(id);
-              setListenerOpen(false);
-            }}
+            onPickListener={pickListener}
           />
           {showWarmingBlock ? (
-            <p className="mt-2 text-[11.5px] font-medium text-danger">
+            <p className="mt-2 text-tiny font-medium text-danger">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}

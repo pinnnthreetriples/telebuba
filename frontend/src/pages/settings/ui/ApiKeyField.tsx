@@ -1,6 +1,6 @@
 const INPUT =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-const FIELD_LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
+const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 function EyeIcon({ off }: { off: boolean }) {
   return off ? (
@@ -59,7 +59,7 @@ export function ApiKeyField({
   return (
     <label className="block">
       <span className={FIELD_LABEL}>{label}</span>
-      <div className="flex gap-2">
+      <div className="flex gap-sm">
         <input
           type={show ? 'text' : 'password'}
           // A provider API key, not a credential of this origin: `new-password`
@@ -76,7 +76,7 @@ export function ApiKeyField({
           type="button"
           aria-label={toggleLabel}
           onClick={onToggleShow}
-          className="flex w-[42px] items-center justify-center rounded-[10px] border border-line-input bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+          className="flex w-[42px] items-center justify-center rounded-lg border border-line-input bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary"
         >
           <EyeIcon off={show} />
         </button>
@@ -85,7 +85,7 @@ export function ApiKeyField({
         <button
           type="button"
           onClick={onClear}
-          className="mt-[9px] text-[12px] font-medium text-danger transition-colors hover:underline"
+          className="mt-[9px] text-body font-medium text-danger transition-colors hover:underline"
         >
           {clearLabel}
         </button>

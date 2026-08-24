@@ -62,7 +62,7 @@ function participant(
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
-      <div className="mb-[3px] flex items-center gap-[5px] text-[10.5px] text-ink-subtle">
+      <div className="mb-[3px] flex items-center gap-tight text-micro text-ink-subtle">
         <span className="font-medium text-ink-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
@@ -79,11 +79,11 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         <span className="font-medium text-ink-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums text-[10px] text-line-strong">
+        <span className="ml-auto shrink-0 tabular-nums text-micro text-line-strong">
           {formatLocalTime(message.created_at)}
         </span>
       </div>
-      <div className="inline-block max-w-full rounded-[10px] rounded-tl-[3px] bg-[#f7f6f4] px-[11px] py-[7px] text-[12px] leading-[1.45] text-[#3a3a3a]">
+      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-[11px] py-[7px] text-body leading-[1.45] text-ink-body">
         {message.text}
       </div>
     </div>
@@ -95,7 +95,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-[2px] flex items-center gap-[6px] text-[10.5px] text-ink-subtle">
+    <div className="mt-[2px] flex items-center gap-sm text-micro text-ink-subtle">
       <span className="flex items-center gap-[3px]">
         {[0, 1, 2].map((index) => (
           <span
@@ -135,14 +135,14 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
 
   if (ordered.length === 0) {
     return (
-      <div className="py-[34px] text-center text-[12px] text-ink-subtle">
+      <div className="py-[34px] text-center text-body text-ink-subtle">
         {t('warming.dialogues.empty')}
       </div>
     );
   }
 
   return (
-    <div className="tb-scroll flex max-h-[260px] flex-col gap-[10px] overflow-y-auto pr-1">
+    <div className="tb-scroll flex max-h-[260px] flex-col gap-md overflow-y-auto pr-1">
       {ordered.map((message) => {
         const key = messageKey(message);
         return <DialogueRow key={key} message={message} isNew={isNew(key)} />;
@@ -177,16 +177,16 @@ export function DialogueFeed() {
   const live = isFeedLive(messages);
 
   return (
-    <div className="mt-4 rounded-2xl border border-line bg-white p-4">
-      <div className="mb-[13px] flex items-center gap-[9px]">
+    <div className="mt-4 rounded-card border border-line bg-white p-4">
+      <div className="mb-[13px] flex items-center gap-md">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span
           className={`h-[7px] w-[7px] shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
         />
-        <span className="text-[14px] font-bold">{t('warming.dialogues.title')}</span>
+        <span className="text-lead font-bold">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
-          <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
+          <span className="rounded-full bg-success-tint px-[8px] py-[2px] text-micro font-bold text-success">
             {/* One page, not a total: at the limit there is more history behind
                 it, so say "30+" instead of freezing at a wrong-looking "30". */}
             {messages.length === FEED_LIMIT ? `${FEED_LIMIT}+` : messages.length}

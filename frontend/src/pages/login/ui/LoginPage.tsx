@@ -26,11 +26,11 @@ export function LoginPage() {
     );
   };
 
-  const inputClass = 'w-full rounded-md border border-line bg-surface px-3 py-2 text-sm';
+  const inputClass = 'w-full rounded-md border border-line bg-surface px-3 py-2 text-lead';
 
   return (
     <main className="mx-auto mt-24 max-w-sm p-8">
-      <h1 className="mb-6 text-2xl font-semibold">{t('auth.login.title')}</h1>
+      <h1 className="mb-6 text-display font-semibold">{t('auth.login.title')}</h1>
       <form onSubmit={onSubmit} className="space-y-4">
         <input
           value={username}
@@ -54,14 +54,14 @@ export function LoginPage() {
           className={inputClass}
         />
         {login.isError ? (
-          <p role="alert" className="text-sm text-danger">
+          <p role="alert" className="text-lead text-danger">
             {t('auth.login.error')}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={login.isPending}
-          className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-md bg-primary px-3 py-2 text-lead font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {t('auth.login.submit')}
         </button>

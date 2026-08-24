@@ -4,13 +4,15 @@ import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
-import { CollapsibleCard } from '@/shared/ui';
+import { CollapsibleCard, IconButton } from '@/shared/ui';
 
-// Activity-feed line colour by the event's display severity (see `logSeverity`).
-const LOG_COLOR: Record<'success' | 'warning' | 'error', string> = {
-  success: '#7be0a6',
-  warning: '#ffd27f',
-  error: '#e5736b',
+// Activity-feed line tone by the event's display severity (see `logSeverity`). The
+// dark-surface tokens, shared with the warming card's log — three parallel triples
+// of on-dark green/amber/red existed before.
+const LOG_TONE: Record<'success' | 'warning' | 'error', string> = {
+  success: 'text-term-success',
+  warning: 'text-term-warning',
+  error: 'text-term-error',
 };
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
@@ -38,8 +40,8 @@ function LogLine({
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-[10px]" title={hint || undefined}>
-      <span className="shrink-0 text-[#5c5c66]">
+    <div className="flex gap-md" title={hint || undefined}>
+      <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>
       {/* Clicking a name narrows the feed to it — the point of the column is following
@@ -53,16 +55,16 @@ function LogLine({
           onClick={() => {
             onPickAccount(accountId);
           }}
-          className="w-[110px] shrink-0 truncate text-left text-[#c9c9d3] hover:text-white hover:underline"
+          className="w-[110px] shrink-0 truncate text-left text-term-text hover:text-white hover:underline"
         >
           {account}
         </button>
       ) : (
         <span className="w-[110px] shrink-0" />
       )}
-      {channel ? <span className="shrink-0 text-[#6ea8fe]">{channel}</span> : null}
-      <span style={{ color: LOG_COLOR[logSeverity(line)] }}>{eventLabel(t, line.event)}</span>
-      {detail ? <span className="truncate text-[#7a7a85]">· {detail}</span> : null}
+      {channel ? <span className="shrink-0 text-term-link">{channel}</span> : null}
+      <span className={LOG_TONE[logSeverity(line)]}>{eventLabel(t, line.event)}</span>
+      {detail ? <span className="truncate text-term-dim">· {detail}</span> : null}
     </div>
   );
 }
@@ -119,7 +121,7 @@ export function LogTerminal({
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="rounded-full bg-primary-tint px-2 py-[2px] text-[11px] font-medium text-primary hover:bg-[#f0c9c5] hover:text-danger"
+              className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-medium text-primary hover:bg-danger-line hover:text-danger"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,
@@ -127,12 +129,12 @@ export function LogTerminal({
             </button>
           ) : null}
           {onClear && logLines.length > 0 ? (
-            <button
-              type="button"
+            <IconButton
+              size="md"
+              tone="danger"
               aria-label={t('logTerminal.clear')}
               title={t('logTerminal.clear')}
               onClick={onClear}
-              className="flex h-[28px] w-[28px] items-center justify-center rounded-lg border border-line bg-white text-ink-subtle hover:border-[#f0c9c5] hover:bg-danger-tint hover:text-danger"
             >
               <svg
                 width="15"
@@ -145,23 +147,23 @@ export function LogTerminal({
                 <path d="M3 6h18" />
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               </svg>
-            </button>
+            </IconButton>
           ) : null}
         </>
       }
       header={
         <>
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
-          <span className="text-[13px] font-semibold">{title}</span>
-          <span className="rounded-full bg-[#f2f1ee] px-2 py-[2px] text-[11px] font-medium text-ink-muted">
+          <span className="text-lead font-semibold">{title}</span>
+          <span className="rounded-full bg-track px-2 py-[2px] text-tiny font-medium text-ink-muted">
             {shown.length}
           </span>
         </>
       }
     >
-      <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-[10px] bg-[#16161a] px-[14px] py-3 font-mono text-[11px] leading-[1.85]">
+      <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-lg bg-term px-[14px] py-3 font-mono text-tiny leading-[1.85]">
         {shown.length === 0 ? (
-          <div className="text-[#5c5c66]">{t('logTerminal.empty')}</div>
+          <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (
           shown.map((line) => (
             <LogLine

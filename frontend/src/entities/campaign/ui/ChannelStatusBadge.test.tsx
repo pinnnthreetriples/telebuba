@@ -10,18 +10,18 @@ test('renders the localized channel status', () => {
   expect(screen.getByText('Готов')).toBeInTheDocument();
 });
 
-test('uses the danger colour for chat_restricted', () => {
+test('uses the danger tone for chat_restricted', () => {
   render(<ChannelStatusBadge status="chat_restricted" />);
-  // Design dot-pill: colour is an inline hex, not a token class.
-  expect(screen.getByText('Чат ограничен')).toHaveStyle({ color: '#c0473f' });
+  // Tone comes from the token pair, not an inline hex.
+  expect(screen.getByText('Чат ограничен')).toHaveClass('text-danger', 'bg-danger-tint');
 });
 
-test('renders banned in the danger colour', () => {
+test('renders banned in the danger tone', () => {
   render(<ChannelStatusBadge status="banned" />);
-  expect(screen.getByText('Забанен')).toHaveStyle({ color: '#c0473f' });
+  expect(screen.getByText('Забанен')).toHaveClass('text-danger');
 });
 
 test('a kicked pair getting itself back in is amber, not the red join failure', () => {
   render(<ChannelStatusBadge status="rejoining" />);
-  expect(screen.getByText('Возвращаемся в чат')).toHaveStyle({ color: '#9a7b22' });
+  expect(screen.getByText('Возвращаемся в чат')).toHaveClass('text-warning');
 });

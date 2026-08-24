@@ -3,22 +3,22 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
 import { type FeedbackResult } from '@/shared/lib';
-import { CollapsibleCard, FeedbackMark } from '@/shared/ui';
+import { CollapsibleCard, FeedbackMark, IconButton, SurfHover } from '@/shared/ui';
 
-import { SurfHover } from './SurfHover';
-
-const STATUS_COLOR = {
-  active: '#12a150',
-  paused: '#c47d12',
-  archived: '#74726e',
+// Tone is the token the status MEANS (running = success, held = amber, shelved =
+// muted), so the pill can't drift from the rest of the design system.
+const STATUS_TONE = {
+  active: 'text-success',
+  paused: 'text-warning-strong',
+  archived: 'text-ink-muted',
 } as const;
 
 // Channel-chip tone driven by the live "Проверить каналы" verdict: banned = red
 // (persists), ok = green (5s flash), default = the neutral gray pill.
 const CHANNEL_CHIP = {
-  banned: 'border-danger bg-[#fdecea] text-danger',
-  ok: 'border-[#2e9e64] bg-[#e9f7ef] text-[#2e9e64]',
-  default: 'border-line bg-[#f4f3f0] text-[#3a3a3a]',
+  banned: 'border-danger bg-danger-tint text-danger',
+  ok: 'border-success bg-success-tint text-success',
+  default: 'border-line bg-track text-ink-body',
 } as const;
 
 // The campaigns card: per-campaign run/pause/edit/delete (SurfHover-revealed),
@@ -81,21 +81,19 @@ export function CampaignsCard({
       label={t('neurocomment.campaigns.title')}
       headerClassName="px-4 py-[15px]"
       bodyClassName="px-4 pb-[15px]"
-      header={
-        <span className="text-[13px] font-semibold">{t('neurocomment.campaigns.title')}</span>
-      }
+      header={<span className="text-lead font-semibold">{t('neurocomment.campaigns.title')}</span>}
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
           const isSelected = campaign.campaign_id === campaignId;
           // Per-campaign run state comes from the campaign's own status,
           // not the global engine (finding #2).
           const isRunning = campaign.status === 'active';
-          const color = STATUS_COLOR[campaign.status];
+          const tone = STATUS_TONE[campaign.status];
           return (
             <SurfHover
               key={campaign.campaign_id}
-              shift={156}
+              shift={144}
               surfaceId={`camp-surf-${campaign.campaign_id}`}
               open={openCampaignActions === campaign.campaign_id}
               actions={
@@ -108,7 +106,7 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`flex w-[52px] items-center justify-center border-none bg-transparent ${isRunning ? 'text-[#c47d12]' : 'text-success'}`}
+                    className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-strong' : 'text-success'}`}
                   >
                     {isRunning ? (
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
@@ -129,7 +127,7 @@ export function CampaignsCard({
                       // prompt modal's account list) on THIS campaign (finding #5).
                       onEditPrompt(campaign);
                     }}
-                    className="flex w-[52px] items-center justify-center border-none bg-transparent text-primary"
+                    className="flex w-12 items-center justify-center border-none bg-transparent text-primary"
                   >
                     <svg
                       width="17"
@@ -149,7 +147,7 @@ export function CampaignsCard({
                     onClick={() => {
                       onDelete(campaign);
                     }}
-                    className="flex w-[52px] items-center justify-center border-none bg-transparent text-danger"
+                    className="flex w-12 items-center justify-center border-none bg-transparent text-danger"
                   >
                     <svg
                       width="17"
@@ -174,31 +172,29 @@ export function CampaignsCard({
                   // Background lives in both branches, never in the base: two `bg-*`
                   // utilities in one class list are resolved by stylesheet order, and
                   // `bg-white` wins over the selected tint.
-                  className={`cursor-pointer rounded-[11px] border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
+                  className={`cursor-pointer rounded-lg border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
                 >
-                  <div className="flex justify-between gap-[10px]">
+                  <div className="flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
-                      <div className="mb-[5px] text-[13px] font-semibold">{campaign.name}</div>
-                      <div className="text-[11px] text-ink-muted">
+                      <div className="mb-[5px] text-lead font-semibold">{campaign.name}</div>
+                      <div className="text-tiny text-ink-muted">
                         {t('neurocomment.campaign.meta', {
                           channels: campaign.channel_count ?? 0,
                           accounts: campaign.account_count ?? 0,
                         })}
                       </div>
                     </div>
-                    <div className="flex shrink-0 flex-col items-end gap-2">
+                    <div className="flex shrink-0 flex-col items-end gap-sm">
                       <span
-                        className="inline-flex items-center gap-[5px] text-[11px] font-medium"
-                        style={{ color }}
+                        className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
                       >
-                        <span
-                          className="h-[6px] w-[6px] rounded-full"
-                          style={{ background: color }}
-                        />
+                        {/* `bg-current` — the dot can never disagree with its label. */}
+                        <span className="h-[6px] w-[6px] rounded-full bg-current" />
                         {t(`neurocomment.campaign.status.${campaign.status}`)}
                       </span>
-                      <button
-                        type="button"
+                      <IconButton
+                        size="sm"
+                        tone="primary"
                         title={t('neurocomment.campaign.actions')}
                         aria-label={t('neurocomment.campaign.actions')}
                         aria-expanded={openCampaignActions === campaign.campaign_id}
@@ -206,7 +202,6 @@ export function CampaignsCard({
                           event.stopPropagation();
                           onToggleActions(campaign.campaign_id);
                         }}
-                        className="flex h-6 w-6 items-center justify-center rounded-[7px] border border-line bg-white text-ink-subtle transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
                       >
                         <svg
                           width="13"
@@ -219,7 +214,7 @@ export function CampaignsCard({
                           <circle cx="12" cy="12" r="3" />
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                         </svg>
-                      </button>
+                      </IconButton>
                     </div>
                   </div>
                 </div>
@@ -228,7 +223,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-[18px] text-center text-[12px] text-ink-subtle">
+          <div className="py-[18px] text-center text-body text-ink-subtle">
             {t('neurocomment.campaigns.none')}
           </div>
         ) : null}
@@ -237,13 +232,13 @@ export function CampaignsCard({
       <button
         type="button"
         onClick={onCreate}
-        className="mt-[9px] flex w-full items-center justify-center gap-[5px] rounded-[10px] border border-dashed border-[#c7d6f0] bg-white py-[9px] text-[12.5px] font-medium text-primary hover:border-primary hover:bg-[#f2f6ff]"
+        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
       >
         {t('neurocomment.campaigns.create')}
       </button>
 
       {/* campaign channels */}
-      <div className="mt-[13px] border-t border-[#f0eeeb] pt-3">
+      <div className="mt-[13px] border-t border-line-row pt-3">
         <CollapsibleCard
           defaultOpen
           wrapperClassName=""
@@ -251,20 +246,20 @@ export function CampaignsCard({
           bodyClassName="px-0 pb-0 pt-[11px]"
           label={t('neurocomment.channels.title')}
           header={
-            <span className="text-[12.5px] font-semibold">{t('neurocomment.channels.title')}</span>
+            <span className="text-body font-semibold">{t('neurocomment.channels.title')}</span>
           }
         >
-          <div className="mb-[10px] flex items-center justify-between gap-2">
-            <span className="min-w-0 truncate text-[11.5px] font-medium text-primary">
+          <div className="mb-[10px] flex items-center justify-between gap-sm">
+            <span className="min-w-0 truncate text-tiny font-medium text-primary">
               {activeCampaign?.name ?? ''}
             </span>
-            <div className="flex shrink-0 items-center gap-[6px]">
+            <div className="flex shrink-0 items-center gap-sm">
               {discoverySlot}
               <button
                 type="button"
                 disabled={campaignId === null || checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-[11.5px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -272,11 +267,11 @@ export function CampaignsCard({
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-[7px]">
+          <div className="flex flex-wrap gap-sm">
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
-                className={`inline-flex items-center gap-[6px] rounded-full border px-[11px] py-[5px] text-[12px] transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
+                className={`inline-flex items-center gap-sm rounded-full border px-[11px] py-[5px] text-body transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}
@@ -288,7 +283,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-[6px] py-px text-[10px] font-medium text-danger"
+                    className="rounded-full bg-danger-tint px-[6px] py-px text-micro font-medium text-danger"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>
@@ -299,14 +294,14 @@ export function CampaignsCard({
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-[14px] leading-none text-[#b5b3ae]"
+                  className="text-lead leading-none text-ink-subtle"
                 >
                   ×
                 </button>
               </span>
             ))}
             {addingChannel ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-primary bg-white py-[3px] pl-[11px] pr-1">
+              <span className="inline-flex items-center gap-tight rounded-full border border-primary bg-white py-[3px] pl-[11px] pr-1">
                 <input
                   autoFocus
                   value={channelInput}
@@ -319,7 +314,7 @@ export function CampaignsCard({
                   }}
                   placeholder={t('neurocomment.channels.placeholder')}
                   aria-label={t('neurocomment.channels.placeholder')}
-                  className="w-[150px] border-none bg-transparent text-[12px] outline-none"
+                  className="w-[150px] border-none bg-transparent text-body outline-none"
                 />
                 <button
                   type="button"
@@ -333,7 +328,7 @@ export function CampaignsCard({
                     height="12"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#fff"
+                    stroke="currentColor"
                     strokeWidth="3"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -347,7 +342,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null}
                 onClick={onStartAdd}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12px] text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-body text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 {t('neurocomment.channels.addPill')}
               </button>

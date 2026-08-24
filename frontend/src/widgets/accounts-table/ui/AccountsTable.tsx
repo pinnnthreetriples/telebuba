@@ -42,10 +42,10 @@ const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
 
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
-  active: 'bg-[#e8f0ff] text-[#0066ff]',
-  spam: 'bg-[#fbf3e2] text-[#9a7b22]',
-  code: 'bg-[#edebe7] text-[#74726e]',
-  banned: 'bg-[#fbecec] text-[#c0473f]',
+  active: 'bg-primary-tint text-primary',
+  spam: 'bg-warning-tint text-warning',
+  code: 'bg-track text-ink-muted',
+  banned: 'bg-danger-tint text-danger',
 };
 
 // Row avatar: the shared account avatar (cached Telegram photo, else initials),
@@ -56,15 +56,16 @@ function RowAvatar({ account }: { account: AccountRead }) {
     <AccountAvatar
       account={account}
       className="h-8 w-8 shrink-0 rounded-full"
-      fallbackClassName={`text-[12px] font-semibold ${AVATAR_CLASS[ds]}`}
+      fallbackClassName={`text-body font-semibold ${AVATAR_CLASS[ds]}`}
     />
   );
 }
 
 // Trust Score is real (computed by the backend from session/spam/age signals).
-// The 3-tier colour band mirrors the design's thresholds.
-function trustColor(score: number): string {
-  return score >= 70 ? '#12a150' : score >= 45 ? '#e08700' : '#e5372a';
+// The 3-tier band mirrors the design's thresholds, as text tokens: the bar takes
+// `bg-current` off the same class, so bar and number cannot disagree.
+function trustTone(score: number): string {
+  return score >= 70 ? 'text-success' : score >= 45 ? 'text-warning-strong' : 'text-danger';
 }
 
 // Real device fingerprint — immutable, set at registration.
@@ -72,11 +73,12 @@ function deviceLabel(account: AccountRead): string {
   return [account.device_model, account.device_system_version].filter(Boolean).join(' · ') || '—';
 }
 
-// Real proxy column, sourced from the account's assigned pool proxy.
-function proxyDotColor(status: string | null | undefined): string {
-  if (status === 'tcp_working') return '#2e9e64';
-  if (status === 'failed') return '#c0473f';
-  return '#c8c6c2';
+// Real proxy column, sourced from the account's assigned pool proxy. Dot tone is
+// the token the connectivity state means, not a hex of its own.
+function proxyDotTone(status: string | null | undefined): string {
+  if (status === 'tcp_working') return 'bg-success';
+  if (status === 'failed') return 'bg-danger';
+  return 'bg-line-strong';
 }
 function proxyMeta(account: AccountRead): string {
   return [
@@ -119,11 +121,11 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return (
-          <div className="flex items-center gap-[11px]">
+          <div className="flex items-center gap-md">
             <RowAvatar account={account} />
             <div>
-              <div className="text-[13px] font-semibold">{accountDisplayName(account)}</div>
-              <div className="text-[11px] text-ink-subtle">
+              <div className="text-lead font-semibold">{accountDisplayName(account)}</div>
+              <div className="text-tiny text-ink-subtle">
                 {account.username ? `@${account.username}` : '—'}
               </div>
             </div>
@@ -144,20 +146,19 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         return account.proxy_id ? (
-          <div className="flex items-center gap-[7px]">
+          <div className="flex items-center gap-sm">
             <span
-              className="h-[7px] w-[7px] shrink-0 rounded-full"
-              style={{ background: proxyDotColor(account.proxy_status) }}
+              className={`h-[7px] w-[7px] shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
             />
             {account.proxy_country_code ? (
               <span
-                className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-ring`}
               />
             ) : null}
-            <span className="text-[12px] text-[#3a3a3a]">{proxyMeta(account)}</span>
+            <span className="text-body text-ink-body">{proxyMeta(account)}</span>
           </div>
         ) : (
-          <span className="text-[12px] text-ink-subtle">—</span>
+          <span className="text-body text-ink-subtle">—</span>
         );
       },
     },
@@ -166,7 +167,7 @@ export function AccountsTable({
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
       cell: ({ row }) => (
-        <span className="text-[12px] text-ink-muted">{deviceLabel(row.original)}</span>
+        <span className="text-body text-ink-muted">{deviceLabel(row.original)}</span>
       ),
     },
     {
@@ -176,19 +177,16 @@ export function AccountsTable({
       cell: ({ row }) => {
         const trust = row.original.trust_score;
         return trust == null ? (
-          <span className="text-[12px] text-ink-subtle">—</span>
+          <span className="text-body text-ink-subtle">—</span>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-sm">
             <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
               <div
-                className="h-full rounded-full"
-                style={{ width: `${String(trust)}%`, background: trustColor(trust) }}
+                className={`h-full rounded-full bg-current ${trustTone(trust)}`}
+                style={{ width: `${String(trust)}%` }}
               />
             </div>
-            <span
-              className="min-w-[20px] text-[12px] font-semibold"
-              style={{ color: trustColor(trust) }}
-            >
+            <span className={`min-w-[20px] text-body font-semibold ${trustTone(trust)}`}>
               {trust}
             </span>
           </div>
@@ -204,7 +202,7 @@ export function AccountsTable({
         const busy = busyIds.has(account.account_id);
         const checked = checkResults[account.account_id];
         return (
-          <div className="flex items-center justify-end gap-[6px]">
+          <div className="flex items-center justify-end gap-sm">
             <button
               type="button"
               title={t('accounts.actions.check')}
@@ -213,10 +211,10 @@ export function AccountsTable({
                 event.stopPropagation();
                 onCheck(account.account_id);
               }}
-              className={`${ACTION_BTN} transition-colors duration-300 ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
+              className={`${ACTION_BTN} transition-colors duration-enter ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
             >
               {busy ? (
-                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
+                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />
               ) : checked ? (
                 // Named, not colour-only: the fill and the glyph say nothing to a
                 // screen reader, and `title` stays the constant action label.
@@ -252,7 +250,7 @@ export function AccountsTable({
                 event.stopPropagation();
                 (onProfile ?? onOpen)?.(account);
               }}
-              className={`${ACTION_BTN} text-ink-muted hover:border-[#bfd6ff] hover:text-primary`}
+              className={`${ACTION_BTN} text-ink-muted hover:border-primary-line hover:text-primary`}
             >
               <svg
                 width="14"
@@ -276,7 +274,7 @@ export function AccountsTable({
                 event.stopPropagation();
                 onDelete(account.account_id);
               }}
-              className={`${ACTION_BTN} text-ink-subtle hover:border-[#f0c9c5] hover:text-danger`}
+              className={`${ACTION_BTN} text-ink-subtle hover:border-danger-line hover:text-danger`}
             >
               <svg
                 width="14"
@@ -296,7 +294,7 @@ export function AccountsTable({
   ];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-white">
+    <div className="overflow-hidden rounded-card border border-line bg-white">
       <div className="tb-scroll overflow-x-auto">
         <DataTable
           data={data}

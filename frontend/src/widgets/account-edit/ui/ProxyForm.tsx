@@ -7,6 +7,7 @@ import { probeProxyMutation } from '@/entities/proxy';
 import { FormField } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
+import { seg } from './_styles';
 
 // Shared proxy-form fields (host / port / type / login / password+eye + a real
 // connectivity probe), now on @tanstack/react-form + zod. The form owns field
@@ -14,9 +15,9 @@ import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 // (the add-proxy modal owns the value + the create call), so the parent's footer
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
-const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
+const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 const PASS_FIELD =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] pr-9 text-[13px] outline-none';
+  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] pr-9 text-lead outline-none';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -50,8 +51,6 @@ export function ProxyForm({
     onValidityChange?.(canSubmit);
   }, [canSubmit, onValidityChange]);
 
-  const seg = (on: boolean): string =>
-    `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
   const canProbe = detect !== 'loading' && values.host.trim() !== '' && values.port !== '';
 
   const runDetect = () => {
@@ -79,8 +78,8 @@ export function ProxyForm({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-[10px]">
+    <div className="flex flex-col gap-md">
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-md">
         <form.Field name="host">
           {(field) => (
             <FormField
@@ -103,7 +102,7 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
         <form.Field name="username">
           {(field) => (
             <FormField
@@ -177,7 +176,7 @@ export function ProxyForm({
         <span className={LABEL}>{t('accounts.proxyForm.type')}</span>
         <form.Field name="proxy_type">
           {(field) => (
-            <div className="flex gap-1 rounded-[10px] bg-[#f1efed] p-1">
+            <div className="flex gap-tight rounded-lg bg-canvas p-1">
               {(['socks5', 'https'] as const).map((option) => (
                 <button
                   key={option}
@@ -194,15 +193,15 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-md">
         <button
           type="button"
           onClick={runDetect}
           disabled={!canProbe}
-          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
+          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
         >
           {detect === 'loading' ? (
-            <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
+            <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />
           ) : (
             <svg
               width="14"
@@ -219,20 +218,20 @@ export function ProxyForm({
           {detect === 'ok' ? t('accounts.proxyForm.detected') : t('accounts.proxyForm.detect')}
         </button>
         {detect === 'loading' && (
-          <span className="text-[12.5px] text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
+          <span className="text-body text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
         )}
         {detect === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-[6px] rounded-full bg-[#e7f2ec] px-3 py-[5px] text-[12.5px] font-medium text-[#2e7d55]">
+          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
             {country ? (
               <span
-                className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
+                className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-ring`}
               />
             ) : null}
             {country ?? t('accounts.proxyForm.resultOk')}
           </span>
         )}
         {detect === 'err' && (
-          <span className="inline-flex items-center gap-[6px] text-[12.5px] font-medium text-[#c0473f]">
+          <span className="inline-flex items-center gap-sm text-body font-medium text-danger">
             <svg
               width="14"
               height="14"

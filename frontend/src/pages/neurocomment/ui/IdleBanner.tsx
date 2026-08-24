@@ -8,9 +8,9 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-center gap-[11px] rounded-[14px] border border-[#efd79a] bg-[#fffbef] px-[14px] py-3 text-left transition-colors hover:bg-[#fdf6e3]"
+      className="flex items-center gap-md rounded-lg border border-warning-line bg-warning-tint px-[14px] py-3 text-left transition-colors hover:border-warning"
     >
-      <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[9px] bg-[#fbefcb] text-[#9a7b22]">
+      <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md bg-warning-line text-warning-deep">
         <svg
           width="16"
           height="16"
@@ -26,12 +26,15 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[12.5px] font-bold leading-[1.25] text-[#7a5e12]">
+        <div className="text-body font-bold leading-[1.25] text-warning-deep">
           {t('neurocomment.idle.label', { count })}
         </div>
-        <div className="mt-px text-[11px] text-[#a98a2e]">{t('neurocomment.idle.sub')}</div>
+        {/* Grey under an amber heading, for the reason WarmingBoard's twin is grey: the
+            amber is already said by the heading, the chip and the surface, and `warning`
+            here reached only 3.57:1 against this tint where `ink-body` reaches 10.10:1. */}
+        <div className="mt-px text-tiny text-ink-body">{t('neurocomment.idle.sub')}</div>
       </div>
-      <span className="flex shrink-0 text-[#b8922f]">
+      <span className="flex shrink-0 text-warning">
         <svg
           width="16"
           height="16"

@@ -6,7 +6,7 @@ import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
 function Chevron({ open }: { open: boolean }) {
   return (
     <span
-      className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${open ? 'rotate-180' : ''}`}
+      className={`flex text-ink-subtle transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
     >
       <svg
         width="16"
@@ -28,7 +28,7 @@ export function CollapsibleCard({
   label,
   defaultOpen = false,
   onOpenChange,
-  wrapperClassName = 'rounded-2xl border border-line bg-white',
+  wrapperClassName = 'rounded-card border border-line bg-white',
   headerClassName = 'px-4 py-[14px]',
   bodyClassName = 'px-4 pb-4',
   children,
@@ -90,13 +90,13 @@ export function CollapsibleCard({
 
   return (
     <div className={`overflow-hidden ${wrapperClassName}`}>
-      <div className={`flex items-center gap-[10px] ${headerClassName}`}>
+      <div className={`flex items-center gap-md ${headerClassName}`}>
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
           aria-controls={bodyId}
-          className="flex min-w-0 flex-1 items-center gap-[9px] text-left"
+          className="flex min-w-0 flex-1 items-center gap-md text-left"
         >
           {header}
         </button>

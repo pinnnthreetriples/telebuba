@@ -143,7 +143,7 @@ test('colours an attempted-but-failed event red even though it is logged INFO', 
     />,
   );
   const label = screen.getByText('Не удалось сгенерировать текст');
-  expect(label).toHaveStyle({ color: '#e5736b' });
+  expect(label).toHaveClass('text-term-error');
 });
 
 test('shows a clear-log button only with onClear and rows, and fires it', async () => {

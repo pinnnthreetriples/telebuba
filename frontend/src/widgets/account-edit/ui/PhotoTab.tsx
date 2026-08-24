@@ -60,19 +60,19 @@ export function PhotoTab({
         );
         onUpload(images);
       }}
-      className={`relative rounded-[12px] border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
+      className={`relative rounded-lg border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[12px] bg-white/70 text-[13px] font-medium text-primary">
+        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-lead font-medium text-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
-      <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.profile.photoHint')}</div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
+      <div className="mb-3 text-body text-ink-subtle">{t('accounts.profile.photoHint')}</div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
         {photos.map((photo) => (
           <div key={photo.photo_id} className="relative">
             <div
-              className="rounded-[12px] border border-black/5"
+              className="rounded-lg border border-black/5"
               style={tileStyle(photo.thumb_url, '1')}
             />
             <button
@@ -81,12 +81,12 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
+              className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-lead leading-none text-white"
             >
               ×
             </button>
             {photo.is_main ? (
-              <span className="mt-[6px] block w-full py-[2px] text-[11px] font-medium text-primary">
+              <span className="mt-[6px] block w-full py-[2px] text-tiny font-medium text-primary">
                 {t('accounts.profile.mainPhoto')}
               </span>
             ) : (
@@ -96,7 +96,7 @@ export function PhotoTab({
                 onClick={() => {
                   onMakeMain(photo);
                 }}
-                className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                className="mt-[6px] block w-full py-[2px] text-left text-tiny font-medium text-primary hover:underline disabled:opacity-50"
               >
                 {t('accounts.profile.makeMain')}
               </button>

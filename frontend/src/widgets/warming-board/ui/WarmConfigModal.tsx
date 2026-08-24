@@ -10,7 +10,7 @@ import {
 import type { WarmingSettings } from '@/shared/api';
 import { mutationErrorText } from '@/shared/lib';
 
-import { Modal } from '@/shared/ui';
+import { Modal, Switch } from '@/shared/ui';
 
 // The three behaviour toggles + the readiness gate map 1:1 onto the real,
 // GLOBAL warming settings row (WarmingSettingsUpdate has no account_id). Quiet
@@ -39,23 +39,6 @@ function initialToggles(settings?: WarmingSettings): Toggles {
   };
 }
 
-function Switch({ on, label, onToggle }: { on: boolean; label: string; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={onToggle}
-      className={`relative h-[26px] w-[44px] shrink-0 rounded-full transition-colors ${on ? 'bg-primary' : 'bg-[#cbc9c4]'}`}
-    >
-      <span
-        className={`absolute top-[3px] block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.35,.5,1)] ${on ? 'translate-x-[21px]' : 'translate-x-[3px]'}`}
-      />
-    </button>
-  );
-}
-
 function ToggleRow({
   title,
   desc,
@@ -68,12 +51,12 @@ function ToggleRow({
   onToggle: () => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-[14px]">
+    <div className="flex items-start justify-between gap-lg">
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold">{title}</div>
-        <div className="mt-[2px] text-[11.5px] leading-[1.45] text-ink-subtle">{desc}</div>
+        <div className="text-lead font-semibold">{title}</div>
+        <div className="mt-[2px] text-tiny leading-[1.45] text-ink-subtle">{desc}</div>
       </div>
-      <Switch on={on} label={title} onToggle={onToggle} />
+      <Switch checked={on} label={title} onChange={onToggle} />
     </div>
   );
 }
@@ -153,9 +136,9 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
   };
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[540px]" label={t('warming.cfg.title')}>
-      <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[#eef4ff] text-primary">
+    <Modal onClose={onClose} className="w-[540px]" label={t('warming.cfg.title')}>
+      <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
           <svg
             width="18"
             height="18"
@@ -169,16 +152,16 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           </svg>
         </span>
         <div>
-          <div className="text-[16px] font-bold">{t('warming.cfg.title')}</div>
-          <div className="mt-[2px] text-[12.5px] text-ink-subtle">{phone}</div>
+          <div className="text-title font-bold">{t('warming.cfg.title')}</div>
+          <div className="mt-[2px] text-body text-ink-subtle">{phone}</div>
         </div>
       </div>
 
       <div className="px-6 pb-5 pt-[18px]">
-        <div className="mb-[14px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+        <div className="mb-[14px] text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('warming.cfg.behaviorTitle')}
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-lg">
           {BEHAVIOR_KEYS.map((key) => (
             <ToggleRow
               key={key}
@@ -192,12 +175,12 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           ))}
         </div>
 
-        <div className="my-[18px] h-px bg-[#f0eeeb]" />
+        <div className="my-[18px] h-px bg-line-row" />
 
-        <div className="mb-[14px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+        <div className="mb-[14px] text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
           {t('warming.cfg.limitsTitle')}
         </div>
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-lg">
           <ToggleRow
             title={t('warming.cfg.toggle.enforce_readiness.title')}
             desc={t('warming.cfg.toggle.enforce_readiness.desc')}
@@ -217,11 +200,11 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
         </div>
 
         {toggles.local_time ? (
-          <div className="tb-fadeup mt-[14px] rounded-[11px]">
-            <div className="mb-[10px] text-right text-[11.5px] font-semibold text-ink-muted">
+          <div className="tb-fadeup mt-[14px] rounded-lg">
+            <div className="mb-[10px] text-right text-tiny font-semibold text-ink-muted">
               {t('warming.cfg.quietHours')}
             </div>
-            <div className="flex items-center justify-end gap-[10px]">
+            <div className="flex items-center justify-end gap-md">
               <input
                 value={from}
                 onChange={(e) => {
@@ -230,9 +213,9 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietFrom')}
-                className="w-[64px] rounded-[10px] border border-[#dedcd8] bg-white px-[11px] py-2 text-center text-[14px] font-semibold tabular-nums outline-none"
+                className="w-[64px] rounded-lg border border-line-input bg-white px-[11px] py-2 text-center text-lead font-semibold tabular-nums outline-none"
               />
-              <span className="shrink-0 text-[13px] text-[#b5b3ae]">–</span>
+              <span className="shrink-0 text-lead text-ink-subtle">–</span>
               <input
                 value={to}
                 onChange={(e) => {
@@ -241,25 +224,25 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietTo')}
-                className="w-[64px] rounded-[10px] border border-[#dedcd8] bg-white px-[11px] py-2 text-center text-[14px] font-semibold tabular-nums outline-none"
+                className="w-[64px] rounded-lg border border-line-input bg-white px-[11px] py-2 text-center text-lead font-semibold tabular-nums outline-none"
               />
             </div>
-            <div className="mt-[9px] text-right text-[11px] leading-[1.4] text-[#b5b3ae]">
+            <div className="mt-[9px] text-right text-tiny leading-[1.4] text-ink-subtle">
               {t('warming.cfg.quietNote')}
             </div>
           </div>
         ) : null}
       </div>
 
-      <div className="border-t border-[#f0eeeb] px-6 pb-5 pt-[15px]">
-        <div className="mb-[14px] flex gap-[6px] rounded-[10px] bg-[#f0eeeb] p-[3px]">
+      <div className="border-t border-line-row px-6 pb-5 pt-[15px]">
+        <div className="mb-[14px] flex gap-sm rounded-lg bg-line-row p-[3px]">
           <button
             type="button"
             title={t('warming.cfg.scopeOneNote')}
             onClick={() => {
               setScope('one');
             }}
-            className={`flex-1 rounded-[8px] py-[7px] text-[12.5px] font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`}
           >
             {t('warming.cfg.scopeOne')}
           </button>
@@ -268,13 +251,13 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             onClick={() => {
               setScope('all');
             }}
-            className={`flex-1 rounded-[8px] py-[7px] text-[12.5px] font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`}
           >
             {t('warming.cfg.scopeAll')}
           </button>
         </div>
         {scope === 'one' ? (
-          <div className="mb-[12px] text-[11.5px] leading-[1.45] text-[#c47d12]">
+          <div className="mb-[12px] text-tiny leading-[1.45] text-warning-strong">
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}
@@ -282,23 +265,23 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           // The same text the global mutation toast shows, not the generic copy:
           // this alert is the in-context report and must not be the less
           // informative of the two. Falls back to shell.mutationError itself.
-          <div role="alert" className="mb-[12px] text-[11.5px] leading-[1.45] text-danger">
+          <div role="alert" className="mb-[12px] text-tiny leading-[1.45] text-danger">
             {mutationErrorText(save.error)}
           </div>
         ) : null}
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           <button
             type="button"
             disabled={save.isPending || scope === 'one' || !settings}
             onClick={onSave}
-            className="flex-1 rounded-full bg-primary px-[14px] py-[10px] text-[13px] font-semibold text-white transition-colors hover:bg-[#0057db] disabled:opacity-50"
+            className="flex-1 rounded-full bg-primary px-[14px] py-[10px] text-lead font-semibold text-white transition-colors hover:bg-primary-press disabled:opacity-50"
           >
             {t('warming.cfg.save')}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-[13px] font-medium text-ink"
+            className="flex-1 rounded-full border border-line-input bg-white px-[14px] py-[10px] text-lead font-semibold text-ink"
           >
             {t('warming.cfg.cancel')}
           </button>

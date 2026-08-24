@@ -17,27 +17,27 @@ export function WarmStopModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} z={72} className="w-[468px]" label={t('warming.stopModal.title')}>
+    <Modal onClose={onClose} className="w-[468px]" label={t('warming.stopModal.title')}>
       <div className="p-6">
-        <div className="mb-2 text-[16px] font-bold">{t('warming.stopModal.title')}</div>
-        <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
+        <div className="mb-2 text-title font-bold">{t('warming.stopModal.title')}</div>
+        <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">
           {t('warming.stopModal.body', { phone })}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-sm">
           <button
             type="button"
             onClick={() => {
               onFinish();
               onClose();
             }}
-            className="flex flex-1 items-center justify-center gap-[5px] whitespace-nowrap rounded-full border border-primary bg-primary px-3 py-[9px] text-[13px] font-semibold text-white transition-colors hover:bg-[#0057db]"
+            className="flex flex-1 items-center justify-center gap-tight whitespace-nowrap rounded-full border border-primary bg-primary px-3 py-[9px] text-lead font-semibold text-white transition-colors hover:bg-primary-press"
           >
             <svg
               width="13"
               height="13"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="#fff"
+              stroke="currentColor"
               strokeWidth="2.6"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -49,7 +49,7 @@ export function WarmStopModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line-input bg-white px-3 py-[9px] text-[13px] font-medium text-ink transition-colors hover:border-[#c8c6c2] hover:bg-[#f7f6f4]"
+            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line-input bg-white px-3 py-[9px] text-lead font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface"
           >
             {t('warming.stopModal.keep')}
           </button>
@@ -59,7 +59,7 @@ export function WarmStopModal({
               onStop();
               onClose();
             }}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-[#e6cfcd] bg-white px-3 py-[9px] text-[13px] font-semibold text-danger transition-colors hover:border-[#e0b6b2] hover:bg-danger-tint"
+            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-danger-line bg-white px-3 py-[9px] text-lead font-semibold text-danger transition-colors hover:border-danger-line hover:bg-danger-tint"
           >
             {t('warming.stopModal.stop')}
           </button>
