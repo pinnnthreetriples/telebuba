@@ -14,6 +14,26 @@ import type { Config } from 'tailwindcss';
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
+    // Five elevations, one per purpose, replacing Tailwind's `sm…2xl` scale outright —
+    // the last scale still sitting in `extend`, which is how `shadow-2xl` stayed
+    // reachable next to a canon that names five. `pop` is anything that floats over the
+    // page (dropdown, tooltip, toast, menu — ALL of them, which is the point: those four
+    // things had four different shadows); `ring` is the hairline outline that stands in
+    // for a border on a tinted pill; `thumb` is a knob you can drag (the switch, the
+    // warming-days slider); `focus` is the ring a focused control wears, the one recipe
+    // shared by `shared/ui/Select`'s trigger and index.css's `.tb-time:focus-within`,
+    // which is what makes it a role rather than a one-off; `seg` is the raised active
+    // segment of an inset segmented tray — Tailwind's own `shadow-sm` value kept
+    // verbatim, so naming it costs nothing and changes nothing. `none` stays because it
+    // is the absence of a shadow, not a step.
+    boxShadow: {
+      none: 'none',
+      pop: '0 10px 30px rgba(11,11,12,0.12)',
+      ring: '0 0 0 1px rgba(11,11,12,0.07)',
+      thumb: '0 1px 3px rgba(0,0,0,0.3)',
+      focus: '0 0 0 3px rgba(0,102,255,0.12)',
+      seg: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+    },
     // The eight type sizes the UI actually has, replacing Tailwind's `xs…9xl` scale
     // outright — nothing used a single one of those names, and leaving them reachable
     // would mean `text-sm` (14px) could arrive tomorrow next to a `text-lead` (13px)
@@ -161,19 +181,6 @@ export default {
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
-      },
-      // Four elevations, one per purpose: `pop` for anything that floats over the page
-      // (dropdown, tooltip, toast, menu — ALL of them, which is the point: these four
-      // things had four different shadows), `ring` for the hairline outline that stands
-      // in for a border on a tinted pill, `thumb` for a knob you can drag (the switch,
-      // and the warming-days slider), `focus` for the ring a focused control wears —
-      // the one recipe shared by `shared/ui/Select`'s trigger and index.css's
-      // `.tb-time:focus-within`, which is what makes it a role rather than a one-off.
-      boxShadow: {
-        pop: '0 10px 30px rgba(11,11,12,0.12)',
-        ring: '0 0 0 1px rgba(11,11,12,0.07)',
-        thumb: '0 1px 3px rgba(0,0,0,0.3)',
-        focus: '0 0 0 3px rgba(0,102,255,0.12)',
       },
     },
   },

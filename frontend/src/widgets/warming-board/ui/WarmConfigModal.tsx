@@ -242,7 +242,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             onClick={() => {
               setScope('one');
             }}
-            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`}
           >
             {t('warming.cfg.scopeOne')}
           </button>
@@ -251,7 +251,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             onClick={() => {
               setScope('all');
             }}
-            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+            className={`flex-1 rounded-md py-[7px] text-body font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`}
           >
             {t('warming.cfg.scopeAll')}
           </button>

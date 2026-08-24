@@ -160,6 +160,10 @@ export function LaunchCard({
         <>
           <span className="text-lead font-semibold">{t('neuroshilling.launch.title')}</span>
           {live ? (
+            // An accent marker, not a neutral state label — `micro`/`bold` on purpose, so
+            // it reads as emphasis beside the title rather than as another status pill.
+            // Two such markers in the app (the other is the warming page's "прогрет"), and
+            // two call sites do not earn a token. Do not fold this into the pill family.
             <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[2px] text-micro font-bold text-success">
               <span className="tb-livedot h-[6px] w-[6px] rounded-full bg-success" />
               LIVE
@@ -248,7 +252,7 @@ export function LaunchCard({
       ) : null}
 
       {halted.length > 0 ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep">
           {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
         </div>
       ) : null}

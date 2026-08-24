@@ -53,7 +53,7 @@ export function PreviewCard({
       }
     >
       {dirty ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep">
           {t('neuroshilling.preview.unsaved')}
         </div>
       ) : null}

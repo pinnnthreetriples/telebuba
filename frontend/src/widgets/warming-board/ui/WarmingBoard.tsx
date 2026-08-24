@@ -246,6 +246,12 @@ function WarmingCard({
               {primaryId}
             </div>
             <div className="mt-[2px] flex items-center gap-sm">
+              {/* Deliberately the dense variant, off the status pill's `3px 10px`/`tiny`
+                  rung: this is not a standalone state label but the second line inside a
+                  card, paired in one flex row with the `micro` daily-actions counter to
+                  its right. On the rung it would tower over the number it is paired
+                  with, which is a worse disagreement than differing from the twelve
+                  pills on other screens. Twelve on the rung, plus this documented pair. */}
               <span
                 className={`inline-flex items-center gap-tight rounded-full px-[7px] py-px text-micro font-semibold ${statusTone}`}
               >

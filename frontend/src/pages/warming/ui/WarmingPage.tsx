@@ -537,6 +537,9 @@ export function WarmingPage() {
                           </span>
                         </div>
                       </div>
+                      {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
+                          with letter-spacing because it is emphasis on a finished account,
+                          not a neutral state. Deliberately outside the status-pill family. */}
                       <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[3px] text-micro font-bold tracking-[0.03em] text-success">
                         <svg
                           width="9"

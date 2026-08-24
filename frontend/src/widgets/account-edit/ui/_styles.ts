@@ -26,7 +26,7 @@ export const SEG_WRAP = 'mb-[10px] flex gap-tight rounded-lg bg-canvas p-1';
 // horizontal padding would change nothing except the point at which a long label forces
 // the tray to overflow.
 export const seg = (on: boolean): string =>
-  `flex-1 rounded-sm py-[8px] text-body font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+  `flex-1 rounded-sm py-[8px] text-body font-medium transition ${on ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`;
 
 // A check-button drives a tiny idle→loading→(ok|err) machine, settling back to
 // idle. Backed by real check calls (proxy connectivity / @SpamBot / alive).
