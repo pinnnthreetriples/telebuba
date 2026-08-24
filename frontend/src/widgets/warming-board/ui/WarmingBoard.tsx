@@ -335,7 +335,11 @@ function WarmingCard({
       ) : null}
 
       {/* pipeline */}
-      <div className="rounded-lg bg-primary-tint px-lg pb-md pt-md">
+      {/* The hairline, not a bare fill: this panel is the one place the two pale
+          blues used to meet, and with them collapsed it would paint its parent's
+          colour and have no edge at all. `primary-hairline` is the rung for exactly
+          this — faint enough to double as a divider fill. */}
+      <div className="rounded-lg border border-primary-hairline bg-primary-tint px-lg pb-md pt-md">
         <div className="mb-sm flex items-center justify-between">
           <span className="text-micro font-medium text-ink-muted">
             {t('warming.inProgress.days')}
