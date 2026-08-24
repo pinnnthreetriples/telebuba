@@ -1386,7 +1386,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
     <section id="source">
       <div class="eyebrow">Свод</div>
       <h2>Источник правды</h2>
-      <table class="spec">
+      <div class="scroll"><table class="spec">
         <tr><td>Токены</td><td><code>frontend/tailwind.config.ts</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Пять шкал <em>заменены</em>, а не расширены: имя мимо канона не рисует ничего. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
         <tr><td>Кейфреймы, подсказки, раскрытие, полосы прокрутки</td><td><code>frontend/src/app/styles/index.css</code></td></tr>
         <tr><td>Примитивы</td><td><code>frontend/src/shared/ui/</code> — <code>Button</code> не примитив: 71 вызов с разной разметкой, поэтому приведены классы, а не введена обёртка</td></tr>
@@ -1395,7 +1395,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td>Каркас и навигация</td><td><code>widgets/nav/ui/AppShell</code> · <code>AppNav</code> · <code>NavDrawer</code></td></tr>
         <tr><td>Выпадающий список</td><td><code>shared/ui/Select</code> — единственный способ выбрать одно из списка. Нативный <code>&lt;select&gt;</code> в коде отсутствует: его рисует система, и рядом с полем он читается как другое приложение. Клавиатура: <kbd>↓</kbd> открывает на выбранном, стрелки идут по кругу и перешагивают недоступные, <kbd>Enter</kbd> выбирает, <kbd>Esc</kbd> закрывает список и не роняет диалог</td></tr>
         <tr><td>Плашка с действиями</td><td><code>shared/ui/SurfHover</code> — рельс 48px, сдвиг считается как 48 × число действий</td></tr>
-      </table>
+      </table></div>
       <footer>
         <span>Значения проверены на живом приложении: аккаунты, прогрев, нейрокомментинг, логи, настройки. НейроШиллинг не эталон — страница не закончена.</span>
         <span>Если значение здесь расходится с <code>tailwind.config.ts</code> — правится код, а расхождение перечислено в «Унификации».</span>
