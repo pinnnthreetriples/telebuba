@@ -32,7 +32,7 @@ export function StoriesTab({
               style={tileStyle(story.thumb_url, '9 / 16')}
             />
             {(story.views != null || story.reactions != null) && (
-              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-[rgba(11,11,12,0.6)] px-tight py-hair text-micro font-medium text-white">
+              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-micro font-medium text-white">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -71,7 +71,7 @@ export function StoriesTab({
               onClick={() => {
                 onRemove(story);
               }}
-              className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-lead leading-none text-white"
+              className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-scrim text-lead leading-none text-white"
             >
               ×
             </button>
@@ -85,12 +85,12 @@ export function StoriesTab({
                 onPinToggle(story);
               }}
               className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-sm px-tight py-hair text-center text-micro font-medium disabled:opacity-50 ${
-                story.is_pinned ? 'bg-primary text-white' : 'bg-[rgba(11,11,12,0.6)] text-white'
+                story.is_pinned ? 'bg-primary text-white' : 'bg-scrim text-white'
               }`}
             >
               {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
             </button>
-            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-[rgba(11,11,12,0.6)] px-tight py-hair text-center text-micro font-medium text-white">
+            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-scrim px-tight py-hair text-center text-micro font-medium text-white">
               {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
             </span>
           </div>

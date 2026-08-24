@@ -4,6 +4,8 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
+import designTokens from './eslint-rules/design-tokens.js';
+
 export default tseslint.config(
   // Generated client, build output, coverage, and config files are out of scope.
   {
@@ -16,6 +18,9 @@ export default tseslint.config(
     plugins: {
       'react-hooks': reactHooks,
       'react-refresh': reactRefresh,
+      // Local rule, in eslint-rules/: it is the gate that keeps the design system a
+      // closed set, and its reasons live next to it.
+      'design-tokens': designTokens,
     },
     rules: {
       // The two classic hook rules, named rather than spread from
@@ -24,6 +29,7 @@ export default tseslint.config(
       // plugin was bumped to v7 because it is the first line that peers on ESLint 10
       // (needed for the brace-expansion advisory), NOT to adopt a new ruleset — those
       // rules flag pre-existing app code and are their own reviewed change.
+      'design-tokens/no-raw-values': 'error',
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
@@ -52,6 +58,13 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // The rule's own fixtures are the patterns it bans, so it cannot lint them: a
+    // gate that flags nothing looks identical to a gate that catches nothing, and
+    // this is the file that tells them apart.
+    files: ['**/designTokenRule.test.ts'],
+    rules: { 'design-tokens/no-raw-values': 'off' },
   },
   prettier,
 );
