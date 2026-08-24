@@ -10,6 +10,13 @@ test('renders the localized status label', () => {
   expect(screen.getByText('Активен')).toBeInTheDocument();
 });
 
+// The dot is the account pill's whole shape in the design; losing it silently is
+// the one thing that survives a colour assertion.
+test('the account pill leads with its dot', () => {
+  render(<StatusBadge status="alive" />);
+  expect(screen.getByText('Активен').querySelector('.bg-current')).toBeInTheDocument();
+});
+
 test('uses the design needs-code colour for unauthorized', () => {
   render(<StatusBadge status="unauthorized" />);
   expect(screen.getByText('Не авторизован').className).toContain('text-primary');

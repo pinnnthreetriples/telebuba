@@ -12,8 +12,11 @@ test('renders the localized channel status', () => {
 
 test('uses the danger tone for chat_restricted', () => {
   render(<ChannelStatusBadge status="chat_restricted" />);
-  // Tone comes from the token pair, not an inline hex.
-  expect(screen.getByText('Чат ограничен')).toHaveClass('text-danger-deep', 'bg-danger-tint');
+  // Tone comes from the token pair, not an inline hex, and the dot reads it off the
+  // same class so the two can never fall out of step.
+  const pill = screen.getByText('Чат ограничен');
+  expect(pill).toHaveClass('text-danger-deep', 'bg-danger-tint');
+  expect(pill.querySelector('.bg-current')).toBeInTheDocument();
 });
 
 test('renders banned in the danger tone', () => {
