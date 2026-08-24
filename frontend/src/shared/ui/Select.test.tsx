@@ -244,3 +244,21 @@ test('the closed list publishes no active descendant', async () => {
   await userEvent.keyboard('{Escape}');
   expect(cursor()).toBeNull();
 });
+
+// The failure this guards against is the one a roving-focus dropdown has: with real
+// focus inside the list, Tab moves it to the next option and a blur handler commits
+// whatever it landed on, so leaving the control silently changes the value. Here the
+// cursor is an attribute and the list is `inert`, so Tab is the trigger's own — it
+// leaves the control and picks nothing.
+test('Tab leaves the trigger and commits nothing', async () => {
+  const { onChange, trigger } = renderSelect();
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+  expect(cursor()).toBe(idOf('Boris'));
+
+  await userEvent.tab();
+
+  expect(onChange).not.toHaveBeenCalled();
+  expect(trigger).not.toHaveFocus();
+});
