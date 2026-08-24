@@ -1,5 +1,5 @@
-const INPUT =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
+import { Input } from '@/shared/ui';
+
 const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 function EyeIcon({ off }: { off: boolean }) {
@@ -60,7 +60,8 @@ export function ApiKeyField({
     <label className="block">
       <span className={FIELD_LABEL}>{label}</span>
       <div className="flex gap-sm">
-        <input
+        <Input
+          className="flex-1 font-mono"
           type={show ? 'text' : 'password'}
           // A provider API key, not a credential of this origin: `new-password`
           // is the token browsers honour as "do not fill" on a password input.
@@ -70,7 +71,6 @@ export function ApiKeyField({
             onChange(event.target.value);
           }}
           placeholder={placeholder}
-          className={`${INPUT} flex-1 font-mono`}
         />
         <button
           type="button"

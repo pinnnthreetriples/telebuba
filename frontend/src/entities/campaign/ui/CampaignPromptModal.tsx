@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { IconButton, Modal } from '@/shared/ui';
+import { Button, IconButton, Modal } from '@/shared/ui';
 
 export interface PromptAccount {
   account_id: string;
@@ -129,10 +129,10 @@ export function CampaignPromptModal({
         )}
 
         <div className="mt-[18px] flex justify-end gap-sm">
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={save}
-            className={`rounded-full border px-[22px] py-[9px] text-lead font-semibold text-white ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
+            className={saved ? 'border-success bg-success hover:bg-success' : ''}
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">
@@ -155,14 +155,8 @@ export function CampaignPromptModal({
             ) : (
               t('neurocomment.modal.save')
             )}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {t('neurocomment.modal.cancel')}
-          </button>
+          </Button>
+          <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
         </div>
       </div>
 
@@ -185,25 +179,22 @@ export function CampaignPromptModal({
               })}
             </div>
             <div className="flex justify-end gap-sm">
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setConfirm(null);
                 }}
-                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
               >
                 {t('neurocomment.modal.cancel')}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="danger"
                 onClick={() => {
                   onRemoveAccount(confirm.account_id);
                   setConfirm(null);
                 }}
-                className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger"
               >
                 {t('neurocomment.modal.campaignPrompt.removeConfirm')}
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

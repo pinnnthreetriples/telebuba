@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { IconButton, Modal } from '@/shared/ui';
+import { Button, IconButton, Input, Modal, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -16,7 +16,6 @@ import {
   channelErrorText,
   envelopeMessage,
   errorChannelId,
-  FIELD,
   LABEL,
 } from './_channelsShared';
 import { CheckRow } from './_CheckRow';
@@ -221,13 +220,12 @@ export function ChannelCreateModal({
 
         <label className="mb-[14px] block">
           <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
-          <input
+          <Input
             value={title}
             maxLength={CHANNEL_TITLE_MAX}
             onChange={(event) => {
               setTitle(event.target.value);
             }}
-            className={FIELD}
           />
           {title !== '' && title.trim() === '' && (
             <span className="mt-1 block text-tiny text-danger">
@@ -238,14 +236,14 @@ export function ChannelCreateModal({
 
         <label className="mb-[14px] block">
           <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
-          <textarea
+          <Textarea
+            className="resize-none [font-family:inherit]"
             rows={3}
             value={about}
             maxLength={CHANNEL_ABOUT_MAX}
             onChange={(event) => {
               setAbout(event.target.value);
             }}
-            className={`${FIELD} resize-none [font-family:inherit]`}
           />
         </label>
 
@@ -270,12 +268,12 @@ export function ChannelCreateModal({
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
               <span className="absolute left-3 text-lead text-ink-subtle">@</span>
-              <input
+              <Input
+                className="pl-[26px]"
                 value={username}
                 onChange={(event) => {
                   setUsername(event.target.value);
                 }}
-                className={`${FIELD} pl-[26px]`}
               />
             </div>
             {usernameHint && (
@@ -291,18 +289,13 @@ export function ChannelCreateModal({
         )}
 
         <div className="mt-5 flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink disabled:opacity-50"
-          >
+          <Button onClick={onClose} disabled={busy}>
             {t('accounts.channel.cancel')}
-          </button>
+          </Button>
           {/* Once the channel exists (id-bearing refusal) the primary action is
               the hand-off into its editor, not another create. */}
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={
               createdId === null
                 ? submit
@@ -311,7 +304,6 @@ export function ChannelCreateModal({
                   }
             }
             disabled={createdId === null && !canSubmit}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {createdId !== null ? (
               t('accounts.channel.edit')
@@ -323,7 +315,7 @@ export function ChannelCreateModal({
             ) : (
               t('accounts.channel.createBtn')
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -9,11 +9,10 @@ import {
   publishAccountChannelPostMutation,
 } from '@/entities/account';
 import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
-import { ConfirmModal, IconButton, toastError } from '@/shared/ui';
+import { Button, ConfirmModal, IconButton, Textarea, toastError } from '@/shared/ui';
 
 import {
   channelErrorText,
-  FIELD,
   isUploadablePostMedia,
   PHOTO_MAX_BYTES,
   PHOTO_SUFFIXES,
@@ -193,7 +192,8 @@ export function ChannelPostsPanel({
 
       {/* composer */}
       <div className="rounded-lg border border-line bg-white p-3">
-        <textarea
+        <Textarea
+          className="resize-none [font-family:inherit]"
           rows={3}
           value={text}
           maxLength={textMax}
@@ -201,7 +201,6 @@ export function ChannelPostsPanel({
           onChange={(event) => {
             setText(event.target.value);
           }}
-          className={`${FIELD} resize-none [font-family:inherit]`}
         />
         {file && (
           <div className="mt-2 flex items-center gap-md rounded-lg border border-line bg-surface px-[10px] py-2">
@@ -363,7 +362,8 @@ export function ChannelPostsPanel({
               </div>
               {editingId === post.post_id ? (
                 <div className="mt-2">
-                  <textarea
+                  <Textarea
+                    className="resize-none [font-family:inherit]"
                     rows={3}
                     value={editText}
                     maxLength={editMax}
@@ -371,7 +371,6 @@ export function ChannelPostsPanel({
                     onChange={(event) => {
                       setEditText(event.target.value);
                     }}
-                    className={`${FIELD} resize-none [font-family:inherit]`}
                   />
                   {editPost.isError && (
                     <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-body text-danger">
@@ -417,13 +416,13 @@ export function ChannelPostsPanel({
         </div>
       )}
       {nextCursor !== null && (
-        <button
-          type="button"
+        <Button
+          size="sm"
+          className="mt-3 w-full"
           onClick={() => {
             void loadMore();
           }}
           disabled={loadingMore}
-          className="mt-3 w-full rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold text-ink disabled:opacity-50"
         >
           {loadingMore ? (
             <span className="inline-flex items-center gap-sm">
@@ -433,7 +432,7 @@ export function ChannelPostsPanel({
           ) : (
             t('accounts.channel.loadMore')
           )}
-        </button>
+        </Button>
       )}
 
       {confirmDelete ? (

@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileMusicView } from '@/shared/api';
-import { IconButton } from '@/shared/ui';
+import { Button, IconButton } from '@/shared/ui';
 
 // The profile modal's music tab: the saved-music list with remove, a picker
 // for a new track, and the "unsupported" note for older Telethon builds that
@@ -78,14 +78,9 @@ export function MusicTab({
           {t('accounts.profile.noMusic')}
         </div>
       )}
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => musicInput.current?.click()}
-        className="mt-3 rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-60"
-      >
+      <Button size="sm" className="mt-3" loading={busy} onClick={() => musicInput.current?.click()}>
         {t('accounts.profile.pickTrack')}
-      </button>
+      </Button>
       <input
         ref={musicInput}
         type="file"

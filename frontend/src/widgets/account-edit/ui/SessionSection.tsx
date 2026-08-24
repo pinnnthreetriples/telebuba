@@ -13,10 +13,10 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { FeedbackMark } from '@/shared/ui';
+import { Button, FeedbackMark, Input } from '@/shared/ui';
 
 import { Section, Spinner } from './_shared';
-import { FIELD, LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
+import { LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
 
 // Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
 // shows the real session state — not a hardcoded green "active". Tokens, so the
@@ -162,14 +162,14 @@ export function SessionSection({ account }: { account: AccountRead }) {
           <FeedbackMark
             result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck}
           />
-          <button
-            type="button"
+          <Button
+            size="xs"
+            className="text-ink-muted"
             onClick={onLogout}
-            disabled={logout.isPending}
-            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
+            loading={logout.isPending}
           >
             {logoutCheck === 'loading' ? <Spinner size={12} /> : t('accounts.edit.logout')}
-          </button>
+          </Button>
         </span>
       </div>
       <div className="mb-[9px] mt-4 flex items-center justify-between gap-sm">
@@ -188,18 +188,18 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <div className="mb-[9px] grid grid-cols-1 md:grid-cols-2 gap-md">
         <label>
           <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
-          <input
+          <Input
+            className="tracking-[0.18em]"
             value={smsCode}
             onChange={(event) => {
               setSmsCode(event.target.value);
             }}
             placeholder="1 2 3 4 5"
-            className={`${FIELD} tracking-[0.18em]`}
           />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.edit.twoFA')}</span>
-          <input
+          <Input
             type="password"
             // The account's 2FA password, never the operator's. `new-password`
             // is the only token browsers honour as "do not fill" on a password
@@ -212,7 +212,6 @@ export function SessionSection({ account }: { account: AccountRead }) {
               setTwoFa(event.target.value);
             }}
             placeholder="••••••"
-            className={FIELD}
           />
         </label>
       </div>

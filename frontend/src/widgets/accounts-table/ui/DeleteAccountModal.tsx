@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import { Button, Modal } from '@/shared/ui';
 
 // The design's delete-account confirm dialog.
 export function DeleteAccountModal({
@@ -27,23 +27,16 @@ export function DeleteAccountModal({
           {t('accounts.deleteModal.body')}
         </div>
         <div className="flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {t('accounts.deleteModal.cancel')}
-          </button>
-          <button
-            type="button"
+          <Button onClick={onClose}>{t('accounts.deleteModal.cancel')}</Button>
+          <Button
+            variant="danger"
             onClick={() => {
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger"
           >
             {t('accounts.deleteModal.confirm')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

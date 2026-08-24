@@ -2,6 +2,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/shared/ui';
+
 import { requestLoginCodeMutation, submitLoginCodeMutation } from '@/entities/account';
 
 // The add-wizard's final step for the phone method: request the Telegram login
@@ -42,20 +44,20 @@ export function CodeLoginStep({
           <div className="rounded-lg border border-line bg-white px-4 py-[14px] text-body text-ink-subtle">
             {phone}
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            className="self-start"
             onClick={() => {
               if (accountId) {
                 requestCode.mutate({ path: { account_id: accountId } });
               }
             }}
             disabled={requestCode.isPending || !accountId}
-            className="self-start rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {requestCode.isPending
               ? t('accounts.addWizard.sending')
               : t('accounts.addWizard.sendCode')}
-          </button>
+          </Button>
           {requestCode.isError && (
             <div className="text-body text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
@@ -99,14 +101,13 @@ export function CodeLoginStep({
         </div>
       )}
       <div className="mt-5 flex justify-end gap-sm">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={onConfirmLogin}
           disabled={!code.trim() || !requestCode.isSuccess || submitCode.isPending}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
         >
           {t('accounts.addWizard.confirmLogin')}
-        </button>
+        </Button>
       </div>
     </>
   );

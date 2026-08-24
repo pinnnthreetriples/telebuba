@@ -10,7 +10,7 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { ConfirmModal, FeedbackMark } from '@/shared/ui';
+import { Button, ConfirmModal, FeedbackMark } from '@/shared/ui';
 
 import { Section, Spinner } from './_shared';
 import { type CheckState } from './_styles';
@@ -182,14 +182,9 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             <FeedbackMark
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
-            <button
-              type="button"
-              onClick={onReset}
-              disabled={resetSession.isPending}
-              className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
-            >
+            <Button size="sm" onClick={onReset} loading={resetSession.isPending}>
               {resetCheck === 'loading' ? <Spinner size={14} /> : t('accounts.edit.reset')}
-            </button>
+            </Button>
           </span>
         </div>
         <div className="flex items-center justify-between gap-md py-[14px]">

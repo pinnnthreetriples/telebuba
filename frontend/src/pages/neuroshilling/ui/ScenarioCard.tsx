@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { CollapsibleCard, HelpHint, Select, Switch } from '@/shared/ui';
+import { Button, CollapsibleCard, HelpHint, Input, Select, Switch, Textarea } from '@/shared/ui';
 
 import type { DraftRole, DraftStep, ScenarioDraft } from './scenarioDraft';
 import {
@@ -15,9 +15,6 @@ import {
   roleTone,
 } from './scenarioDraft';
 
-const FIELD =
-  'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-body outline-none focus:border-primary';
-const PICK = 'rounded-md border border-line-input bg-white px-[9px] py-[6px] text-body';
 const GHOST_BUTTON =
   'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash disabled:opacity-50';
 
@@ -122,7 +119,9 @@ function StepRow({
       </div>
 
       {step.kind === 'message' ? (
-        <textarea
+        <Textarea
+          size="sm"
+          className="mb-[8px] resize-none font-[inherit] leading-[1.5]"
           rows={2}
           value={step.text}
           maxLength={1000}
@@ -131,7 +130,6 @@ function StepRow({
           onChange={(event) => {
             onChange({ text: event.target.value });
           }}
-          className={`${FIELD} mb-[8px] resize-none font-[inherit] leading-[1.5]`}
         />
       ) : (
         <div
@@ -185,7 +183,9 @@ function StepRow({
         </div>
         <div className="flex items-center gap-tight text-tiny text-ink-subtle">
           <span>{t('neuroshilling.scenario.steps.delay')}</span>
-          <input
+          <Input
+            size="xs"
+            className="w-[62px] tabular-nums"
             type="number"
             min={0}
             max={MAX_STEP_DELAY_SECONDS}
@@ -200,10 +200,11 @@ function StepRow({
                 delayMaxSeconds: Math.max(value, step.delayMaxSeconds),
               });
             }}
-            className={`${PICK} w-[62px] tabular-nums`}
           />
           <span>–</span>
-          <input
+          <Input
+            size="xs"
+            className="w-[62px] tabular-nums"
             type="number"
             min={0}
             max={MAX_STEP_DELAY_SECONDS}
@@ -216,7 +217,6 @@ function StepRow({
                 delayMinSeconds: Math.min(value, step.delayMinSeconds),
               });
             }}
-            className={`${PICK} w-[62px] tabular-nums`}
           />
           <span>{t('neuroshilling.scenario.steps.seconds')}</span>
         </div>
@@ -368,7 +368,9 @@ export function ScenarioCard({
         {t('neuroshilling.scenario.topic.label')}
         <HelpHint text={t('neuroshilling.scenario.topic.hint')} />
       </span>
-      <textarea
+      <Textarea
+        size="sm"
+        className="mb-[12px] resize-none font-[inherit] leading-[1.5]"
         rows={3}
         value={draft.topic}
         maxLength={2000}
@@ -377,7 +379,6 @@ export function ScenarioCard({
         onChange={(event) => {
           onDraft({ ...draft, topic: event.target.value });
         }}
-        className={`${FIELD} mb-[12px] resize-none font-[inherit] leading-[1.5]`}
       />
 
       <div className="mb-[12px] flex flex-wrap items-center gap-lg rounded-lg border border-line bg-surface p-[11px]">
@@ -432,7 +433,9 @@ export function ScenarioCard({
         <HelpHint text={t('neuroshilling.scenario.media.hint')} />
       </span>
       <div className="mb-[14px] flex flex-wrap items-center gap-sm">
-        <input
+        <Input
+          size="sm"
+          className="min-w-[220px] flex-1"
           value={draft.mediaMessageLink}
           maxLength={500}
           placeholder={t('neuroshilling.scenario.media.placeholder')}
@@ -440,7 +443,6 @@ export function ScenarioCard({
           onChange={(event) => {
             onDraft({ ...draft, mediaMessageLink: event.target.value });
           }}
-          className={`${FIELD} min-w-[220px] flex-1`}
         />
         <div className="w-[150px]">
           <Select
@@ -481,7 +483,9 @@ export function ScenarioCard({
         {draft.roles.map((role, index) => (
           <div key={role.roleId} className="flex items-center gap-sm">
             <span className={`h-[9px] w-[9px] shrink-0 rounded-full ${roleTone(index).bg}`} />
-            <input
+            <Input
+              size="sm"
+              className="w-[140px] shrink-0"
               value={role.name}
               maxLength={60}
               placeholder={t('neuroshilling.scenario.roles.namePlaceholder')}
@@ -494,9 +498,10 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className={`${FIELD} w-[140px] shrink-0`}
             />
-            <input
+            <Input
+              size="sm"
+              className="min-w-0 flex-1"
               value={role.description}
               maxLength={1000}
               placeholder={t('neuroshilling.scenario.roles.descriptionPlaceholder')}
@@ -509,7 +514,6 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className={`${FIELD} min-w-0 flex-1`}
             />
             <button
               type="button"
@@ -600,23 +604,22 @@ export function ScenarioCard({
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={busy || !dirty || namelessRole}
           onClick={onSave}
-          className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50"
         >
           {t('neuroshilling.scenario.save')}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          size="sm"
           disabled={busy || dirty || status === 'approved' || draft.steps.length === 0}
           title={dirty ? t('neuroshilling.scenario.approveHint') : undefined}
           onClick={onApprove}
-          className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold text-ink disabled:opacity-50"
         >
           {t('neuroshilling.scenario.approve')}
-        </button>
+        </Button>
       </div>
     </CollapsibleCard>
   );

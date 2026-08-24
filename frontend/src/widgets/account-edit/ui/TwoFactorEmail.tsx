@@ -10,10 +10,10 @@ import {
   resendAccountTwofaEmailMutation,
   setAccountTwofaEmailMutation,
 } from '@/entities/account';
-import { ConfirmModal } from '@/shared/ui';
+import { Button, ConfirmModal, Input } from '@/shared/ui';
 
 import { Spinner } from './_shared';
-import { FIELD, LABEL } from './_styles';
+import { LABEL } from './_styles';
 
 // The exact bounds `schemas/twofa` enforces. Gating on anything looser makes the
 // button fire a request that can only 422, and a `validation_error` envelope
@@ -219,7 +219,8 @@ export function TwoFactorEmail({
           </div>
           <label className="mb-[10px] block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailCode')}</span>
-            <input
+            <Input
+              className="font-mono tracking-[0.18em]"
               ref={codeRef}
               value={code}
               onChange={(event) => {
@@ -228,7 +229,6 @@ export function TwoFactorEmail({
               inputMode="numeric"
               autoComplete="one-time-code"
               maxLength={codeLength ?? MAX_CODE_LENGTH}
-              className={`${FIELD} font-mono tracking-[0.18em]`}
             />
           </label>
           <div className="flex flex-wrap items-center gap-sm">
@@ -244,14 +244,14 @@ export function TwoFactorEmail({
                 t('accounts.edit.twofaEmailConfirm')
               )}
             </button>
-            <button
-              type="button"
+            <Button
+              size="xs"
+              className="text-ink-muted"
               onClick={onResend}
-              disabled={resendEmail.isPending}
-              className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
+              loading={resendEmail.isPending}
             >
               {resendEmail.isPending ? <Spinner size={12} /> : t('accounts.edit.twofaEmailResend')}
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => {
@@ -269,7 +269,7 @@ export function TwoFactorEmail({
               is attached", and offering to attach one over that is a guess. */}
           <label className="mb-[6px] block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailAddress')}</span>
-            <input
+            <Input
               value={address}
               onChange={(event) => {
                 setAddress(event.target.value);
@@ -277,7 +277,6 @@ export function TwoFactorEmail({
               type="email"
               autoComplete="off"
               maxLength={MAX_EMAIL_LENGTH}
-              className={FIELD}
             />
             {email && !addressValid ? (
               <span className="mt-[5px] block text-tiny font-medium text-danger">

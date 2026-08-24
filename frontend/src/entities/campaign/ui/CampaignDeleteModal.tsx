@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import { Button, Modal } from '@/shared/ui';
 
 // Design modal: campaign-delete (L1373-1385) — a destructive confirm.
 export function CampaignDeleteModal({
@@ -27,23 +27,16 @@ export function CampaignDeleteModal({
           {t('neurocomment.modal.campaignDelete.body')}
         </div>
         <div className="flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {t('neurocomment.modal.cancel')}
-          </button>
-          <button
-            type="button"
+          <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
+          <Button
+            variant="danger"
             onClick={() => {
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger"
           >
             {t('neurocomment.modal.campaignDelete.confirm')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

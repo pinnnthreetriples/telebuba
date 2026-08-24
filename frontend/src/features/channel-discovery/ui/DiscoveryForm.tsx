@@ -3,7 +3,7 @@ import { useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { expandDiscoveryKeywordsMutation } from '@/entities/campaign';
-import { HelpHint } from '@/shared/ui';
+import { HelpHint, Input } from '@/shared/ui';
 
 import {
   boundsInverted,
@@ -19,8 +19,6 @@ import {
 
 // The project has no shared input primitive; this literal is the established
 // convention (duplicated in _styles.ts, ApiKeyField.tsx, SettingsPage.tsx).
-const FIELD =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
 const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 // A HelpHint must sit OUTSIDE the <label>, so the label text needs its own row and the
 // control needs an id: a label click activates its control, and on a phone tapping the
@@ -96,7 +94,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
           {t('neurocomment.modal.discovery.form.keywords')}
         </label>
         <div className="flex items-start gap-sm">
-          <input
+          <Input
             id={keywordsId}
             autoFocus
             value={form.keywords}
@@ -104,7 +102,6 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
               set('keywords', event.target.value);
             }}
             placeholder={t('neurocomment.modal.discovery.form.keywordsPlaceholder')}
-            className={FIELD}
           />
           {/* type="button" is load-bearing: the default inside a <form> is submit, and
               submitting here would spend the run's Telegram read budget on keywords the
@@ -167,7 +164,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <label className="block">
           <span className={LABEL}>{t('neurocomment.modal.discovery.form.minSubscribers')}</span>
-          <input
+          <Input
             type="number"
             min={0}
             value={form.minSubscribers}
@@ -175,12 +172,11 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
               set('minSubscribers', event.target.value);
             }}
             placeholder="0"
-            className={FIELD}
           />
         </label>
         <label className="block">
           <span className={LABEL}>{t('neurocomment.modal.discovery.form.maxSubscribers')}</span>
-          <input
+          <Input
             type="number"
             min={0}
             value={form.maxSubscribers}
@@ -188,7 +184,6 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
               set('maxSubscribers', event.target.value);
             }}
             placeholder="∞"
-            className={FIELD}
           />
         </label>
       </div>
@@ -212,14 +207,13 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
           <label htmlFor={seedId}>{t('neurocomment.modal.discovery.form.seedChannel')}</label>
           <HelpHint text={t('neurocomment.modal.discovery.form.seedChannelHint')} />
         </span>
-        <input
+        <Input
           id={seedId}
           value={form.seedChannel}
           onChange={(event) => {
             set('seedChannel', event.target.value);
           }}
           placeholder={t('neurocomment.modal.discovery.form.seedChannelPlaceholder')}
-          className={FIELD}
         />
       </div>
 

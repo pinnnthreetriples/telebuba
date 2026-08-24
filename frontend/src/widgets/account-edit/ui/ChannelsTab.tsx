@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountChannelsQueryOptions, deleteAccountChannelMutation } from '@/entities/account';
 import type { ChannelView } from '@/shared/api';
-import { ConfirmModal, IconButton } from '@/shared/ui';
+import { Button, ConfirmModal, IconButton } from '@/shared/ui';
 
 import { channelErrorText } from './_channelsShared';
 import { ChannelCreateModal } from './ChannelCreateModal';
@@ -93,15 +93,15 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                   )}
                 </div>
               </div>
-              <button
-                type="button"
+              <Button
+                size="xs"
+                className="rounded-full hover:border-primary-line hover:text-primary"
                 onClick={() => {
                   setEditingId(channel.channel_id);
                 }}
-                className="shrink-0 rounded-full border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink hover:border-primary-line hover:text-primary"
               >
                 {t('accounts.channel.edit')}
-              </button>
+              </Button>
               <IconButton
                 size="md"
                 onClick={() => {
@@ -118,15 +118,15 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {!channels.isPending && (
-        <button
-          type="button"
+        <Button
+          size="sm"
+          className="mt-3"
           onClick={() => {
             setCreateOpen(true);
           }}
-          className="mt-3 rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold"
         >
           {t('accounts.channel.create')}
-        </button>
+        </Button>
       )}
 
       {createOpen && (

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
-import { Modal } from '@/shared/ui';
+import { Button, Modal } from '@/shared/ui';
 
 const MIN = 1;
 const MAX = 14;
@@ -225,23 +225,16 @@ export function WarmDaysModal({
         </div>
 
         <div className="flex justify-end gap-sm">
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => {
               onConfirm(days, persona);
               onClose();
             }}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white transition-colors hover:bg-primary-press"
           >
             {t('warming.days.start')}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {t('warming.days.cancel')}
-          </button>
+          </Button>
+          <Button onClick={onClose}>{t('warming.days.cancel')}</Button>
         </div>
       </div>
     </Modal>

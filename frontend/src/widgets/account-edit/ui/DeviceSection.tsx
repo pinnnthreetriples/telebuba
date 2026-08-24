@@ -1,9 +1,11 @@
 import { useTranslation } from 'react-i18next';
 
+import { Input } from '@/shared/ui';
+
 import type { AccountRead } from '@/shared/api';
 
 import { Section } from './_shared';
-import { FIELD_LOCKED, LABEL } from './_styles';
+import { LABEL } from './_styles';
 
 // Device fingerprint card: three immutable, locked fields (the profile is created
 // at registration and never mutated — non-negotiable #9).
@@ -31,15 +33,30 @@ export function DeviceSection({ account }: { account: AccountRead }) {
       <div className="flex flex-col gap-md">
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>
-          <input value={account.device_model ?? '—'} disabled className={FIELD_LOCKED} />
+          <Input
+            tone="flat"
+            value={account.device_model ?? '—'}
+            disabled
+            className="cursor-not-allowed text-ink-subtle"
+          />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceOs')}</span>
-          <input value={account.device_system_version ?? '—'} disabled className={FIELD_LOCKED} />
+          <Input
+            tone="flat"
+            value={account.device_system_version ?? '—'}
+            disabled
+            className="cursor-not-allowed text-ink-subtle"
+          />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceLang')}</span>
-          <input value={account.device_lang ?? '—'} disabled className={FIELD_LOCKED} />
+          <Input
+            tone="flat"
+            value={account.device_lang ?? '—'}
+            disabled
+            className="cursor-not-allowed text-ink-subtle"
+          />
         </label>
       </div>
     </Section>

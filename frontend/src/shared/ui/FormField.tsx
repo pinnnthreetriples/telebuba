@@ -1,14 +1,13 @@
 import type { InputHTMLAttributes, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { cn } from '@/shared/lib/cn';
+import { Input } from './Input';
 
 // Minimal @tanstack/react-form field primitive: a label, an input (or arbitrary
 // child), and the field's first validation error. Shared so every migrated form
 // (proxy add/edit, profile text, add-account) displays errors the same way.
 // `cn` is imported from the specific module (not the shared/lib barrel) to avoid
 // the shared/ui ↔ shared/lib import cycle.
-const FIELD = 'tb-time w-full rounded-lg border bg-white px-3 py-[9px] text-lead outline-none';
 const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 // Structural slice of a react-form string field — just what this primitive reads
@@ -50,13 +49,16 @@ export function FormField({
   field: FormFieldApi;
   label?: string;
   children?: ReactNode;
-} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'>) {
+  // `size` is dropped along with the bound three: the HTML attribute is a
+  // character count no field in this app sets, and `Input` spends the name on its
+  // own scale.
+} & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur' | 'size'>) {
   const invalid = fieldError(field) !== null;
   return (
     <label className="block">
       {label ? <span className={LABEL}>{label}</span> : null}
       {children ?? (
-        <input
+        <Input
           id={field.name}
           name={field.name}
           value={field.state.value}
@@ -64,7 +66,8 @@ export function FormField({
             field.handleChange(event.target.value);
           }}
           onBlur={field.handleBlur}
-          className={cn(FIELD, invalid ? 'border-danger' : 'border-line-input', className)}
+          invalid={invalid}
+          className={className}
           {...rest}
         />
       )}

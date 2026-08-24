@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { CollapsibleCard, HelpHint, Switch } from '@/shared/ui';
+import { Button, CollapsibleCard, HelpHint, Input, Switch, Textarea } from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
 import {
@@ -16,10 +16,6 @@ import {
   MAX_TOTAL_PER_ACCOUNT,
 } from './setupDraft';
 
-const FIELD =
-  'w-full rounded-lg border border-line-input bg-white px-[11px] py-[8px] text-body outline-none focus:border-primary disabled:bg-track disabled:text-ink-subtle';
-const NUMBER =
-  'w-[78px] rounded-md border border-line-input bg-white px-[9px] py-[6px] text-body tabular-nums outline-none focus:border-primary disabled:bg-track disabled:text-ink-subtle';
 // The filter-pill rung (`6px 14px`), shared with the logs level filter and the
 // warming board's state filter — the same control in a different card.
 const SEGMENT = 'rounded-full px-[14px] py-[6px] text-body font-medium disabled:opacity-60';
@@ -51,7 +47,9 @@ function NumberField({
           second label element for the same field only makes the name ambiguous. */}
       <span className="min-w-0 flex-1 text-body">{label}</span>
       {hint ? <HelpHint text={hint} /> : null}
-      <input
+      <Input
+        size="xs"
+        className="w-[78px] tabular-nums"
         type="number"
         min={min}
         max={max}
@@ -62,7 +60,6 @@ function NumberField({
         onChange={(event) => {
           onChange(event.target.value);
         }}
-        className={NUMBER}
       />
     </div>
   );
@@ -131,7 +128,9 @@ export function CampaignSetupCard({
           {t('neuroshilling.setup.targets.count', { n: targets })}
         </span>
       </span>
-      <textarea
+      <Textarea
+        size="sm"
+        className="mb-[14px] resize-none font-mono text-body leading-[1.6]"
         rows={4}
         value={draft.targetsRaw}
         maxLength={MAX_TARGETS_RAW}
@@ -141,7 +140,6 @@ export function CampaignSetupCard({
         onChange={(event) => {
           onDraft({ ...draft, targetsRaw: event.target.value });
         }}
-        className={`${FIELD} mb-[14px] resize-none font-mono text-body leading-[1.6]`}
       />
 
       <span className="mb-[5px] block text-body font-medium text-ink-muted">
@@ -197,7 +195,9 @@ export function CampaignSetupCard({
         {(['min', 'max'] as const).map((bound) => (
           <span key={bound} className="flex items-center gap-sm text-tiny text-ink-subtle">
             {t(`neuroshilling.setup.pause.${bound}`)}
-            <input
+            <Input
+              size="xs"
+              className="w-[78px] tabular-nums"
               type="number"
               min={0}
               max={MAX_PAUSE_SECONDS}
@@ -222,7 +222,6 @@ export function CampaignSetupCard({
                       },
                 );
               }}
-              className={NUMBER}
             />
           </span>
         ))}
@@ -394,14 +393,9 @@ export function CampaignSetupCard({
       ) : null}
 
       <div className="flex items-center justify-end">
-        <button
-          type="button"
-          disabled={busy || live || !dirty}
-          onClick={onSave}
-          className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50"
-        >
+        <Button variant="primary" size="sm" disabled={busy || live || !dirty} onClick={onSave}>
           {t('neuroshilling.setup.save')}
-        </button>
+        </Button>
       </div>
     </CollapsibleCard>
   );

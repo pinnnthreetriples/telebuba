@@ -9,14 +9,12 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { FieldError, FormField, HelpHint, Switch } from '@/shared/ui';
+import { Button, FieldError, FormField, HelpHint, Input, Switch } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
 import { Card } from './SettingsPrimitives';
 
-const INPUT =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] text-lead outline-none';
 const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
 // The three real, engine-used warming toggles surfaced as the design's flag rows.
@@ -216,7 +214,7 @@ function SettingsForm({
                   example={t('settings.api.geminiRetriesExample')}
                 />
               </span>
-              <input
+              <Input
                 type="number"
                 min={0}
                 max={5}
@@ -226,7 +224,6 @@ function SettingsForm({
                   setGeminiRetries(event.target.value);
                 }}
                 aria-label={t('settings.api.geminiRetries')}
-                className={INPUT}
               />
             </label>
             <label className="block">
@@ -237,7 +234,7 @@ function SettingsForm({
                   example={t('settings.api.geminiIntervalExample')}
                 />
               </span>
-              <input
+              <Input
                 type="number"
                 min={0}
                 max={60}
@@ -248,7 +245,6 @@ function SettingsForm({
                   setGeminiInterval(event.target.value);
                 }}
                 aria-label={t('settings.api.geminiInterval')}
-                className={INPUT}
               />
             </label>
           </div>
@@ -379,17 +375,18 @@ function SettingsForm({
       </Card>
 
       <div className="flex justify-end gap-sm">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold"
-        >
-          {t('settings.cancel')}
-        </button>
-        <button
+        <Button onClick={onCancel}>{t('settings.cancel')}</Button>
+        <Button
+          variant="primary"
           type="submit"
           disabled={pending || !canSubmit}
-          className={`rounded-full px-[22px] py-[9px] text-lead font-semibold text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-success' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
+          className={
+            justSaved
+              ? 'bg-success hover:bg-success'
+              : saveFailed
+                ? 'bg-danger hover:bg-danger'
+                : ''
+          }
         >
           {justSaved ? (
             <span className="inline-flex items-center gap-sm">
@@ -430,7 +427,7 @@ function SettingsForm({
           ) : (
             t('settings.save')
           )}
-        </button>
+        </Button>
       </div>
     </form>
   );

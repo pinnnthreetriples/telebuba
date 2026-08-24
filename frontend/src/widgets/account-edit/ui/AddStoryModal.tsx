@@ -3,11 +3,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
-import { IconButton, Modal } from '@/shared/ui';
+import { Button, IconButton, Input, Modal } from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
-import { FIELD, seg } from './_styles';
+import { seg } from './_styles';
 import {
   type CollageCell,
   MAX_COLLAGE_IMAGES,
@@ -295,7 +295,7 @@ export function AddStoryModal({
           <span className="mb-[6px] block text-body font-medium text-ink-body">
             {t('accounts.addStory.caption')}
           </span>
-          <input
+          <Input
             value={caption}
             onChange={(event) => {
               setCaption(event.target.value);
@@ -305,7 +305,6 @@ export function AddStoryModal({
             // operator can no longer see the end of.
             maxLength={POST_CAPTION_MAX}
             placeholder={t('accounts.addStory.captionPlaceholder')}
-            className={FIELD}
           />
         </label>
 
@@ -643,25 +642,19 @@ export function AddStoryModal({
         )}
 
         <div className="mt-5 flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink disabled:opacity-50"
-          >
+          <Button onClick={onClose} disabled={busy}>
             {t('accounts.addStory.cancel')}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
             onClick={publish}
             // `done` keeps the button locked through the 900ms success-close
             // window — isPending is already false there, and a second click
             // would publish the same story to the live account twice.
             disabled={!hasMedia || busy || done}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {t('accounts.addStory.publish')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

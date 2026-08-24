@@ -10,12 +10,11 @@ import {
 } from '@/entities/account';
 import type { AccountRead, AccountTwoFactorCreated } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, Textarea } from '@/shared/ui';
 
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
 import { Section, Spinner } from './_shared';
-import { FIELD_READONLY } from './_styles';
 
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
@@ -247,12 +246,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 readonly textarea wraps (and scrolls past two rows for an unusually
                 long typed password), stays selectable, and keeps the label. The copy
                 button moves below so the field gets the full card width. */}
-            <textarea
+            <Textarea
+              tone="flat"
               readOnly
               rows={2}
               value={created.password}
               aria-label={t('accounts.edit.twofaNewPassword')}
-              className={`${FIELD_READONLY} mb-2 resize-none break-all font-mono`}
+              className="mb-2 resize-none break-all font-mono text-ink"
             />
             {clipboard ? (
               <button

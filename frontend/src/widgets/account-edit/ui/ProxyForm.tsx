@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { FormField } from '@/shared/ui';
+import { Button, FormField, Input } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { seg } from './_styles';
@@ -16,8 +16,6 @@ import { seg } from './_styles';
 // button stays the submit trigger. The probe hits POST /proxies/probe (stateless)
 // so the operator can verify before adding.
 const LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
-const PASS_FIELD =
-  'tb-time w-full rounded-lg border border-line-input bg-white px-3 py-[9px] pr-9 text-lead outline-none';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
@@ -120,7 +118,7 @@ export function ProxyForm({
             <label className="block">
               <span className={LABEL}>{t('accounts.proxyForm.password')}</span>
               <div className="relative">
-                <input
+                <Input
                   value={field.state.value}
                   onChange={(event) => {
                     field.handleChange(event.target.value);
@@ -129,7 +127,7 @@ export function ProxyForm({
                   type={showPass ? 'text' : 'password'}
                   autoComplete="new-password"
                   placeholder={t('accounts.proxyForm.passwordPlaceholder')}
-                  className={PASS_FIELD}
+                  className="pr-9"
                 />
                 <button
                   type="button"
@@ -194,12 +192,7 @@ export function ProxyForm({
         </form.Field>
       </div>
       <div className="flex flex-wrap items-center gap-md">
-        <button
-          type="button"
-          onClick={runDetect}
-          disabled={!canProbe}
-          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
-        >
+        <Button size="sm" className="items-center gap-sm" onClick={runDetect} disabled={!canProbe}>
           {detect === 'loading' ? (
             <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />
           ) : (
@@ -216,7 +209,7 @@ export function ProxyForm({
             </svg>
           )}
           {detect === 'ok' ? t('accounts.proxyForm.detected') : t('accounts.proxyForm.detect')}
-        </button>
+        </Button>
         {detect === 'loading' && (
           <span className="text-body text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
         )}

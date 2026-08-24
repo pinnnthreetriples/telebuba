@@ -8,7 +8,7 @@ import {
   setAllAccountsPrivacyMutation,
 } from '@/entities/account';
 import type { AccountPrivacyUpdateRequest, PrivacySettingsResult } from '@/shared/api';
-import { ConfirmModal } from '@/shared/ui';
+import { Button, ConfirmModal } from '@/shared/ui';
 
 import { envelopeMessage } from './_channelsShared';
 import { PrivacyLevelRow, type PrivacyLevel, type PrivacyShown } from './PrivacyLevelRow';
@@ -244,23 +244,22 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-sm">
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="sm"
               disabled={locked}
               onClick={() => {
                 write(OPEN_TO_ALL);
               }}
-              className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-60"
             >
               {t('accounts.profile.privacy.openAll')}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
               disabled={locked || !canFleet}
               onClick={() => {
                 setConfirmFleet(true);
               }}
-              className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-60"
             >
               {/* The confirm dialog closes on Escape / backdrop while the sweep
                   keeps running for minutes, so the button label is the only
@@ -268,7 +267,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
               {sweeping
                 ? t('accounts.profile.privacy.applyAllPending')
                 : t('accounts.profile.privacy.applyAll')}
-            </button>
+            </Button>
           </div>
         </>
       )}

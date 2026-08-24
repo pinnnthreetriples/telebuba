@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/shared/ui';
+
 import { invalidateAccountViews } from '@/entities/account';
 import {
   checkProxyMutation,
@@ -122,11 +124,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           <div className="mb-4 max-w-[300px] text-body text-ink-subtle">
             {t('accounts.proxyPool.emptyBody')}
           </div>
-          <button
-            type="button"
-            onClick={onAdd}
-            className="inline-flex items-center gap-sm rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
-          >
+          <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
             <svg
               width="15"
               height="15"
@@ -138,7 +136,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M12 5v14M5 12h14" />
             </svg>
             {t('accounts.proxyPool.emptyAdd')}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-md">

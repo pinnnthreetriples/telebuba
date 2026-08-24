@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { neurocommentCommentsQueryOptions } from '@/entities/campaign';
 import type { CommentRecord, NeurocommentAccountCard } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { DataTable, type DataTableColumnMeta, Modal } from '@/shared/ui';
+import { Button, DataTable, Modal, type DataTableColumnMeta } from '@/shared/ui';
 
 const PAGE_SIZE = 50;
 
@@ -141,13 +141,9 @@ export function CommentHistoryModal({
             {t('neurocomment.history.next')}
           </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
-        >
+        <Button variant="primary" onClick={onClose}>
           {t('neurocomment.history.done')}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

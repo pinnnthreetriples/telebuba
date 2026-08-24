@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
-import { Modal, toastError } from '@/shared/ui';
+import { Button, Modal, toastError } from '@/shared/ui';
 
 import {
   accountLimitsQueryOptions,
@@ -274,16 +274,15 @@ export function AccountLimitsModal({
           >
             {t('neurocomment.modal.cancel')}
           </button>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={() => {
               void submit();
             }}
             disabled={!view || save.isPending}
-            className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
           >
             {t('neurocomment.modal.limits.save')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
