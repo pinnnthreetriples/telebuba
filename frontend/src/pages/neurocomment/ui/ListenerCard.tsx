@@ -161,7 +161,7 @@ export function ListenerCard({
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-tight text-micro font-bold text-white ${working ? 'bg-success' : 'bg-ink-muted'}`}
+                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-tight text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>

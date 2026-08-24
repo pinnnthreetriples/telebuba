@@ -159,7 +159,7 @@ export function ListenerEditModal({
             onClick={save}
             // A second click while the PUT is open would send the same body again.
             loading={saveSettings.isPending}
-            className={saved ? 'border-success bg-success hover:bg-success' : ''}
+            className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">

@@ -17,7 +17,8 @@ const SIZE = {
 // giving it one would make every modal header twitch on the way past.
 const TONE = {
   neutral: 'text-ink-muted',
-  primary: 'text-ink-subtle hover:border-primary-line hover:bg-primary-wash hover:text-primary',
+  primary:
+    'text-ink-subtle hover:border-primary-line hover:bg-primary-wash hover:text-primary-deep',
   danger: 'text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
 } as const;
 

@@ -210,7 +210,7 @@ export default {
         danger: { DEFAULT: '#c0473f', deep: '#a83a33', tint: '#fbecec', line: '#f0c9c5' },
         term: {
           DEFAULT: '#16161a',
-          dim: '#5c5c66',
+          dim: '#80808c',
           text: '#c9c9d3',
           link: '#6ea8fe',
           error: '#e5736b',

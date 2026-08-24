@@ -1011,7 +1011,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 void form.handleSubmit();
               }}
               disabled={updateProfile.isPending || !canSave || !isDirty}
-              className={saved ? 'bg-success hover:bg-success' : ''}
+              className={saved ? 'bg-success-deep hover:bg-success-deep' : ''}
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">

@@ -36,7 +36,7 @@ const ACTION_BTN =
 // verdict's fill — the old answer asserted over an unresolved check.
 const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
   idle: 'text-ink-muted',
-  ok: 'border-success bg-success text-white',
+  ok: 'border-success bg-success-deep text-white',
   err: 'border-danger bg-danger text-white',
 };
 
