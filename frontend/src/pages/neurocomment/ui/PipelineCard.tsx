@@ -154,7 +154,7 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-md text-center text-tiny font-semibold text-primary md:hidden">
+        <div className="mb-md text-center text-tiny font-semibold text-primary-deep md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
