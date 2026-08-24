@@ -180,7 +180,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           type="button"
           onClick={onRequestCode}
           disabled={requestCode.isPending}
-          className="rounded-full border border-line-input bg-white px-md py-xs text-tiny font-medium text-primary disabled:opacity-50"
+          className="rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-primary disabled:opacity-50"
         >
           {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
         </button>
@@ -219,7 +219,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         type="button"
         onClick={onConfirmLogin}
         disabled={submitCode.isPending || !code}
-        className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium disabled:opacity-50"
+        className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
       >
         {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
       </button>
@@ -268,7 +268,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
             className="tb-fadeup rounded-lg border border-line bg-white px-md py-md"
           >
             <div className="flex items-center gap-md">
-              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
+              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
                 {file.archive ? (
                   <Icon name="alert-square" size={16} />
                 ) : (

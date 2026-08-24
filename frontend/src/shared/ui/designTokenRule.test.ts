@@ -32,6 +32,16 @@ if (rule) {
       { code: 'const h = "https://example.com/to-3/blue-500";', name: 'a url is not a class' },
     ],
     invalid: [
+      // The quiet one: `border-line-input` still renders a border, in preflight's own
+      // grey, so nothing on screen says the token is gone.
+      {
+        code: 'const z = "border border-line-input";',
+        errors: [{ message: /collapsed into another one/ }],
+      },
+      {
+        code: 'const y = "hover:bg-primary-wash";',
+        errors: [{ message: /collapsed into another one/ }],
+      },
       {
         code: 'const a = "bg-blue-500";',
         errors: [{ message: /palette/ }],

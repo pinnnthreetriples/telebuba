@@ -28,7 +28,7 @@ test('invalid paints the border and says so out loud', () => {
   const field = screen.getByLabelText('Прокси');
   expect(field).toHaveAttribute('aria-invalid', 'true');
   expect(field.className).toContain('border-danger');
-  expect(field.className).not.toContain('border-line-input');
+  expect(field.className).not.toContain('border-line');
 });
 
 test('a valid field claims neither', () => {
@@ -36,7 +36,7 @@ test('a valid field claims neither', () => {
 
   const field = screen.getByLabelText('Прокси');
   expect(field).not.toHaveAttribute('aria-invalid');
-  expect(field.className).toContain('border-line-input');
+  expect(field.className).toContain('border-line');
 });
 
 test('the flat tone drops the white fill for the inert one', () => {

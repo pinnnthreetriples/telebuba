@@ -44,7 +44,7 @@ const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
 const AVATAR_CLASS: Record<DesignStatus, string> = {
   active: 'bg-primary-tint text-primary-deep',
   spam: 'bg-warning-tint text-warning-deep',
-  code: 'bg-track text-ink-muted',
+  code: 'bg-canvas text-ink-muted',
   banned: 'bg-danger-tint text-danger-deep',
 };
 
@@ -180,7 +180,7 @@ export function AccountsTable({
           <span className="text-body text-ink-subtle">—</span>
         ) : (
           <div className="flex items-center gap-sm">
-            <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
+            <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-canvas">
               <div
                 className={`h-full rounded-full bg-current ${trustTone(trust)}`}
                 style={{ width: `${String(trust)}%` }}

@@ -203,7 +203,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietFrom')}
-                className="w-[64px] rounded-lg border border-line-input bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
+                className="w-[64px] rounded-lg border border-line bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
               />
               <span className="shrink-0 text-lead text-ink-subtle">–</span>
               <input
@@ -214,7 +214,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietTo')}
-                className="w-[64px] rounded-lg border border-line-input bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
+                className="w-[64px] rounded-lg border border-line bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
               />
             </div>
             <div className="mt-md text-right text-tiny leading-[1.4] text-ink-subtle">
@@ -271,7 +271,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 rounded-full border border-line-input bg-white px-lg py-md text-lead font-semibold text-ink"
+            className="flex-1 rounded-full border border-line bg-white px-lg py-md text-lead font-semibold text-ink"
           >
             {t('warming.cfg.cancel')}
           </button>

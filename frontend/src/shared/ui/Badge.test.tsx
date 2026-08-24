@@ -13,7 +13,7 @@ test('the tone names the fill and the readable text rung together', () => {
     </>,
   );
 
-  expect(screen.getByText('7').className).toContain('bg-track');
+  expect(screen.getByText('7').className).toContain('bg-canvas');
   expect(screen.getByText('7').className).toContain('text-ink-muted');
 
   // `text-danger` would be 4.34:1 on this fill; the pairing is what `deep` is for.

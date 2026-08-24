@@ -316,7 +316,7 @@ export function AddStoryModal({
           className="mb-lg flex w-full items-center gap-md text-left"
         >
           <span
-            className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
+            className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line bg-white'}`}
           >
             {noForward && <Icon name="check" size={14} className="stroke-white" />}
           </span>
@@ -395,7 +395,7 @@ export function AddStoryModal({
                 key={`${image.name}-${index}`}
                 className="tb-fadeup flex w-[74px] flex-col gap-xs"
               >
-                <div className="relative h-[104px] w-[74px] overflow-hidden rounded-lg border border-line bg-track">
+                <div className="relative h-[104px] w-[74px] overflow-hidden rounded-lg border border-line bg-canvas">
                   <img
                     src={previews[index]}
                     alt={image.name}
@@ -425,7 +425,7 @@ export function AddStoryModal({
                     // moveImage also resets the mutation — see the add control.
                     disabled={index === 0 || busy || done}
                     aria-label={t('accounts.addStory.moveLeft', { n: index + 1 })}
-                    className="inline-flex h-[22px] flex-1 items-center justify-center rounded-sm border border-line-input bg-white text-ink-muted transition hover:border-line hover:bg-track hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-input disabled:hover:bg-white disabled:hover:text-ink-muted"
+                    className="inline-flex h-[22px] flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >
                     <svg
                       width="12"
@@ -447,7 +447,7 @@ export function AddStoryModal({
                     }}
                     disabled={index === count - 1 || busy || done}
                     aria-label={t('accounts.addStory.moveRight', { n: index + 1 })}
-                    className="inline-flex h-[22px] flex-1 items-center justify-center rounded-sm border border-line-input bg-white text-ink-muted transition hover:border-line hover:bg-track hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-input disabled:hover:bg-white disabled:hover:text-ink-muted"
+                    className="inline-flex h-[22px] flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >
                     <svg
                       width="12"
@@ -500,7 +500,7 @@ export function AddStoryModal({
         {video !== null && (
           <div className="mt-md tb-fadeup rounded-lg border border-line bg-white px-md py-md">
             <div className="flex items-center gap-md">
-              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
+              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
                 <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
@@ -531,7 +531,7 @@ export function AddStoryModal({
             <div className="min-w-0 flex-1">
               <div className={`text-tiny font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
-                <div className="mt-sm h-[5px] overflow-hidden rounded-full bg-track">
+                <div className="mt-sm h-[5px] overflow-hidden rounded-full bg-canvas">
                   <div
                     className={`h-full rounded-full ${done ? 'w-full bg-success' : 'tb-upbar bg-primary'}`}
                   />
@@ -540,7 +540,7 @@ export function AddStoryModal({
             </div>
             <div className="flex shrink-0 items-center gap-hair">
               {busy && (
-                <span className="tb-spin m-tight inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
+                <span className="tb-spin m-tight inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
               )}
               {done && (
                 <span className="tb-pop m-xs inline-flex text-success-deep">

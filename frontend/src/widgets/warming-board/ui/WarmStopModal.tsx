@@ -38,7 +38,7 @@ export function WarmStopModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line-input bg-white px-md py-md text-lead font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface"
+            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line bg-white px-md py-md text-lead font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface"
           >
             {t('warming.stopModal.keep')}
           </button>

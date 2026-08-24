@@ -115,7 +115,7 @@ const REFRESH_LOOK = {
     path: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16',
     stroke: '2',
     labelKey: 'accounts.profile.refresh',
-    border: 'border-line-input text-ink hover:border-primary-line hover:text-primary',
+    border: 'border-line text-ink hover:border-primary-line hover:text-primary',
   },
   ok: {
     path: 'M20 6 9 17l-5-5',
@@ -773,7 +773,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 aria-label={t('accounts.profile.syncing')}
                 className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 [animation:ovfade_0.2s_ease]"
               >
-                <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-input border-t-primary" />
+                {/* `line-strong`, not the default line: this ring sits on the modal's own
+                    `bg-black/10` scrim, which composites within a unit of `line` — the
+                    unlit half disappeared into it and left a bare blue arc. */}
+                <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-strong border-t-primary" />
                 <span className="text-body font-medium text-ink-muted">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)

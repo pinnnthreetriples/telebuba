@@ -46,7 +46,7 @@ export function PreviewCard({
       header={<span className="text-lead font-semibold">{t('neuroshilling.preview.title')}</span>}
       trailing={
         <span
-          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
@@ -142,7 +142,7 @@ export function PreviewCard({
           onClick={() => {
             setPlay((value) => value + 1);
           }}
-          className="rounded-full border border-line-input bg-white px-lg py-sm text-tiny font-semibold text-ink disabled:opacity-50"
+          className="rounded-full border border-line bg-white px-lg py-sm text-tiny font-semibold text-ink disabled:opacity-50"
         >
           {t('neuroshilling.preview.play')}
         </button>
@@ -150,7 +150,7 @@ export function PreviewCard({
           type="button"
           disabled={busy}
           onClick={onRegenerate}
-          className="rounded-full border border-line-input bg-white px-lg py-sm text-tiny font-semibold text-primary disabled:opacity-50"
+          className="rounded-full border border-line bg-white px-lg py-sm text-tiny font-semibold text-primary disabled:opacity-50"
         >
           {t('neuroshilling.preview.regenerate')}
         </button>

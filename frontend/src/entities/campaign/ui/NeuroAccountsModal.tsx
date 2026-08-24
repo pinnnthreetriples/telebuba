@@ -67,7 +67,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
       ? 'border-danger-line bg-danger-tint text-danger-deep'
       : worst >= 0.8
         ? 'border-warning-line bg-warning-tint text-warning-deep'
-        : 'border-line-input bg-white text-ink-muted hover:border-line-strong';
+        : 'border-line bg-white text-ink-muted hover:border-line-strong';
 
   return (
     <button
@@ -85,7 +85,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
             <i
               key={key}
               style={{ height: `${Math.max(3, Math.round(spent * 12))}px` }}
-              className={`block w-[3px] rounded-[1px] ${spent > 0 ? 'bg-current' : 'bg-track'}`}
+              className={`block w-[3px] rounded-[1px] ${spent > 0 ? 'bg-current' : 'bg-canvas'}`}
             />
           );
         })}
@@ -177,7 +177,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line-input bg-white px-md py-sm text-body text-ink sm:w-[180px]"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-white px-md py-sm text-body text-ink sm:w-[180px]"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}

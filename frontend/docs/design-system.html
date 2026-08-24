@@ -17,19 +17,16 @@
   --canvas:#f1efed;
   --scrim:rgba(11,11,12,0.55);
   --surface:#faf9f7;
-  --track:#eeedea;
   --ink:#0b0b0c;
   --ink-body:#3a3a3a;
   --ink-muted:#63615d;
   --ink-subtle:#6e6b66;
   --line:#e6e5e3;
   --line-strong:#d8d6d2;
-  --line-input:#dedcd8;
   --line-row:#f0eeeb;
   --primary:#0066ff;
   --primary-press:#0057db;
   --primary-tint:#eef4ff;
-  --primary-wash:#f2f6ff;
   --primary-line:#cbd7ec;
   --primary-hairline:#e4ecfa;
   --primary-deep:#0052cc;
@@ -513,17 +510,16 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
 
       <!-- ds:gen color-swatches -->
       <h3>Основа</h3>
-      <p class="body">Тон отвечает на вопрос «где я нахожусь»: белое — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом, <strong>track</strong> — то, что заполняется. <strong>scrim</strong> стоит особняком: это не тон основы, а завеса поверх фотографии, единственное полупрозрачное значение в наборе.</p>
+      <p class="body">Тон отвечает на вопрос «где я нахожусь»: белое — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом и внутри него всё, что заполняется. Отдельного тона для заполняемого нет: он отличался от <strong>canvas</strong> на три единицы, а на фоне страницы ни один чип в приложении не лежит. <strong>scrim</strong> стоит особняком: это не тон основы, а завеса поверх фотографии, единственное полупрозрачное значение в наборе.</p>
       <div class="sw-grid">
         <div class="sw"><i style="background:#ffffff"></i><b>white</b><em>#ffffff</em><span>Карточки, поля, шапка</span></div>
-        <div class="sw"><i style="background:#f1efed"></i><b>canvas</b><em>#f1efed</em><span>Фон страницы, рельс под плашкой</span></div>
+        <div class="sw"><i style="background:#f1efed"></i><b>canvas</b><em>#f1efed</em><span>Фон страницы, рельс под плашкой и всё заполняемое: дорожка прогресса, чип, счётчик</span></div>
         <div class="sw"><i style="background:rgba(11,11,12,0.55)"></i><b>scrim</b><em>rgba(11,11,12,0.55)</em><span>Завеса над фотографией: тёмные чернила на 55%, чтобы кнопка поверх снимка осталась читаемой</span></div>
         <div class="sw"><i style="background:#faf9f7"></i><b>surface</b><em>#faf9f7</em><span>Шапка таблицы, наведение на строку, вложенный блок</span></div>
-        <div class="sw"><i style="background:#eeedea"></i><b>track</b><em>#eeedea</em><span>Всё заполняемое: дорожка прогресса, чип, счётчик</span></div>
       </div>
 
       <h3>Текст</h3>
-      <p class="body"><strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на <code>track</code>, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>body</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть.</p>
+      <p class="body"><strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на заливке чипа, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>body</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть.</p>
       <div class="sw-grid">
         <div class="sw"><i style="background:#0b0b0c"></i><b>ink</b><em>#0b0b0c</em><span>Заголовки, основной текст</span></div>
         <div class="sw"><i style="background:#3a3a3a"></i><b>ink-body</b><em>#3a3a3a</em><span>Плотные строки, значения в чипах</span></div>
@@ -533,22 +529,20 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
 
       <h3>Линии</h3>
       <div class="sw-grid">
-        <div class="sw"><i style="background:#e6e5e3"></i><b>line</b><em>#e6e5e3</em><span>Граница по умолчанию</span></div>
+        <div class="sw"><i style="background:#e6e5e3"></i><b>line</b><em>#e6e5e3</em><span>Граница по умолчанию, в том числе у поля ввода</span></div>
         <div class="sw"><i style="background:#d8d6d2"></i><b>line-strong</b><em>#d8d6d2</em><span>Наведение, пунктир, полоса прокрутки</span></div>
-        <div class="sw"><i style="background:#dedcd8"></i><b>line-input</b><em>#dedcd8</em><span>Граница поля ввода</span></div>
         <div class="sw"><i style="background:#f0eeeb"></i><b>line-row</b><em>#f0eeeb</em><span>Разделитель строк таблицы</span></div>
       </div>
 
       <h3>Смысл</h3>
-      <p class="body">У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий добавляет <strong>wash</strong>, самую светлую заливку наведения, и <strong>press</strong>, наведение на залитую кнопку. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.</p>
+      <p class="body">У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий добавляет <strong>press</strong>, наведение на залитую кнопку, а его <strong>tint</strong> работает заодно и заливкой наведения. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.</p>
       <div class="sw-grid">
         <div class="sw"><i style="background:#0066ff"></i><b>primary</b><em>#0066ff</em><span>Действие, живое состояние, фокус</span></div>
         <div class="sw"><i style="background:#0057db"></i><b>primary-press</b><em>#0057db</em><span>Наведение и нажатие залитой кнопки</span></div>
-        <div class="sw"><i style="background:#eef4ff"></i><b>primary-tint</b><em>#eef4ff</em><span>Выбранная строка, синий чип</span></div>
-        <div class="sw"><i style="background:#f2f6ff"></i><b>primary-wash</b><em>#f2f6ff</em><span>Самая светлая синяя заливка: наведение, рамка карточки</span></div>
+        <div class="sw"><i style="background:#eef4ff"></i><b>primary-tint</b><em>#eef4ff</em><span>Выбранная строка, синий чип, заливка наведения</span></div>
         <div class="sw"><i style="background:#cbd7ec"></i><b>primary-line</b><em>#cbd7ec</em><span>Граница синей подложки и пунктира</span></div>
         <div class="sw"><i style="background:#e4ecfa"></i><b>primary-hairline</b><em>#e4ecfa</em><span>Рамка настолько бледная, что работает и разделителем плитки</span></div>
-        <div class="sw"><i style="background:#0052cc"></i><b>primary-deep</b><em>#0052cc</em><span>Синий для мелкого текста на tint и wash: основной даёт там 4.38:1</span></div>
+        <div class="sw"><i style="background:#0052cc"></i><b>primary-deep</b><em>#0052cc</em><span>Синий для мелкого текста на tint: основной даёт там 4.38:1</span></div>
         <div class="sw"><i style="background:#12a150"></i><b>success</b><em>#12a150</em><span>Работает, проверено</span></div>
         <div class="sw"><i style="background:#0b6b37"></i><b>success-deep</b><em>#0b6b37</em><span>Заголовок на зелёной подложке — единственный проходит по читаемости</span></div>
         <div class="sw"><i style="background:#0e8c45"></i><b>success-press</b><em>#0e8c45</em><span>Наведение и нажатие залитой зелёной кнопки</span></div>
@@ -988,7 +982,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
 
       <h3>Состояния чипа</h3>
       <div class="wells">
-        <div><span class="chip">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Обычный<i>track / line</i></span></div>
+        <div><span class="chip">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Обычный<i>canvas / line</i></span></div>
         <div><span class="chip ok">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Проверен · 5 c</span></div>
         <div><span class="chip bad">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Забанен · остаётся</span></div>
         <div><span class="chip off">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Недоступен</span></div>
@@ -1016,7 +1010,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
           <tr><td><span class="pill s-warn"><i></i>Спамблок</span></td><td><strong>warning</strong> — пауза, ожидание, ограничение, карантин</td></tr>
           <tr><td><span class="pill s-info"><i></i>Ждёт код</span></td><td><strong>primary</strong> — идёт прямо сейчас, нужен оператор</td></tr>
           <tr><td><span class="pill s-bad"><i></i>Забанен</span></td><td><strong>danger</strong> — сломалось, требует решения</td></tr>
-          <tr><td><span class="pill s-idle"><i></i>Ожидает</span></td><td><strong>track</strong> — ничего не происходит и это нормально</td></tr>
+          <tr><td><span class="pill s-idle"><i></i>Ожидает</span></td><td><strong>canvas</strong> — ничего не происходит и это нормально</td></tr>
         </table>
       </div>
 
@@ -1320,9 +1314,9 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
           <tr><td><span class="chipdot" style="background:#16b364"></span><span class="old">success-dot #16b364</span></td><td class="arw">→</td><td><span class="new">success</span></td><td>Жил ради одной точки «система активна»; в журнале зелёный исход убран как рутинный</td></tr>
           <tr><td><span class="old">plpulse + livepulse</span></td><td class="arw">→</td><td><span class="new">pulsedot</span></td><td>Два пульса говорили одно и то же, отличаясь темпом 2 c против 1.2 c и масштабом 1.18</td></tr>
           <tr><td><span class="old">Иконки: 5 толщин обводки, свои контуры</span></td><td class="arw">→</td><td><span class="new">Lucide, спрайт</span></td><td>1.8 / 1.9 / 2 / 2.6 / 3 вперемешку; геометрия дублировалась в каждом вызове</td></tr>
-          <tr><td><span class="chipdot" style="background:#f2f6ff"></span><span class="old">primary-wash #f2f6ff</span></td><td class="arw">→</td><td><span class="new">primary-tint</span></td><td>Две бледно-синие заливки в 4 единицах друг от друга</td></tr>
-          <tr><td><span class="chipdot" style="background:#eeedea"></span><span class="old">track #eeedea</span></td><td class="arw">→</td><td><span class="new">canvas</span></td><td>3 единицы разницы; проверено на пяти страницах — ни один чип не лежит прямо на фоне страницы</td></tr>
-          <tr><td><span class="chipdot" style="background:#dedcd8"></span><span class="old">line-input #dedcd8</span></td><td class="arw">→</td><td><span class="new">line</span></td><td>Поле узнаётся формой и белой заливкой, а не более тёмной рамкой; все поля лежат на белом</td></tr>
+          <tr><td><span class="chipdot" style="background:#f2f6ff"></span><span class="old">primary-wash #f2f6ff</span></td><td class="arw">→</td><td><span class="new">primary-tint</span></td><td><span class="done">сведено</span> две бледно-синие заливки в 4 единицах друг от друга, 13 мест. Встречались они ровно в одном: панель конвейера внутри синей карточки прогрева, где 4 единицы и не давали видимого края</td></tr>
+          <tr><td><span class="chipdot" style="background:#eeedea"></span><span class="old">track #eeedea</span></td><td class="arw">→</td><td><span class="new">canvas</span></td><td><span class="done">сведено</span> 3 единицы разницы, 38 мест. Условие проверено по разметке, а не на глаз: под каждым заполняемым элементом лежит белая карточка, <code>surface</code>, синяя подложка прогрева, красная или янтарная строка прокси либо размытая шапка. Ни один не лежит на фоне страницы и ни один не вложен в блок на <code>canvas</code></td></tr>
+          <tr><td><span class="chipdot" style="background:#dedcd8"></span><span class="old">line-input #dedcd8</span></td><td class="arw">→</td><td><span class="new">line</span></td><td><span class="done">сведено</span> поле узнаётся формой и белой заливкой, а не более тёмной рамкой, 70 мест. Все поля действительно лежат на белом. Вне белого это имя носили три элемента, ни один из которых не поле: лоток переключателя на <code>canvas</code>, пунктирная плашка «ключей ещё нет» на <code>surface</code> и кольцо спиннера поверх затемнения — у последнего непрогоревшая часть кольца теперь сливается с завесой, и от спиннера остаётся синяя дуга</td></tr>
           <tr><td><span class="old">fadeup + swapin</span></td><td class="arw">→</td><td><span class="new">enter</span></td><td>Одна и та же анимация с разницей в 1 пиксель хода</td></tr>
           <tr><td><span class="old">Радиусы: 9 значений</span></td><td class="arw">→</td><td><span class="new">5 ступеней</span></td><td>3, 5, 10, 12 и 18 жили вне объявленной шкалы</td></tr>
           <tr><td><span class="old">Вторичная + контурная кнопка</span></td><td class="arw">→</td><td><span class="new">вторичная</span></td><td>Обе белая пилюля с рамкой; разница только в оттенке рамки и цвете текста</td></tr>

@@ -42,7 +42,7 @@ function ratio(text: string, background: string): number {
 }
 
 // Every text-on-fill pairing the app actually renders, read off the class lists
-// rather than imagined: the greys on the four neutral surfaces, and each semantic's
+// rather than imagined: the greys on the three neutral surfaces, and each semantic's
 // text rung on its own tint. A pairing that is not here is not painted anywhere.
 const PAIRS: [string, string][] = [
   ['ink', 'white'],
@@ -50,14 +50,12 @@ const PAIRS: [string, string][] = [
   ['ink.muted', 'white'],
   ['ink.muted', 'surface'],
   ['ink.muted', 'canvas'],
-  ['ink.muted', 'track'],
   ['ink.muted', 'line.row'],
   ['ink.subtle', 'white'],
   ['ink.subtle', 'surface'],
   ['ink.subtle', 'canvas'],
   ['primary', 'white'],
   ['primary.deep', 'primary.tint'],
-  ['primary.deep', 'primary.wash'],
   ['success.deep', 'success.tint'],
   ['warning.deep', 'warning.tint'],
   ['danger', 'white'],

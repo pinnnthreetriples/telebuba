@@ -152,7 +152,7 @@ function AccountComments({
         <div className="flex items-center gap-sm">
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
           <span className="text-body font-semibold">{t('neurocomment.feed.title')}</span>
-          <span className="rounded-full bg-track px-sm py-hair text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-ink-muted">
             {comments.length}
           </span>
         </div>
@@ -377,7 +377,7 @@ export function NeurocommentBoard({
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary-deep lg:h-7 lg:w-7"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep lg:h-7 lg:w-7"
           >
             <Icon name="gear" size={16} />
           </button>

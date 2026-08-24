@@ -54,12 +54,12 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-primary-hairline bg-primary-wash px-xl py-lg text-ink">
+    <div className="rounded-card border border-primary-hairline bg-primary-tint px-xl py-lg text-ink">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
           <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
+            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>

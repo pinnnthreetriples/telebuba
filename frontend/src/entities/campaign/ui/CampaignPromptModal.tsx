@@ -73,7 +73,7 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="w-full resize-none rounded-lg border border-line-input bg-white px-lg py-md font-[inherit] text-lead leading-[1.5] outline-none"
+          className="w-full resize-none rounded-lg border border-line bg-white px-lg py-md font-[inherit] text-lead leading-[1.5] outline-none"
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
@@ -85,11 +85,11 @@ export function CampaignPromptModal({
           </span>
         </div>
         {accounts.length > 0 ? (
-          <div className="tb-scroll flex max-h-[184px] flex-col gap-sm overflow-y-auto rounded-lg border border-track bg-surface p-tight">
+          <div className="tb-scroll flex max-h-[184px] flex-col gap-sm overflow-y-auto rounded-lg border border-canvas bg-surface p-tight">
             {accounts.map((account) => (
               <div
                 key={account.account_id}
-                className="flex items-center gap-md rounded-md border border-track bg-white px-md py-sm"
+                className="flex items-center gap-md rounded-md border border-canvas bg-white px-md py-sm"
               >
                 <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary-deep">
                   {account.initials}

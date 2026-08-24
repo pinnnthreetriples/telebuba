@@ -53,7 +53,7 @@ function ChoiceCard({
       // Background lives in both branches, never in the base: two `bg-*` utilities in
       // one class list are resolved by stylesheet order, where `bg-white` comes last
       // and wins, so the picked method showed a blue border over a white row.
-      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line-input bg-white'}`}
+      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
     >
       <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-primary-tint">
         {icon}
@@ -362,7 +362,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line-input bg-white px-md py-md text-lead outline-none focus:border-primary"
+                    className="rounded-lg border border-line bg-white px-md py-md text-lead outline-none focus:border-primary"
                   />
                   <button
                     type="button"
@@ -411,14 +411,14 @@ export function AddAccountModal({
                           : t('accounts.addWizard.dropDescSession')}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full border border-line-input px-lg py-tight text-body font-medium text-ink">
+                    <span className="shrink-0 rounded-full border border-line px-lg py-tight text-body font-medium text-ink">
                       {t('accounts.addWizard.browse')}
                     </span>
                   </button>
                   {fileName && (
                     <div className="tb-fadeup rounded-lg border border-line bg-white px-md py-md">
                       <div className="flex items-center gap-md">
-                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-track text-ink-muted">
+                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-canvas text-ink-muted">
                           {method === 'tdata' ? (
                             <Icon name="alert-square" size={18} />
                           ) : (
@@ -441,7 +441,7 @@ export function AddAccountModal({
                           </div>
                         </div>
                         {importing ? (
-                          <span className="tb-spin m-tight inline-block h-[14px] w-[14px] rounded-full border-2 border-line-input border-t-primary" />
+                          <span className="tb-spin m-tight inline-block h-[14px] w-[14px] rounded-full border-2 border-line border-t-primary" />
                         ) : importFailed ? (
                           <span className="m-xs inline-flex text-danger">
                             <Icon name="x-circle" size={18} />
@@ -571,7 +571,7 @@ export function AddAccountModal({
                     onClick={() => {
                       assignFromPool(proxy.id);
                     }}
-                    className="flex items-center gap-md rounded-lg border border-line-input bg-white px-lg py-md text-left transition-colors hover:border-primary-line disabled:opacity-60"
+                    className="flex items-center gap-md rounded-lg border border-line bg-white px-lg py-md text-left transition-colors hover:border-primary-line disabled:opacity-60"
                   >
                     {proxy.country_code ? (
                       <span

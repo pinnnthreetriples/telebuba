@@ -351,7 +351,7 @@ export function WarmingPage() {
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
+                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-canvas text-ink-subtle'}`}
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
@@ -552,7 +552,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
-                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted disabled:opacity-50"
+                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted disabled:opacity-50"
                       >
                         <svg
                           width="15"

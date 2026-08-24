@@ -158,7 +158,7 @@ export function TwoFactorForm({
           void twofaForm.handleSubmit();
         }}
         disabled={setTwofa.isPending || !canSubmit}
-        className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium disabled:opacity-50"
+        className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
       >
         {setTwofa.isPending ? <Spinner size={14} /> : submitLabel}
       </button>

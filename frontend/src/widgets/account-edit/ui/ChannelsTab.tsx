@@ -37,7 +37,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-2xl"
         >
-          <span className="tb-spin inline-block h-6 w-6 rounded-full border-2 border-line-input border-t-primary" />
+          <span className="tb-spin inline-block h-6 w-6 rounded-full border-2 border-line border-t-primary" />
         </div>
       )}
 

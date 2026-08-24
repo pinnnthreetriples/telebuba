@@ -211,7 +211,7 @@ export function ChannelPostsPanel({
                 className="h-[38px] w-[38px] rounded-md border border-black/5 object-cover"
               />
             ) : (
-              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
+              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
                 <Icon name="video" size={16} />
               </span>
             )}
@@ -290,7 +290,7 @@ export function ChannelPostsPanel({
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-xl"
         >
-          <span className="tb-spin inline-block h-5 w-5 rounded-full border-2 border-line-input border-t-primary" />
+          <span className="tb-spin inline-block h-5 w-5 rounded-full border-2 border-line border-t-primary" />
         </div>
       )}
       {posts.isError && (
@@ -380,7 +380,7 @@ export function ChannelPostsPanel({
                         setEditingId(null);
                       }}
                       disabled={editPost.isPending}
-                      className="rounded-full border border-line-input bg-white px-lg py-tight text-body font-medium disabled:opacity-50"
+                      className="rounded-full border border-line bg-white px-lg py-tight text-body font-medium disabled:opacity-50"
                     >
                       {t('accounts.channel.postCancel')}
                     </button>
@@ -416,7 +416,7 @@ export function ChannelPostsPanel({
         >
           {loadingMore ? (
             <span className="inline-flex items-center gap-sm">
-              <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
+              <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
               {t('accounts.channel.loading')}
             </span>
           ) : (

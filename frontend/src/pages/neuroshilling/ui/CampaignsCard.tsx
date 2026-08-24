@@ -130,7 +130,7 @@ export function CampaignsCard({
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
             onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line-input bg-white px-md py-sm text-body text-ink-muted"
+            className="shrink-0 rounded-full border border-line bg-white px-md py-sm text-body text-ink-muted"
           >
             ×
           </button>
@@ -139,7 +139,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
+          className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

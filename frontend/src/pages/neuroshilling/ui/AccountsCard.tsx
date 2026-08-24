@@ -22,7 +22,7 @@ export function AccountsCard({
       header={<span className="text-lead font-semibold">{t('neuroshilling.accounts.title')}</span>}
     >
       <div className="mb-md flex items-center gap-sm">
-        <span className="rounded-full border border-line bg-track px-md py-xs text-tiny font-medium text-ink-body">
+        <span className="rounded-full border border-line bg-canvas px-md py-xs text-tiny font-medium text-ink-body">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
         {/* The hint carries two rules. The picker enforces the second one — a held
@@ -48,7 +48,7 @@ export function AccountsCard({
       <button
         type="button"
         onClick={onPick}
-        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
+        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
       >
         {t('neuroshilling.accounts.pick')}
       </button>

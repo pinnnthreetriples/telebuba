@@ -144,7 +144,7 @@ export function CreateCampaignModal({
         <button
           type="button"
           onClick={onClose}
-          className="flex-1 rounded-full border border-line-input bg-white px-lg py-md text-lead font-semibold text-ink"
+          className="flex-1 rounded-full border border-line bg-white px-lg py-md text-lead font-semibold text-ink"
         >
           {t('neurocomment.modal.cancel')}
         </button>

@@ -88,7 +88,7 @@ export function WarmDaysModal({
                   ? 'border-success text-success-deep'
                   : spam === 'limited'
                     ? 'border-danger text-danger'
-                    : 'border-line-input text-ink-muted'
+                    : 'border-line text-ink-muted'
               }`}
             >
               <Icon name="shield-check" size={14} />
@@ -136,7 +136,7 @@ export function WarmDaysModal({
           }}
           className="relative mx-md mb-tight h-[30px] cursor-grab touch-none select-none outline-none"
         >
-          <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-track">
+          <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
             <div className="h-full rounded-full bg-primary" style={{ width: `${String(pct)}%` }} />
           </div>
           <div className="pointer-events-none absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2">
@@ -169,7 +169,7 @@ export function WarmDaysModal({
               className={`flex-1 rounded-lg border py-sm text-body font-medium transition-colors ${
                 days === n
                   ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line-input bg-white text-ink-muted hover:bg-surface'
+                  : 'border-line bg-white text-ink-muted hover:bg-surface'
               }`}
             >
               {String(n)} {t('warming.days.label', { count: n })}
@@ -183,7 +183,7 @@ export function WarmDaysModal({
             <button
               type="button"
               aria-label={t('warming.persona.label')}
-              className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-line-input text-micro font-bold text-ink-subtle"
+              className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
             >
               ?
             </button>
@@ -201,7 +201,7 @@ export function WarmDaysModal({
               className={`flex-1 rounded-lg border px-sm py-md text-center transition-colors ${
                 persona === p
                   ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line-input bg-white text-ink-muted hover:bg-surface'
+                  : 'border-line bg-white text-ink-muted hover:bg-surface'
               }`}
             >
               <div className="text-body font-semibold">{t(`warming.persona.${p}.name`)}</div>

@@ -18,7 +18,7 @@ const STATUS_TONE = {
 const CHANNEL_CHIP = {
   banned: 'border-danger bg-danger-tint text-danger-deep',
   ok: 'border-success bg-success-tint text-success-deep',
-  default: 'border-line bg-track text-ink-body',
+  default: 'border-line bg-canvas text-ink-body',
 } as const;
 
 // The campaigns card: per-campaign run/pause/edit/delete (SurfHover-revealed),
@@ -194,7 +194,7 @@ export function CampaignsCard({
       <button
         type="button"
         onClick={onCreate}
-        className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
+        className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
       >
         {t('neurocomment.campaigns.create')}
       </button>
@@ -221,7 +221,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null || checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line-input bg-white px-md py-xs text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                className="shrink-0 rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')

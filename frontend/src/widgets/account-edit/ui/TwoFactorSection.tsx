@@ -260,7 +260,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 onClick={() => {
                   copyPassword(created.password);
                 }}
-                className="mb-md w-full rounded-lg border border-line-input bg-white px-md py-md text-body font-medium text-ink-muted"
+                className="mb-md w-full rounded-lg border border-line bg-white px-md py-md text-body font-medium text-ink-muted"
               >
                 {copyState === 'done'
                   ? t('accounts.edit.twofaCopied')
@@ -283,7 +283,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 setCreated(null);
                 setCopyState('idle');
               }}
-              className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium"
+              className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium"
             >
               {t('accounts.edit.twofaDone')}
             </button>
@@ -414,7 +414,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                     setChanging(true);
                   }}
                   disabled={!hasStored}
-                  className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium disabled:opacity-50"
+                  className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
                 >
                   {t('accounts.edit.twofaChange')}
                 </button>

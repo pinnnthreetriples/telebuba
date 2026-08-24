@@ -57,7 +57,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="text-body text-ink-muted">{t('accounts.edit.trust')}</span>
             <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
           </div>
-          <div className="mt-tight h-[6px] overflow-hidden rounded-full bg-track">
+          <div className="mt-tight h-[6px] overflow-hidden rounded-full bg-canvas">
             <div
               className={`h-full rounded-full bg-current ${tTone}`}
               style={{ width: `${String(trust)}%` }}

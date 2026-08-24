@@ -43,7 +43,7 @@ const WARMING_DAYS = 14;
 const WARM_STATUS: Record<WarmingState, string> = {
   active: 'bg-success-tint text-success-deep',
   sleeping: 'bg-warning-tint text-warning-deep',
-  idle: 'bg-track text-ink-muted',
+  idle: 'bg-canvas text-ink-muted',
   flood_wait: 'bg-warning-tint text-warning-deep',
   quarantine: 'bg-warning-tint text-warning-deep',
   error: 'bg-danger-tint text-danger-deep',
@@ -335,7 +335,7 @@ function WarmingCard({
       ) : null}
 
       {/* pipeline */}
-      <div className="rounded-lg bg-primary-wash px-lg pb-md pt-md">
+      <div className="rounded-lg bg-primary-tint px-lg pb-md pt-md">
         <div className="mb-sm flex items-center justify-between">
           <span className="text-micro font-medium text-ink-muted">
             {t('warming.inProgress.days')}

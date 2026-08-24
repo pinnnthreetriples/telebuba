@@ -145,7 +145,7 @@ export function LogTerminal({
         <>
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
           <span className="text-lead font-semibold">{title}</span>
-          <span className="rounded-full bg-track px-sm py-hair text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-ink-muted">
             {shown.length}
           </span>
         </>

@@ -266,8 +266,8 @@ function SettingsForm({
               }}
               className={`flex-1 rounded-lg border px-md py-md text-lead font-medium transition-colors ${
                 provider === option
-                  ? 'border-primary bg-primary-wash text-primary-deep'
-                  : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
+                  ? 'border-primary bg-primary-tint text-primary-deep'
+                  : 'border-line bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
               }`}
             >
               {t(`settings.captchaLlm.${option}`)}
@@ -281,7 +281,7 @@ function SettingsForm({
         title={t('settings.warmLimits.title')}
         subtitle={t('settings.warmLimits.subtitle')}
       >
-        <div className="rounded-lg border border-dashed border-line-input bg-surface px-lg py-md text-body leading-relaxed text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md text-body leading-relaxed text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
@@ -302,7 +302,7 @@ function SettingsForm({
             <div className="flex items-center gap-md">
               <form.Field name="delayFrom">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-md py-md">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-white px-md py-md">
                     <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.from')}
                     </span>
@@ -321,7 +321,7 @@ function SettingsForm({
               </form.Field>
               <form.Field name="delayTo">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-md py-md">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-white px-md py-md">
                     <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.to')}
                     </span>

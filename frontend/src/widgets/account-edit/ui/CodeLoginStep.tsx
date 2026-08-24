@@ -77,7 +77,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line-input bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
+              className="mt-tight w-full rounded-lg border border-line bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
           <label className="block text-tiny font-medium text-ink-subtle">
@@ -92,7 +92,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line-input bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
+              className="mt-tight w-full rounded-lg border border-line bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
           {submitCode.isError && (

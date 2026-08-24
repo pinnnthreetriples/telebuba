@@ -258,7 +258,7 @@ function ProxyCard({
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
-        <div className="h-[5px] overflow-hidden rounded-full bg-track">
+        <div className="h-[5px] overflow-hidden rounded-full bg-canvas">
           <div
             className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-primary'}`}
             style={{ width: `${String(pct)}%` }}

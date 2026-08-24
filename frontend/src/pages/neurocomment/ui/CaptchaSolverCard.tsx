@@ -45,7 +45,7 @@ export function CaptchaSolverCard({
                 {t('neurocomment.captcha.title')}
               </span>
               <span className="tb-tip inline-flex">
-                <span className="inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line-input bg-white text-micro font-bold text-ink-subtle">
+                <span className="inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line bg-white text-micro font-bold text-ink-subtle">
                   ?
                 </span>
                 <span className="tb-tip-pop tb-tip-pop--wide" style={{ textAlign: 'left' }}>
