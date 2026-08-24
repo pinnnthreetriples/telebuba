@@ -7,7 +7,7 @@ import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { FeedbackMark, IconButton } from '@/shared/ui';
+import { Card, FeedbackMark, IconButton } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
@@ -41,12 +41,12 @@ const WARMING_DAYS = 14;
 // per-state hex. Sleeping and flood-wait/quarantine share amber deliberately —
 // throttled and recovering on its own is not an error.
 const WARM_STATUS: Record<WarmingState, string> = {
-  active: 'bg-success-tint text-success',
-  sleeping: 'bg-warning-tint text-warning-strong',
+  active: 'bg-success-tint text-success-deep',
+  sleeping: 'bg-warning-tint text-warning-deep',
   idle: 'bg-track text-ink-muted',
-  flood_wait: 'bg-warning-tint text-warning',
-  quarantine: 'bg-warning-tint text-warning',
-  error: 'bg-danger-tint text-danger',
+  flood_wait: 'bg-warning-tint text-warning-deep',
+  quarantine: 'bg-warning-tint text-warning-deep',
+  error: 'bg-danger-tint text-danger-deep',
 };
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
@@ -234,7 +234,7 @@ function WarmingCard({
           <AccountAvatar
             account={account}
             className="h-7 w-7 shrink-0 rounded-full"
-            fallbackClassName="text-tiny font-semibold bg-primary-tint text-primary"
+            fallbackClassName="text-tiny font-semibold bg-primary-tint text-primary-deep"
           />
           <div className="min-w-0">
             {/* Telegram supplies this name, so it can be one 90-char word with nowhere
@@ -421,7 +421,7 @@ function WarmingCard({
                 <span
                   className={`mt-2 text-center text-micro ${
                     index < active
-                      ? 'font-medium text-success'
+                      ? 'font-medium text-success-deep'
                       : index === active
                         ? 'font-semibold text-primary'
                         : 'text-ink-subtle'
@@ -579,7 +579,7 @@ function WarmingCard({
               onClick={() => {
                 onPromote(account.account_id);
               }}
-              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success px-[14px] py-[10px] text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success-deep px-[14px] py-[10px] text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
             >
               <svg
                 width="14"
@@ -617,7 +617,7 @@ export function WarmingBoard({
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
-    <div className="rounded-card border border-line bg-white p-4">
+    <Card className="p-4">
       <div className="mb-[14px] flex items-center justify-between">
         <div className="flex items-center gap-md">
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-primary">
@@ -637,7 +637,7 @@ export function WarmingBoard({
           <span className="text-lead font-bold">{t('warming.inProgress.title')}</span>
         </div>
         {warming.length > 0 ? (
-          <span className="tb-pulse rounded-full bg-success-tint px-[10px] py-[3px] text-tiny font-semibold text-success">
+          <span className="tb-pulse rounded-full bg-success-tint px-[10px] py-[3px] text-tiny font-semibold text-success-deep">
             {t('warming.inProgress.live')}
           </span>
         ) : null}
@@ -662,6 +662,6 @@ export function WarmingBoard({
           </div>
         ) : null}
       </div>
-    </div>
+    </Card>
   );
 }

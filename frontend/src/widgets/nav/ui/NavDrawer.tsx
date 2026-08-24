@@ -58,7 +58,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
             to={link.to}
             onClick={onClose}
             className={`flex min-h-[44px] items-center rounded-lg px-3 text-lead font-medium transition-colors ${
-              activeIdx === index ? 'bg-primary-tint text-primary' : 'text-ink-muted'
+              activeIdx === index ? 'bg-primary-tint text-primary-deep' : 'text-ink-muted'
             }`}
           >
             {t(`nav.${link.key}`)}

@@ -64,7 +64,7 @@ export function CodeLoginStep({
         </div>
       ) : (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg bg-success-tint px-3 py-[10px] text-body font-medium text-success">
+          <div className="rounded-lg bg-success-tint px-3 py-[10px] text-body font-medium text-success-deep">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
           <label className="block text-tiny font-medium text-ink-subtle">

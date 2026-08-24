@@ -9,11 +9,10 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { Button, FieldError, FormField, HelpHint, Input, Switch } from '@/shared/ui';
+import { Button, Card, FieldError, FormField, HelpHint, Input, Switch } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
-import { Card } from './SettingsPrimitives';
 
 const FIELD_LABEL = 'mb-[6px] block text-body font-medium text-ink-body';
 
@@ -151,7 +150,7 @@ function SettingsForm({
         void form.handleSubmit();
       }}
     >
-      <Card title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
+      <Card mb="mb-[14px]" title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
         <div className="space-y-4">
           <ApiKeyField
             label={t('settings.api.geminiKey')}
@@ -251,7 +250,11 @@ function SettingsForm({
         </div>
       </Card>
 
-      <Card title={t('settings.captchaLlm.title')} subtitle={t('settings.captchaLlm.subtitle')}>
+      <Card
+        mb="mb-[14px]"
+        title={t('settings.captchaLlm.title')}
+        subtitle={t('settings.captchaLlm.subtitle')}
+      >
         <div className="flex gap-sm">
           {(['gemini', 'openai'] as const).map((option) => (
             <button
@@ -263,7 +266,7 @@ function SettingsForm({
               }}
               className={`flex-1 rounded-lg border px-3 py-[9px] text-lead font-medium transition-colors ${
                 provider === option
-                  ? 'border-primary bg-primary-wash text-primary'
+                  ? 'border-primary bg-primary-wash text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
               }`}
             >
@@ -273,13 +276,21 @@ function SettingsForm({
         </div>
       </Card>
 
-      <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
+      <Card
+        mb="mb-[14px]"
+        title={t('settings.warmLimits.title')}
+        subtitle={t('settings.warmLimits.subtitle')}
+      >
         <div className="rounded-lg border border-dashed border-line-input bg-surface px-4 py-3 text-body leading-relaxed text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
 
-      <Card title={t('settings.neuroLimits.title')} subtitle={t('settings.neuroLimits.subtitle')}>
+      <Card
+        mb="mb-[14px]"
+        title={t('settings.neuroLimits.title')}
+        subtitle={t('settings.neuroLimits.subtitle')}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <form.Field name="cpd">
             {(field) => (
@@ -382,7 +393,7 @@ function SettingsForm({
           disabled={pending || !canSubmit}
           className={
             justSaved
-              ? 'bg-success hover:bg-success'
+              ? 'bg-success-deep hover:bg-success-deep'
               : saveFailed
                 ? 'bg-danger hover:bg-danger'
                 : ''

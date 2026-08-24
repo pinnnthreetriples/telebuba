@@ -8,7 +8,13 @@ import type {
   DiscoveryChannelVerdict,
   DiscoverySourceReport,
 } from '@/shared/api';
-import { DataTable, StatusIcon, useWideContainer, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Badge,
+  DataTable,
+  StatusIcon,
+  type DataTableColumnMeta,
+  useWideContainer,
+} from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
@@ -102,7 +108,7 @@ function CommentsMark({ state }: { state: string }) {
   const label = t(`neurocomment.modal.discovery.comments.${state}`);
   if (state === 'comments_on') {
     return (
-      <span className="inline-flex text-success" role="img" title={label} aria-label={label}>
+      <span className="inline-flex text-success-deep" role="img" title={label} aria-label={label}>
         <StatusIcon kind="ok" />
       </span>
     );
@@ -157,7 +163,7 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
       {(verdict == null ? [] : verdictMarks(verdict)).map((mark) => (
         <span
           key={mark.key}
-          className={`text-tiny ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning'}`}
+          className={`text-tiny ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning-deep'}`}
         >
           {t(`neurocomment.modal.discovery.verdict.${mark.key}`)}
         </span>
@@ -328,18 +334,10 @@ export function DiscoveryResults({
       header: () => t('neurocomment.modal.discovery.results.colState'),
       cell: ({ row }) => {
         if (row.original.in_campaign === true) {
-          return (
-            <span className="rounded-full bg-track px-[8px] py-[2px] text-micro text-ink-muted">
-              {t('neurocomment.modal.discovery.results.inCampaign')}
-            </span>
-          );
+          return <Badge>{t('neurocomment.modal.discovery.results.inCampaign')}</Badge>;
         }
         if (row.original.taken_by_other_campaign === true) {
-          return (
-            <span className="rounded-full bg-track px-[8px] py-[2px] text-micro text-ink-muted">
-              {t('neurocomment.modal.discovery.results.takenElsewhere')}
-            </span>
-          );
+          return <Badge>{t('neurocomment.modal.discovery.results.takenElsewhere')}</Badge>;
         }
         return null;
       },

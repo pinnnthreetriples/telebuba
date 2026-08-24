@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { ChallengeRow } from '@/shared/api';
-import { Switch } from '@/shared/ui';
+import { Card, Switch } from '@/shared/ui';
 
 import { CaptchaQueue } from './CaptchaQueue';
 
@@ -23,10 +23,10 @@ export function CaptchaSolverCard({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="rounded-card border border-line bg-white">
+    <Card className="">
       <div className="flex items-center justify-between gap-md px-[14px] py-3">
         <div className="flex min-w-0 items-center gap-md">
-          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
               width="15"
               height="15"
@@ -82,13 +82,13 @@ export function CaptchaSolverCard({
               <path d="M12 8v4" />
               <path d="M12 16h.01" />
             </svg>
-            <span className="text-tiny font-semibold uppercase tracking-[.03em] text-warning">
+            <span className="text-tiny font-semibold uppercase tracking-[.03em] text-warning-deep">
               {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
             </span>
           </div>
           <CaptchaQueue rows={captchaQueue} accountLabel={accountLabel} />
         </div>
       ) : null}
-    </div>
+    </Card>
   );
 }

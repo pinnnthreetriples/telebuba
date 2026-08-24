@@ -64,7 +64,7 @@ export function PrivacyLevelRow({
             }}
             className={`rounded-md border px-[10px] py-[5px] text-body font-medium transition-colors disabled:opacity-60 ${
               current === level
-                ? 'border-primary bg-primary-wash text-primary'
+                ? 'border-primary bg-primary-wash text-primary-deep'
                 : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
             }`}
           >

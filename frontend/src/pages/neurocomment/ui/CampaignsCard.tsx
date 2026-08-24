@@ -8,16 +8,16 @@ import { CollapsibleCard, FeedbackMark, IconButton, SurfHover } from '@/shared/u
 // Tone is the token the status MEANS (running = success, held = amber, shelved =
 // muted), so the pill can't drift from the rest of the design system.
 const STATUS_TONE = {
-  active: 'text-success',
-  paused: 'text-warning-strong',
+  active: 'text-success-deep',
+  paused: 'text-warning-deep',
   archived: 'text-ink-muted',
 } as const;
 
 // Channel-chip tone driven by the live "Проверить каналы" verdict: banned = red
 // (persists), ok = green (5s flash), default = the neutral gray pill.
 const CHANNEL_CHIP = {
-  banned: 'border-danger bg-danger-tint text-danger',
-  ok: 'border-success bg-success-tint text-success',
+  banned: 'border-danger bg-danger-tint text-danger-deep',
+  ok: 'border-success bg-success-tint text-success-deep',
   default: 'border-line bg-track text-ink-body',
 } as const;
 
@@ -106,7 +106,7 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-strong' : 'text-success'}`}
+                    className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
                   >
                     {isRunning ? (
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
@@ -232,7 +232,7 @@ export function CampaignsCard({
       <button
         type="button"
         onClick={onCreate}
-        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
+        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
       >
         {t('neurocomment.campaigns.create')}
       </button>
@@ -283,7 +283,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-[6px] py-px text-micro font-medium text-danger"
+                    className="rounded-full bg-danger-tint px-[6px] py-px text-micro font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>

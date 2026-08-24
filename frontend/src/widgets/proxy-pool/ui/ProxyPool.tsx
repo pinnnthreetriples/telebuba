@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/shared/ui';
+import { Button, Card } from '@/shared/ui';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
@@ -20,7 +20,7 @@ import { ProxyDeleteModal } from './ProxyDeleteModal';
 // drops the geo flag, so this is the only cue the proxy is dead — surface it
 // explicitly instead of letting the flag silently vanish.
 const PROXY_STATUS_TONE: Record<ProxyRead['status'], string> = {
-  tcp_working: 'text-success',
+  tcp_working: 'text-success-deep',
   failed: 'text-danger',
   unknown: 'text-ink-subtle',
 };
@@ -79,7 +79,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <div className="mb-4 rounded-card border border-line bg-white px-[18px] py-4">
+    <Card className="mb-4 px-[18px] py-4">
       <div className="mb-[13px] flex flex-wrap items-center justify-between gap-md">
         <div>
           <span className="text-lead font-semibold">{t('accounts.proxyPool.title')}</span>
@@ -167,7 +167,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -228,7 +228,7 @@ function ProxyCard({
             </svg>
           </span>
         ) : failed ? (
-          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger">
+          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger-deep">
             <svg
               width="11"
               height="11"
@@ -249,7 +249,7 @@ function ProxyCard({
           </div>
           <div className="mt-px flex items-center gap-tight text-tiny text-ink-subtle">
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
-            <span className="text-line-strong">·</span>
+            <span className="text-ink-subtle">·</span>
             <span
               className={`inline-flex items-center gap-[4px] font-medium ${statusTone}`}
               title={proxy.last_error ?? undefined}
@@ -305,7 +305,9 @@ function ProxyCard({
       <div>
         <div className="mb-[5px] flex items-center justify-between">
           <span className="text-tiny text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
-          <span className={`text-tiny font-semibold ${full ? 'text-danger' : 'text-success'}`}>
+          <span
+            className={`text-tiny font-semibold ${full ? 'text-danger-deep' : 'text-success-deep'}`}
+          >
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
@@ -315,7 +317,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-[5px] text-micro ${full ? 'text-danger' : 'text-success'}`}>
+        <div className={`mt-[5px] text-micro ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

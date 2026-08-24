@@ -27,6 +27,7 @@ import {
   IconButton,
   Input,
   Modal,
+  Notice,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -119,7 +120,7 @@ const REFRESH_LOOK = {
     path: 'M20 6 9 17l-5-5',
     stroke: '2.4',
     labelKey: 'accounts.profile.refreshOk',
-    border: 'border-success-line text-success',
+    border: 'border-success-line text-success-deep',
   },
   error: {
     path: 'M18 6 6 18M6 6l12 12',
@@ -779,7 +780,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+              <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
@@ -791,7 +792,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 >
                   {t('accounts.profile.refresh')}
                 </button>
-              </div>
+              </Notice>
             )}
             {tab === 'text' && (
               <div className="flex flex-col gap-lg">
@@ -1009,7 +1010,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 void form.handleSubmit();
               }}
               disabled={updateProfile.isPending || !canSave || !isDirty}
-              className={saved ? 'bg-success hover:bg-success' : ''}
+              className={saved ? 'bg-success-deep hover:bg-success-deep' : ''}
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">

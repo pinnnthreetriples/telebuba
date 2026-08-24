@@ -9,7 +9,7 @@ import {
   deleteAccountMutation,
   invalidateAccountViews,
 } from '@/entities/account';
-import { Button } from '@/shared/ui';
+import { Button, Card } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -127,8 +127,8 @@ export function AccountsPage() {
   // query, not the current page, so they hold across pagination and search.
   const stats: { label: string; value: number; cls: string }[] = [
     { label: t('accounts.stats.total'), value: fleetStats?.total ?? 0, cls: 'text-ink' },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
     { label: t('accounts.stats.code'), value: fleetStats?.needs_code ?? 0, cls: 'text-primary' },
     { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
   ];
@@ -229,9 +229,9 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-lead text-ink-subtle">
+            <Card className="px-4 py-16 text-center text-lead text-ink-subtle">
               {t('accounts.empty')}
-            </div>
+            </Card>
           ) : (
             <AccountsTable
               data={items}

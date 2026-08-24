@@ -138,7 +138,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
   return (
     <Modal onClose={onClose} className="w-[540px]" label={t('warming.cfg.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="18"
             height="18"
@@ -257,7 +257,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           </button>
         </div>
         {scope === 'one' ? (
-          <div className="mb-[12px] text-tiny leading-[1.45] text-warning-strong">
+          <div className="mb-[12px] text-tiny leading-[1.45] text-warning-deep">
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}

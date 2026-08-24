@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { neurocommentCommentsQueryOptions } from '@/entities/campaign';
 import type { CommentRecord, NeurocommentAccountCard } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { Button, DataTable, Modal, type DataTableColumnMeta } from '@/shared/ui';
+import { Badge, Button, Card, DataTable, Modal, type DataTableColumnMeta } from '@/shared/ui';
 
 const PAGE_SIZE = 50;
 
@@ -78,9 +78,7 @@ export function CommentHistoryModal({
           return (
             <span className="inline-flex items-center gap-sm">
               <span className="text-ink-subtle line-through">{text}</span>
-              <span className="shrink-0 rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
-                {t('neurocomment.feed.deleted')}
-              </span>
+              <Badge tone="danger">{t('neurocomment.feed.deleted')}</Badge>
             </span>
           );
         },
@@ -110,11 +108,11 @@ export function CommentHistoryModal({
             {t('neurocomment.history.empty')}
           </div>
         ) : (
-          <div className="overflow-hidden rounded-card border border-line bg-white">
+          <Card className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>
-          </div>
+          </Card>
         )}
       </div>
 

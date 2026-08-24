@@ -9,7 +9,7 @@ import type {
   NeuroshillingRunStatus,
   NeuroshillingStep,
 } from '@/shared/api';
-import { Button, CollapsibleCard } from '@/shared/ui';
+import { Badge, Button, CollapsibleCard } from '@/shared/ui';
 import { LogTerminal } from '@/widgets/log-terminal';
 
 import { clock, dialogueSeconds } from './scenarioDraft';
@@ -24,8 +24,8 @@ const MIN_ACCOUNTS = 2;
 // Tone is the token the status MEANS, matching the campaigns card row for row.
 const STATUS_TONE: Record<NonNullable<NeuroshillingRunStatus['status']>, string> = {
   idle: 'text-ink-muted',
-  running: 'text-success',
-  stopping: 'text-warning-strong',
+  running: 'text-success-deep',
+  stopping: 'text-warning-deep',
   done: 'text-primary',
   failed: 'text-danger',
 };
@@ -164,7 +164,7 @@ export function LaunchCard({
             // it reads as emphasis beside the title rather than as another status pill.
             // Two such markers in the app (the other is the warming page's "прогрет"), and
             // two call sites do not earn a token. Do not fold this into the pill family.
-            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[2px] text-micro font-bold text-success">
+            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[2px] text-micro font-bold text-success-deep">
               <span className="tb-livedot h-[6px] w-[6px] rounded-full bg-success" />
               LIVE
             </span>
@@ -176,7 +176,7 @@ export function LaunchCard({
         // campaign to `draft` — and the consequence only shows here, at launch.
         // Repeating the badge is what stops that being a surprise 409.
         <span
-          className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
         >
           {t(`neuroshilling.launch.scenario.${scenarioStatus}`)}
         </span>
@@ -205,9 +205,9 @@ export function LaunchCard({
             row a substitution writes is the campaign's and outlives the run. Shown at
             zero too: "nobody has been replaced" is the answer the operator is
             checking for. */}
-        <span className="rounded-full bg-track px-[8px] py-[2px] text-micro font-medium tabular-nums text-ink-muted">
+        <Badge className="tabular-nums">
           {t('neuroshilling.launch.substitutions', { n: run.substitutions ?? 0 })}
-        </span>
+        </Badge>
         {/* `sent` / `total` counts MESSAGE steps only: reactions are journalled but
             a skipped reaction is not lost progress, so presenting the bar as
             counting every step would make it lie downward. */}
@@ -246,7 +246,7 @@ export function LaunchCard({
       ) : null}
 
       {status === 'failed' && run.last_error_type ? (
-        <div className="mb-[10px] rounded-lg bg-danger-tint px-[11px] py-[7px] text-tiny text-danger">
+        <div className="mb-[10px] rounded-lg bg-danger-tint px-[11px] py-[7px] text-tiny text-danger-deep">
           {t('neuroshilling.launch.failed', { type: run.last_error_type })}
         </div>
       ) : null}

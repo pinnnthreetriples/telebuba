@@ -64,7 +64,7 @@ export function WarmDaysModal({
     <Modal onClose={onClose} className="w-[440px]" label={t('warming.days.title')}>
       <div className="p-6">
         <div className="mb-1 flex items-start gap-md">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
               width="17"
               height="17"
@@ -85,7 +85,7 @@ export function WarmDaysModal({
               onClick={runSpamCheck}
               className={`inline-flex items-center gap-sm rounded-full border bg-white px-[11px] py-[6px] text-body font-medium disabled:opacity-60 ${
                 spam === 'clean'
-                  ? 'border-success text-success'
+                  ? 'border-success text-success-deep'
                   : spam === 'limited'
                     ? 'border-danger text-danger'
                     : 'border-line-input text-ink-muted'
@@ -180,7 +180,7 @@ export function WarmDaysModal({
               }}
               className={`flex-1 rounded-lg border py-2 text-body font-medium transition-colors ${
                 days === n
-                  ? 'border-primary bg-primary-tint text-primary'
+                  ? 'border-primary bg-primary-tint text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:bg-surface'
               }`}
             >
@@ -212,7 +212,7 @@ export function WarmDaysModal({
               }}
               className={`flex-1 rounded-lg border px-2 py-[9px] text-center transition-colors ${
                 persona === p
-                  ? 'border-primary bg-primary-tint text-primary'
+                  ? 'border-primary bg-primary-tint text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:bg-surface'
               }`}
             >

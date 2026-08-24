@@ -7,8 +7,8 @@ import { CollapsibleCard, IconButton } from '@/shared/ui';
 // meaning of the status, not a hex, so the two cards cannot drift apart.
 const STATUS_TONE = {
   idle: 'text-ink-muted',
-  running: 'text-success',
-  stopping: 'text-warning-strong',
+  running: 'text-success-deep',
+  stopping: 'text-warning-deep',
   done: 'text-primary',
   failed: 'text-danger',
 } as const;
@@ -148,7 +148,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
+          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

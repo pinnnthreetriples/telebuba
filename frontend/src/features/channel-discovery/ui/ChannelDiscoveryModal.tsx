@@ -216,7 +216,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         ) : null}
 
         {adopted !== null && adopted.refused > 0 ? (
-          <p role="status" className="mt-[11px] text-body text-warning">
+          <p role="status" className="mt-[11px] text-body text-warning-deep">
             {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
           </p>
         ) : null}
@@ -224,7 +224,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {/* Its own line, not folded into "already taken": the operator's next move is
             to drop the channel, not to look for the campaign holding it. */}
         {adopted !== null && adopted.commentsOff > 0 ? (
-          <p role="status" className="mt-[11px] text-body text-warning">
+          <p role="status" className="mt-[11px] text-body text-warning-deep">
             {t('neurocomment.modal.discovery.addedCommentsOff', { count: adopted.commentsOff })}
           </p>
         ) : null}

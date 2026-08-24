@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountChannelsQueryOptions, deleteAccountChannelMutation } from '@/entities/account';
 import type { ChannelView } from '@/shared/api';
-import { Button, ConfirmModal, IconButton } from '@/shared/ui';
+import { Button, ConfirmModal, IconButton, Notice } from '@/shared/ui';
 
 import { channelErrorText } from './_channelsShared';
 import { ChannelCreateModal } from './ChannelCreateModal';
@@ -42,7 +42,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isError && (
-        <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+        <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
           <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
           <button
             type="button"
@@ -53,7 +53,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           >
             {t('accounts.channel.retry')}
           </button>
-        </div>
+        </Notice>
       )}
 
       {channels.isSuccess && items.length === 0 && (
@@ -75,7 +75,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                   <span
                     className={`rounded-sm px-[6px] py-[1px] font-medium ${
                       channel.username != null
-                        ? 'bg-primary-tint text-primary'
+                        ? 'bg-primary-tint text-primary-deep'
                         : 'bg-canvas text-ink-muted'
                     }`}
                   >

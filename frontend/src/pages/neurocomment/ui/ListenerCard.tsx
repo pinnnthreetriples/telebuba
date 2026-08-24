@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { IconButton, Select, SurfHover } from '@/shared/ui';
+import { Card, IconButton, Select, SurfHover } from '@/shared/ui';
 
 // The listener-account card: shows the active listener with pause/edit/remove
 // actions (revealed via SurfHover), or a dropdown to choose one when none is set.
@@ -53,9 +53,9 @@ export function ListenerCard({
       ? t('neurocomment.listener.listeningNoChannels')
       : t('neurocomment.listener.paused');
   return (
-    <div className="relative z-raised rounded-card border border-line bg-white px-[14px] py-[13px]">
+    <Card className="relative z-raised px-[14px] py-[13px]">
       <div className="mb-[3px] flex items-center gap-md">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="15"
             height="15"
@@ -91,7 +91,7 @@ export function ListenerCard({
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
-                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-strong' : 'text-success'}`}
+                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-deep' : 'text-success-deep'}`}
                 >
                   {running ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -152,7 +152,7 @@ export function ListenerCard({
                     className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
                   <span
-                    className={`text-body font-semibold ${working ? 'tb-pulse text-success' : 'text-ink-muted'}`}
+                    className={`text-body font-semibold ${working ? 'tb-pulse text-success-deep' : 'text-ink-muted'}`}
                   >
                     {statusLabel}
                   </span>
@@ -161,7 +161,7 @@ export function ListenerCard({
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-micro font-bold text-white ${working ? 'bg-success' : 'bg-ink-muted'}`}
+                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-[5px] text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>
@@ -220,6 +220,6 @@ export function ListenerCard({
           })}
         </p>
       ) : null}
-    </div>
+    </Card>
   );
 }

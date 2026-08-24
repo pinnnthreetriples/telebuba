@@ -59,7 +59,7 @@ export function PipelineCard({
         <div className="flex items-center gap-md">
           <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-[10px] py-[3px] text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
+            className={`rounded-full px-[10px] py-[3px] text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -140,9 +140,9 @@ export function PipelineCard({
               <span
                 className={`hidden whitespace-nowrap text-tiny md:block ${
                   index < activeCell
-                    ? 'font-medium text-success'
+                    ? 'font-medium text-success-deep'
                     : index === activeCell
-                      ? 'font-semibold text-primary'
+                      ? 'font-semibold text-primary-deep'
                       : 'text-ink-subtle'
                 }`}
               >
@@ -154,14 +154,14 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-3 text-center text-tiny font-semibold text-primary md:hidden">
+        <div className="mb-3 text-center text-tiny font-semibold text-primary-deep md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
       <div className="mb-[14px] flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
-        <span className="tb-pulse text-body font-medium text-primary">
+        <span className="tb-pulse text-body font-medium text-primary-deep">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}

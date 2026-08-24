@@ -11,7 +11,7 @@ import {
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 import type { FeedbackResult } from '@/shared/lib';
-import { DataTable, type DataTableColumnMeta, StatusIcon } from '@/shared/ui';
+import { Card, DataTable, StatusIcon, type DataTableColumnMeta } from '@/shared/ui';
 
 interface AccountsTableProps {
   data: AccountRead[];
@@ -36,16 +36,16 @@ const ACTION_BTN =
 // verdict's fill — the old answer asserted over an unresolved check.
 const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
   idle: 'text-ink-muted',
-  ok: 'border-success bg-success text-white',
+  ok: 'border-success bg-success-deep text-white',
   err: 'border-danger bg-danger text-white',
 };
 
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
-  active: 'bg-primary-tint text-primary',
-  spam: 'bg-warning-tint text-warning',
+  active: 'bg-primary-tint text-primary-deep',
+  spam: 'bg-warning-tint text-warning-deep',
   code: 'bg-track text-ink-muted',
-  banned: 'bg-danger-tint text-danger',
+  banned: 'bg-danger-tint text-danger-deep',
 };
 
 // Row avatar: the shared account avatar (cached Telegram photo, else initials),
@@ -65,7 +65,7 @@ function RowAvatar({ account }: { account: AccountRead }) {
 // The 3-tier band mirrors the design's thresholds, as text tokens: the bar takes
 // `bg-current` off the same class, so bar and number cannot disagree.
 function trustTone(score: number): string {
-  return score >= 70 ? 'text-success' : score >= 45 ? 'text-warning-strong' : 'text-danger';
+  return score >= 70 ? 'text-success-deep' : score >= 45 ? 'text-warning-deep' : 'text-danger';
 }
 
 // Real device fingerprint — immutable, set at registration.
@@ -294,7 +294,7 @@ export function AccountsTable({
   ];
 
   return (
-    <div className="overflow-hidden rounded-card border border-line bg-white">
+    <Card className="overflow-hidden">
       <div className="tb-scroll overflow-x-auto">
         <DataTable
           data={data}
@@ -320,6 +320,6 @@ export function AccountsTable({
           })}
         />
       </div>
-    </div>
+    </Card>
   );
 }

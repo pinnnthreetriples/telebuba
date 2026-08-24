@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, IconButton, Input, Modal, Textarea } from '@/shared/ui';
+import { Button, IconButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -189,7 +189,7 @@ export function ChannelCreateModal({
   }
   const hintColor =
     usernameHint?.tone === 'ok'
-      ? 'text-success'
+      ? 'text-success-deep'
       : usernameHint?.tone === 'error'
         ? 'text-danger'
         : 'text-ink-subtle';
@@ -283,9 +283,9 @@ export function ChannelCreateModal({
         )}
 
         {create.isError && (
-          <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+          <Notice tone="danger" className="mb-[14px]">
             {channelErrorText(create.error, t, t('accounts.channel.error'))}
-          </div>
+          </Notice>
         )}
 
         <div className="mt-5 flex justify-end gap-sm">

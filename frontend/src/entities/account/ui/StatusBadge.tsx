@@ -5,10 +5,10 @@ import { accountDesignStatus, type AccountStatus } from '../model/status';
 // The design's status pill: a coloured dot + label, tinted per status. Colours
 // are the design's exact statusMap values (active/spam/code/banned).
 const STATUS_CLASS: Record<ReturnType<typeof accountDesignStatus>, string> = {
-  active: 'bg-success-tint text-success',
-  spam: 'bg-warning-tint text-warning-strong',
-  code: 'bg-primary-tint text-primary',
-  banned: 'bg-danger-tint text-danger',
+  active: 'bg-success-tint text-success-deep',
+  spam: 'bg-warning-tint text-warning-deep',
+  code: 'bg-primary-tint text-primary-deep',
+  banned: 'bg-danger-tint text-danger-deep',
 };
 
 export function StatusBadge({ status }: { status: AccountStatus }) {

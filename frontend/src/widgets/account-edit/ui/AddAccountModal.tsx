@@ -482,7 +482,7 @@ export function AddAccountModal({
                           <div className="truncate text-body font-semibold">{fileName}</div>
                           {/* Import verdict tone from the tokens the states MEAN. */}
                           <div
-                            className={`mt-px text-tiny ${importFailed ? 'text-danger' : createdAccountId ? 'text-success' : 'text-ink-subtle'}`}
+                            className={`mt-px text-tiny ${importFailed ? 'text-danger' : createdAccountId ? 'text-success-deep' : 'text-ink-subtle'}`}
                           >
                             {importFailed
                               ? t('accounts.addWizard.importError')
@@ -510,7 +510,7 @@ export function AddAccountModal({
                             </svg>
                           </span>
                         ) : createdAccountId ? (
-                          <span className="tb-pop m-[3px] inline-flex text-success">
+                          <span className="tb-pop m-[3px] inline-flex text-success-deep">
                             <svg
                               width="18"
                               height="18"
@@ -566,7 +566,7 @@ export function AddAccountModal({
               >
                 <path d="M20 6 9 17l-5-5" />
               </svg>
-              <span className="text-body font-medium text-success">
+              <span className="text-body font-medium text-success-deep">
                 {t('accounts.addWizard.added')}
               </span>
             </div>
@@ -680,7 +680,7 @@ export function AddAccountModal({
                         {proxy.host}:{proxy.port}
                       </span>
                     </span>
-                    <span className="text-body font-medium text-success">
+                    <span className="text-body font-medium text-success-deep">
                       {t('accounts.addWizard.poolFree', { count: proxy.free })}
                     </span>
                   </button>
