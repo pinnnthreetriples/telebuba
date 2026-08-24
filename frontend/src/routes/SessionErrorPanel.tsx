@@ -1,5 +1,7 @@
 import { Link, useRouter, useRouterState } from '@tanstack/react-router';
 
+import { Button } from '@/shared/ui';
+
 import { i18n } from '@/shared/i18n';
 
 // The protected layout's error boundary: a failed session check, and nothing else now
@@ -23,16 +25,15 @@ export function SessionErrorPanel() {
     <div role="alert" className="p-8">
       <p className="text-lead text-ink">{i18n.t('shell.sessionError')}</p>
       <div className="mt-4 flex items-center gap-sm">
-        <button
-          type="button"
+        <Button
+          variant="primary"
           disabled={retrying}
           onClick={() => {
             void router.invalidate();
           }}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-60"
         >
           {i18n.t('shell.sessionRetry')}
-        </button>
+        </Button>
         <Link
           to="/login"
           className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"

@@ -8,13 +8,12 @@ import {
   setAccountChannelPhotoMutation,
   updateAccountChannelMutation,
 } from '@/entities/account';
-import { ConfirmModal, IconButton, Modal, toastError } from '@/shared/ui';
+import { Button, ConfirmModal, IconButton, Input, Modal, Textarea, toastError } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
   CHANNEL_TITLE_MAX,
   channelErrorText,
-  FIELD,
   isUploadablePhoto,
   LABEL,
   PHOTO_MAX_BYTES,
@@ -209,13 +208,12 @@ export function ChannelEditModal({
             <>
               <label className="mb-[14px] block">
                 <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
-                <input
+                <Input
                   value={shownTitle}
                   maxLength={CHANNEL_TITLE_MAX}
                   onChange={(event) => {
                     setTitle(event.target.value);
                   }}
-                  className={FIELD}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
                   <span className="mt-1 block text-tiny text-danger">
@@ -225,14 +223,14 @@ export function ChannelEditModal({
               </label>
               <label className="mb-[14px] block">
                 <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
-                <textarea
+                <Textarea
+                  className="resize-none [font-family:inherit]"
                   rows={3}
                   value={shownAbout}
                   maxLength={CHANNEL_ABOUT_MAX}
                   onChange={(event) => {
                     setAbout(event.target.value);
                   }}
-                  className={`${FIELD} resize-none [font-family:inherit]`}
                 />
               </label>
 
@@ -268,12 +266,7 @@ export function ChannelEditModal({
                   )}
                 </button>
                 <span className="flex-1" />
-                <button
-                  type="button"
-                  onClick={save}
-                  disabled={!canSave}
-                  className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-60"
-                >
+                <Button variant="primary" onClick={save} disabled={!canSave}>
                   {update.isPending ? (
                     <span className="inline-flex items-center gap-sm">
                       <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
@@ -282,7 +275,7 @@ export function ChannelEditModal({
                   ) : (
                     t('accounts.channel.save')
                   )}
-                </button>
+                </Button>
               </div>
               <input
                 ref={photoInput}

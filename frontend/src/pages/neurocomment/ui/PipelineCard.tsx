@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/shared/ui';
+
 import type { LogEntry } from '@/shared/api';
 
 import { Odometer } from './Odometer';
@@ -62,11 +64,12 @@ export function PipelineCard({
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`flex items-center gap-sm rounded-full px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50 ${running ? 'bg-ink' : 'bg-primary'}`}
+          className={`gap-sm ${running ? 'bg-ink hover:bg-ink' : ''}`}
         >
           {running ? (
             <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -79,7 +82,7 @@ export function PipelineCard({
             </svg>
           )}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}
-        </button>
+        </Button>
       </div>
 
       {/* Stepper with dual progress fill. Dot and label share ONE cell: as two rows

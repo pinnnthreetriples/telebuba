@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingBoardAccount } from '@/shared/api';
-import { Modal } from '@/shared/ui';
+import { Button, Modal } from '@/shared/ui';
 
 // The picker edits a DRAFT and saves it once, when the operator says so. The
 // obvious alternative — one request per click, the way the neurocomment picker
@@ -106,20 +106,10 @@ export function NeuroshillingAccountsModal({
       </div>
 
       <div className="flex justify-end gap-sm border-t border-line-row px-6 pb-5 pt-[14px]">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-        >
-          {t('neuroshilling.modal.accounts.cancel')}
-        </button>
-        <button
-          type="button"
-          onClick={commit}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
-        >
+        <Button onClick={onClose}>{t('neuroshilling.modal.accounts.cancel')}</Button>
+        <Button variant="primary" onClick={commit}>
           {t('neuroshilling.modal.accounts.done')}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

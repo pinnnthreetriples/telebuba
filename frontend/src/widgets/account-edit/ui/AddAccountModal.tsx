@@ -13,7 +13,7 @@ import {
   proxyPoolQueryOptions,
   proxyTypeLabel,
 } from '@/entities/proxy';
-import { IconButton, Modal } from '@/shared/ui';
+import { Button, IconButton, Modal } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ProxyForm } from './ProxyForm';
@@ -531,24 +531,17 @@ export function AddAccountModal({
               )}
             </div>
             <div className="mt-5 flex justify-end gap-sm">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-              >
-                {t('accounts.addWizard.cancel')}
-              </button>
-              <button
-                type="button"
+              <Button onClick={onClose}>{t('accounts.addWizard.cancel')}</Button>
+              <Button
+                variant="primary"
                 disabled={!createdAccountId}
                 onClick={() => {
                   setStep(2);
                   setProxyStep('choice');
                 }}
-                className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
               >
                 {t('accounts.addWizard.next')}
-              </button>
+              </Button>
             </div>
           </>
         ) : step === 3 ? (
@@ -620,22 +613,16 @@ export function AddAccountModal({
               />
             </div>
             <div className="mt-5 flex justify-between gap-sm">
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setStep(1);
                 }}
-                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
               >
                 {t('accounts.addWizard.back')}
-              </button>
-              <button
-                type="button"
-                onClick={afterProxy}
-                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink-muted"
-              >
+              </Button>
+              <Button className="text-ink-muted" onClick={afterProxy}>
                 {t('accounts.addWizard.skip')}
-              </button>
+              </Button>
             </div>
           </>
         ) : proxyStep === 'form' ? (
@@ -646,23 +633,16 @@ export function AddAccountModal({
               onValidityChange={setProxyValid}
             />
             <div className="mt-5 flex justify-between gap-sm">
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setProxyStep('choice');
                 }}
-                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
               >
                 {t('accounts.addWizard.back')}
-              </button>
-              <button
-                type="button"
-                onClick={createAndAssign}
-                disabled={!proxyValid}
-                className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-50"
-              >
+              </Button>
+              <Button variant="primary" onClick={createAndAssign} disabled={!proxyValid}>
                 {t('accounts.addWizard.done')}
-              </button>
+              </Button>
             </div>
           </>
         ) : (
@@ -716,22 +696,16 @@ export function AddAccountModal({
               )}
             </div>
             <div className="mt-5 flex justify-between gap-sm">
-              <button
-                type="button"
+              <Button
                 onClick={() => {
                   setProxyStep('choice');
                 }}
-                className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
               >
                 {t('accounts.addWizard.back')}
-              </button>
-              <button
-                type="button"
-                onClick={afterProxy}
-                className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
-              >
+              </Button>
+              <Button variant="primary" onClick={afterProxy}>
                 {t('accounts.addWizard.done')}
-              </button>
+              </Button>
             </div>
           </>
         )}

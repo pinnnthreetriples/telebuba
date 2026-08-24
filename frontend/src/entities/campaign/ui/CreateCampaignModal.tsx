@@ -1,10 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
-
-const FIELD =
-  'box-border w-full rounded-lg border border-line-input px-3 py-[9px] text-lead text-ink outline-none';
+import { Button, Input, Modal, Textarea } from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -61,20 +58,21 @@ export function CreateCampaignModal({
         <div className="mb-[7px] text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.nameLabel')}
         </div>
-        <input
+        <Input
+          className="mb-4"
           value={name}
           onChange={(event) => {
             setName(event.target.value);
           }}
           placeholder={t('neurocomment.modal.createCampaign.namePlaceholder')}
           aria-label={t('neurocomment.modal.createCampaign.nameLabel')}
-          className={`${FIELD} mb-4`}
         />
 
         <div className="mb-[7px] text-body font-semibold text-ink">
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
-        <textarea
+        <Textarea
+          className="mb-4 resize-y font-[inherit] leading-[1.5]"
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
@@ -82,7 +80,6 @@ export function CreateCampaignModal({
           rows={4}
           placeholder={t('neurocomment.modal.createCampaign.promptPlaceholder')}
           aria-label={t('neurocomment.modal.createCampaign.promptLabel')}
-          className={`${FIELD} mb-4 resize-y font-[inherit] leading-[1.5]`}
         />
 
         <div className="mb-[7px] text-body font-semibold text-ink">
@@ -114,7 +111,8 @@ export function CreateCampaignModal({
           </div>
         ) : null}
         <div className="flex gap-sm">
-          <input
+          <Input
+            className="flex-1"
             value={channelInput}
             onChange={(event) => {
               setChannelInput(event.target.value);
@@ -127,15 +125,15 @@ export function CreateCampaignModal({
             }}
             placeholder={t('neurocomment.channels.placeholder')}
             aria-label={t('neurocomment.channels.placeholder')}
-            className={`${FIELD} flex-1`}
           />
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="rounded-lg bg-primary-tint text-primary"
             onClick={addChannel}
-            className="shrink-0 rounded-lg bg-primary-tint px-[18px] py-[7px] text-body font-semibold text-primary"
           >
             {t('neurocomment.modal.add')}
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { setAccountTwofaMutation } from '@/entities/account';
 import type { AccountTwoFactorCreated, AccountTwoFactorUpdateRequest } from '@/shared/api';
-import { FormField } from '@/shared/ui';
+import { FormField, Input } from '@/shared/ui';
 
 import {
   EMPTY_TWOFA_FORM,
@@ -14,7 +14,7 @@ import {
   type TwofaFormValue,
 } from './twofaFormValue';
 import { Spinner } from './_shared';
-import { FIELD, SEG_WRAP, seg } from './_styles';
+import { SEG_WRAP, seg } from './_styles';
 
 // Only the fields the operator actually filled in are sent: a bare `{}` is the
 // documented "generate one for me", and the backend forbids unknown keys, so
@@ -109,7 +109,8 @@ export function TwoFactorForm({
               // hand-rolling a second error renderer.
               <FormField field={field} label={t('accounts.edit.twofaPassword')}>
                 <div className="relative">
-                  <input
+                  <Input
+                    className="pr-9 font-mono"
                     id={field.name}
                     name={field.name}
                     value={field.state.value}
@@ -122,7 +123,6 @@ export function TwoFactorForm({
                     // is documented as ignored on password inputs, so only
                     // `new-password` keeps the browser's saved credential out.
                     autoComplete="new-password"
-                    className={`${FIELD} pr-9 font-mono`}
                   />
                   <button
                     type="button"

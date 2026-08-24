@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { Button } from './Button';
 import { Modal } from './Modal';
 
 // Generic delete/remove confirm dialog (rule: any destructive action asks
@@ -45,19 +46,8 @@ export function ConfirmModal({
         <div className="mb-2 text-title font-bold">{title}</div>
         <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">{body}</div>
         <div className="flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {cancelLabel}
-          </button>
-          <button
-            type="button"
-            onClick={confirm}
-            disabled={pending}
-            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger disabled:opacity-60"
-          >
+          <Button onClick={onClose}>{cancelLabel}</Button>
+          <Button variant="danger" onClick={confirm} loading={pending}>
             {pending ? (
               <span className="inline-flex items-center gap-sm">
                 <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-danger-line border-t-danger" />
@@ -66,7 +56,7 @@ export function ConfirmModal({
             ) : (
               confirmLabel
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

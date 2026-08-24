@@ -9,6 +9,8 @@ import {
   deleteAccountMutation,
   invalidateAccountViews,
 } from '@/entities/account';
+import { Button } from '@/shared/ui';
+
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
@@ -194,15 +196,15 @@ export function AccountsPage() {
               className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-lead outline-none sm:w-[220px]"
             />
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               setAdding(true);
             }}
-            className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white"
           >
             + {t('accounts.actions.add')}
-          </button>
+          </Button>
         </div>
       </div>
 

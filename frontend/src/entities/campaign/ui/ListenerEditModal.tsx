@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { IconButton, Modal, Select, toastError } from '@/shared/ui';
+import { Button, IconButton, Modal, Select, toastError } from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -153,19 +153,13 @@ export function ListenerEditModal({
         />
 
         <div className="mt-[22px] flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {t('neurocomment.modal.cancel')}
-          </button>
-          <button
-            type="button"
+          <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
+          <Button
+            variant="primary"
             onClick={save}
             // A second click while the PUT is open would send the same body again.
-            disabled={saveSettings.isPending}
-            className={`rounded-full border px-[22px] py-[9px] text-lead font-semibold text-white disabled:opacity-60 ${saved ? 'border-success bg-success' : 'border-primary bg-primary'}`}
+            loading={saveSettings.isPending}
+            className={saved ? 'border-success bg-success hover:bg-success' : ''}
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">
@@ -188,7 +182,7 @@ export function ListenerEditModal({
             ) : (
               t('neurocomment.modal.save')
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

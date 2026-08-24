@@ -9,7 +9,7 @@ import type {
   NeuroshillingRunStatus,
   NeuroshillingStep,
 } from '@/shared/api';
-import { CollapsibleCard } from '@/shared/ui';
+import { Button, CollapsibleCard } from '@/shared/ui';
 import { LogTerminal } from '@/widgets/log-terminal';
 
 import { clock, dialogueSeconds } from './scenarioDraft';
@@ -269,23 +269,23 @@ export function LaunchCard({
 
       <div className="mb-[14px] flex flex-wrap items-center justify-end gap-sm">
         {live ? (
-          <button
-            type="button"
+          <Button
+            size="sm"
+            className="text-danger"
             disabled={busy || status === 'stopping'}
             onClick={onStop}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold text-danger disabled:opacity-50"
           >
             {t('neuroshilling.launch.stop')}
-          </button>
+          </Button>
         ) : (
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={busy || blockers.length > 0}
             onClick={onStart}
-            className="rounded-full bg-primary px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50"
           >
             {t('neuroshilling.launch.start')}
-          </button>
+          </Button>
         )}
       </div>
 

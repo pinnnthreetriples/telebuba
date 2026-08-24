@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge } from '@/shared/api';
-import { ConfirmModal, FeedbackMark, IconButton, Modal } from '@/shared/ui';
+import { Button, ConfirmModal, FeedbackMark, IconButton, Modal } from '@/shared/ui';
 
 import { accountLimitsQueryOptions } from '../api/campaign.queries';
 import { AccountLimitsModal } from './AccountLimitsModal';
@@ -406,13 +406,9 @@ export function NeuroAccountsModal({
       </div>
 
       <div className="flex justify-end border-t border-line-row px-6 pb-5 pt-[14px]">
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-full bg-primary px-[22px] py-[9px] text-lead font-semibold text-white"
-        >
+        <Button variant="primary" onClick={onClose}>
           {t('neurocomment.modal.neuroAccounts.done')}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

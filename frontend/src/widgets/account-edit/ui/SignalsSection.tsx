@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/shared/ui';
+
 import { invalidateAccountViews, spamCheckAccountMutation } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
@@ -74,15 +76,15 @@ export function SignalsSection({ account }: { account: AccountRead }) {
       title={t('accounts.edit.signals')}
       right={
         <span className="tb-tip">
-          <button
-            type="button"
+          <Button
+            size="xs"
             onClick={runSpamCheck}
-            className={`inline-flex items-center gap-sm rounded-full px-3 py-[5px] text-body font-medium transition-[background-color,border-color,color] duration-enter ${
+            className={`gap-sm rounded-full ${
               spamCheck === 'ok'
-                ? 'border border-success bg-success text-white'
+                ? 'border-success bg-success text-white hover:border-success'
                 : spamCheck === 'err'
-                  ? 'border border-danger bg-danger text-white'
-                  : 'border border-line-input bg-white text-ink-muted'
+                  ? 'border-danger bg-danger text-white hover:border-danger'
+                  : 'text-ink-muted'
             }`}
           >
             {spamCheck === 'loading' && <Spinner size={13} />}
@@ -120,7 +122,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
               </span>
             )}
             {t('accounts.edit.signalsCheck')}
-          </button>
+          </Button>
           <span className="tb-tip-pop">{t('accounts.edit.signalsTip')}</span>
         </span>
       }

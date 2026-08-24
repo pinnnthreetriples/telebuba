@@ -16,7 +16,7 @@ import {
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
 import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
+import { Button, CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
@@ -229,8 +229,9 @@ export function WarmingPage() {
             <Counter value={idle.length} label={t('warming.counter.ready')} cls="text-ink" />
             <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
           </div>
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="sm"
             disabled={bulkBusy || start.isPending || stop.isPending}
             onClick={() => {
               const mutation = poolOn ? stop : start;
@@ -241,7 +242,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className={`flex items-center gap-sm rounded-full px-[18px] py-[7px] text-body font-semibold text-white disabled:opacity-50 ${poolOn ? 'bg-ink' : 'bg-primary'}`}
+            className={`gap-sm ${poolOn ? 'bg-ink hover:bg-ink' : ''}`}
           >
             {poolOn ? (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
@@ -254,7 +255,7 @@ export function WarmingPage() {
               </svg>
             )}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
-          </button>
+          </Button>
         </div>
       </div>
 

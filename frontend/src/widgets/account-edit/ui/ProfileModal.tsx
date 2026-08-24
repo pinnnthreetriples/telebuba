@@ -20,11 +20,19 @@ import {
 } from '@/entities/account';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shared/api';
-import { ConfirmModal, FormField, IconButton, Modal, toastError } from '@/shared/ui';
+import {
+  Button,
+  ConfirmModal,
+  FormField,
+  IconButton,
+  Input,
+  Modal,
+  Textarea,
+  toastError,
+} from '@/shared/ui';
 
 import { isUploadablePhoto, PHOTO_MAX_BYTES } from './_channelsShared';
 import { dedupeById, profileCodeText, profileErrorField, profileErrorText } from './_profileShared';
-import { FIELD } from './_styles';
 import { AddStoryModal } from './AddStoryModal';
 import { ChannelsTab } from './ChannelsTab';
 import { MusicTab } from './MusicTab';
@@ -800,13 +808,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     <FormField field={field} label={t('accounts.profile.username')}>
                       <div className="relative flex items-center">
                         <span className="absolute left-3 text-lead text-ink-subtle">@</span>
-                        <input
+                        <Input
+                          className="pl-[26px]"
                           value={field.state.value}
                           onChange={(event) => {
                             field.handleChange(event.target.value);
                           }}
                           onBlur={field.handleBlur}
-                          className={`${FIELD} pl-[26px]`}
                         />
                       </div>
                       {saveErrorField === 'username' && saveErrorText != null && (
@@ -823,7 +831,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 <form.Field name="bio">
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.bio')}>
-                      <textarea
+                      <Textarea
+                        className="resize-none [font-family:inherit]"
                         data-testid="profile-bio"
                         rows={3}
                         value={field.state.value}
@@ -838,7 +847,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                           field.handleChange(event.target.value);
                         }}
                         onBlur={field.handleBlur}
-                        className={`${FIELD} resize-none [font-family:inherit]`}
                       />
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
@@ -992,21 +1000,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 {saveErrorText}
               </div>
             )}
-            <button
-              type="button"
-              onClick={requestClose}
-              disabled={uploading}
-              className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink disabled:opacity-50"
-            >
+            <Button onClick={requestClose} disabled={uploading}>
               {t('accounts.profile.cancel')}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="primary"
               onClick={() => {
                 void form.handleSubmit();
               }}
               disabled={updateProfile.isPending || !canSave || !isDirty}
-              className={`rounded-full px-[22px] py-[9px] text-lead font-semibold text-white transition-colors disabled:opacity-60 ${saved ? 'bg-success' : 'bg-primary'}`}
+              className={saved ? 'bg-success hover:bg-success' : ''}
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">
@@ -1034,7 +1037,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               ) : (
                 t('accounts.profile.save')
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

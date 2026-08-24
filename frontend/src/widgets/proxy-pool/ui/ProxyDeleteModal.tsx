@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import { Button, Modal } from '@/shared/ui';
 
 // Confirm dialog for deleting a pool proxy (the card's × button). Warns when the
 // proxy still serves accounts — deleting it detaches them (their proxy is cleared).
@@ -32,23 +32,16 @@ export function ProxyDeleteModal({
             : t('accounts.proxyDeleteModal.body')}
         </div>
         <div className="flex justify-end gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[22px] py-[9px] text-lead font-semibold text-ink"
-          >
-            {t('accounts.proxyDeleteModal.cancel')}
-          </button>
-          <button
-            type="button"
+          <Button onClick={onClose}>{t('accounts.proxyDeleteModal.cancel')}</Button>
+          <Button
+            variant="danger"
             onClick={() => {
               onConfirm();
               onClose();
             }}
-            className="rounded-full border border-danger-line bg-danger-tint px-[22px] py-[9px] text-lead font-semibold text-danger"
           >
             {t('accounts.proxyDeleteModal.confirm')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

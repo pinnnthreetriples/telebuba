@@ -12,11 +12,11 @@ import {
   unassignProxyMutation,
 } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { ConfirmModal, FormField, Select, type SelectOption } from '@/shared/ui';
+import { Button, ConfirmModal, FormField, Input, Select, type SelectOption } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { Section, Spinner } from './_shared';
-import { FIELD, LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
+import { LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
 
 // Protocol names, not copy — nothing to translate.
 const PROXY_TYPES: SelectOption[] = [
@@ -211,14 +211,14 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="text-body text-ink-body">{proxyStateText}</span>
         </span>
         {account.proxy_id ? (
-          <button
-            type="button"
+          <Button
+            size="xs"
+            className="text-ink-muted"
             onClick={onUnassign}
-            disabled={unassignProxy.isPending}
-            className="rounded-md border border-line-input bg-white px-3 py-[5px] text-body font-medium text-ink-muted disabled:opacity-50"
+            loading={unassignProxy.isPending}
           >
             {unassignProxy.isPending ? <Spinner size={12} /> : t('accounts.edit.proxyDetach')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {unassignProxy.isError ? (
@@ -289,7 +289,8 @@ export function ProxySection({ account }: { account: AccountRead }) {
                 <label className="block">
                   <span className={LABEL}>{t('accounts.edit.password')}</span>
                   <div className="relative">
-                    <input
+                    <Input
+                      className="pr-9"
                       value={field.state.value}
                       onChange={(event) => {
                         field.handleChange(event.target.value);
@@ -297,7 +298,6 @@ export function ProxySection({ account }: { account: AccountRead }) {
                       onBlur={field.handleBlur}
                       type={showPass ? 'text' : 'password'}
                       autoComplete="new-password"
-                      className={`${FIELD} pr-9`}
                     />
                     <button
                       type="button"
@@ -358,11 +358,11 @@ export function ProxySection({ account }: { account: AccountRead }) {
         </div>
       )}
       <div className="flex flex-wrap items-center gap-md">
-        <button
-          type="button"
+        <Button
+          size="sm"
+          className="items-center gap-sm"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
-          className="inline-flex items-center gap-sm rounded-full border border-line-input bg-white px-[18px] py-[7px] text-body font-semibold disabled:opacity-50"
         >
           {proxyCheck === 'loading' ? (
             <Spinner size={13} />
@@ -382,7 +382,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           {proxyMode === 'manual'
             ? t('accounts.edit.proxyAddAssign')
             : t('accounts.edit.proxyCheck')}
-        </button>
+        </Button>
         {proxyCheck === 'loading' && (
           <span className="text-body text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
         )}

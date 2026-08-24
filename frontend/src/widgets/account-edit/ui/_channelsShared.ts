@@ -19,7 +19,7 @@ export const VIDEO_SUFFIXES = ['.mp4', '.mov'];
 export const VIDEO_MAX_BYTES = 100_000_000;
 
 // Field/label styling is the slice-wide one (single source in ./_styles).
-export { FIELD, LABEL } from './_styles';
+export { LABEL } from './_styles';
 
 function hasSuffix(file: File, suffixes: string[]): boolean {
   const name = file.name.toLowerCase();
