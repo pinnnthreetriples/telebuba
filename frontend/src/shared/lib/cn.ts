@@ -18,7 +18,9 @@ import { extendTailwindMerge } from 'tailwind-merge';
 const merge = extendTailwindMerge({
   extend: {
     classGroups: {
-      'font-size': [{ text: ['micro', 'tiny', 'body', 'lead', 'title', 'stat', 'display', 'hero'] }],
+      'font-size': [
+        { text: ['micro', 'tiny', 'body', 'lead', 'title', 'stat', 'display', 'hero'] },
+      ],
       rounded: [{ rounded: ['card'] }],
     },
   },
