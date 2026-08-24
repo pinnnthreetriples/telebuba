@@ -654,6 +654,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 other behind an avatar that has not loaded — deliberately NOT tokens, for
                 the same reason as the media tiles in `_profileShared`. */}
             <div
+              // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: two decorative stops, single-use by design
               className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-white"
               style={
                 avatarUri

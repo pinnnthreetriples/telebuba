@@ -202,7 +202,7 @@ export function LogsPage() {
               greys, and a token for one call site is not an improvement. */}
           <span
             aria-hidden
-            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-[0_1px_2px_rgba(0,102,255,0.3)] transition-[left,width] duration-enter"
+            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-pill transition-[left,width] duration-enter"
             style={{ left: indicator.left, width: indicator.width, height: indicator.height }}
           />
           {STATUS_FILTERS.map((value) => (

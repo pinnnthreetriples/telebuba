@@ -33,6 +33,9 @@ export default {
       thumb: '0 1px 3px rgba(0,0,0,0.3)',
       focus: '0 0 0 3px rgba(0,102,255,0.12)',
       seg: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+      // The sliding pill of a segmented tab strip: a filled blue lozenge that has to
+      // read as sitting ON the tray rather than in it, which its own colour cannot do.
+      pill: '0 1px 2px rgba(0,102,255,0.3)',
     },
     // The eight type sizes the UI actually has, replacing Tailwind's `xs…9xl` scale
     // outright — nothing used a single one of those names, and leaving them reachable
@@ -155,6 +158,10 @@ export default {
       },
       colors: {
         canvas: '#f1efed',
+        // The wash over an image that a control has to stay legible on — a photo tile's
+        // remove button. Dark ink at 55%, not a flat grey: what is behind it is a
+        // photograph, and a solid fill would read as a hole punched in it.
+        scrim: 'rgba(11,11,12,0.55)',
         surface: '#faf9f7',
         track: '#eeedea',
         // `muted` and `subtle` are the two greys small text is written in, so both sit

@@ -5,7 +5,7 @@ import { Card } from './Card';
 
 test('the surface is the card and the padding is the caller`s', () => {
   render(
-    <Card data-testid="plain" className="p-4">
+    <Card data-testid="plain" className="p-lg">
       тело
     </Card>,
   );
@@ -14,8 +14,8 @@ test('the surface is the card and the padding is the caller`s', () => {
   expect(card.className).toContain('rounded-card');
   expect(card.className).toContain('border-line');
   expect(card.className).toContain('bg-white');
-  expect(card.className).toContain('p-4');
-  expect(card.className).not.toContain('px-5');
+  expect(card.className).toContain('p-lg');
+  expect(card.className).not.toContain('px-xl');
 });
 
 test('the title and subtitle slots render only when given', () => {
@@ -38,9 +38,9 @@ test('the bottom margin is opt-in', () => {
   expect(screen.getByTestId('c').className).not.toContain('mb-');
 
   rerender(
-    <Card data-testid="c" mb="mb-[14px]">
+    <Card data-testid="c" mb="mb-lg">
       тело
     </Card>,
   );
-  expect(screen.getByTestId('c').className).toContain('mb-[14px]');
+  expect(screen.getByTestId('c').className).toContain('mb-lg');
 });

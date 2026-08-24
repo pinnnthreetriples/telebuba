@@ -155,7 +155,7 @@ export function WarmDaysModal({
             {TICKS.map((i) => (
               <span
                 key={i}
-                className="absolute top-1/2 h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[rgba(11,11,12,0.18)]"
+                className="absolute top-1/2 h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-line-strong"
                 style={{ left: `${String((i / (MAX - 1)) * 100)}%` }}
               />
             ))}
