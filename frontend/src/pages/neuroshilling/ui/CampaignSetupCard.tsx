@@ -114,7 +114,7 @@ export function CampaignSetupCard({
       }
     >
       {live ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep-deep">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep">
           {t('neuroshilling.setup.liveLocked')}
         </div>
       ) : null}
@@ -373,7 +373,7 @@ export function CampaignSetupCard({
               combination that publishes anything a stranger's message provoked —
               and it is the one thing on this page an outsider gets a say in. */}
           {draft.replyToHumans && draft.autoresponder === 'neurodialog' ? (
-            <div className="rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny leading-snug text-warning-deep-deep">
+            <div className="rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny leading-snug text-warning-deep">
               {t('neuroshilling.setup.replyToHumans.warning')}
             </div>
           ) : null}

@@ -142,7 +142,7 @@ export function PipelineCard({
                   index < activeCell
                     ? 'font-medium text-success-deep'
                     : index === activeCell
-                      ? 'font-semibold text-primary'
+                      ? 'font-semibold text-primary-deep'
                       : 'text-ink-subtle'
                 }`}
               >
@@ -161,7 +161,7 @@ export function PipelineCard({
 
       <div className="mb-[14px] flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
-        <span className="tb-pulse text-body font-medium text-primary">
+        <span className="tb-pulse text-body font-medium text-primary-deep">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}
