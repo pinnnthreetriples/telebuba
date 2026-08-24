@@ -32,6 +32,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
+from services._account_limits import account_join_cap
 from services._join_lock import join_lock
 from services.neurocomment import _comments_off, _rejoin, _seams, _state
 
@@ -327,8 +328,11 @@ async def _at_join_cap(account_id: str) -> bool:
     Telegram freezes an account after ~20-50 channel joins a day, so both join sites
     gate on this before sending a real join RPC — an over-cap account has its
     remaining joins skipped this run and resumes as the 24h window rolls.
+
+    The cap is the account's own when the operator has set one, else the fleet
+    setting; ``services._account_limits`` owns that choice for every join site.
     """
-    cap = settings.neurocomment.max_joins_per_account_per_day
+    cap = await account_join_cap(account_id, settings.neurocomment.max_joins_per_account_per_day)
     if cap <= 0:
         return False
     since = (datetime.now(UTC) - timedelta(days=1)).isoformat()

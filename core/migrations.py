@@ -42,6 +42,7 @@ from core.migration_steps import (
     _rename_proxy_type_http_to_https,
 )
 from core.migration_steps_access_reason import _add_readiness_access_lost_reason
+from core.migration_steps_account_limits import _add_neurocomment_account_limits
 from core.migration_steps_budget_reset import _reset_overshot_retry_budgets
 from core.migration_steps_captcha_giveup import _add_readiness_captcha_giveup
 from core.migration_steps_channel_activity import _add_campaign_channel_last_post
@@ -172,6 +173,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (55, "add_neuroshilling_tables", _add_neuroshilling_tables),
     (56, "add_neuroshilling_chat_log", _add_neuroshilling_chat_log),
     (57, "add_account_twofa_password", _add_account_twofa_password),
+    (58, "add_neurocomment_account_limits", _add_neurocomment_account_limits),
 )
 
 

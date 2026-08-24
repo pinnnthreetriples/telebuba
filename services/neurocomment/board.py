@@ -12,6 +12,7 @@ board's (the SPA reads them from ``AccountRead`` there).
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -27,6 +28,7 @@ from core.db import (
     list_linked_groups,
     list_posted_comments_since,
     list_waiting_comments,
+    load_account_limit_overrides,
 )
 from schemas.neurocomment_board import (
     AccountChannelReadiness,
@@ -35,6 +37,7 @@ from schemas.neurocomment_board import (
     NeurocommentBoard,
     NeurocommentChannelRow,
 )
+from services._account_limits import resolve_limits
 from services.neurocomment import _pair_status, _state, settings_store
 
 if TYPE_CHECKING:
@@ -85,6 +88,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     # the operator-editable saved row (#19), not the .env default. One bulk read
     # here, threaded into every card, so it stays off the per-card path.
     limits = await settings_store.load_settings()
+    # …and per account, since #58: an operator who raised one account's hourly cap must
+    # see that account's card counting against ITS number, not the fleet's.
+    overrides = await load_account_limit_overrides(account_ids)
 
     now = datetime.now(UTC)
     day_ago = (now - timedelta(days=1)).isoformat()
@@ -105,7 +111,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             ),
             readiness=[r for r in readiness if r.account_id == account_id],
             posted=[c for c in posted if c.account_id == account_id],
-            max_comments_per_hour=limits.max_comments_per_hour,
+            max_comments_per_hour=resolve_limits(
+                overrides.get(account_id), limits
+            ).max_comments_per_hour,
             now=now,
         )
         for account_id in account_ids
@@ -117,10 +125,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     # explain it — an unexplained back-off on the operator's board. The cards above keep
     # counting only ``posted``, which is what "comments this account published" means.
     delivered = (await list_delivered_comments_since(campaign_id, day_ago)).comments
-    deleted_by_channel: dict[str, int] = {}
-    for comment in delivered:
-        if comment.deleted_at:
-            deleted_by_channel[comment.channel] = deleted_by_channel.get(comment.channel, 0) + 1
+    delivered_deleted = Counter(c.channel for c in delivered if c.deleted_at)
     rows = [
         _build_channel_row(
             link.channel,
@@ -129,7 +134,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             _ChannelFlags(
                 challenged=link.channel in challenged,
                 paused=_state.channel_paused(link.paused_until, now),
-                deleted_recent=deleted_by_channel.get(link.channel, 0),
+                deleted_recent=delivered_deleted[link.channel],
             ),
         )
         for link in channel_links
@@ -163,15 +168,17 @@ def _build_card(
     # "what did this account publish", which a post still waiting has not done.
     last_hour = sum(1 for c in (*posted, *parked) if c.created_at >= hour_ago)
     latest = max(posted, key=lambda c: c.created_at, default=None)
+    posted_deleted = Counter(c.channel for c in posted if c.deleted_at)
     return NeurocommentAccountCard(
         account_id=account.account_id,
         label=account.label or account.account_id,
         comments_last_hour=last_hour,
         max_comments_per_hour=max_comments_per_hour,
         comments_today=len(posted),
-        deleted_today=sum(1 for c in posted if c.deleted_at),
+        deleted_today=sum(posted_deleted.values()),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
+        last_comment_deleted=bool(latest and latest.deleted_at),
         # Same row as the text above, so the board's channel and comment columns can
         # never name two different events.
         last_comment_channel=latest.channel if latest else None,
@@ -189,6 +196,9 @@ def _build_card(
                 # account is banned (#30), skipped (#148), or done re-joining here.
                 banned=r.banned,
                 rejoin_gave_up=r.rejoin_gave_up,
+                # Same `posted` rows as ``deleted_today`` above, split by channel: the
+                # board row's chip sits beside ONE channel name and has to mean this pair.
+                deleted=posted_deleted[r.channel],
             )
             for r in readiness
         ],

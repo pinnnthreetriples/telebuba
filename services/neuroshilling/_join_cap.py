@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.logging import log_event
 from core.repositories.neurocomment import count_account_joins_since
+from services._account_limits import account_join_cap
 
 if TYPE_CHECKING:
     from schemas.neuroshilling import NeuroshillingPresenceState
@@ -29,8 +30,12 @@ async def at_join_cap(account_id: str) -> bool:
     counter would have let one account join forty times with both features certain
     they had stayed under twenty. The price is that neurocomment reaches its own cap
     sooner when a campaign is running, which is the point rather than a side effect.
+
+    A per-account override governs BOTH features for the same reason the counter
+    does: it is one account's join budget, not one feature's. Only the fleet default
+    below differs between the two.
     """
-    cap = settings.neuroshilling.max_joins_per_account_per_day
+    cap = await account_join_cap(account_id, settings.neuroshilling.max_joins_per_account_per_day)
     if cap <= 0:
         return False
     since = (datetime.now(UTC) - timedelta(days=1)).isoformat()

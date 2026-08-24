@@ -75,3 +75,15 @@ test('falls back to the raw code for an unmapped event', () => {
   expect(eventLabel(t, 'warming_telegram_no_such_action')).toBe('warming_telegram_no_such_action');
   expect(eventLabel(t, '')).toBe('');
 });
+
+test('the by-request suffix composes instead of leaking the raw code', () => {
+  // The whole `*_by_request` family printed its event code verbatim because the suffix
+  // was missing from the composer's list — `logEventTelegram.status.by_request` had been
+  // translated all along, in both locales.
+  expect(eventLabel(t, 'neurocomment_telegram_join_channel_by_request')).toBe(
+    'Подписка на канал — заявка отправлена, ждём одобрения',
+  );
+  expect(eventLabel(t, 'warming_telegram_join_channel_by_request')).toBe(
+    'Подписка на канал — заявка отправлена, ждём одобрения',
+  );
+});

@@ -959,7 +959,7 @@
     "neurocomment_discovery_adopted": "Channels added from search",
     "neurocomment_channel_comments_off": "Channel comments are disabled",
     "neurocomment_channel_comments_off_dropped": "Channel dropped: its comments are disabled",
-    "neurocomment_onboard_join_by_request": "Join request sent",
+    "neurocomment_onboard_join_by_request": "Admits only by request. Join request sent",
     "neurocomment_onboard_join_request_pending": "Join request still awaiting approval",
     "neurocomment_onboard_join_request_approved": "Join request approved",
     "neurocomment_challenge_attempt": "Answering the captcha",
@@ -1233,6 +1233,7 @@
       "addPill": "+ Channel",
       "check": "Check channels",
       "checking": "Checking…",
+      "deletedHint": "Comments deleted in this channel in the last 24h — what sends it into back-off",
       "checkFailed": "Couldn't check channels",
       "placeholder": "t.me/channel or @channel",
       "remove": "Remove channel",
@@ -1320,6 +1321,8 @@
       "commentPlaceholder": "Comment sent",
       "empty": "No work yet",
       "deleted": "{{count}} deleted",
+      "deletedIn": "This comment was deleted in {{channel}}",
+      "deletedHint": "This account's comments deleted in this channel in the last 24h. The number on the channel itself, in the list on the left, counts every account.",
       "col": {
         "account": "Account",
         "channel": "Channel",
@@ -1385,6 +1388,7 @@
         "channelLabel": "Account channels",
         "allChannels": "All channels",
         "channelsSelected": "Channels: {{count}}",
+        "limits": "Limits",
         "assign": "Add to campaign",
         "banned": "Banned for good in: {{channels}}",
         "remove": "Remove from neurocommenting",
@@ -1393,6 +1397,29 @@
         "removeConfirm": "Remove",
         "empty": "No accounts in neurocommenting",
         "done": "Done"
+      },
+      "limits": {
+        "title": "Limits · {{name}}",
+        "sub": "Rolling windows — no midnight reset",
+        "cap": {
+          "joins": "Channel joins",
+          "comments_per_hour": "Comments per hour",
+          "comments_per_channel_per_day": "Comments per channel"
+        },
+        "window": {
+          "day": "24-hour window",
+          "hour": "1-hour window",
+          "channel": "24-hour window · {{channel}}"
+        },
+        "resetsAt": "a slot frees up {{at}}",
+        "fleetValue": "Fleet-wide limit: {{value}}",
+        "ownValue": "Own limit. Fleet-wide is {{value}}. Clear the box to follow it again",
+        "sharedJoins": "The join counter is shared with neuroshilling: both features spend one account budget.",
+        "resetAll": "Back to fleet",
+        "save": "Save",
+        "saveFailed": "Could not save the limits",
+        "loading": "Loading…",
+        "loadFailed": "Could not load the limits"
       },
       "discovery": {
         "open": "Find channels",

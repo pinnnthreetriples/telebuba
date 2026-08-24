@@ -56,6 +56,11 @@ class AccountChannelReadiness(BaseModel):
     # This account spent its whole re-join budget here and left the chat. Same reason as
     # ``banned`` above, and the same shape of remedy.
     rejoin_gave_up: bool = False
+    # This account's comments removed from THIS channel in the 24h board window. Per-pair
+    # for the same reason as the two flags above: the board row names one channel per
+    # account, so the chip beside it can only honestly mean this pair. The card's flat
+    # ``deleted_today`` stays — the «Удалено» tile sums whole accounts, not pairs.
+    deleted: int = 0
 
 
 class NeurocommentAccountCard(BaseModel):
@@ -81,6 +86,10 @@ class NeurocommentAccountCard(BaseModel):
     # Text of the most recent posted comment (None until the account comments, or
     # when the stored row has no text). Surfaces the real comment in the board.
     last_comment_text: str | None = None
+    # Whether that same comment has since been swept away. The row shows the text either
+    # way — an account whose last comment was removed has still done the work, and blanking
+    # it would read as "never commented" — so the marking is all that separates them.
+    last_comment_deleted: bool = False
     # Where that same comment went. Rides the card rather than being looked up in
     # ``NeurocommentBoard.comments``, which is a newest-first prefix capped at
     # ``board_comment_feed_limit`` (50) across the WHOLE campaign: six accounts under the

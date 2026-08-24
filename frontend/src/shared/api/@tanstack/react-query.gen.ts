@@ -41,6 +41,7 @@ import {
   expandDiscoveryKeywords,
   generateNeuroshillingScenario,
   getAccountChannel,
+  getAccountLimits,
   getAccountPrivacy,
   getAccountProfileSnapshot,
   getAccountTwofa,
@@ -118,6 +119,7 @@ import {
   unassignProxy,
   unpromoteFromNeurocomment,
   updateAccountChannel,
+  updateAccountLimits,
   updateAccountProfile,
   updateCampaignPrompt,
   updateNeurocommentSettings,
@@ -221,6 +223,9 @@ import type {
   GetAccountChannelData,
   GetAccountChannelError,
   GetAccountChannelResponse,
+  GetAccountLimitsData,
+  GetAccountLimitsError,
+  GetAccountLimitsResponse,
   GetAccountPrivacyData,
   GetAccountPrivacyError,
   GetAccountPrivacyResponse,
@@ -449,6 +454,9 @@ import type {
   UpdateAccountChannelData,
   UpdateAccountChannelError,
   UpdateAccountChannelResponse,
+  UpdateAccountLimitsData,
+  UpdateAccountLimitsError,
+  UpdateAccountLimitsResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
@@ -3356,6 +3364,62 @@ export const updateNeurocommentSettingsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateNeurocommentSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountLimitsQueryKey = (options: Options<GetAccountLimitsData>) =>
+  createQueryKey('getAccountLimits', options);
+
+/**
+ * Get Account Limits
+ *
+ * One account's caps, what each window has spent, and when a slot comes back.
+ */
+export const getAccountLimitsOptions = (options: Options<GetAccountLimitsData>) =>
+  queryOptions<
+    GetAccountLimitsResponse,
+    GetAccountLimitsError,
+    GetAccountLimitsResponse,
+    ReturnType<typeof getAccountLimitsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountLimits({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountLimitsQueryKey(options),
+  });
+
+/**
+ * Update Account Limits
+ *
+ * Replace the account's overrides — a null field drops back to the fleet cap.
+ */
+export const updateAccountLimitsMutation = (
+  options?: Partial<Options<UpdateAccountLimitsData>>,
+): UseMutationOptions<
+  UpdateAccountLimitsResponse,
+  UpdateAccountLimitsError,
+  Options<UpdateAccountLimitsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateAccountLimitsResponse,
+    UpdateAccountLimitsError,
+    Options<UpdateAccountLimitsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateAccountLimits({
         ...options,
         ...fnOptions,
         throwOnError: true,

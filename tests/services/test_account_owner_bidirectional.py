@@ -155,6 +155,7 @@ def _empty_pool() -> nc_engine._SelectionPool:
         fingerprints={},
         hourly_counts={},
         daily_counts={},
+        overrides={},
         limits=NeurocommentSettings(
             max_comments_per_hour=5,
             max_comments_per_channel_per_day=3,

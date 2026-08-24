@@ -8,6 +8,7 @@ export {
   createCampaignMutation,
   deleteCampaignMutation,
   expandDiscoveryKeywordsMutation,
+  getAccountLimitsOptions as accountLimitsQueryOptions,
   getCampaignDiscoveryOptions as campaignDiscoveryQueryOptions,
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
   getNeurocommentRuntimeOptions as neurocommentRuntimeQueryOptions,
@@ -25,6 +26,7 @@ export {
   startCampaignDiscoveryMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateAccountLimitsMutation,
   updateCampaignPromptMutation,
   updateNeurocommentSettingsMutation,
 } from '@/shared/api/@tanstack/react-query.gen';
