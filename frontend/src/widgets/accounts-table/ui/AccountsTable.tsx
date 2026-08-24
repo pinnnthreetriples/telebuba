@@ -42,10 +42,10 @@ const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
 
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
-  active: 'bg-primary-tint text-primary',
-  spam: 'bg-warning-tint text-warning',
+  active: 'bg-primary-tint text-primary-deep',
+  spam: 'bg-warning-tint text-warning-deep',
   code: 'bg-track text-ink-muted',
-  banned: 'bg-danger-tint text-danger',
+  banned: 'bg-danger-tint text-danger-deep',
 };
 
 // Row avatar: the shared account avatar (cached Telegram photo, else initials),

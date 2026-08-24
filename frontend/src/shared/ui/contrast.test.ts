@@ -86,3 +86,35 @@ test('the rungs that failed are the ones the deep rungs replaced', () => {
   expect(ratio('primary', 'primary.tint')).toBeLessThan(AA);
   expect(ratio('danger', 'danger.tint')).toBeLessThan(AA);
 });
+
+// The check the table above cannot make. A tone is two classes, and for most of the
+// app's status pills they live in a map const rather than side by side in a
+// `className` — which is where thirty-five of them stayed on the failing rung after
+// the first sweep, invisible to a test that only reads the palette. This one reads
+// the source and asserts the pairing itself.
+const TONES = ['primary', 'success', 'warning', 'danger'] as const;
+const sources = import.meta.glob('/src/**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+test('no class list names a tint fill beside its own unreadable text rung', () => {
+  // A glob that resolved to nothing would pass this test on an empty list, which is
+  // the one way a source-reading assertion can lie.
+  expect(Object.keys(sources).length).toBeGreaterThan(100);
+  const offenders: string[] = [];
+  for (const [path, source] of Object.entries(sources)) {
+    if (path.includes('.test.')) continue;
+    source.split(/\r?\n/).forEach((line, index) => {
+      for (const tone of TONES) {
+        const readable = tone === 'warning' ? /text-warning-(?:deep)/ : undefined;
+        const failing = new RegExp(`text-${tone}(?![\\w-])|text-warning-strong`);
+        if (!line.includes(`bg-${tone}-tint`)) continue;
+        if (readable?.test(line)) continue;
+        if (failing.test(line)) offenders.push(`${path}:${index + 1} ${line.trim().slice(0, 70)}`);
+      }
+    });
+  }
+  expect(offenders).toEqual([]);
+});
