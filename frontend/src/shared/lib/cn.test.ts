@@ -1,13 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { expect, test } from 'vitest';
 
 import { cn } from './cn';
 
-describe('cn', () => {
-  it('joins truthy class names and drops falsy ones', () => {
-    expect(cn('a', false, 'b', undefined, null, 'c')).toBe('a b c');
-  });
+// The config replaces Tailwind's font-size scale outright, so tailwind-merge has to
+// be told the new rung names. Untaught, it reads `text-lead` as a colour — both are
+// spelled `text-*` — and drops it in favour of the colour that follows, which is
+// exactly the order a variant component paints in.
+test('a type rung survives the colour painted after it', () => {
+  expect(cn('text-lead', 'text-white')).toBe('text-lead text-white');
+  expect(cn('bg-track text-ink-muted', 'text-micro')).toBe('bg-track text-ink-muted text-micro');
+});
 
-  it('lets a later Tailwind utility win over an earlier conflicting one', () => {
-    expect(cn('px-2 px-4')).toBe('px-4');
-  });
+test('two type rungs still collapse to the last one', () => {
+  expect(cn('text-lead', 'text-body')).toBe('text-body');
+});
+
+test('two colours still collapse to the last one', () => {
+  expect(cn('text-ink', 'text-danger-deep')).toBe('text-danger-deep');
+  expect(cn('bg-primary', 'bg-success')).toBe('bg-success');
+});
+
+test('the card radius belongs to the radius group', () => {
+  expect(cn('rounded-lg', 'rounded-card')).toBe('rounded-card');
 });
