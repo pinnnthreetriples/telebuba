@@ -16,8 +16,8 @@ const STATUS_TONE = {
 // Channel-chip tone driven by the live "Проверить каналы" verdict: banned = red
 // (persists), ok = green (5s flash), default = the neutral gray pill.
 const CHANNEL_CHIP = {
-  banned: 'border-danger bg-danger-tint text-danger',
-  ok: 'border-success bg-success-tint text-success',
+  banned: 'border-danger bg-danger-tint text-danger-deep',
+  ok: 'border-success bg-success-tint text-success-deep',
   default: 'border-line bg-track text-ink-body',
 } as const;
 

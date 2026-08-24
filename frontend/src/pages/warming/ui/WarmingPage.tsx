@@ -312,7 +312,7 @@ export function WarmingPage() {
                       <AccountAvatar
                         account={account}
                         className="h-[30px] w-[30px] shrink-0 rounded-full"
-                        fallbackClassName="text-body font-semibold bg-primary-tint text-primary"
+                        fallbackClassName="text-body font-semibold bg-primary-tint text-primary-deep"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">
@@ -515,7 +515,7 @@ export function WarmingPage() {
                       <AccountAvatar
                         account={acc}
                         className="h-8 w-8 shrink-0 rounded-full ring-2 ring-success"
-                        fallbackClassName="text-tiny font-bold bg-primary-tint text-primary"
+                        fallbackClassName="text-tiny font-bold bg-primary-tint text-primary-deep"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">

@@ -41,12 +41,12 @@ const WARMING_DAYS = 14;
 // per-state hex. Sleeping and flood-wait/quarantine share amber deliberately —
 // throttled and recovering on its own is not an error.
 const WARM_STATUS: Record<WarmingState, string> = {
-  active: 'bg-success-tint text-success',
-  sleeping: 'bg-warning-tint text-warning-strong',
+  active: 'bg-success-tint text-success-deep',
+  sleeping: 'bg-warning-tint text-warning-deep',
   idle: 'bg-track text-ink-muted',
-  flood_wait: 'bg-warning-tint text-warning',
-  quarantine: 'bg-warning-tint text-warning',
-  error: 'bg-danger-tint text-danger',
+  flood_wait: 'bg-warning-tint text-warning-deep',
+  quarantine: 'bg-warning-tint text-warning-deep',
+  error: 'bg-danger-tint text-danger-deep',
 };
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
@@ -234,7 +234,7 @@ function WarmingCard({
           <AccountAvatar
             account={account}
             className="h-7 w-7 shrink-0 rounded-full"
-            fallbackClassName="text-tiny font-semibold bg-primary-tint text-primary"
+            fallbackClassName="text-tiny font-semibold bg-primary-tint text-primary-deep"
           />
           <div className="min-w-0">
             {/* Telegram supplies this name, so it can be one 90-char word with nowhere

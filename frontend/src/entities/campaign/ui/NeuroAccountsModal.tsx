@@ -76,9 +76,9 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
   const binding = tightest ? data?.[tightest] : undefined;
   const skin =
     worst >= 1
-      ? 'border-danger-line bg-danger-tint text-danger'
+      ? 'border-danger-line bg-danger-tint text-danger-deep'
       : worst >= 0.8
-        ? 'border-warning-line bg-warning-tint text-warning'
+        ? 'border-warning-line bg-warning-tint text-warning-deep'
         : 'border-line-input bg-white text-ink-muted hover:border-line-strong';
 
   return (

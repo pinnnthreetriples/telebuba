@@ -18,7 +18,7 @@ const SIZE = {
 const TONE = {
   neutral: 'text-ink-muted',
   primary: 'text-ink-subtle hover:border-primary-line hover:bg-primary-wash hover:text-primary',
-  danger: 'text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger',
+  danger: 'text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
 } as const;
 
 // `className` is appended, not merged: there is no tailwind-merge here (it would
