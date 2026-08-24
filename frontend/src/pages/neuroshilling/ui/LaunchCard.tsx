@@ -252,7 +252,7 @@ export function LaunchCard({
       ) : null}
 
       {halted.length > 0 ? (
-        <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep-deep">
+        <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
           {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
         </div>
       ) : null}
