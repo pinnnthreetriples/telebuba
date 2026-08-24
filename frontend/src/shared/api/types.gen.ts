@@ -38,6 +38,10 @@ export type AccountChannelReadiness = {
    * Rejoin Gave Up
    */
   rejoin_gave_up?: boolean;
+  /**
+   * Deleted
+   */
+  deleted?: number;
 };
 
 /**
@@ -1814,6 +1818,10 @@ export type NeurocommentAccountCard = {
    * Last Comment Text
    */
   last_comment_text?: string | null;
+  /**
+   * Last Comment Deleted
+   */
+  last_comment_deleted?: boolean;
   /**
    * Last Comment Channel
    */
