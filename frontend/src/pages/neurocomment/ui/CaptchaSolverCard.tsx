@@ -82,7 +82,7 @@ export function CaptchaSolverCard({
               <path d="M12 8v4" />
               <path d="M12 16h.01" />
             </svg>
-            <span className="text-tiny font-semibold uppercase tracking-[.03em] text-warning">
+            <span className="text-tiny font-semibold uppercase tracking-[.03em] text-warning-deep">
               {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
             </span>
           </div>

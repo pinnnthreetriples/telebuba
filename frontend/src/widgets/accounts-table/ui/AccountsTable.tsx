@@ -65,7 +65,7 @@ function RowAvatar({ account }: { account: AccountRead }) {
 // The 3-tier band mirrors the design's thresholds, as text tokens: the bar takes
 // `bg-current` off the same class, so bar and number cannot disagree.
 function trustTone(score: number): string {
-  return score >= 70 ? 'text-success' : score >= 45 ? 'text-warning-strong' : 'text-danger';
+  return score >= 70 ? 'text-success-deep' : score >= 45 ? 'text-warning-deep' : 'text-danger';
 }
 
 // Real device fingerprint — immutable, set at registration.

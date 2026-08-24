@@ -85,7 +85,7 @@ export function WarmDaysModal({
               onClick={runSpamCheck}
               className={`inline-flex items-center gap-sm rounded-full border bg-white px-md py-tight text-body font-medium disabled:opacity-60 ${
                 spam === 'clean'
-                  ? 'border-success text-success'
+                  ? 'border-success text-success-deep'
                   : spam === 'limited'
                     ? 'border-danger text-danger'
                     : 'border-line-input text-ink-muted'

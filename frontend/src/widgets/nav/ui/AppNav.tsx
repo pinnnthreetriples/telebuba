@@ -177,7 +177,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only text-body font-medium lg:not-sr-only ${systemActive ? 'text-success' : 'text-ink-muted'}`}
+              className={`sr-only text-body font-medium lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>

@@ -10,7 +10,7 @@ test('renders nothing when there is no result', () => {
 
 test('renders a success mark', () => {
   const { container } = render(<FeedbackMark result="ok" />);
-  expect(container.querySelector('.text-success svg')).toBeInTheDocument();
+  expect(container.querySelector('.text-success-deep svg')).toBeInTheDocument();
 });
 
 test('renders an error mark', () => {

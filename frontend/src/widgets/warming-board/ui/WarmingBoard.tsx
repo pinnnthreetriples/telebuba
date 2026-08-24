@@ -421,7 +421,7 @@ function WarmingCard({
                 <span
                   className={`mt-sm text-center text-micro ${
                     index < active
-                      ? 'font-medium text-success'
+                      ? 'font-medium text-success-deep'
                       : index === active
                         ? 'font-semibold text-primary'
                         : 'text-ink-subtle'

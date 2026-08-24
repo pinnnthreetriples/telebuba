@@ -266,7 +266,7 @@ test('shows a success or error mark from the feedback map', () => {
       feedback={{ a1: 'ok' }}
     />,
   );
-  expect(document.querySelector('.text-success svg')).toBeInTheDocument();
+  expect(document.querySelector('.text-success-deep svg')).toBeInTheDocument();
 
   rerender(
     <NeuroAccountsModal

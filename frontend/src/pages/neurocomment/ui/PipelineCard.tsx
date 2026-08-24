@@ -140,7 +140,7 @@ export function PipelineCard({
               <span
                 className={`hidden whitespace-nowrap text-tiny md:block ${
                   index < activeCell
-                    ? 'font-medium text-success'
+                    ? 'font-medium text-success-deep'
                     : index === activeCell
                       ? 'font-semibold text-primary'
                       : 'text-ink-subtle'
