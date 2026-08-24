@@ -146,6 +146,7 @@ def test_health_rejects_low_trust_before_readiness_evaluation(
         fingerprints={},
         hourly_counts={},
         daily_counts={},
+        overrides={},
         limits=_limits(daily=0),
     )
 
@@ -182,6 +183,7 @@ def test_health_passes_cached_language_and_signals_to_policy(
         fingerprints={"a": fingerprint},
         hourly_counts={},
         daily_counts={},
+        overrides={},
         limits=_limits(daily=0),
     )
     now = datetime.now(UTC)

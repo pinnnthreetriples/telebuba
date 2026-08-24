@@ -31,6 +31,7 @@ from core.db import (
     list_campaign_channels,
 )
 from services import _account_owner
+from services._account_limits import account_limits, resolve_limits
 from services.neurocomment import _pair_status, _state
 from services.neurocomment._pins import serving_accounts
 from services.trust import account_trust_score_from
@@ -39,6 +40,7 @@ from services.warming.pacing import evaluate_readiness
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.neurocomment import CommentRecord, NeurocommentCampaign, NeurocommentSettings
+    from schemas.neurocomment_limits import EffectiveAccountLimits
 
     # Type-only, and deliberately this direction: ``_SelectionPool`` is what ``engine``'s
     # bulk loader RETURNS, so it belongs beside that loader, while the runtime import runs
@@ -49,11 +51,15 @@ if TYPE_CHECKING:
 
 def _quota_block_reason(
     account_id: str,
-    limits: NeurocommentSettings,
+    caps: EffectiveAccountLimits,
     hourly: dict[str, int],
     daily: dict[str, int],
 ) -> str | None:
     """Which cap the account has reached, or ``None`` while under both.
+
+    ``caps`` are this ACCOUNT's, not the fleet's: two candidates scored in the same
+    pass can hold different budgets, so the numbers arrive already resolved rather than
+    being read off one shared settings object here.
 
     ``quota_hour`` (per-account/hour) is reported before ``quota_day`` (per-channel/
     day) when both are full, so the log names the specific limit the operator hit.
@@ -61,9 +67,9 @@ def _quota_block_reason(
     so a burst arriving inside one account's reply-delay window can't stack past the
     cap — each claim consumes quota the moment it is won.
     """
-    if hourly.get(account_id, 0) >= limits.max_comments_per_hour:
+    if hourly.get(account_id, 0) >= caps.max_comments_per_hour:
         return "quota_hour"
-    day_cap = limits.max_comments_per_channel_per_day
+    day_cap = caps.max_comments_per_channel_per_day
     if day_cap > 0 and daily.get(account_id, 0) >= day_cap:
         return "quota_day"
     return None
@@ -100,12 +106,13 @@ async def _account_quota_block_reason(
     window is measured from ``created_at``, so a post parked ninety minutes ago has already
     dropped out of the hour it was admitted in, and the sibling admitted after it counts.
     """
+    caps = await account_limits(account_id, limits)
     now = datetime.now(UTC)
     hour_ago = (now - timedelta(hours=1)).isoformat()
     hourly = await count_account_comments_since(account_id, hour_ago)
-    if hourly - _already_held(held_since, hour_ago) >= limits.max_comments_per_hour:
+    if hourly - _already_held(held_since, hour_ago) >= caps.max_comments_per_hour:
         return "quota_hour"
-    day_cap = limits.max_comments_per_channel_per_day
+    day_cap = caps.max_comments_per_channel_per_day
     if day_cap > 0:
         day_ago = (now - timedelta(days=1)).isoformat()
         daily = await count_account_channel_comments_since(account_id, channel, day_ago)
@@ -174,7 +181,8 @@ def _account_block_reason(  # noqa: PLR0911 - one return per gate IS the ladder
         return "not_handed_off"
     if not _is_healthy(account, channel_count, now, pool):
         return "unhealthy"
-    return _quota_block_reason(account_id, pool.limits, pool.hourly_counts, pool.daily_counts)
+    caps = resolve_limits(pool.overrides.get(account_id), pool.limits)
+    return _quota_block_reason(account_id, caps, pool.hourly_counts, pool.daily_counts)
 
 
 def _is_eligible(

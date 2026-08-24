@@ -106,6 +106,9 @@ import type {
   GetAccountChannelData,
   GetAccountChannelErrors,
   GetAccountChannelResponses,
+  GetAccountLimitsData,
+  GetAccountLimitsErrors,
+  GetAccountLimitsResponses,
   GetAccountPrivacyData,
   GetAccountPrivacyErrors,
   GetAccountPrivacyResponses,
@@ -334,6 +337,9 @@ import type {
   UpdateAccountChannelData,
   UpdateAccountChannelErrors,
   UpdateAccountChannelResponses,
+  UpdateAccountLimitsData,
+  UpdateAccountLimitsErrors,
+  UpdateAccountLimitsResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
@@ -2001,6 +2007,40 @@ export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Account Limits
+ *
+ * One account's caps, what each window has spent, and when a slot comes back.
+ */
+export const getAccountLimits = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountLimitsData, ThrowOnError>,
+): RequestResult<GetAccountLimitsResponses, GetAccountLimitsErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountLimitsResponses, GetAccountLimitsErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/accounts/{account_id}/limits',
+    ...options,
+  });
+
+/**
+ * Update Account Limits
+ *
+ * Replace the account's overrides — a null field drops back to the fleet cap.
+ */
+export const updateAccountLimits = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateAccountLimitsData, ThrowOnError>,
+): RequestResult<UpdateAccountLimitsResponses, UpdateAccountLimitsErrors, ThrowOnError> =>
+  (options.client ?? client).put<
+    UpdateAccountLimitsResponses,
+    UpdateAccountLimitsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/accounts/{account_id}/limits',
     ...options,
     headers: {
       'Content-Type': 'application/json',

@@ -649,6 +649,7 @@ export function NeurocommentPage() {
         <NeuroAccountsModal
           accounts={neuroAccountRows}
           channels={boardChannelNames}
+          campaignId={campaignId}
           feedback={accountFeedback.feedback}
           onClose={() => {
             setShowAccounts(false);

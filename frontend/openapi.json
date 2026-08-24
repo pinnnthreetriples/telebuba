@@ -9428,6 +9428,192 @@
         }
       }
     },
+    "/api/v1/neurocomment/accounts/{account_id}/limits": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Get Account Limits",
+        "description": "One account's caps, what each window has spent, and when a slot comes back.",
+        "operationId": "getAccountLimits",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLimitsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Update Account Limits",
+        "description": "Replace the account's overrides \u2014 a null field drops back to the fleet cap.",
+        "operationId": "updateAccountLimits",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountLimitsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountLimitsView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/logs": {
       "get": {
         "tags": [
@@ -10883,6 +11069,134 @@
           "account_id"
         ],
         "title": "AccountCheckRequest"
+      },
+      "AccountLimitGauge": {
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Limit"
+          },
+          "used": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Used"
+          },
+          "fleet_default": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Fleet Default"
+          },
+          "overridden": {
+            "type": "boolean",
+            "title": "Overridden",
+            "default": false
+          },
+          "resets_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resets At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "limit",
+          "used",
+          "fleet_default"
+        ],
+        "title": "AccountLimitGauge",
+        "description": "One cap as the operator reads it: the number, what is spent, when a slot returns.\n\n``resets_at`` is the moment the OLDEST counted row leaves the rolling window, i.e.\nwhen the account gets one slot back \u2014 not a midnight reset, which no cap here has.\n``None`` when nothing is counted, because then there is nothing to wait for."
+      },
+      "AccountLimitsUpdate": {
+        "properties": {
+          "max_joins_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Joins Per Day"
+          },
+          "max_comments_per_hour": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Comments Per Hour"
+          },
+          "max_comments_per_channel_per_day": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Comments Per Channel Per Day"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AccountLimitsUpdate",
+        "description": "The operator's edit \u2014 a full replace of the override row.\n\nEvery field is sent every time: ``None`` is how the modal's \"\u0421\u0431\u0440\u043e\u0441\u0438\u0442\u044c\" says *drop\nthis override and follow the fleet again*, so an omitted field cannot be allowed to\nmean \"keep whatever was stored\" \u2014 that would leave no way to clear one cap."
+      },
+      "AccountLimitsView": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "joins": {
+            "$ref": "#/components/schemas/AccountLimitGauge"
+          },
+          "comments_per_hour": {
+            "$ref": "#/components/schemas/AccountLimitGauge"
+          },
+          "comments_per_channel_per_day": {
+            "$ref": "#/components/schemas/AccountLimitGauge"
+          },
+          "busiest_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busiest Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "joins",
+          "comments_per_hour",
+          "comments_per_channel_per_day"
+        ],
+        "title": "AccountLimitsView",
+        "description": "Every cap of one account, for the \"\u041b\u0438\u043c\u0438\u0442\u044b\" modal."
       },
       "AccountPrivacyOutcome": {
         "properties": {

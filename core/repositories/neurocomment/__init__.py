@@ -11,6 +11,14 @@ models / ``None`` / ``bool`` — never raw rows (non-negotiable #2).
 
 from __future__ import annotations
 
+from core.repositories.neurocomment._account_limits import (
+    account_busiest_channel_window,
+    account_comment_window,
+    account_join_window,
+    load_account_limit_override,
+    load_account_limit_overrides,
+    save_account_limit_override,
+)
 from core.repositories.neurocomment._accounts import (
     ChannelNotInCampaignError,
     assign_account_to_campaign,
@@ -159,6 +167,9 @@ from core.repositories.neurocomment._waiting import (
 __all__ = [
     "ChannelAlreadyAssignedError",
     "ChannelNotInCampaignError",
+    "account_busiest_channel_window",
+    "account_comment_window",
+    "account_join_window",
     "assign_account_to_campaign",
     "bump_channel_pause",
     "checkpoint_backfill",
@@ -220,6 +231,8 @@ __all__ = [
     "list_posted_comments_since",
     "list_silent_watch_channels",
     "list_waiting_comments",
+    "load_account_limit_override",
+    "load_account_limit_overrides",
     "load_active_cooldowns",
     "load_neurocomment_settings",
     "lookup_cached_decision",
@@ -251,6 +264,7 @@ __all__ = [
     "requeue_processing_posts",
     "resolve_pending_outcome",
     "return_claimed_posts",
+    "save_account_limit_override",
     "save_neurocomment_settings",
     "set_campaign_account_channels",
     "set_campaign_status",

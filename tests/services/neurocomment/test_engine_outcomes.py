@@ -378,6 +378,7 @@ def test_min_trust_gate_rejects_below_threshold() -> None:
         fingerprints={},
         hourly_counts={},
         daily_counts={},
+        overrides={},
         limits=limits,
     )
 

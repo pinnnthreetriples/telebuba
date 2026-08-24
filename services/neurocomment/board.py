@@ -28,6 +28,7 @@ from core.db import (
     list_linked_groups,
     list_posted_comments_since,
     list_waiting_comments,
+    load_account_limit_overrides,
 )
 from schemas.neurocomment_board import (
     AccountChannelReadiness,
@@ -36,6 +37,7 @@ from schemas.neurocomment_board import (
     NeurocommentBoard,
     NeurocommentChannelRow,
 )
+from services._account_limits import resolve_limits
 from services.neurocomment import _pair_status, _state, settings_store
 
 if TYPE_CHECKING:
@@ -86,6 +88,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     # the operator-editable saved row (#19), not the .env default. One bulk read
     # here, threaded into every card, so it stays off the per-card path.
     limits = await settings_store.load_settings()
+    # …and per account, since #58: an operator who raised one account's hourly cap must
+    # see that account's card counting against ITS number, not the fleet's.
+    overrides = await load_account_limit_overrides(account_ids)
 
     now = datetime.now(UTC)
     day_ago = (now - timedelta(days=1)).isoformat()
@@ -106,7 +111,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             ),
             readiness=[r for r in readiness if r.account_id == account_id],
             posted=[c for c in posted if c.account_id == account_id],
-            max_comments_per_hour=limits.max_comments_per_hour,
+            max_comments_per_hour=resolve_limits(
+                overrides.get(account_id), limits
+            ).max_comments_per_hour,
             now=now,
         )
         for account_id in account_ids
