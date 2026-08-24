@@ -345,7 +345,7 @@ export function WarmingPage() {
                           <span className={`text-tiny font-semibold ${tTone}`}>{trust ?? '—'}</span>
                           {ptype ? (
                             <>
-                              <span className="text-tiny text-line-strong">·</span>
+                              <span className="text-tiny text-ink-subtle">·</span>
                               {pc ? (
                                 <span
                                   className={`fi fi-${pc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}

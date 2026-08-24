@@ -386,7 +386,7 @@ export function NeurocommentBoard({
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary lg:h-7 lg:w-7"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary-deep lg:h-7 lg:w-7"
           >
             <svg
               width="15"

@@ -579,7 +579,7 @@ function WarmingCard({
               onClick={() => {
                 onPromote(account.account_id);
               }}
-              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success px-[14px] py-[10px] text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success-deep px-[14px] py-[10px] text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
             >
               <svg
                 width="14"

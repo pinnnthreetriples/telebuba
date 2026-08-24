@@ -266,7 +266,7 @@ function SettingsForm({
               }}
               className={`flex-1 rounded-lg border px-3 py-[9px] text-lead font-medium transition-colors ${
                 provider === option
-                  ? 'border-primary bg-primary-wash text-primary'
+                  ? 'border-primary bg-primary-wash text-primary-deep'
                   : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
               }`}
             >
@@ -393,7 +393,7 @@ function SettingsForm({
           disabled={pending || !canSubmit}
           className={
             justSaved
-              ? 'bg-success hover:bg-success'
+              ? 'bg-success-deep hover:bg-success-deep'
               : saveFailed
                 ? 'bg-danger hover:bg-danger'
                 : ''

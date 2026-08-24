@@ -232,7 +232,7 @@ export function CampaignsCard({
       <button
         type="button"
         onClick={onCreate}
-        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
+        className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
       >
         {t('neurocomment.campaigns.create')}
       </button>

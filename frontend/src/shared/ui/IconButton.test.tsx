@@ -70,7 +70,7 @@ test('tone paints the hover, and neutral deliberately has none', () => {
   expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
     'hover:border-primary-line',
     'hover:bg-primary-wash',
-    'hover:text-primary',
+    'hover:text-primary-deep',
   );
 
   rerender(

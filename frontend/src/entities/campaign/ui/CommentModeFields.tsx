@@ -73,7 +73,7 @@ export function CommentModeFields({
                 title={`${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`}
                 className={`w-full rounded-md border px-[10px] py-[6px] text-body font-medium transition-colors disabled:opacity-60 ${
                   mode === option
-                    ? 'border-primary bg-primary-wash text-primary'
+                    ? 'border-primary bg-primary-wash text-primary-deep'
                     : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
                 }`}
               >

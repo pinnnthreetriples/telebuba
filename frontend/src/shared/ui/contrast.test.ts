@@ -66,6 +66,13 @@ const PAIRS: [string, string][] = [
   ['white', 'primary.press'],
   ['white', 'danger'],
   ['white', 'term'],
+  // The two fills that carry white text: DEFAULT green and amber are 3.37:1 and
+  // 4.02:1 under it, which is why a filled badge wears the deep rung instead.
+  ['white', 'success.deep'],
+  ['white', 'warning.deep'],
+  // The terminal's own two inks on its own surface.
+  ['term.dim', 'term'],
+  ['term.text', 'term'],
 ];
 
 describe('every text colour the app paints clears WCAG AA on its own surface', () => {

@@ -249,7 +249,7 @@ function ProxyCard({
           </div>
           <div className="mt-px flex items-center gap-tight text-tiny text-ink-subtle">
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
-            <span className="text-line-strong">·</span>
+            <span className="text-ink-subtle">·</span>
             <span
               className={`inline-flex items-center gap-[4px] font-medium ${statusTone}`}
               title={proxy.last_error ?? undefined}

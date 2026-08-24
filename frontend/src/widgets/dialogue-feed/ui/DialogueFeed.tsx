@@ -81,7 +81,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         <span className="font-medium text-ink-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums text-micro text-line-strong">
+        <span className="ml-auto shrink-0 tabular-nums text-micro text-ink-subtle">
           {formatLocalTime(message.created_at)}
         </span>
       </div>
