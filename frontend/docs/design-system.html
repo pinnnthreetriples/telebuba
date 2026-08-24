@@ -1,0 +1,1546 @@
+<title>Telebuba Design System</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   Telebuba Design System
+   Канон системы. Значения — из frontend/tailwind.config.ts и
+   app/styles/index.css; расхождения между кодом и этим документом решаются
+   в пользу канона, отклонения перечислены в разделе «Унификация».
+   Документ намеренно светлый: у продукта одна основа, инвертировать её —
+   значит показать то, чего в приложении нет.
+   ═══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ds:gen root-tokens */
+  /* Цвет */
+  --white:#ffffff;
+  --canvas:#f1efed;
+  --scrim:rgba(11,11,12,0.55);
+  --surface:#faf9f7;
+  --track:#eeedea;
+  --ink:#0b0b0c;
+  --ink-body:#3a3a3a;
+  --ink-muted:#63615d;
+  --ink-subtle:#6e6b66;
+  --line:#e6e5e3;
+  --line-strong:#d8d6d2;
+  --line-input:#dedcd8;
+  --line-row:#f0eeeb;
+  --primary:#0066ff;
+  --primary-press:#0057db;
+  --primary-tint:#eef4ff;
+  --primary-wash:#f2f6ff;
+  --primary-line:#cbd7ec;
+  --primary-hairline:#e4ecfa;
+  --primary-deep:#0052cc;
+  --success:#12a150;
+  --success-deep:#0b6b37;
+  --success-press:#0e8c45;
+  --success-tint:#ddf7e9;
+  --success-line:#b8ecce;
+  --success-dot:#16b364;
+  --warning:#9a7b22;
+  --warning-deep:#7a5e12;
+  --warning-strong:#c47d12;
+  --warning-tint:#fff0d2;
+  --warning-line:#efd79a;
+  --danger:#c0473f;
+  --danger-deep:#a83a33;
+  --danger-tint:#fbecec;
+  --danger-line:#f0c9c5;
+  --slate:#16161a;
+  --slate-dim:#80808c;
+  --slate-text:#c9c9d3;
+  --slate-blue:#6ea8fe;
+  --slate-error:#e5736b;
+  --slate-success:#7be0a6;
+  --slate-warning:#ffd27f;
+
+  /* Шрифт */
+  --sans:'Inter',-apple-system,system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+
+  /* Форма */
+  --r-none:0px;
+  --r-sm:6px;
+  --r-md:8px;
+  --r-nest:11px;
+  --r-card:16px;
+  --r-full:9999px;
+
+  /* Движение */
+  --t-state:150ms;
+  --t-enter:250ms;
+  --t-reveal:420ms;
+  --t-roll:900ms;
+  --e-out:cubic-bezier(.16,1,.3,1);
+  --e-spring:cubic-bezier(.34,1.45,.6,1);
+
+  /* Высота */
+  --pop:0 10px 30px rgba(11,11,12,0.12);
+  --ring:0 0 0 1px rgba(11,11,12,0.07);
+  --thumb:0 1px 3px rgba(0,0,0,0.3);
+  --focus:0 0 0 3px rgba(0,102,255,0.12);
+  --seg:0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --pill:0 1px 2px rgba(0,102,255,0.3);
+  /* /ds:gen root-tokens */
+}
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  margin:0; background:var(--white); color:var(--ink);
+  font-family:var(--sans); font-size:13px; line-height:1.55;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:focus-visible { outline:2px solid var(--primary); outline-offset:3px; border-radius:var(--r-sm); }
+a { color:var(--primary); text-decoration:none; }
+
+/* ── Каркас документа ───────────────────────────────────────────────────── */
+.bar {
+  position:sticky; top:0; z-index:50; background:rgba(255,255,255,.82);
+  backdrop-filter:saturate(180%) blur(20px); border-bottom:1px solid var(--line);
+}
+.bar-in { max-width:1180px; margin:0 auto; padding:0 32px; height:48px; display:flex; align-items:center; gap:10px; }
+.logo { width:22px; height:22px; border-radius:6px; background:var(--ink); display:grid; place-items:center; flex:none; }
+.logo i { width:7px; height:7px; border-radius:50%; background:var(--primary); display:block; }
+.bar b { font-size:13.5px; font-weight:600; letter-spacing:-.01em; }
+.bar .sep { color:var(--line-strong); }
+.bar span.sub { font-size:13.5px; color:var(--ink-muted); }
+.bar .ver { margin-left:auto; font:400 11px/1 var(--mono); color:var(--ink-subtle); }
+
+.shell { max-width:1180px; margin:0 auto; padding:0 32px; display:grid; grid-template-columns:196px minmax(0,1fr); gap:56px; }
+@media (max-width:960px) { .shell { grid-template-columns:minmax(0,1fr); gap:0; } .side { display:none; } }
+
+.side { position:sticky; top:48px; align-self:start; padding:56px 0 80px; max-height:calc(100vh - 48px); overflow-y:auto; }
+.side h4 { margin:22px 0 6px; font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-subtle); }
+.side h4:first-child { margin-top:0; }
+.side a { display:block; padding:4px 0 4px 11px; margin-left:-1px; border-left:1px solid var(--line); color:var(--ink-muted); font-size:12.5px; }
+.side a:hover { color:var(--ink); border-left-color:var(--line-strong); }
+.side a.on { color:var(--ink); font-weight:500; border-left:2px solid var(--primary); padding-left:10px; }
+
+main { padding:56px 0 160px; min-width:0; }
+.hero { padding-bottom:56px; }
+h1 { margin:0 0 18px; font-size:40px; font-weight:700; letter-spacing:-.035em; line-height:1.08; text-wrap:balance; }
+.hero p { margin:0; max-width:62ch; font-size:15px; line-height:1.62; color:var(--ink-muted); }
+.facts { display:flex; flex-wrap:wrap; gap:32px; margin-top:32px; }
+.facts div { display:flex; flex-direction:column; gap:2px; }
+.facts b { font-size:22px; font-weight:600; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+.facts span { font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); }
+
+section { padding:64px 0; border-top:1px solid var(--line); scroll-margin-top:60px; }
+section > .eyebrow { font:500 10.5px/1 var(--mono); text-transform:uppercase; letter-spacing:.08em; color:var(--ink-subtle); }
+h2 { margin:14px 0 0; font-size:26px; font-weight:600; letter-spacing:-.028em; line-height:1.15; }
+.intro { margin:14px 0 0; max-width:64ch; font-size:14px; line-height:1.65; color:var(--ink-muted); }
+h3 { margin:44px 0 0; font-size:15px; font-weight:600; letter-spacing:-.015em; }
+h3 + .intro, h2 + .intro { margin-top:10px; }
+.body { margin:12px 0 0; max-width:64ch; font-size:12.5px; line-height:1.6; color:var(--ink-muted); }
+.body strong { color:var(--ink); font-weight:500; }
+.block { margin-top:22px; }
+code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
+
+/* ── Служебные элементы документа ───────────────────────────────────────── */
+.tok { font:400 11px/1.5 var(--mono); background:var(--surface); border:1px solid var(--line); color:var(--ink-body); border-radius:var(--r-sm); padding:2px 6px; cursor:copy; white-space:nowrap; }
+.tok:hover { border-color:var(--line-strong); }
+.tok.copied { border-color:var(--primary); background:var(--primary-tint); color:var(--primary); }
+.tok.fixed { cursor:default; }
+.toks { display:flex; flex-wrap:wrap; gap:6px; }
+
+/* Полоса состояний: ячейки на канве, разделённые волосяной линией */
+.wells { display:grid; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--r-nest); overflow:hidden; grid-template-columns:repeat(auto-fit,minmax(136px,1fr)); }
+.wells.w2 { grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); }
+.wells.w3 { grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); }
+.wells > div { background:var(--canvas); padding:22px 16px 13px; display:flex; flex-direction:column; align-items:center; justify-content:space-between; gap:16px; min-height:96px; }
+.wells > div.left { align-items:stretch; }
+.cap { font:500 10px/1.3 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); text-align:center; }
+.cap i { display:block; margin-top:4px; font-style:normal; text-transform:none; letter-spacing:0; color:var(--ink-muted); font-size:10.5px; }
+
+/* Плоская таблица спецификации */
+.spec { width:100%; border-collapse:collapse; margin-top:18px; }
+.spec td { padding:10px 14px 10px 0; border-top:1px solid var(--line); font-size:12.5px; vertical-align:top; line-height:1.5; }
+.spec tr:first-child td { border-top:0; }
+.spec td:first-child { width:30%; color:var(--ink-muted); white-space:nowrap; }
+.spec td:last-child { padding-right:0; }
+.spec .n { font-variant-numeric:tabular-nums; }
+.scroll { overflow-x:auto; }
+
+/* Свотчи */
+.sw-grid { display:grid; gap:14px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); margin-top:20px; }
+.sw { display:flex; flex-direction:column; gap:8px; }
+.sw i { height:52px; border-radius:var(--r-nest); border:1px solid rgba(11,11,12,.07); display:block; }
+.sw b { font:500 11px/1 var(--mono); }
+.sw em { font:400 10.5px/1 var(--mono); color:var(--ink-subtle); font-style:normal; }
+.sw span { font-size:11.5px; color:var(--ink-muted); line-height:1.4; }
+
+/* Таблица «убрано → канон» */
+.merge { width:100%; border-collapse:collapse; margin-top:18px; }
+.merge th { text-align:left; padding:0 14px 8px 0; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); }
+.merge td { padding:9px 14px 9px 0; border-top:1px solid var(--line); font-size:12.5px; vertical-align:middle; }
+.merge .old { font:400 11px/1.4 var(--mono); color:var(--ink-subtle); text-decoration:line-through; }
+.merge .arw { color:var(--ink-subtle); }
+.merge .new { font:500 11px/1.4 var(--mono); color:var(--ink); }
+.done, .todo { display:inline-flex; align-items:center; gap:5px; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.06em; border-radius:999px; padding:3px 8px; white-space:nowrap; }
+.done { background:var(--success-tint); color:var(--success); }
+.todo { background:var(--warning-tint); color:var(--warning); }
+.wl { width:100%; border-collapse:collapse; margin-top:18px; }
+.wl th { text-align:left; padding:0 14px 8px 0; font:500 10px/1 var(--mono); text-transform:uppercase; letter-spacing:.07em; color:var(--ink-subtle); }
+.wl td { padding:11px 14px 11px 0; border-top:1px solid var(--line); font-size:12.5px; vertical-align:top; line-height:1.5; }
+.wl td:first-child { width:34px; font:500 11px/1.6 var(--mono); color:var(--ink-subtle); }
+.wl td:nth-child(2) { width:26%; color:var(--ink); }
+.wl td:last-child { padding-right:0; color:var(--ink-muted); }
+.wl .n { font-variant-numeric:tabular-nums; color:var(--ink); }
+.chipdot { width:11px; height:11px; border-radius:999px; display:inline-block; vertical-align:-1px; margin-right:6px; border:1px solid rgba(11,11,12,.08); }
+
+/* ═══ Компоненты продукта ══════════════════════════════════════════════════ */
+
+
+/* Иконки — Lucide 1.33.0, сетка 24, обводка 2, скругления round.
+   Геометрия живёт один раз в спрайте; здесь только размер и толщина. */
+.i { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; display:block; }
+.i-fill { fill:currentColor; stroke:none; }
+.i-12 { width:12px; height:12px; } .i-13 { width:13px; height:13px; }
+.i-14 { width:14px; height:14px; } .i-15 { width:15px; height:15px; }
+.i-16 { width:16px; height:16px; } .i-18 { width:18px; height:18px; }
+.i-24 { width:24px; height:24px; }
+
+/* Кнопка */
+.btn { font-family:inherit; border:1px solid transparent; border-radius:999px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; transition:background-color var(--t-state),border-color var(--t-state),color var(--t-state); }
+.btn-lg { padding:9px 22px; font-size:13px; font-weight:600; }
+.btn-md { padding:7px 18px; font-size:12.5px; font-weight:600; }
+.btn-sm { padding:5px 14px; font-size:11.5px; font-weight:500; }
+.b-pri { background:var(--primary); color:#fff; }
+.b-pri:hover, .b-pri.is-hover { background:var(--primary-press); }
+.b-pri:active, .b-pri.is-active { background:var(--primary-press); transform:scale(.98); }
+.b-sec { background:var(--white); border-color:var(--line); color:var(--ink); }
+.b-sec:hover, .b-sec.is-hover { border-color:var(--line-strong); }
+.b-dan { background:var(--danger-tint); border-color:var(--danger-line); color:var(--danger); font-weight:600; }
+.b-dan:hover, .b-dan.is-hover { border-color:#e0b6b2; }
+.b-lnk { background:none; border:0; color:var(--primary); padding:0; font-size:12.5px; font-weight:500; }
+.b-lnk:hover { text-decoration:underline; }
+.btn.is-focus { outline:2px solid var(--primary); outline-offset:3px; }
+.btn:disabled, .btn.is-off { opacity:.5; cursor:default; }
+.spin { width:13px; height:13px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
+.spin.dark { border-color:var(--line-strong); border-top-color:var(--primary); }
+
+/* Иконочная кнопка */
+.ib { display:grid; place-items:center; border:1px solid var(--line); background:var(--white); color:var(--ink-subtle); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.ib-24 { width:24px; height:24px; border-radius:var(--r-sm); }
+.ib-28 { width:28px; height:28px; border-radius:var(--r-md); }
+.ib-34 { width:34px; height:34px; border-radius:999px; }
+.ib-44 { width:44px; height:44px; border-radius:var(--r-md); }
+.ib-nut:hover, .ib-nut.is-hover { border-color:var(--line-strong); color:var(--ink); }
+.ib-pri:hover, .ib-pri.is-hover { border-color:var(--primary-line); background:var(--primary-tint); color:var(--primary); }
+.ib-dan:hover, .ib-dan.is-hover { border-color:var(--danger-line); background:var(--danger-tint); color:var(--danger); }
+.ib.is-focus { outline:2px solid var(--primary); outline-offset:2px; }
+.ib:disabled, .ib.is-off { opacity:.45; cursor:default; }
+.ib.solid { background:var(--primary); border-color:var(--primary); color:#fff; }
+
+/* Переключатель */
+.sw-btn { width:44px; height:26px; border:0; border-radius:999px; background:var(--line-strong); position:relative; cursor:pointer; flex:none; transition:background-color .18s; }
+.sw-btn[aria-checked="true"] { background:var(--primary); }
+.sw-btn i { position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.3); transition:transform .18s; }
+.sw-btn[aria-checked="true"] i { transform:translateX(18px); }
+.sw-btn:active i { transform:scale(.86); }
+.sw-btn[aria-checked="true"]:active i { transform:translateX(18px) scale(.86); }
+.sw-btn.is-focus { outline:2px solid var(--primary); outline-offset:3px; }
+.sw-btn:disabled { opacity:.5; cursor:default; }
+
+/* Поля */
+.fld { width:100%; border:1px solid var(--line); background:var(--white); border-radius:var(--r-nest); padding:9px 12px; font:inherit; font-size:13px; color:var(--ink); outline:0; transition:border-color .18s,box-shadow .18s; }
+.fld::placeholder { color:var(--ink-subtle); }
+.fld:hover, .fld.is-hover { border-color:var(--line-strong); }
+.fld:focus, .fld.is-focus { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); }
+.fld.is-bad { border-color:var(--danger); }
+.fld:disabled, .fld.is-off { background:var(--surface); color:var(--ink-subtle); cursor:default; }
+.in-icon { position:relative; display:block; width:100%; }
+.in-icon > .i { position:absolute; left:12px; top:50%; margin-top:-7px; color:var(--ink-subtle); pointer-events:none; }
+.fld.pill { border-radius:999px; height:36px; padding:0 14px; }
+.lab { display:flex; flex-direction:column; gap:6px; width:100%; }
+.lab > .t { font-size:12px; font-weight:500; color:var(--ink-body); }
+.lab > .err { font-size:11px; font-weight:500; color:var(--danger); }
+.lab > .hint { font-size:11px; color:var(--ink-subtle); }
+.seg { display:flex; gap:6px; width:100%; }
+.seg button { flex:1; border:1px solid var(--line); background:var(--white); color:var(--ink-muted); border-radius:var(--r-nest); padding:8px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.seg button.on { border-color:var(--primary); background:var(--primary-tint); color:var(--primary); }
+.step { display:inline-flex; align-items:center; gap:6px; }
+.step .v { min-width:44px; text-align:center; font-size:12.5px; font-variant-numeric:tabular-nums; }
+
+
+/* Выпадающий список: поле-кнопка + панель, раскрывающаяся по max-height.
+   Закрытая панель получает inert — иначе её кнопки остаются в порядке обхода. */
+.dd { position:relative; width:100%; }
+.dd-btn { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); background:var(--white); border-radius:var(--r-nest); padding:9px 13px; font:inherit; font-size:13px; color:var(--ink); text-align:left; cursor:pointer; outline:0; transition:border-color .18s,box-shadow .18s; }
+.dd-btn .ph { color:var(--ink-subtle); }
+.dd-btn:hover, .dd-btn.is-hover { border-color:var(--line-strong); }
+.dd-btn.is-focus, .dd-btn:focus-visible { border-color:var(--primary); box-shadow:0 0 0 3px rgba(0,102,255,.12); outline:0; }
+.dd-btn[aria-expanded="true"] { border-color:var(--primary); }
+.dd-btn:disabled { background:var(--surface); color:var(--ink-subtle); cursor:default; }
+.dd-btn .i { color:var(--ink-subtle); transition:transform .4s var(--e-spring); }
+.dd-btn[aria-expanded="true"] .i { transform:rotate(180deg); }
+.dd-panel { position:absolute; left:0; right:0; top:calc(100% + 5px); z-index:20; background:var(--white); border:1px solid var(--line); border-radius:var(--r-nest); padding:4px; box-shadow:var(--pop); max-height:0; opacity:0; overflow:hidden; transition:max-height .42s cubic-bezier(.34,1.4,.6,1),opacity .22s ease; }
+.dd-panel.open { max-height:240px; opacity:1; overflow-y:auto; }
+.dd-opt { width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:0; background:none; border-radius:var(--r-sm); padding:8px 10px; font:inherit; font-size:12.5px; color:var(--ink); text-align:left; cursor:pointer; transition:background-color var(--t-state); }
+.dd-opt:hover, .dd-opt.is-hover { background:var(--primary-tint); }
+.dd-opt.on { color:var(--primary); font-weight:500; }
+.dd-opt .i { color:var(--primary); }
+.dd-empty { padding:8px 10px; font-size:12.5px; color:var(--ink-subtle); }
+
+/* Чипы */
+.chipset { display:flex; flex-wrap:wrap; gap:7px; }
+.chip { display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:999px; background:var(--canvas); color:var(--ink-body); padding:5px 11px; font-size:12px; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.chip.ok { border-color:var(--success-line); background:var(--success-tint); color:var(--success); }
+.chip.bad { border-color:var(--danger-line); background:var(--danger-tint); color:var(--danger); }
+.chip.off { opacity:.5; }
+.chip .x { border:0; background:none; padding:0; cursor:pointer; font-size:14px; line-height:1; color:var(--ink-subtle); }
+.chip .x:hover { color:var(--danger); }
+.chip-add { display:inline-flex; align-items:center; gap:4px; border:1px dashed var(--line-strong); border-radius:999px; background:var(--white); color:var(--ink-muted); padding:5px 11px; font:400 12px/1.3 var(--sans); cursor:pointer; transition:border-color var(--t-state),color var(--t-state); }
+.chip-add:hover { border-color:var(--primary); color:var(--primary); }
+.chip-edit { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--primary); border-radius:999px; background:var(--white); padding:3px 4px 3px 11px; }
+.chip-edit input { width:132px; border:0; background:none; outline:0; font:inherit; font-size:12px; }
+.chip-edit .go { width:22px; height:22px; border:0; border-radius:50%; background:var(--primary); color:#fff; display:grid; place-items:center; cursor:pointer; flex:none; }
+.chip-edit .go:disabled { opacity:.5; cursor:default; }
+
+/* Статусы */
+.pill { display:inline-flex; align-items:center; gap:5px; border-radius:999px; padding:3px 10px; font-size:11px; font-weight:500; }
+.pill i { width:6px; height:6px; border-radius:50%; background:currentColor; display:block; flex:none; }
+.s-ok   { background:var(--success-tint); color:var(--success); }
+.s-warn { background:var(--warning-tint); color:var(--warning); }
+.s-info { background:var(--primary-tint); color:var(--primary); }
+.s-bad  { background:var(--danger-tint); color:var(--danger); }
+.s-idle { background:var(--canvas); color:var(--ink-muted); }
+.cnt { border-radius:999px; background:var(--canvas); color:var(--ink-muted); padding:2px 8px; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums; }
+.cnt.live { height:18px; min-width:18px; padding:0 5px; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-weight:700; font-size:10.5px; background:var(--success); }
+.cnt.live.off { background:var(--ink-muted); }
+.dl { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:500; }
+.dl i { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+/* Уведомления */
+.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-nest); padding:11px 13px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
+.n-info { border-color:var(--primary-line); background:var(--primary-tint); color:var(--ink-body); }
+.n-warn { border-color:var(--warning-line); background:var(--warning-tint); color:var(--ink-body); }
+.n-bad  { border-color:var(--danger-line); background:var(--danger-tint); color:var(--ink-body); }
+.note .ic { flex:none; margin-top:1px; }
+.n-info .ic { color:var(--primary); } .n-warn .ic { color:var(--warning); } .n-bad .ic { color:var(--danger); }
+
+/* Поверхности */
+.card { background:var(--white); border:1px solid var(--line); border-radius:var(--r-card); padding:18px; }
+.nest { background:var(--white); border:1px solid var(--line); border-radius:var(--r-nest); padding:13px; }
+.nest.rec { background:var(--surface); }
+.nest.sel { border-color:var(--primary); background:rgba(0,102,255,.06); }
+.acc { border:1px solid var(--line); border-radius:var(--r-card); background:var(--white); overflow:hidden; width:100%; }
+.acc-h { width:100%; border:0; background:none; font:inherit; text-align:left; display:flex; align-items:center; gap:10px; padding:13px 16px; cursor:pointer; }
+.acc-h b { font-size:13px; font-weight:600; }
+.chev { margin-left:auto; color:var(--ink-subtle); display:flex; transition:transform .42s var(--e-spring); }
+.acc-h[aria-expanded="true"] .chev { transform:rotate(180deg); }
+.acc-b { padding:0 16px 16px; font-size:12.5px; color:var(--ink-muted); }
+.dialog { width:100%; max-width:300px; background:var(--white); border-radius:var(--r-card); box-shadow:0 18px 50px rgba(11,11,12,.18); padding:16px; display:flex; flex-direction:column; gap:10px; }
+.dialog b { font-size:14px; font-weight:600; }
+.dialog p { margin:0; font-size:12px; color:var(--ink-muted); line-height:1.5; }
+.tip { position:relative; display:inline-flex; }
+.tip-pop { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%) translateY(3px); background:var(--slate); color:#fff; border-radius:var(--r-md); padding:6px 9px; font-size:11px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .15s,transform .15s; box-shadow:var(--pop); z-index:20; }
+.tip:hover .tip-pop, .tip:focus-within .tip-pop, .tip.open .tip-pop { opacity:1; transform:translateX(-50%) translateY(0); }
+.tip-pop::before { content:''; position:absolute; bottom:100%; left:50%; transform:translateX(-50%); border:5px solid transparent; border-bottom-color:var(--slate); }
+.hint-card { position:absolute; top:calc(100% + 7px); left:50%; transform:translateX(-50%); width:210px; background:var(--white); border:1px solid var(--line); border-radius:var(--r-nest); padding:10px; font-size:11.5px; line-height:1.45; color:var(--ink-muted); box-shadow:var(--pop); opacity:0; pointer-events:none; transition:opacity .15s; z-index:20; text-align:left; }
+.tip:hover .hint-card, .tip:focus-within .hint-card, .tip.open .hint-card { opacity:1; }
+
+/* Плашка с действиями */
+.surf { position:relative; overflow:hidden; border-radius:var(--r-nest); margin-bottom:-2px; padding-bottom:2px; width:100%; }
+.surf-rail { position:absolute; left:0; right:0; top:0; bottom:2px; display:flex; align-items:stretch; justify-content:flex-end; border-radius:var(--r-nest); background:var(--canvas); }
+.surf-rail button { width:48px; border:0; background:none; display:grid; place-items:center; cursor:pointer; }
+.surf-rail .run { color:var(--success); } .surf-rail .pause { color:var(--warning); }
+.surf-rail .edit { color:var(--primary); } .surf-rail .del { color:var(--danger); }
+.surf-face { position:relative; border-radius:var(--r-nest); background:var(--white); transition:transform var(--t-reveal) var(--e-out); will-change:transform; }
+.surf:hover .surf-face, .surf.open .surf-face { transform:translateX(calc(-1 * var(--shift,144px))); }
+.plaque { display:flex; align-items:center; justify-content:space-between; gap:8px; border:1px solid var(--line); border-radius:var(--r-nest); background:var(--surface); padding:8px 10px; }
+.plaque.on { background:var(--success-tint); border-color:var(--success-line); }
+.plaque .lhs { display:flex; align-items:center; gap:8px; min-width:0; }
+.plaque .st { font-size:12.5px; font-weight:600; color:var(--ink-muted); }
+.plaque.on .st { color:var(--success); }
+.plaque .pd { width:8px; height:8px; border-radius:50%; background:var(--ink-subtle); flex:none; }
+.plaque.on .pd { background:var(--success); }
+
+/* Таблица */
+.tbl { width:100%; border-collapse:collapse; background:var(--white); }
+.tbl th { padding:11px 16px; text-align:left; font-size:11px; font-weight:500; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-subtle); background:var(--surface); white-space:nowrap; }
+.tbl td { padding:11px 16px; border-top:1px solid var(--line-row); font-size:12.5px; }
+.tbl tbody tr:hover { background:var(--surface); }
+.tbl tbody tr.sel { background:var(--primary-tint); }
+.frame { border:1px solid var(--line); border-radius:var(--r-card); overflow:hidden; }
+.empty { border:1.5px dashed var(--primary-line); border-radius:var(--r-nest); padding:36px 16px; text-align:center; font-size:12.5px; color:var(--ink-subtle); width:100%; }
+.skel { height:11px; border-radius:999px; background:linear-gradient(90deg,var(--canvas),var(--surface),var(--canvas)); background-size:200% 100%; animation:sheen 1.4s linear infinite; }
+
+/* Прогресс, аватар, журнал */
+.bar-track { height:5px; border-radius:999px; background:var(--canvas); overflow:hidden; width:100%; }
+.bar-track i { display:block; height:100%; border-radius:999px; background:var(--primary); }
+.bar-track.ind i { width:38%; animation:slide 1.4s ease-in-out infinite; }
+.av { border-radius:50%; display:grid; place-items:center; font-weight:600; background:var(--primary-tint); color:var(--primary); flex:none; }
+.av.solid { background:var(--primary); color:#fff; }
+.term { background:var(--slate); border-radius:var(--r-nest); padding:12px 14px; font:400 11px/1.85 var(--mono); color:var(--slate-text); overflow-x:auto; width:100%; }
+.term .t { color:var(--slate-dim); } .term .c { color:var(--slate-blue); }
+.term .er { color:#e5736a; }
+.mark-ok { color:var(--success); display:inline-flex; } .mark-bad { color:var(--danger); display:inline-flex; }
+.toast { display:inline-flex; align-items:center; gap:8px; background:var(--slate); color:#fff; border-radius:var(--r-nest); padding:9px 12px; font-size:12px; box-shadow:var(--pop); }
+
+/* Движение */
+@keyframes spin { to { transform:rotate(360deg); } }
+@keyframes enter { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+@keyframes okpop { 0% { transform:scale(.6); opacity:0; } 60% { transform:scale(1.08); } 100% { transform:scale(1); opacity:1; } }
+@keyframes blurswap { from { opacity:0; filter:blur(6px); transform:scale(.78); } to { opacity:1; filter:blur(0); transform:scale(1); } }
+@keyframes pulsedot { 0% { box-shadow:0 0 0 0 rgba(0,102,255,.45); } 70% { box-shadow:0 0 0 6px rgba(0,102,255,0); } 100% { box-shadow:0 0 0 0 rgba(0,102,255,0); } }
+@keyframes textpulse { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+@keyframes dotspin { 0%,100% { opacity:1; } 50% { opacity:.16; } }
+@keyframes sheen { to { background-position:-200% 0; } }
+@keyframes slide { 0% { transform:translateX(-100%); } 100% { transform:translateX(320%); } }
+.dot { width:9px; height:9px; border-radius:50%; background:var(--primary); }
+.a-live { animation:pulsedot 1.6s ease-out infinite; }
+.a-pulse { animation:textpulse 1.4s ease-in-out infinite; }
+.a-enter { animation:enter var(--t-enter) ease both; }
+.a-pop { animation:okpop .35s ease both; }
+.a-blur { animation:blurswap .34s cubic-bezier(.34,1.56,.64,1) both; }
+.typing { display:inline-flex; gap:4px; align-items:center; }
+.typing span { width:4px; height:4px; border-radius:50%; background:var(--primary); animation:dotspin 1.2s ease-in-out infinite; }
+.typing span:nth-child(2) { animation-delay:.15s; } .typing span:nth-child(3) { animation-delay:.3s; }
+.replay { font:500 10.5px/1 var(--mono); color:var(--primary); background:none; border:0; padding:0; cursor:pointer; }
+
+@media (prefers-reduced-motion:reduce) {
+  html { scroll-behavior:auto; }
+  .a-live,.a-pulse,.a-enter,.a-pop,.a-blur,.typing span,.spin,.skel,.bar-track.ind i { animation:none !important; }
+  .surf-face,.chev,.sw-btn,.sw-btn i,.btn,.ib,.fld,.chip { transition:none !important; }
+}
+.row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.col { display:flex; flex-direction:column; gap:10px; width:100%; }
+footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; color:var(--ink-subtle); display:flex; flex-direction:column; gap:6px; max-width:64ch; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ic-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="ic-play" viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></symbol>
+  <symbol id="ic-pause" viewBox="0 0 24 24"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></symbol>
+  <symbol id="ic-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="ic-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="ic-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="ic-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="ic-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="ic-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="ic-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="ic-menu" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></symbol>
+  <symbol id="ic-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="ic-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="ic-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="ic-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+  <symbol id="ic-audio" viewBox="0 0 24 24"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></symbol>
+</svg>
+<header class="bar">
+  <div class="bar-in">
+    <span class="logo"><i></i></span>
+    <b>Telebuba</b>
+    <span class="sep">/</span>
+    <span class="sub">Дизайн-система</span>
+    <span class="ver">canon 1.0</span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="side" aria-label="Разделы">
+    <h4>Основы</h4>
+    <a href="#principles" class="on">Принципы</a>
+    <a href="#color">Цвет</a>
+    <a href="#type">Типографика</a>
+    <a href="#shape">Форма и ритм</a>
+    <a href="#motion">Движение</a>
+    <a href="#icons">Иконки</a>
+    <h4>Действия</h4>
+    <a href="#button">Кнопка</a>
+    <a href="#iconbutton">Иконочная кнопка</a>
+    <h4>Ввод</h4>
+    <a href="#field">Поле</a>
+    <a href="#dropdown">Выпадающий список</a>
+    <a href="#toggle">Переключатели</a>
+    <a href="#chip">Чипы</a>
+    <h4>Сообщение</h4>
+    <a href="#status">Статус</a>
+    <a href="#notice">Уведомление</a>
+    <a href="#feedback">Отклик</a>
+    <h4>Поверхности</h4>
+    <a href="#card">Карточка</a>
+    <a href="#actionrow">Плашка с действиями</a>
+    <a href="#overlay">Диалог и подсказка</a>
+    <h4>Данные</h4>
+    <a href="#table">Таблица</a>
+    <a href="#log">Журнал</a>
+    <a href="#identity">Аватар</a>
+    <h4>Свод</h4>
+    <a href="#unify">Унификация</a>
+    <a href="#plan">План работ</a>
+    <a href="#source">Источник правды</a>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <h1>Дизайн-система Telebuba</h1>
+      <p>Канон интерфейса операционной панели: одна светлая основа, один синий акцент, три смысловых цвета. Ниже — токены, компоненты и все их состояния. Документ описывает то, как система должна выглядеть; расхождения с текущим кодом собраны в разделе «Унификация».</p>
+      <div class="facts">
+        <div><b>3</b><span>оттенка основы</span></div>
+        <div><b>1</b><span>акцент</span></div>
+        <div><b>2</b><span>шрифта</span></div>
+        <div><b>5</b><span>радиусов</span></div>
+        <div><b>6</b><span>заменённых шкал</span></div>
+        <div><b>20</b><span>компонентов</span></div>
+      </div>
+    </div>
+
+    <!-- ── Принципы ──────────────────────────────────────────────────────── -->
+    <section id="principles">
+      <div class="eyebrow">Основы</div>
+      <h2>Принципы</h2>
+      <table class="spec">
+        <tr><td>Одно действие</td><td>На поверхности одна залитая синим кнопка. Всё остальное — контур или текст.</td></tr>
+        <tr><td>Цвет — это смысл</td><td>Синий значит «действие», зелёный «работает», янтарный «ждёт», красный «сломалось». Ничего декоративного.</td></tr>
+        <tr><td>Каждое изменение видно</td><td>Мутация заканчивается зелёной галочкой или красным крестом рядом с тем, что изменилось.</td></tr>
+        <tr><td>Форма говорит о роли</td><td>Пилюля — действие, прямоугольник с радиусом 10 — ввод, пунктир — «здесь можно добавить».</td></tr>
+        <tr><td>Движение объясняет</td><td>Анимация подтверждает действие оператора или сообщает, что процесс жив. Больше её нет.</td></tr>
+        <tr><td>Плотность без тесноты</td><td>13px основной текст, 11px подписи заглавными, воздух между группами — не внутри них.</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Цвет ──────────────────────────────────────────────────────────── -->
+    <section id="color">
+      <div class="eyebrow">Основы</div>
+      <h2>Цвет</h2>
+      <p class="intro">Тёплые нейтрали, не серые: основа — бумажный тон, каждая граница — волосяная линия от него. Смысловой цвет всегда приходит парой: насыщенный для текста и иконки, бледный для подложки.</p>
+
+      <!-- ds:gen color-swatches -->
+      <h3>Основа</h3>
+      <p class="body">Тон отвечает на вопрос «где я нахожусь»: белое — предмет, <strong>surface</strong> — вложено в предмет, <strong>canvas</strong> — под предметом, <strong>track</strong> — то, что заполняется. <strong>scrim</strong> стоит особняком: это не тон основы, а завеса поверх фотографии, единственное полупрозрачное значение в наборе.</p>
+      <div class="sw-grid">
+        <div class="sw"><i style="background:#ffffff"></i><b>white</b><em>#ffffff</em><span>Карточки, поля, шапка</span></div>
+        <div class="sw"><i style="background:#f1efed"></i><b>canvas</b><em>#f1efed</em><span>Фон страницы, рельс под плашкой</span></div>
+        <div class="sw"><i style="background:rgba(11,11,12,0.55)"></i><b>scrim</b><em>rgba(11,11,12,0.55)</em><span>Завеса над фотографией: тёмные чернила на 55%, чтобы кнопка поверх снимка осталась читаемой</span></div>
+        <div class="sw"><i style="background:#faf9f7"></i><b>surface</b><em>#faf9f7</em><span>Шапка таблицы, наведение на строку, вложенный блок</span></div>
+        <div class="sw"><i style="background:#eeedea"></i><b>track</b><em>#eeedea</em><span>Всё заполняемое: дорожка прогресса, чип, счётчик</span></div>
+      </div>
+
+      <h3>Текст</h3>
+      <p class="body"><strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на <code>track</code>, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>body</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть.</p>
+      <div class="sw-grid">
+        <div class="sw"><i style="background:#0b0b0c"></i><b>ink</b><em>#0b0b0c</em><span>Заголовки, основной текст</span></div>
+        <div class="sw"><i style="background:#3a3a3a"></i><b>ink-body</b><em>#3a3a3a</em><span>Плотные строки, значения в чипах</span></div>
+        <div class="sw"><i style="background:#63615d"></i><b>ink-muted</b><em>#63615d</em><span>Второстепенный текст, контурные кнопки</span></div>
+        <div class="sw"><i style="background:#6e6b66"></i><b>ink-subtle</b><em>#6e6b66</em><span>Подписи, плейсхолдеры, иконки в покое</span></div>
+      </div>
+
+      <h3>Линии</h3>
+      <div class="sw-grid">
+        <div class="sw"><i style="background:#e6e5e3"></i><b>line</b><em>#e6e5e3</em><span>Граница по умолчанию</span></div>
+        <div class="sw"><i style="background:#d8d6d2"></i><b>line-strong</b><em>#d8d6d2</em><span>Наведение, пунктир, полоса прокрутки</span></div>
+        <div class="sw"><i style="background:#dedcd8"></i><b>line-input</b><em>#dedcd8</em><span>Граница поля ввода</span></div>
+        <div class="sw"><i style="background:#f0eeeb"></i><b>line-row</b><em>#f0eeeb</em><span>Разделитель строк таблицы</span></div>
+      </div>
+
+      <h3>Смысл</h3>
+      <p class="body">У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий добавляет <strong>wash</strong>, самую светлую заливку наведения, и <strong>press</strong>, наведение на залитую кнопку. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.</p>
+      <div class="sw-grid">
+        <div class="sw"><i style="background:#0066ff"></i><b>primary</b><em>#0066ff</em><span>Действие, живое состояние, фокус</span></div>
+        <div class="sw"><i style="background:#0057db"></i><b>primary-press</b><em>#0057db</em><span>Наведение и нажатие залитой кнопки</span></div>
+        <div class="sw"><i style="background:#eef4ff"></i><b>primary-tint</b><em>#eef4ff</em><span>Выбранная строка, синий чип</span></div>
+        <div class="sw"><i style="background:#f2f6ff"></i><b>primary-wash</b><em>#f2f6ff</em><span>Самая светлая синяя заливка: наведение, рамка карточки</span></div>
+        <div class="sw"><i style="background:#cbd7ec"></i><b>primary-line</b><em>#cbd7ec</em><span>Граница синей подложки и пунктира</span></div>
+        <div class="sw"><i style="background:#e4ecfa"></i><b>primary-hairline</b><em>#e4ecfa</em><span>Рамка настолько бледная, что работает и разделителем плитки</span></div>
+        <div class="sw"><i style="background:#0052cc"></i><b>primary-deep</b><em>#0052cc</em><span>Синий для мелкого текста на tint и wash: основной даёт там 4.38:1</span></div>
+        <div class="sw"><i style="background:#12a150"></i><b>success</b><em>#12a150</em><span>Работает, проверено</span></div>
+        <div class="sw"><i style="background:#0b6b37"></i><b>success-deep</b><em>#0b6b37</em><span>Заголовок на зелёной подложке — единственный проходит по читаемости</span></div>
+        <div class="sw"><i style="background:#0e8c45"></i><b>success-press</b><em>#0e8c45</em><span>Наведение и нажатие залитой зелёной кнопки</span></div>
+        <div class="sw"><i style="background:#ddf7e9"></i><b>success-tint</b><em>#ddf7e9</em><span>Плашка «слушает», зелёный чип</span></div>
+        <div class="sw"><i style="background:#b8ecce"></i><b>success-line</b><em>#b8ecce</em><span>Граница зелёной подложки</span></div>
+        <div class="sw"><i style="background:#16b364"></i><b>success-dot</b><em>#16b364</em><span>Точка «система активна»</span></div>
+        <div class="sw"><i style="background:#9a7b22"></i><b>warning</b><em>#9a7b22</em><span>Пауза, ожидание, спам-блок</span></div>
+        <div class="sw"><i style="background:#7a5e12"></i><b>warning-deep</b><em>#7a5e12</em><span>Заголовок или иконка на янтарном чипе</span></div>
+        <div class="sw"><i style="background:#c47d12"></i><b>warning-strong</b><em>#c47d12</em><span>Точка и значок, где нужен более яркий янтарный</span></div>
+        <div class="sw"><i style="background:#fff0d2"></i><b>warning-tint</b><em>#fff0d2</em><span>Подложка предупреждения</span></div>
+        <div class="sw"><i style="background:#efd79a"></i><b>warning-line</b><em>#efd79a</em><span>Граница янтарной подложки</span></div>
+        <div class="sw"><i style="background:#c0473f"></i><b>danger</b><em>#c0473f</em><span>Ошибка, удаление, бан</span></div>
+        <div class="sw"><i style="background:#a83a33"></i><b>danger-deep</b><em>#a83a33</em><span>Красный для мелкого текста на красном чипе: каждая метка «удалён» набрана 10.5px</span></div>
+        <div class="sw"><i style="background:#fbecec"></i><b>danger-tint</b><em>#fbecec</em><span>Лицо разрушительной кнопки</span></div>
+        <div class="sw"><i style="background:#f0c9c5"></i><b>danger-line</b><em>#f0c9c5</em><span>Граница красной подложки</span></div>
+        <div class="sw"><i style="background:#16161a"></i><b>term</b><em>#16161a</em><span>Журнал, тёмная подсказка, тост</span></div>
+        <div class="sw"><i style="background:#80808c"></i><b>term-dim</b><em>#80808c</em><span>Время и разделители в строке журнала</span></div>
+        <div class="sw"><i style="background:#c9c9d3"></i><b>term-text</b><em>#c9c9d3</em><span>Текст журнала</span></div>
+        <div class="sw"><i style="background:#6ea8fe"></i><b>term-link</b><em>#6ea8fe</em><span>Канал и ссылка в журнале</span></div>
+        <div class="sw"><i style="background:#e5736b"></i><b>term-error</b><em>#e5736b</em><span>Сбой в журнале</span></div>
+        <div class="sw"><i style="background:#7be0a6"></i><b>term-success</b><em>#7be0a6</em><span>Удачный исход в журнале</span></div>
+        <div class="sw"><i style="background:#ffd27f"></i><b>term-warning</b><em>#ffd27f</em><span>Предупреждение в журнале</span></div>
+      </div>
+      <!-- /ds:gen color-swatches -->
+
+      <h3>Копировать</h3>
+      <div class="block toks">
+        <span class="tok">bg-canvas</span><span class="tok">bg-surface</span>
+        <span class="tok">text-ink</span><span class="tok">text-ink-muted</span><span class="tok">text-ink-subtle</span>
+        <span class="tok">border-line</span><span class="tok">border-line-row</span>
+        <span class="tok">bg-primary</span><span class="tok">bg-primary-tint</span>
+        <span class="tok">text-success</span><span class="tok">bg-success-tint</span>
+                <span class="tok">text-warning</span><span class="tok">bg-warning-tint</span><span class="tok">border-warning-line</span>
+        <span class="tok">text-danger</span><span class="tok">bg-danger-tint</span>
+      </div>
+    </section>
+
+    <!-- ── Типографика ───────────────────────────────────────────────────── -->
+    <section id="type">
+      <div class="eyebrow">Основы</div>
+      <h2>Типографика</h2>
+      <p class="intro">Inter для всего читаемого, JetBrains Mono для машинного: строки журнала, идентификаторы, номера. Размеры заданы в точных пикселях, потому что плотные строки стоят рядом с крупными заголовками.</p>
+      <div class="scroll">
+        <table class="spec">
+          <tr><td>Заголовок страницы</td><td><span style="font-size:22px;font-weight:700;letter-spacing:-.02em">Аккаунты</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22 / 700 / −0.02em</span></td></tr>
+          <tr><td>Заголовок раздела</td><td><span style="font-size:16px;font-weight:700">Прогрев</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 / 700</span></td></tr>
+          <tr><td>Заголовок карточки</td><td><span style="font-size:13px;font-weight:600">Каналы кампании</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">13 / 600 — 12.5 / 600 во вложенной</span></td></tr>
+          <tr><td>Основной</td><td><span style="font-size:13px">Запустить прогрев</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">13 / 400–500</span></td></tr>
+          <tr><td>Плотная строка</td><td><span style="font-size:12.5px;color:var(--ink-body)">+7 900 123-45-67</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12.5 / 400</span></td></tr>
+          <tr><td>Мета</td><td><span style="font-size:11.5px;color:var(--ink-muted)">15 каналов · 5 аккаунтов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">11.5 / 400–500</span></td></tr>
+          <tr><td>Подпись</td><td><span style="font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-subtle)">Статус</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">11 / 500 / 0.04em / заглавные</span></td></tr>
+          <tr><td>Журнал</td><td><span style="font:400 11px/1.85 var(--mono)">18:42:07 · join → @channel</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">11 / mono / 1.85</span></td></tr>
+          <tr><td>Счётчик</td><td><span style="font-size:20px;font-weight:700;font-variant-numeric:tabular-nums">1 284</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">20 / 700 / tabular-nums</span></td></tr>
+        </table>
+      </div>
+      <h3>Ступени</h3>
+      <p class="body">Восемь имён, и других размеров нет: шкала Tailwind заменена целиком, поэтому <code>text-sm</code> не существует, а <code>text-[12.5px]</code> больше не написать мимо канона. Имя говорит роль, а не число — <code>body</code> носит 262 вызова, и когда роль сменит размер, менять придётся одну строку в конфиге.</p>
+      <div class="scroll">
+        <table class="spec">
+          <!-- ds:gen type-scale -->
+          <tr><td><code>micro</code> · 10.5</td><td>Подпись под строкой, вторая строка плашки</td></tr>
+          <tr><td><code>tiny</code> · 11</td><td>Пилюля статуса, шапка таблицы, журнал</td></tr>
+          <tr><td><code>body</code> · 12.5</td><td>Основной размер интерфейса</td></tr>
+          <tr><td><code>lead</code> · 13</td><td>Поле, список, подпись кнопки, заголовок карточки</td></tr>
+          <tr><td><code>title</code> · 16</td><td>Заголовок раздела и диалога</td></tr>
+          <tr><td><code>stat</code> · 20</td><td>Счётчик-одометр</td></tr>
+          <tr><td><code>display</code> · 22</td><td>Заголовок страницы</td></tr>
+          <tr><td><code>hero</code> · 42</td><td>Единственная крупная цифра</td></tr>
+          <!-- /ds:gen type-scale -->
+        </table>
+      </div>
+      <p class="body">Межстрочное не привязано к размеру: <code>leading-*</code> живёт отдельно, потому что одна и та же ступень стоит и в плотной строке, и в абзаце.</p>
+
+      <p class="body">Цифры, которые встают в столбец, всегда получают <code>tabular-nums</code>. Заглавные подписи — только 11px и только с трекингом 0.04em; крупные заглавные в системе не используются.</p>
+    </section>
+
+    <!-- ── Форма и ритм ──────────────────────────────────────────────────── -->
+    <section id="shape">
+      <div class="eyebrow">Основы</div>
+      <h2>Форма и ритм</h2>
+      <p class="intro">Радиус кодирует уровень вложенности, а не вкус: чем глубже элемент, тем меньше скругление. Всё, что можно нажать и что стоит в строке, — пилюля.</p>
+      <div class="wells" style="margin-top:20px">
+        <!-- ds:gen radius-scale -->
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:0px"></div><span class="cap">none · 0<i>отсутствие скругления, а не ступень</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:6px"></div><span class="cap">sm · 6<i>чип-кнопка, иконка 24</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:8px"></div><span class="cap">md · 8<i>иконка 28, подсказка</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:11px"></div><span class="cap">lg · 11<i>поле, вложенная карточка, плашка</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:16px"></div><span class="cap">card · 16<i>карточка, диалог</i></span></div>
+        <div><div style="width:56px;height:38px;background:var(--primary-tint);border:1px solid var(--primary-line);border-radius:9999px"></div><span class="cap">full · 9999<i>действие, статус, чип</i></span></div>
+        <!-- /ds:gen radius-scale -->
+      </div>
+      <h3>Зазоры</h3>
+      <!-- ds:gen spacing-scale -->
+      <p class="body">Одиннадцать ступеней — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>добавлена</em>, а не заменена — <code>spacing</code> кормит ещё и <code>w-*</code>/<code>h-*</code>, а 34px аватара это размер компонента, а не ступень ритма; вернуться <code>p-4</code> не даёт правило линтера, а не отсутствие ключа.</p>
+      <table class="spec">
+        <tr><td><code>hair</code> · 2</td><td>Волосяной зазор сетки и стопки строк</td></tr>
+        <tr><td><code>xs</code> · 3</td><td>Счётчик над своей подписью</td></tr>
+        <tr><td><code>tight</code> · 5</td><td>Иконка и подпись, точка и текст</td></tr>
+        <tr><td><code>sm</code> · 7</td><td>Основной зазор внутри контрола и строки</td></tr>
+        <tr><td><code>md</code> · 10</td><td>Строки и поля внутри карточки</td></tr>
+        <tr><td><code>lg</code> · 14</td><td>Блоки карточки и формы</td></tr>
+        <tr><td><code>xl</code> · 18</td><td>Горизонтальный отступ контрола</td></tr>
+        <tr><td><code>2xl</code> · 22</td><td>Горизонтальный отступ крупного контрола</td></tr>
+        <tr><td><code>3xl</code> · 26</td><td>Воздух страницы</td></tr>
+        <tr><td><code>4xl</code> · 32</td><td>Воздух страницы, крупный шаг</td></tr>
+        <tr><td><code>5xl</code> · 64</td><td>Пустое состояние</td></tr>
+      </table>
+      <!-- /ds:gen spacing-scale -->
+
+      <h3>Отступы</h3>
+      <p class="body">Одна ступень на семейство, и семейство определяется тем, чем элемент является, а не тем, сколько он сейчас меряет.</p>
+      <div class="scroll">
+        <table class="spec">
+          <tr><td>Кнопка</td><td><code>9 / 22</code> · lead &nbsp;·&nbsp; средняя <code>7 / 18</code> · body &nbsp;·&nbsp; малая <code>5 / 14</code></td></tr>
+          <tr><td>Чип</td><td><code>5 / 11</code> · body</td></tr>
+          <tr><td>Пилюля статуса</td><td><code>3 / 10</code> · tiny</td></tr>
+          <tr><td>Бейдж-счётчик</td><td><code>2 / 8</code> · micro — число рядом с заголовком, не состояние</td></tr>
+          <tr><td>Фильтр-пилюля</td><td><code>6 / 14</code> — группа с едущей капсулой</td></tr>
+          <tr><td>Сегментная кнопка</td><td><code>8 / 10</code> — внутри вложенного лотка</td></tr>
+          <tr><td>Строка меню и списка</td><td><code>8 / 10</code> · body</td></tr>
+        </table>
+      </div>
+
+      <h3>Слои</h3>
+      <!-- ds:gen layer-scale -->
+      <p class="body">Пять ступеней, и порядок в них — это утверждение о поведении: всплывающая панель обязана быть выше липкой шапки, иначе выпадающий список уезжает под неё.</p>
+      <table class="spec">
+        <tr><td><code>0</code> · 0</td><td>Выход из слоёв: едущая капсула лежит под своими подписями</td></tr>
+        <tr><td><code>raised</code> · 1</td><td>Содержимое поверх соседей в том же потоке</td></tr>
+        <tr><td><code>sticky</code> · 10</td><td>Шапка приложения</td></tr>
+        <tr><td><code>pop</code> · 20</td><td>Выпадающий список, подсказка, меню</td></tr>
+        <tr><td><code>dialog</code> · 30</td><td>Диалог и подложка. Порядок вложенных диалогов задаёт порядок монтирования, а не z</td></tr>
+      </table>
+      <!-- /ds:gen layer-scale -->
+
+      <h3>Тени</h3>
+      <!-- ds:gen shadow-scale -->
+      <p class="body">Семь высот, по одной на задачу. У плоского интерфейса тень — способ сказать «я поверх», а не украшение, поэтому высота даётся смыслу, а не элементу: тост, подсказка, меню и список всплывают одинаково, потому что делают одно и то же.</p>
+      <div class="wells w2" style="margin-top:16px">
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:none;display:block"></span><span class="cap">none<i>отсутствие тени, а не высота</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 10px 30px rgba(11,11,12,0.12);display:block"></span><span class="cap">pop<i>всплывает над страницей: список, подсказка, тост, меню</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 0 0 1px rgba(11,11,12,0.07);display:block"></span><span class="cap">ring<i>волосяной контур вместо границы на подложке</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,0.3);display:block"></span><span class="cap">thumb<i>палец, который тянут</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 0 0 3px rgba(0,102,255,0.12);display:block"></span><span class="cap">focus<i>кольцо на поле и списке</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);display:block"></span><span class="cap">seg<i>поднятый сегмент вложенного лотка</i></span></div>
+        <div><span style="width:88px;height:34px;border-radius:11px;background:var(--white);border:1px solid var(--line);box-shadow:0 1px 2px rgba(0,102,255,0.3);display:block"></span><span class="cap">pill<i>едущая капсула сегментной группы: лежит на лотке, а не в нём</i></span></div>
+      </div>
+      <!-- /ds:gen shadow-scale -->
+      <table class="spec">
+        <tr><td>Ширина содержимого</td><td class="n">1340px по центру · внутренние отступы 16 → 24 на lg</td></tr>
+        <tr><td>Шапка</td><td class="n">56px, липкая, белая с размытием 10px</td></tr>
+        <tr><td>Отступы карточки</td><td class="n">18px в разделе · 13px во вложенной · 11/16 в ячейке таблицы</td></tr>
+        <tr><td>Зазоры</td><td class="n">5 · 7 · 10 · 14 — четыре ступени, других нет</td></tr>
+        <tr><td>Вертикальный шаг</td><td class="n">Между карточками 14px, между блоками страницы 18px</td></tr>
+        <tr><td>Контрольная точка</td><td class="n">Одна — <code>lg</code>. Ниже: навигация в ящик, цели нажатия 44px, таблицы в карточки</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Движение ──────────────────────────────────────────────────────── -->
+    <section id="motion">
+      <div class="eyebrow">Основы</div>
+      <h2>Движение</h2>
+      <p class="intro">Четыре длительности и две кривые. Короткое — смена состояния, среднее — появление, длинное — раскрытие. Циклическое движение означает только одно: процесс идёт.</p>
+      <table class="spec">
+        <!-- ds:gen motion-scale -->
+        <tr><td><code>state</code> · 150ms</td><td>Смена состояния: цвет, граница, фон</td></tr>
+        <tr><td><code>enter</code> · 250ms</td><td>Появление: диалог, строка, событие, тост. Одно на всю систему</td></tr>
+        <tr><td><code>reveal</code> · 420ms</td><td>Шеврон и раскрытие карточки — <code>spring</code>, <code>cubic-bezier(.34,1.45,.6,1)</code>. Один жест — одна длительность на обе половины</td></tr>
+        <tr><td><code>roll</code> · 900ms</td><td>Одометр докручивается — <code>out</code>, <code>cubic-bezier(.16,1,.3,1)</code>. Плашка с действиями едет на <code>reveal</code></td></tr>
+        <!-- /ds:gen motion-scale -->
+        <tr><td>Цикл</td><td>Процесс жив: <code>pulsedot</code> у точки, <code>textpulse</code> у подписи, спиннер у запроса, <code>dotspin</code> у набора. Один пульс на всю систему — раньше их было два, с разным темпом и масштабом</td></tr>
+        <tr><td>Уважение к настройке</td><td><code>prefers-reduced-motion</code> отключает всё декоративное; переходы, от которых зависит логика, становятся мгновенными</td></tr>
+      </table>
+      <div class="wells" style="margin-top:24px">
+        <div><span class="dot a-live"></span><span class="cap">pulsedot<i>процесс жив · 1.6 c</i></span></div>
+        <div><span class="spin dark"></span><span class="cap">spin · запрос</span></div>
+        <div><span class="typing"><span></span><span></span><span></span></span><span class="cap">dotspin · набор</span></div>
+        <div><span class="cnt a-pulse">ожидание</span><span class="cap">textpulse</span></div>
+        <div><span class="cnt a-enter">строка</span><span class="cap">enter<i>появление · 250ms <button class="replay" data-replay=".a-enter">↻</button></i></span></div>
+        <div><span class="mark-ok a-pop"><svg class="i i-18" aria-hidden="true"><use href="#ic-check"/></svg></span><span class="cap">okpop <button class="replay" data-replay=".a-pop">↻</button></span></div>
+        <div><span class="av a-blur" style="width:30px;height:30px;font-size:11px">АК</span><span class="cap">blurswap <button class="replay" data-replay=".a-blur">↻</button></span></div>
+      </div>
+    </section>
+
+    <!-- ── Иконки ────────────────────────────────────────────────────────── -->
+    <section id="icons">
+      <div class="eyebrow">Основы</div>
+      <h2>Иконки</h2>
+      <p class="intro">Набор <strong>Lucide</strong>: сетка 24, обводка 2, скругления round. Заливка только у «пуск» и «пауза» — сплошная фигура читается на 16px там, где контур сливается. Геометрия хранится один раз в спрайте, вызов задаёт только размер.</p>
+      <div class="wells" style="margin-top:18px">
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-settings"/></svg></span><span class="cap">settings<i>действия</i></span></div>
+        <div><span style="color:var(--success)"><svg class="i i-18 i-fill" aria-hidden="true"><use href="#ic-play"/></svg></span><span class="cap">play<i>запустить</i></span></div>
+        <div><span style="color:var(--warning)"><svg class="i i-18 i-fill" aria-hidden="true"><use href="#ic-pause"/></svg></span><span class="cap">pause<i>остановить</i></span></div>
+        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-pencil"/></svg></span><span class="cap">pencil<i>изменить</i></span></div>
+        <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-trash"/></svg></span><span class="cap">trash-2<i>удалить</i></span></div>
+        <div><span style="color:var(--success)"><svg class="i i-18" aria-hidden="true"><use href="#ic-check"/></svg></span><span class="cap">check<i>получилось</i></span></div>
+        <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-x"/></svg></span><span class="cap">x<i>не получилось</i></span></div>
+        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-info"/></svg></span><span class="cap">info<i>так устроено</i></span></div>
+        <div><span style="color:var(--warning)"><svg class="i i-18" aria-hidden="true"><use href="#ic-alert"/></svg></span><span class="cap">triangle-alert<i>внимание</i></span></div>
+        <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span class="cap">circle-x<i>ошибка</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-help"/></svg></span><span class="cap">circle-help<i>подсказка</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-refresh"/></svg></span><span class="cap">refresh-cw<i>обновить</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-search"/></svg></span><span class="cap">search<i>поиск</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-arrow-right"/></svg></span><span class="cap">arrow-right<i>перейти</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-chevron"/></svg></span><span class="cap">chevron-down<i>раскрыть</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-bell"/></svg></span><span class="cap">bell<i>уведомления</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></span><span class="cap">menu<i>навигация</i></span></div>
+        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-audio"/></svg></span><span class="cap">audio-lines<i>слушатель</i></span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Размеры</td><td class="n">13 в кнопке 24 · 14 в кнопке 28 · 15–16 в шапке и рельсе · 18 в списке</td></tr>
+        <tr><td>Обводка</td><td class="n">2 на любом размере — не масштабируется вместе с иконкой</td></tr>
+        <tr><td>Цвет</td><td>Всегда <code>currentColor</code>: иконка наследует цвет кнопки, а не задаёт свой</td></tr>
+        <tr><td>Заливка</td><td>Только <code>play</code> и <code>pause</code></td></tr>
+        <tr><td>Подпись</td><td>Иконка без текста получает <code>aria-label</code> и подсказку. Крестик в чипе — типографский «×», не иконка: на 10px контур Lucide тяжелее текста</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Кнопка ────────────────────────────────────────────────────────── -->
+    <section id="button">
+      <div class="eyebrow">Действия</div>
+      <h2>Кнопка</h2>
+      <p class="intro">Три вида и три размера. Залитая синим — одна на поверхности. Разрушительное действие никогда не заливается красным: красная подложка с красной границей читается однозначно и не приглашает нажать случайно.</p>
+
+      <h3>Виды</h3>
+      <div class="wells w2" style="margin-top:18px">
+        <div><button class="btn btn-lg b-pri">Запустить прогрев</button><span class="cap">Основная</span></div>
+        <div><button class="btn btn-lg b-sec">Отмена</button><span class="cap">Вторичная</span></div>
+        <div><button class="btn btn-lg b-dan">Удалить аккаунт</button><span class="cap">Разрушительная</span></div>
+        <div><button class="b-lnk">Сбросить пароль</button><span class="cap">Текстовая</span></div>
+      </div>
+
+      <h3>Размеры</h3>
+      <div class="wells">
+        <div><button class="btn btn-sm b-pri">Добавить</button><span class="cap">sm · 14/5 · 11.5<i>11.5px</i></span></div>
+        <div><button class="btn btn-md b-pri">Добавить</button><span class="cap">md · 18/7 · 12.5<i>12.5px</i></span></div>
+        <div><button class="btn btn-lg b-pri">Добавить</button><span class="cap">lg · 22/9 · 13<i>13px</i></span></div>
+      </div>
+
+      <h3>Состояния</h3>
+      <div class="wells">
+        <div><button class="btn btn-md b-pri">Сохранить</button><span class="cap">Покой<i>#0066ff</i></span></div>
+        <div><button class="btn btn-md b-pri is-hover">Сохранить</button><span class="cap">Наведение<i>#0057db</i></span></div>
+        <div><button class="btn btn-md b-pri is-active">Сохранить</button><span class="cap">Нажатие<i>scale .98</i></span></div>
+        <div><button class="btn btn-md b-pri is-focus">Сохранить</button><span class="cap">Фокус<i>обводка 2px</i></span></div>
+        <div><button class="btn btn-md b-pri" disabled>Сохранить</button><span class="cap">Недоступна<i>opacity .5</i></span></div>
+        <div><button class="btn btn-md b-pri"><span class="spin"></span>Сохранение</button><span class="cap">В работе<i>спиннер 13px</i></span></div>
+        <div><button class="btn btn-md b-pri"><svg class="i i-13" aria-hidden="true"><use href="#ic-check"/></svg>Сохранено</button><span class="cap">Успех<i>галочка 1.5 c</i></span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Покой → наведение</td><td>Основная темнеет до <code>primary-press</code>, вторичная усиливает границу до <code>line-strong</code></td></tr>
+        <tr><td>Нажатие</td><td>Масштаб 0.98 — единственная трансформация в системе кнопок</td></tr>
+        <tr><td>Фокус</td><td>Обводка 2px <code>primary</code> с отступом 3px. Обводку не заменяют тенью</td></tr>
+        <tr><td>Недоступна</td><td>Прозрачность 0.5, курсор обычный. Причину объясняет подсказка рядом, а не сама кнопка</td></tr>
+        <tr><td>В работе</td><td>Спиннер 13px слева, надпись меняется на процесс, кнопка заблокирована</td></tr>
+        <tr><td>Успех</td><td>Галочка на 1.5 секунды, затем возврат к покою</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Иконочная кнопка ──────────────────────────────────────────────── -->
+    <section id="iconbutton">
+      <div class="eyebrow">Действия</div>
+      <h2>Иконочная кнопка</h2>
+      <p class="intro">Четыре размера и три смысла. Размер выбирает контекст, смысл — последствие: серое наведение ничего не обещает, синее ведёт дальше, красное удаляет. Иконка без подписи всегда несёт <code>aria-label</code> и подсказку.</p>
+
+      <h3>Размеры</h3>
+      <div class="wells" style="margin-top:18px">
+        <div><button class="ib ib-24 ib-pri" aria-label="Действия"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button><span class="cap">24 · в строке</span></div>
+        <div><button class="ib ib-28 ib-pri" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">28 · в карточке</span></div>
+        <div><button class="ib ib-34 ib-nut" aria-label="Уведомления"><svg class="i i-15" aria-hidden="true"><use href="#ic-bell"/></svg></button><span class="cap">34 · шапка</span></div>
+        <div><button class="ib ib-44 ib-nut" aria-label="Меню"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></button><span class="cap">44 · тач</span></div>
+      </div>
+
+      <h3>Смысл и состояния</h3>
+      <div class="wells">
+        <div><button class="ib ib-28 ib-nut" aria-label="Обновить"><svg class="i i-14" aria-hidden="true"><use href="#ic-refresh"/></svg></button><span class="cap">Нейтральная<i>ink-subtle / line</i></span></div>
+        <div><button class="ib ib-28 ib-nut is-hover" aria-label="Обновить"><svg class="i i-14" aria-hidden="true"><use href="#ic-refresh"/></svg></button><span class="cap">Наведение</span></div>
+        <div><button class="ib ib-28 ib-pri is-hover" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">Синяя · наведение</span></div>
+        <div><button class="ib ib-28 ib-dan is-hover" aria-label="Удалить"><svg class="i i-14" aria-hidden="true"><use href="#ic-trash"/></svg></button><span class="cap">Красная · наведение</span></div>
+        <div><button class="ib ib-28 ib-pri is-focus" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">Фокус</span></div>
+        <div><button class="ib ib-28 ib-nut" disabled aria-label="Недоступно"><svg class="i i-14" aria-hidden="true"><use href="#ic-refresh"/></svg></button><span class="cap">Недоступна</span></div>
+        <div><button class="ib ib-28 solid" aria-label="Подтвердить"><svg class="i i-13" aria-hidden="true"><use href="#ic-check"/></svg></button><span class="cap">Залитая · подтвердить</span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Форма</td><td>24 и 28 — квадрат с радиусом 6 и 8; 34 — круг в шапке; 44 — квадрат для тач-экрана</td></tr>
+        <tr><td>Наведение</td><td>Синее: <code>primary-line</code> + <code>primary-tint</code>. Красное: <code>danger-line</code> + <code>danger-tint</code></td></tr>
+        <tr><td>Залитая</td><td>Только подтверждение ввода на месте: галочка 22px в поле добавления</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Поле ──────────────────────────────────────────────────────────── -->
+    <section id="field">
+      <div class="eyebrow">Ввод</div>
+      <h2>Поле</h2>
+      <p class="intro">Прямоугольник с радиусом 10 — ввод данных. Пилюля — фильтр или поиск. Форма отвечает на вопрос, изменит ли контрол данные или только выборку.</p>
+
+      <h3>Состояния</h3>
+      <div class="wells w2" style="margin-top:18px">
+        <div class="left"><label class="lab"><span class="t">Имя профиля</span><input class="fld" value="Анна" aria-label="Имя профиля"></label><span class="cap">Заполнено<i>border line</i></span></div>
+        <div class="left"><label class="lab"><span class="t">Имя профиля</span><input class="fld" placeholder="Например, Анна" aria-label="Пусто"></label><span class="cap">Пусто<i>плейсхолдер ink-subtle</i></span></div>
+        <div class="left"><label class="lab"><span class="t">Имя профиля</span><input class="fld is-hover" value="Анна" aria-label="Наведение"></label><span class="cap">Наведение<i>border line-strong</i></span></div>
+        <div class="left"><label class="lab"><span class="t">Имя профиля</span><input class="fld is-focus" value="Анна" aria-label="Фокус"></label><span class="cap">Фокус<i>кольцо 3px 12%</i></span></div>
+        <div class="left"><label class="lab"><span class="t">Телефон</span><input class="fld is-bad" value="+7 900" aria-label="Ошибка" aria-invalid="true"><span class="err">Введите номер в формате +7…</span></label><span class="cap">Ошибка<i>border danger</i></span></div>
+        <div class="left"><label class="lab"><span class="t">Телефон</span><input class="fld" value="+7 900 123-45-67" disabled aria-label="Недоступно"><span class="hint">Меняется только в Telegram</span></label><span class="cap">Недоступно<i>фон surface</i></span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Фокус</td><td>Граница <code>primary</code> плюс кольцо 3px непрозрачностью 12%. Системную обводку заменяем только здесь</td></tr>
+        <tr><td>Ошибка</td><td>Краснеет граница, под полем сообщение 11px. Подпись остаётся нейтральной</td></tr>
+        <tr><td>Недоступно</td><td>Фон <code>surface</code>, текст <code>ink-subtle</code>. Под полем — почему</td></tr>
+        <tr><td>Подсказка и ошибка</td><td>Одно место под полем: ошибка вытесняет подсказку, а не встаёт второй строкой</td></tr>
+      </table>
+
+      <h3>Разновидности</h3>
+      <div class="wells w2">
+        <div class="left"><span class="in-icon"><svg class="i i-14" aria-hidden="true"><use href="#ic-search"/></svg><input class="fld pill" style="padding-left:34px" placeholder="Поиск по номеру или имени" aria-label="Поиск"></span><span class="cap">Поиск</span></div>
+        <div class="left"><button class="fld pill" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left">Все статусы <svg class="i i-14" aria-hidden="true"><use href="#ic-chevron"/></svg></button><span class="cap">Выбор</span></div>
+        <div class="left"><div class="seg"><button class="on">Каждый день</button><button>По расписанию</button></div><span class="cap">Сегментированный</span></div>
+        <div class="left"><div class="step" style="justify-content:center"><button class="ib ib-28 ib-nut" aria-label="Меньше"><svg class="i i-14" aria-hidden="true"><use href="#ic-minus"/></svg></button><span class="v">15</span><button class="ib ib-28 ib-nut" aria-label="Больше"><svg class="i i-14" aria-hidden="true"><use href="#ic-plus"/></svg></button></div><span class="cap">Счётчик</span></div>
+      </div>
+    </section>
+
+    <!-- ── Выпадающий список ────────────────────────────────────────────── -->
+    <section id="dropdown">
+      <div class="eyebrow">Ввод</div>
+      <h2>Выпадающий список</h2>
+      <p class="intro">Выбор одного значения из известного набора: аккаунт-слушатель, фильтр журнала, часовой пояс. Панель раскрывается по высоте за 420 мс, шеврон переворачивается пружиной. Закрытая панель обязательно получает <code>inert</code> — иначе её кнопки остаются достижимы с клавиатуры сквозь свёрнутый список.</p>
+
+      <div class="wells w3" style="margin-top:18px">
+        <div class="left" style="padding-bottom:70px">
+          <div class="dd">
+            <button class="dd-btn" data-dd aria-expanded="false" aria-haspopup="listbox">
+              <span class="ph">Выберите аккаунт</span>
+              <svg class="i i-15" aria-hidden="true"><use href="#ic-chevron"/></svg>
+            </button>
+            <div class="dd-panel" role="listbox">
+              <button class="dd-opt on" role="option" aria-selected="true">Анна Ковалёва<svg class="i i-13" aria-hidden="true"><use href="#ic-check"/></svg></button>
+              <button class="dd-opt" role="option" aria-selected="false">Дмитрий Морозов</button>
+              <button class="dd-opt" role="option" aria-selected="false">Светлана Волкова</button>
+              <button class="dd-opt" role="option" aria-selected="false">Игорь Петров</button>
+              <button class="dd-opt" role="option" aria-selected="false">Мария Соколова</button>
+            </div>
+          </div>
+          <span class="cap">Живой пример<i>нажмите, чтобы раскрыть</i></span>
+        </div>
+        <div class="left">
+          <div class="dd"><button class="dd-btn" aria-expanded="false"><span>Анна Ковалёва</span><svg class="i i-15" aria-hidden="true"><use href="#ic-chevron"/></svg></button></div>
+          <span class="cap">Выбрано<i>значение вместо плейсхолдера</i></span>
+        </div>
+        <div class="left">
+          <div class="dd"><button class="dd-btn is-hover" aria-expanded="false"><span class="ph">Выберите аккаунт</span><svg class="i i-15" aria-hidden="true"><use href="#ic-chevron"/></svg></button></div>
+          <span class="cap">Наведение<i>border line-strong</i></span>
+        </div>
+        <div class="left">
+          <div class="dd"><button class="dd-btn is-focus" aria-expanded="false"><span class="ph">Выберите аккаунт</span><svg class="i i-15" aria-hidden="true"><use href="#ic-chevron"/></svg></button></div>
+          <span class="cap">Фокус<i>кольцо 3px 12%</i></span>
+        </div>
+        <div class="left">
+          <div class="dd"><button class="dd-btn" disabled><span class="ph">Нет доступных аккаунтов</span><svg class="i i-15" aria-hidden="true"><use href="#ic-chevron"/></svg></button></div>
+          <span class="cap">Недоступен<i>фон surface</i></span>
+        </div>
+        <div class="left" style="padding-bottom:40px">
+          <div class="dd">
+            <button class="dd-btn" aria-expanded="true"><span class="ph">Выберите аккаунт</span><svg class="i i-15" aria-hidden="true"><use href="#ic-chevron"/></svg></button>
+            <div class="dd-panel open"><div class="dd-empty">Свободных аккаунтов нет</div></div>
+          </div>
+          <span class="cap">Пустой набор<i>объяснение вместо списка</i></span>
+        </div>
+      </div>
+
+      <table class="spec">
+        <tr><td>Раскрытие</td><td class="n">max-height 0 → 240px, 420 мс, пружина без перелёта. Дальше список прокручивается</td></tr>
+        <tr><td>Шеврон</td><td>Поворот на 180°, 400 мс. Тот же жест, что у раскрывающейся карточки</td></tr>
+        <tr><td>Пункт</td><td>Радиус 6, наведение — <code>primary-tint</code>, выбранный — синий текст и галочка</td></tr>
+        <tr><td>Закрытая панель</td><td><code>inert</code>. Проверено в приложении: без него оператор с клавиатуры попадал в скрытые пункты</td></tr>
+        <tr><td>Пустой набор</td><td>Не пустая панель, а строка с причиной: «Свободных аккаунтов нет»</td></tr>
+        <tr><td>Тень</td><td>Одна на все всплывающие панели — <code>pop</code></td></tr>
+        <tr><td>Когда не список</td><td>Два значения — сегментированный переключатель. Больше двадцати — поле с поиском</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Переключатели ─────────────────────────────────────────────────── -->
+    <section id="toggle">
+      <div class="eyebrow">Ввод</div>
+      <h2>Переключатель</h2>
+      <p class="intro">Один размер: дорожка 44×26, хода 18px, палец сжимается до 0.86 при нажатии. Переключатель меняет состояние сразу, без кнопки «Применить» — поэтому у выключенного по недоступности вида обязательно есть объяснение рядом.</p>
+      <div class="wells" style="margin-top:18px">
+        <div><button class="sw-btn" role="switch" aria-checked="false" aria-label="Выключен"><i></i></button><span class="cap">Выключен<i>дорожка line-strong</i></span></div>
+        <div><button class="sw-btn" role="switch" aria-checked="true" aria-label="Включен"><i></i></button><span class="cap">Включен<i>дорожка primary</i></span></div>
+        <div><button class="sw-btn is-focus" role="switch" aria-checked="true" aria-label="Фокус"><i></i></button><span class="cap">Фокус</span></div>
+        <div><button class="sw-btn" role="switch" aria-checked="false" aria-label="Недоступен" disabled><i></i></button><span class="cap">Недоступен<i>opacity .5</i></span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Выключен</td><td>Дорожка <code>line-strong</code> — не серый из палитры текста</td></tr>
+        <tr><td>Недоступен</td><td>Для функции, которая ещё не подключена: переключатель, который двигается и ничего не делает, хуже отказа</td></tr>
+        <tr><td>Роль</td><td><code>role="switch"</code> и <code>aria-checked</code>; подпись — обязательна</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Чипы ──────────────────────────────────────────────────────────── -->
+    <section id="chip">
+      <div class="eyebrow">Ввод</div>
+      <h2>Набор чипов</h2>
+      <p class="intro">Список коротких значений, который правят на месте: каналы кампании, аккаунты, теги. Чипы переносятся по строкам, у каждого своё удаление, добавление живёт последним чипом — пунктирным, и превращается в поле, не сдвигая строки.</p>
+
+      <div class="block card">
+        <div class="row" style="justify-content:space-between">
+          <b style="font-size:12.5px;font-weight:600">Каналы кампании</b>
+          <span class="row" style="gap:6px;flex:none">
+            <button class="btn btn-sm b-sec">Найти каналы</button>
+            <button class="btn btn-sm b-sec" data-check>Проверить каналы</button>
+          </span>
+        </div>
+        <div class="row" style="margin:10px 0 12px"><span style="font-size:11.5px;font-weight:500;color:var(--primary)">tabacum</span></div>
+        <div class="chipset" id="chipset">
+          <span class="chip">Streetfights66<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">flflorissima<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">nokautys<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">vk_dating<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">Ateobreaking<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">DeCenter<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">invest_zonaa<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">lentachold<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">moscowmap<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">msk_live<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">notatraderrr<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">pravdadirty<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">readovkanews<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">shot_shot<button class="x" aria-label="Убрать канал">×</button></span>
+          <span class="chip">tonkeeper_ru<button class="x" aria-label="Убрать канал">×</button></span>
+          <button class="chip-add" data-add>+ Канал</button>
+          <span class="chip-edit" data-edit hidden>
+            <input placeholder="@канал или ссылка" aria-label="Канал">
+            <button class="go" disabled aria-label="Добавить"><svg class="i i-12" aria-hidden="true"><use href="#ic-check"/></svg></button>
+          </span>
+        </div>
+        <p class="body" style="margin-top:14px">Удалите чип крестиком, добавьте свой через «+ Канал» — Enter добавляет, Escape отменяет. «Проверить каналы» присылает вердикт.</p>
+      </div>
+
+      <h3>Состояния чипа</h3>
+      <div class="wells">
+        <div><span class="chip">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Обычный<i>track / line</i></span></div>
+        <div><span class="chip ok">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Проверен · 5 c</span></div>
+        <div><span class="chip bad">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Забанен · остаётся</span></div>
+        <div><span class="chip off">msk_live<button class="x" aria-label="Убрать">×</button></span><span class="cap">Недоступен</span></div>
+        <div><button class="chip-add">+ Канал</button><span class="cap">Добавление</span></div>
+        <div><span class="chip-edit"><input value="@lenta" aria-label="Ввод"><button class="go" aria-label="Добавить"><svg class="i i-12" aria-hidden="true"><use href="#ic-check"/></svg></button></span><span class="cap">Ввод</span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Вердикт, а не статус</td><td>Зелёный — результат последней проверки, гаснет через 5 секунд. Красный держится до правки: это нужно решить</td></tr>
+        <tr><td>Удаление</td><td>× внутри чипа, <code>ink-subtle</code>, краснеет при наведении</td></tr>
+        <tr><td>Действия над набором</td><td>Контурные кнопки в шапке справа, не под набором</td></tr>
+        <tr><td>Зазор</td><td class="n">7px, перенос по строкам</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Статус ────────────────────────────────────────────────────────── -->
+    <section id="status">
+      <div class="eyebrow">Сообщение</div>
+      <h2>Статус</h2>
+      <p class="intro">Одна карта цветов и две формы. Пилюля с точкой — везде, где есть место: столбец таблицы, плашка, карточка. Точка с подписью — в тесной строке, где пилюля не помещается.</p>
+
+      <h3>Карта</h3>
+      <div class="scroll">
+        <table class="spec">
+          <tr><td><span class="pill s-ok"><i></i>Активен</span></td><td><strong>success</strong> — работает, проверено, подтверждено</td></tr>
+          <tr><td><span class="pill s-warn"><i></i>Спамблок</span></td><td><strong>warning</strong> — пауза, ожидание, ограничение, карантин</td></tr>
+          <tr><td><span class="pill s-info"><i></i>Ждёт код</span></td><td><strong>primary</strong> — идёт прямо сейчас, нужен оператор</td></tr>
+          <tr><td><span class="pill s-bad"><i></i>Забанен</span></td><td><strong>danger</strong> — сломалось, требует решения</td></tr>
+          <tr><td><span class="pill s-idle"><i></i>Ожидает</span></td><td><strong>track</strong> — ничего не происходит и это нормально</td></tr>
+        </table>
+      </div>
+
+      <h3>Формы</h3>
+      <div class="wells w2">
+        <div><span class="pill s-ok"><i></i>Активен</span><span class="cap">Пилюля<i>основная форма</i></span></div>
+        <div><span class="dl" style="color:var(--success)"><i></i>Активна</span><span class="cap">Точка с подписью<i>когда пилюля не влезает</i></span></div>
+      </div>
+
+      <h3>Счётчики и живое</h3>
+      <div class="wells">
+        <div><span class="cnt">7 задач</span><span class="cap">Счётчик</span></div>
+        <div><span class="cnt live">3</span><span class="cap">Живой счётчик</span></div>
+        <div><span class="cnt live off">1</span><span class="cap">На паузе</span></div>
+        <div><span class="pill s-ok"><i></i>Система активна</span><span class="cap">Система</span></div>
+        <div><span class="pill s-idle"><i></i>Система офлайн</span><span class="cap">Система офлайн</span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Одна карта</td><td>Цвет статуса берётся из карты по смыслу, а не подбирается на месте</td></tr>
+        <tr><td>Живой счётчик</td><td>Сплошной круг 18px, белые цифры — только на плашке состояния, в цвет её подписи</td></tr>
+        <tr><td>Пульс</td><td>Точка пульсирует только когда процесс действительно работает; «включено, но нечего делать» — без пульса</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Уведомление ───────────────────────────────────────────────────── -->
+    <section id="notice">
+      <div class="eyebrow">Сообщение</div>
+      <h2>Уведомление</h2>
+      <p class="intro">Плашка в потоке страницы: объясняет положение дел там, где оператор его встретит. Один компонент, три тона, единый радиус 12 и отступы 11/13 — раньше это были четыре разные плашки с четырьмя радиусами.</p>
+      <div class="col block">
+        <div class="note n-info"><span class="ic"><svg class="i i-15" aria-hidden="true"><use href="#ic-info"/></svg></span><span>Прогрев стартует медленно: первые пять часов аккаунт только читает. Это заложено намеренно.</span></div>
+        <div class="note n-warn"><span class="ic"><svg class="i i-15" aria-hidden="true"><use href="#ic-alert"/></svg></span><span>Кампаний нет — слушатель запущен, но подписан на ноль каналов. Создайте кампанию, чтобы он начал работать.</span></div>
+        <div class="note n-bad"><span class="ic"><svg class="i i-15" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span>Два канала не разрешаются: <code>@old_name</code>, <code>@dead_link</code>. Ни один пост оттуда не придёт.</span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Синее</td><td>Так устроено: объясняет поведение, которое похоже на поломку</td></tr>
+        <tr><td>Янтарное</td><td>Работает не полностью, оператор может это исправить</td></tr>
+        <tr><td>Красное</td><td>Не работает, потеря данных или действий</td></tr>
+        <tr><td>Место</td><td>Внутри блока, к которому относится, а не сверху страницы. Тост — только для сбоя, которого оператор не вызывал</td></tr>
+        <tr><td>Нажимаемое</td><td>Плашка может быть кнопкой (перейти к причине) — тогда фон светлеет при наведении</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Отклик ────────────────────────────────────────────────────────── -->
+    <section id="feedback">
+      <div class="eyebrow">Сообщение</div>
+      <h2>Отклик на изменение</h2>
+      <p class="intro">Правило системы: каждое изменение данных заканчивается видимым знаком рядом с тем, что изменилось. Зелёная галочка или красный крест появляются пружиной <code>okpop</code> и живут 1.5 секунды.</p>
+      <div class="wells" style="margin-top:18px">
+        <div><span class="row" style="gap:7px"><span class="mark-ok a-pop"><svg class="i i-14" aria-hidden="true"><use href="#ic-check"/></svg></span><span style="font-size:12px;color:var(--ink-muted)">Сохранено</span></span><span class="cap">Успех</span></div>
+        <div><span class="row" style="gap:7px"><span class="mark-bad a-pop"><svg class="i i-14" aria-hidden="true"><use href="#ic-x"/></svg></span><span style="font-size:12px;color:var(--ink-muted)">Не удалось</span></span><span class="cap">Отказ</span></div>
+        <div><span class="spin dark"></span><span class="cap">В работе</span></div>
+        <div><span class="toast"><svg class="i i-14" aria-hidden="true"><use href="#ic-circle-x"/></svg>Сессия истекла</span><span class="cap">Тост · не вызванный сбой</span></div>
+      </div>
+    </section>
+
+    <!-- ── Карточка ──────────────────────────────────────────────────────── -->
+    <section id="card">
+      <div class="eyebrow">Поверхности</div>
+      <h2>Карточка</h2>
+      <p class="intro">Два уровня, и этого достаточно. Карточка раздела — белая, радиус 16, отступ 18. Вложенная плашка — радиус 11, отступ 13. Утопленная получает фон <code>surface</code>, выбранная — синюю границу и заливку 6%.</p>
+      <div class="wells w3" style="margin-top:18px">
+        <div class="left"><div class="card"><b style="font-size:13px;font-weight:600">Карточка раздела</b><p class="body" style="margin-top:6px">Радиус 16, отступ 18, граница <code>line</code>.</p></div><span class="cap">Раздел</span></div>
+        <div class="left"><div class="nest"><b style="font-size:12.5px;font-weight:600">Вложенная</b><p class="body" style="margin-top:5px">Радиус 11, отступ 13.</p></div><span class="cap">Вложенная</span></div>
+        <div class="left"><div class="nest rec"><b style="font-size:12.5px;font-weight:600">Утопленная</b><p class="body" style="margin-top:5px">Фон <code>surface</code> — только для чтения.</p></div><span class="cap">Утопленная</span></div>
+        <div class="left"><div class="nest sel"><b style="font-size:12.5px;font-weight:600">Выбранная</b><p class="body" style="margin-top:5px">Граница <code>primary</code>, заливка 6%.</p></div><span class="cap">Выбранная</span></div>
+      </div>
+
+      <h3>Раскрывающаяся</h3>
+      <div class="block" style="max-width:460px">
+        <div class="acc">
+          <button class="acc-h" aria-expanded="false" data-acc>
+            <span class="av" style="width:34px;height:34px;font-size:12px">АК</span>
+            <span style="display:flex;flex-direction:column;gap:1px;min-width:0">
+              <b>Анна Ковалёва</b>
+              <span style="font-size:11.5px;color:var(--ink-muted)">+7 900 123-45-67</span>
+            </span>
+            <span class="pill s-ok" style="margin-left:auto"><i></i>Активен</span>
+            <span class="chev"><svg class="i i-16" aria-hidden="true"><use href="#ic-chevron"/></svg></span>
+          </button>
+          <div class="acc-b" hidden>Прокси, прогрев, профиль и каналы раскрываются здесь. Заголовок кликабелен целиком, шеврон — второй, дублирующий триггер.</div>
+        </div>
+      </div>
+      <table class="spec">
+        <tr><td>Закрытое тело</td><td>Получает <code>hidden</code>: иначе контролы внутри остаются в порядке обхода клавиатурой</td></tr>
+        <tr><td>Два триггера</td><td>Заголовок и шеврон делают одно и то же — так задумано</td></tr>
+        <tr><td>Шеврон</td><td>Поворот на 180°, пружина 420ms</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Плашка с действиями ───────────────────────────────────────────── -->
+    <section id="actionrow">
+      <div class="eyebrow">Поверхности</div>
+      <h2>Плашка с действиями</h2>
+      <p class="intro">Сигнатурный паттерн панели: плашка объекта, из-под которой выезжают действия. Рельс лежит снизу на <code>canvas</code>, поверхность уезжает влево на 48px за каждое действие. Наведите или нажмите шестерёнку.</p>
+
+      <div class="wells w3" style="margin-top:18px">
+        <div class="left">
+          <div class="surf" style="--shift:144px">
+            <div class="surf-rail">
+              <button class="run" title="Запустить"><svg class="i i-16 i-fill" aria-hidden="true"><use href="#ic-play"/></svg></button>
+              <button class="edit" title="Изменить"><svg class="i i-16" aria-hidden="true"><use href="#ic-pencil"/></svg></button>
+              <button class="del" title="Убрать"><svg class="i i-16" aria-hidden="true"><use href="#ic-trash"/></svg></button>
+            </div>
+            <div class="surf-face">
+              <div class="plaque">
+                <span class="lhs"><span class="pd"></span><span class="st">На паузе</span><span class="cnt live off">1</span></span>
+                <button class="ib ib-24 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <span class="cap">Плашка состояния · на паузе</span>
+        </div>
+        <div class="left">
+          <div class="surf" style="--shift:144px">
+            <div class="surf-rail">
+              <button class="pause" title="Остановить"><svg class="i i-16 i-fill" aria-hidden="true"><use href="#ic-pause"/></svg></button>
+              <button class="edit" title="Изменить"><svg class="i i-16" aria-hidden="true"><use href="#ic-pencil"/></svg></button>
+              <button class="del" title="Удалить"><svg class="i i-16" aria-hidden="true"><use href="#ic-trash"/></svg></button>
+            </div>
+            <div class="surf-face">
+              <div class="plaque on">
+                <span class="lhs"><span class="pd a-live"></span><span class="st a-pulse">Слушает</span><span class="cnt live">3</span></span>
+                <button class="ib ib-24 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
+              </div>
+            </div>
+          </div>
+          <span class="cap">Плашка состояния · работает</span>
+        </div>
+        <div class="left">
+          <div class="surf" style="--shift:144px">
+            <div class="surf-rail">
+              <button class="pause" title="Остановить"><svg class="i i-16 i-fill" aria-hidden="true"><use href="#ic-pause"/></svg></button>
+              <button class="edit" title="Изменить"><svg class="i i-16" aria-hidden="true"><use href="#ic-pencil"/></svg></button>
+              <button class="del" title="Удалить"><svg class="i i-16" aria-hidden="true"><use href="#ic-trash"/></svg></button>
+            </div>
+            <div class="surf-face">
+              <div class="nest sel" style="display:flex;justify-content:space-between;gap:10px">
+                <span style="min-width:0">
+                  <span style="display:block;font-size:13px;font-weight:600;margin-bottom:5px">tabacum</span>
+                  <span style="font-size:11px;color:var(--ink-muted)">15 каналов · 5 аккаунтов</span>
+                </span>
+                <span style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
+                  <span class="dl" style="color:var(--success)"><i></i>Активна</span>
+                  <button class="ib ib-24 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
+                </span>
+              </div>
+            </div>
+          </div>
+          <span class="cap">Плашка объекта · выбрана</span>
+        </div>
+      </div>
+      <table class="spec">
+        <tr><td>Ширина действия</td><td class="n">48px. Сдвиг = 48 × число действий</td></tr>
+        <tr><td>Порядок</td><td>Пуск или пауза → изменить → удалить. Разрушительное последним, у самого края</td></tr>
+        <tr><td>Цвета</td><td><span class="dl" style="color:var(--success)"><i></i>пуск</span> &nbsp; <span class="dl" style="color:var(--warning)"><i></i>пауза</span> &nbsp; <span class="dl" style="color:var(--primary)"><i></i>изменить</span> &nbsp; <span class="dl" style="color:var(--danger)"><i></i>удалить</span> — иконка без рамки и фона</td></tr>
+        <tr><td>Второй триггер</td><td>Шестерёнка 24px с <code>aria-expanded</code>: наведение недостижимо на тач-экране и с клавиатуры</td></tr>
+        <tr><td>Заливка поверхности</td><td>Обязательна: рельс отрисован всегда, через прозрачный фон кнопки просвечивают</td></tr>
+        <tr><td>Клип</td><td class="n">Отступ 2px снизу и −2px внешнего поля, иначе <code>overflow</code> срезает нижнюю границу</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Диалог и подсказка ────────────────────────────────────────────── -->
+    <section id="overlay">
+      <div class="eyebrow">Поверхности</div>
+      <h2>Диалог и подсказка</h2>
+      <div class="wells w2" style="margin-top:18px">
+        <div><div class="dialog"><b>Остановить прогрев?</b><p>Аккаунт вернётся в очередь, прогресс за день сохранится.</p><span class="row" style="justify-content:flex-end;gap:8px"><button class="btn btn-md b-sec">Отмена</button><button class="btn btn-md b-dan">Остановить</button></span></div><span class="cap">Диалог по центру</span></div>
+        <div>
+          <span class="row" style="gap:26px">
+            <span class="tip open"><span class="cnt">34</span><span class="tip-pop">Действий сегодня</span></span>
+            <span class="tip open" style="margin-left:10px"><button class="ib ib-24 ib-pri" aria-label="Подсказка"><svg class="i i-12" aria-hidden="true"><use href="#ic-help"/></svg></button><span class="hint-card">Лимит — 60 действий в сутки на аккаунт. Счётчик обнуляется в полночь по часовому поясу аккаунта.</span></span>
+          </span>
+          <span class="cap">Подсказка-ярлык и подсказка-объяснение</span>
+        </div>
+      </div>
+      <table class="spec">
+        <tr><td>Тёмная подсказка</td><td>Название контрола. Одна строка, без переноса, <code>slate</code></td></tr>
+        <tr><td>Светлая подсказка</td><td>Объяснение. Ширина 210px, перенос, белый фон с границей <code>line</code></td></tr>
+        <tr><td>Диалог</td><td>Радиус 16, подложка 40% чёрного, вход <code>enter</code>. Высокий диалог прокручивает подложку, а не себя</td></tr>
+        <tr><td>Escape</td><td>Закрывает только верхний диалог; вложенный не закрывает родителя</td></tr>
+        <tr><td>Фокус</td><td>Входит в диалог при открытии, Tab ходит по кругу внутри, при закрытии возвращается</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Таблица ───────────────────────────────────────────────────────── -->
+    <section id="table">
+      <div class="eyebrow">Данные</div>
+      <h2>Таблица</h2>
+      <p class="intro">Шапка на <code>surface</code> с подписями 11px заглавными, разделители строк <code>line-row</code>, наведение подсвечивает строку. Ниже <code>lg</code> тот же компонент рисует каждую строку карточкой — без горизонтальной прокрутки.</p>
+      <div class="block frame scroll">
+        <table class="tbl">
+          <thead><tr><th>Аккаунт</th><th>Статус</th><th>Прогрев</th><th>Прокси</th><th style="text-align:right">Действий</th></tr></thead>
+          <tbody>
+            <tr><td><span class="row" style="gap:9px"><span class="av" style="width:28px;height:28px;font-size:11px">АК</span>Анна Ковалёва</span></td><td><span class="pill s-ok"><i></i>Активен</span></td><td><span class="pill s-info"><i></i>Активен</span></td><td class="n">RU · 45.86.…</td><td class="n" style="text-align:right">34</td></tr>
+            <tr class="sel"><td><span class="row" style="gap:9px"><span class="av" style="width:28px;height:28px;font-size:11px">ДМ</span>Дмитрий Морозов</span></td><td><span class="pill s-warn"><i></i>Спамблок</span></td><td><span class="pill s-warn"><i></i>Карантин</span></td><td class="n">DE · 91.20.…</td><td class="n" style="text-align:right">0</td></tr>
+            <tr><td><span class="row" style="gap:9px"><span class="av" style="width:28px;height:28px;font-size:11px">СВ</span>Светлана Волкова</span></td><td><span class="pill s-info"><i></i>Ждёт код</span></td><td><span class="pill s-idle"><i></i>Ожидает</span></td><td class="n">NL · 188.4.…</td><td class="n" style="text-align:right">12</td></tr>
+            <tr><td><span class="row" style="gap:9px"><span class="av" style="width:28px;height:28px;font-size:11px">ИП</span>Игорь Петров</span></td><td><span class="pill s-bad"><i></i>Забанен</span></td><td><span class="pill s-bad"><i></i>Ошибка</span></td><td class="n">—</td><td class="n" style="text-align:right">0</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>Состояния списка</h3>
+      <div class="wells w2">
+        <div class="left"><div class="col"><span class="skel" style="width:70%"></span><span class="skel" style="width:90%"></span><span class="skel" style="width:55%"></span></div><span class="cap">Загрузка</span></div>
+        <div class="left"><div class="empty">Аккаунтов пока нет</div><span class="cap">Пусто</span></div>
+        <div class="left"><div class="empty" style="border-style:solid;border-color:var(--line);color:var(--ink-muted)">Ничего не найдено по запросу «моск»</div><span class="cap">Нет результатов</span></div>
+        <div class="left"><div class="note n-bad"><span>Не удалось загрузить список. <a href="#table">Повторить</a></span></div><span class="cap">Ошибка</span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Пусто и «не найдено»</td><td>Разные состояния: пустой список приглашает добавить пунктиром, пустой результат поиска — нет</td></tr>
+        <tr><td>Выбранная строка</td><td>Фон <code>primary-tint</code>, без смены цвета текста</td></tr>
+        <tr><td>Подстрока</td><td>Раскрывается на <code>grid-template-rows</code>, 420ms, кривая без перелёта</td></tr>
+        <tr><td>Числа справа</td><td>Столбец с числами выравнивается по правому краю и получает <code>tabular-nums</code></td></tr>
+      </table>
+    </section>
+
+    <!-- ── Журнал ────────────────────────────────────────────────────────── -->
+    <section id="log">
+      <div class="eyebrow">Данные</div>
+      <h2>Журнал</h2>
+      <p class="intro">Единственная тёмная поверхность в системе. Моно 11px с межстрочным 1.85, метки времени приглушены, каналы синие, исход окрашивается только когда он не рутинный.</p>
+      <div class="block">
+        <div class="row" style="margin-bottom:10px"><span class="dot a-live" style="width:7px;height:7px"></span><b style="font-size:13px;font-weight:600">Живой журнал</b><span class="cnt">4 события</span><button class="btn btn-sm b-sec" style="margin-left:auto">Очистить</button></div>
+        <div class="term">
+          <div><span class="t">18:42:07</span> прогрев &nbsp;<span class="c">@devnull_news</span> <span class="t">· вход в канал</span></div>
+          <div><span class="t">18:42:19</span> прогрев &nbsp;<span class="c">@devnull_news</span> <span class="t">· реакция поставлена</span></div>
+          <div><span class="t">18:43:02</span> нейрокомм <span class="c">@ai_weekly</span> <span class="t">· комментарий отправлен</span></div>
+          <div><span class="t">18:43:44</span> нейрокомм <span class="c">@ai_weekly</span> <span class="er">· капча не решена</span></div>
+        </div>
+      </div>
+      <table class="spec">
+        <tr><td>Строка</td><td>Время · источник · канал · подробность. Первые три — фиксированной ширины, подробность обрезается</td></tr>
+        <tr><td>Цвет исхода</td><td>Зелёный — получилось, красный — нет, серый — рутина. Синий только для канала</td></tr>
+        <tr><td>Живое</td><td>Пульсирующая точка перед заголовком означает открытый поток событий</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Аватар ────────────────────────────────────────────────────────── -->
+    <section id="identity">
+      <div class="eyebrow">Данные</div>
+      <h2>Аватар</h2>
+      <p class="intro">Фотография из Telegram, когда она снята, иначе — инициалы на <code>primary-tint</code>. Один компонент решает это сам, размер задаёт вызывающий.</p>
+      <div class="wells" style="margin-top:18px">
+        <div><span class="av" style="width:24px;height:24px;font-size:10px">АК</span><span class="cap">24 · строка</span></div>
+        <div><span class="av" style="width:28px;height:28px;font-size:11px">АК</span><span class="cap">28 · таблица</span></div>
+        <div><span class="av" style="width:34px;height:34px;font-size:12px">АК</span><span class="cap">34 · карточка</span></div>
+        <div><span class="av" style="width:44px;height:44px;font-size:15px">АК</span><span class="cap">44 · профиль</span></div>
+        <div><span class="av solid" style="width:34px;height:34px;font-size:13px">АД</span><span class="cap">Оператор · залитый</span></div>
+      </div>
+      <table class="spec">
+        <tr><td>Отказ фотографии</td><td>Сломанная картинка не скрывает будущую: компонент помнит, какой именно снимок не загрузился</td></tr>
+        <tr><td>Инициалы</td><td>Из имени, иначе из телефона. Никогда не пустой круг</td></tr>
+      </table>
+    </section>
+
+    <!-- ── Унификация ────────────────────────────────────────────────────── -->
+    <section id="unify">
+      <div class="eyebrow">Свод</div>
+      <h2>Унификация</h2>
+      <p class="intro">Канон против кода: слева литералы и копии, которые расползлись по компонентам, справа то, что их заменяет. Зелёная метка — уже в коде и проверено гейтами; янтарная — в плане работ ниже.</p>
+
+      <h3>Оттенки основы: 8 → 3 <span class="done">сведено</span></h3>
+      <div class="scroll">
+        <table class="merge">
+          <thead><tr><th>Было</th><th></th><th>Канон</th><th>Где встречалось</th></tr></thead>
+          <tr><td><span class="chipdot" style="background:#f7f6f4"></span><span class="old">#f7f6f4</span></td><td class="arw">→</td><td><span class="new">surface</span></td><td>Плашка на паузе, фон недоступного поля</td></tr>
+          <tr><td><span class="chipdot" style="background:#f6f5f2"></span><span class="old">#f6f5f2</span></td><td class="arw">→</td><td><span class="new">canvas</span></td><td>Утопленная карточка на доске прогрева</td></tr>
+          <tr><td><span class="chipdot" style="background:#f4f3f0"></span><span class="old">#f4f3f0</span></td><td class="arw">→</td><td><span class="new">track</span></td><td>Чип канала, чип аккаунта, счётчик — 20 раз на странице</td></tr>
+          <tr><td><span class="chipdot" style="background:#f2f1ee"></span><span class="old">#f2f1ee</span></td><td class="arw">→</td><td><span class="new">track</span></td><td>Счётчик событий в журнале</td></tr>
+          <tr><td><span class="chipdot" style="background:#eceae6"></span><span class="old">#eceae6</span></td><td class="arw">→</td><td><span class="new">track</span></td><td>Единичный фон в настройках</td></tr>
+        </table>
+      </div>
+
+      <h3>Границы наведения: 8 → 4 <span class="done">сведено</span></h3>
+      <div class="scroll">
+        <table class="merge">
+          <thead><tr><th>Было</th><th></th><th>Канон</th><th>Где встречалось</th></tr></thead>
+          <tr><td><span class="chipdot" style="background:#cbd7ec"></span><span class="old">#cbd7ec</span></td><td class="arw">→</td><td><span class="new">primary-line</span></td><td>Наведение на иконочную кнопку</td></tr>
+          <tr><td><span class="chipdot" style="background:#bfd6ff"></span><span class="old">#bfd6ff</span></td><td class="arw">→</td><td><span class="new">primary-line</span></td><td>Круглые кнопки в таблице аккаунтов</td></tr>
+          <tr><td><span class="chipdot" style="background:#c7d6f0"></span><span class="old">#c7d6f0</span></td><td class="arw">→</td><td><span class="new">primary-line</span></td><td>Пунктирная кнопка «создать»</td></tr>
+          <tr><td><span class="chipdot" style="background:#dce7fb"></span><span class="old">#dce7fb</span></td><td class="arw">→</td><td><span class="new">primary-line</span></td><td>Пустое состояние, синее уведомление</td></tr>
+          <tr><td><span class="chipdot" style="background:#e6cfcd"></span><span class="old">#e6cfcd</span></td><td class="arw">→</td><td><span class="new">danger-line</span></td><td>Кнопка «остановить прогрев»</td></tr>
+          <tr><td><span class="chipdot" style="background:#e0b6b2"></span><span class="old">#e0b6b2</span></td><td class="arw">→</td><td><span class="new">danger-line</span> при наведении</td><td>Та же кнопка под курсором</td></tr>
+          <tr><td><span class="chipdot" style="background:#c8c6c2"></span><span class="old">#c8c6c2</span></td><td class="arw">→</td><td><span class="new">line-strong</span></td><td>Невыбранный сегмент в настройках</td></tr>
+          <tr><td><span class="chipdot" style="background:#f0eeeb"></span><span class="old">#f0eeeb</span> литералом</td><td class="arw">→</td><td><span class="new">line-row</span> токеном</td><td>Разделитель строк таблицы</td></tr>
+        </table>
+      </div>
+
+      <h3>Компоненты и цвета: копии → канон</h3>
+      <div class="scroll">
+        <table class="merge">
+          <thead><tr><th>Было</th><th></th><th>Канон</th><th>Что расходилось</th></tr></thead>
+          <tr><td><span class="old">Switch × 3</span></td><td class="arw">→</td><td><span class="new">shared/ui/Switch</span></td><td><span class="done">сведено</span> было 44px, 44px без сжатия пальца и 46px — расхождение видно глазом</td></tr>
+          <tr><td><span class="old">Иконочная кнопка: 7 размеров × 5 радиусов</span></td><td class="arw">→</td><td><span class="new">IconButton</span></td><td><span class="done">сведено</span> было 44 / 34 / 30 / 28 / 26 / 24 / 20 в трёх вариантах наведения</td></tr>
+          <tr><td><span class="old">Основная кнопка: 7 наборов отступов</span></td><td class="arw">→</td><td><span class="new">3 размера</span></td><td><span class="done">сведено</span> было ещё и <code>font-medium</code> вперемешку с <code>font-semibold</code></td></tr>
+          <tr><td><span class="old">Статус: 3 реализации</span></td><td class="arw">→</td><td><span class="new">одна карта цветов</span></td><td><span class="done">сведено</span> пилюля, бейдж и инлайн-вариант несли по своей копии карты</td></tr>
+          <tr><td><span class="old">Счётчик: 5 вариантов</span></td><td class="arw">→</td><td><span class="new">2</span></td><td><span class="done">сведено</span> были три разных серых плюс синий и сплошной</td></tr>
+          <tr><td><span class="old">Уведомление: 4 плашки</span></td><td class="arw">→</td><td><span class="new">Notice, 3 тона</span></td><td><span class="done">сведено</span> радиусы 9, 10, 13 и 14 у одного по смыслу элемента</td></tr>
+          <tr><td><span class="old">Рельс плашки: 48px и 52px</span></td><td class="arw">→</td><td><span class="new">48px</span></td><td><span class="done">сведено</span> было 144 против 156 у одного паттерна</td></tr>
+          <tr><td><span class="old">SurfHover в pages/neurocomment</span></td><td class="arw">→</td><td><span class="new">shared/ui</span></td><td><span class="done">сведено</span> переехал в <code>shared/ui</code></td></tr>
+          <tr><td><span class="chipdot" style="background:#16b364"></span><span class="old">success-dot #16b364</span></td><td class="arw">→</td><td><span class="new">success</span></td><td>Жил ради одной точки «система активна»; в журнале зелёный исход убран как рутинный</td></tr>
+          <tr><td><span class="old">plpulse + livepulse</span></td><td class="arw">→</td><td><span class="new">pulsedot</span></td><td>Два пульса говорили одно и то же, отличаясь темпом 2 c против 1.2 c и масштабом 1.18</td></tr>
+          <tr><td><span class="old">Иконки: 5 толщин обводки, свои контуры</span></td><td class="arw">→</td><td><span class="new">Lucide, спрайт</span></td><td>1.8 / 1.9 / 2 / 2.6 / 3 вперемешку; геометрия дублировалась в каждом вызове</td></tr>
+          <tr><td><span class="chipdot" style="background:#f2f6ff"></span><span class="old">primary-wash #f2f6ff</span></td><td class="arw">→</td><td><span class="new">primary-tint</span></td><td>Две бледно-синие заливки в 4 единицах друг от друга</td></tr>
+          <tr><td><span class="chipdot" style="background:#eeedea"></span><span class="old">track #eeedea</span></td><td class="arw">→</td><td><span class="new">canvas</span></td><td>3 единицы разницы; проверено на пяти страницах — ни один чип не лежит прямо на фоне страницы</td></tr>
+          <tr><td><span class="chipdot" style="background:#dedcd8"></span><span class="old">line-input #dedcd8</span></td><td class="arw">→</td><td><span class="new">line</span></td><td>Поле узнаётся формой и белой заливкой, а не более тёмной рамкой; все поля лежат на белом</td></tr>
+          <tr><td><span class="old">fadeup + swapin</span></td><td class="arw">→</td><td><span class="new">enter</span></td><td>Одна и та же анимация с разницей в 1 пиксель хода</td></tr>
+          <tr><td><span class="old">Радиусы: 9 значений</span></td><td class="arw">→</td><td><span class="new">5 ступеней</span></td><td>3, 5, 10, 12 и 18 жили вне объявленной шкалы</td></tr>
+          <tr><td><span class="old">Вторичная + контурная кнопка</span></td><td class="arw">→</td><td><span class="new">вторичная</span></td><td>Обе белая пилюля с рамкой; разница только в оттенке рамки и цвете текста</td></tr>
+          <tr><td><span class="old">Бейдж статуса</span></td><td class="arw">→</td><td><span class="new">пилюля статуса</span></td><td><span class="done">сведено</span> <code>WarmingStateBadge</code> не вызывается ни из одного экрана — мёртвый компонент, форма существовала только в документе</td></tr>
+          <tr><td><span class="old">Выпадающий список × 4</span></td><td class="arw">→</td><td><span class="new">shared/ui/Select</span></td><td><span class="todo">в плане</span> раскрытие, <code>inert</code>, шеврон и список пунктов написаны заново в <code>ListenerEditModal</code>, <code>NeuroAccountsModal</code>, <code>LogsPage</code>, <code>ListenerCard</code></td></tr>
+          <tr><td><span class="old">Тени: 10 рецептов</span></td><td class="arw">→</td><td><span class="new">pop · ring · thumb</span></td><td><span class="done">сведено</span> кольцо было в двух написаниях, панелей — шесть почти одинаковых</td></tr>
+          <tr><td><span class="old">Второе семейство зелёного</span></td><td class="arw">→</td><td><span class="new">success · success-tint</span></td><td><span class="done">сведено</span> было <code>#2e9e64</code> 22 раза, <code>#2e7d55</code> 9, <code>#e7f2ec</code> 4 — параллельная зелёная палитра в 19 файлах</td></tr>
+          <tr><td><span class="old">Отступы карточек: 5 наборов</span></td><td class="arw">→</td><td><span class="new">2 уровня</span></td><td><span class="done">сведено</span> были радиусы 2xl / xl / 13 / 11 без правила</td></tr>
+        </table>
+      </div>
+
+      <h3>Что осталось намеренно</h3>
+      <table class="spec">
+        <tr><td>Две подсказки</td><td>Тёмная — ярлык контрола, светлая — объяснение. Разные задачи, обе нужны</td></tr>
+        <tr><td>Три пунктира</td><td>Создать, добавить в набор, пустое состояние — три разных приглашения, один цвет границы</td></tr>
+        <tr><td>Ярче в статусах аккаунта</td><td>Красный бан и янтарный спамблок обязаны выпрыгивать из таблицы на 40 строк</td></tr>
+        <tr><td><code>ink-body #3a3a3a</code></td><td>Проверено: несёт три роли — значения в плотной таблице, текст чипа, подпись поля; 6–13 вхождений на страницу. Слияние с <code>ink</code> делает таблицы криклиными, с <code>ink-muted</code> — читается как недоступное</td></tr>
+        <tr><td><code>blurswap</code></td><td>Проверено: 5 живых вызовов в разделах действий и сигналов аккаунта. Это не разовый эффект, а способ подменить иконку состояния</td></tr>
+        <tr><td>Четыре токена тёмной поверхности</td><td>На <code>#16161a</code> синий <code>primary</code> не читается: канал в журнале обязан быть светлее. Требование контраста, не дубликат: в проекте таких наборов было три — <code>#7FCDA0/#E0B341/#E5736B</code>, <code>#7be0a6/#ffd27f/#e5736b</code> и <code>#5FD08A/#F08C84</code>. Остался один</td></tr>
+        <tr><td>Одна светлая тема</td><td>У продукта одна основа; тёмной версии не существует, и документ её не выдумывает</td></tr>
+      </table>
+    </section>
+
+    <!-- ── План работ ────────────────────────────────────────────────────── -->
+    <section id="plan">
+      <div class="eyebrow">Свод</div>
+      <h2>План работ</h2>
+      <p class="intro">Что канон уже требует, а код ещё не даёт. Порядок — по отношению выигрыша к риску: сверху механика без визуальных последствий, снизу то, где нужно решение человека.</p>
+
+      <h3>Сделано и проверено гейтами</h3>
+      <p class="body">Шесть шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-2</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
+      <div class="scroll">
+        <table class="spec">
+          <tr><td class="n">427 замен</td><td>Литеральные хексы → токены: классы, цвета из JS-объектов, инлайновые стили, атрибуты <code>stroke</code>. Точки, повторявшие цвет подписи, взяли <code>bg-current</code></td></tr>
+          <tr><td class="n">5 семейств</td><td>Янтарный, зелёный, красный, синий, серый сведены к трём-четырём ролям каждое; три параллельных набора тёмной поверхности — к одному. Два несвязанных янтарных набора красили одну и ту же плашку «внимание» на разных страницах</td></tr>
+          <tr><td class="n">6 шкал</td><td>Заменены целиком: радиусы (20 → 5), ступени текста (19 → 8), зазоры (18 → 4), длительности (8 → 4), кривые (2), слои (14 → 4)</td></tr>
+          <tr><td class="n">16 → 1</td><td>Тени. Восемь литералов были <code>ring</code>, набранный вручную в двух написаниях, два — <code>thumb</code>, пять — четыре разных высоты для одного смысла «всплывает над страницей». <code>focus</code> стал ролью, потому что его рецепт встретился и в списке, и у каждого поля</td></tr>
+          <tr><td class="n">9 → 6 семейств</td><td>Отступы: кнопка (три размера), чип, пилюля статуса, бейдж-счётчик, фильтр-пилюля, сегментная кнопка, строка меню. Одна ступень на семейство вместо десяти вертикальных и четырнадцати горизонтальных значений</td></tr>
+          <tr><td class="n">3 жеста</td><td>Внутренне расходились и сведены: шеврон списка шёл 400ms против панели 420, тело карточки 500 против своего шеврона 420, и один и тот же контрол пользовался двумя пружинами, разными на 0.05 перелёта</td></tr>
+          <tr><td class="n">+4 примитива</td><td><code>Select</code>, <code>IconButton</code>, <code>SurfHover</code>, <code>Switch</code> — все с тестами. Нативного <code>&lt;select&gt;</code> в коде больше нет: выбор одного из списка был написан двумя способами в девяти местах</td></tr>
+          <tr><td class="n">4 читаемости</td><td>Подписи на цветной подложке не проходили по контрасту (3.70, 3.57, 4.26) и стали серыми. Цвет там ничего не несёт: смысл держат заголовок, подложка, рамка и значок</td></tr>
+          <tr><td class="n">−2 файла</td><td>Мёртвый <code>WarmingStateBadge</code> и копия хелпера сегментной кнопки, из-за которой два одинаковых контрола молча разошлись на 1px</td></tr>
+        </table>
+      </div>
+
+      <h3>Осталось</h3>
+      <div class="scroll">
+        <table class="wl">
+          <thead><tr><th></th><th>Что</th><th>Почему и чем мерить</th></tr></thead>
+          <tr><td>1</td><td>Пилюля прогрева</td><td>Двенадцать пилюль статуса из тринадцати сошлись на <code>3 / 10</code> и <code>tiny</code>. Тринадцатая — в таблице прогрева, на <code>1 / 7</code> и <code>micro</code>, самая тесная в приложении. Привести её к семейству значит +2px по высоте на каждой строке самой плотной таблицы. Решение человека, не скрипта</td></tr>
+          <tr><td>2</td><td><code>shadow-sm</code> в трёх местах</td><td>Поднятый сегмент вложенного лотка — связная роль, которой нет имени, поэтому он берёт встроенную шкалу Tailwind. Шкала теней единственная осталась расширенной, а не заменённой, то есть <code>shadow-2xl</code> всё ещё достижим. Заменить — значит выбрать значение для пятой ступени и увидеть, как сегменты сдвинутся</td></tr>
+          <tr><td>3</td><td>Четыре абзаца в нейрошиллинге</td><td>11px янтарным на янтарной подложке — 3.57 при норме 4.5. Та же правка, что уже сделана в трёх местах, но страница не закончена, и там янтарный, возможно, и есть сигнал</td></tr>
+          <tr><td>4</td><td>Две пилюли-исключения</td><td><code>LIVE</code> и «прогрет» намеренно <code>micro</code> и жирные: это акцент, а не нейтральная метка состояния. Возможно, правильный ответ — назвать это отдельным семейством, а не сводить</td></tr>
+          <tr><td>5</td><td>Одна тень и один градиент</td><td>Синее свечение едущей капсулы в логах подкрашивает, а не приподнимает, и вызывается один раз. Градиенты-заглушки аватара — украшение, а не роль. Оба оставлены литералами с комментарием, который объясняет, почему их не надо «исправлять»</td></tr>
+        </table>
+      </div>
+      <p class="body">Ни один пункт больше не механический — механику всю забрали. Осталось пять решений о смысле: где расхождение это ошибка, а где отдельная роль. Пункт 1 самый дорогой: он трогает таблицу, на которую смотрят чаще всего.</p>
+    </section>
+
+    <!-- ── Источник правды ───────────────────────────────────────────────── -->
+    <section id="source">
+      <div class="eyebrow">Свод</div>
+      <h2>Источник правды</h2>
+      <table class="spec">
+        <tr><td>Токены</td><td><code>frontend/tailwind.config.ts</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Пять шкал <em>заменены</em>, а не расширены: имя мимо канона не рисует ничего. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
+        <tr><td>Кейфреймы, подсказки, раскрытие, полосы прокрутки</td><td><code>frontend/src/app/styles/index.css</code></td></tr>
+        <tr><td>Примитивы</td><td><code>frontend/src/shared/ui/</code> — <code>Button</code> не примитив: 71 вызов с разной разметкой, поэтому приведены классы, а не введена обёртка</td></tr>
+        <tr><td>Иконочная кнопка</td><td><code>shared/ui/IconButton</code> — размеры <code>sm 24</code> / <code>md 28</code> / <code>lg 34</code> / <code>touch 44</code>, тона <code>neutral | primary | danger</code></td></tr>
+        <tr><td>Статусы</td><td><code>entities/account/ui/StatusBadge</code> · <code>entities/campaign/ui/ChannelStatusBadge</code> · <code>entities/log/ui/LogStatusBadge</code></td></tr>
+        <tr><td>Каркас и навигация</td><td><code>widgets/nav/ui/AppShell</code> · <code>AppNav</code> · <code>NavDrawer</code></td></tr>
+        <tr><td>Выпадающий список</td><td><code>shared/ui/Select</code> — единственный способ выбрать одно из списка. Нативный <code>&lt;select&gt;</code> в коде отсутствует: его рисует система, и рядом с полем он читается как другое приложение. Клавиатура: <kbd>↓</kbd> открывает на выбранном, стрелки идут по кругу и перешагивают недоступные, <kbd>Enter</kbd> выбирает, <kbd>Esc</kbd> закрывает список и не роняет диалог</td></tr>
+        <tr><td>Плашка с действиями</td><td><code>shared/ui/SurfHover</code> — рельс 48px, сдвиг считается как 48 × число действий</td></tr>
+      </table>
+      <footer>
+        <span>Значения проверены на живом приложении: аккаунты, прогрев, нейрокомментинг, логи, настройки. НейроШиллинг не эталон — страница не закончена.</span>
+        <span>Если значение здесь расходится с <code>tailwind.config.ts</code> — правится код, а расхождение перечислено в «Унификации».</span>
+      </footer>
+    </section>
+  </main>
+</div>
+
+<script>
+  // Копирование токена, раскрытие карточки, переключатель, рельс плашки,
+  // повтор одноразовой анимации, набор чипов.
+  document.addEventListener('click', (e) => {
+    const tok = e.target.closest('.tok:not(.fixed)');
+    if (tok) {
+      navigator.clipboard?.writeText(tok.textContent.trim());
+      tok.classList.add('copied');
+      setTimeout(() => tok.classList.remove('copied'), 900);
+      return;
+    }
+    const acc = e.target.closest('[data-acc]');
+    if (acc) {
+      const open = acc.getAttribute('aria-expanded') === 'true';
+      acc.setAttribute('aria-expanded', String(!open));
+      acc.parentElement.querySelector('.acc-b').hidden = open;
+      return;
+    }
+    // Шестерёнка фиксирует рельс: наведение недостижимо на тач-экране.
+    const gear = e.target.closest('[data-surf]');
+    if (gear) {
+      const surf = gear.closest('.surf');
+      const open = surf.classList.toggle('open');
+      gear.setAttribute('aria-expanded', String(open));
+      return;
+    }
+    // Выпадающий список: панель и inert закрытого состояния.
+    const ddBtn = e.target.closest('[data-dd]');
+    if (ddBtn) {
+      const panel = ddBtn.parentElement.querySelector('.dd-panel');
+      const open = panel.classList.toggle('open');
+      ddBtn.setAttribute('aria-expanded', String(open));
+      panel.inert = !open;
+      return;
+    }
+    const opt = e.target.closest('.dd-opt');
+    if (opt) {
+      const panel = opt.closest('.dd-panel');
+      panel.querySelectorAll('.dd-opt').forEach(function (o) {
+        o.classList.remove('on');
+        o.setAttribute('aria-selected', 'false');
+        const mark = o.querySelector('.i');
+        if (mark) mark.remove();
+      });
+      opt.classList.add('on');
+      opt.setAttribute('aria-selected', 'true');
+      opt.insertAdjacentHTML('beforeend', '<svg class="i i-13" aria-hidden="true"><use href="#ic-check"/></svg>');
+      const btn = panel.parentElement.querySelector('[data-dd]');
+      btn.querySelector('span').textContent = opt.textContent.trim();
+      btn.querySelector('span').classList.remove('ph');
+      panel.classList.remove('open');
+      btn.setAttribute('aria-expanded', 'false');
+      panel.inert = true;
+      return;
+    }
+    const sw = e.target.closest('.sw-btn:not([disabled])');
+    if (sw) {
+      sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+      return;
+    }
+    const x = e.target.closest('.chip .x');
+    if (x) { x.closest('.chip').remove(); return; }
+    const add = e.target.closest('[data-add]');
+    if (add) {
+      const edit = add.parentElement.querySelector('[data-edit]');
+      add.hidden = true;
+      edit.hidden = false;
+      edit.querySelector('input').focus();
+      return;
+    }
+    if (e.target.closest('.chip-edit .go')) { commitChip(e.target.closest('[data-edit]')); return; }
+    const check = e.target.closest('[data-check]');
+    if (check) {
+      const chips = [...document.querySelectorAll('#chipset .chip')];
+      chips.forEach((c) => c.classList.remove('ok', 'bad'));
+      const ok = chips.filter((_, i) => i % 4 === 1);
+      ok.forEach((c) => c.classList.add('ok'));
+      if (chips[2]) chips[2].classList.add('bad');
+      setTimeout(() => ok.forEach((c) => c.classList.remove('ok')), 5000);
+      return;
+    }
+    const replay = e.target.closest('[data-replay]');
+    if (replay) {
+      document.querySelectorAll(replay.dataset.replay).forEach((el) => {
+        el.style.animation = 'none';
+        void el.offsetWidth;
+        el.style.animation = '';
+      });
+    }
+  });
+
+  function commitChip(edit) {
+    const input = edit.querySelector('input');
+    const name = input.value.trim();
+    if (name) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.textContent = name;
+      const kill = document.createElement('button');
+      kill.className = 'x';
+      kill.setAttribute('aria-label', 'Убрать канал');
+      kill.textContent = '×';
+      chip.appendChild(kill);
+      edit.parentElement.insertBefore(chip, edit.parentElement.querySelector('[data-add]'));
+    }
+    closeChipEdit(edit);
+  }
+
+  function closeChipEdit(edit) {
+    edit.querySelector('input').value = '';
+    edit.querySelector('.go').disabled = true;
+    edit.hidden = true;
+    edit.parentElement.querySelector('[data-add]').hidden = false;
+  }
+
+  document.addEventListener('input', (e) => {
+    const edit = e.target.closest('[data-edit]');
+    if (edit) edit.querySelector('.go').disabled = e.target.value.trim() === '';
+  });
+
+  document.addEventListener('keydown', (e) => {
+    const edit = e.target.closest('[data-edit]');
+    if (!edit) return;
+    if (e.key === 'Enter') commitChip(edit);
+    if (e.key === 'Escape') closeChipEdit(edit);
+  });
+
+  // Подсветка текущего раздела в боковом указателе.
+  const links = [...document.querySelectorAll('.side a')];
+  const spy = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      links.forEach((a) => a.classList.toggle('on', a.getAttribute('href') === '#' + entry.target.id));
+    });
+  }, { rootMargin: '-60px 0px -70% 0px' });
+  document.querySelectorAll('section[id]').forEach((s) => spy.observe(s));
+  document.querySelectorAll('.dd-panel:not(.open)').forEach((p) => { p.inert = true; });
+</script>

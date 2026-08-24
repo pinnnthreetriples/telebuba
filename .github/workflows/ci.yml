@@ -381,8 +381,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # frontend — the React SPA's own gate set (per the FSD ADR): Steiger boundary
-  # lint + ESLint + Prettier + tsc --strict + Vitest (80% floor), then a
-  # production build. Independent of the Python jobs.
+  # lint + ESLint + Prettier + tsc --strict + the design-system doc check +
+  # Vitest (80% floor), then a production build. Independent of the Python jobs.
   # ---------------------------------------------------------------------------
   frontend:
     name: frontend (lint/boundaries/tsc/vitest)
@@ -407,7 +407,7 @@ jobs:
       - name: Install frontend deps
         run: npm ci
 
-      - name: Gates (boundaries + eslint + prettier + tsc + vitest)
+      - name: Gates (boundaries + eslint + prettier + tsc + design-system doc + vitest)
         run: npm run gates
 
       - name: Build

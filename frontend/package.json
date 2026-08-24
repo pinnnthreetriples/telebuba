@@ -12,7 +12,9 @@
     "format:write": "prettier --write .",
     "boundaries": "steiger ./src",
     "test": "vitest run --coverage",
-    "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run test",
+    "ds:doc": "node scripts/design-system-doc.mjs",
+    "ds:doc:check": "node scripts/design-system-doc.mjs --check",
+    "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run test",
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
   },
   "overrides": {
