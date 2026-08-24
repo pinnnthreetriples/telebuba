@@ -330,7 +330,7 @@ export function NeurocommentPage() {
     {
       label: t('neurocomment.stat.comments'),
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
-      color: 'text-success',
+      color: 'text-success-deep',
     },
     // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
     // both tiles read the account's 24h window. Summing the channels' `deleted_recent`

@@ -257,7 +257,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           </button>
         </div>
         {scope === 'one' ? (
-          <div className="mb-[12px] text-tiny leading-[1.45] text-warning-strong">
+          <div className="mb-[12px] text-tiny leading-[1.45] text-warning-deep">
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}

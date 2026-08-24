@@ -164,7 +164,7 @@ export function AddStoryModal({
     metaTone = 'text-danger';
   } else if (done) {
     metaText = t('accounts.addStory.stDone');
-    metaTone = 'text-success';
+    metaTone = 'text-success-deep';
   } else if (busy) {
     metaText = t('accounts.addStory.stUploading');
   }
@@ -582,7 +582,7 @@ export function AddStoryModal({
                 <span className="tb-spin m-[5px] inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
               )}
               {done && (
-                <span className="tb-pop m-[3px] inline-flex text-success">
+                <span className="tb-pop m-[3px] inline-flex text-success-deep">
                   <svg
                     width="17"
                     height="17"

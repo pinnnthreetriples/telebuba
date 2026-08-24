@@ -91,7 +91,7 @@ export function ListenerCard({
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
-                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-strong' : 'text-success'}`}
+                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-deep' : 'text-success-deep'}`}
                 >
                   {running ? (
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -152,7 +152,7 @@ export function ListenerCard({
                     className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
                   <span
-                    className={`text-body font-semibold ${working ? 'tb-pulse text-success' : 'text-ink-muted'}`}
+                    className={`text-body font-semibold ${working ? 'tb-pulse text-success-deep' : 'text-ink-muted'}`}
                   >
                     {statusLabel}
                   </span>

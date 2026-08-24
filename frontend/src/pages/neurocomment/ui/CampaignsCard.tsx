@@ -8,8 +8,8 @@ import { CollapsibleCard, FeedbackMark, IconButton, SurfHover } from '@/shared/u
 // Tone is the token the status MEANS (running = success, held = amber, shelved =
 // muted), so the pill can't drift from the rest of the design system.
 const STATUS_TONE = {
-  active: 'text-success',
-  paused: 'text-warning-strong',
+  active: 'text-success-deep',
+  paused: 'text-warning-deep',
   archived: 'text-ink-muted',
 } as const;
 
@@ -106,7 +106,7 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-strong' : 'text-success'}`}
+                    className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
                   >
                     {isRunning ? (
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">

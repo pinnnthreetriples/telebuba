@@ -127,8 +127,8 @@ export function AccountsPage() {
   // query, not the current page, so they hold across pagination and search.
   const stats: { label: string; value: number; cls: string }[] = [
     { label: t('accounts.stats.total'), value: fleetStats?.total ?? 0, cls: 'text-ink' },
-    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success' },
-    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
     { label: t('accounts.stats.code'), value: fleetStats?.needs_code ?? 0, cls: 'text-primary' },
     { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
   ];

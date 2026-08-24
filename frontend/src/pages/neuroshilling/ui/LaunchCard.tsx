@@ -24,8 +24,8 @@ const MIN_ACCOUNTS = 2;
 // Tone is the token the status MEANS, matching the campaigns card row for row.
 const STATUS_TONE: Record<NonNullable<NeuroshillingRunStatus['status']>, string> = {
   idle: 'text-ink-muted',
-  running: 'text-success',
-  stopping: 'text-warning-strong',
+  running: 'text-success-deep',
+  stopping: 'text-warning-deep',
   done: 'text-primary',
   failed: 'text-danger',
 };

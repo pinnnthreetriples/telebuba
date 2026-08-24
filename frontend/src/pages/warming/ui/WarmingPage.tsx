@@ -32,8 +32,8 @@ const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmingChannels', 'listLogs']
 // Trust 3-tier tone (design): healthy / watch / risk. Tokens, not hexes, so the
 // tiers read the same as every other health signal in the dashboard.
 function trustTone(trust: number): string {
-  if (trust >= 70) return 'text-success';
-  if (trust >= 45) return 'text-warning-strong';
+  if (trust >= 70) return 'text-success-deep';
+  if (trust >= 45) return 'text-warning-deep';
   return 'text-danger';
 }
 
@@ -571,7 +571,7 @@ export function WarmingPage() {
                         <div className="text-micro text-ink-subtle">
                           {t('warming.warmed.trust')}
                         </div>
-                        <div className="text-lead font-bold text-success">
+                        <div className="text-lead font-bold text-success-deep">
                           {acc.trust_score ?? '—'}
                         </div>
                       </div>

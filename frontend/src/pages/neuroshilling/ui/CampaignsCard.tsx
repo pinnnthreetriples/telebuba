@@ -7,8 +7,8 @@ import { CollapsibleCard, IconButton } from '@/shared/ui';
 // meaning of the status, not a hex, so the two cards cannot drift apart.
 const STATUS_TONE = {
   idle: 'text-ink-muted',
-  running: 'text-success',
-  stopping: 'text-warning-strong',
+  running: 'text-success-deep',
+  stopping: 'text-warning-deep',
   done: 'text-primary',
   failed: 'text-danger',
 } as const;

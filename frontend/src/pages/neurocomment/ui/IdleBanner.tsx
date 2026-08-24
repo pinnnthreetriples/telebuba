@@ -34,7 +34,7 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
             here reached only 3.57:1 against this tint where `ink-body` reaches 10.10:1. */}
         <div className="mt-px text-tiny text-ink-body">{t('neurocomment.idle.sub')}</div>
       </div>
-      <span className="flex shrink-0 text-warning">
+      <span className="flex shrink-0 text-warning-deep">
         <svg
           width="16"
           height="16"

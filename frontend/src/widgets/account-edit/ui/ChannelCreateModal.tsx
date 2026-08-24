@@ -189,7 +189,7 @@ export function ChannelCreateModal({
   }
   const hintColor =
     usernameHint?.tone === 'ok'
-      ? 'text-success'
+      ? 'text-success-deep'
       : usernameHint?.tone === 'error'
         ? 'text-danger'
         : 'text-ink-subtle';

@@ -5,7 +5,7 @@ import { StatusIcon } from './StatusIcon';
 export function FeedbackMark({ result }: { result?: 'ok' | 'err' }) {
   if (!result) return null;
   return (
-    <span className={`tb-pop inline-flex ${result === 'ok' ? 'text-success' : 'text-danger'}`}>
+    <span className={`tb-pop inline-flex ${result === 'ok' ? 'text-success-deep' : 'text-danger'}`}>
       <StatusIcon kind={result} />
     </span>
   );

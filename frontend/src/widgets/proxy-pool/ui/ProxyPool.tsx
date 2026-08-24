@@ -20,7 +20,7 @@ import { ProxyDeleteModal } from './ProxyDeleteModal';
 // drops the geo flag, so this is the only cue the proxy is dead — surface it
 // explicitly instead of letting the flag silently vanish.
 const PROXY_STATUS_TONE: Record<ProxyRead['status'], string> = {
-  tcp_working: 'text-success',
+  tcp_working: 'text-success-deep',
   failed: 'text-danger',
   unknown: 'text-ink-subtle',
 };
@@ -305,7 +305,9 @@ function ProxyCard({
       <div>
         <div className="mb-[5px] flex items-center justify-between">
           <span className="text-tiny text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
-          <span className={`text-tiny font-semibold ${full ? 'text-danger' : 'text-success'}`}>
+          <span
+            className={`text-tiny font-semibold ${full ? 'text-danger-deep' : 'text-success-deep'}`}
+          >
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
@@ -315,7 +317,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-[5px] text-micro ${full ? 'text-danger' : 'text-success'}`}>
+        <div className={`mt-[5px] text-micro ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}
