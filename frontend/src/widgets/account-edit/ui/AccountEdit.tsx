@@ -20,7 +20,7 @@ function mono(account: AccountRead): string {
 // design's thresholds, as text tokens — the bar takes `bg-current` off the same
 // class, so the bar and the number cannot disagree.
 function trustTone(t: number): string {
-  return t >= 70 ? 'text-success' : t >= 45 ? 'text-warning-strong' : 'text-danger';
+  return t >= 70 ? 'text-success-deep' : t >= 45 ? 'text-warning-deep' : 'text-danger';
 }
 
 // The design's account-edit view (reached by clicking a row): an always-visible

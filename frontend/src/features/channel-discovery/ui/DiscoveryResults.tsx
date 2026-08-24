@@ -108,7 +108,7 @@ function CommentsMark({ state }: { state: string }) {
   const label = t(`neurocomment.modal.discovery.comments.${state}`);
   if (state === 'comments_on') {
     return (
-      <span className="inline-flex text-success" role="img" title={label} aria-label={label}>
+      <span className="inline-flex text-success-deep" role="img" title={label} aria-label={label}>
         <StatusIcon kind="ok" />
       </span>
     );
@@ -163,7 +163,7 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
       {(verdict == null ? [] : verdictMarks(verdict)).map((mark) => (
         <span
           key={mark.key}
-          className={`text-tiny ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning'}`}
+          className={`text-tiny ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning-deep'}`}
         >
           {t(`neurocomment.modal.discovery.verdict.${mark.key}`)}
         </span>

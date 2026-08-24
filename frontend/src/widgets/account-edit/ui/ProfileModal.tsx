@@ -120,7 +120,7 @@ const REFRESH_LOOK = {
     path: 'M20 6 9 17l-5-5',
     stroke: '2.4',
     labelKey: 'accounts.profile.refreshOk',
-    border: 'border-success-line text-success',
+    border: 'border-success-line text-success-deep',
   },
   error: {
     path: 'M18 6 6 18M6 6l12 12',

@@ -91,7 +91,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             <div className="text-lead font-medium">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
+              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')

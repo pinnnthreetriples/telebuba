@@ -22,8 +22,8 @@ import type {
 // both cards.
 const ROLE_TONES = [
   { bg: 'bg-primary', text: 'text-primary', border: 'border-primary' },
-  { bg: 'bg-success', text: 'text-success', border: 'border-success' },
-  { bg: 'bg-warning', text: 'text-warning', border: 'border-warning' },
+  { bg: 'bg-success', text: 'text-success-deep', border: 'border-success' },
+  { bg: 'bg-warning', text: 'text-warning-deep', border: 'border-warning' },
 ] as const;
 
 /** The tone a role at this position wears, cycling through the three. */

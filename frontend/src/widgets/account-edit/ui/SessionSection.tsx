@@ -315,7 +315,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                   </div>
                   <div className="flex shrink-0 items-center gap-hair">
                     {file.status === 'done' ? (
-                      <span className="tb-pop m-xs inline-flex text-success">
+                      <span className="tb-pop m-xs inline-flex text-success-deep">
                         <svg
                           width="17"
                           height="17"
