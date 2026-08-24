@@ -108,19 +108,28 @@ export default {
     // arbitrary `gap-[2px]`/`gap-[3px]` (arbitrary values still work with a replaced
     // scale): snapping a 2px stack of counters up to 5px would re-lay it out.
     gap: { 0: '0px', px: '1px', tight: '5px', sm: '7px', md: '10px', lg: '14px' },
-    // Four stacking layers, lowest to highest, so a component never has to guess a
+    // Five stacking layers, lowest to highest, so a component never has to guess a
     // number: `raised` lifts content over its own siblings, `sticky` is the app
     // header that survives scrolling, `pop` is anything that floats over the page
-    // (dropdown, tooltip, menu) and therefore must clear the sticky header, and
+    // (dropdown, tooltip, menu) and therefore must clear the sticky header,
     // `dialog` is the modal layer — above everything, including its own backdrop's
-    // neighbours. `0` stays as the one way to opt out (the segmented control's
-    // sliding pill sits under its own labels, not over its neighbours).
+    // neighbours — and `toast` is the one thing above THAT. `0` stays as the one way
+    // to opt out (the segmented control's sliding pill sits under its own labels,
+    // not over its neighbours).
+    //
+    // `toast` is its own rung rather than sharing `dialog`: a toast reports the
+    // outcome of an action, and the dialog that action was taken in is usually still
+    // open, so it has to clear it. Sharing the rung made that a question of document
+    // order, which holds only while every toast is raised AFTER its dialog opened —
+    // a toast already on screen when a dialog opens loses the tie and is painted
+    // over. Order-independent is the whole point of naming a layer.
     zIndex: {
       0: '0',
       raised: '1',
       sticky: '10',
       pop: '20',
       dialog: '30',
+      toast: '40',
     },
     extend: {
       colors: {

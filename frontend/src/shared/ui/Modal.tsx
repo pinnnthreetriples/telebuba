@@ -54,13 +54,13 @@ const SHELL = {
 // the dialog on open, Tab cycles inside it, and the previously-focused element
 // gets focus back on close.
 //
-// Every dialog sits on the same `z-dialog` rung of the config's four-layer
+// Every dialog sits on the same `z-dialog` rung of the config's five-layer
 // ladder. There is no per-modal z any more: the six hand-picked values it used to
 // take (60 for the drawer, 70/72/75/80 for nesting depth) were encoding the order
 // the portal already produces — a nested dialog renders inside its parent, so it
 // mounts later and is appended to document.body after it, which at equal z-index
-// paints it on top. That also lets the toast layer share the rung and still clear
-// an open dialog (see Toaster).
+// paints it on top. Toasts are the one thing that must clear an open dialog, and
+// they say so with their own rung above this one rather than by mount order.
 export function Modal({
   onClose,
   children,
