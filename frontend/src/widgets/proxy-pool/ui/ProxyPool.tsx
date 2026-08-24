@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/shared/ui';
+import { Button, Card } from '@/shared/ui';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
@@ -79,7 +79,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <div className="mb-4 rounded-card border border-line bg-white px-[18px] py-4">
+    <Card className="mb-4 px-[18px] py-4">
       <div className="mb-[13px] flex flex-wrap items-center justify-between gap-md">
         <div>
           <span className="text-lead font-semibold">{t('accounts.proxyPool.title')}</span>
@@ -167,7 +167,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           }}
         />
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -228,7 +228,7 @@ function ProxyCard({
             </svg>
           </span>
         ) : failed ? (
-          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger">
+          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger-deep">
             <svg
               width="11"
               height="11"

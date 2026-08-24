@@ -59,7 +59,7 @@ export function PipelineCard({
         <div className="flex items-center gap-md">
           <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-[10px] py-[3px] text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
+            className={`rounded-full px-[10px] py-[3px] text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>

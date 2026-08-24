@@ -7,7 +7,7 @@ import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { FeedbackMark, IconButton } from '@/shared/ui';
+import { Card, FeedbackMark, IconButton } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
@@ -617,7 +617,7 @@ export function WarmingBoard({
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
-    <div className="rounded-card border border-line bg-white p-4">
+    <Card className="p-4">
       <div className="mb-[14px] flex items-center justify-between">
         <div className="flex items-center gap-md">
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-primary">
@@ -637,7 +637,7 @@ export function WarmingBoard({
           <span className="text-lead font-bold">{t('warming.inProgress.title')}</span>
         </div>
         {warming.length > 0 ? (
-          <span className="tb-pulse rounded-full bg-success-tint px-[10px] py-[3px] text-tiny font-semibold text-success">
+          <span className="tb-pulse rounded-full bg-success-tint px-[10px] py-[3px] text-tiny font-semibold text-success-deep">
             {t('warming.inProgress.live')}
           </span>
         ) : null}
@@ -662,6 +662,6 @@ export function WarmingBoard({
           </div>
         ) : null}
       </div>
-    </div>
+    </Card>
   );
 }

@@ -8,7 +8,7 @@ import {
   setAllAccountsPrivacyMutation,
 } from '@/entities/account';
 import type { AccountPrivacyUpdateRequest, PrivacySettingsResult } from '@/shared/api';
-import { Button, ConfirmModal } from '@/shared/ui';
+import { Button, ConfirmModal, Notice } from '@/shared/ui';
 
 import { envelopeMessage } from './_channelsShared';
 import { PrivacyLevelRow, type PrivacyLevel, type PrivacyShown } from './PrivacyLevelRow';
@@ -195,9 +195,10 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
       )}
 
       {reason != null && (
-        <div
+        <Notice
+          tone="danger"
+          className="mb-4 flex items-center justify-between gap-md"
           role="alert"
-          className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger"
         >
           <span>{t('accounts.profile.privacy.loadError', { reason })}</span>
           <button
@@ -209,7 +210,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           >
             {t('accounts.profile.privacy.retry')}
           </button>
-        </div>
+        </Notice>
       )}
 
       {writeReadError != null && (

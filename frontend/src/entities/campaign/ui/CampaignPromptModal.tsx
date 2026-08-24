@@ -80,7 +80,7 @@ export function CampaignPromptModal({
           <span className="text-body font-semibold tracking-[.04em] text-ink-body">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
-          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary">
+          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary-deep">
             {accounts.length}
           </span>
         </div>
@@ -91,7 +91,7 @@ export function CampaignPromptModal({
                 key={account.account_id}
                 className="flex items-center gap-md rounded-md border border-track bg-white px-[10px] py-2"
               >
-                <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary">
+                <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary-deep">
                   {account.initials}
                 </span>
                 <div className="min-w-0 flex-1">

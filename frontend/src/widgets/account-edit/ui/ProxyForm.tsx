@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Button, FormField, Input } from '@/shared/ui';
+import { Badge, Button, FormField, Input } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { seg } from './_styles';
@@ -214,14 +214,14 @@ export function ProxyForm({
           <span className="text-body text-ink-subtle">{t('accounts.proxyForm.checking')}</span>
         )}
         {detect === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
+          <Badge tone="success" size="md" className="tb-pop gap-sm">
             {country ? (
               <span
                 className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-ring`}
               />
             ) : null}
             {country ?? t('accounts.proxyForm.resultOk')}
-          </span>
+          </Badge>
         )}
         {detect === 'err' && (
           <span className="inline-flex items-center gap-sm text-body font-medium text-danger">

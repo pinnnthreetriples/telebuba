@@ -127,7 +127,13 @@ export default {
         canvas: '#f1efed',
         surface: '#faf9f7',
         track: '#eeedea',
-        ink: { DEFAULT: '#0b0b0c', body: '#3a3a3a', muted: '#74726e', subtle: '#9a9893' },
+        // `muted` and `subtle` are the two greys small text is written in, so both sit
+        // at the AA floor rather than where they looked best: `muted` cleared only
+        // 4.10:1 on `track` (fourteen pills pair them) and `subtle` 2.88:1 on white
+        // across seventeen timestamps, placeholders and empty states. AA leaves little
+        // room between them and `body`, so the ramp is compressed on purpose — the
+        // alternative is a rung the design system knows cannot be read.
+        ink: { DEFAULT: '#0b0b0c', body: '#3a3a3a', muted: '#63615d', subtle: '#6e6b66' },
         line: { DEFAULT: '#e6e5e3', strong: '#d8d6d2', input: '#dedcd8', row: '#f0eeeb' },
         primary: {
           DEFAULT: '#0066ff',
@@ -141,6 +147,10 @@ export default {
           // and the background of a `gap-px` grid whose 1px gaps ARE the tile dividers.
           // `line` is far too dark for that fill and `tint` far too blue for the border.
           hairline: '#e4ecfa',
+          // The blue that small text on `tint`/`wash` is written in. DEFAULT measures
+          // 4.38:1 there — under the 4.5:1 floor by a margin nobody can see and every
+          // contrast checker reports. Same role `success.deep` and `warning.deep` play.
+          deep: '#0052cc',
         },
         // `deep` and `press` mirror the amber and blue rungs: `deep` is the darkest green,
         // for the heading of a notice on a green surface (WarmingBoard's "прогрет" block,
@@ -167,7 +177,9 @@ export default {
           tint: '#fff0d2',
           line: '#efd79a',
         },
-        danger: { DEFAULT: '#c0473f', tint: '#fbecec', line: '#f0c9c5' },
+        // `deep` is the red small text on a red chip is written in: DEFAULT measures
+        // 4.34:1 on `tint`, and every «удалён» chip in the app is 10.5px.
+        danger: { DEFAULT: '#c0473f', deep: '#a83a33', tint: '#fbecec', line: '#f0c9c5' },
         term: {
           DEFAULT: '#16161a',
           dim: '#5c5c66',

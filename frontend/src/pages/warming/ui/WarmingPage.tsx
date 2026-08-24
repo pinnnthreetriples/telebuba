@@ -16,7 +16,7 @@ import {
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
 import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { Button, CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
+import { Badge, Button, Card, CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
@@ -267,7 +267,7 @@ export function WarmingPage() {
           sticky header can't follow. With minmax the feed scrolls in its own card. */}
       <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex flex-col gap-lg">
-          <div className="rounded-card border border-line bg-white p-[14px]">
+          <Card className="p-[14px]">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-lead font-semibold">{t('warming.ready.title')}</span>
               <span className="rounded-full border border-line bg-white px-2 py-[2px] text-tiny text-ink-subtle">
@@ -374,7 +374,7 @@ export function WarmingPage() {
                 })
               )}
             </div>
-          </div>
+          </Card>
 
           <CollapsibleCard
             wrapperClassName="rounded-lg border border-line bg-white"
@@ -386,9 +386,10 @@ export function WarmingPage() {
             </div>
             <div className="flex flex-wrap gap-sm">
               {channels.map((channel) => (
-                <span
+                <Badge
+                  size="md"
+                  className="gap-sm border border-line text-ink-body"
                   key={channel.channel}
-                  className="inline-flex items-center gap-sm rounded-full border border-line bg-track px-[11px] py-[5px] text-body text-ink-body"
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                   {channel.channel}
@@ -402,7 +403,7 @@ export function WarmingPage() {
                   >
                     ×
                   </button>
-                </span>
+                </Badge>
               ))}
               {addingChannel ? (
                 <span className="inline-flex items-center gap-tight rounded-full border border-primary bg-white py-[3px] pl-[11px] pr-1">
@@ -489,9 +490,9 @@ export function WarmingPage() {
                   </svg>
                 </span>
                 <span className="text-lead font-bold">{t('warming.warmed.title')}</span>
-                <span className="rounded-full bg-success-tint px-[8px] py-[2px] text-micro font-bold text-success">
+                <Badge tone="success" className="font-bold">
                   {warmed.length}
-                </span>
+                </Badge>
               </>
             }
           >
@@ -541,7 +542,7 @@ export function WarmingPage() {
                       {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
-                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[3px] text-micro font-bold tracking-[0.03em] text-success">
+                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[3px] text-micro font-bold tracking-[0.03em] text-success-deep">
                         <svg
                           width="9"
                           height="9"

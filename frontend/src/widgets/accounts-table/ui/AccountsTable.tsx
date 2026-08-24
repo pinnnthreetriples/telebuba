@@ -11,7 +11,7 @@ import {
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 import type { FeedbackResult } from '@/shared/lib';
-import { DataTable, type DataTableColumnMeta, StatusIcon } from '@/shared/ui';
+import { Card, DataTable, StatusIcon, type DataTableColumnMeta } from '@/shared/ui';
 
 interface AccountsTableProps {
   data: AccountRead[];
@@ -294,7 +294,7 @@ export function AccountsTable({
   ];
 
   return (
-    <div className="overflow-hidden rounded-card border border-line bg-white">
+    <Card className="overflow-hidden">
       <div className="tb-scroll overflow-x-auto">
         <DataTable
           data={data}
@@ -320,6 +320,6 @@ export function AccountsTable({
           })}
         />
       </div>
-    </div>
+    </Card>
   );
 }

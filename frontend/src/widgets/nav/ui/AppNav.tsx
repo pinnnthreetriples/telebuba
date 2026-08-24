@@ -242,7 +242,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-[10px] py-[8px] text-left text-lead font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
+                    className="flex w-full items-center gap-sm px-[10px] py-[8px] text-left text-lead font-medium text-danger-deep transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
                   >
                     <svg
                       width="15"

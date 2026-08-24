@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
+import { Card } from '@/shared/ui';
+
 import { StatusBadge } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 
@@ -39,8 +41,8 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         ← {t('accounts.edit.back')}
       </button>
 
-      <div className="mb-[14px] flex flex-wrap items-center gap-lg rounded-card border border-line bg-white px-5 py-[18px]">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary">
+      <Card className="mb-[14px] flex flex-wrap items-center gap-lg px-5 py-[18px]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary-deep">
           {mono(account)}
         </div>
         <div className="min-w-[150px] flex-1">
@@ -62,7 +64,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             />
           </div>
         </div>
-      </div>
+      </Card>
 
       <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-lg">
         <SessionSection account={account} />

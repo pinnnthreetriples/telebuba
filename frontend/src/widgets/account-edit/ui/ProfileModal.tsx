@@ -27,6 +27,7 @@ import {
   IconButton,
   Input,
   Modal,
+  Notice,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -779,7 +780,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+              <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
@@ -791,7 +792,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 >
                   {t('accounts.profile.refresh')}
                 </button>
-              </div>
+              </Notice>
             )}
             {tab === 'text' && (
               <div className="flex flex-col gap-lg">

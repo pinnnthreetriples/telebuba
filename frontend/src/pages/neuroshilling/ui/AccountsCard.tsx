@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingBoardAccount } from '@/shared/api';
-import { CollapsibleCard, HelpHint } from '@/shared/ui';
+import { Badge, CollapsibleCard, HelpHint } from '@/shared/ui';
 
 // The campaign's roster: how many accounts are on it, which ones, and the way in
 // to the picker. Editing happens in the modal, which saves the whole roster once.
@@ -36,12 +36,9 @@ export function AccountsCard({
       {accounts.length > 0 ? (
         <div className="mb-[10px] flex flex-wrap gap-sm">
           {accounts.map((account) => (
-            <span
-              key={account.account_id}
-              className="inline-flex items-center rounded-full border border-line bg-track px-[11px] py-[5px] text-body text-ink-body"
-            >
+            <Badge size="md" className="border border-line text-ink-body" key={account.account_id}>
               {account.title}
-            </span>
+            </Badge>
           ))}
         </div>
       ) : (

@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Badge, Card } from '@/shared/ui';
+
 import { accountDisplayName } from '@/entities/account';
 import { warmingDialoguesQueryOptions } from '@/entities/warming';
 import type { DialogueFeedMessage } from '@/shared/api';
@@ -177,7 +179,7 @@ export function DialogueFeed() {
   const live = isFeedLive(messages);
 
   return (
-    <div className="mt-4 rounded-card border border-line bg-white p-4">
+    <Card className="mt-4 p-4">
       <div className="mb-[13px] flex items-center gap-md">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
@@ -186,14 +188,14 @@ export function DialogueFeed() {
         />
         <span className="text-lead font-bold">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
-          <span className="rounded-full bg-success-tint px-[8px] py-[2px] text-micro font-bold text-success">
+          <Badge tone="success" className="font-bold">
             {/* One page, not a total: at the limit there is more history behind
                 it, so say "30+" instead of freezing at a wrong-looking "30". */}
             {messages.length === FEED_LIMIT ? `${FEED_LIMIT}+` : messages.length}
-          </span>
+          </Badge>
         ) : null}
       </div>
       <DialogueTranscript messages={messages} />
-    </div>
+    </Card>
   );
 }

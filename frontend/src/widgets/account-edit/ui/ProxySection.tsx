@@ -12,7 +12,15 @@ import {
   unassignProxyMutation,
 } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { Button, ConfirmModal, FormField, Input, Select, type SelectOption } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  ConfirmModal,
+  FormField,
+  Input,
+  Select,
+  type SelectOption,
+} from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { Section, Spinner } from './_shared';
@@ -387,7 +395,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className="text-body text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
         )}
         {proxyCheck === 'ok' && (
-          <span className="tb-pop inline-flex items-center gap-sm rounded-full bg-success-tint px-[11px] py-[5px] text-body font-medium text-success">
+          <Badge tone="success" size="md" className="tb-pop gap-sm">
             {proxyResult?.country_code ? (
               <span
                 className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-ring`}
@@ -396,7 +404,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
             {[proxyResult?.country_code?.toUpperCase(), proxyResult?.exit_ip]
               .filter(Boolean)
               .join(' · ') || t('accounts.edit.proxyReachable')}
-          </span>
+          </Badge>
         )}
         {proxyCheck === 'err' && (
           <span className="inline-flex items-center gap-sm text-body font-medium text-danger">

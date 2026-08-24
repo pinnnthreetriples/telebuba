@@ -8,7 +8,16 @@ import {
   setAccountChannelPhotoMutation,
   updateAccountChannelMutation,
 } from '@/entities/account';
-import { Button, ConfirmModal, IconButton, Input, Modal, Textarea, toastError } from '@/shared/ui';
+import {
+  Button,
+  ConfirmModal,
+  IconButton,
+  Input,
+  Modal,
+  Notice,
+  Textarea,
+  toastError,
+} from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -190,7 +199,7 @@ export function ChannelEditModal({
           </div>
 
           {detail.isError && (
-            <div className="mb-4 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+            <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <button
                 type="button"
@@ -201,7 +210,7 @@ export function ChannelEditModal({
               >
                 {t('accounts.channel.retry')}
               </button>
-            </div>
+            </Notice>
           )}
 
           {detail.isSuccess && (
@@ -244,9 +253,9 @@ export function ChannelEditModal({
               />
 
               {update.isError && (
-                <div className="mb-[14px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+                <Notice tone="danger" className="mb-[14px]">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
-                </div>
+                </Notice>
               )}
 
               <div className="flex items-center gap-sm">

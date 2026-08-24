@@ -10,7 +10,7 @@ import {
 } from '@/entities/account';
 import type { AccountRead, AccountTwoFactorCreated } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { ConfirmModal, Textarea } from '@/shared/ui';
+import { ConfirmModal, Notice, Textarea } from '@/shared/ui';
 
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
@@ -176,7 +176,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           ) : (
             <span
               className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-medium ${
-                hasPassword ? 'bg-success-tint text-success' : 'bg-canvas text-ink-muted'
+                hasPassword ? 'bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'
               }`}
             >
               {/* No data and nothing in flight means nobody has asked Telegram yet
@@ -216,9 +216,12 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // ONLY copy and change/removal are gone until it is set again. NOT the
               // unconfirmed-change cases: nothing failed there, the previous password
               // was kept on purpose (`true` or `null`) and the warning below says so.
-              <div className="mb-[10px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[9px] text-tiny font-medium leading-[1.45] text-danger">
+              <Notice
+                tone="danger"
+                className="mb-[10px] py-[9px] text-tiny font-medium leading-[1.45]"
+              >
                 {t('accounts.edit.twofaStoreFailed')}
-              </div>
+              </Notice>
             ) : null}
             {created.confirmed === false ? (
               // The request was on the wire and only the answer was lost, so
@@ -230,13 +233,16 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the read that would have proved Telegram holds ANY password answered
               // nothing either (`previous_kept: null`), and then not even "one of
               // these two is in force" is sayable.
-              <div className="mb-[10px] rounded-lg border border-danger-line bg-danger-tint px-3 py-[9px] text-tiny font-medium leading-[1.45] text-danger">
+              <Notice
+                tone="danger"
+                className="mb-[10px] py-[9px] text-tiny font-medium leading-[1.45]"
+              >
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
                   : created.previous_kept === null
                     ? t('accounts.edit.twofaUnconfirmedKept')
                     : t('accounts.edit.twofaUnconfirmed')}
-              </div>
+              </Notice>
             ) : null}
             {/* A textarea, and on its own row. Measured in Chrome at a 355px viewport,
                 the input this replaces reported scrollWidth 196 against clientWidth

@@ -1,4 +1,6 @@
+export { Badge } from './Badge';
 export { Button } from './Button';
+export { Card } from './Card';
 export { CollapsibleCard } from './CollapsibleCard';
 export { ConfirmModal } from './ConfirmModal';
 export { DataTable } from './DataTable';
@@ -9,6 +11,7 @@ export { HelpHint, HintBubble } from './HelpHint';
 export { Input, Textarea } from './Input';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';
+export { Notice } from './Notice';
 export { Select } from './Select';
 export type { SelectOption } from './Select';
 export { StatusIcon } from './StatusIcon';

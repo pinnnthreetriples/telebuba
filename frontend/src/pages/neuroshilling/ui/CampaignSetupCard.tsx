@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, CollapsibleCard, HelpHint, Input, Switch, Textarea } from '@/shared/ui';
+import { Badge, Button, CollapsibleCard, HelpHint, Input, Switch, Textarea } from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
 import {
@@ -107,14 +107,14 @@ export function CampaignSetupCard({
       header={<span className="text-lead font-semibold">{t('neuroshilling.setup.title')}</span>}
       trailing={
         dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-[10px] py-[3px] text-tiny font-semibold text-warning">
+          <span className="shrink-0 rounded-full bg-warning-tint px-[10px] py-[3px] text-tiny font-semibold text-warning-deep">
             {t('neuroshilling.setup.unsaved')}
           </span>
         ) : null
       }
     >
       {live ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep-deep">
           {t('neuroshilling.setup.liveLocked')}
         </div>
       ) : null}
@@ -122,11 +122,11 @@ export function CampaignSetupCard({
       <span className="mb-[5px] flex items-center gap-sm text-body font-medium text-ink-muted">
         {t('neuroshilling.setup.targets.label')}
         <HelpHint text={t('neuroshilling.setup.targets.hint')} />
-        <span className="ml-auto rounded-full bg-track px-[8px] py-[2px] text-micro font-medium tabular-nums text-ink-muted">
+        <Badge className="ml-auto tabular-nums">
           {/* `n`, not `count`: an i18next `count` switches on plural forms this
               key does not carry, and Russian would need four of them to read right. */}
           {t('neuroshilling.setup.targets.count', { n: targets })}
-        </span>
+        </Badge>
       </span>
       <Textarea
         size="sm"
@@ -237,9 +237,9 @@ export function CampaignSetupCard({
       >
         {t('neuroshilling.setup.advanced.title')}
         {changed > 0 ? (
-          <span className="rounded-full bg-primary-tint px-[8px] py-[2px] text-micro font-semibold tabular-nums text-primary">
+          <Badge tone="primary" className="font-semibold tabular-nums">
             {changed}
-          </span>
+          </Badge>
         ) : null}
         <span className="ml-auto text-ink-subtle">{advanced ? '−' : '+'}</span>
       </button>
@@ -306,9 +306,9 @@ export function CampaignSetupCard({
             {/* The pool as it stands NOW, not as the roster was arranged: a promoted
                 account has its reserve flag cleared, so this drops by one on every
                 substitution and reaching zero is the warning the operator needs. */}
-            <span className="ml-auto rounded-full bg-track px-[8px] py-[2px] text-micro font-medium tabular-nums text-ink-muted">
+            <Badge className="ml-auto tabular-nums">
               {t('neuroshilling.setup.reserve.count', { n: reserveCount })}
-            </span>
+            </Badge>
           </div>
 
           {/* The listening block: the three switches that let the run READ its
@@ -373,7 +373,7 @@ export function CampaignSetupCard({
               combination that publishes anything a stranger's message provoked —
               and it is the one thing on this page an outsider gets a say in. */}
           {draft.replyToHumans && draft.autoresponder === 'neurodialog' ? (
-            <div className="rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny leading-snug text-warning-deep">
+            <div className="rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny leading-snug text-warning-deep-deep">
               {t('neuroshilling.setup.replyToHumans.warning')}
             </div>
           ) : null}

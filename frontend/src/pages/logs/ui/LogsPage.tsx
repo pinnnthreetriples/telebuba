@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
-import { DataTable, type DataTableColumnMeta, Select } from '@/shared/ui';
+import { Card, DataTable, Select, type DataTableColumnMeta } from '@/shared/ui';
 import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
@@ -237,16 +237,14 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-lead text-ink-subtle">
-          {t('logs.empty')}
-        </div>
+        <Card className="px-4 py-16 text-center text-lead text-ink-subtle">{t('logs.empty')}</Card>
       ) : (
         <>
-          <div className="overflow-hidden rounded-card border border-line bg-white">
+          <Card className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">
               <DataTable data={items} columns={columns} />
             </div>
-          </div>
+          </Card>
           <div className="mt-4 flex items-center justify-end gap-sm">
             <button
               type="button"

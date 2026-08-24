@@ -46,14 +46,14 @@ export function PreviewCard({
       header={<span className="text-lead font-semibold">{t('neuroshilling.preview.title')}</span>}
       trailing={
         <span
-          className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success' : 'bg-track text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
       }
     >
       {dirty ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep">
+        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep-deep">
           {t('neuroshilling.preview.unsaved')}
         </div>
       ) : null}

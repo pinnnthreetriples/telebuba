@@ -9,7 +9,7 @@ import {
   publishAccountChannelPostMutation,
 } from '@/entities/account';
 import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
-import { Button, ConfirmModal, IconButton, Textarea, toastError } from '@/shared/ui';
+import { Button, ConfirmModal, IconButton, Notice, Textarea, toastError } from '@/shared/ui';
 
 import {
   channelErrorText,
@@ -241,9 +241,9 @@ export function ChannelPostsPanel({
           </div>
         )}
         {publish.isError && (
-          <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-body text-danger">
+          <Notice tone="danger" className="mt-2 py-[8px]">
             {channelErrorText(publish.error, t, t('accounts.channel.error'))}
-          </div>
+          </Notice>
         )}
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center gap-sm">
@@ -304,7 +304,7 @@ export function ChannelPostsPanel({
         </div>
       )}
       {posts.isError && (
-        <div className="mt-3 flex items-center justify-between gap-md rounded-lg border border-danger-line bg-danger-tint px-3 py-[10px] text-body text-danger">
+        <Notice tone="danger" className="mt-3 flex items-center justify-between gap-md">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
           <button
             type="button"
@@ -315,7 +315,7 @@ export function ChannelPostsPanel({
           >
             {t('accounts.channel.retry')}
           </button>
-        </div>
+        </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (
         <div className="mt-3 rounded-lg border border-dashed border-line bg-white px-4 py-5 text-center text-body text-ink-subtle">
@@ -373,9 +373,9 @@ export function ChannelPostsPanel({
                     }}
                   />
                   {editPost.isError && (
-                    <div className="mt-2 rounded-lg border border-danger-line bg-danger-tint px-3 py-[8px] text-body text-danger">
+                    <Notice tone="danger" className="mt-2 py-[8px]">
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
-                    </div>
+                    </Notice>
                   )}
                   <div className="mt-2 flex items-center justify-end gap-sm">
                     {/* The same readout the composer carries: without it the box

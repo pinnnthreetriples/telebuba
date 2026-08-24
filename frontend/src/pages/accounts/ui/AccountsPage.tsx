@@ -9,7 +9,7 @@ import {
   deleteAccountMutation,
   invalidateAccountViews,
 } from '@/entities/account';
-import { Button } from '@/shared/ui';
+import { Button, Card } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -229,9 +229,9 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <div className="rounded-card border border-line bg-white px-4 py-16 text-center text-lead text-ink-subtle">
+            <Card className="px-4 py-16 text-center text-lead text-ink-subtle">
               {t('accounts.empty')}
-            </div>
+            </Card>
           ) : (
             <AccountsTable
               data={items}

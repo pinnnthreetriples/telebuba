@@ -272,7 +272,7 @@ function AccountRow({
               onChannelChange(account.account_id, []);
             }}
             className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-body transition-colors hover:bg-primary-tint ${
-              selected.length === 0 ? 'font-medium text-primary' : 'text-ink'
+              selected.length === 0 ? 'font-medium text-primary-deep' : 'text-ink'
             }`}
           >
             <span className="min-w-0 truncate">{allChannels}</span>
@@ -290,7 +290,7 @@ function AccountRow({
                   toggleChannel(channel);
                 }}
                 className={`flex w-full items-center justify-between gap-sm rounded-sm px-[10px] py-2 text-left text-body transition-colors hover:bg-primary-tint ${
-                  isSelected ? 'font-medium text-primary' : 'text-ink'
+                  isSelected ? 'font-medium text-primary-deep' : 'text-ink'
                 }`}
                 title={channel}
               >
@@ -360,7 +360,7 @@ export function NeuroAccountsModal({
       label={t('neurocomment.modal.neuroAccounts.title')}
     >
       <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="18"
             height="18"

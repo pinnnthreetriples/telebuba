@@ -283,7 +283,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-[6px] py-px text-micro font-medium text-danger"
+                    className="rounded-full bg-danger-tint px-[6px] py-px text-micro font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>

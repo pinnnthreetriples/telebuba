@@ -1,7 +1,16 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { Button, CollapsibleCard, HelpHint, Input, Select, Switch, Textarea } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CollapsibleCard,
+  HelpHint,
+  Input,
+  Select,
+  Switch,
+  Textarea,
+} from '@/shared/ui';
 
 import type { DraftRole, DraftStep, ScenarioDraft } from './scenarioDraft';
 import {
@@ -92,9 +101,9 @@ function StepRow({
   return (
     <div className="rounded-lg border border-line bg-white p-[11px]">
       <div className="mb-[8px] flex items-center gap-sm">
-        <span className="rounded-full bg-track px-[8px] py-[2px] text-micro font-semibold tabular-nums text-ink-muted">
+        <Badge className="font-semibold tabular-nums">
           {t('neuroshilling.scenario.steps.position', { position })}
-        </span>
+        </Badge>
         <div className="min-w-0 flex-1">
           <Select
             value={step.roleId ?? ''}
@@ -112,7 +121,7 @@ function StepRow({
           type="button"
           aria-label={t('neuroshilling.scenario.steps.remove', { position })}
           onClick={onRemove}
-          className="h-[24px] shrink-0 rounded-sm border border-line bg-white px-[8px] text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
+          className="h-[24px] shrink-0 rounded-sm border border-line bg-white px-[8px] text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
         >
           ×
         </button>
@@ -325,9 +334,9 @@ export function ScenarioCard({
         <span
           className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${
             dirty && status === 'approved'
-              ? 'bg-warning-tint text-warning'
+              ? 'bg-warning-tint text-warning-deep'
               : status === 'approved'
-                ? 'bg-success-tint text-success'
+                ? 'bg-success-tint text-success-deep'
                 : 'bg-track text-ink-muted'
           }`}
         >
@@ -530,7 +539,7 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className="h-[30px] shrink-0 rounded-md border border-line bg-white px-[9px] text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger"
+              className="h-[30px] shrink-0 rounded-md border border-line bg-white px-[9px] text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
             >
               ×
             </button>

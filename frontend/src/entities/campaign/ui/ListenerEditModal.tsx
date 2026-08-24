@@ -98,7 +98,7 @@ export function ListenerEditModal({
     <Modal onClose={onClose} className="w-[440px]" label={t('neurocomment.listener.title')}>
       <div className="p-6">
         <div className="mb-[6px] flex items-center gap-md">
-          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+          <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
               width="17"
               height="17"

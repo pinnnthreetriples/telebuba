@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Input, Modal, Textarea } from '@/shared/ui';
+import { Badge, Button, Input, Modal, Textarea } from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -32,7 +32,7 @@ export function CreateCampaignModal({
       label={t('neurocomment.modal.createCampaign.title')}
     >
       <div className="flex items-center gap-md border-b border-line-row px-6 pb-[15px] pt-5">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
+        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="18"
             height="18"
@@ -91,9 +91,10 @@ export function CreateCampaignModal({
         {channels.length > 0 ? (
           <div className="mb-3 flex flex-wrap gap-sm">
             {channels.map((channel, index) => (
-              <span
+              <Badge
+                size="md"
+                className="gap-sm border border-line text-ink-body"
                 key={`${channel}-${String(index)}`}
-                className="inline-flex items-center gap-sm rounded-full border border-line bg-track px-[11px] py-[5px] text-body text-ink-body"
               >
                 {channel}
                 <button
@@ -106,7 +107,7 @@ export function CreateCampaignModal({
                 >
                   ×
                 </button>
-              </span>
+              </Badge>
             ))}
           </div>
         ) : null}
@@ -129,7 +130,7 @@ export function CreateCampaignModal({
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-lg bg-primary-tint text-primary"
+            className="rounded-lg bg-primary-tint text-primary-deep"
             onClick={addChannel}
           >
             {t('neurocomment.modal.add')}

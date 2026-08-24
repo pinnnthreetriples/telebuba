@@ -163,7 +163,7 @@ export function Select({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={`${OPTION} ${option.value === value ? 'font-medium text-primary' : 'text-ink'} ${
+              className={`${OPTION} ${option.value === value ? 'font-medium text-primary-deep' : 'text-ink'} ${
                 open && index === active ? 'bg-primary-tint' : ''
               }`}
             >

@@ -8,7 +8,13 @@ import type {
   DiscoveryChannelVerdict,
   DiscoverySourceReport,
 } from '@/shared/api';
-import { DataTable, StatusIcon, useWideContainer, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Badge,
+  DataTable,
+  StatusIcon,
+  type DataTableColumnMeta,
+  useWideContainer,
+} from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
@@ -328,18 +334,10 @@ export function DiscoveryResults({
       header: () => t('neurocomment.modal.discovery.results.colState'),
       cell: ({ row }) => {
         if (row.original.in_campaign === true) {
-          return (
-            <span className="rounded-full bg-track px-[8px] py-[2px] text-micro text-ink-muted">
-              {t('neurocomment.modal.discovery.results.inCampaign')}
-            </span>
-          );
+          return <Badge>{t('neurocomment.modal.discovery.results.inCampaign')}</Badge>;
         }
         if (row.original.taken_by_other_campaign === true) {
-          return (
-            <span className="rounded-full bg-track px-[8px] py-[2px] text-micro text-ink-muted">
-              {t('neurocomment.modal.discovery.results.takenElsewhere')}
-            </span>
-          );
+          return <Badge>{t('neurocomment.modal.discovery.results.takenElsewhere')}</Badge>;
         }
         return null;
       },

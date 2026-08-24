@@ -9,7 +9,7 @@ import type {
   NeurocommentChannelRow,
 } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { CollapsibleCard, DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import { Badge, CollapsibleCard, DataTable, type DataTableColumnMeta } from '@/shared/ui';
 
 interface BoardRow {
   account: string;
@@ -128,7 +128,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-medium text-primary">
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-medium text-primary-deep">
       <span className="h-[5px] w-[5px] rounded-full bg-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -191,11 +191,7 @@ function AccountComments({
                 >
                   {c.comment_text ?? '—'}
                 </span>
-                {deleted ? (
-                  <span className="shrink-0 rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger">
-                    {t('neurocomment.feed.deleted')}
-                  </span>
-                ) : null}
+                {deleted ? <Badge tone="danger">{t('neurocomment.feed.deleted')}</Badge> : null}
               </div>
             );
           })}
@@ -264,12 +260,9 @@ export function NeurocommentBoard({
                 a chip that reads 0 here beside a pill that reads 1 is otherwise unexplained
                 — the pill also counts a delivered comment the send recorded `failed`. */}
             {row.original.deletedHere > 0 ? (
-              <span
-                title={t('neurocomment.board.deletedHint')}
-                className="rounded-full bg-danger-tint px-[8px] py-[2px] text-micro font-medium text-danger"
-              >
+              <Badge tone="danger" title={t('neurocomment.board.deletedHint')}>
                 {t('neurocomment.board.deleted', { count: row.original.deletedHere })}
-              </span>
+              </Badge>
             ) : null}
           </span>
         ),
@@ -368,7 +361,7 @@ export function NeurocommentBoard({
       header={
         <>
           <span className="text-lead font-semibold">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary">
+          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary-deep">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
         </>
@@ -376,7 +369,7 @@ export function NeurocommentBoard({
       trailing={
         <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-semibold text-primary">
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-semibold text-primary-deep">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>

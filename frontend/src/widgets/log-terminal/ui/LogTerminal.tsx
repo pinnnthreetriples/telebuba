@@ -121,7 +121,7 @@ export function LogTerminal({
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-medium text-primary hover:bg-danger-line hover:text-danger"
+              className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-medium text-primary-deep hover:bg-danger-line hover:text-danger"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,
