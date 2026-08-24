@@ -3,20 +3,29 @@ import { expect, test } from 'vitest';
 
 import { Icon } from './Icon';
 
-test('a name draws the shape the registry holds for it', () => {
+test('a name draws the library glyph it is mapped to', () => {
   const { container } = render(<Icon name="check" size={16} />);
 
   expect(container.querySelector('path')).toHaveAttribute('d', 'M20 6 9 17l-5-5');
   expect(container.querySelector('svg')).toHaveAttribute('viewBox', '0 0 24 24');
 });
 
-// A registry entry may be several elements, and the ones built from circles and
-// rects have to survive the trip as circles and rects.
-test('an icon of several parts draws all of them', () => {
-  const { container } = render(<Icon name="eye" size={16} />);
+// The table is the whole reason this component still exists: the app's vocabulary and
+// Lucide's disagree, and `chart` → `audio-lines` is the pair furthest apart.
+test('a name Lucide spells differently still finds its glyph', () => {
+  const { container } = render(<Icon name="chart" size={16} />);
 
-  expect(container.querySelectorAll('path')).toHaveLength(1);
-  expect(container.querySelector('circle')).toHaveAttribute('r', '3');
+  expect(container.querySelectorAll('path')).toHaveLength(6);
+  expect(container.querySelector('path')).toHaveAttribute('d', 'M2 10v3');
+});
+
+// The one shape Lucide has no glyph for. If the library ever grows a square with a
+// zipper this test is what says the local copy can go.
+test('a shape the library lacks is drawn from the local file', () => {
+  const { container } = render(<Icon name="alert-square" size={16} />);
+
+  expect(container.querySelector('rect')).toHaveAttribute('width', '18');
+  expect(container.querySelector('path')).toHaveAttribute('d', 'M12 7v2M12 12v2M12 17v.5');
 });
 
 test('the size sets the box', () => {
@@ -49,11 +58,12 @@ test('a caller class reaches the element', () => {
 });
 
 // A solid silhouette painted with a stroke as well gets a fattened, blurred edge.
-test('a fill-only icon is filled and carries no stroke', () => {
+// Lucide writes `stroke-width` unconditionally, so the stroke is turned off by paint
+// rather than by absence — `stroke="none"` draws nothing whatever the width says.
+test('a fill-only icon is filled and paints no stroke', () => {
   const { container } = render(<Icon name="play" size={16} />);
   const svg = container.querySelector('svg');
 
   expect(svg).toHaveAttribute('fill', 'currentColor');
-  expect(svg).not.toHaveAttribute('stroke');
-  expect(svg).not.toHaveAttribute('stroke-width');
+  expect(svg).toHaveAttribute('stroke', 'none');
 });
