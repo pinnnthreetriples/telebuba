@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
 import { type FeedbackResult } from '@/shared/lib';
-import { CollapsibleCard, FeedbackMark, IconButton, SurfHover } from '@/shared/ui';
+import { CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
 
 // Tone is the token the status MEANS (running = success, held = amber, shelved =
 // muted), so the pill can't drift from the rest of the design system.
@@ -18,7 +18,7 @@ const STATUS_TONE = {
 const CHANNEL_CHIP = {
   banned: 'border-danger bg-danger-tint text-danger-deep',
   ok: 'border-success bg-success-tint text-success-deep',
-  default: 'border-line bg-track text-ink-body',
+  default: 'border-line bg-canvas text-ink-body',
 } as const;
 
 // The campaigns card: per-campaign run/pause/edit/delete (SurfHover-revealed),
@@ -108,16 +108,7 @@ export function CampaignsCard({
                     }}
                     className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
                   >
-                    {isRunning ? (
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="5" width="4" height="14" rx="1" />
-                        <rect x="14" y="5" width="4" height="14" rx="1" />
-                      </svg>
-                    ) : (
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z" />
-                      </svg>
-                    )}
+                    {isRunning ? <Icon name="pause" size={18} /> : <Icon name="play" size={18} />}
                   </button>
                   <button
                     type="button"
@@ -129,17 +120,7 @@ export function CampaignsCard({
                     }}
                     className="flex w-12 items-center justify-center border-none bg-transparent text-primary"
                   >
-                    <svg
-                      width="17"
-                      height="17"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
+                    <Icon name="pencil" size={18} />
                   </button>
                   <button
                     type="button"
@@ -149,16 +130,7 @@ export function CampaignsCard({
                     }}
                     className="flex w-12 items-center justify-center border-none bg-transparent text-danger"
                   >
-                    <svg
-                      width="17"
-                      height="17"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                    </svg>
+                    <Icon name="trash" size={18} />
                   </button>
                 </>
               }
@@ -203,17 +175,7 @@ export function CampaignsCard({
                           onToggleActions(campaign.campaign_id);
                         }}
                       >
-                        <svg
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <circle cx="12" cy="12" r="3" />
-                          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                        </svg>
+                        <Icon name="gear" size={14} />
                       </IconButton>
                     </div>
                   </div>
@@ -232,7 +194,7 @@ export function CampaignsCard({
       <button
         type="button"
         onClick={onCreate}
-        className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
+        className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
       >
         {t('neurocomment.campaigns.create')}
       </button>
@@ -259,7 +221,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null || checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line-input bg-white px-md py-xs text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                className="shrink-0 rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -323,18 +285,7 @@ export function CampaignsCard({
                   onClick={onAddChannel}
                   className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                 >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
+                  <Icon name="check" size={12} />
                 </button>
               </span>
             ) : (

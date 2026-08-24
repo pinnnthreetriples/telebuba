@@ -13,7 +13,7 @@ test('the tone names the fill and the readable text rung together', () => {
     </>,
   );
 
-  expect(screen.getByText('7').className).toContain('bg-track');
+  expect(screen.getByText('7').className).toContain('bg-canvas');
   expect(screen.getByText('7').className).toContain('text-ink-muted');
 
   // `text-danger` would be 4.34:1 on this fill; the pairing is what `deep` is for.
@@ -25,16 +25,34 @@ test('the tone names the fill and the readable text rung together', () => {
   expect(screen.getByText('Готов').className).toContain('text-success-deep');
 });
 
-test('the size picks the chip or the label rung', () => {
+test('the size picks one of the three pill rungs', () => {
   render(
     <>
       <Badge>10</Badge>
+      <Badge size="sm">Забанен</Badge>
       <Badge size="md">Прогрев</Badge>
     </>,
   );
 
   expect(screen.getByText('10').className).toContain('text-micro');
+  // The rung every status pill in the app sits on, and the one this component
+  // could not express until it was added.
+  expect(screen.getByText('Забанен').className).toContain('text-tiny');
   expect(screen.getByText('Прогрев').className).toContain('text-body');
+});
+
+test('the dot is asked for, and cannot disagree with the label it sits beside', () => {
+  render(
+    <>
+      <Badge tone="danger" dot>
+        Забанен
+      </Badge>
+      <Badge tone="danger">3 удалено</Badge>
+    </>,
+  );
+
+  expect(screen.getByText('Забанен').querySelector('.bg-current')).toBeInTheDocument();
+  expect(screen.getByText('3 удалено').querySelector('.bg-current')).toBeNull();
 });
 
 test('a badge never wraps and a caller can still add layout', () => {

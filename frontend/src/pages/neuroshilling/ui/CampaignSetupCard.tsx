@@ -331,7 +331,7 @@ export function CampaignSetupCard({
               <div
                 role="radiogroup"
                 aria-label={t(`neuroshilling.setup.${field}.label`)}
-                className="inline-flex rounded-full border border-line-input bg-track p-xs"
+                className="inline-flex rounded-full border border-line bg-canvas p-xs"
               >
                 {options.map((option) => (
                   <button

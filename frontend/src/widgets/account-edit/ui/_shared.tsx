@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 
-import { CollapsibleCard } from '@/shared/ui';
+import { CollapsibleCard, Icon } from '@/shared/ui';
 
 // The accordion preset shared by every AccountEdit section, plus the profile
 // modal's dashed add-tile. Internal to the slice (not re-exported from index).
@@ -26,16 +26,7 @@ export function DashedAdd({
       style={{ aspectRatio: ratio }}
       className="flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-white text-body font-medium text-ink-muted disabled:opacity-60"
     >
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      >
-        <path d="M12 5v14M5 12h14" />
-      </svg>
+      <Icon name="plus" size={20} />
       {label}
     </button>
   );

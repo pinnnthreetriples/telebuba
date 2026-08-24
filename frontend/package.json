@@ -12,7 +12,9 @@
     "format:write": "prettier --write .",
     "boundaries": "steiger ./src",
     "test": "vitest run --coverage",
-    "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run test",
+    "ds:doc": "node scripts/design-system-doc.mjs",
+    "ds:doc:check": "node scripts/design-system-doc.mjs --check",
+    "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run test",
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
   },
   "overrides": {
@@ -32,6 +34,7 @@
     "clsx": "^2.1.1",
     "flag-icons": "^7.3.2",
     "i18next": "^24.2.0",
+    "lucide-react": "^1.34.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^15.2.0",

@@ -27,7 +27,7 @@ const SIZE = {
 // secret shown once to be read off the screen. It keeps the canvas fill so it
 // reads as inert, and `invalid` overrides either.
 const TONE = {
-  default: 'border-line-input',
+  default: 'border-line',
   flat: 'border-line bg-canvas',
 } as const;
 

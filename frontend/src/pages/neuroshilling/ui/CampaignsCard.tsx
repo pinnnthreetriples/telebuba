@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { CollapsibleCard, IconButton } from '@/shared/ui';
+import { CollapsibleCard, Icon, IconButton } from '@/shared/ui';
 
 // Status tone, in the tokens the neurocomment campaign rows already use — the
 // meaning of the status, not a hex, so the two cards cannot drift apart.
@@ -86,16 +86,7 @@ export function CampaignsCard({
                       onDelete(campaign);
                     }}
                   >
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.9"
-                    >
-                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                    </svg>
+                    <Icon name="trash" size={14} />
                   </IconButton>
                 </div>
               </div>
@@ -139,7 +130,7 @@ export function CampaignsCard({
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
             onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line-input bg-white px-md py-sm text-body text-ink-muted"
+            className="shrink-0 rounded-full border border-line bg-white px-md py-sm text-body text-ink-muted"
           >
             ×
           </button>
@@ -148,7 +139,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash"
+          className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

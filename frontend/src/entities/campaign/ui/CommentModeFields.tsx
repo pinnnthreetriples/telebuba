@@ -73,8 +73,8 @@ export function CommentModeFields({
                 title={`${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`}
                 className={`w-full rounded-md border px-md py-tight text-body font-medium transition-colors disabled:opacity-60 ${
                   mode === option
-                    ? 'border-primary bg-primary-wash text-primary-deep'
-                    : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
+                    ? 'border-primary bg-primary-tint text-primary-deep'
+                    : 'border-line bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
                 }`}
               >
                 {t(`neurocomment.mode.${option}.label`)}
@@ -115,7 +115,7 @@ export function CommentModeFields({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={t('neurocomment.mode.waitLabel')}
-              className="tb-time w-[68px] rounded-md border border-line-input bg-white px-md py-tight text-body font-medium text-ink disabled:opacity-60"
+              className="tb-time w-[68px] rounded-md border border-line bg-white px-md py-tight text-body font-medium text-ink disabled:opacity-60"
             />
             <span className="text-tiny text-ink-subtle">{t('neurocomment.mode.waitHint')}</span>
           </span>

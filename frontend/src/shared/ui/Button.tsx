@@ -31,7 +31,7 @@ const SIZE = {
 // until you point at it.
 const VARIANT = {
   primary: 'bg-primary text-white hover:bg-primary-press',
-  secondary: 'border border-line-input bg-white text-ink hover:border-line-strong',
+  secondary: 'border border-line bg-white text-ink hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
   ghost: 'text-ink-muted hover:bg-canvas hover:text-ink',
 } as const;

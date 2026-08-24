@@ -2,6 +2,9 @@ import { Input } from '@/shared/ui';
 
 const FIELD_LABEL = 'mb-tight block text-body font-medium text-ink-body';
 
+// Stays inline, both halves. The crossed-out eye is this file's own transcription
+// and is drawn nowhere else, so <Icon> can only take the open one — and the two
+// swap in the same slot, where a 17px state and an 18px state would step.
 function EyeIcon({ off }: { off: boolean }) {
   return off ? (
     <svg
@@ -76,7 +79,7 @@ export function ApiKeyField({
           type="button"
           aria-label={toggleLabel}
           onClick={onToggleShow}
-          className="flex w-[42px] items-center justify-center rounded-lg border border-line-input bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary-deep"
+          className="flex w-[42px] items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep"
         >
           <EyeIcon off={show} />
         </button>

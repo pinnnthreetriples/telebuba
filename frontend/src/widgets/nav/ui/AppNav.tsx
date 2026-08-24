@@ -165,10 +165,10 @@ export function AppNav() {
             this cluster right below `lg`. */}
         <div className="ml-auto flex shrink-0 items-center gap-md">
           <div
-            className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
+            className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
           >
             <span
-              className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
+              className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success' : 'bg-ink-subtle'}`}
             />
             {/* sr-only, not `hidden`: below `lg` only the dot shows, but the text has
                 to stay in the accessibility tree — a display:none span leaves the

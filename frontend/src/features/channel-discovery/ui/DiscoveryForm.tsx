@@ -110,7 +110,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
             type="button"
             onClick={suggest}
             disabled={topic === '' || topicTooLong || expand.isPending}
-            className="shrink-0 whitespace-nowrap rounded-lg border border-line-input bg-white px-lg py-md text-body font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-line bg-white px-lg py-md text-body font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
           >
             {expand.isPending
               ? t('neurocomment.modal.discovery.form.expanding')

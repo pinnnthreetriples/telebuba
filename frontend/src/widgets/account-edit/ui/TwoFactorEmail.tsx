@@ -236,7 +236,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onConfirmCode}
               disabled={confirmEmail.isPending || !code.trim()}
-              className="rounded-lg border border-line-input bg-white px-lg py-sm text-body font-medium disabled:opacity-50"
+              className="rounded-lg border border-line bg-white px-lg py-sm text-body font-medium disabled:opacity-50"
             >
               {confirmEmail.isPending ? (
                 <Spinner size={13} />
@@ -289,7 +289,7 @@ export function TwoFactorEmail({
             type="button"
             onClick={onAttach}
             disabled={setEmail.isPending || !addressValid || !hasStored}
-            className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium disabled:opacity-50"
+            className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
           >
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
           </button>

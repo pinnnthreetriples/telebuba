@@ -1,4 +1,5 @@
 export { Badge } from './Badge';
+export type { BadgeTone } from './Badge';
 export { Button } from './Button';
 export { Card } from './Card';
 export { CollapsibleCard } from './CollapsibleCard';
@@ -8,6 +9,7 @@ export type { DataTableColumnMeta } from './DataTable';
 export { FeedbackMark } from './FeedbackMark';
 export { FieldError, FormField } from './FormField';
 export { HelpHint, HintBubble } from './HelpHint';
+export { Icon } from './Icon';
 export { Input, Textarea } from './Input';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';

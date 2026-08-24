@@ -25,7 +25,7 @@ import {
 } from './scenarioDraft';
 
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-wash disabled:opacity-50';
+  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint disabled:opacity-50';
 
 function Stepper({
   label,
@@ -44,7 +44,7 @@ function Stepper({
   return (
     <div className="flex items-center gap-sm">
       <span className="text-body text-ink-muted">{label}</span>
-      <div className="inline-flex items-center gap-hair rounded-full border border-line-input bg-white px-xs py-hair">
+      <div className="inline-flex items-center gap-hair rounded-full border border-line bg-white px-xs py-hair">
         <button
           type="button"
           aria-label={t('neuroshilling.scenario.stepper.less', { label })}
@@ -156,7 +156,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`h-[28px] w-[28px] rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line-input bg-white'}`}
+              className={`h-[28px] w-[28px] rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line bg-white'}`}
             >
               {emoji}
             </button>
@@ -337,7 +337,7 @@ export function ScenarioCard({
               ? 'bg-warning-tint text-warning-deep'
               : status === 'approved'
                 ? 'bg-success-tint text-success-deep'
-                : 'bg-track text-ink-muted'
+                : 'bg-canvas text-ink-muted'
           }`}
         >
           {dirty && status === 'approved'
@@ -350,7 +350,7 @@ export function ScenarioCard({
         <div
           role="radiogroup"
           aria-label={t('neuroshilling.scenario.mode.label')}
-          className="inline-flex rounded-full border border-line-input bg-white p-xs"
+          className="inline-flex rounded-full border border-line bg-white p-xs"
         >
           {(['campaign', 'revive'] as const).map((mode) => (
             <button

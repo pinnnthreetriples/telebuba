@@ -6,8 +6,8 @@ import type { Config } from 'tailwindcss';
 //
 // Each semantic colour carries the same three roles, so a component never has to
 // invent a shade: DEFAULT for text and icons, `tint` for the surface behind them,
-// `line` for that surface's border. Blue adds `wash` (the lightest hover fill)
-// and `press` (filled-button hover). `term` is the one dark surface — the log
+// `line` for that surface's border. Blue adds `press` (filled-button hover), and
+// its `tint` doubles as the hover fill. `term` is the one dark surface — the log
 // terminal and the tooltips that share its ink; its text/link/error shades are
 // lighter than the light-theme ones on purpose, because #0066ff and #c0473f do
 // not read on #16161a.
@@ -157,26 +157,37 @@ export default {
         '5xl': '64px',
       },
       colors: {
+        // Two jobs, one colour: the ground the page sits on, and the fill of anything
+        // that is filled ON a card — a progress rail, a chip, a counter. They were two
+        // tokens three units apart, which is under the threshold at which a flat area
+        // reads as a different colour at all, and no filled thing in the app ever lies
+        // straight on the page for the difference to have to carry.
         canvas: '#f1efed',
         // The wash over an image that a control has to stay legible on — a photo tile's
         // remove button. Dark ink at 55%, not a flat grey: what is behind it is a
         // photograph, and a solid fill would read as a hole punched in it.
         scrim: 'rgba(11,11,12,0.55)',
         surface: '#faf9f7',
-        track: '#eeedea',
         // `muted` and `subtle` are the two greys small text is written in, so both sit
         // at the AA floor rather than where they looked best: `muted` cleared only
-        // 4.10:1 on `track` (fourteen pills pair them) and `subtle` 2.88:1 on white
+        // 4.10:1 on the neutral fill (fourteen pills pair them) and `subtle` 2.88:1 on white
         // across seventeen timestamps, placeholders and empty states. AA leaves little
         // room between them and `body`, so the ramp is compressed on purpose — the
         // alternative is a rung the design system knows cannot be read.
         ink: { DEFAULT: '#0b0b0c', body: '#3a3a3a', muted: '#63615d', subtle: '#6e6b66' },
-        line: { DEFAULT: '#e6e5e3', strong: '#d8d6d2', input: '#dedcd8', row: '#f0eeeb' },
+        // A field's border is DEFAULT too. It had a darker rung of its own, eight units
+        // down, on the theory that a box you type into has to announce itself — but a
+        // field is read as a field by its shape and its white fill against the card
+        // around it, and every field in the app does sit on white.
+        line: { DEFAULT: '#e6e5e3', strong: '#d8d6d2', row: '#f0eeeb' },
         primary: {
           DEFAULT: '#0066ff',
           press: '#0057db',
+          // Also the hover fill. `wash` was a second pale blue four units lighter, which
+          // is a difference a flat area cannot show; the one place the two ever met is
+          // WarmingBoard's pipeline panel inside its tinted card, where four units never
+          // bought a visible edge in the first place.
           tint: '#eef4ff',
-          wash: '#f2f6ff',
           line: '#cbd7ec',
           // Not `line` a notch lighter by accident: this is a border faint enough to
           // double as a divider FILL, which is the whole reason it has to exist. The
@@ -184,7 +195,7 @@ export default {
           // and the background of a `gap-px` grid whose 1px gaps ARE the tile dividers.
           // `line` is far too dark for that fill and `tint` far too blue for the border.
           hairline: '#e4ecfa',
-          // The blue that small text on `tint`/`wash` is written in. DEFAULT measures
+          // The blue that small text on `tint` is written in. DEFAULT measures
           // 4.38:1 there — under the 4.5:1 floor by a margin nobody can see and every
           // contrast checker reports. Same role `success.deep` and `warning.deep` play.
           deep: '#0052cc',
@@ -200,7 +211,6 @@ export default {
           press: '#0e8c45',
           tint: '#ddf7e9',
           line: '#b8ecce',
-          dot: '#16b364',
         },
         // `deep` is the one amber the set lacked: the darkest rung, for a heading or a
         // small icon sitting ON an amber chip, where DEFAULT is the subtitle beside it.

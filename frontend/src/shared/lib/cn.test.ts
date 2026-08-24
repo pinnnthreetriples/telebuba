@@ -8,7 +8,7 @@ import { cn } from './cn';
 // exactly the order a variant component paints in.
 test('a type rung survives the colour painted after it', () => {
   expect(cn('text-lead', 'text-white')).toBe('text-lead text-white');
-  expect(cn('bg-track text-ink-muted', 'text-micro')).toBe('bg-track text-ink-muted text-micro');
+  expect(cn('bg-canvas text-ink-muted', 'text-micro')).toBe('bg-canvas text-ink-muted text-micro');
 });
 
 test('two type rungs still collapse to the last one', () => {

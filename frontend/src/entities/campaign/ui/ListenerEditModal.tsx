@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { Button, IconButton, Modal, Select, toastError } from '@/shared/ui';
+import { Button, Icon, IconButton, Modal, Select, toastError } from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -99,21 +99,7 @@ export function ListenerEditModal({
       <div className="p-2xl">
         <div className="mb-tight flex items-center gap-md">
           <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M2 10v3" />
-              <path d="M6 6v11" />
-              <path d="M10 3v18" />
-              <path d="M14 8v7" />
-              <path d="M18 5v13" />
-              <path d="M22 10v3" />
-            </svg>
+            <Icon name="chart" size={18} />
           </span>
           <div className="flex-1">
             <div className="text-title font-bold">{t('neurocomment.listener.title')}</div>
@@ -164,16 +150,7 @@ export function ListenerEditModal({
             {saved ? (
               <span className="inline-flex items-center gap-sm">
                 <span className="inline-flex [animation:swapin_0.3s_ease_both]">
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
+                  <Icon name="check" size={16} />
                 </span>
                 <span className="inline-block [animation:swapin_0.3s_ease_0.09s_both]">
                   {t('neurocomment.modal.saved')}

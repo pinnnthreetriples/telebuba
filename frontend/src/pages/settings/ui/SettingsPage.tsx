@@ -9,7 +9,7 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { Button, Card, FieldError, FormField, HelpHint, Input, Switch } from '@/shared/ui';
+import { Button, Card, FieldError, FormField, HelpHint, Icon, Input, Switch } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
@@ -266,8 +266,8 @@ function SettingsForm({
               }}
               className={`flex-1 rounded-lg border px-md py-md text-lead font-medium transition-colors ${
                 provider === option
-                  ? 'border-primary bg-primary-wash text-primary-deep'
-                  : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
+                  ? 'border-primary bg-primary-tint text-primary-deep'
+                  : 'border-line bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
               }`}
             >
               {t(`settings.captchaLlm.${option}`)}
@@ -281,7 +281,7 @@ function SettingsForm({
         title={t('settings.warmLimits.title')}
         subtitle={t('settings.warmLimits.subtitle')}
       >
-        <div className="rounded-lg border border-dashed border-line-input bg-surface px-lg py-md text-body leading-relaxed text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md text-body leading-relaxed text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
@@ -302,7 +302,7 @@ function SettingsForm({
             <div className="flex items-center gap-md">
               <form.Field name="delayFrom">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-md py-md">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-white px-md py-md">
                     <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.from')}
                     </span>
@@ -321,7 +321,7 @@ function SettingsForm({
               </form.Field>
               <form.Field name="delayTo">
                 {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line-input bg-white px-md py-md">
+                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-white px-md py-md">
                     <span className="shrink-0 text-tiny text-ink-subtle">
                       {t('settings.range.to')}
                     </span>
@@ -402,16 +402,7 @@ function SettingsForm({
           {justSaved ? (
             <span className="inline-flex items-center gap-sm">
               <span className="tb-swapin inline-flex">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+                <Icon name="check" size={16} />
               </span>
               <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                 {t('settings.saved')}
@@ -420,16 +411,7 @@ function SettingsForm({
           ) : saveFailed ? (
             <span className="inline-flex items-center gap-sm">
               <span className="tb-swapin inline-flex">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
+                <Icon name="close" size={16} />
               </span>
               <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                 {t('settings.saveFailed')}

@@ -16,7 +16,15 @@ import {
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
 import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { Badge, Button, Card, CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CollapsibleCard,
+  ConfirmModal,
+  FeedbackMark,
+  Icon,
+} from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
@@ -244,16 +252,7 @@ export function WarmingPage() {
             }}
             className={`gap-sm ${poolOn ? 'bg-ink hover:bg-ink' : ''}`}
           >
-            {poolOn ? (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <rect x="6" y="5" width="4" height="14" rx="1.5" />
-                <rect x="14" y="5" width="4" height="14" rx="1.5" />
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z" />
-              </svg>
-            )}
+            {poolOn ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
           </Button>
         </div>
@@ -328,20 +327,7 @@ export function WarmingPage() {
                           </div>
                         ) : null}
                         <div className="mt-hair flex items-center gap-sm">
-                          <svg
-                            width="13"
-                            height="13"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            className={`shrink-0 ${tTone}`}
-                          >
-                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-                            <path d="m9 12 2 2 4-4" />
-                          </svg>
+                          <Icon name="shield-check" size={14} className={`shrink-0 ${tTone}`} />
                           <span className={`text-tiny font-semibold ${tTone}`}>{trust ?? '—'}</span>
                           {ptype ? (
                             <>
@@ -365,7 +351,7 @@ export function WarmingPage() {
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
+                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-canvas text-ink-subtle'}`}
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
@@ -429,18 +415,7 @@ export function WarmingPage() {
                     onClick={addChannel}
                     className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                   >
-                    <svg
-                      width="12"
-                      height="12"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+                    <Icon name="check" size={12} />
                   </button>
                   <button
                     type="button"
@@ -476,18 +451,7 @@ export function WarmingPage() {
             header={
               <>
                 <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-success-tint">
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="2.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="stroke-success"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
+                  <Icon name="check" size={16} className="stroke-success" />
                 </span>
                 <span className="text-lead font-bold">{t('warming.warmed.title')}</span>
                 <Badge tone="success" className="font-bold">
@@ -543,16 +507,7 @@ export function WarmingPage() {
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
                       <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-micro font-bold tracking-[0.03em] text-success-deep">
-                        <svg
-                          width="9"
-                          height="9"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          strokeWidth="3.4"
-                          className="stroke-success"
-                        >
-                          <path d="M20 6 9 17l-5-5" />
-                        </svg>
+                        <Icon name="check" size={10} className="stroke-success" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
@@ -586,16 +541,7 @@ export function WarmingPage() {
                         className="flex flex-1 items-center justify-center gap-sm rounded-full bg-ink px-lg py-md text-body font-semibold text-white disabled:opacity-50"
                       >
                         {t('warming.warmed.toNeuro')}
-                        <svg
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.2"
-                        >
-                          <path d="M5 12h14M13 6l6 6-6 6" />
-                        </svg>
+                        <Icon name="arrow-right" size={14} />
                       </button>
                       <FeedbackMark result={accountFeedback.feedback[acc.account_id]} />
                       <button
@@ -606,7 +552,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
-                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted disabled:opacity-50"
+                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted disabled:opacity-50"
                       >
                         <svg
                           width="15"

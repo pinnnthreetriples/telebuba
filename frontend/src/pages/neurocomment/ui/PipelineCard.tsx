@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/shared/ui';
+import { Button, Icon } from '@/shared/ui';
 
 import type { LogEntry } from '@/shared/api';
 
@@ -54,12 +54,12 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-primary-hairline bg-primary-wash px-xl py-lg text-ink">
+    <div className="rounded-card border border-primary-hairline bg-primary-tint px-xl py-lg text-ink">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
           <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
+            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -71,16 +71,7 @@ export function PipelineCard({
           onClick={onToggle}
           className={`gap-sm ${running ? 'bg-ink hover:bg-ink' : ''}`}
         >
-          {running ? (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="5" width="4" height="14" rx="1.5" />
-              <rect x="14" y="5" width="4" height="14" rx="1.5" />
-            </svg>
-          ) : (
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z" />
-            </svg>
-          )}
+          {running ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}
         </Button>
       </div>
@@ -113,18 +104,7 @@ export function PipelineCard({
               <div className="flex h-6 w-4 items-center justify-center">
                 {index < activeCell ? (
                   <span className="tb-pop flex h-4 w-4 items-center justify-center rounded-full bg-success">
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      className="stroke-white"
-                      strokeWidth="3.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+                    <Icon name="check" size={10} className="stroke-white" />
                   </span>
                 ) : index === activeCell ? (
                   <span className="tb-livedot h-[11px] w-[11px] rounded-full bg-primary" />

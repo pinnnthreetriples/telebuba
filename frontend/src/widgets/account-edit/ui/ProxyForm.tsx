@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Badge, Button, FormField, Input } from '@/shared/ui';
+import { Badge, Button, FormField, Icon, Input } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { seg } from './_styles';
@@ -137,33 +137,7 @@ export function ProxyForm({
                   aria-label={t('accounts.proxyForm.password')}
                   className="absolute right-[6px] top-1/2 flex h-[26px] w-[26px] -translate-y-1/2 items-center justify-center text-ink-subtle"
                 >
-                  {showPass ? (
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a13.16 13.16 0 0 1-1.67 2.68" />
-                      <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.12 9.12 0 0 0 5.39-1.61" />
-                      <path d="M14.12 14.12A3 3 0 1 1 9.88 9.88" />
-                      <path d="M1 1l22 22" />
-                    </svg>
-                  ) : (
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.8"
-                    >
-                      <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
-                      <circle cx="12" cy="12" r="3" />
-                    </svg>
-                  )}
+                  {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                 </button>
               </div>
             </label>
@@ -225,17 +199,7 @@ export function ProxyForm({
         )}
         {detect === 'err' && (
           <span className="inline-flex items-center gap-sm text-body font-medium text-danger">
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="m15 9-6 6M9 9l6 6" />
-            </svg>
+            <Icon name="x-circle" size={14} />
             {t('accounts.proxyForm.resultErr')}
           </span>
         )}

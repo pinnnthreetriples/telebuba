@@ -263,11 +263,11 @@ export function ChannelEditModal({
                   type="button"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line-input bg-white px-lg py-sm text-lead font-medium disabled:opacity-60"
+                  className="rounded-full border border-line bg-white px-lg py-sm text-lead font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
+                      <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
                       {t('accounts.channel.avatarUpload')}
                     </span>
                   ) : (

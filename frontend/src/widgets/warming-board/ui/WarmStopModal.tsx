@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import { Icon, Modal } from '@/shared/ui';
 
 // The design's "stop warming?" confirm (three actions: finish→warmed, keep
 // going, hard stop).
@@ -32,24 +32,13 @@ export function WarmStopModal({
             }}
             className="flex flex-1 items-center justify-center gap-tight whitespace-nowrap rounded-full border border-primary bg-primary px-md py-md text-lead font-semibold text-white transition-colors hover:bg-primary-press"
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
+            <Icon name="check" size={14} />
             {t('warming.stopModal.toWarmed')}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line-input bg-white px-md py-md text-lead font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface"
+            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line bg-white px-md py-md text-lead font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface"
           >
             {t('warming.stopModal.keep')}
           </button>

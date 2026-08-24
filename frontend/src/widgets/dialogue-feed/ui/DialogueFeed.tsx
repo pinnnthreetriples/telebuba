@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Card } from '@/shared/ui';
+import { Badge, Card, Icon } from '@/shared/ui';
 
 import { accountDisplayName } from '@/entities/account';
 import { warmingDialoguesQueryOptions } from '@/entities/warming';
@@ -68,16 +68,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         <span className="font-medium text-ink-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
-        <svg
-          width="11"
-          height="11"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.2"
-        >
-          <path d="M5 12h14M13 6l6 6-6 6" />
-        </svg>
+        <Icon name="arrow-right" size={12} />
         <span className="font-medium text-ink-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>

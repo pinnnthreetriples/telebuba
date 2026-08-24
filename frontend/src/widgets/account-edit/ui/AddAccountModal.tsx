@@ -13,7 +13,7 @@ import {
   proxyPoolQueryOptions,
   proxyTypeLabel,
 } from '@/entities/proxy';
-import { Button, IconButton, Modal } from '@/shared/ui';
+import { Button, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ProxyForm } from './ProxyForm';
@@ -53,7 +53,7 @@ function ChoiceCard({
       // Background lives in both branches, never in the base: two `bg-*` utilities in
       // one class list are resolved by stylesheet order, where `bg-white` comes last
       // and wins, so the picked method showed a blue border over a white row.
-      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line-input bg-white'}`}
+      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
     >
       <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-primary-tint">
         {icon}
@@ -62,18 +62,7 @@ function ChoiceCard({
         <span className="block text-lead font-semibold">{title}</span>
         <span className="mt-px block text-tiny text-ink-subtle">{desc}</span>
       </span>
-      {chevron && (
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          strokeWidth="2"
-          className="stroke-line-strong"
-        >
-          <path d="m9 18 6-6-6-6" />
-        </svg>
-      )}
+      {chevron && <Icon name="chevron-right" size={16} className="stroke-line-strong" />}
     </button>
   );
 }
@@ -310,19 +299,7 @@ export function AddAccountModal({
           <>
             <div className="flex flex-col gap-md">
               <ChoiceCard
-                icon={
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="1.8"
-                    className="stroke-primary"
-                  >
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 2v6h6" />
-                  </svg>
-                }
+                icon={<Icon name="file" size={18} className="stroke-primary" />}
                 title={t('accounts.addWizard.sessionTitle')}
                 desc={t('accounts.addWizard.sessionDesc')}
                 selected={method === 'session'}
@@ -385,7 +362,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line-input bg-white px-md py-md text-lead outline-none focus:border-primary"
+                    className="rounded-lg border border-line bg-white px-md py-md text-lead outline-none focus:border-primary"
                   />
                   <button
                     type="button"
@@ -422,17 +399,7 @@ export function AddAccountModal({
                     className="flex items-center gap-md rounded-lg border border-dashed border-line bg-white px-lg py-lg text-left"
                   >
                     <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
-                      <svg
-                        width="22"
-                        height="22"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.7"
-                      >
-                        <path d="M16 16l-4-4-4 4M12 12v9" />
-                        <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-                      </svg>
+                      <Icon name="upload-cloud" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-lead font-semibold">
@@ -444,38 +411,18 @@ export function AddAccountModal({
                           : t('accounts.addWizard.dropDescSession')}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full border border-line-input px-lg py-tight text-body font-medium text-ink">
+                    <span className="shrink-0 rounded-full border border-line px-lg py-tight text-body font-medium text-ink">
                       {t('accounts.addWizard.browse')}
                     </span>
                   </button>
                   {fileName && (
                     <div className="tb-fadeup rounded-lg border border-line bg-white px-md py-md">
                       <div className="flex items-center gap-md">
-                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-track text-ink-muted">
+                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-canvas text-ink-muted">
                           {method === 'tdata' ? (
-                            <svg
-                              width="17"
-                              height="17"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.7"
-                            >
-                              <rect x="3" y="3" width="18" height="18" rx="2" />
-                              <path d="M12 7v2M12 12v2M12 17v.5" />
-                            </svg>
+                            <Icon name="alert-square" size={18} />
                           ) : (
-                            <svg
-                              width="17"
-                              height="17"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="1.7"
-                            >
-                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                              <path d="M14 2v6h6" />
-                            </svg>
+                            <Icon name="file" size={18} />
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
@@ -494,34 +441,14 @@ export function AddAccountModal({
                           </div>
                         </div>
                         {importing ? (
-                          <span className="tb-spin m-tight inline-block h-[14px] w-[14px] rounded-full border-2 border-line-input border-t-primary" />
+                          <span className="tb-spin m-tight inline-block h-[14px] w-[14px] rounded-full border-2 border-line border-t-primary" />
                         ) : importFailed ? (
                           <span className="m-xs inline-flex text-danger">
-                            <svg
-                              width="18"
-                              height="18"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <path d="m15 9-6 6M9 9l6 6" />
-                            </svg>
+                            <Icon name="x-circle" size={18} />
                           </span>
                         ) : createdAccountId ? (
                           <span className="tb-pop m-xs inline-flex text-success-deep">
-                            <svg
-                              width="18"
-                              height="18"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                            >
-                              <circle cx="12" cy="12" r="10" />
-                              <path d="m8 12 2.5 2.5L16 9" />
-                            </svg>
+                            <Icon name="check-circle" size={18} />
                           </span>
                         ) : null}
                       </div>
@@ -556,34 +483,14 @@ export function AddAccountModal({
         ) : proxyStep === 'choice' ? (
           <>
             <div className="mb-lg flex items-center gap-sm rounded-lg bg-success-tint px-md py-md">
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                strokeWidth="2.2"
-                className="stroke-success"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+              <Icon name="check" size={16} className="stroke-success" />
               <span className="text-body font-medium text-success-deep">
                 {t('accounts.addWizard.added')}
               </span>
             </div>
             <div className="flex flex-col gap-md">
               <ChoiceCard
-                icon={
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    strokeWidth="1.8"
-                    className="stroke-primary"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                }
+                icon={<Icon name="plus" size={18} className="stroke-primary" />}
                 title={t('accounts.addWizard.proxyManual')}
                 desc={t('accounts.addWizard.proxyManualDesc')}
                 chevron
@@ -664,7 +571,7 @@ export function AddAccountModal({
                     onClick={() => {
                       assignFromPool(proxy.id);
                     }}
-                    className="flex items-center gap-md rounded-lg border border-line-input bg-white px-lg py-md text-left transition-colors hover:border-primary-line disabled:opacity-60"
+                    className="flex items-center gap-md rounded-lg border border-line bg-white px-lg py-md text-left transition-colors hover:border-primary-line disabled:opacity-60"
                   >
                     {proxy.country_code ? (
                       <span

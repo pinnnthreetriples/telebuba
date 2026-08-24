@@ -7,7 +7,7 @@ import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { Card, FeedbackMark, IconButton } from '@/shared/ui';
+import { Card, FeedbackMark, Icon, IconButton } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
@@ -43,7 +43,7 @@ const WARMING_DAYS = 14;
 const WARM_STATUS: Record<WarmingState, string> = {
   active: 'bg-success-tint text-success-deep',
   sleeping: 'bg-warning-tint text-warning-deep',
-  idle: 'bg-track text-ink-muted',
+  idle: 'bg-canvas text-ink-muted',
   flood_wait: 'bg-warning-tint text-warning-deep',
   quarantine: 'bg-warning-tint text-warning-deep',
   error: 'bg-danger-tint text-danger-deep',
@@ -291,17 +291,7 @@ function WarmingCard({
               setCfgOpen(true);
             }}
           >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <Icon name="gear" size={14} />
           </IconButton>
           {!complete ? (
             <>
@@ -345,7 +335,11 @@ function WarmingCard({
       ) : null}
 
       {/* pipeline */}
-      <div className="rounded-lg bg-primary-wash px-lg pb-md pt-md">
+      {/* The hairline, not a bare fill: this panel is the one place the two pale
+          blues used to meet, and with them collapsed it would paint its parent's
+          colour and have no edge at all. `primary-hairline` is the rung for exactly
+          this — faint enough to double as a divider fill. */}
+      <div className="rounded-lg border border-primary-hairline bg-primary-tint px-lg pb-md pt-md">
         <div className="mb-sm flex items-center justify-between">
           <span className="text-micro font-medium text-ink-muted">
             {t('warming.inProgress.days')}
@@ -399,18 +393,7 @@ function WarmingCard({
                 <div className="flex h-[16px] w-[14px] items-center justify-center">
                   {index < active ? (
                     <span className="tb-pop flex h-[14px] w-[14px] items-center justify-center rounded-full bg-success">
-                      <svg
-                        width="9"
-                        height="9"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className="stroke-white"
-                        strokeWidth="3.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
+                      <Icon name="check" size={10} className="stroke-white" />
                     </span>
                   ) : index === active ? (
                     <span className="tb-livedot h-[10px] w-[10px] rounded-full bg-primary" />
@@ -460,16 +443,7 @@ function WarmingCard({
             <span
               className={`flex transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+              <Icon name="chevron-down" size={12} />
             </span>
           </button>
           {open ? (
@@ -541,18 +515,7 @@ function WarmingCard({
           {/* complete */}
           <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
             <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success">
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="stroke-white"
-                strokeWidth="3.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
+              <Icon name="check" size={14} className="stroke-white" />
             </span>
             <div className="min-w-0">
               <div className="text-body font-bold text-success-deep">

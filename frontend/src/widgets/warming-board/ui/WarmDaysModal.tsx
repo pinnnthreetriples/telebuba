@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
-import { Button, Modal } from '@/shared/ui';
+import { Button, Icon, Modal } from '@/shared/ui';
 
 const MIN = 1;
 const MAX = 14;
@@ -88,22 +88,10 @@ export function WarmDaysModal({
                   ? 'border-success text-success-deep'
                   : spam === 'limited'
                     ? 'border-danger text-danger'
-                    : 'border-line-input text-ink-muted'
+                    : 'border-line text-ink-muted'
               }`}
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
+              <Icon name="shield-check" size={14} />
               {spam === 'loading'
                 ? t('warming.days.spamChecking')
                 : spam === 'clean'
@@ -148,7 +136,7 @@ export function WarmDaysModal({
           }}
           className="relative mx-md mb-tight h-[30px] cursor-grab touch-none select-none outline-none"
         >
-          <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-track">
+          <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
             <div className="h-full rounded-full bg-primary" style={{ width: `${String(pct)}%` }} />
           </div>
           <div className="pointer-events-none absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2">
@@ -181,7 +169,7 @@ export function WarmDaysModal({
               className={`flex-1 rounded-lg border py-sm text-body font-medium transition-colors ${
                 days === n
                   ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line-input bg-white text-ink-muted hover:bg-surface'
+                  : 'border-line bg-white text-ink-muted hover:bg-surface'
               }`}
             >
               {String(n)} {t('warming.days.label', { count: n })}
@@ -195,7 +183,7 @@ export function WarmDaysModal({
             <button
               type="button"
               aria-label={t('warming.persona.label')}
-              className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-line-input text-micro font-bold text-ink-subtle"
+              className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
             >
               ?
             </button>
@@ -213,7 +201,7 @@ export function WarmDaysModal({
               className={`flex-1 rounded-lg border px-sm py-md text-center transition-colors ${
                 persona === p
                   ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line-input bg-white text-ink-muted hover:bg-surface'
+                  : 'border-line bg-white text-ink-muted hover:bg-surface'
               }`}
             >
               <div className="text-body font-semibold">{t(`warming.persona.${p}.name`)}</div>

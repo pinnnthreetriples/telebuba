@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button } from '@/shared/ui';
+import { Button, Icon } from '@/shared/ui';
 
 import { invalidateAccountViews, spamCheckAccountMutation } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
@@ -90,35 +90,12 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             {spamCheck === 'loading' && <Spinner size={13} />}
             {spamCheck === 'ok' && (
               <span className="tb-blur inline-flex">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="stroke-white"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+                <Icon name="check" size={14} className="stroke-white" />
               </span>
             )}
             {spamCheck === 'err' && (
               <span className="tb-blur inline-flex">
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  className="stroke-white"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M18 6 6 18" />
-                  <path d="m6 6 12 12" />
-                </svg>
+                <Icon name="close" size={14} className="stroke-white" />
               </span>
             )}
             {t('accounts.edit.signalsCheck')}

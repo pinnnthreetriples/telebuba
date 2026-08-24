@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge } from '@/shared/api';
-import { Button, ConfirmModal, FeedbackMark, IconButton, Modal } from '@/shared/ui';
+import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { accountLimitsQueryOptions } from '../api/campaign.queries';
 import { AccountLimitsModal } from './AccountLimitsModal';
@@ -30,19 +30,7 @@ function shortChannel(channel: string): string {
 }
 
 function CheckIcon() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.4"
-      className="shrink-0"
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
+  return <Icon name="check" size={14} className="shrink-0" />;
 }
 
 // The three caps in the order they bind — same order as the limits modal's rows.
@@ -79,7 +67,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
       ? 'border-danger-line bg-danger-tint text-danger-deep'
       : worst >= 0.8
         ? 'border-warning-line bg-warning-tint text-warning-deep'
-        : 'border-line-input bg-white text-ink-muted hover:border-line-strong';
+        : 'border-line bg-white text-ink-muted hover:border-line-strong';
 
   return (
     <button
@@ -97,7 +85,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
             <i
               key={key}
               style={{ height: `${Math.max(3, Math.round(spent * 12))}px` }}
-              className={`block w-[3px] rounded-[1px] ${spent > 0 ? 'bg-current' : 'bg-track'}`}
+              className={`block w-[3px] rounded-[1px] ${spent > 0 ? 'bg-current' : 'bg-canvas'}`}
             />
           );
         })}
@@ -189,22 +177,13 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line-input bg-white px-md py-sm text-body text-ink sm:w-[180px]"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-white px-md py-sm text-body text-ink sm:w-[180px]"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
             </span>
             <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="m6 9 6 6 6-6" />
-              </svg>
+              <Icon name="chevron-down" size={14} />
             </span>
           </button>
         ) : (
@@ -226,16 +205,7 @@ function AccountRow({
             setConfirmRemove(true);
           }}
         >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.9"
-          >
-            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-          </svg>
+          <Icon name="trash" size={16} />
         </IconButton>
       </div>
       {banned.length > 0 ? (

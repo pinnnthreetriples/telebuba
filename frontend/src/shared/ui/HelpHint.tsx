@@ -4,7 +4,7 @@
 // labels where the field's effect isn't obvious from its name.
 const BADGE =
   'flex h-[15px] w-[15px] shrink-0 cursor-help items-center justify-center rounded-full ' +
-  'border border-line-input text-micro font-bold leading-none text-ink-subtle ' +
+  'border border-line text-micro font-bold leading-none text-ink-subtle ' +
   'transition-colors hover:border-primary hover:text-primary focus:outline-none ' +
   'focus-visible:border-primary focus-visible:text-primary';
 

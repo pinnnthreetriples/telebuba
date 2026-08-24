@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import { Icon, Modal } from '@/shared/ui';
 
 import { NAV_LINKS } from './links';
 
@@ -37,17 +37,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           aria-label={t('shell.closeMenu')}
           className="-mr-sm flex h-11 w-11 items-center justify-center rounded-full text-ink-muted"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          >
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
+          <Icon name="close" size={18} />
         </button>
       </div>
 

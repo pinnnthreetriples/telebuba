@@ -94,7 +94,7 @@ function LimitRow({
           {gauge.used} / {gauge.limit > 0 ? gauge.limit : '∞'}
         </span>
       </div>
-      <div className="mt-sm h-[6px] overflow-hidden rounded-[3px] bg-track">
+      <div className="mt-sm h-[6px] overflow-hidden rounded-[3px] bg-canvas">
         <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
       </div>
       <div className="mt-md flex flex-wrap items-center justify-between gap-md">
@@ -120,7 +120,7 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-[74px] rounded-md border border-line-input bg-white px-md py-tight text-right font-mono text-body font-semibold text-ink"
+          className="w-[74px] rounded-md border border-line bg-white px-md py-tight text-right font-mono text-body font-semibold text-ink"
         />
       </div>
       <div className="mt-tight text-tiny text-ink-subtle">

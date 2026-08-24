@@ -1,5 +1,7 @@
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import { Icon } from './Icon';
+
 // The design's collapsible accordion card: a header row (free-form content +
 // chevron) over a max-height-collapsing body. Used across the account-edit,
 // warming and neurocomment screens, which all share this pattern in the design.
@@ -8,16 +10,7 @@ function Chevron({ open }: { open: boolean }) {
     <span
       className={`flex text-ink-subtle transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
     >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
+      <Icon name="chevron-down" size={16} />
     </span>
   );
 }

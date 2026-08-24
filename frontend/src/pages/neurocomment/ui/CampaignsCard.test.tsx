@@ -72,7 +72,7 @@ test('banned channels render red, ok channels render green, others gray', () => 
 
 test('with no verdicts the chips stay the default gray', () => {
   renderCard();
-  expect(chipFor('@a').className).toContain('bg-track');
+  expect(chipFor('@a').className).toContain('bg-canvas');
 });
 
 const CAMPAIGN = {

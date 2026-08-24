@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
-import { CollapsibleCard, IconButton } from '@/shared/ui';
+import { CollapsibleCard, Icon, IconButton } from '@/shared/ui';
 
 // Activity-feed line tone by the event's display severity (see `logSeverity`). The
 // dark-surface tokens, shared with the warming card's log — three parallel triples
@@ -136,17 +136,7 @@ export function LogTerminal({
               title={t('logTerminal.clear')}
               onClick={onClear}
             >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M3 6h18" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
+              <Icon name="trash" size={16} />
             </IconButton>
           ) : null}
         </>
@@ -155,7 +145,7 @@ export function LogTerminal({
         <>
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
           <span className="text-lead font-semibold">{title}</span>
-          <span className="rounded-full bg-track px-sm py-hair text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-ink-muted">
             {shown.length}
           </span>
         </>

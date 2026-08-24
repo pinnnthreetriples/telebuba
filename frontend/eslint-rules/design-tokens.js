@@ -42,7 +42,20 @@ const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|s
 // so `sub-p-2` or a URL that happens to contain `to-3` is not a hit.
 const at = (body) => new RegExp(String.raw`(?:^|\s)(?:${body})`);
 
+// Colour names the canon collapsed into another. Listed rather than left to fail on
+// its own, because only half of them fail visibly: an unknown `bg-*` emits no rule at
+// all and the chip loses its fill, which anyone reviewing the screen sees — but an
+// unknown `border-*` on an element that also carries `border` falls through to
+// preflight's own default, Tailwind's `gray-200`, three units from `line` and cool
+// where the app is warm. That one comes back looking right.
+const RETIRED = 'track|line-input|primary-wash|success-dot';
+
 const PATTERNS = [
+  {
+    test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${RETIRED})(?![\w-])`),
+    message:
+      'That colour was collapsed into another one and no longer exists: `track` and `primary-wash` are `canvas` and `primary-tint`, `line-input` is `line`, `success-dot` is `success`. The unification ledger in docs/design-system.html carries the reason for each.',
+  },
   {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
     message:
