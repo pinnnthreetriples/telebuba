@@ -639,7 +639,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     <>
       <Modal
         onClose={requestClose}
-        className="w-[580px]"
+        className="w-panel"
         // A fixed name, unlike the visible heading below it — the same choice as
         // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
         // after a rename saves, and an ARIA name change while a dialog is open is
@@ -648,7 +648,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         // different name, and it went stale on a renamed row's new `account` prop.
         label={t('accounts.profile.dialog')}
       >
-        <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+        <div className="flex max-h-dialog flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
             {/* The two gradient stops are decorative and exist only to differ from each
@@ -656,7 +656,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 the same reason as the media tiles in `_profileShared`. */}
             <div
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: two decorative stops, single-use by design
-              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-white"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-white"
               style={
                 avatarUri
                   ? {
@@ -776,7 +776,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 {/* `line-strong`, not the default line: this ring sits on the modal's own
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
-                <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-strong border-t-primary" />
+                <span className="tb-spin inline-block size-tile rounded-full border-[3px] border-line-strong border-t-primary" />
                 <span className="text-body font-medium text-ink-muted">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
@@ -813,9 +813,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.username')}>
                       <div className="relative flex items-center">
-                        <span className="absolute left-3 text-lead text-ink-subtle">@</span>
+                        <span className="absolute left-lg text-lead text-ink-subtle">@</span>
                         <Input
-                          className="pl-3xl"
+                          className="pl-page"
                           value={field.state.value}
                           onChange={(event) => {
                             field.handleChange(event.target.value);
@@ -1019,7 +1019,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">
-                  <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
+                  <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
                   {t('accounts.profile.saving')}
                 </span>
               ) : saved ? (

@@ -94,11 +94,11 @@ function LimitRow({
           {gauge.used} / {gauge.limit > 0 ? gauge.limit : '∞'}
         </span>
       </div>
-      <div className="mt-sm h-[6px] overflow-hidden rounded-[3px] bg-canvas">
+      <div className="mt-sm h-meter overflow-hidden rounded-[3px] bg-canvas">
         <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
       </div>
       <div className="mt-md flex flex-wrap items-center justify-between gap-md">
-        <span className="min-w-[11rem] flex-1 text-tiny text-ink-subtle">
+        <span className="min-w-col flex-1 text-tiny text-ink-subtle">
           {hint}
           {resets ? ` · ${t('neurocomment.modal.limits.resetsAt', { at: resets })}` : ''}
         </span>
@@ -120,7 +120,7 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-[74px] rounded-md border border-line bg-white px-md py-tight text-right font-mono text-body font-semibold text-ink"
+          className="w-readout rounded-md border border-line bg-white px-md py-tight text-right font-mono text-body font-semibold text-ink"
         />
       </div>
       <div className="mt-tight text-tiny text-ink-subtle">
@@ -200,11 +200,11 @@ export function AccountLimitsModal({
   return (
     <Modal
       onClose={onClose}
-      className="w-[440px]"
+      className="w-confirm"
       label={t('neurocomment.modal.limits.title', { name })}
     >
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="18"
             height="18"
@@ -244,7 +244,7 @@ export function AccountLimitsModal({
             />
           ))
         ) : (
-          <div className="px-md py-4xl text-center text-lead text-ink-subtle">
+          <div className="px-md py-page text-center text-lead text-ink-subtle">
             {query.isError
               ? t('neurocomment.modal.limits.loadFailed')
               : t('neurocomment.modal.limits.loading')}

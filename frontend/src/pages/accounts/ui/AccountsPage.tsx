@@ -175,7 +175,7 @@ export function AccountsPage() {
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
             <svg
-              className="pointer-events-none absolute left-3 text-ink-subtle"
+              className="pointer-events-none absolute left-lg text-ink-subtle"
               width="15"
               height="15"
               viewBox="0 0 24 24"
@@ -193,7 +193,8 @@ export function AccountsPage() {
                 setCursorStack([null]);
               }}
               placeholder={t('accounts.searchPlaceholder')}
-              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-[36px] pr-md text-lead outline-none sm:w-[220px]"
+              // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the search pill's own height, one component's internal layout
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-[36px] pr-md text-lead outline-none sm:w-tip"
             />
           </div>
           <Button
@@ -212,7 +213,7 @@ export function AccountsPage() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-w-[120px] rounded-lg border border-line bg-white px-lg py-md"
+            className="min-w-col rounded-lg border border-line bg-white px-lg py-md"
           >
             <div className={`text-stat font-bold ${stat.cls}`}>{stat.value}</div>
             <div className="mt-px text-tiny text-ink-muted">{stat.label}</div>
@@ -229,7 +230,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-lg py-5xl text-center text-lead text-ink-subtle">
+            <Card className="px-lg py-empty text-center text-lead text-ink-subtle">
               {t('accounts.empty')}
             </Card>
           ) : (

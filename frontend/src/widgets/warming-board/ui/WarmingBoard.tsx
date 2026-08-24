@@ -233,7 +233,7 @@ function WarmingCard({
         <div className="flex min-w-0 items-center gap-md">
           <AccountAvatar
             account={account}
-            className="h-7 w-7 shrink-0 rounded-full"
+            className="size-icon shrink-0 rounded-full"
             fallbackClassName="text-tiny font-semibold bg-primary-tint text-primary-deep"
           />
           <div className="min-w-0">
@@ -255,7 +255,7 @@ function WarmingCard({
               <span
                 className={`inline-flex items-center gap-tight rounded-full px-sm py-px text-micro font-semibold ${statusTone}`}
               >
-                <span className="h-[5px] w-[5px] rounded-full bg-current" />
+                <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
               </span>
               <span className="tb-tip inline-flex items-center">
@@ -271,7 +271,7 @@ function WarmingCard({
             the actions instead, and the "Стоп" button loses its label. */}
         <div className="flex shrink-0 items-center gap-sm">
           <span className="tb-tip inline-flex">
-            <span className="inline-flex h-[18px] w-[18px] cursor-help items-center justify-center rounded-full border border-primary-line bg-white text-tiny font-bold text-ink-subtle">
+            <span className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-primary-line bg-white text-tiny font-bold text-ink-subtle">
               ?
             </span>
             <span className="tb-tip-pop">
@@ -356,7 +356,7 @@ function WarmingCard({
               key={index}
               // Days done, the day in progress, days to come — tokens, so the bar
               // reads the same green/blue/grey as the rest of the board.
-              className={`h-[22px] flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-primary' : 'bg-line'}`}
+              className={`h-bar flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-primary' : 'bg-line'}`}
             />
           ))}
         </div>
@@ -376,7 +376,7 @@ function WarmingCard({
             and stop for the `active / (STAGES.length - 1)` fill to land on a dot. */}
         <div className="relative">
           <div
-            className="absolute top-[7px] h-[2px] overflow-hidden rounded-[2px] bg-primary-line"
+            className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-primary-line"
             style={{
               left: `${String(50 / STAGES.length)}%`,
               right: `${String(50 / STAGES.length)}%`,
@@ -390,15 +390,15 @@ function WarmingCard({
           <div className="relative flex">
             {STAGES.map((stage, index) => (
               <div key={stage} className="flex flex-1 flex-col items-center">
-                <div className="flex h-[16px] w-[14px] items-center justify-center">
+                <div className="flex size-glyph items-center justify-center">
                   {index < active ? (
-                    <span className="tb-pop flex h-[14px] w-[14px] items-center justify-center rounded-full bg-success">
+                    <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
                       <Icon name="check" size={10} className="stroke-white" />
                     </span>
                   ) : index === active ? (
-                    <span className="tb-livedot h-[10px] w-[10px] rounded-full bg-primary" />
+                    <span className="tb-livedot size-node rounded-full bg-primary" />
                   ) : (
-                    <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-line-strong bg-white" />
+                    <span className="size-node rounded-full border-[1.5px] border-line-strong bg-white" />
                   )}
                 </div>
                 <span
@@ -422,7 +422,7 @@ function WarmingCard({
         <>
           {/* current activity */}
           <div className="mt-md flex items-center gap-md rounded-md border border-primary-line bg-primary-tint px-md py-sm">
-            <span className="tb-livedot h-2 w-2 shrink-0 rounded-full bg-primary" />
+            <span className="tb-livedot size-dot shrink-0 rounded-full bg-primary" />
             <span className="tb-pulse text-tiny font-semibold text-primary">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
             </span>
@@ -473,7 +473,10 @@ function WarmingCard({
                   </button>
                 </div>
               ) : null}
-              <div className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-md font-mono text-micro leading-[1.7]">
+              <div
+                // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own embedded log, one component's internal layout
+                className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-md font-mono text-micro leading-[1.7]"
+              >
                 {visibleLines.length === 0 ? (
                   <div className="text-term-dim">
                     {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
@@ -514,7 +517,7 @@ function WarmingCard({
         <>
           {/* complete */}
           <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
-            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success">
+            <span className="inline-flex size-chip shrink-0 items-center justify-center rounded-full bg-success">
               <Icon name="check" size={14} className="stroke-white" />
             </span>
             <div className="min-w-0">
@@ -583,7 +586,7 @@ export function WarmingBoard({
     <Card className="p-lg">
       <div className="mb-lg flex items-center justify-between">
         <div className="flex items-center gap-md">
-          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-primary">
+          <span className="flex size-icon items-center justify-center rounded-md bg-primary">
             <svg
               width="16"
               height="16"

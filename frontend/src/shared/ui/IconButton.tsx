@@ -2,14 +2,19 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 // The bordered white chip that carries an icon or a single glyph, in the four
 // sizes the design actually uses. Shape follows size and is not a separate knob:
-// the small ones are squares (a 24px circle reads as a dot beside 13px text), 34
-// is the one circle, and 44 goes back to a square with the `md` radius because a
-// 44px circle is a coin, not a control.
+// the small ones are squares (a 22px circle reads as a dot beside 13px text),
+// `tile` is the one circle, and `touch` goes back to a square with the `md` radius
+// because a 44px circle is a coin, not a control.
+//
+// One utility per box rather than a `w`/`h` pair: this object used to write the
+// same scale two ways in one literal — `h-11 w-11` beside `h-[34px] w-[34px]` —
+// and a square whose two sides are separate decisions is a square that can stop
+// being one.
 const SIZE = {
-  sm: 'h-6 w-6 rounded-sm',
-  md: 'h-7 w-7 rounded-md',
-  lg: 'h-[34px] w-[34px] rounded-full',
-  touch: 'h-11 w-11 rounded-md',
+  sm: 'size-chip rounded-sm',
+  md: 'size-icon rounded-md',
+  lg: 'size-tile rounded-full',
+  touch: 'size-touch rounded-md',
 } as const;
 
 // What the button MEANS, painted as the hover it takes. `neutral` deliberately

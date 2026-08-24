@@ -19,7 +19,7 @@ export function ProxyDeleteModal({
   return (
     <Modal
       onClose={onClose}
-      className="w-[420px]"
+      className="w-confirm"
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
       <div className="p-2xl">

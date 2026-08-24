@@ -25,8 +25,21 @@
 //   that is the range the pattern covers. Above it are a page's own breathing room
 //   and the room a control takes up inside a field, one-offs by nature.
 //
-//   `w-*` / `h-*` in pixels — a 34px avatar or a 6px progress bar is a component's
-//   dimension, not a rung of the app's rhythm.
+//   a dimension measured against the viewport or the text (`w-[min(84vw,300px)]`,
+//   `max-w-[90vw]`, `h-[1.1em]`) — those are not values the design system could hold,
+//   because they resolve differently on every screen. Anything in px or rem is.
+//
+//   a dimension only one component ever asks for (12 sites) — AddStoryModal's
+//   collage-layout tile and story preview, NeuroAccountsModal's spend gauge (its bars
+//   and the row they stand in), Switch's track, AccountsTable's trust bar,
+//   AccountsPage's search pill, WarmingBoard's embedded log, LoginPage's card,
+//   SettingsPage's settings column, ProxyPool's empty-state sentence and ScenarioCard's
+//   prompt column. A dimension owned by one component's internal layout is that
+//   component's business, not the scale's: giving it a rung would put a name with a
+//   single wearer in the canon, which is a literal with a name and the way a closed set
+//   reopens. Each of the twelve carries its own inline suppression rather than a hole in
+//   the pattern, so the second component to reach for the same measurement is flagged
+//   and has to argue for a rung.
 //
 //   two decorative gradients (ProfileModal, _profileShared) — placeholder fills
 //   behind an avatar or a thumbnail that has not loaded. They exist only to differ
@@ -37,6 +50,7 @@ const PALETTE =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
 const COLOUR = 'bg|text|border|ring|fill|stroke|from|to|via|divide|outline|decoration|caret|accent';
 const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y';
+const DIMENSION = 'size|min-w|max-w|min-h|max-h|w|h';
 
 // A utility class starts at the beginning of the string or after whitespace. Anchored
 // so `sub-p-2` or a URL that happens to contain `to-3` is not a hit.
@@ -82,6 +96,11 @@ const PATTERNS = [
     test: at(String.raw`(?:${SPACE})-\[(?:[0-9]|[12][0-9]|3[0-4])px\]`),
     message:
       'The rhythm has a rung within 2px of this value. Reach for it: twelve names is the whole point, and a thirteenth measurement in pixels is where two rhythms start again.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*(?:${DIMENSION})-\[[0-9.]+(?:px|rem)\](?![\w-])`),
+    message:
+      'Dimensions are their own scale now: `size-*` for a square, `width`/`height` for everything else, and each rung is named for the component that wears it. This rule used to exempt `w-*`/`h-*` in pixels on the grounds that a component’s size is not a rung of the rhythm — which was true, and is exactly how 73 distinct dimensions grew beside eleven rungs. Both halves are scales now, so a measurement here belongs in one of them.',
   },
   {
     test: at(String.raw`rounded(?:-[a-z]+)?-\[(?:[4-9]|[1-9][0-9])`),

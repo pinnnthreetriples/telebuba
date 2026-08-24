@@ -201,10 +201,10 @@ export function ChannelCreateModal({
     <Modal
       onClose={busy ? () => undefined : onClose}
       backdrop={0.45}
-      className="w-[460px]"
+      className="w-form"
       label={t('accounts.channel.createTitle')}
     >
-      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-2xl py-2xl">
+      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
           <span className="text-title font-bold">{t('accounts.channel.createTitle')}</span>
           <IconButton
@@ -267,9 +267,9 @@ export function ChannelCreateModal({
           <label className="mb-lg block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
-              <span className="absolute left-3 text-lead text-ink-subtle">@</span>
+              <span className="absolute left-lg text-lead text-ink-subtle">@</span>
               <Input
-                className="pl-3xl"
+                className="pl-page"
                 value={username}
                 onChange={(event) => {
                   setUsername(event.target.value);
@@ -309,7 +309,7 @@ export function ChannelCreateModal({
               t('accounts.channel.edit')
             ) : busy ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
+                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.creating')}
               </span>
             ) : (

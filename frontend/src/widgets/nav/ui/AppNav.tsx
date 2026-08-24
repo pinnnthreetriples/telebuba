@@ -102,7 +102,7 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-md px-lg lg:gap-3xl lg:px-2xl">
+      <div className="mx-auto flex h-header max-w-shell items-center gap-md px-lg lg:gap-page lg:px-2xl">
         <IconButton
           size="touch"
           aria-label={t('shell.menu')}
@@ -126,8 +126,8 @@ export function AppNav() {
         </IconButton>
 
         <div className="flex shrink-0 items-center gap-md">
-          <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
-            <div className="h-[9px] w-[9px] rounded-full bg-primary" />
+          <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
+            <div className="size-node rounded-full bg-primary" />
           </div>
           <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
@@ -147,7 +147,7 @@ export function AppNav() {
           ))}
           <span
             aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-[2px] rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-reveal ease-spring"
+            className="pointer-events-none absolute left-0 top-0 h-rail rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-reveal ease-spring"
             style={{
               width: indicator.width,
               // Position via GPU transform (matches the design's layoutId slide),
@@ -168,7 +168,7 @@ export function AppNav() {
             className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
           >
             <span
-              className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success' : 'bg-ink-subtle'}`}
+              className={`size-dot rounded-full ${systemActive ? 'bg-success' : 'bg-ink-subtle'}`}
             />
             {/* sr-only, not `hidden`: below `lg` only the dot shows, but the text has
                 to stay in the accessibility tree — a display:none span leaves the
@@ -185,7 +185,7 @@ export function AppNav() {
           <button
             type="button"
             aria-label={t('shell.notifications')}
-            className="relative flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-ink-muted lg:h-[34px] lg:w-[34px]"
+            className="relative flex size-touch items-center justify-center rounded-full border border-line bg-white text-ink-muted lg:size-tile"
           >
             <svg
               width="16"
@@ -198,7 +198,7 @@ export function AppNav() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="absolute right-[11px] top-[9px] h-[6px] w-[6px] rounded-full border-[1.5px] border-white bg-primary lg:right-[8px] lg:top-[6px]" />
+            <span className="absolute right-[11px] top-[9px] size-dot rounded-full border-[1.5px] border-white bg-primary lg:right-[8px] lg:top-[6px]" />
           </button>
           <div className="relative">
             <button
@@ -207,7 +207,7 @@ export function AppNav() {
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-lead font-semibold text-white lg:h-[34px] lg:w-[34px]"
+              className="flex size-touch items-center justify-center rounded-full bg-primary text-lead font-semibold text-white lg:size-tile"
             >
               {initials}
             </button>
@@ -222,7 +222,7 @@ export function AppNav() {
                   }}
                   className="fixed inset-0 z-raised cursor-default"
                 />
-                <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-xs shadow-pop lg:top-[42px]">
+                <div className="absolute right-0 top-[48px] z-pop w-menu overflow-hidden rounded-lg border border-line bg-white py-xs shadow-pop lg:top-[42px]">
                   {me.data ? (
                     <div className="truncate border-b border-line-row px-md py-sm text-body text-ink-muted">
                       {me.data.username}
@@ -242,7 +242,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-md py-sm text-left text-lead font-medium text-danger-deep transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
+                    className="flex w-full items-center gap-sm px-md py-sm text-left text-lead font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
                   >
                     <svg
                       width="15"

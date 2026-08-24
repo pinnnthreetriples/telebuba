@@ -99,8 +99,8 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
         )}
       </div>
       {empty ? (
-        <div className="flex flex-col items-center justify-center px-lg pb-4xl pt-4xl text-center">
-          <div className="mb-lg flex h-[46px] w-[46px] items-center justify-center rounded-lg bg-canvas text-ink-subtle">
+        <div className="flex flex-col items-center justify-center px-lg pb-page pt-page text-center">
+          <div className="mb-lg flex size-touch items-center justify-center rounded-lg bg-canvas text-ink-subtle">
             <svg
               width="22"
               height="22"
@@ -114,7 +114,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             </svg>
           </div>
           <div className="mb-xs text-lead font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
-          <div className="mb-lg max-w-[300px] text-body text-ink-subtle">
+          <div
+            // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the sentence in this widget's own empty state
+            className="mb-lg max-w-[300px] text-body text-ink-subtle"
+          >
             {t('accounts.proxyPool.emptyBody')}
           </div>
           <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
@@ -191,23 +194,23 @@ function ProxyCard({
       <div className="flex items-center gap-md">
         {proxy.country_code ? (
           <span
-            className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-ring`}
+            className={`fi fi-${proxy.country_code.toLowerCase()} h-flag w-flag shrink-0 rounded-[3px] shadow-ring`}
             title={geoTitle}
           />
         ) : geoConflict ? (
           <span
             data-testid="geo-conflict"
             title={geoTitle}
-            className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-warning-line text-warning-deep"
+            className="flex h-flag w-flag shrink-0 items-center justify-center rounded-[3px] bg-warning-line text-warning-deep"
           >
             <Icon name="alert-triangle" size={12} />
           </span>
         ) : failed ? (
-          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger-deep">
+          <span className="flex h-flag w-flag shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger-deep">
             <Icon name="alert-triangle" size={12} />
           </span>
         ) : (
-          <span title={geoTitle} className="h-4 w-[22px] shrink-0 rounded-[3px] bg-line" />
+          <span title={geoTitle} className="h-flag w-flag shrink-0 rounded-[3px] bg-line" />
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-body font-semibold">
@@ -221,7 +224,7 @@ function ProxyCard({
               title={proxy.last_error ?? undefined}
             >
               {/* `bg-current` — the dot can never disagree with its label. */}
-              <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-current" />
+              <span className="size-dot shrink-0 rounded-full bg-current" />
               {t(`accounts.proxyPool.status.${proxy.status}`)}
             </span>
           </div>
@@ -231,10 +234,10 @@ function ProxyCard({
           onClick={onCheck}
           disabled={busy}
           aria-label={t('accounts.proxyForm.detect')}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
+          className="flex size-chip shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
         >
           {busy ? (
-            <span className="tb-spin inline-block h-[12px] w-[12px] rounded-full border-2 border-line-strong border-t-primary" />
+            <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-primary" />
           ) : (
             <Icon name="refresh" size={14} />
           )}
@@ -244,7 +247,7 @@ function ProxyCard({
           onClick={onDelete}
           disabled={busy}
           aria-label={t('accounts.actions.delete')}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
+          className="flex size-chip shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
         >
           <Icon name="close" size={14} />
         </button>
@@ -258,7 +261,7 @@ function ProxyCard({
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
-        <div className="h-[5px] overflow-hidden rounded-full bg-canvas">
+        <div className="h-meter overflow-hidden rounded-full bg-canvas">
           <div
             className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-primary'}`}
             style={{ width: `${String(pct)}%` }}

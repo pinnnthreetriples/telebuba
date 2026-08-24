@@ -41,7 +41,7 @@ export function ConfirmModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-[420px]" label={title}>
+    <Modal onClose={onClose} className="w-confirm" label={title}>
       <div className="p-2xl">
         <div className="mb-sm text-title font-bold">{title}</div>
         <div className="mb-2xl text-lead leading-[1.5] text-ink-muted">{body}</div>
@@ -50,7 +50,7 @@ export function ConfirmModal({
           <Button variant="danger" onClick={confirm} loading={pending}>
             {pending ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-danger-line border-t-danger" />
+                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-danger-line border-t-danger" />
                 {confirmLabel}
               </span>
             ) : (

@@ -160,7 +160,7 @@ export function ChannelEditModal({
       <Modal
         onClose={requestClose}
         backdrop={0.45}
-        className="w-[560px]"
+        className="w-panel"
         // A fixed name, unlike the visible heading below it: this dialog opens
         // while the detail is still loading, and an ARIA name that changes after
         // the announcement is never re-announced — so the operator would only ever
@@ -168,7 +168,7 @@ export function ChannelEditModal({
         // is a real (if rare) read result, which left the dialog nameless.
         label={t('accounts.channel.dialog')}
       >
-        <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-2xl py-2xl">
+        <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
           <div className="mb-lg flex items-center justify-between gap-md">
             <div className="min-w-0">
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
@@ -267,7 +267,7 @@ export function ChannelEditModal({
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
+                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
                       {t('accounts.channel.avatarUpload')}
                     </span>
                   ) : (
@@ -278,7 +278,7 @@ export function ChannelEditModal({
                 <Button variant="primary" onClick={save} disabled={!canSave}>
                   {update.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
+                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
                       {t('accounts.channel.saving')}
                     </span>
                   ) : (

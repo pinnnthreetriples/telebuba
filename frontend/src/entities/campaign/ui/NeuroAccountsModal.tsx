@@ -78,13 +78,21 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
       title={t('neurocomment.modal.neuroAccounts.limits')}
       className={`flex shrink-0 items-center gap-sm rounded-md border px-md py-sm text-body font-medium ${skin}`}
     >
-      <span className="flex h-3 items-end gap-hair">
+      {/* The gauge is drawn, not sized: its bars are 3px wide and rise to the 13px
+          its own script scales them by, which is one component's chart rather than
+          anything the scale can name — it used to ride `h-flag` for measuring the
+          same, and a gauge is not a flag. */}
+      <span
+        // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: the spend gauge's own chart
+        className="flex h-[13px] items-end gap-hair"
+      >
         {GAUGES.map((key) => {
           const spent = data ? share(data[key]) : 0;
           return (
             <i
               key={key}
-              style={{ height: `${Math.max(3, Math.round(spent * 12))}px` }}
+              style={{ height: `${Math.max(3, Math.round(spent * 13))}px` }}
+              // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: the spend gauge's own chart
               className={`block w-[3px] rounded-[1px] ${spent > 0 ? 'bg-current' : 'bg-canvas'}`}
             />
           );
@@ -177,7 +185,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-white px-md py-sm text-body text-ink sm:w-[180px]"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-white px-md py-sm text-body text-ink sm:w-menu"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
@@ -192,7 +200,7 @@ function AccountRow({
             onClick={() => {
               onPick(account.account_id);
             }}
-            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-white px-md py-sm text-body font-medium text-primary hover:border-primary sm:w-[180px]"
+            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-white px-md py-sm text-body font-medium text-primary hover:border-primary sm:w-menu"
           >
             {t('neurocomment.modal.neuroAccounts.assign')}
           </button>
@@ -326,11 +334,11 @@ export function NeuroAccountsModal({
   return (
     <Modal
       onClose={onClose}
-      className="w-[560px]"
+      className="w-panel"
       label={t('neurocomment.modal.neuroAccounts.title')}
     >
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <svg
             width="18"
             height="18"
@@ -369,7 +377,7 @@ export function NeuroAccountsModal({
             />
           ))
         ) : (
-          <div className="px-md py-4xl text-center text-lead text-ink-subtle">
+          <div className="px-md py-page text-center text-lead text-ink-subtle">
             {t('neurocomment.modal.neuroAccounts.empty')}
           </div>
         )}

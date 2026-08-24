@@ -190,7 +190,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           aria-label={t('accounts.profile.privacy.loading')}
           className="flex justify-center py-2xl"
         >
-          <span className="tb-spin inline-block h-6 w-6 rounded-full border-2 border-line border-t-primary" />
+          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-primary" />
         </div>
       )}
 

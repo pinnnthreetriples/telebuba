@@ -46,7 +46,7 @@ export function MusicTab({
               key={track.file_id}
               className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-primary text-white">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M8 5v14l11-7z" />
                 </svg>

@@ -17,7 +17,7 @@ export function WarmStopModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} className="w-[468px]" label={t('warming.stopModal.title')}>
+    <Modal onClose={onClose} className="w-form" label={t('warming.stopModal.title')}>
       <div className="p-2xl">
         <div className="mb-sm text-title font-bold">{t('warming.stopModal.title')}</div>
         <div className="mb-2xl text-lead leading-[1.5] text-ink-muted">

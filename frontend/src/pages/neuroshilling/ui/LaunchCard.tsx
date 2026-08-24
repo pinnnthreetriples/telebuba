@@ -165,7 +165,7 @@ export function LaunchCard({
             // Two such markers in the app (the other is the warming page's "прогрет"), and
             // two call sites do not earn a token. Do not fold this into the pill family.
             <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-hair text-micro font-bold text-success-deep">
-              <span className="tb-livedot h-[6px] w-[6px] rounded-full bg-success" />
+              <span className="tb-livedot size-dot rounded-full bg-success" />
               LIVE
             </span>
           ) : null}
@@ -198,7 +198,7 @@ export function LaunchCard({
           className={`inline-flex items-center gap-tight text-tiny font-medium ${STATUS_TONE[status]}`}
         >
           {/* `bg-current` — the dot can never disagree with its label. */}
-          <span className="h-[6px] w-[6px] rounded-full bg-current" />
+          <span className="size-dot rounded-full bg-current" />
           {t(`neuroshilling.campaign.status.${status}`)}
         </span>
         {/* Counted over the whole campaign rather than this run, because the roster
@@ -225,7 +225,7 @@ export function LaunchCard({
           aria-valuemin={0}
           aria-valuemax={total}
           aria-valuenow={sent}
-          className="mb-md h-[7px] w-full overflow-hidden rounded-full bg-canvas"
+          className="mb-md h-meter w-full overflow-hidden rounded-full bg-canvas"
         >
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-reveal"

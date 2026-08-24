@@ -155,7 +155,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
     <Section title={t('accounts.edit.session')}>
       <div className="mb-md flex items-center justify-between gap-md rounded-lg bg-canvas px-md py-md">
         <span className="flex items-center gap-sm">
-          <span className={`h-2 w-2 rounded-full ${sessionDot}`} />
+          <span className={`size-dot rounded-full ${sessionDot}`} />
           <span className="text-body text-ink-body">{sessionText}</span>
         </span>
         <span className="flex items-center gap-sm">
@@ -246,7 +246,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         onClick={() => uploadInput.current?.click()}
         className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-canvas/40 px-lg py-lg text-left"
       >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
           <Icon name="upload-cloud" size={20} />
         </div>
         <div className="min-w-0">
@@ -268,7 +268,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
             className="tb-fadeup rounded-lg border border-line bg-white px-md py-md"
           >
             <div className="flex items-center gap-md">
-              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
                 {file.archive ? (
                   <Icon name="alert-square" size={16} />
                 ) : (
@@ -301,7 +301,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                       onClick={() => {
                         setUploads((list) => list.filter((item) => item.id !== file.id));
                       }}
-                      className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
+                      className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
                     >
                       <Icon name="close" size={14} />
                     </button>

@@ -112,7 +112,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             className="flex items-center justify-between gap-md border-b border-line-row py-md"
           >
             <span className="flex items-center gap-sm text-body text-ink-muted">
-              <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${signal.dot}`} />
+              <span className={`size-dot shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>
             <span className="text-right text-body font-medium text-ink">{signal.value}</span>

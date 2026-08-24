@@ -17,7 +17,7 @@ export function HowItWorksCard() {
       <div className="flex flex-col gap-md">
         {HOW_STEPS.map((index) => (
           <div key={index} className="flex items-start gap-md">
-            <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
+            <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
               {index + 1}
             </span>
             <span className="text-body leading-[1.5] text-ink-muted">

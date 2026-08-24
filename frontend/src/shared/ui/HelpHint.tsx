@@ -3,7 +3,7 @@
 // library; `title` is the accessible/native fallback. Used next to settings
 // labels where the field's effect isn't obvious from its name.
 const BADGE =
-  'flex h-[15px] w-[15px] shrink-0 cursor-help items-center justify-center rounded-full ' +
+  'flex size-glyph shrink-0 cursor-help items-center justify-center rounded-full ' +
   'border border-line text-micro font-bold leading-none text-ink-subtle ' +
   'transition-colors hover:border-primary hover:text-primary focus:outline-none ' +
   'focus-visible:border-primary focus-visible:text-primary';
@@ -17,12 +17,12 @@ export function HintBubble({ text, example }: { text: string; example?: string }
   return (
     /* ponytail: stays trigger-anchored at every width. A 230px box centred on a
        trigger near a screen edge can clip on a phone, but the viewport-pinned
-       alternative (fixed inset-x-3 bottom-3 below md) is worse: inside a centred
+       alternative (fixed inset-x-lg bottom-lg below md) is worse: inside a centred
        modal it paints on the backdrop *below* the dialog, and two hints resolving
        to the same rect can overlap. Fix properly with measurement, not a media
        query, if the clipping ever actually bites. */
     <span
-      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-[230px] -translate-x-1/2 rounded-lg border border-line bg-white p-md text-left text-tiny leading-snug text-ink-muted shadow-pop group-hover:block group-focus-within:block"
+      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 rounded-lg border border-line bg-white p-md text-left text-tiny leading-snug text-ink-muted shadow-pop group-hover:block group-focus-within:block"
       role="tooltip"
     >
       {text}

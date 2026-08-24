@@ -15,7 +15,7 @@ export function App() {
   // to the file (which would unload the SPA, e.g. mid-upload).
   useWindowFileDropGuard();
   return (
-    <Sentry.ErrorBoundary fallback={<p className="p-4xl">{i18n.t('shell.fatalError')}</p>}>
+    <Sentry.ErrorBoundary fallback={<p className="p-page">{i18n.t('shell.fatalError')}</p>}>
       <QueryClientProvider client={queryClient}>
         <div className="min-h-screen bg-white">
           <RouterProvider router={router} />

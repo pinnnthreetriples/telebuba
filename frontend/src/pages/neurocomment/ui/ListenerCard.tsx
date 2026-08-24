@@ -55,7 +55,7 @@ export function ListenerCard({
   return (
     <Card className="relative z-raised px-lg py-lg">
       <div className="mb-xs flex items-center gap-md">
-        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
           <Icon name="chart" size={16} />
         </span>
         <div className="min-w-0">
@@ -77,7 +77,7 @@ export function ListenerCard({
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
-                  className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-deep' : 'text-success-deep'}`}
+                  className={`flex w-action items-center justify-center border-none bg-transparent ${running ? 'text-warning-deep' : 'text-success-deep'}`}
                 >
                   {running ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
                 </button>
@@ -85,7 +85,7 @@ export function ListenerCard({
                   type="button"
                   title={t('neurocomment.listener.edit')}
                   onClick={onEdit}
-                  className="flex w-12 items-center justify-center border-none bg-transparent text-primary"
+                  className="flex w-action items-center justify-center border-none bg-transparent text-primary"
                 >
                   <Icon name="pencil" size={16} />
                 </button>
@@ -93,7 +93,7 @@ export function ListenerCard({
                   type="button"
                   title={t('neurocomment.listener.remove')}
                   onClick={onRemove}
-                  className="flex w-12 items-center justify-center border-none bg-transparent text-danger"
+                  className="flex w-action items-center justify-center border-none bg-transparent text-danger"
                 >
                   <Icon name="trash" size={16} />
                 </button>
@@ -107,7 +107,7 @@ export function ListenerCard({
               >
                 <div className="flex min-w-0 items-center gap-sm">
                   <span
-                    className={`h-2 w-2 shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
+                    className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
                   <span
                     className={`text-body font-semibold ${working ? 'tb-pulse text-success-deep' : 'text-ink-muted'}`}
@@ -119,7 +119,7 @@ export function ListenerCard({
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full px-tight text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
+                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>

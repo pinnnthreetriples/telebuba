@@ -26,7 +26,14 @@ if (rule) {
       { code: 'const c = "bg-white text-white";', name: 'white needs no name' },
       { code: 'const d = "rounded-[2px] rounded-[3px]";', name: 'hairline radii' },
       { code: 'const e = "pb-[80px] mt-[96px] py-[50px]";', name: 'page breathing room' },
-      { code: 'const f = "w-[34px] h-[6px] max-w-[240px]";', name: 'component dimensions' },
+      {
+        code: 'const f = "size-tile h-meter w-col max-w-name";',
+        name: 'dimensions have their own named scale',
+      },
+      {
+        code: 'const f2 = "w-[min(84vw,300px)] max-w-[90vw] h-[1.1em]";',
+        name: 'a dimension relative to the viewport or the text is not a rung',
+      },
       { code: 'const g = "p-0 m-0 gap-px";', name: 'zero and the hairline are not steps' },
       // Not utility classes at all: the pattern is anchored to a class boundary.
       { code: 'const h = "https://example.com/to-3/blue-500";', name: 'a url is not a class' },
@@ -69,6 +76,20 @@ if (rule) {
       {
         code: 'const g = "duration-[420ms]";',
         errors: [{ message: /Four motion rungs/ }],
+      },
+      // The exemption this rule used to carry, now the pattern it enforces: while
+      // `w-*`/`h-*` in pixels were allowed, 73 distinct dimensions grew beside the
+      // rhythm's eleven rungs.
+      {
+        code: 'const i = "lg:w-[34px] max-w-[240px]";',
+        errors: [{ message: /Dimensions are their own scale/ }],
+      },
+      // The dimensions a single component owns are exempt at their own call sites and
+      // nowhere else: the exemption is an inline suppression per site, not a hole in the
+      // pattern, so the same measurement written a second time is still an error.
+      {
+        code: 'const j = "w-[46px] h-[62px] max-h-[120px] min-w-[220px]";',
+        errors: [{ message: /Dimensions are their own scale/ }],
       },
       // The place the drift actually hid: a class string hoisted out of the JSX. The
       // rule reports the first pattern that matches, so one hoisted constant is one

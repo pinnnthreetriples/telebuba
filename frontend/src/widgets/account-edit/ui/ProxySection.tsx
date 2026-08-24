@@ -216,7 +216,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
       <div className="mb-md text-body text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
       <div className="mb-md flex items-center justify-between gap-sm rounded-lg bg-canvas px-md py-md">
         <span className="flex items-center gap-sm">
-          <span className={`h-2 w-2 rounded-full ${proxyDot}`} />
+          <span className={`size-dot rounded-full ${proxyDot}`} />
           <span className="text-body text-ink-body">{proxyStateText}</span>
         </span>
         {account.proxy_id ? (
@@ -314,7 +314,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
                         setShowPass((value) => !value);
                       }}
                       aria-label={t('accounts.edit.password')}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle"
+                      className="absolute right-sm top-1/2 -translate-y-1/2 text-ink-subtle"
                     >
                       {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                     </button>
@@ -373,7 +373,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <Badge tone="success" size="md" className="tb-pop gap-sm">
             {proxyResult?.country_code ? (
               <span
-                className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-ring`}
+                className={`fi fi-${proxyResult.country_code.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}
               />
             ) : null}
             {[proxyResult?.country_code?.toUpperCase(), proxyResult?.exit_ip]

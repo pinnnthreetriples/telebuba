@@ -27,7 +27,7 @@ interface AccountsTableProps {
 }
 
 const ACTION_BTN =
-  'flex h-[30px] w-[30px] items-center justify-center rounded-full border border-line bg-white disabled:opacity-50';
+  'flex size-icon items-center justify-center rounded-full border border-line bg-white disabled:opacity-50';
 
 // The check button wears its own verdict (repo rule: every mutation ends in a
 // green check or a red cross), so the ✓/✗ lands where the click did. A busy row
@@ -55,7 +55,7 @@ function RowAvatar({ account }: { account: AccountRead }) {
   return (
     <AccountAvatar
       account={account}
-      className="h-8 w-8 shrink-0 rounded-full"
+      className="size-tile shrink-0 rounded-full"
       fallbackClassName={`text-body font-semibold ${AVATAR_CLASS[ds]}`}
     />
   );
@@ -148,11 +148,11 @@ export function AccountsTable({
         return account.proxy_id ? (
           <div className="flex items-center gap-sm">
             <span
-              className={`h-[7px] w-[7px] shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
+              className={`size-dot shrink-0 rounded-full ${proxyDotTone(account.proxy_status)}`}
             />
             {account.proxy_country_code ? (
               <span
-                className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-ring`}
+                className={`fi fi-${account.proxy_country_code.toLowerCase()} h-flag w-flag rounded-[2px] shadow-ring`}
               />
             ) : null}
             <span className="text-body text-ink-body">{proxyMeta(account)}</span>
@@ -180,13 +180,16 @@ export function AccountsTable({
           <span className="text-body text-ink-subtle">—</span>
         ) : (
           <div className="flex items-center gap-sm">
-            <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-canvas">
+            <div
+              // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
+              className="h-meter w-[46px] overflow-hidden rounded-full bg-canvas"
+            >
               <div
                 className={`h-full rounded-full bg-current ${trustTone(trust)}`}
                 style={{ width: `${String(trust)}%` }}
               />
             </div>
-            <span className={`min-w-[20px] text-body font-semibold ${trustTone(trust)}`}>
+            <span className={`min-w-badge text-body font-semibold ${trustTone(trust)}`}>
               {trust}
             </span>
           </div>
@@ -214,7 +217,7 @@ export function AccountsTable({
               className={`${ACTION_BTN} transition-colors duration-enter ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
             >
               {busy ? (
-                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-strong border-t-primary" />
+                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-primary" />
               ) : checked ? (
                 // Named, not colour-only: the fill and the glyph say nothing to a
                 // screen reader, and `title` stays the constant action label.

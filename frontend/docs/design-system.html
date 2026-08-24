@@ -635,7 +635,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       </div>
       <h3>Зазоры</h3>
       <!-- ds:gen spacing-scale -->
-      <p class="body">Одиннадцать ступеней — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>добавлена</em>, а не заменена — <code>spacing</code> кормит ещё и <code>w-*</code>/<code>h-*</code>, а 34px аватара это размер компонента, а не ступень ритма; вернуться <code>p-4</code> не даёт правило линтера, а не отсутствие ключа.</p>
+      <p class="body">Десять ступеней — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>заменяет</em> числовую шкалу Tailwind целиком, и до сих пор это было невозможно: <code>spacing</code> кормит и <code>w-*</code>/<code>h-*</code> тоже, а 34px аватара — размер компонента, а не ступень ритма. Теперь у размеров свои шкалы, поэтому <code>p-md</code> рисует 10px, а <code>w-md</code> не рисует ничего. <code>0</code> и <code>px</code> в конфиге есть, но в таблице их нет: это не ступени.</p>
       <table class="spec">
         <tr><td><code>hair</code> · 2</td><td>Волосяной зазор сетки и стопки строк</td></tr>
         <tr><td><code>xs</code> · 3</td><td>Счётчик над своей подписью</td></tr>
@@ -645,11 +645,92 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td><code>lg</code> · 14</td><td>Блоки карточки и формы</td></tr>
         <tr><td><code>xl</code> · 18</td><td>Горизонтальный отступ контрола</td></tr>
         <tr><td><code>2xl</code> · 22</td><td>Горизонтальный отступ крупного контрола</td></tr>
-        <tr><td><code>3xl</code> · 26</td><td>Воздух страницы</td></tr>
-        <tr><td><code>4xl</code> · 32</td><td>Воздух страницы, крупный шаг</td></tr>
-        <tr><td><code>5xl</code> · 64</td><td>Пустое состояние</td></tr>
+        <tr><td><code>page</code> · 32</td><td>Воздух самой страницы: поля экрана входа, панели ошибки и блока «ничего нет»</td></tr>
+        <tr><td><code>empty</code> · 64</td><td>Пустое состояние: высота карточки, в которой нечего показать</td></tr>
       </table>
       <!-- /ds:gen spacing-scale -->
+
+      <h3>Квадраты</h3>
+      <!-- ds:gen size-scale -->
+      <p class="body">Одиннадцать ступеней на квадрат, где ширина и высота — одно решение. 131 элемент писал одно и то же число дважды парой <code>w</code>/<code>h</code>; <code>size-*</code> говорит его один раз. Эти ступени вобрали двадцать девять диаметров кружков и все иконочные коробки приложения, и ни одна свёртка не сдвинула значение больше чем на 4px.</p>
+      <table class="spec">
+        <tr><td><code>tick</code> · 4</td><td>Самая мелкая метка: деления ползунка в WarmDaysModal, точка «печатает» в DialogueFeed</td></tr>
+        <tr><td><code>dot</code> · 7</td><td>Точка состояния рядом с подписью: Badge, прокси в таблице аккаунтов, индикатор системы в шапке</td></tr>
+        <tr><td><code>node</code> · 9</td><td>Метка шага на рельсе степпера: WarmingBoard и PipelineCard</td></tr>
+        <tr><td><code>spinner</code> · 14</td><td>Кольцо загрузки tb-spin и галочка пройденного шага степпера</td></tr>
+        <tr><td><code>glyph</code> · 18</td><td>Круглый бейдж со знаком: «?» у HelpHint, флажок _CheckRow, номер шага в HowItWorksCard, бегунок ползунка</td></tr>
+        <tr><td><code>chip</code> · 22</td><td>Самое мелкое, что можно нажать: IconButton sm, кнопка удаления поверх фотографии в PhotoTab</td></tr>
+        <tr><td><code>icon</code> · 28</td><td>Отдельная иконочная кнопка: IconButton md, знак логотипа в шапке</td></tr>
+        <tr><td><code>tile</code> · 34</td><td>Иконка рядом с заголовком диалога, лицо аккаунта в строке таблицы, IconButton lg</td></tr>
+        <tr><td><code>thumbnail</code> · 38</td><td>Картинка поста в ChannelPostsPanel, плитка файла в AddAccountModal</td></tr>
+        <tr><td><code>touch</code> · 44</td><td>Цель для пальца: кнопки шапки на телефоне, строки NavDrawer, IconButton touch</td></tr>
+        <tr><td><code>face</code> · 52</td><td>Собственный портрет аккаунта в ProfileModal и AccountEdit</td></tr>
+      </table>
+      <!-- /ds:gen size-scale -->
+
+      <!-- ds:gen dimension-scale -->
+      <p class="body">Размер компонента — не ступень ритма, и до сих пор это было мнение, а не устройство: в Tailwind ключ <code>spacing</code> становится и <code>p-&lt;имя&gt;</code>, и <code>w-&lt;имя&gt;</code>, его разливают семнадцать базовых шкал. Пока одна таблица отвечала на два вопроса, 476 размерных мест тратили 73 разных значения, 57 из которых ни одна ступень ритма не называла. Шкалы ниже объявлены отдельно и <code>spacing</code> не разливают, поэтому <code>p-md</code> есть, а <code>w-md</code> нет.</p>
+      <p class="body">Каждое имя здесь — <em>роль</em>, и проверка у роли одна: она обязана называть то, что в этом продукте есть, и надо уметь показать компонент, который её носит. <code>coin</code> для 52px проверку не проходит, <code>touch</code> для цели пальца в 44px — проходит. Слово-величина не умеет спорить со следующим значением, а спорить со значениями — вся работа шкалы.</p>
+      <h3>Высоты</h3>
+      <p class="body">Высота, которая не является стороной квадрата: предмет либо лежит (дорожка, полоса), либо стоит в собственный рост контрола.</p>
+      <table class="spec">
+        <tr><td><code>px</code> · 1px</td><td>Волосяная линия: разделитель, который рисуют высотой, а не границей</td></tr>
+        <tr><td><code>full</code> · 100%</td><td>Вся высота родителя — отказ от ступени, а не ступень</td></tr>
+        <tr><td><code>rail</code> · 2px</td><td>Дорожка, которая заполняется: подчёркивание раздела в шапке, связка обоих степперов, шаги мастера в AddAccountModal</td></tr>
+        <tr><td><code>meter</code> · 6px</td><td>Полоса прогресса: прогрев в AccountEdit, ёмкость прокси в ProxyPool, рельс ползунка в WarmDaysModal</td></tr>
+        <tr><td><code>flag</code> · 13px</td><td>Флаг страны — приложение рисовало его в шести размерах ради одной задачи, и только он: шкала расхода в NeuroAccountsModal мерила столько же, но шкала — не флаг</td></tr>
+        <tr><td><code>badge</code> · 18px</td><td>Счётчик, который растёт вширь, а не вверх: бейдж ListenerCard, номер фотографии в AddStoryModal</td></tr>
+        <tr><td><code>bar</code> · 22px</td><td>Столбик гистограммы дней в WarmingBoard и компактные кнопки той же высоты</td></tr>
+        <tr><td><code>compact</code> · 28px</td><td>Контрол ниже поля: дорожка Switch, ползунок WarmDaysModal, кнопка удаления в ScenarioCard</td></tr>
+        <tr><td><code>header</code> · 56px</td><td>Шапка приложения: AppNav и NavDrawer</td></tr>
+      </table>
+      <h3>Ширины</h3>
+      <p class="body">Ширины — это в основном полосы, а не размеры: колонка, обрезка, диалог. Последние четыре ступени и есть причина, по которой шкала существует: двадцать два диалога тратили одиннадцать ширин — 380, 420, 440, 460, 468, 480, 540, 560, 580, 760 и 920, — а это не шкала, а протокол того, кто с какой родился.</p>
+      <table class="spec">
+        <tr><td><code>px</code> · 1px</td><td>Вертикальный разделитель в строке — на странице прогрева он единственный</td></tr>
+        <tr><td><code>auto</code> · auto</td><td>Ширина по содержимому: строка, которая на широком экране перестаёт быть колонкой</td></tr>
+        <tr><td><code>max</code> · max-content</td><td>Ширина по самой длинной строке: подсказка над кнопкой в AddStoryModal</td></tr>
+        <tr><td><code>full</code> · 100%</td><td>Вся ширина родителя — отказ от ступени, а не ступень</td></tr>
+        <tr><td><code>flag</code> · 18px</td><td>Ширина флага страны</td></tr>
+        <tr><td><code>action</code> · 46px</td><td>Постоянная колонка, которую строка отдаёт контролу: кнопки запуска и удаления в CampaignsCard и ListenerCard, показ ключа в ApiKeyField, колонка флажков в DiscoveryResults. Дорожка Switch, полоса доверия в таблице аккаунтов и плитка раскладки в AddStoryModal мерили те же 46px, но ни одна не стоит в колонке строки, и каждая теперь своя</td></tr>
+        <tr><td><code>number</code> · 64px</td><td>Числовое поле: дни и часы в WarmConfigModal, время в CommentModeFields</td></tr>
+        <tr><td><code>readout</code> · 74px</td><td>Число, которое не должно прыгать при изменении: показание ползунка в CampaignSetupCard, лимит в AccountLimitsModal. Ту же меру занимает карточка истории в AddStoryModal</td></tr>
+        <tr><td><code>stamp</code> · 120px</td><td>Колонка таблицы со временем или идентификатором: LogsPage, канал в LogTerminal</td></tr>
+        <tr><td><code>col</code> · 150px</td><td>Обычная колонка таблицы и поле, встроенное в строку</td></tr>
+        <tr><td><code>menu</code> · 190px</td><td>Выпадающий список или фильтр рядом с заголовком страницы: меню аккаунта в AppNav</td></tr>
+        <tr><td><code>tip</code> · 230px</td><td>Подсказка HelpHint и поле поиска на странице аккаунтов</td></tr>
+        <tr><td><code>confirm</code> · 420px</td><td>Диалог-вопрос с двумя кнопками: ConfirmModal и три диалога удаления</td></tr>
+        <tr><td><code>form</code> · 480px</td><td>Диалог, который заполняют: AddAccountModal, AddStoryModal, ProxyAddModal, WarmDaysModal</td></tr>
+        <tr><td><code>panel</code> · 560px</td><td>Диалог со списком или вкладками: ProfileModal, ChannelEditModal, NeuroAccountsModal, WarmConfigModal</td></tr>
+        <tr><td><code>table</code> · 926px</td><td>Диалог вокруг таблицы: история комментариев и подбор каналов. 926 — это 880 порога DataTable плюс собственные поля более щедрого из двух: ниже диалог показал бы карточки, а не таблицу</td></tr>
+      </table>
+      <h3>Нижние границы ширины</h3>
+      <p class="body">Ширина, ниже которой элемент не опускается, что бы ни делал flex вокруг него.</p>
+      <table class="spec">
+        <tr><td><code>0</code> · 0px</td><td>Ноль, который позволяет ячейке flex обрезать текст вместо того, чтобы растягивать строку. Самый частый размерный токен в приложении</td></tr>
+        <tr><td><code>badge</code> · 18px</td><td>Счётчик, который обязан остаться круглым на одной цифре: ListenerCard, AddStoryModal</td></tr>
+        <tr><td><code>col</code> · 150px</td><td>Ширина, ниже которой колонка не опускается: шапка AccountEdit, фильтр на странице аккаунтов</td></tr>
+        <tr><td><code>table</code> · 880px</td><td>Порог, ниже которого DataTable перестаёт быть таблицей и становится карточками, — и потому мера, вокруг которой считается ширина диалога с таблицей</td></tr>
+      </table>
+      <h3>Верхние границы ширины</h3>
+      <p class="body">Пределы, и все они про чтение, а не про то, чтобы влезть.</p>
+      <table class="spec">
+        <tr><td><code>full</code> · 100%</td><td>Не шире родителя: диалог на узком экране</td></tr>
+        <tr><td><code>name</code> · 240px</td><td>Предел для канала или комментария, который обязан обрезаться: DiscoveryResults, NeurocommentBoard</td></tr>
+        <tr><td><code>page</code> · 1000px</td><td>Содержательная колонка страницы: AccountEdit, NeuroshillingPage</td></tr>
+        <tr><td><code>shell</code> · 1340px</td><td>Собственная ширина приложения: AppShell и AppNav</td></tr>
+      </table>
+      <h3>Нижние границы высоты</h3>
+      <table class="spec">
+        <tr><td><code>touch</code> · 44px</td><td>Те же 44px, что и у квадратной ступени, но про одну ось: строки NavDrawer</td></tr>
+        <tr><td><code>screen</code> · 100vh</td><td>Ростом со стекло — корневой контейнер приложения</td></tr>
+      </table>
+      <h3>Пределы прокрутки</h3>
+      <table class="spec">
+        <tr><td><code>feed</code> · 220px</td><td>Прокручиваемый список, у которого свой блок: LogTerminal, комментарии NeurocommentBoard, аккаунты CampaignPromptModal, DialogueFeed</td></tr>
+        <tr><td><code>dialog</code> · 88dvh</td><td>Предел для тела диалога. В dvh, потому что панели браузера на телефоне — часть того, что ему надо обойти</td></tr>
+      </table>
+      <!-- /ds:gen dimension-scale -->
 
       <h3>Отступы</h3>
       <p class="body">Одна ступень на семейство, и семейство определяется тем, чем элемент является, а не тем, сколько он сейчас меряет.</p>

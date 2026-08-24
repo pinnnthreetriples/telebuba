@@ -123,39 +123,216 @@ export default {
       dialog: '30',
       toast: '40',
     },
+    // One rhythm for every gap, padding and margin in the app, replacing Tailwind's
+    // numeric scale outright — a gap and a padding are the same measurement seen from
+    // two sides, and keeping them in separate scales is how `gap-md` (10px) ended up
+    // beside `px-3` (12px) in one row. The numbers are the design's own, not a 4px
+    // grid: the app had two rhythms, its designer's and Tailwind's, and the design
+    // source is the one that wins.
+    //
+    // `hair` and `xs` separate stacked hairlines (a counter over its label); `tight`
+    // separates parts of one thing (a dot from its label); `sm` is the default inside a
+    // control or a row; `md` separates rows and fields inside a card; `lg` the blocks of
+    // a card or form; `xl` and `2xl` are a control's own horizontal padding. `0` and
+    // `px` stay because they are not steps — `px` is the hairline a grid uses for its
+    // own dividers.
+    //
+    // `page` and `empty` are the two rungs that belong to the page rather than to
+    // anything on it: the room a page's own content stands in, and the height an empty
+    // state fills. They carry names instead of magnitudes because a component reaching
+    // for the widest number it can find is exactly how they got spent, and `p-page` on a
+    // card reads as the mistake it is where `p-4xl` read as a size. The 26px rung that
+    // used to sit under them is gone into `page`: its eight sites were a page's own
+    // padding written 6px short, and with 72% of this scale's 1384 uses on `sm`, `md`
+    // and `lg`, the middle is where the rhythm has to be exact and the top is where it
+    // has to be few.
+    //
+    // Replacing rather than extending — which is what makes `p-4` an error instead of a
+    // habit — only became safe once a component's dimensions moved out: `spacing` also
+    // feeds seventeen core scales including `w-*` and `h-*`, and a 34px avatar is not a
+    // rung of a rhythm. The dimension scales below take that job, so `p-md` still paints
+    // 10px and `w-md` now paints nothing.
+    spacing: {
+      0: '0px',
+      px: '1px',
+      hair: '2px',
+      xs: '3px',
+      tight: '5px',
+      sm: '7px',
+      md: '10px',
+      lg: '14px',
+      xl: '18px',
+      '2xl': '22px',
+      page: '32px',
+      empty: '64px',
+    },
+    // A component's own dimensions, and the reason the rhythm above could be replaced.
+    // In Tailwind a `theme.spacing` key becomes `p-<key>` AND `w-<key>`; declaring
+    // `width`, `height`, `minWidth`, `maxWidth`, `minHeight`, `maxHeight` and `size` as
+    // their own top-level keys is the only way to stop one table answering two
+    // questions. While it answered both, 476 dimension sites spent 73 distinct values,
+    // 57 of which no rung of the rhythm named — the exemption for them in the lint rule
+    // is what let the drift run.
+    //
+    // Every name here is a ROLE, and each one had to name a thing this product has, with
+    // a component that can be pointed at wearing it. `coin` for 52px fails that test;
+    // `touch` for the 44px tap target passes it. A magnitude word cannot argue the next
+    // value down onto an existing rung, and arguing values down is the whole job.
+    //
+    // A role also has to be worn twice. A rung with one wearer is a literal with a name,
+    // and worse than the literal: it teaches the next reader that any one-off deserves a
+    // rung, which is how a closed set reopens. Nine came back out — AddStoryModal's
+    // layout tile and story preview, NeuroAccountsModal's spend gauge, AccountsPage's
+    // search field, WarmingBoard's embedded log, LoginPage's card, SettingsPage's column,
+    // ProxyPool's empty-state sentence, ScenarioCard's prompt column — each one
+    // component's internal layout, so each stays at its call site as an arbitrary value,
+    // named in the lint rule's exemption instead of here. `0`, `px`, `auto`, `max`,
+    // `full` and `screen` are outside that count for the same reason they are outside the
+    // rhythm's: they are shapes and keywords, not steps.
+
+    // Squares, where width and height are one decision — 131 elements used to say the
+    // same number twice. Eleven rungs absorb twenty-nine circle diameters and every
+    // icon-sized box in the app, and no fold moved a value more than 4px.
+    //
+    // `tick` is the smallest mark drawn (WarmDaysModal's slider ticks, DialogueFeed's
+    // typing dot); `dot` the status dot beside a label (Badge, AccountsTable's proxy
+    // dot, AppNav's system dot); `node` a marker on a stepper's rail (WarmingBoard,
+    // PipelineCard); `spinner` the `tb-spin` ring and the check a finished step wears;
+    // `glyph` a round badge carrying a character (HelpHint's `?`, _CheckRow's checkbox,
+    // HowItWorksCard's numeral, WarmDaysModal's thumb); `chip` the smallest thing that
+    // can be pressed (IconButton `sm`, PhotoTab's remove-over-image); `icon` the
+    // standalone icon button (IconButton `md`, AppNav's logo mark); `tile` the icon
+    // beside a modal title and an account's face in a table row (IconButton `lg`);
+    // `thumbnail` a post's picture (ChannelPostsPanel); `touch` the tap target the
+    // mobile nav is built from (IconButton `touch`, NavDrawer's rows); `face` an
+    // account's own portrait at the top of ProfileModal and AccountEdit.
+    size: {
+      tick: '4px',
+      dot: '7px',
+      node: '9px',
+      spinner: '14px',
+      glyph: '18px',
+      chip: '22px',
+      icon: '28px',
+      tile: '34px',
+      thumbnail: '38px',
+      touch: '44px',
+      face: '52px',
+    },
+    // Heights that are not a square's side: something either lies flat (a rail, a bar)
+    // or stands to a control's own height. `rail` is a hairline that fills (AppNav's
+    // active underline, both steppers' connectors, AddAccountModal's step bar); `meter`
+    // the progress bar a value fills (AccountEdit's warm-up, ProxyPool's capacity,
+    // WarmDaysModal's slider rail); `flag` the country flag, which the app drew at six
+    // different sizes for one job, and nothing else — NeuroAccountsModal's spend gauge
+    // rode this rung because it measures 13px too, and a gauge is not a flag; `badge` a
+    // count that grows sideways rather than taller, so it cannot be a square
+    // (ListenerCard's counter, AddStoryModal's photo index) and pairs with the `minWidth`
+    // rung of the same name; `bar` a column of WarmingBoard's day histogram, and the
+    // compact buttons that stand as tall; `compact` a control shorter than a field
+    // (Switch's track, WarmDaysModal's slider, ScenarioCard's delete); `header` the app
+    // bar (AppNav, NavDrawer).
+    height: {
+      px: '1px',
+      full: '100%',
+      rail: '2px',
+      meter: '6px',
+      flag: '13px',
+      badge: '18px',
+      bar: '22px',
+      compact: '28px',
+      header: '56px',
+    },
+    // Widths, which unlike heights are mostly bands rather than sizes: a column, a
+    // truncation, a dialog. `flag` is the country flag's own width; `action` the fixed
+    // column a ROW gives to a control, and nothing else — CampaignsCard's and
+    // ListenerCard's play/stop/edit/delete buttons, ApiKeyField's reveal,
+    // DiscoveryResults' checkbox column. Switch's track, AccountsTable's trust bar and
+    // AddStoryModal's layout tile also measured 46px and were wearing this rung for it,
+    // which is measuring the same rather than being the same: none of the three sits in a
+    // row's column, and each is now its own component's business. `number` is a number
+    // input (WarmConfigModal's day box, CommentModeFields' time box); `readout` a figure
+    // that must not reflow as it changes (CampaignSetupCard's slider readout,
+    // AccountLimitsModal's limit), which AddStoryModal's story card happens to share;
+    // `stamp` a table column holding a time or an id (LogsPage, LogTerminal's channel);
+    // `col` the ordinary table column and the inline field in a row; `menu` a dropdown
+    // or a filter beside a page title (AppNav's account menu); `tip` HelpHint's tooltip
+    // and AccountsPage's search.
+    //
+    // The last four are the dialogs, and they are the reason this scale exists. Twenty-two
+    // modals were spending eleven widths: 380, 420, 440, 460, 468, 480, 540, 560, 580,
+    // 760 and 920, which is not a scale but a record of what each one happened to be born
+    // at. `confirm` is a question with two buttons, `form` a dialog you fill in, `panel`
+    // one that holds a list or a tabbed body, `table` one built around a table.
+    //
+    // `table` is the one rung here whose value a component dictates rather than a
+    // designer: DataTable renders cards instead of a table below 880px of MEASURED width,
+    // so a dialog built around a table has to clear 880 plus its own chrome or it never
+    // shows a table at all. CommentHistoryModal's `px-2xl` body and the hairline border of
+    // the card it wraps the table in cost 46 of those, which is where 926 comes from;
+    // ChannelDiscoveryModal's `p-xl` costs 36 and clears it by ten. 920 — the widest thing
+    // the app was born with, and the number this rung took first — leaves the history
+    // dialog 874 and renders it as cards, which is the rung naming something neither
+    // wearer draws.
+    width: {
+      px: '1px',
+      auto: 'auto',
+      max: 'max-content',
+      full: '100%',
+      flag: '18px',
+      action: '46px',
+      number: '64px',
+      readout: '74px',
+      stamp: '120px',
+      col: '150px',
+      menu: '190px',
+      tip: '230px',
+      confirm: '420px',
+      form: '480px',
+      panel: '560px',
+      table: '926px',
+    },
+    // Floors. `0` is the one that lets a flex child truncate instead of pushing its row
+    // wide, which is why it outnumbers every other dimension token in the app. `badge`
+    // is a count that must stay round at one digit (ListenerCard's counter,
+    // AddStoryModal's photo index); `col` the width a table column refuses to go under
+    // (AccountEdit's header columns, AccountsPage's filter); `table` the point below which
+    // DataTable stops being a table and becomes cards, and therefore the floor every
+    // `w-table` dialog is sized around. `table` is the one rung here a single component
+    // wears, and it keeps its name because two other places already say the same number:
+    // useWideViewport's `TABLE_MIN_WIDTH`, which is this measurement said in JS, and
+    // `width.table` above, which is this plus a dialog's own padding.
+    minWidth: {
+      0: '0px',
+      badge: '18px',
+      col: '150px',
+      table: '880px',
+    },
+    // Ceilings, all of them about reading rather than fitting. `name` is the cap on a
+    // channel or comment that has to truncate (DiscoveryResults, NeurocommentBoard);
+    // `page` a page's content column (AccountEdit, NeuroshillingPage); `shell` the app's
+    // own width (AppShell, AppNav).
+    maxWidth: {
+      full: '100%',
+      name: '240px',
+      page: '1000px',
+      shell: '1340px',
+    },
+    // `touch` is the same 44px as the square rung, said about one axis: NavDrawer's rows
+    // are as tall as a tap target but as wide as the drawer.
+    minHeight: {
+      touch: '44px',
+      screen: '100vh',
+    },
+    // Scroll caps. `feed` is a scrolling list that owns its block (LogTerminal,
+    // NeurocommentBoard's comments, CampaignPromptModal's accounts, DialogueFeed);
+    // `dialog` the cap on a dialog's body, in `dvh` because the browser chrome on a phone
+    // is part of what it has to clear.
+    maxHeight: {
+      feed: '220px',
+      dialog: '88dvh',
+    },
     extend: {
-      // One rhythm for every gap, padding and margin in the app, replacing the four-rung
-      // `gap` scale that used to live here on its own — a gap and a padding are the same
-      // measurement seen from two sides, and keeping them in separate scales is how
-      // `gap-md` (10px) ended up beside `px-3` (12px) in one row. The numbers are the
-      // design's own, not a 4px grid: the app had two rhythms, its designer's and
-      // Tailwind's, and the design source is the one that wins.
-      //
-      // `hair` and `xs` separate stacked hairlines (a counter over its label); `tight`
-      // separates parts of one thing (a dot from its label); `sm` is the default inside a
-      // control or a row; `md` separates rows and fields inside a card; `lg` the blocks of
-      // a card or form; `xl` and `2xl` are a control's own horizontal padding; `3xl` and
-      // up are a page's own breathing room and an empty state's. `0` and `px` stay because
-      // they are not steps — `px` is the hairline a grid uses for its own dividers.
-      //
-      // Added rather than replacing Tailwind's numeric scale outright, because `spacing`
-      // also feeds `w-*`/`h-*`, and a 34px avatar or a 6px progress bar is a component's
-      // dimension, not a rung of this rhythm. What keeps `p-4` from coming back beside
-      // `px-xl` is the lint rule that forbids it (eslint.config.js), not the absence of
-      // the key.
-      spacing: {
-        hair: '2px',
-        xs: '3px',
-        tight: '5px',
-        sm: '7px',
-        md: '10px',
-        lg: '14px',
-        xl: '18px',
-        '2xl': '22px',
-        '3xl': '26px',
-        '4xl': '32px',
-        '5xl': '64px',
-      },
       colors: {
         // Two jobs, one colour: the ground the page sits on, and the fill of anything
         // that is filled ON a card — a progress rail, a chip, a counter. They were two

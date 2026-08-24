@@ -32,7 +32,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const tTone = trustTone(trust);
 
   return (
-    <div className="tb-fadeup max-w-[960px]">
+    <div className="tb-fadeup max-w-page">
       <button
         type="button"
         onClick={onBack}
@@ -42,22 +42,22 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       </button>
 
       <Card className="mb-lg flex flex-wrap items-center gap-lg px-xl py-xl">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary-deep">
+        <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary-deep">
           {mono(account)}
         </div>
-        <div className="min-w-[150px] flex-1">
+        <div className="min-w-col flex-1">
           <div className="text-title font-bold">{account.phone ?? account.account_id}</div>
           <div className="text-body text-ink-subtle">
             {account.username ? `@${account.username}` : (account.label ?? '—')}
           </div>
         </div>
         <StatusBadge status={account.status} />
-        <div className="min-w-[130px]">
+        <div className="min-w-col">
           <div className="flex items-center justify-end gap-sm">
             <span className="text-body text-ink-muted">{t('accounts.edit.trust')}</span>
             <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
           </div>
-          <div className="mt-tight h-[6px] overflow-hidden rounded-full bg-canvas">
+          <div className="mt-tight h-meter overflow-hidden rounded-full bg-canvas">
             <div
               className={`h-full rounded-full bg-current ${tTone}`}
               style={{ width: `${String(trust)}%` }}

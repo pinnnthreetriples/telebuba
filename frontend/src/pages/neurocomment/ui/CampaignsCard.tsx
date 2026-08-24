@@ -106,7 +106,7 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`flex w-12 items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
+                    className={`flex w-action items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
                   >
                     {isRunning ? <Icon name="pause" size={18} /> : <Icon name="play" size={18} />}
                   </button>
@@ -118,7 +118,7 @@ export function CampaignsCard({
                       // prompt modal's account list) on THIS campaign (finding #5).
                       onEditPrompt(campaign);
                     }}
-                    className="flex w-12 items-center justify-center border-none bg-transparent text-primary"
+                    className="flex w-action items-center justify-center border-none bg-transparent text-primary"
                   >
                     <Icon name="pencil" size={18} />
                   </button>
@@ -128,7 +128,7 @@ export function CampaignsCard({
                     onClick={() => {
                       onDelete(campaign);
                     }}
-                    className="flex w-12 items-center justify-center border-none bg-transparent text-danger"
+                    className="flex w-action items-center justify-center border-none bg-transparent text-danger"
                   >
                     <Icon name="trash" size={18} />
                   </button>
@@ -161,7 +161,7 @@ export function CampaignsCard({
                         className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
                       >
                         {/* `bg-current` — the dot can never disagree with its label. */}
-                        <span className="h-[6px] w-[6px] rounded-full bg-current" />
+                        <span className="size-dot rounded-full bg-current" />
                         {t(`neurocomment.campaign.status.${campaign.status}`)}
                       </span>
                       <IconButton
@@ -276,14 +276,14 @@ export function CampaignsCard({
                   }}
                   placeholder={t('neurocomment.channels.placeholder')}
                   aria-label={t('neurocomment.channels.placeholder')}
-                  className="w-[150px] border-none bg-transparent text-body outline-none"
+                  className="w-col border-none bg-transparent text-body outline-none"
                 />
                 <button
                   type="button"
                   aria-label={t('neurocomment.modal.add')}
                   disabled={!channelInput.trim()}
                   onClick={onAddChannel}
-                  className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                 >
                   <Icon name="check" size={12} />
                 </button>

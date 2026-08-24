@@ -2,13 +2,13 @@ import { type RefObject, useLayoutEffect, useState, useSyncExternalStore } from 
 
 // The width at which DataTable shows a table rather than cards. 880px is the table's
 // own minimum and the shell gives content viewport−48px (AppShell: mx-auto
-// max-w-[1340px] px-lg/px-2xl), so 1024 is the narrowest viewport where a full-width
+// max-w-shell px-lg/px-2xl), so 1024 is the narrowest viewport where a full-width
 // page table fits without horizontal scroll. Only a fallback since useWideContainer
 // below exists: a viewport query cannot see that the table's own box is narrower than
 // the viewport (a column, a modal).
 const WIDE_MQ = '(min-width: 1024px)';
 
-// DataTable's own `min-w-[880px]`: below this a table is only reachable by scrolling
+// DataTable's own `min-w-table`: below this a table is only reachable by scrolling
 // sideways, which is exactly what the card layout replaces.
 const TABLE_MIN_WIDTH = 880;
 

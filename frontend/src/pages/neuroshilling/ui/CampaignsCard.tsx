@@ -73,7 +73,7 @@ export function CampaignsCard({
                     className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
                   >
                     {/* `bg-current` — the dot can never disagree with its label. */}
-                    <span className="h-[6px] w-[6px] rounded-full bg-current" />
+                    <span className="size-dot rounded-full bg-current" />
                     {t(`neuroshilling.campaign.status.${status}`)}
                   </span>
                   <IconButton
