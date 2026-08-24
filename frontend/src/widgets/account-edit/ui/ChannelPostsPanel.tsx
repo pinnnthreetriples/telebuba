@@ -9,7 +9,7 @@ import {
   publishAccountChannelPostMutation,
 } from '@/entities/account';
 import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
-import { Button, ConfirmModal, IconButton, Notice, Textarea, toastError } from '@/shared/ui';
+import { Button, ConfirmModal, Icon, IconButton, Notice, Textarea, toastError } from '@/shared/ui';
 
 import {
   channelErrorText,
@@ -212,17 +212,7 @@ export function ChannelPostsPanel({
               />
             ) : (
               <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <rect x="3" y="4" width="14" height="16" rx="3" />
-                  <path d="m17 9 4-2v10l-4-2" />
-                </svg>
+                <Icon name="video" size={16} />
               </span>
             )}
             <span className="min-w-0 flex-1 truncate text-body font-medium">{file.name}</span>

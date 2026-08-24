@@ -13,7 +13,7 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, FeedbackMark, Input } from '@/shared/ui';
+import { Button, FeedbackMark, Icon, Input } from '@/shared/ui';
 
 import { Section, Spinner } from './_shared';
 import { LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
@@ -247,17 +247,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-canvas/40 px-lg py-lg text-left"
       >
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
-          <svg
-            width="19"
-            height="19"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-          >
-            <path d="M16 16l-4-4-4 4M12 12v9" />
-            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-          </svg>
+          <Icon name="upload-cloud" size={20} />
         </div>
         <div className="min-w-0">
           <div className="text-body font-semibold">{t('accounts.edit.dropTitle')}</div>
@@ -280,29 +270,9 @@ export function SessionSection({ account }: { account: AccountRead }) {
             <div className="flex items-center gap-md">
               <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
                 {file.archive ? (
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <path d="M12 7v2M12 12v2M12 17v.5" />
-                  </svg>
+                  <Icon name="alert-square" size={16} />
                 ) : (
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.7"
-                  >
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 2v6h6" />
-                  </svg>
+                  <Icon name="file" size={16} />
                 )}
               </div>
               <div className="min-w-0 flex-1">
@@ -316,31 +286,11 @@ export function SessionSection({ account }: { account: AccountRead }) {
                   <div className="flex shrink-0 items-center gap-hair">
                     {file.status === 'done' ? (
                       <span className="tb-pop m-xs inline-flex text-success-deep">
-                        <svg
-                          width="17"
-                          height="17"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="m8 12 2.5 2.5L16 9" />
-                        </svg>
+                        <Icon name="check-circle" size={18} />
                       </span>
                     ) : file.status === 'error' ? (
                       <span className="m-xs inline-flex text-danger">
-                        <svg
-                          width="17"
-                          height="17"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="m15 9-6 6M9 9l6 6" />
-                        </svg>
+                        <Icon name="x-circle" size={18} />
                       </span>
                     ) : (
                       <Spinner size={13} />
@@ -353,16 +303,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                       }}
                       className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
                     >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M18 6 6 18M6 6l12 12" />
-                      </svg>
+                      <Icon name="close" size={14} />
                     </button>
                   </div>
                 </div>

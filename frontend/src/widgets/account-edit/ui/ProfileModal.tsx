@@ -24,6 +24,7 @@ import {
   Button,
   ConfirmModal,
   FormField,
+  Icon,
   IconButton,
   Input,
   Modal,
@@ -1021,16 +1022,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               ) : saved ? (
                 <span className="inline-flex items-center gap-sm">
                   <span className="tb-swapin inline-flex">
-                    <svg
-                      width="15"
-                      height="15"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
+                    <Icon name="check" size={16} />
                   </span>
                   <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                     {t('accounts.profile.saved')}

@@ -9,7 +9,7 @@ import type {
   NeurocommentChannelRow,
 } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { Badge, CollapsibleCard, DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import { Badge, CollapsibleCard, DataTable, type DataTableColumnMeta, Icon } from '@/shared/ui';
 
 interface BoardRow {
   account: string;
@@ -325,16 +325,7 @@ export function NeurocommentBoard({
             // chevron or widening the column it is sized to.
             className={`-m-md flex p-md text-ink-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+            <Icon name="chevron-down" size={16} />
           </button>
         ),
         // Last column, sized to the chevron so it hugs the row's right edge.
@@ -388,17 +379,7 @@ export function NeurocommentBoard({
             onClick={onOpenAccounts}
             className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-wash hover:text-primary-deep lg:h-7 lg:w-7"
           >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
+            <Icon name="gear" size={16} />
           </button>
         </div>
       }

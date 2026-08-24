@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card } from '@/shared/ui';
+import { Button, Card, Icon } from '@/shared/ui';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
@@ -93,16 +93,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             onClick={onAdd}
             className="inline-flex items-center gap-sm rounded-full bg-primary px-lg py-sm text-tiny font-semibold text-white"
           >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <Icon name="plus" size={14} />
             {t('accounts.proxyPool.add')}
           </button>
         )}
@@ -127,16 +118,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             {t('accounts.proxyPool.emptyBody')}
           </div>
           <Button variant="primary" className="items-center gap-sm" onClick={onAdd}>
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <Icon name="plus" size={16} />
             {t('accounts.proxyPool.emptyAdd')}
           </Button>
         </div>
@@ -218,29 +200,11 @@ function ProxyCard({
             title={geoTitle}
             className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-warning-line text-warning-deep"
           >
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-            >
-              <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-            </svg>
+            <Icon name="alert-triangle" size={12} />
           </span>
         ) : failed ? (
           <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-danger-tint text-danger-deep">
-            <svg
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.4"
-            >
-              <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
-            </svg>
+            <Icon name="alert-triangle" size={12} />
           </span>
         ) : (
           <span title={geoTitle} className="h-4 w-[22px] shrink-0 rounded-[3px] bg-line" />
@@ -272,17 +236,7 @@ function ProxyCard({
           {busy ? (
             <span className="tb-spin inline-block h-[12px] w-[12px] rounded-full border-2 border-line-strong border-t-primary" />
           ) : (
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-            >
-              <path d="M21 12a9 9 0 1 1-6.2-8.6" />
-              <path d="M21 3v6h-6" />
-            </svg>
+            <Icon name="refresh" size={14} />
           )}
         </button>
         <button
@@ -292,16 +246,7 @@ function ProxyCard({
           aria-label={t('accounts.actions.delete')}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
         >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
+          <Icon name="close" size={14} />
         </button>
       </div>
       <div>

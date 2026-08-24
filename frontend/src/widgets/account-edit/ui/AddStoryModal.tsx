@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
-import { Button, IconButton, Input, Modal } from '@/shared/ui';
+import { Button, Icon, IconButton, Input, Modal } from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
@@ -318,18 +318,7 @@ export function AddStoryModal({
           <span
             className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
           >
-            {noForward && (
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                className="stroke-white"
-                strokeWidth="3"
-              >
-                <path d="M20 6 9 17l-5-5" />
-              </svg>
-            )}
+            {noForward && <Icon name="check" size={14} className="stroke-white" />}
           </span>
           <span className="text-lead text-ink-body">{t('accounts.addStory.noForward')}</span>
         </button>
@@ -424,16 +413,7 @@ export function AddStoryModal({
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
                     className="absolute right-[3px] top-[3px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-40"
                   >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                    >
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
+                    <Icon name="close" size={10} />
                   </button>
                 </div>
                 <div className="flex items-stretch gap-tight">
@@ -521,17 +501,7 @@ export function AddStoryModal({
           <div className="mt-md tb-fadeup rounded-lg border border-line bg-white px-md py-md">
             <div className="flex items-center gap-md">
               <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.7"
-                >
-                  <rect x="3" y="4" width="14" height="16" rx="3" />
-                  <path d="m17 9 4-2v10l-4-2" />
-                </svg>
+                <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-body font-semibold">{video.name}</div>
@@ -547,16 +517,7 @@ export function AddStoryModal({
                   aria-label={t('accounts.addStory.removeFile')}
                   className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
                 >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M18 6 6 18M6 6l12 12" />
-                  </svg>
+                  <Icon name="close" size={14} />
                 </button>
               )}
             </div>
@@ -583,17 +544,7 @@ export function AddStoryModal({
               )}
               {done && (
                 <span className="tb-pop m-xs inline-flex text-success-deep">
-                  <svg
-                    width="17"
-                    height="17"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="m8 12 2.5 2.5L16 9" />
-                  </svg>
+                  <Icon name="check-circle" size={18} />
                 </span>
               )}
               {failed && (

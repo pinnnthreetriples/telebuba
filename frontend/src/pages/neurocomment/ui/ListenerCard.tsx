@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { Card, IconButton, Select, SurfHover } from '@/shared/ui';
+import { Card, Icon, IconButton, Select, SurfHover } from '@/shared/ui';
 
 // The listener-account card: shows the active listener with pause/edit/remove
 // actions (revealed via SurfHover), or a dropdown to choose one when none is set.
@@ -56,21 +56,7 @@ export function ListenerCard({
     <Card className="relative z-raised px-lg py-lg">
       <div className="mb-xs flex items-center gap-md">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M2 10v3" />
-            <path d="M6 6v11" />
-            <path d="M10 3v18" />
-            <path d="M14 8v7" />
-            <path d="M18 5v13" />
-            <path d="M22 10v3" />
-          </svg>
+          <Icon name="chart" size={16} />
         </span>
         <div className="min-w-0">
           <div className="text-body font-semibold text-ink">{t('neurocomment.listener.title')}</div>
@@ -93,16 +79,7 @@ export function ListenerCard({
                   onClick={onToggleRuntime}
                   className={`flex w-12 items-center justify-center border-none bg-transparent ${running ? 'text-warning-deep' : 'text-success-deep'}`}
                 >
-                  {running ? (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <rect x="6" y="5" width="4" height="14" rx="1" />
-                      <rect x="14" y="5" width="4" height="14" rx="1" />
-                    </svg>
-                  ) : (
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M7 5.5v13a1 1 0 0 0 1.5.87l11-6.5a1 1 0 0 0 0-1.74l-11-6.5A1 1 0 0 0 7 5.5z" />
-                    </svg>
-                  )}
+                  {running ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
                 </button>
                 <button
                   type="button"
@@ -110,17 +87,7 @@ export function ListenerCard({
                   onClick={onEdit}
                   className="flex w-12 items-center justify-center border-none bg-transparent text-primary"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                  </svg>
+                  <Icon name="pencil" size={16} />
                 </button>
                 <button
                   type="button"
@@ -128,16 +95,7 @@ export function ListenerCard({
                   onClick={onRemove}
                   className="flex w-12 items-center justify-center border-none bg-transparent text-danger"
                 >
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  >
-                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                  </svg>
+                  <Icon name="trash" size={16} />
                 </button>
               </>
             }
@@ -177,17 +135,7 @@ export function ListenerCard({
                     onToggleActions();
                   }}
                 >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
+                  <Icon name="gear" size={14} />
                 </IconButton>
               </div>
             }

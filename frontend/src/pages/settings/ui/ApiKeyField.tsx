@@ -2,6 +2,9 @@ import { Input } from '@/shared/ui';
 
 const FIELD_LABEL = 'mb-tight block text-body font-medium text-ink-body';
 
+// Stays inline, both halves. The crossed-out eye is this file's own transcription
+// and is drawn nowhere else, so <Icon> can only take the open one — and the two
+// swap in the same slot, where a 17px state and an 18px state would step.
 function EyeIcon({ off }: { off: boolean }) {
   return off ? (
     <svg

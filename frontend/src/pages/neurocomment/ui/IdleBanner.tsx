@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
+import { Icon } from '@/shared/ui';
+
 // Amber nudge shown when graduated ("Прогреты") accounts aren't yet linked to the
 // selected campaign — clicking opens the accounts modal to assign them.
 export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => void }) {
@@ -35,16 +37,7 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
         <div className="mt-px text-tiny text-ink-body">{t('neurocomment.idle.sub')}</div>
       </div>
       <span className="flex shrink-0 text-warning-deep">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="m9 18 6-6-6-6" />
-        </svg>
+        <Icon name="chevron-right" size={16} />
       </span>
     </button>
   );

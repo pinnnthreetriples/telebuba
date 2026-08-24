@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, IconButton, Modal } from '@/shared/ui';
+import { Button, Icon, IconButton, Modal } from '@/shared/ui';
 
 export interface PromptAccount {
   account_id: string;
@@ -107,17 +107,7 @@ export function CampaignPromptModal({
                     setConfirm(account);
                   }}
                 >
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M3 6h18" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
+                  <Icon name="trash" size={16} />
                 </IconButton>
               </div>
             ))}
@@ -137,16 +127,7 @@ export function CampaignPromptModal({
             {saved ? (
               <span className="inline-flex items-center gap-sm">
                 <span className="inline-flex [animation:swapin_0.3s_ease_both]">
-                  <svg
-                    width="15"
-                    height="15"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                  >
-                    <path d="M20 6 9 17l-5-5" />
-                  </svg>
+                  <Icon name="check" size={16} />
                 </span>
                 <span className="inline-block [animation:swapin_0.3s_ease_0.09s_both]">
                   {t('neurocomment.modal.saved')}

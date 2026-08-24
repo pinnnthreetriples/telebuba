@@ -9,7 +9,7 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { Button, Card, FieldError, FormField, HelpHint, Input, Switch } from '@/shared/ui';
+import { Button, Card, FieldError, FormField, HelpHint, Icon, Input, Switch } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
@@ -402,16 +402,7 @@ function SettingsForm({
           {justSaved ? (
             <span className="inline-flex items-center gap-sm">
               <span className="tb-swapin inline-flex">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
+                <Icon name="check" size={16} />
               </span>
               <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                 {t('settings.saved')}
@@ -420,16 +411,7 @@ function SettingsForm({
           ) : saveFailed ? (
             <span className="inline-flex items-center gap-sm">
               <span className="tb-swapin inline-flex">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.4"
-                >
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
+                <Icon name="close" size={16} />
               </span>
               <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                 {t('settings.saveFailed')}
