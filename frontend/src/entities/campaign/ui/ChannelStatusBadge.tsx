@@ -11,22 +11,22 @@ type ChannelStatus = NeurocommentChannelRow['status'];
 // "amber" and four share "red", so a literal per row is four chances to drift.
 // The leading dot takes `bg-current`, so it can never disagree with the text.
 const STATUS_TONE: Record<ChannelStatus, string> = {
-  ready: 'bg-success-tint text-success',
+  ready: 'bg-success-tint text-success-deep',
   comments_off: 'bg-track text-ink-muted',
   no_data: 'bg-track text-ink-muted',
-  throttled: 'bg-warning-tint text-warning',
-  join_by_request: 'bg-warning-tint text-warning',
-  join_failed: 'bg-danger-tint text-danger',
+  throttled: 'bg-warning-tint text-warning-deep',
+  join_by_request: 'bg-warning-tint text-warning-deep',
+  join_failed: 'bg-danger-tint text-danger-deep',
   // Amber, not danger: the pair was kicked out and is walking itself back in (one
   // attempt within minutes, then one a day) — nothing for the operator to do yet.
-  rejoining: 'bg-warning-tint text-warning',
+  rejoining: 'bg-warning-tint text-warning-deep',
   // Danger, unlike 'rejoining': this account has no attempt left to spend here and has
   // left the chat. Account rows only — a channel never aggregates to it.
-  rejoin_exhausted: 'bg-danger-tint text-danger',
-  chat_restricted: 'bg-danger-tint text-danger',
-  banned: 'bg-danger-tint text-danger',
-  bot_challenge: 'bg-warning-tint text-warning',
-  channel_paused: 'bg-warning-tint text-warning',
+  rejoin_exhausted: 'bg-danger-tint text-danger-deep',
+  chat_restricted: 'bg-danger-tint text-danger-deep',
+  banned: 'bg-danger-tint text-danger-deep',
+  bot_challenge: 'bg-warning-tint text-warning-deep',
+  channel_paused: 'bg-warning-tint text-warning-deep',
 };
 
 export function ChannelStatusBadge({ status }: { status: ChannelStatus }) {

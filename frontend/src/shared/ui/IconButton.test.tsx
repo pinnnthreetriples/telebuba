@@ -81,7 +81,7 @@ test('tone paints the hover, and neutral deliberately has none', () => {
   expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
     'hover:border-danger-line',
     'hover:bg-danger-tint',
-    'hover:text-danger',
+    'hover:text-danger-deep',
   );
 });
 

@@ -6,9 +6,9 @@ type LogStatus = LogEntry['status'];
 
 // The design's level pill — solid severity tint.
 const STATUS_CLASS: Record<LogStatus, string> = {
-  success: 'bg-success-tint text-success',
-  warning: 'bg-warning-tint text-warning-strong',
-  error: 'bg-danger-tint text-danger',
+  success: 'bg-success-tint text-success-deep',
+  warning: 'bg-warning-tint text-warning-deep',
+  error: 'bg-danger-tint text-danger-deep',
 };
 
 export function LogStatusBadge({ status }: { status: LogStatus }) {
