@@ -29,8 +29,8 @@ export function CollapsibleCard({
   defaultOpen = false,
   onOpenChange,
   wrapperClassName = 'rounded-card border border-line bg-white',
-  headerClassName = 'px-4 py-[14px]',
-  bodyClassName = 'px-4 pb-4',
+  headerClassName = 'px-lg py-lg',
+  bodyClassName = 'px-lg pb-lg',
   children,
 }: {
   header: ReactNode;

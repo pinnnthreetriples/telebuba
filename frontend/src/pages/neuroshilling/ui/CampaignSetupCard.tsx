@@ -18,7 +18,7 @@ import {
 
 // The filter-pill rung (`6px 14px`), shared with the logs level filter and the
 // warming board's state filter — the same control in a different card.
-const SEGMENT = 'rounded-full px-[14px] py-[6px] text-body font-medium disabled:opacity-60';
+const SEGMENT = 'rounded-full px-lg py-tight text-body font-medium disabled:opacity-60';
 
 // One labelled numeric box. Inline rather than a shared primitive: five of them
 // live on this card and nowhere else, and `shared/ui` has no numeric field.
@@ -102,24 +102,24 @@ export function CampaignSetupCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.setup.title')}
-      headerClassName="px-4 py-[15px]"
-      bodyClassName="px-4 pb-[15px]"
+      headerClassName="px-lg py-lg"
+      bodyClassName="px-lg pb-lg"
       header={<span className="text-lead font-semibold">{t('neuroshilling.setup.title')}</span>}
       trailing={
         dirty ? (
-          <span className="shrink-0 rounded-full bg-warning-tint px-[10px] py-[3px] text-tiny font-semibold text-warning-deep">
+          <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-tiny font-semibold text-warning-deep">
             {t('neuroshilling.setup.unsaved')}
           </span>
         ) : null
       }
     >
       {live ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep-deep">
+        <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep-deep">
           {t('neuroshilling.setup.liveLocked')}
         </div>
       ) : null}
 
-      <span className="mb-[5px] flex items-center gap-sm text-body font-medium text-ink-muted">
+      <span className="mb-tight flex items-center gap-sm text-body font-medium text-ink-muted">
         {t('neuroshilling.setup.targets.label')}
         <HelpHint text={t('neuroshilling.setup.targets.hint')} />
         <Badge className="ml-auto tabular-nums">
@@ -130,7 +130,7 @@ export function CampaignSetupCard({
       </span>
       <Textarea
         size="sm"
-        className="mb-[14px] resize-none font-mono text-body leading-[1.6]"
+        className="mb-lg resize-none font-mono text-body leading-[1.6]"
         rows={4}
         value={draft.targetsRaw}
         maxLength={MAX_TARGETS_RAW}
@@ -142,13 +142,13 @@ export function CampaignSetupCard({
         }}
       />
 
-      <span className="mb-[5px] block text-body font-medium text-ink-muted">
+      <span className="mb-tight block text-body font-medium text-ink-muted">
         {t('neuroshilling.setup.runMode.label')}
       </span>
       <div
         role="radiogroup"
         aria-label={t('neuroshilling.setup.runMode.label')}
-        className="mb-[14px] grid gap-sm sm:grid-cols-2"
+        className="mb-lg grid gap-sm sm:grid-cols-2"
       >
         {(['sequential', 'parallel'] as const).map((mode) => {
           const unavailable = mode === 'parallel';
@@ -167,12 +167,12 @@ export function CampaignSetupCard({
               onClick={() => {
                 onDraft({ ...draft, runMode: mode });
               }}
-              className={`rounded-lg border p-[11px] text-left disabled:opacity-60 ${picked ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
+              className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
               <span className="block text-body font-semibold">
                 {t(`neuroshilling.setup.runMode.${mode}.title`)}
               </span>
-              <span className="mt-[3px] block text-tiny leading-snug text-ink-subtle">
+              <span className="mt-xs block text-tiny leading-snug text-ink-subtle">
                 {t(
                   unavailable
                     ? 'neuroshilling.setup.runMode.parallel.unavailable'
@@ -187,11 +187,11 @@ export function CampaignSetupCard({
       {/* «Пауза между целями, сек», not the mockup's «Пауза (мин)» / «Пауза (макс)»:
           the two numbers are a MINIMUM and a MAXIMUM, and the unit is seconds. The
           mockup's wording reads as minutes beside a value like `10с`. */}
-      <span className="mb-[5px] flex items-center gap-sm text-body font-medium text-ink-muted">
+      <span className="mb-tight flex items-center gap-sm text-body font-medium text-ink-muted">
         {t('neuroshilling.setup.pause.label')}
         <HelpHint text={t('neuroshilling.setup.pause.hint')} />
       </span>
-      <div className="mb-[14px] flex flex-wrap items-center gap-md">
+      <div className="mb-lg flex flex-wrap items-center gap-md">
         {(['min', 'max'] as const).map((bound) => (
           <span key={bound} className="flex items-center gap-sm text-tiny text-ink-subtle">
             {t(`neuroshilling.setup.pause.${bound}`)}
@@ -233,7 +233,7 @@ export function CampaignSetupCard({
         onClick={() => {
           setAdvanced((value) => !value);
         }}
-        className="mb-[10px] flex w-full items-center gap-sm rounded-lg border border-line bg-surface px-[11px] py-[8px] text-body font-medium"
+        className="mb-md flex w-full items-center gap-sm rounded-lg border border-line bg-surface px-md py-sm text-body font-medium"
       >
         {t('neuroshilling.setup.advanced.title')}
         {changed > 0 ? (
@@ -245,7 +245,7 @@ export function CampaignSetupCard({
       </button>
 
       {advanced ? (
-        <div className="mb-[14px] flex flex-col gap-md rounded-lg border border-line bg-white p-[12px]">
+        <div className="mb-lg flex flex-col gap-md rounded-lg border border-line bg-white p-md">
           <NumberField
             label={t('neuroshilling.setup.perHour.label')}
             hint={t('neuroshilling.setup.perHour.hint')}
@@ -313,7 +313,7 @@ export function CampaignSetupCard({
 
           {/* The listening block: the three switches that let the run READ its
               target chats, and the window it keeps reading for. */}
-          <div className="mt-[2px] flex items-center gap-sm border-t border-line pt-[11px] text-body font-semibold">
+          <div className="mt-hair flex items-center gap-sm border-t border-line pt-md text-body font-semibold">
             {t('neuroshilling.setup.listening.title')}
             <HelpHint text={t('neuroshilling.setup.listening.hint')} />
           </div>
@@ -331,7 +331,7 @@ export function CampaignSetupCard({
               <div
                 role="radiogroup"
                 aria-label={t(`neuroshilling.setup.${field}.label`)}
-                className="inline-flex rounded-full border border-line-input bg-track p-[3px]"
+                className="inline-flex rounded-full border border-line-input bg-track p-xs"
               >
                 {options.map((option) => (
                   <button
@@ -373,7 +373,7 @@ export function CampaignSetupCard({
               combination that publishes anything a stranger's message provoked —
               and it is the one thing on this page an outsider gets a say in. */}
           {draft.replyToHumans && draft.autoresponder === 'neurodialog' ? (
-            <div className="rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny leading-snug text-warning-deep-deep">
+            <div className="rounded-lg bg-warning-tint px-md py-sm text-tiny leading-snug text-warning-deep-deep">
               {t('neuroshilling.setup.replyToHumans.warning')}
             </div>
           ) : null}

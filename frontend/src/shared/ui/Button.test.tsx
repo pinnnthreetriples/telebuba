@@ -19,10 +19,10 @@ test('the shape comes from the size and the fill from the variant', () => {
     </>,
   );
 
-  expect(classesOf('Отмена')).toContain('px-[22px]');
+  expect(classesOf('Отмена')).toContain('px-2xl');
   expect(classesOf('Отмена')).toContain('text-lead');
   expect(classesOf('Отмена')).toContain('bg-white');
-  expect(classesOf('Запустить')).toContain('px-[18px]');
+  expect(classesOf('Запустить')).toContain('px-xl');
   // The rung has to survive the variant's colour: both are `text-*`, and an
   // untaught tailwind-merge drops the size in favour of the colour (see cn.ts).
   expect(classesOf('Запустить')).toContain('text-body');

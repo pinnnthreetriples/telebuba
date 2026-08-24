@@ -11,7 +11,7 @@ export function HowItWorksCard() {
     <CollapsibleCard
       label={t('neuroshilling.howto.title')}
       wrapperClassName="rounded-card border border-line bg-canvas"
-      headerClassName="px-4 py-[15px]"
+      headerClassName="px-lg py-lg"
       header={<span className="text-lead font-semibold">{t('neuroshilling.howto.title')}</span>}
     >
       <div className="flex flex-col gap-md">

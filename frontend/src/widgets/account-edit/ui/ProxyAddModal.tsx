@@ -43,8 +43,8 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal onClose={onClose} className="w-[460px]" label={t('accounts.proxyAdd.title')}>
-      <div className="p-6">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="p-2xl">
+        <div className="mb-lg flex items-center justify-between">
           <span className="text-title font-bold">{t('accounts.proxyAdd.title')}</span>
           <IconButton
             size="md"
@@ -56,7 +56,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
           </IconButton>
         </div>
         <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
-        <div className="mt-5 flex justify-end gap-sm">
+        <div className="mt-xl flex justify-end gap-sm">
           <Button onClick={onClose}>{t('accounts.proxyAdd.cancel')}</Button>
           <Button variant="primary" onClick={onAdd} disabled={!canAdd}>
             {t('accounts.proxyAdd.add')}

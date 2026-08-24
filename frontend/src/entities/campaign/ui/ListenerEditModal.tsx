@@ -96,8 +96,8 @@ export function ListenerEditModal({
 
   return (
     <Modal onClose={onClose} className="w-[440px]" label={t('neurocomment.listener.title')}>
-      <div className="p-6">
-        <div className="mb-[6px] flex items-center gap-md">
+      <div className="p-2xl">
+        <div className="mb-tight flex items-center gap-md">
           <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
               width="17"
@@ -131,7 +131,7 @@ export function ListenerEditModal({
           </IconButton>
         </div>
 
-        <div className="mb-[7px] mt-[18px] text-body font-medium text-ink-body">
+        <div className="mb-sm mt-xl text-body font-medium text-ink-body">
           {t('neurocomment.modal.listenerEdit.account')}
         </div>
         <Select
@@ -152,7 +152,7 @@ export function ListenerEditModal({
           onWaitChange={setWait}
         />
 
-        <div className="mt-[22px] flex justify-end gap-sm">
+        <div className="mt-2xl flex justify-end gap-sm">
           <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
           <Button
             variant="primary"

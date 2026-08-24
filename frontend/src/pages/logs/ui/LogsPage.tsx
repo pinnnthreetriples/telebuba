@@ -192,10 +192,10 @@ export function LogsPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
+      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
 
-      <div className="mb-[14px] flex flex-wrap items-center gap-sm">
-        <div ref={pillsRef} className="relative flex rounded-full bg-white p-[3px]">
+      <div className="mb-lg flex flex-wrap items-center gap-sm">
+        <div ref={pillsRef} className="relative flex rounded-full bg-white p-xs">
           {/* The one shadow with no name and no second site: a BLUE glow that belongs to
               this sliding capsule alone, tinting the filled pill it sits under rather
               than lifting anything off the page. `pop`/`ring`/`thumb` are all neutral
@@ -213,7 +213,7 @@ export function LogsPage() {
                 setStatus(value);
                 resetPaging();
               }}
-              className={`relative z-raised px-[14px] py-[6px] text-body font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
+              className={`relative z-raised px-lg py-tight text-body font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
             >
               {t(`logs.filter.${value}`)}
             </button>
@@ -237,7 +237,9 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-4 py-16 text-center text-lead text-ink-subtle">{t('logs.empty')}</Card>
+        <Card className="px-lg py-5xl text-center text-lead text-ink-subtle">
+          {t('logs.empty')}
+        </Card>
       ) : (
         <>
           <Card className="overflow-hidden">
@@ -245,14 +247,14 @@ export function LogsPage() {
               <DataTable data={items} columns={columns} />
             </div>
           </Card>
-          <div className="mt-4 flex items-center justify-end gap-sm">
+          <div className="mt-lg flex items-center justify-end gap-sm">
             <button
               type="button"
               disabled={!hasPrev}
               onClick={() => {
                 setCursorStack((stack) => stack.slice(0, -1));
               }}
-              className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
+              className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
             >
               {t('logs.pagination.prev')}
             </button>
@@ -262,7 +264,7 @@ export function LogsPage() {
               onClick={() => {
                 setCursorStack((stack) => [...stack, data.next_cursor ?? null]);
               }}
-              className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
+              className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
             >
               {t('logs.pagination.next')}
             </button>

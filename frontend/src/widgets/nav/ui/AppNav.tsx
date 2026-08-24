@@ -102,7 +102,7 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-md px-4 lg:gap-[28px] lg:px-6">
+      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-md px-lg lg:gap-3xl lg:px-2xl">
         <IconButton
           size="touch"
           aria-label={t('shell.menu')}
@@ -165,7 +165,7 @@ export function AppNav() {
             this cluster right below `lg`. */}
         <div className="ml-auto flex shrink-0 items-center gap-md">
           <div
-            className={`flex items-center gap-sm rounded-full px-[9px] py-[9px] lg:px-[11px] lg:py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
+            className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
           >
             <span
               className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
@@ -222,9 +222,9 @@ export function AppNav() {
                   }}
                   className="fixed inset-0 z-raised cursor-default"
                 />
-                <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-1 shadow-pop lg:top-[42px]">
+                <div className="absolute right-0 top-[48px] z-pop w-[190px] overflow-hidden rounded-lg border border-line bg-white py-xs shadow-pop lg:top-[42px]">
                   {me.data ? (
-                    <div className="truncate border-b border-line-row px-[10px] py-[8px] text-body text-ink-muted">
+                    <div className="truncate border-b border-line-row px-md py-sm text-body text-ink-muted">
                       {me.data.username}
                     </div>
                   ) : null}
@@ -242,7 +242,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-[10px] py-[8px] text-left text-lead font-medium text-danger-deep transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
+                    className="flex w-full items-center gap-sm px-md py-sm text-left text-lead font-medium text-danger-deep transition-colors max-lg:min-h-[44px] hover:bg-danger-tint"
                   >
                     <svg
                       width="15"

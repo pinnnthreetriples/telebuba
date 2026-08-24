@@ -8,7 +8,7 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-center gap-md rounded-lg border border-warning-line bg-warning-tint px-[14px] py-3 text-left transition-colors hover:border-warning"
+      className="flex items-center gap-md rounded-lg border border-warning-line bg-warning-tint px-lg py-md text-left transition-colors hover:border-warning"
     >
       <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-md bg-warning-line text-warning-deep">
         <svg

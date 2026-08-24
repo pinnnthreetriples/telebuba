@@ -54,12 +54,12 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-primary-hairline bg-primary-wash px-[18px] py-4 text-ink">
-      <div className="mb-[14px] flex flex-wrap items-center justify-between gap-md">
+    <div className="rounded-card border border-primary-hairline bg-primary-wash px-xl py-lg text-ink">
+      <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
           <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-[10px] py-[3px] text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
+            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -86,14 +86,14 @@ export function PipelineCard({
       </div>
 
       {/* Stepper with dual progress fill. Dot and label share ONE cell: as two rows
-          they had different geometry — the dots sat in an `mx-2` box while the labels
+          they had different geometry — the dots sat in an `mx-sm` box while the labels
           spread across the full width in 88px slots — and the ends drifted 29px apart.
           Equal cells put the first and last dot centres half a cell from the edges,
           which is where the rail has to start and stop for the fill below to land on
           a dot. Derived, not a literal: the fills two lines up already read
           `STAGES.length`, and a seventh stage would leave a hardcoded inset behind
           with nothing to fail. */}
-      <div className="relative mb-3">
+      <div className="relative mb-md">
         <div
           className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-primary-line"
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
@@ -154,12 +154,12 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-3 text-center text-tiny font-semibold text-primary md:hidden">
+        <div className="mb-md text-center text-tiny font-semibold text-primary md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
-      <div className="mb-[14px] flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-[13px] py-[10px]">
+      <div className="mb-lg flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-lg py-md">
         <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
         <span className="tb-pulse text-body font-medium text-primary">
           {running
@@ -173,9 +173,9 @@ export function PipelineCard({
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
           // tile across both columns, and stays right as stats are added or removed.
-          <div key={stat.label} className="bg-white px-4 py-[14px] max-md:odd:last:col-span-2">
+          <div key={stat.label} className="bg-white px-lg py-lg max-md:odd:last:col-span-2">
             <Odometer value={stat.value} tone={stat.color} />
-            <div className="mt-[2px] text-tiny text-ink-subtle">{stat.label}</div>
+            <div className="mt-hair text-tiny text-ink-subtle">{stat.label}</div>
           </div>
         ))}
       </div>

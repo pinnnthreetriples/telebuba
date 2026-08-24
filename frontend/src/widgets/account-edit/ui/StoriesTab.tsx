@@ -23,7 +23,7 @@ export function StoriesTab({
   const { t } = useTranslation();
   return (
     <div>
-      <div className="mb-3 text-body text-ink-subtle">{t('accounts.profile.storiesHint')}</div>
+      <div className="mb-md text-body text-ink-subtle">{t('accounts.profile.storiesHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
         {stories.map((story) => (
           <div key={story.story_id} className="relative">
@@ -32,11 +32,11 @@ export function StoriesTab({
               style={tileStyle(story.thumb_url, '9 / 16')}
             />
             {(story.views != null || story.reactions != null) && (
-              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-micro font-medium text-white">
+              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-[rgba(11,11,12,0.6)] px-tight py-hair text-micro font-medium text-white">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
-                    className="inline-flex items-center gap-[3px]"
+                    className="inline-flex items-center gap-xs"
                   >
                     <svg
                       width="10"
@@ -55,7 +55,7 @@ export function StoriesTab({
                 {story.reactions != null && (
                   <span
                     title={t('accounts.profile.storyReactions', { n: story.reactions })}
-                    className="inline-flex items-center gap-[3px]"
+                    className="inline-flex items-center gap-xs"
                   >
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z" />
@@ -84,13 +84,13 @@ export function StoriesTab({
               onClick={() => {
                 onPinToggle(story);
               }}
-              className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-sm px-[5px] py-[2px] text-center text-micro font-medium disabled:opacity-50 ${
+              className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-sm px-tight py-hair text-center text-micro font-medium disabled:opacity-50 ${
                 story.is_pinned ? 'bg-primary text-white' : 'bg-[rgba(11,11,12,0.6)] text-white'
               }`}
             >
               {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
             </button>
-            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-micro font-medium text-white">
+            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-[rgba(11,11,12,0.6)] px-tight py-hair text-center text-micro font-medium text-white">
               {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
             </span>
           </div>

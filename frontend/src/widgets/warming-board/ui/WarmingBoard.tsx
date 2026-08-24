@@ -227,9 +227,9 @@ function WarmingCard({
   const primaryId = accountDisplayName(account);
 
   return (
-    <div className="rounded-lg border border-primary-line bg-primary-tint px-[17px] py-4">
+    <div className="rounded-lg border border-primary-line bg-primary-tint px-xl py-lg">
       {/* header */}
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-lg flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-md">
           <AccountAvatar
             account={account}
@@ -245,7 +245,7 @@ function WarmingCard({
             <div className="truncate text-lead font-semibold" title={primaryId}>
               {primaryId}
             </div>
-            <div className="mt-[2px] flex items-center gap-sm">
+            <div className="mt-hair flex items-center gap-sm">
               {/* Deliberately the dense variant, off the status pill's `3px 10px`/`tiny`
                   rung: this is not a standalone state label but the second line inside a
                   card, paired in one flex row with the `micro` daily-actions counter to
@@ -253,7 +253,7 @@ function WarmingCard({
                   with, which is a worse disagreement than differing from the twelve
                   pills on other screens. Twelve on the rung, plus this documented pair. */}
               <span
-                className={`inline-flex items-center gap-tight rounded-full px-[7px] py-px text-micro font-semibold ${statusTone}`}
+                className={`inline-flex items-center gap-tight rounded-full px-sm py-px text-micro font-semibold ${statusTone}`}
               >
                 <span className="h-[5px] w-[5px] rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
@@ -312,7 +312,7 @@ function WarmingCard({
                 onClick={() => {
                   setStopOpen(true);
                 }}
-                className="rounded-full border border-line bg-white px-[11px] py-[5px] text-tiny font-medium text-ink-muted disabled:opacity-50"
+                className="rounded-full border border-line bg-white px-md py-tight text-tiny font-medium text-ink-muted disabled:opacity-50"
               >
                 {t('warming.actions.stopShort')}
               </button>
@@ -345,8 +345,8 @@ function WarmingCard({
       ) : null}
 
       {/* pipeline */}
-      <div className="rounded-lg bg-primary-wash px-[13px] pb-[9px] pt-[11px]">
-        <div className="mb-2 flex items-center justify-between">
+      <div className="rounded-lg bg-primary-wash px-lg pb-md pt-md">
+        <div className="mb-sm flex items-center justify-between">
           <span className="text-micro font-medium text-ink-muted">
             {t('warming.inProgress.days')}
           </span>
@@ -356,7 +356,7 @@ function WarmingCard({
         </div>
 
         {/* day bar */}
-        <div className="flex items-end gap-[2px]">
+        <div className="flex items-end gap-hair">
           {DAY_SEGMENTS.map((index) => (
             <span
               key={index}
@@ -366,14 +366,14 @@ function WarmingCard({
             />
           ))}
         </div>
-        <div className="mt-[7px] flex justify-between px-[2px] text-micro text-ink-subtle">
+        <div className="mt-sm flex justify-between px-hair text-micro text-ink-subtle">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
         </div>
       </div>
 
-      <div className="px-[6px]">
+      <div className="px-tight">
         {/* Stepper. Dot and label share ONE cell: as two rows they had different
             geometry — 14px dot cells against full-width label slots, both pinned
             flush by `justify-between` — and the ends drifted 45px apart on a 571px
@@ -419,7 +419,7 @@ function WarmingCard({
                   )}
                 </div>
                 <span
-                  className={`mt-2 text-center text-micro ${
+                  className={`mt-sm text-center text-micro ${
                     index < active
                       ? 'font-medium text-success'
                       : index === active
@@ -438,7 +438,7 @@ function WarmingCard({
       {!complete ? (
         <>
           {/* current activity */}
-          <div className="mt-[11px] flex items-center gap-md rounded-md border border-primary-line bg-primary-tint px-[10px] py-[7px]">
+          <div className="mt-md flex items-center gap-md rounded-md border border-primary-line bg-primary-tint px-md py-sm">
             <span className="tb-livedot h-2 w-2 shrink-0 rounded-full bg-primary" />
             <span className="tb-pulse text-tiny font-semibold text-primary">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
@@ -454,7 +454,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-[11px] flex w-full items-center justify-center gap-tight border-t border-line-row pt-[9px] text-tiny text-ink-muted"
+            className="mt-md flex w-full items-center justify-center gap-tight border-t border-line-row pt-md text-tiny text-ink-muted"
           >
             {t('warming.card.logToggle')}
             <span
@@ -473,15 +473,15 @@ function WarmingCard({
             </span>
           </button>
           {open ? (
-            <div className="mt-[9px]">
+            <div className="mt-md">
               {visibleLines.length > 0 ? (
-                <div className="mb-[5px] flex justify-end">
+                <div className="mb-tight flex justify-end">
                   <button
                     type="button"
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
-                    className="inline-flex items-center gap-[4px] rounded-full border border-line px-[8px] py-[2px] text-micro text-ink-muted transition-colors hover:border-primary-line hover:text-primary"
+                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-micro text-ink-muted transition-colors hover:border-primary-line hover:text-primary"
                   >
                     <svg
                       width="10"
@@ -499,7 +499,7 @@ function WarmingCard({
                   </button>
                 </div>
               ) : null}
-              <div className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-[11px] py-[10px] font-mono text-micro leading-[1.7]">
+              <div className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-md font-mono text-micro leading-[1.7]">
                 {visibleLines.length === 0 ? (
                   <div className="text-term-dim">
                     {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
@@ -539,7 +539,7 @@ function WarmingCard({
       ) : (
         <>
           {/* complete */}
-          <div className="mt-[11px] flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-[12px] py-[10px]">
+          <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
             <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-success">
               <svg
                 width="13"
@@ -571,7 +571,7 @@ function WarmingCard({
               </div>
             </div>
           </div>
-          <div className="mt-[9px] flex items-center gap-sm">
+          <div className="mt-md flex items-center gap-sm">
             <FeedbackMark result={result} />
             <button
               type="button"
@@ -579,7 +579,7 @@ function WarmingCard({
               onClick={() => {
                 onPromote(account.account_id);
               }}
-              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success px-[14px] py-[10px] text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success px-lg py-md text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
             >
               <svg
                 width="14"
@@ -617,8 +617,8 @@ export function WarmingBoard({
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
-    <Card className="p-4">
-      <div className="mb-[14px] flex items-center justify-between">
+    <Card className="p-lg">
+      <div className="mb-lg flex items-center justify-between">
         <div className="flex items-center gap-md">
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-md bg-primary">
             <svg
@@ -637,7 +637,7 @@ export function WarmingBoard({
           <span className="text-lead font-bold">{t('warming.inProgress.title')}</span>
         </div>
         {warming.length > 0 ? (
-          <span className="tb-pulse rounded-full bg-success-tint px-[10px] py-[3px] text-tiny font-semibold text-success-deep">
+          <span className="tb-pulse rounded-full bg-success-tint px-md py-xs text-tiny font-semibold text-success-deep">
             {t('warming.inProgress.live')}
           </span>
         ) : null}
@@ -657,7 +657,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-primary-line px-[10px] py-[50px] text-center text-lead text-ink-subtle">
+          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-primary-line px-md py-[50px] text-center text-lead text-ink-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

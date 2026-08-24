@@ -29,27 +29,27 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      <div className="mb-3 text-body text-ink-subtle">{t('accounts.channel.hint')}</div>
+      <div className="mb-md text-body text-ink-subtle">{t('accounts.channel.hint')}</div>
 
       {channels.isPending && (
         <div
           role="status"
           aria-label={t('accounts.channel.loading')}
-          className="flex justify-center py-6"
+          className="flex justify-center py-2xl"
         >
           <span className="tb-spin inline-block h-6 w-6 rounded-full border-2 border-line-input border-t-primary" />
         </div>
       )}
 
       {channels.isError && (
-        <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
+        <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
           <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
           <button
             type="button"
             onClick={() => {
               void channels.refetch();
             }}
-            className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium"
+            className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
           >
             {t('accounts.channel.retry')}
           </button>
@@ -57,7 +57,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isSuccess && items.length === 0 && (
-        <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
           {t('accounts.channel.empty')}
         </div>
       )}
@@ -67,13 +67,13 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           {items.map((channel) => (
             <div
               key={channel.channel_id}
-              className="flex items-center gap-lg rounded-lg border border-line px-[14px] py-3"
+              className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-lead font-semibold">{channel.title}</div>
-                <div className="mt-[2px] flex items-center gap-sm text-tiny text-ink-subtle">
+                <div className="mt-hair flex items-center gap-sm text-tiny text-ink-subtle">
                   <span
-                    className={`rounded-sm px-[6px] py-[1px] font-medium ${
+                    className={`rounded-sm px-tight py-px font-medium ${
                       channel.username != null
                         ? 'bg-primary-tint text-primary-deep'
                         : 'bg-canvas text-ink-muted'
@@ -120,7 +120,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       {!channels.isPending && (
         <Button
           size="sm"
-          className="mt-3"
+          className="mt-md"
           onClick={() => {
             setCreateOpen(true);
           }}

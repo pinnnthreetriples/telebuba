@@ -4,7 +4,7 @@ import { expect, test, vi } from 'vitest';
 
 import { Input, Textarea } from './Input';
 
-test('the padding and type size come from the size prop', () => {
+test('the vertical padding and type size come from the size prop', () => {
   render(
     <>
       <Input aria-label="Ключ" />
@@ -13,9 +13,11 @@ test('the padding and type size come from the size prop', () => {
     </>,
   );
 
-  expect(screen.getByLabelText('Ключ').className).toContain('px-3');
-  expect(screen.getByLabelText('Порог').className).toContain('px-[11px]');
-  expect(screen.getByLabelText('Лимит').className).toContain('px-[9px]');
+  // On one rhythm the three rungs share their horizontal padding and differ
+  // vertically, which is what they were reaching for at 12/11/9px apart.
+  expect(screen.getByLabelText('Ключ').className).toContain('py-md');
+  expect(screen.getByLabelText('Порог').className).toContain('py-sm');
+  expect(screen.getByLabelText('Лимит').className).toContain('py-tight');
 });
 
 // A red border alone is a colour carrying meaning, so the state is published to
@@ -55,7 +57,7 @@ test('Textarea takes the same shape and reaches its element by ref', async () =>
 
   const area = screen.getByLabelText('Промпт');
   expect(area.tagName).toBe('TEXTAREA');
-  expect(area.className).toContain('px-[11px]');
+  expect(area.className).toContain('py-sm');
   await userEvent.type(area, 'ок');
   expect(onChange).toHaveBeenCalled();
 });

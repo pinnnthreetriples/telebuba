@@ -484,7 +484,7 @@ export function NeurocommentPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-[18px] text-display font-bold tracking-[-0.02em]">
+      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">
         {t('neurocomment.title')}
       </h1>
 
@@ -568,7 +568,7 @@ export function NeurocommentPage() {
             onPickListener={pickListener}
           />
           {showWarmingBlock ? (
-            <p className="mt-2 text-tiny font-medium text-danger">
+            <p className="mt-sm text-tiny font-medium text-danger">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}

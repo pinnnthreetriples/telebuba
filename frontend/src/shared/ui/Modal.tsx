@@ -39,7 +39,7 @@ let overflowBeforeLock = '';
 // whereas auto margins centre it and still yield to the scroll.
 const SHELL = {
   center: {
-    overlay: 'justify-center overflow-y-auto overscroll-contain p-4 sm:p-5',
+    overlay: 'justify-center overflow-y-auto overscroll-contain p-lg sm:p-xl',
     card: 'm-auto rounded-card [animation:fadeup_0.25s_ease]',
   },
   'drawer-left': {

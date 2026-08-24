@@ -22,11 +22,11 @@ export function ProxyDeleteModal({
       className="w-[420px]"
       label={t('accounts.proxyDeleteModal.title', { endpoint })}
     >
-      <div className="p-6">
-        <div className="mb-2 text-title font-bold">
+      <div className="p-2xl">
+        <div className="mb-sm text-title font-bold">
           {t('accounts.proxyDeleteModal.title', { endpoint })}
         </div>
-        <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">
+        <div className="mb-2xl text-lead leading-[1.5] text-ink-muted">
           {used > 0
             ? t('accounts.proxyDeleteModal.bodyAssigned', { count: used })
             : t('accounts.proxyDeleteModal.body')}

@@ -168,8 +168,8 @@ export function ChannelEditModal({
         // is a real (if rare) read result, which left the dialog nameless.
         label={t('accounts.channel.dialog')}
       >
-        <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
-          <div className="mb-4 flex items-center justify-between gap-md">
+        <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-2xl py-2xl">
+          <div className="mb-lg flex items-center justify-between gap-md">
             <div className="min-w-0">
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the channel's title is exposed, and heading
@@ -199,14 +199,14 @@ export function ChannelEditModal({
           </div>
 
           {detail.isError && (
-            <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
+            <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <button
                 type="button"
                 onClick={() => {
                   void detail.refetch();
                 }}
-                className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium"
+                className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
               >
                 {t('accounts.channel.retry')}
               </button>
@@ -215,7 +215,7 @@ export function ChannelEditModal({
 
           {detail.isSuccess && (
             <>
-              <label className="mb-[14px] block">
+              <label className="mb-lg block">
                 <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
                 <Input
                   value={shownTitle}
@@ -225,12 +225,12 @@ export function ChannelEditModal({
                   }}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-1 block text-tiny text-danger">
+                  <span className="mt-xs block text-tiny text-danger">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}
               </label>
-              <label className="mb-[14px] block">
+              <label className="mb-lg block">
                 <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
                 <Textarea
                   className="resize-none [font-family:inherit]"
@@ -253,7 +253,7 @@ export function ChannelEditModal({
               />
 
               {update.isError && (
-                <Notice tone="danger" className="mb-[14px]">
+                <Notice tone="danger" className="mb-lg">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
                 </Notice>
               )}
@@ -263,7 +263,7 @@ export function ChannelEditModal({
                   type="button"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line-input bg-white px-4 py-[8px] text-lead font-medium disabled:opacity-60"
+                  className="rounded-full border border-line-input bg-white px-lg py-sm text-lead font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">

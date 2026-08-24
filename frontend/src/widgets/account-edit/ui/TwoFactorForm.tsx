@@ -78,7 +78,7 @@ export function TwoFactorForm({
 
   return (
     <>
-      <div className="mb-[10px] text-body text-ink-subtle">{t('accounts.edit.twofaExplain')}</div>
+      <div className="mb-md text-body text-ink-subtle">{t('accounts.edit.twofaExplain')}</div>
       <div className={SEG_WRAP}>
         {(['generate', 'custom'] as const).map((option) => (
           <button
@@ -100,7 +100,7 @@ export function TwoFactorForm({
         ))}
       </div>
       {mode === 'custom' ? (
-        <div className="mb-[10px]">
+        <div className="mb-md">
           <twofaForm.Field name="password">
             {(field) => (
               // FormField's `children` slot rather than its default input: the
@@ -110,7 +110,7 @@ export function TwoFactorForm({
               <FormField field={field} label={t('accounts.edit.twofaPassword')}>
                 <div className="relative">
                   <Input
-                    className="pr-9 font-mono"
+                    className="pr-[36px] font-mono"
                     id={field.name}
                     name={field.name}
                     value={field.state.value}
@@ -166,7 +166,7 @@ export function TwoFactorForm({
           </twofaForm.Field>
         </div>
       ) : null}
-      <div className="mb-[6px]">
+      <div className="mb-tight">
         <twofaForm.Field name="hint">
           {(field) => (
             <FormField
@@ -177,14 +177,14 @@ export function TwoFactorForm({
           )}
         </twofaForm.Field>
       </div>
-      <div className="mb-[14px] text-tiny text-ink-subtle">{t('accounts.edit.twofaHintWarn')}</div>
+      <div className="mb-lg text-tiny text-ink-subtle">{t('accounts.edit.twofaHintWarn')}</div>
       <button
         type="button"
         onClick={() => {
           void twofaForm.handleSubmit();
         }}
         disabled={setTwofa.isPending || !canSubmit}
-        className="w-full rounded-lg border border-line-input bg-white py-[9px] text-lead font-medium disabled:opacity-50"
+        className="w-full rounded-lg border border-line-input bg-white py-md text-lead font-medium disabled:opacity-50"
       >
         {setTwofa.isPending ? <Spinner size={14} /> : submitLabel}
       </button>

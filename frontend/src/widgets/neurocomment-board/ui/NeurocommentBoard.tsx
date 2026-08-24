@@ -128,7 +128,7 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-medium text-primary-deep">
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-md py-xs text-tiny font-medium text-primary-deep">
       <span className="h-[5px] w-[5px] rounded-full bg-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
@@ -147,12 +147,12 @@ function AccountComments({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="border-t border-line-row bg-surface px-4 py-3">
-      <div className="mb-2 flex items-center justify-between">
+    <div className="border-t border-line-row bg-surface px-lg py-md">
+      <div className="mb-sm flex items-center justify-between">
         <div className="flex items-center gap-sm">
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
           <span className="text-body font-semibold">{t('neurocomment.feed.title')}</span>
-          <span className="rounded-full bg-track px-2 py-[2px] text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-track px-sm py-hair text-tiny font-medium text-ink-muted">
             {comments.length}
           </span>
         </div>
@@ -160,14 +160,14 @@ function AccountComments({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="rounded-full border border-line bg-white px-3 py-[4px] text-tiny font-medium text-primary hover:border-primary"
+            className="rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-primary hover:border-primary"
           >
             {t('neurocomment.feed.history')}
           </button>
         ) : null}
       </div>
       {comments.length === 0 ? (
-        <div className="py-4 text-center text-body text-ink-subtle">
+        <div className="py-lg text-center text-body text-ink-subtle">
           {t('neurocomment.feed.empty')}
         </div>
       ) : (
@@ -177,7 +177,7 @@ function AccountComments({
             return (
               <div
                 key={`${c.channel}:${String(c.post_id)}`}
-                className="flex flex-wrap items-baseline gap-x-md gap-y-[2px] border-b border-line-row py-[7px] text-body last:border-b-0"
+                className="flex flex-wrap items-baseline gap-x-md gap-y-hair border-b border-line-row py-sm text-body last:border-b-0"
               >
                 <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
                 {/* Was shrink-0, which let a long channel (a t.me invite link) push the
@@ -323,7 +323,7 @@ export function NeurocommentBoard({
             // The row's only control, and a 16px glyph is not a thumb target — the
             // padding/negative-margin pair grows the hit box to 40px without moving the
             // chevron or widening the column it is sized to.
-            className={`-m-3 flex p-3 text-ink-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+            className={`-m-md flex p-md text-ink-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
           >
             <svg
               width="16"
@@ -356,12 +356,12 @@ export function NeurocommentBoard({
     <CollapsibleCard
       defaultOpen
       label={t('neurocomment.board.title')}
-      headerClassName="border-b border-line-row px-4 py-[14px]"
+      headerClassName="border-b border-line-row px-lg py-lg"
       bodyClassName="tb-scroll overflow-x-auto"
       header={
         <>
           <span className="text-lead font-semibold">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary-deep">
+          <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
         </>
@@ -369,7 +369,7 @@ export function NeurocommentBoard({
       trailing={
         <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-[10px] py-[3px] text-tiny font-semibold text-primary-deep">
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-md py-xs text-tiny font-semibold text-primary-deep">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>
@@ -417,7 +417,7 @@ export function NeurocommentBoard({
           )}
         />
       ) : (
-        <div className="px-4 py-8 text-center text-body text-ink-subtle">
+        <div className="px-lg py-4xl text-center text-body text-ink-subtle">
           {t('neurocomment.board.empty')}
         </div>
       )}

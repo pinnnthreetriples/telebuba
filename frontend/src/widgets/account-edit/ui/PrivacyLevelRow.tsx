@@ -33,17 +33,17 @@ export function PrivacyLevelRow({
     <div
       role="group"
       aria-label={label}
-      className="flex items-center gap-md rounded-lg border border-line px-[14px] py-3"
+      className="flex items-center gap-md rounded-lg border border-line px-lg py-md"
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-lead font-semibold">{label}</div>
-        <div className="mt-[2px] text-tiny text-ink-subtle">
+        <div className="mt-hair text-tiny text-ink-subtle">
           {t('accounts.profile.privacy.current', {
             value: t(`accounts.profile.privacy.level.${current}`),
           })}
         </div>
         {current === 'unknown' && (
-          <div className="mt-[2px] text-tiny text-ink-muted">
+          <div className="mt-hair text-tiny text-ink-muted">
             {t('accounts.profile.privacy.unknownNote')}
           </div>
         )}
@@ -62,7 +62,7 @@ export function PrivacyLevelRow({
             onClick={() => {
               onPick(level);
             }}
-            className={`rounded-md border px-[10px] py-[5px] text-body font-medium transition-colors disabled:opacity-60 ${
+            className={`rounded-md border px-md py-tight text-body font-medium transition-colors disabled:opacity-60 ${
               current === level
                 ? 'border-primary bg-primary-wash text-primary'
                 : 'border-line-input bg-white text-ink-muted hover:border-line-strong hover:bg-surface'

@@ -611,7 +611,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const tabBtn = (value: Tab): string =>
-    `shrink-0 whitespace-nowrap border-b-2 py-[14px] text-lead font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
+    `shrink-0 whitespace-nowrap border-b-2 py-lg text-lead font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
 
   // The other half of the ARIA tabs pattern (the roles landed with the tablist):
   // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
@@ -649,7 +649,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       >
         <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
-          <div className="flex items-center gap-lg border-b border-line-row px-5 py-[18px]">
+          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
             {/* The two gradient stops are decorative and exist only to differ from each
                 other behind an avatar that has not loaded — deliberately NOT tokens, for
                 the same reason as the media tiles in `_profileShared`. */}
@@ -684,7 +684,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 onClick={() => {
                   void onRefresh();
                 }}
-                className={`inline-flex items-center gap-sm rounded-full border bg-white px-3 py-[6px] text-body font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
+                className={`inline-flex items-center gap-sm rounded-full border bg-white px-md py-tight text-body font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
               >
                 <span
                   className={`inline-flex ${
@@ -715,7 +715,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               onClick={requestClose}
               disabled={uploading}
               aria-label={t('accounts.profile.close')}
-              className="ml-[2px] text-title"
+              className="ml-hair text-title"
             >
               ×
             </IconButton>
@@ -728,7 +728,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               so the roving-tabindex row stays a single line. */}
           <div
             role="tablist"
-            className="tb-scroll flex gap-[20px] overflow-x-auto border-b border-line-row px-5"
+            className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl"
           >
             {TABS.map((value) => (
               <button
@@ -755,7 +755,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             role="tabpanel"
             id="profile-tabpanel"
             aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex-1 overflow-y-auto p-5"
+            className="tb-scroll relative flex-1 overflow-y-auto p-xl"
           >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a
@@ -780,7 +780,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <Notice tone="danger" className="mb-4 flex items-center justify-between gap-md">
+              <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
@@ -788,7 +788,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   onClick={() => {
                     void onRefresh();
                   }}
-                  className="shrink-0 rounded-full border border-danger-line bg-white px-3 py-[4px] text-body font-medium disabled:opacity-60"
+                  className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium disabled:opacity-60"
                 >
                   {t('accounts.profile.refresh')}
                 </button>
@@ -810,7 +810,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       <div className="relative flex items-center">
                         <span className="absolute left-3 text-lead text-ink-subtle">@</span>
                         <Input
-                          className="pl-[26px]"
+                          className="pl-3xl"
                           value={field.state.value}
                           onChange={(event) => {
                             field.handleChange(event.target.value);
@@ -821,7 +821,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-[5px] block text-tiny font-medium text-danger"
+                          className="mt-tight block text-tiny font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -852,7 +852,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-[5px] block text-tiny font-medium text-danger"
+                          className="mt-tight block text-tiny font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -861,7 +861,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         <span
                           role="alert"
                           data-testid="bio-not-applied"
-                          className="mt-[5px] block text-tiny font-medium text-warning-deep"
+                          className="mt-tight block text-tiny font-medium text-warning-deep"
                         >
                           {t('accounts.profile.bioNotApplied')}
                         </span>
@@ -989,7 +989,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex items-center justify-end gap-sm border-t border-line-row px-5 py-[14px]">
+          <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null && (

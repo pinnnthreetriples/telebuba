@@ -93,9 +93,9 @@ function launchBlockers(
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-line bg-surface px-[10px] py-[9px] text-center">
+    <div className="rounded-lg border border-line bg-surface px-md py-md text-center">
       <div className="text-title font-bold tabular-nums">{value}</div>
-      <div className="mt-[2px] text-micro text-ink-subtle">{label}</div>
+      <div className="mt-hair text-micro text-ink-subtle">{label}</div>
     </div>
   );
 }
@@ -154,8 +154,8 @@ export function LaunchCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.launch.title')}
-      headerClassName="px-4 py-[15px]"
-      bodyClassName="px-4 pb-[15px]"
+      headerClassName="px-lg py-lg"
+      bodyClassName="px-lg pb-lg"
       header={
         <>
           <span className="text-lead font-semibold">{t('neuroshilling.launch.title')}</span>
@@ -164,7 +164,7 @@ export function LaunchCard({
             // it reads as emphasis beside the title rather than as another status pill.
             // Two such markers in the app (the other is the warming page's "прогрет"), and
             // two call sites do not earn a token. Do not fold this into the pill family.
-            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-[9px] py-[2px] text-micro font-bold text-success-deep">
+            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-hair text-micro font-bold text-success-deep">
               <span className="tb-livedot h-[6px] w-[6px] rounded-full bg-success" />
               LIVE
             </span>
@@ -176,13 +176,13 @@ export function LaunchCard({
         // campaign to `draft` — and the consequence only shows here, at launch.
         // Repeating the badge is what stops that being a surprise 409.
         <span
-          className={`shrink-0 rounded-full px-[10px] py-[3px] text-tiny font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-track text-ink-muted'}`}
         >
           {t(`neuroshilling.launch.scenario.${scenarioStatus}`)}
         </span>
       }
     >
-      <div className="mb-[12px] grid grid-cols-3 gap-sm sm:grid-cols-5">
+      <div className="mb-md grid grid-cols-3 gap-sm sm:grid-cols-5">
         <Tile label={t('neuroshilling.launch.tile.accounts')} value={String(roster.length)} />
         <Tile label={t('neuroshilling.launch.tile.targets')} value={String(targets.length)} />
         <Tile label={t('neuroshilling.launch.tile.roles')} value={String(roles.length)} />
@@ -193,7 +193,7 @@ export function LaunchCard({
         />
       </div>
 
-      <div className="mb-[7px] flex flex-wrap items-center gap-sm">
+      <div className="mb-sm flex flex-wrap items-center gap-sm">
         <span
           className={`inline-flex items-center gap-tight text-tiny font-medium ${STATUS_TONE[status]}`}
         >
@@ -225,7 +225,7 @@ export function LaunchCard({
           aria-valuemin={0}
           aria-valuemax={total}
           aria-valuenow={sent}
-          className="mb-[12px] h-[7px] w-full overflow-hidden rounded-full bg-track"
+          className="mb-md h-[7px] w-full overflow-hidden rounded-full bg-track"
         >
           <div
             className="h-full rounded-full bg-primary transition-[width] duration-reveal"
@@ -238,7 +238,7 @@ export function LaunchCard({
           campaign row already, and what the operator cannot see from there is
           whether anything is acting on them right now. */}
       {run.listening === true ? (
-        <div className="mb-[12px] flex flex-wrap items-center gap-sm rounded-lg bg-track px-[11px] py-[7px] text-tiny tabular-nums text-ink-muted">
+        <div className="mb-md flex flex-wrap items-center gap-sm rounded-lg bg-track px-md py-sm text-tiny tabular-nums text-ink-muted">
           <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
           <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
           <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>
@@ -246,13 +246,13 @@ export function LaunchCard({
       ) : null}
 
       {status === 'failed' && run.last_error_type ? (
-        <div className="mb-[10px] rounded-lg bg-danger-tint px-[11px] py-[7px] text-tiny text-danger-deep">
+        <div className="mb-md rounded-lg bg-danger-tint px-md py-sm text-tiny text-danger-deep">
           {t('neuroshilling.launch.failed', { type: run.last_error_type })}
         </div>
       ) : null}
 
       {halted.length > 0 ? (
-        <div className="mb-[10px] rounded-lg bg-warning-tint px-[11px] py-[7px] text-tiny text-warning-deep-deep">
+        <div className="mb-md rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep-deep">
           {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
         </div>
       ) : null}
@@ -260,14 +260,14 @@ export function LaunchCard({
       {!live && blockers.length > 0 ? (
         // Every reason, not just the first: fixing one only to be refused by the
         // next is the loop this list exists to end.
-        <ul className="mb-[10px] flex list-none flex-col gap-[4px] rounded-lg bg-track px-[11px] py-[8px] text-tiny text-ink-muted">
+        <ul className="mb-md flex list-none flex-col gap-xs rounded-lg bg-track px-md py-sm text-tiny text-ink-muted">
           {blockers.map((reason) => (
             <li key={reason}>· {reason}</li>
           ))}
         </ul>
       ) : null}
 
-      <div className="mb-[14px] flex flex-wrap items-center justify-end gap-sm">
+      <div className="mb-lg flex flex-wrap items-center justify-end gap-sm">
         {live ? (
           <Button
             size="sm"

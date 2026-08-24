@@ -204,8 +204,8 @@ export function ChannelCreateModal({
       className="w-[460px]"
       label={t('accounts.channel.createTitle')}
     >
-      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-2xl py-2xl">
+        <div className="mb-lg flex items-center justify-between">
           <span className="text-title font-bold">{t('accounts.channel.createTitle')}</span>
           <IconButton
             size="md"
@@ -218,7 +218,7 @@ export function ChannelCreateModal({
           </IconButton>
         </div>
 
-        <label className="mb-[14px] block">
+        <label className="mb-lg block">
           <span className={LABEL}>{t('accounts.channel.titleLabel')}</span>
           <Input
             value={title}
@@ -228,13 +228,13 @@ export function ChannelCreateModal({
             }}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-1 block text-tiny text-danger">
+            <span className="mt-xs block text-tiny text-danger">
               {t('accounts.channel.errTitle')}
             </span>
           )}
         </label>
 
-        <label className="mb-[14px] block">
+        <label className="mb-lg block">
           <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
           <Textarea
             className="resize-none [font-family:inherit]"
@@ -264,12 +264,12 @@ export function ChannelCreateModal({
         />
 
         {isPublic && (
-          <label className="mb-[14px] block">
+          <label className="mb-lg block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
               <span className="absolute left-3 text-lead text-ink-subtle">@</span>
               <Input
-                className="pl-[26px]"
+                className="pl-3xl"
                 value={username}
                 onChange={(event) => {
                   setUsername(event.target.value);
@@ -277,18 +277,18 @@ export function ChannelCreateModal({
               />
             </div>
             {usernameHint && (
-              <span className={`mt-1 block text-tiny ${hintColor}`}>{usernameHint.text}</span>
+              <span className={`mt-xs block text-tiny ${hintColor}`}>{usernameHint.text}</span>
             )}
           </label>
         )}
 
         {create.isError && (
-          <Notice tone="danger" className="mb-[14px]">
+          <Notice tone="danger" className="mb-lg">
             {channelErrorText(create.error, t, t('accounts.channel.error'))}
           </Notice>
         )}
 
-        <div className="mt-5 flex justify-end gap-sm">
+        <div className="mt-xl flex justify-end gap-sm">
           <Button onClick={onClose} disabled={busy}>
             {t('accounts.channel.cancel')}
           </Button>

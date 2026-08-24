@@ -24,7 +24,7 @@ export function CaptchaSolverCard({
   const { t } = useTranslation();
   return (
     <Card className="">
-      <div className="flex items-center justify-between gap-md px-[14px] py-3">
+      <div className="flex items-center justify-between gap-md px-lg py-md">
         <div className="flex min-w-0 items-center gap-md">
           <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
@@ -66,8 +66,8 @@ export function CaptchaSolverCard({
         />
       </div>
       {solverEnabled && captchaQueue.length > 0 ? (
-        <div className="px-[14px] pb-[14px]">
-          <div className="mb-[9px] flex items-center gap-sm border-t border-line-row pt-[11px]">
+        <div className="px-lg pb-lg">
+          <div className="mb-md flex items-center gap-sm border-t border-line-row pt-md">
             <svg
               width="13"
               height="13"

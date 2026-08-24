@@ -90,21 +90,21 @@ export function CommentHistoryModal({
 
   return (
     <Modal onClose={onClose} className="w-[760px]" label={t('neurocomment.history.title')}>
-      <div className="border-b border-line-row px-6 pb-[15px] pt-5">
+      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="text-title font-bold text-ink">{t('neurocomment.history.title')}</div>
       </div>
 
-      <div className="px-6 pb-4 pt-3">
+      <div className="px-2xl pb-lg pt-md">
         {isPending ? (
-          <p className="py-10 text-center text-lead text-ink-muted">
+          <p className="py-[40px] text-center text-lead text-ink-muted">
             {t('neurocomment.history.loading')}
           </p>
         ) : isError ? (
-          <p role="alert" className="py-10 text-center text-lead text-danger">
+          <p role="alert" className="py-[40px] text-center text-lead text-danger">
             {t('neurocomment.history.error')}
           </p>
         ) : items.length === 0 ? (
-          <div className="py-12 text-center text-lead text-ink-subtle">
+          <div className="py-[48px] text-center text-lead text-ink-subtle">
             {t('neurocomment.history.empty')}
           </div>
         ) : (
@@ -116,7 +116,7 @@ export function CommentHistoryModal({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-line-row px-6 pb-5 pt-[14px]">
+      <div className="flex items-center justify-between border-t border-line-row px-2xl pb-xl pt-lg">
         <div className="flex gap-sm">
           <button
             type="button"
@@ -124,7 +124,7 @@ export function CommentHistoryModal({
             onClick={() => {
               setCursorStack((stack) => stack.slice(0, -1));
             }}
-            className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
+            className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
           >
             {t('neurocomment.history.prev')}
           </button>
@@ -134,7 +134,7 @@ export function CommentHistoryModal({
             onClick={() => {
               setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
             }}
-            className="rounded-full border border-line bg-white px-4 py-[7px] text-lead disabled:opacity-50"
+            className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
           >
             {t('neurocomment.history.next')}
           </button>

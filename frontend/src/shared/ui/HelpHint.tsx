@@ -22,11 +22,11 @@ export function HintBubble({ text, example }: { text: string; example?: string }
        to the same rect can overlap. Fix properly with measurement, not a media
        query, if the clipping ever actually bites. */
     <span
-      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-[230px] -translate-x-1/2 rounded-lg border border-line bg-white p-[10px] text-left text-tiny leading-snug text-ink-muted shadow-pop group-hover:block group-focus-within:block"
+      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-[230px] -translate-x-1/2 rounded-lg border border-line bg-white p-md text-left text-tiny leading-snug text-ink-muted shadow-pop group-hover:block group-focus-within:block"
       role="tooltip"
     >
       {text}
-      {example ? <span className="mt-[6px] block text-ink-subtle">{example}</span> : null}
+      {example ? <span className="mt-tight block text-ink-subtle">{example}</span> : null}
     </span>
   );
 }

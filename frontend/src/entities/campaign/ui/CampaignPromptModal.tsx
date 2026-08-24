@@ -45,8 +45,8 @@ export function CampaignPromptModal({
       className="w-[480px]"
       label={t('neurocomment.modal.campaignPrompt.title')}
     >
-      <div className="p-6">
-        <div className="mb-[6px] flex items-center justify-between">
+      <div className="p-2xl">
+        <div className="mb-tight flex items-center justify-between">
           <span className="text-title font-bold">
             {t('neurocomment.modal.campaignPrompt.title')}
           </span>
@@ -59,7 +59,7 @@ export function CampaignPromptModal({
             ×
           </IconButton>
         </div>
-        <div className="mb-[14px] text-body text-ink-subtle">
+        <div className="mb-lg text-body text-ink-subtle">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}
         </div>
         <textarea
@@ -73,23 +73,23 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="w-full resize-none rounded-lg border border-line-input bg-white px-[13px] py-[11px] font-[inherit] text-lead leading-[1.5] outline-none"
+          className="w-full resize-none rounded-lg border border-line-input bg-white px-lg py-md font-[inherit] text-lead leading-[1.5] outline-none"
         />
 
-        <div className="my-[18px] mb-[9px] flex items-center justify-between">
+        <div className="my-xl mb-md flex items-center justify-between">
           <span className="text-body font-semibold tracking-[.04em] text-ink-body">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
-          <span className="rounded-full bg-primary-tint px-2 py-[2px] text-tiny font-semibold text-primary-deep">
+          <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
             {accounts.length}
           </span>
         </div>
         {accounts.length > 0 ? (
-          <div className="tb-scroll flex max-h-[184px] flex-col gap-sm overflow-y-auto rounded-lg border border-track bg-surface p-[6px]">
+          <div className="tb-scroll flex max-h-[184px] flex-col gap-sm overflow-y-auto rounded-lg border border-track bg-surface p-tight">
             {accounts.map((account) => (
               <div
                 key={account.account_id}
-                className="flex items-center gap-md rounded-md border border-track bg-white px-[10px] py-2"
+                className="flex items-center gap-md rounded-md border border-track bg-white px-md py-sm"
               >
                 <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary-deep">
                   {account.initials}
@@ -123,12 +123,12 @@ export function CampaignPromptModal({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-[14px] text-center text-body text-ink-subtle">
+          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center text-body text-ink-subtle">
             {t('neurocomment.modal.campaignPrompt.empty')}
           </div>
         )}
 
-        <div className="mt-[18px] flex justify-end gap-sm">
+        <div className="mt-xl flex justify-end gap-sm">
           <Button
             variant="primary"
             onClick={save}
@@ -168,11 +168,11 @@ export function CampaignPromptModal({
           className="w-[380px]"
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
-          <div className="p-6">
-            <div className="mb-2 text-title font-bold">
+          <div className="p-2xl">
+            <div className="mb-sm text-title font-bold">
               {t('neurocomment.modal.campaignPrompt.removeTitle')}
             </div>
-            <div className="mb-5 text-lead leading-[1.5] text-ink-muted">
+            <div className="mb-xl text-lead leading-[1.5] text-ink-muted">
               {t('neurocomment.modal.campaignPrompt.removeBody', {
                 phone: confirm.phone,
                 channel: confirm.channel,

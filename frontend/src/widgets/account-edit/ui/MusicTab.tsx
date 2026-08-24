@@ -25,7 +25,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
+      <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );
@@ -44,7 +44,7 @@ export function MusicTab({
           {music.map((track) => (
             <div
               key={track.file_id}
-              className="flex items-center gap-lg rounded-lg border border-line px-[14px] py-3"
+              className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
             >
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
@@ -74,11 +74,16 @@ export function MusicTab({
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-line bg-white px-4 py-6 text-center text-body text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
           {t('accounts.profile.noMusic')}
         </div>
       )}
-      <Button size="sm" className="mt-3" loading={busy} onClick={() => musicInput.current?.click()}>
+      <Button
+        size="sm"
+        className="mt-md"
+        loading={busy}
+        onClick={() => musicInput.current?.click()}
+      >
         {t('accounts.profile.pickTrack')}
       </Button>
       <input

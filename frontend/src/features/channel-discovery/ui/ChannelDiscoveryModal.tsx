@@ -174,13 +174,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // HelpHint tooltips — including the only place the seed channel is documented.
   return (
     <Modal onClose={onClose} className="w-[920px]" label={t('neurocomment.modal.discovery.title')}>
-      <div className="p-[18px]">
+      <div className="p-xl">
         <h2 className="text-title font-semibold">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-[3px] text-body text-ink-subtle">
+        <p className="mt-xs text-body text-ink-subtle">
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
         </p>
 
-        <div ref={contentRef} tabIndex={-1} className="mt-[15px] outline-none">
+        <div ref={contentRef} tabIndex={-1} className="mt-lg outline-none">
           {submitted ? (
             <DiscoveryResults
               board={board.data}
@@ -201,7 +201,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         </div>
 
         {refused ? (
-          <p className="mt-[11px] text-body text-danger">
+          <p className="mt-md text-body text-danger">
             {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
           </p>
         ) : null}
@@ -210,13 +210,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             toast fires outside the modal with a raw error code, and the form alone
             would just re-enable its button. */}
         {startSearch.isError ? (
-          <p role="status" className="mt-[11px] text-body text-danger">
+          <p role="status" className="mt-md text-body text-danger">
             {t('neurocomment.modal.discovery.startFailed')}
           </p>
         ) : null}
 
         {adopted !== null && adopted.refused > 0 ? (
-          <p role="status" className="mt-[11px] text-body text-warning">
+          <p role="status" className="mt-md text-body text-warning">
             {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
           </p>
         ) : null}
@@ -224,13 +224,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {/* Its own line, not folded into "already taken": the operator's next move is
             to drop the channel, not to look for the campaign holding it. */}
         {adopted !== null && adopted.commentsOff > 0 ? (
-          <p role="status" className="mt-[11px] text-body text-warning">
+          <p role="status" className="mt-md text-body text-warning">
             {t('neurocomment.modal.discovery.addedCommentsOff', { count: adopted.commentsOff })}
           </p>
         ) : null}
 
         {adopted !== null && adopted.failed > 0 ? (
-          <p role="status" className="mt-[11px] text-body text-danger">
+          <p role="status" className="mt-md text-body text-danger">
             {t('neurocomment.modal.discovery.addedFailed', { count: adopted.failed })}
           </p>
         ) : null}
@@ -238,13 +238,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {/* The request itself never landed, so nothing can be read from the outcomes —
             silence would read as "nothing happened". */}
         {adopt.isError ? (
-          <p role="status" className="mt-[11px] text-body text-danger">
+          <p role="status" className="mt-md text-body text-danger">
             {t('neurocomment.modal.discovery.addFailed')}
           </p>
         ) : null}
 
         {submitted ? (
-          <div className="mt-[15px] flex items-center justify-between gap-sm border-t border-line pt-[13px]">
+          <div className="mt-lg flex items-center justify-between gap-sm border-t border-line pt-lg">
             <button
               type="button"
               onClick={() => {
@@ -261,7 +261,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-[13px] py-[8px] text-body text-ink-muted hover:text-primary"
+                className="rounded-lg px-lg py-sm text-body text-ink-muted hover:text-primary"
               >
                 {t('neurocomment.modal.close')}
               </button>
@@ -276,7 +276,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                   (adopted !== null && adopted.failed === 0)
                 }
                 onClick={submitAdopt}
-                className="inline-flex items-center gap-sm rounded-lg bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white disabled:opacity-50"
+                className="inline-flex items-center gap-sm rounded-lg bg-primary px-lg py-sm text-tiny font-semibold text-white disabled:opacity-50"
               >
                 {adopted === null ? (
                   t('neurocomment.modal.discovery.add', { count: picks.length })

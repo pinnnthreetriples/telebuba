@@ -44,8 +44,8 @@ export function CampaignsCard({
     <CollapsibleCard
       defaultOpen
       label={t('neuroshilling.campaigns.title')}
-      headerClassName="px-4 py-[15px]"
-      bodyClassName="px-4 pb-[15px]"
+      headerClassName="px-lg py-lg"
+      bodyClassName="px-lg pb-lg"
       header={<span className="text-lead font-semibold">{t('neuroshilling.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
@@ -64,7 +64,7 @@ export function CampaignsCard({
               // Background in both branches, never in the base: two `bg-*` utilities
               // in one class list are resolved by stylesheet order, so a base
               // `bg-white` would beat the selected tint.
-              className={`cursor-pointer rounded-lg border p-[13px] ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
+              className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
               <div className="flex justify-between gap-md">
                 <div className="min-w-0 flex-1 text-lead font-semibold">{campaign.name}</div>
@@ -103,7 +103,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-[18px] text-center text-body text-ink-subtle">
+          <div className="py-xl text-center text-body text-ink-subtle">
             {t('neuroshilling.campaigns.none')}
           </div>
         ) : null}
@@ -112,7 +112,7 @@ export function CampaignsCard({
       {creating ? (
         // Inline, not a modal: creating asks for a name and nothing else, and the
         // app already spells that shape this way (the channel "add" pill).
-        <div className="mt-[9px] flex items-center gap-sm">
+        <div className="mt-md flex items-center gap-sm">
           <input
             autoFocus
             value={createName}
@@ -125,13 +125,13 @@ export function CampaignsCard({
             }}
             placeholder={t('neuroshilling.campaigns.namePlaceholder')}
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
-            className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-3 py-[8px] text-body outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-md py-sm text-body outline-none"
           />
           <button
             type="button"
             disabled={!createName.trim()}
             onClick={onCreate}
-            className="shrink-0 rounded-full bg-primary px-[15px] py-[7px] text-tiny font-semibold text-white disabled:opacity-50"
+            className="shrink-0 rounded-full bg-primary px-lg py-sm text-tiny font-semibold text-white disabled:opacity-50"
           >
             {t('neuroshilling.campaigns.confirm')}
           </button>
@@ -139,7 +139,7 @@ export function CampaignsCard({
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
             onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line-input bg-white px-[12px] py-[8px] text-body text-ink-muted"
+            className="shrink-0 rounded-full border border-line-input bg-white px-md py-sm text-body text-ink-muted"
           >
             ×
           </button>
@@ -148,7 +148,7 @@ export function CampaignsCard({
         <button
           type="button"
           onClick={onStartCreate}
-          className="mt-[9px] flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-[9px] text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
+          className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary hover:border-primary hover:bg-primary-wash"
         >
           {t('neuroshilling.campaigns.create')}
         </button>

@@ -256,8 +256,8 @@ export function AddStoryModal({
       className="w-[460px]"
       label={t('accounts.addStory.title')}
     >
-      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
-        <div className="mb-4 flex items-center justify-between">
+      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-2xl py-2xl">
+        <div className="mb-lg flex items-center justify-between">
           <span className="text-title font-bold">{t('accounts.addStory.title')}</span>
           <IconButton
             size="md"
@@ -273,10 +273,10 @@ export function AddStoryModal({
           </IconButton>
         </div>
 
-        <div className="mb-[6px] text-body font-medium text-ink-body">
+        <div className="mb-tight text-body font-medium text-ink-body">
           {t('accounts.addStory.audience')}
         </div>
-        <div className="mb-[14px] flex gap-tight rounded-lg bg-canvas p-1">
+        <div className="mb-lg flex gap-tight rounded-lg bg-canvas p-xs">
           {(['contacts', 'closeFriends', 'public'] as const).map((value) => (
             <button
               key={value}
@@ -291,8 +291,8 @@ export function AddStoryModal({
           ))}
         </div>
 
-        <label className="mb-[14px] block">
-          <span className="mb-[6px] block text-body font-medium text-ink-body">
+        <label className="mb-lg block">
+          <span className="mb-tight block text-body font-medium text-ink-body">
             {t('accounts.addStory.caption')}
           </span>
           <Input
@@ -313,7 +313,7 @@ export function AddStoryModal({
           onClick={() => {
             setNoForward((value) => !value);
           }}
-          className="mb-4 flex w-full items-center gap-md text-left"
+          className="mb-lg flex w-full items-center gap-md text-left"
         >
           <span
             className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line-input bg-white'}`}
@@ -334,7 +334,7 @@ export function AddStoryModal({
           <span className="text-lead text-ink-body">{t('accounts.addStory.noForward')}</span>
         </button>
 
-        <div className="mb-[6px] flex items-center justify-between">
+        <div className="mb-tight flex items-center justify-between">
           <span className="text-body font-medium text-ink-body">
             {t('accounts.addStory.media')}
           </span>
@@ -357,7 +357,7 @@ export function AddStoryModal({
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy || done}
-            className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-white px-4 py-[14px] text-left disabled:opacity-50"
+            className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-white px-lg py-lg text-left disabled:opacity-50"
           >
             <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
               <svg
@@ -384,7 +384,7 @@ export function AddStoryModal({
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-surface px-4 py-3 text-tiny text-ink-subtle">
+          <div className="rounded-lg border border-line bg-surface px-lg py-md text-tiny text-ink-subtle">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -400,11 +400,11 @@ export function AddStoryModal({
         {/* Image tiles: ordered previews with reorder (◀ ▶) + remove (×). The
             tile order is the collage cell order sent to the backend. */}
         {video === null && count > 0 && (
-          <div className="mt-[10px] flex flex-wrap gap-sm">
+          <div className="mt-md flex flex-wrap gap-sm">
             {images.map((image, index) => (
               <div
                 key={`${image.name}-${index}`}
-                className="tb-fadeup flex w-[74px] flex-col gap-[3px]"
+                className="tb-fadeup flex w-[74px] flex-col gap-xs"
               >
                 <div className="relative h-[104px] w-[74px] overflow-hidden rounded-lg border border-line bg-track">
                   <img
@@ -412,7 +412,7 @@ export function AddStoryModal({
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-black/55 px-[4px] text-micro font-semibold text-white">
+                  <span className="absolute left-[3px] top-[3px] flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-black/55 px-xs text-micro font-semibold text-white">
                     {index + 1}
                   </span>
                   <button
@@ -490,8 +490,8 @@ export function AddStoryModal({
 
         {/* Layout picker — only for a 2..6 photo collage. */}
         {isCollage && (
-          <div className="mt-[14px]">
-            <div className="mb-[7px] text-body font-medium text-ink-body">
+          <div className="mt-lg">
+            <div className="mb-sm text-body font-medium text-ink-body">
               {t('accounts.addStory.layout')}
             </div>
             <div className="flex flex-wrap gap-sm">
@@ -518,7 +518,7 @@ export function AddStoryModal({
 
         {/* Single-video row: filename + size + remove (mirrors the photo path). */}
         {video !== null && (
-          <div className="mt-[9px] tb-fadeup rounded-lg border border-line bg-white px-[11px] py-[10px]">
+          <div className="mt-md tb-fadeup rounded-lg border border-line bg-white px-md py-md">
             <div className="flex items-center gap-md">
               <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-track text-ink-muted">
                 <svg
@@ -566,23 +566,23 @@ export function AddStoryModal({
         {/* Per-publish status: uploading spinner + bar → success check + full
             bar → error icon (hover = reason) + retry. Shared by both modes. */}
         {hasMedia && (busy || done || failed) && (
-          <div className="mt-[10px] tb-fadeup flex items-center gap-md rounded-lg border border-line bg-white px-[12px] py-[10px]">
+          <div className="mt-md tb-fadeup flex items-center gap-md rounded-lg border border-line bg-white px-md py-md">
             <div className="min-w-0 flex-1">
               <div className={`text-tiny font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
-                <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-track">
+                <div className="mt-sm h-[5px] overflow-hidden rounded-full bg-track">
                   <div
                     className={`h-full rounded-full ${done ? 'w-full bg-success' : 'tb-upbar bg-primary'}`}
                   />
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-[2px]">
+            <div className="flex shrink-0 items-center gap-hair">
               {busy && (
-                <span className="tb-spin m-[5px] inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
+                <span className="tb-spin m-tight inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
               )}
               {done && (
-                <span className="tb-pop m-[3px] inline-flex text-success">
+                <span className="tb-pop m-xs inline-flex text-success">
                   <svg
                     width="17"
                     height="17"
@@ -598,7 +598,7 @@ export function AddStoryModal({
               )}
               {failed && (
                 <>
-                  <span className="group relative m-[3px] inline-flex text-danger">
+                  <span className="group relative m-xs inline-flex text-danger">
                     <svg
                       width="17"
                       height="17"
@@ -612,7 +612,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-[10px] py-[7px] text-left text-tiny font-normal leading-[1.5] text-white shadow-pop group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal leading-[1.5] text-white shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>
@@ -641,7 +641,7 @@ export function AddStoryModal({
           </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-sm">
+        <div className="mt-xl flex justify-end gap-sm">
           <Button onClick={onClose} disabled={busy}>
             {t('accounts.addStory.cancel')}
           </Button>

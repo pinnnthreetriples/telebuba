@@ -85,8 +85,8 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
 
   return (
     <>
-      <Section title={t('accounts.edit.actions')} bodyClassName="px-5 pb-[6px]">
-        <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
+      <Section title={t('accounts.edit.actions')} bodyClassName="px-xl pb-tight">
+        <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
           <div>
             <div className="text-lead font-medium">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
@@ -171,7 +171,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             )}
           </button>
         </div>
-        <div className="flex items-center justify-between gap-md border-b border-line-row py-[14px]">
+        <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
           <div>
             <div className="text-lead font-medium">{t('accounts.edit.resetSession')}</div>
             <div className="mt-px text-tiny text-ink-subtle">
@@ -187,7 +187,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             </Button>
           </span>
         </div>
-        <div className="flex items-center justify-between gap-md py-[14px]">
+        <div className="flex items-center justify-between gap-md py-lg">
           <div>
             <div className="text-lead font-medium">{t('accounts.edit.deleteAccount')}</div>
             <div className="mt-px text-tiny text-ink-subtle">{t('accounts.edit.deleteHint')}</div>
@@ -197,7 +197,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             onClick={() => {
               setConfirmDelete(true);
             }}
-            className="shrink-0 px-1 py-2 text-lead font-medium text-danger"
+            className="shrink-0 px-xs py-sm text-lead font-medium text-danger"
           >
             {t('accounts.edit.deleteAccount')}
           </button>

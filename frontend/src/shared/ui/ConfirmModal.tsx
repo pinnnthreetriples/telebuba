@@ -42,9 +42,9 @@ export function ConfirmModal({
 
   return (
     <Modal onClose={onClose} className="w-[420px]" label={title}>
-      <div className="p-6">
-        <div className="mb-2 text-title font-bold">{title}</div>
-        <div className="mb-[22px] text-lead leading-[1.5] text-ink-muted">{body}</div>
+      <div className="p-2xl">
+        <div className="mb-sm text-title font-bold">{title}</div>
+        <div className="mb-2xl text-lead leading-[1.5] text-ink-muted">{body}</div>
         <div className="flex justify-end gap-sm">
           <Button onClick={onClose}>{cancelLabel}</Button>
           <Button variant="danger" onClick={confirm} loading={pending}>

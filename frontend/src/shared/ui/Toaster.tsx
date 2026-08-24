@@ -24,7 +24,7 @@ export function Toaster() {
         <div
           key={toast.id}
           role="alert"
-          className="pointer-events-auto max-w-[90vw] rounded-lg bg-term px-[14px] py-[10px] text-lead leading-[1.5] text-white shadow-pop [animation:fadeup_0.25s_ease]"
+          className="pointer-events-auto max-w-[90vw] rounded-lg bg-term px-lg py-md text-lead leading-[1.5] text-white shadow-pop [animation:fadeup_0.25s_ease]"
         >
           {toast.message}
         </div>

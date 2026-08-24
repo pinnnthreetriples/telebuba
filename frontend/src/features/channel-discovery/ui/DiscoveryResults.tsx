@@ -153,7 +153,7 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
   // channel measured and cleared on every gate renders too.
   const unanswered = !settledByComments && (verdict == null || verdict.can_send_messages == null);
   return (
-    <div className="flex flex-col items-start gap-[3px]">
+    <div className="flex flex-col items-start gap-xs">
       <CommentsMark state={state} />
       {unanswered ? (
         <span className="text-tiny text-ink-subtle">
@@ -353,7 +353,7 @@ export function DiscoveryResults({
   // operator has to be told when it finishes or fails without polling the table.
   if (loading) {
     return (
-      <p role="status" className="py-[26px] text-center text-body text-ink-subtle">
+      <p role="status" className="py-3xl text-center text-body text-ink-subtle">
         {t('neurocomment.modal.discovery.results.searching')}
       </p>
     );
@@ -364,7 +364,7 @@ export function DiscoveryResults({
   // operator has made with it.
   if (errored && candidates.length === 0) {
     return (
-      <p role="status" className="py-[26px] text-center text-body text-danger">
+      <p role="status" className="py-3xl text-center text-body text-danger">
         {t('neurocomment.modal.discovery.results.error')}
       </p>
     );
@@ -372,7 +372,7 @@ export function DiscoveryResults({
 
   if (failed && candidates.length === 0) {
     return (
-      <p role="status" className="py-[26px] text-center text-body text-danger">
+      <p role="status" className="py-3xl text-center text-body text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
           reason:
             board?.progress.last_error == null
@@ -387,7 +387,7 @@ export function DiscoveryResults({
 
   if (candidates.length === 0) {
     return (
-      <p className="py-[26px] text-center text-body text-ink-subtle">
+      <p className="py-3xl text-center text-body text-ink-subtle">
         {t('neurocomment.modal.discovery.results.empty')}
       </p>
     );

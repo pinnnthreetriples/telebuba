@@ -7,9 +7,9 @@ export type SelectOption = { value: string; label: string; disabled?: boolean };
 // input in the same dialog it reads as a different application; the six sites that
 // needed this each grew their own panel instead, with their own literal shadow.
 const TRIGGER =
-  'flex w-full items-center justify-between gap-[8px] rounded-lg border bg-white px-[13px] py-[9px] text-left text-lead text-ink outline-none hover:border-line-strong focus-visible:border-primary focus-visible:shadow-focus disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-ink-subtle';
+  'flex w-full items-center justify-between gap-sm rounded-lg border bg-white px-lg py-md text-left text-lead text-ink outline-none hover:border-line-strong focus-visible:border-primary focus-visible:shadow-focus disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-ink-subtle';
 const OPTION =
-  'flex w-full items-center justify-between gap-[8px] rounded-sm border-none px-[10px] py-[8px] text-left text-body hover:bg-primary-tint disabled:text-ink-subtle';
+  'flex w-full items-center justify-between gap-sm rounded-sm border-none px-md py-sm text-left text-body hover:bg-primary-tint disabled:text-ink-subtle';
 
 export function Select({
   value,
@@ -146,10 +146,10 @@ export function Select({
         // of a Modal's focusable list froze its Tab trap. `inert` is the real thing
         // and, unlike `hidden`, keeps the open/close transition.
         inert={!open}
-        className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop rounded-lg border border-line bg-white p-1 shadow-pop ${open ? 'open' : ''}`}
+        className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop rounded-lg border border-line bg-white p-xs shadow-pop ${open ? 'open' : ''}`}
       >
         {options.length === 0 ? (
-          <div className="px-[10px] py-[8px] text-body text-ink-subtle">{emptyLabel}</div>
+          <div className="px-md py-sm text-body text-ink-subtle">{emptyLabel}</div>
         ) : (
           options.map((option, index) => (
             <button

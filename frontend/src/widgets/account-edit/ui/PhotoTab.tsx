@@ -60,14 +60,14 @@ export function PhotoTab({
         );
         onUpload(images);
       }}
-      className={`relative rounded-lg border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
+      className={`relative rounded-lg border-[1.5px] border-dashed p-md transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
     >
       {dragOver && (
         <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-lead font-medium text-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
-      <div className="mb-3 text-body text-ink-subtle">{t('accounts.profile.photoHint')}</div>
+      <div className="mb-md text-body text-ink-subtle">{t('accounts.profile.photoHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-md">
         {photos.map((photo) => (
           <div key={photo.photo_id} className="relative">
@@ -86,7 +86,7 @@ export function PhotoTab({
               ×
             </button>
             {photo.is_main ? (
-              <span className="mt-[6px] block w-full py-[2px] text-tiny font-medium text-primary">
+              <span className="mt-tight block w-full py-hair text-tiny font-medium text-primary">
                 {t('accounts.profile.mainPhoto')}
               </span>
             ) : (
@@ -96,7 +96,7 @@ export function PhotoTab({
                 onClick={() => {
                   onMakeMain(photo);
                 }}
-                className="mt-[6px] block w-full py-[2px] text-left text-tiny font-medium text-primary hover:underline disabled:opacity-50"
+                className="mt-tight block w-full py-hair text-left text-tiny font-medium text-primary hover:underline disabled:opacity-50"
               >
                 {t('accounts.profile.makeMain')}
               </button>
