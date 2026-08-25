@@ -88,14 +88,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           </span>
         </div>
         {!empty && (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="inline-flex items-center gap-sm rounded-full bg-primary px-lg py-sm text-tiny font-semibold text-white"
-          >
+          <Button variant="primary" size="sm" onClick={onAdd}>
             <Icon name="plus" size={14} />
             {t('accounts.proxyPool.add')}
-          </button>
+          </Button>
         )}
       </div>
       {empty ? (

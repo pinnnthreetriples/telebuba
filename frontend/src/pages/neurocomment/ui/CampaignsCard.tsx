@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
 import { type FeedbackResult } from '@/shared/lib';
-import { CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
+import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
 
 // Tone is the token the status MEANS (running = success, held = amber, shelved =
 // muted), so the pill can't drift from the rest of the design system.
@@ -191,13 +191,9 @@ export function CampaignsCard({
         ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={onCreate}
-        className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
-      >
+      <Button variant="dashed" size="block" className="mt-md" onClick={onCreate}>
         {t('neurocomment.campaigns.create')}
-      </button>
+      </Button>
 
       {/* campaign channels */}
       <div className="mt-lg border-t border-line-row pt-md">
@@ -291,6 +287,11 @@ export function CampaignsCard({
             ) : (
               <button
                 type="button"
+                // Not `Button variant="dashed"`, and deliberately: this is the muted
+                // inline adder that stands in a row of channel chips, drawn in
+                // `line-strong` and `ink-muted` where the block adder under a list is
+                // drawn in blue. It shares only the dash. Its twin is the warming
+                // page's; if a third appears, that is the moment it earns a rung.
                 disabled={campaignId === null}
                 onClick={onStartAdd}
                 className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-md py-tight text-body text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"

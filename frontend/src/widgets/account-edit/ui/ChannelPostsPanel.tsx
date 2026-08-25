@@ -258,12 +258,7 @@ export function ChannelPostsPanel({
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
           </div>
-          <button
-            type="button"
-            onClick={doPublish}
-            disabled={!canPublish}
-            className="rounded-full bg-primary px-lg py-sm text-body font-medium text-white disabled:opacity-50"
-          >
+          <Button variant="primary" size="sm" onClick={doPublish} disabled={!canPublish}>
             {busy ? (
               <span className="inline-flex items-center gap-sm">
                 <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
@@ -272,7 +267,7 @@ export function ChannelPostsPanel({
             ) : (
               t('accounts.channel.publish')
             )}
-          </button>
+          </Button>
         </div>
         <input
           ref={fileInput}
@@ -374,24 +369,23 @@ export function ChannelPostsPanel({
                     <span className="mr-auto text-tiny text-ink-subtle">
                       {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
                     </span>
-                    <button
-                      type="button"
+                    <Button
+                      size="xs"
                       onClick={() => {
                         setEditingId(null);
                       }}
                       disabled={editPost.isPending}
-                      className="rounded-full border border-line bg-white px-lg py-tight text-body font-medium disabled:opacity-50"
                     >
                       {t('accounts.channel.postCancel')}
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="xs"
                       onClick={saveEdit}
                       disabled={editPost.isPending || !canSaveEdit}
-                      className="rounded-full bg-primary px-lg py-tight text-body font-medium text-white disabled:opacity-50"
                     >
                       {t('accounts.channel.postSave')}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : (

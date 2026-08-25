@@ -405,14 +405,14 @@ export function ScenarioCard({
           max={MAX_GENERATED_STEPS}
           onChange={onStepCount}
         />
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
           disabled={busy || !draft.topic.trim()}
           onClick={onGenerate}
-          className="rounded-full bg-primary px-lg py-sm text-tiny font-semibold text-white disabled:opacity-50"
         >
           {t('neuroshilling.scenario.generate.run')}
-        </button>
+        </Button>
         <HelpHint text={t('neuroshilling.scenario.generate.hint')} />
       </div>
 

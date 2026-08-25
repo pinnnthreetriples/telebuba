@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Icon, Modal } from '@/shared/ui';
+import { Button, Icon, Modal } from '@/shared/ui';
 
 // The design's "stop warming?" confirm (three actions: finish→warmed, keep
 // going, hard stop).
@@ -24,34 +24,35 @@ export function WarmStopModal({
           {t('warming.stopModal.body', { phone })}
         </div>
         <div className="flex gap-sm">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            className="flex-1"
             onClick={() => {
               onFinish();
               onClose();
             }}
-            className="flex flex-1 items-center justify-center gap-tight whitespace-nowrap rounded-full border border-primary bg-primary px-md py-md text-lead font-semibold text-white transition-colors hover:bg-primary-press"
           >
             <Icon name="check" size={14} />
             {t('warming.stopModal.toWarmed')}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-line bg-white px-md py-md text-lead font-semibold text-ink transition-colors hover:border-line-strong hover:bg-surface"
-          >
+          </Button>
+          <Button className="flex-1 hover:bg-surface" onClick={onClose}>
             {t('warming.stopModal.keep')}
-          </button>
-          <button
-            type="button"
+          </Button>
+          {/* The one destructive button in the app that is white at rest and tints
+              only under the pointer, rather than `danger`'s always-tinted box: it
+              stands between two calm buttons in a three-way choice, and a filled
+              third would read as the recommended one. The variant supplies the
+              border, the ink and the states; the resting fill is the override. */}
+          <Button
+            variant="danger"
+            className="flex-1 bg-white hover:border-danger-line hover:bg-danger-tint"
             onClick={() => {
               onStop();
               onClose();
             }}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-danger-line bg-white px-md py-md text-lead font-semibold text-danger-deep transition-colors hover:border-danger-line hover:bg-danger-tint"
           >
             {t('warming.stopModal.stop')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

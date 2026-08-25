@@ -285,14 +285,13 @@ export function TwoFactorEmail({
             ) : null}
           </label>
           <div className="mb-md text-tiny text-ink-subtle">{t('accounts.edit.twofaEmailWarn')}</div>
-          <button
-            type="button"
+          <Button
+            size="block"
             onClick={onAttach}
             disabled={setEmail.isPending || !addressValid || !hasStored}
-            className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
           >
             {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
-          </button>
+          </Button>
         </>
       ) : null}
       {confirming ? (

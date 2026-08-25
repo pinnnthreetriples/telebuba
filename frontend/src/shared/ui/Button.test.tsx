@@ -30,6 +30,43 @@ test('the shape comes from the size and the fill from the variant', () => {
   expect(classesOf('Удалить')).toContain('bg-danger-tint');
 });
 
+// `block` is the only rung that sets its own width, and the only one that is not
+// inline: a `w-full` inline-level button still sits on a line and collects that
+// line's leading underneath it, which is the gap six of its wearers used to carry.
+test('the block rung spans its form and is not inline', () => {
+  render(<Button size="block">Подтвердить</Button>);
+
+  const classes = classesOf('Подтвердить').split(' ');
+  expect(classes).toContain('w-full');
+  expect(classes).toContain('flex');
+  expect(classes).not.toContain('inline-flex');
+  expect(classes).toContain('rounded-lg');
+});
+
+// `dashed` is a fill, so it has to compose with the rung rather than replace it —
+// the three add-one-more buttons in the app are all `block`, but `block` is worn by
+// three different fills and the two must not fuse into one name.
+test('dashed is a fill that keeps whatever rung it is given', () => {
+  render(
+    <>
+      <Button variant="dashed" size="block">
+        Добавить кампанию
+      </Button>
+      <Button variant="dashed" size="sm">
+        Добавить
+      </Button>
+    </>,
+  );
+
+  for (const name of ['Добавить кампанию', 'Добавить']) {
+    expect(classesOf(name)).toContain('border-dashed');
+    expect(classesOf(name)).toContain('text-primary-deep');
+  }
+  expect(classesOf('Добавить кампанию')).toContain('w-full');
+  expect(classesOf('Добавить')).toContain('px-xl');
+  expect(classesOf('Добавить')).not.toContain('w-full');
+});
+
 // Every rung carries the same state vocabulary — before the component the app
 // spelled `disabled` four ways and `focus-visible` three times in total.
 test('every button carries the same disabled and focus treatment', () => {
@@ -37,10 +74,12 @@ test('every button carries the same disabled and focus treatment', () => {
     <>
       <Button size="xs">Проверить</Button>
       <Button variant="ghost">Ещё</Button>
+      <Button size="block">Готово</Button>
+      <Button variant="dashed">Добавить</Button>
     </>,
   );
 
-  for (const name of ['Проверить', 'Ещё']) {
+  for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
     expect(classesOf(name)).toContain('focus-visible:shadow-focus');
   }

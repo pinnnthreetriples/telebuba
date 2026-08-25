@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign, NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
-import { CollapsibleCard } from '@/shared/ui';
+import { Button, CollapsibleCard } from '@/shared/ui';
 
 import { clock, dialogueSeconds, roleTone, stepMeanSeconds } from './scenarioDraft';
 
@@ -136,24 +136,18 @@ export function PreviewCard({
         <span className="mr-auto text-tiny tabular-nums text-ink-subtle">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>
-        <button
-          type="button"
+        <Button
+          size="sm"
           disabled={steps.length === 0}
           onClick={() => {
             setPlay((value) => value + 1);
           }}
-          className="rounded-full border border-line bg-white px-lg py-sm text-tiny font-semibold text-ink disabled:opacity-50"
         >
           {t('neuroshilling.preview.play')}
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onRegenerate}
-          className="rounded-full border border-line bg-white px-lg py-sm text-tiny font-semibold text-primary disabled:opacity-50"
-        >
+        </Button>
+        <Button size="sm" className="text-primary" disabled={busy} onClick={onRegenerate}>
           {t('neuroshilling.preview.regenerate')}
-        </button>
+        </Button>
       </div>
     </CollapsibleCard>
   );

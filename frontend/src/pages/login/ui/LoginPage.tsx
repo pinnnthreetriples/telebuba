@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginMutation } from '@/shared/auth';
+import { Button } from '@/shared/ui';
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -59,13 +60,9 @@ export function LoginPage() {
             {t('auth.login.error')}
           </p>
         ) : null}
-        <button
-          type="submit"
-          disabled={login.isPending}
-          className="w-full rounded-md bg-primary px-md py-sm text-lead font-medium text-white hover:opacity-90 disabled:opacity-50"
-        >
+        <Button type="submit" variant="primary" size="block" disabled={login.isPending}>
           {t('auth.login.submit')}
-        </button>
+        </Button>
       </form>
     </main>
   );

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingBoardAccount } from '@/shared/api';
-import { Badge, CollapsibleCard, HelpHint } from '@/shared/ui';
+import { Badge, Button, CollapsibleCard, HelpHint } from '@/shared/ui';
 
 // The campaign's roster: how many accounts are on it, which ones, and the way in
 // to the picker. Editing happens in the modal, which saves the whole roster once.
@@ -45,13 +45,9 @@ export function AccountsCard({
         <div className="mb-md text-body text-ink-subtle">{t('neuroshilling.accounts.none')}</div>
       )}
 
-      <button
-        type="button"
-        onClick={onPick}
-        className="flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
-      >
+      <Button variant="dashed" size="block" onClick={onPick}>
         {t('neuroshilling.accounts.pick')}
-      </button>
+      </Button>
     </CollapsibleCard>
   );
 }

@@ -10,7 +10,7 @@ import {
 } from '@/entities/account';
 import type { AccountRead, AccountTwoFactorCreated } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { ConfirmModal, Notice, Textarea } from '@/shared/ui';
+import { Button, ConfirmModal, Notice, Textarea } from '@/shared/ui';
 
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
@@ -277,16 +277,15 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
-            <button
-              type="button"
+            <Button
+              size="block"
               onClick={() => {
                 setCreated(null);
                 setCopyState('idle');
               }}
-              className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium"
             >
               {t('accounts.edit.twofaDone')}
-            </button>
+            </Button>
           </>
         ) : readFailed ? (
           <>
@@ -408,16 +407,15 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                   onCreated={onCreated}
                 />
               ) : (
-                <button
-                  type="button"
+                <Button
+                  size="block"
                   onClick={() => {
                     setChanging(true);
                   }}
                   disabled={!hasStored}
-                  className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
                 >
                   {t('accounts.edit.twofaChange')}
-                </button>
+                </Button>
               )}
             </div>
             <div className="mt-md text-center">
