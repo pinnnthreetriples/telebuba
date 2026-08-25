@@ -55,7 +55,7 @@ function ChoiceCard({
       // and wins, so the picked method showed a blue border over a white row.
       className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
     >
-      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-primary-tint">
+      <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-primary-tint">
         {icon}
       </span>
       <span className="flex-1">
@@ -254,7 +254,7 @@ export function AddAccountModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-[480px]" label={t('accounts.addWizard.title')}>
+    <Modal onClose={onClose} className="w-form" label={t('accounts.addWizard.title')}>
       <div className="px-2xl pb-xl pt-2xl">
         <div className="mb-lg flex items-start justify-between">
           <div>
@@ -283,11 +283,11 @@ export function AddAccountModal({
             <Fragment key={n}>
               {n > 1 && (
                 <span
-                  className={`h-[2px] flex-1 rounded-full ${step >= n ? 'bg-primary' : 'bg-line'}`}
+                  className={`h-rail flex-1 rounded-full ${step >= n ? 'bg-primary' : 'bg-line'}`}
                 />
               )}
               <span
-                className={`flex h-7 w-7 items-center justify-center rounded-full text-body font-semibold ${step >= n ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
+                className={`flex size-icon items-center justify-center rounded-full text-body font-semibold ${step >= n ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
               >
                 {n}
               </span>
@@ -398,7 +398,7 @@ export function AddAccountModal({
                     onClick={() => fileInput.current?.click()}
                     className="flex items-center gap-md rounded-lg border border-dashed border-line bg-white px-lg py-lg text-left"
                   >
-                    <span className="flex h-[46px] w-[46px] shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+                    <span className="flex size-touch shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
                       <Icon name="upload-cloud" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -418,7 +418,7 @@ export function AddAccountModal({
                   {fileName && (
                     <div className="tb-fadeup rounded-lg border border-line bg-white px-md py-md">
                       <div className="flex items-center gap-md">
-                        <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg bg-canvas text-ink-muted">
+                        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-canvas text-ink-muted">
                           {method === 'tdata' ? (
                             <Icon name="alert-square" size={18} />
                           ) : (
@@ -441,7 +441,7 @@ export function AddAccountModal({
                           </div>
                         </div>
                         {importing ? (
-                          <span className="tb-spin m-tight inline-block h-[14px] w-[14px] rounded-full border-2 border-line border-t-primary" />
+                          <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
                         ) : importFailed ? (
                           <span className="m-xs inline-flex text-danger">
                             <Icon name="x-circle" size={18} />
@@ -575,7 +575,7 @@ export function AddAccountModal({
                   >
                     {proxy.country_code ? (
                       <span
-                        className={`fi fi-${proxy.country_code.toLowerCase()} block h-[17px] w-6 shrink-0 rounded-[3px] shadow-ring`}
+                        className={`fi fi-${proxy.country_code.toLowerCase()} block h-flag w-flag shrink-0 rounded-[3px] shadow-ring`}
                       />
                     ) : null}
                     <span className="flex-1">

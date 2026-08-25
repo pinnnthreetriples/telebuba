@@ -52,11 +52,11 @@ function Stepper({
           onClick={() => {
             onChange(value - 1);
           }}
-          className="h-[20px] w-[20px] rounded-full text-lead text-ink-muted disabled:opacity-40"
+          className="size-chip rounded-full text-lead text-ink-muted disabled:opacity-40"
         >
           −
         </button>
-        <span className="min-w-[18px] text-center text-body font-semibold tabular-nums">
+        <span className="min-w-badge text-center text-body font-semibold tabular-nums">
           {value}
         </span>
         <button
@@ -66,7 +66,7 @@ function Stepper({
           onClick={() => {
             onChange(value + 1);
           }}
-          className="h-[20px] w-[20px] rounded-full text-lead text-ink-muted disabled:opacity-40"
+          className="size-chip rounded-full text-lead text-ink-muted disabled:opacity-40"
         >
           +
         </button>
@@ -121,7 +121,7 @@ function StepRow({
           type="button"
           aria-label={t('neuroshilling.scenario.steps.remove', { position })}
           onClick={onRemove}
-          className="h-[24px] shrink-0 rounded-sm border border-line bg-white px-sm text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
+          className="h-bar shrink-0 rounded-sm border border-line bg-white px-sm text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
         >
           ×
         </button>
@@ -156,7 +156,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`h-[28px] w-[28px] rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line bg-white'}`}
+              className={`size-icon rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line bg-white'}`}
             >
               {emoji}
             </button>
@@ -165,7 +165,7 @@ function StepRow({
       )}
 
       <div className="flex flex-wrap items-center gap-md">
-        <div className="w-[150px]">
+        <div className="w-col">
           <Select
             value={link === null ? '' : String(link)}
             onChange={(value) => {
@@ -194,7 +194,7 @@ function StepRow({
           <span>{t('neuroshilling.scenario.steps.delay')}</span>
           <Input
             size="xs"
-            className="w-[62px] tabular-nums"
+            className="w-number tabular-nums"
             type="number"
             min={0}
             max={MAX_STEP_DELAY_SECONDS}
@@ -213,7 +213,7 @@ function StepRow({
           <span>–</span>
           <Input
             size="xs"
-            className="w-[62px] tabular-nums"
+            className="w-number tabular-nums"
             type="number"
             min={0}
             max={MAX_STEP_DELAY_SECONDS}
@@ -444,6 +444,7 @@ export function ScenarioCard({
       <div className="mb-lg flex flex-wrap items-center gap-sm">
         <Input
           size="sm"
+          // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own two-column body
           className="min-w-[220px] flex-1"
           value={draft.mediaMessageLink}
           maxLength={500}
@@ -453,7 +454,7 @@ export function ScenarioCard({
             onDraft({ ...draft, mediaMessageLink: event.target.value });
           }}
         />
-        <div className="w-[150px]">
+        <div className="w-col">
           <Select
             value={draft.mediaStepPosition === null ? '' : String(draft.mediaStepPosition)}
             onChange={(value) => {
@@ -491,10 +492,10 @@ export function ScenarioCard({
       <div className="mb-md flex flex-col gap-sm">
         {draft.roles.map((role, index) => (
           <div key={role.roleId} className="flex items-center gap-sm">
-            <span className={`h-[9px] w-[9px] shrink-0 rounded-full ${roleTone(index).bg}`} />
+            <span className={`size-node shrink-0 rounded-full ${roleTone(index).bg}`} />
             <Input
               size="sm"
-              className="w-[140px] shrink-0"
+              className="w-col shrink-0"
               value={role.name}
               maxLength={60}
               placeholder={t('neuroshilling.scenario.roles.namePlaceholder')}
@@ -539,7 +540,7 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className="h-[30px] shrink-0 rounded-md border border-line bg-white px-md text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
+              className="h-compact shrink-0 rounded-md border border-line bg-white px-md text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
             >
               ×
             </button>

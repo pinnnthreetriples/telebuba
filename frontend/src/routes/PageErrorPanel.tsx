@@ -12,7 +12,7 @@ import { i18n } from '@/shared/i18n';
 // detail.
 export function PageErrorPanel() {
   return (
-    <div role="alert" className="p-4xl text-lead text-ink">
+    <div role="alert" className="p-page text-lead text-ink">
       {i18n.t('shell.pageError')}
     </div>
   );

@@ -16,7 +16,7 @@ export function DeleteAccountModal({
   return (
     <Modal
       onClose={onClose}
-      className="w-[420px]"
+      className="w-confirm"
       label={t('accounts.deleteModal.title', { phone })}
     >
       <div className="p-2xl">

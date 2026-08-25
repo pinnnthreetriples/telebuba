@@ -49,7 +49,7 @@ function NumberField({
       {hint ? <HelpHint text={hint} /> : null}
       <Input
         size="xs"
-        className="w-[78px] tabular-nums"
+        className="w-readout tabular-nums"
         type="number"
         min={min}
         max={max}
@@ -197,7 +197,7 @@ export function CampaignSetupCard({
             {t(`neuroshilling.setup.pause.${bound}`)}
             <Input
               size="xs"
-              className="w-[78px] tabular-nums"
+              className="w-readout tabular-nums"
               type="number"
               min={0}
               max={MAX_PAUSE_SECONDS}

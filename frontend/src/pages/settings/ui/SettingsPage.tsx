@@ -435,6 +435,7 @@ export function SettingsPage() {
   const failed = warming.isError || neuro.isError || !warming.data || !neuro.data;
 
   return (
+    // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this page's own settings column
     <div className="tb-fadeup max-w-[760px]">
       <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">{t('settings.title')}</h1>
       {loading ? (

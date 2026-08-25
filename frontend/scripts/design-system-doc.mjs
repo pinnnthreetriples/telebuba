@@ -68,6 +68,13 @@ function readConfig() {
   return {
     colors: block(src, 'colors'),
     spacing: block(src, 'spacing'),
+    size: block(src, 'size'),
+    height: block(src, 'height'),
+    width: block(src, 'width'),
+    minWidth: block(src, 'minWidth'),
+    maxWidth: block(src, 'maxWidth'),
+    minHeight: block(src, 'minHeight'),
+    maxHeight: block(src, 'maxHeight'),
     fontSize: block(src, 'fontSize'),
     borderRadius: block(src, 'borderRadius'),
     boxShadow: block(src, 'boxShadow'),
@@ -183,9 +190,84 @@ const RUNG = {
     lg: 'Блоки карточки и формы',
     xl: 'Горизонтальный отступ контрола',
     '2xl': 'Горизонтальный отступ крупного контрола',
-    '3xl': 'Воздух страницы',
-    '4xl': 'Воздух страницы, крупный шаг',
-    '5xl': 'Пустое состояние',
+    page: 'Воздух самой страницы: поля экрана входа, панели ошибки и блока «ничего нет»',
+    empty: 'Пустое состояние: высота карточки, в которой нечего показать',
+  },
+  // Подписи размеров держатся одного правила: ступень называет роль, а роль обязана
+  // указывать на компонент, который её носит. Ступень, про которую нельзя сказать, кто
+  // её надевает, защитить нечем — и это единственная проверка, отличающая роль от
+  // синонима величины.
+  size: {
+    tick: 'Самая мелкая метка: деления ползунка в WarmDaysModal, точка «печатает» в DialogueFeed',
+    dot: 'Точка состояния рядом с подписью: Badge, прокси в таблице аккаунтов, индикатор системы в шапке',
+    node: 'Метка шага на рельсе степпера: WarmingBoard и PipelineCard',
+    spinner: 'Кольцо загрузки tb-spin и галочка пройденного шага степпера',
+    glyph:
+      'Круглый бейдж со знаком: «?» у HelpHint, флажок _CheckRow, номер шага в HowItWorksCard, бегунок ползунка',
+    chip: 'Самое мелкое, что можно нажать: IconButton sm, кнопка удаления поверх фотографии в PhotoTab',
+    icon: 'Отдельная иконочная кнопка: IconButton md, знак логотипа в шапке',
+    tile: 'Иконка рядом с заголовком диалога, лицо аккаунта в строке таблицы, IconButton lg',
+    thumbnail: 'Картинка поста в ChannelPostsPanel, плитка файла в AddAccountModal',
+    touch: 'Цель для пальца: кнопки шапки на телефоне, строки NavDrawer, IconButton touch',
+    face: 'Собственный портрет аккаунта в ProfileModal и AccountEdit',
+  },
+  height: {
+    px: 'Волосяная линия: разделитель, который рисуют высотой, а не границей',
+    full: 'Вся высота родителя — отказ от ступени, а не ступень',
+    rail: 'Дорожка, которая заполняется: подчёркивание раздела в шапке, связка обоих степперов, шаги мастера в AddAccountModal',
+    meter:
+      'Полоса прогресса: прогрев в AccountEdit, ёмкость прокси в ProxyPool, рельс ползунка в WarmDaysModal',
+    flag: 'Флаг страны — приложение рисовало его в шести размерах ради одной задачи, и только он: шкала расхода в NeuroAccountsModal мерила столько же, но шкала — не флаг',
+    badge:
+      'Счётчик, который растёт вширь, а не вверх: бейдж ListenerCard, номер фотографии в AddStoryModal',
+    bar: 'Столбик гистограммы дней в WarmingBoard и компактные кнопки той же высоты',
+    compact:
+      'Контрол ниже поля: дорожка Switch, ползунок WarmDaysModal, кнопка удаления в ScenarioCard',
+    header: 'Шапка приложения: AppNav и NavDrawer',
+  },
+  width: {
+    px: 'Вертикальный разделитель в строке — на странице прогрева он единственный',
+    auto: 'Ширина по содержимому: строка, которая на широком экране перестаёт быть колонкой',
+    max: 'Ширина по самой длинной строке: подсказка над кнопкой в AddStoryModal',
+    full: 'Вся ширина родителя — отказ от ступени, а не ступень',
+    flag: 'Ширина флага страны',
+    action:
+      'Постоянная колонка, которую строка отдаёт контролу: кнопки запуска и удаления в CampaignsCard и ListenerCard, показ ключа в ApiKeyField, колонка флажков в DiscoveryResults. Дорожка Switch, полоса доверия в таблице аккаунтов и плитка раскладки в AddStoryModal мерили те же 46px, но ни одна не стоит в колонке строки, и каждая теперь своя',
+    number: 'Числовое поле: дни и часы в WarmConfigModal, время в CommentModeFields',
+    readout:
+      'Число, которое не должно прыгать при изменении: показание ползунка в CampaignSetupCard, лимит в AccountLimitsModal. Ту же меру занимает карточка истории в AddStoryModal',
+    stamp: 'Колонка таблицы со временем или идентификатором: LogsPage, канал в LogTerminal',
+    col: 'Обычная колонка таблицы и поле, встроенное в строку',
+    menu: 'Выпадающий список или фильтр рядом с заголовком страницы: меню аккаунта в AppNav',
+    tip: 'Подсказка HelpHint и поле поиска на странице аккаунтов',
+    confirm: 'Диалог-вопрос с двумя кнопками: ConfirmModal и три диалога удаления',
+    form: 'Диалог, который заполняют: AddAccountModal, AddStoryModal, ProxyAddModal, WarmDaysModal',
+    panel:
+      'Диалог со списком или вкладками: ProfileModal, ChannelEditModal, NeuroAccountsModal, WarmConfigModal',
+    table:
+      'Диалог вокруг таблицы: история комментариев и подбор каналов. 926 — это 880 порога DataTable плюс собственные поля более щедрого из двух: ниже диалог показал бы карточки, а не таблицу',
+  },
+  minWidth: {
+    0: 'Ноль, который позволяет ячейке flex обрезать текст вместо того, чтобы растягивать строку. Самый частый размерный токен в приложении',
+    badge: 'Счётчик, который обязан остаться круглым на одной цифре: ListenerCard, AddStoryModal',
+    col: 'Ширина, ниже которой колонка не опускается: шапка AccountEdit, фильтр на странице аккаунтов',
+    table:
+      'Порог, ниже которого DataTable перестаёт быть таблицей и становится карточками, — и потому мера, вокруг которой считается ширина диалога с таблицей',
+  },
+  maxWidth: {
+    full: 'Не шире родителя: диалог на узком экране',
+    name: 'Предел для канала или комментария, который обязан обрезаться: DiscoveryResults, NeurocommentBoard',
+    page: 'Содержательная колонка страницы: AccountEdit, NeuroshillingPage',
+    shell: 'Собственная ширина приложения: AppShell и AppNav',
+  },
+  minHeight: {
+    touch: 'Те же 44px, что и у квадратной ступени, но про одну ось: строки NavDrawer',
+    screen: 'Ростом со стекло — корневой контейнер приложения',
+  },
+  maxHeight: {
+    feed: 'Прокручиваемый список, у которого свой блок: LogTerminal, комментарии NeurocommentBoard, аккаунты CampaignPromptModal, DialogueFeed',
+    dialog:
+      'Предел для тела диалога. В dvh, потому что панели браузера на телефоне — часть того, что ему надо обойти',
   },
   zIndex: {
     0: 'Выход из слоёв: едущая капсула лежит под своими подписями',
@@ -306,8 +388,10 @@ function renderTypeScale(config, indent) {
 }
 
 function renderSpacingScale(config, indent) {
-  const rungs = config.spacing;
-  const prose = `${count(rungs.length, 'ступеней')} — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>добавлена</em>, а не заменена — <code>spacing</code> кормит ещё и <code>w-*</code>/<code>h-*</code>, а 34px аватара это размер компонента, а не ступень ритма; вернуться <code>p-4</code> не даёт правило линтера, а не отсутствие ключа.`;
+  // `0` и `px` из таблицы выпадают: проза называет их не ступенями, и посчитать их
+  // ступенями значило бы написать над таблицей число, которое сама же проза опровергает.
+  const rungs = config.spacing.filter((e) => e.name !== '0' && e.name !== 'px');
+  const prose = `${count(rungs.length, 'ступеней')} — один ритм на зазор, отступ и поле. Зазор и отступ это одна мера с двух сторон, и держать их в разных шкалах значит получить <code>gap-md</code> рядом с <code>px-3</code> в одной строке. Числа взяты из макета, а не с сетки в 4px: у приложения было два ритма, свой и Tailwind, и выигрывает тот, который рисовали. Шкала <em>заменяет</em> числовую шкалу Tailwind целиком, и до сих пор это было невозможно: <code>spacing</code> кормит и <code>w-*</code>/<code>h-*</code> тоже, а 34px аватара — размер компонента, а не ступень ритма. Теперь у размеров свои шкалы, поэтому <code>p-md</code> рисует 10px, а <code>w-md</code> не рисует ничего. <code>0</code> и <code>px</code> в конфиге есть, но в таблице их нет: это не ступени.`;
   const rows = rungs.map((e) =>
     specRow(indent + '  ', `<code>${e.name}</code> · ${px(e.value)}`, RUNG.spacing[e.name] ?? ''),
   );
@@ -317,6 +401,70 @@ function renderSpacingScale(config, indent) {
     ...rows,
     `${indent}</table>`,
   ].join('\n');
+}
+
+function renderSizeScale(config, indent) {
+  const prose = `${count(config.size.length, 'ступеней')} на квадрат, где ширина и высота — одно решение. 131 элемент писал одно и то же число дважды парой <code>w</code>/<code>h</code>; <code>size-*</code> говорит его один раз. Эти ступени вобрали двадцать девять диаметров кружков и все иконочные коробки приложения, и ни одна свёртка не сдвинула значение больше чем на 4px.`;
+  const rows = config.size.map((e) =>
+    specRow(indent + '  ', `<code>${e.name}</code> · ${px(e.value)}`, RUNG.size[e.name] ?? ''),
+  );
+  return [
+    `${indent}<p class="body">${prose}</p>`,
+    `${indent}<table class="spec">`,
+    ...rows,
+    `${indent}</table>`,
+  ].join('\n');
+}
+
+// Остальные размерные шкалы: заголовок, вступление и таблица на каждую. Значение
+// печатается как есть — в одной шкале стоят рядом пиксели, проценты, dvh и ключевые
+// слова, и обрезать «px» тут значило бы врать в трёх строках из четырёх.
+const DIMENSION_GROUPS = [
+  [
+    'height',
+    'Высоты',
+    'Высота, которая не является стороной квадрата: предмет либо лежит (дорожка, полоса), либо стоит в собственный рост контрола.',
+  ],
+  [
+    'width',
+    'Ширины',
+    'Ширины — это в основном полосы, а не размеры: колонка, обрезка, диалог. Последние четыре ступени и есть причина, по которой шкала существует: двадцать два диалога тратили одиннадцать ширин — 380, 420, 440, 460, 468, 480, 540, 560, 580, 760 и 920, — а это не шкала, а протокол того, кто с какой родился.',
+  ],
+  [
+    'minWidth',
+    'Нижние границы ширины',
+    'Ширина, ниже которой элемент не опускается, что бы ни делал flex вокруг него.',
+  ],
+  [
+    'maxWidth',
+    'Верхние границы ширины',
+    'Пределы, и все они про чтение, а не про то, чтобы влезть.',
+  ],
+  ['minHeight', 'Нижние границы высоты', ''],
+  ['maxHeight', 'Пределы прокрутки', ''],
+];
+
+function renderDimensionScales(config, indent) {
+  const out = [
+    `${indent}<p class="body">Размер компонента — не ступень ритма, и до сих пор это было мнение, а не устройство: в Tailwind ключ <code>spacing</code> становится и <code>p-&lt;имя&gt;</code>, и <code>w-&lt;имя&gt;</code>, его разливают семнадцать базовых шкал. Пока одна таблица отвечала на два вопроса, 476 размерных мест тратили 73 разных значения, 57 из которых ни одна ступень ритма не называла. Шкалы ниже объявлены отдельно и <code>spacing</code> не разливают, поэтому <code>p-md</code> есть, а <code>w-md</code> нет.</p>`,
+    `${indent}<p class="body">Каждое имя здесь — <em>роль</em>, и проверка у роли одна: она обязана называть то, что в этом продукте есть, и надо уметь показать компонент, который её носит. <code>coin</code> для 52px проверку не проходит, <code>touch</code> для цели пальца в 44px — проходит. Слово-величина не умеет спорить со следующим значением, а спорить со значениями — вся работа шкалы.</p>`,
+  ];
+  for (const [key, title, prose] of DIMENSION_GROUPS) {
+    out.push(`${indent}<h3>${title}</h3>`);
+    if (prose) out.push(`${indent}<p class="body">${prose}</p>`);
+    out.push(`${indent}<table class="spec">`);
+    for (const entry of config[key]) {
+      out.push(
+        specRow(
+          `${indent}  `,
+          `<code>${entry.name}</code> · ${entry.value}`,
+          RUNG[key][entry.name] ?? '',
+        ),
+      );
+    }
+    out.push(`${indent}</table>`);
+  }
+  return out.join('\n');
 }
 
 function renderLayerScale(config, indent) {
@@ -429,6 +577,8 @@ const REGIONS = {
   'type-scale': (config) => renderTypeScale(config, '          '),
   'radius-scale': (config) => renderRadiusScale(config, '        '),
   'spacing-scale': (config) => renderSpacingScale(config, '      '),
+  'size-scale': (config) => renderSizeScale(config, '      '),
+  'dimension-scale': (config) => renderDimensionScales(config, '      '),
   'layer-scale': (config) => renderLayerScale(config, '      '),
   'shadow-scale': (config) => renderShadowScale(config, '      '),
   'motion-scale': (config) => renderMotionScale(config, '        '),

@@ -64,7 +64,7 @@ const SHELL = {
 export function Modal({
   onClose,
   children,
-  className = 'w-[420px]',
+  className = 'w-confirm',
   variant = 'center',
   label,
   backdrop = 0.4,

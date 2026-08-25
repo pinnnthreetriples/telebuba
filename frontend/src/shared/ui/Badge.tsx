@@ -36,7 +36,7 @@ const SIZE = {
 // this one, and beside an 11px label the smaller reads as a printing flaw. Its
 // diameter is a component's dimension and not a rung of the spacing rhythm, which
 // is why it is written out rather than taken from the scale.
-const DOT = 'h-[6px] w-[6px] shrink-0 rounded-full bg-current';
+const DOT = 'size-dot shrink-0 rounded-full bg-current';
 
 export type BadgeTone = keyof typeof TONE;
 

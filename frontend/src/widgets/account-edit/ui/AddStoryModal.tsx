@@ -253,10 +253,10 @@ export function AddStoryModal({
     <Modal
       onClose={busy ? () => undefined : onClose}
       backdrop={0.45}
-      className="w-[460px]"
+      className="w-form"
       label={t('accounts.addStory.title')}
     >
-      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-2xl py-2xl">
+      <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
           <span className="text-title font-bold">{t('accounts.addStory.title')}</span>
           <IconButton
@@ -316,7 +316,7 @@ export function AddStoryModal({
           className="mb-lg flex w-full items-center gap-md text-left"
         >
           <span
-            className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line bg-white'}`}
+            className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line bg-white'}`}
           >
             {noForward && <Icon name="check" size={14} className="stroke-white" />}
           </span>
@@ -348,7 +348,7 @@ export function AddStoryModal({
             disabled={busy || done}
             className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-white px-lg py-lg text-left disabled:opacity-50"
           >
-            <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
               <svg
                 width="20"
                 height="20"
@@ -393,15 +393,18 @@ export function AddStoryModal({
             {images.map((image, index) => (
               <div
                 key={`${image.name}-${index}`}
-                className="tb-fadeup flex w-[74px] flex-col gap-xs"
+                className="tb-fadeup flex w-readout flex-col gap-xs"
               >
-                <div className="relative h-[104px] w-[74px] overflow-hidden rounded-lg border border-line bg-canvas">
+                <div
+                  // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the story preview's own portrait box, one component's internal layout
+                  className="relative h-[104px] w-readout overflow-hidden rounded-lg border border-line bg-canvas"
+                >
                   <img
                     src={previews[index]}
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-black/55 px-xs text-micro font-semibold text-white">
+                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-micro font-semibold text-white">
                     {index + 1}
                   </span>
                   <button
@@ -411,7 +414,7 @@ export function AddStoryModal({
                     }}
                     disabled={busy || done}
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                    className="absolute right-[3px] top-[3px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-40"
+                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-40"
                   >
                     <Icon name="close" size={10} />
                   </button>
@@ -425,7 +428,7 @@ export function AddStoryModal({
                     // moveImage also resets the mutation — see the add control.
                     disabled={index === 0 || busy || done}
                     aria-label={t('accounts.addStory.moveLeft', { n: index + 1 })}
-                    className="inline-flex h-[22px] flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
+                    className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >
                     <svg
                       width="12"
@@ -447,7 +450,7 @@ export function AddStoryModal({
                     }}
                     disabled={index === count - 1 || busy || done}
                     aria-label={t('accounts.addStory.moveRight', { n: index + 1 })}
-                    className="inline-flex h-[22px] flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
+                    className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >
                     <svg
                       width="12"
@@ -486,7 +489,8 @@ export function AddStoryModal({
                     }}
                     aria-label={t('accounts.addStory.layoutOption', { id: layout.id })}
                     aria-pressed={selected}
-                    className={`flex h-[62px] w-[42px] items-center justify-center rounded-md border text-primary transition ${selected ? 'border-primary bg-primary/5' : 'border-line bg-white'}`}
+                    // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the collage-layout tile's own box, one component's internal layout
+                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-md border text-primary transition ${selected ? 'border-primary bg-primary/5' : 'border-line bg-white'}`}
                   >
                     <LayoutIcon cells={layout.cells} selected={selected} />
                   </button>
@@ -500,7 +504,7 @@ export function AddStoryModal({
         {video !== null && (
           <div className="mt-md tb-fadeup rounded-lg border border-line bg-white px-md py-md">
             <div className="flex items-center gap-md">
-              <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
                 <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
@@ -515,7 +519,7 @@ export function AddStoryModal({
                     post.reset();
                   }}
                   aria-label={t('accounts.addStory.removeFile')}
-                  className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
+                  className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
                 >
                   <Icon name="close" size={14} />
                 </button>
@@ -531,7 +535,7 @@ export function AddStoryModal({
             <div className="min-w-0 flex-1">
               <div className={`text-tiny font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
-                <div className="mt-sm h-[5px] overflow-hidden rounded-full bg-canvas">
+                <div className="mt-sm h-meter overflow-hidden rounded-full bg-canvas">
                   <div
                     className={`h-full rounded-full ${done ? 'w-full bg-success' : 'tb-upbar bg-primary'}`}
                   />
@@ -540,7 +544,7 @@ export function AddStoryModal({
             </div>
             <div className="flex shrink-0 items-center gap-hair">
               {busy && (
-                <span className="tb-spin m-tight inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
+                <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
               )}
               {done && (
                 <span className="tb-pop m-xs inline-flex text-success-deep">
@@ -563,7 +567,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-[240px] whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal leading-[1.5] text-white shadow-pop group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal leading-[1.5] text-white shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>
@@ -572,7 +576,7 @@ export function AddStoryModal({
                     type="button"
                     onClick={publish}
                     aria-label={t('accounts.addStory.retry')}
-                    className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-muted"
+                    className="inline-flex size-chip items-center justify-center rounded-full text-ink-muted"
                   >
                     <svg
                       width="13"

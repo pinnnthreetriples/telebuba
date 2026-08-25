@@ -24,7 +24,7 @@ export function CheckRow({
       className="mb-lg flex w-full items-center gap-md text-left disabled:opacity-60"
     >
       <span
-        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-sm border ${on ? 'border-primary bg-primary' : 'border-line bg-white'}`}
+        className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-primary bg-primary' : 'border-line bg-white'}`}
       >
         {on && <Icon name="check" size={14} className="stroke-white" />}
       </span>

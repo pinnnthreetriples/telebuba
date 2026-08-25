@@ -86,7 +86,7 @@ export function PipelineCard({
           with nothing to fail. */}
       <div className="relative mb-md">
         <div
-          className="absolute top-[11px] h-[2px] overflow-hidden rounded-[2px] bg-primary-line"
+          className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-primary-line"
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
         >
           <div
@@ -101,15 +101,15 @@ export function PipelineCard({
         <div className="relative flex">
           {STAGES.map((stage, index) => (
             <div key={stage} className="flex flex-1 flex-col items-center">
-              <div className="flex h-6 w-4 items-center justify-center">
+              <div className="flex size-glyph items-center justify-center">
                 {index < activeCell ? (
-                  <span className="tb-pop flex h-4 w-4 items-center justify-center rounded-full bg-success">
+                  <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
                     <Icon name="check" size={10} className="stroke-white" />
                   </span>
                 ) : index === activeCell ? (
-                  <span className="tb-livedot h-[11px] w-[11px] rounded-full bg-primary" />
+                  <span className="tb-livedot size-node rounded-full bg-primary" />
                 ) : (
-                  <span className="h-[9px] w-[9px] rounded-full border-[1.5px] border-primary-line bg-white" />
+                  <span className="size-node rounded-full border-[1.5px] border-primary-line bg-white" />
                 )}
               </div>
               {/* No `min-w-0`: the cells then refuse to shrink under the widest label,
@@ -140,7 +140,7 @@ export function PipelineCard({
       ) : null}
 
       <div className="mb-lg flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-lg py-md">
-        <span className="pl-pulse h-2 w-2 shrink-0 rounded-full bg-primary" />
+        <span className="pl-pulse size-dot shrink-0 rounded-full bg-primary" />
         <span className="tb-pulse text-body font-medium text-primary-deep">
           {running
             ? t('neurocomment.pipeline.descRunning')

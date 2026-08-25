@@ -121,7 +121,7 @@ export function DataTable<TData>({
   });
 
   // Measured on the wrapper below rather than on the <table>: the table carries
-  // `min-w-[880px]`, so measuring it would always read "it fits" and never switch
+  // `min-w-table`, so measuring it would always read "it fits" and never switch
   // back to cards. Both branches return the same wrapper element in the same
   // position, so React keeps the node — and the ref — across a layout switch.
   const box = useRef<HTMLDivElement>(null);
@@ -202,7 +202,7 @@ export function DataTable<TData>({
 
   return (
     <div ref={box}>
-      <table className="w-full min-w-[880px] border-collapse">
+      <table className="w-full min-w-table border-collapse">
         <thead>
           {table.getHeaderGroups().map((headerGroup) => (
             <tr key={headerGroup.id} className="bg-surface">

@@ -61,10 +61,10 @@ export function WarmDaysModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-[440px]" label={t('warming.days.title')}>
+    <Modal onClose={onClose} className="w-confirm" label={t('warming.days.title')}>
       <div className="p-2xl">
         <div className="mb-xs flex items-start gap-md">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+          <div className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
             <svg
               width="17"
               height="17"
@@ -134,22 +134,22 @@ export function WarmDaysModal({
             if (e.key === 'ArrowLeft') setDays((d) => Math.max(MIN, d - 1));
             if (e.key === 'ArrowRight') setDays((d) => Math.min(MAX, d + 1));
           }}
-          className="relative mx-md mb-tight h-[30px] cursor-grab touch-none select-none outline-none"
+          className="relative mx-md mb-tight h-compact cursor-grab touch-none select-none outline-none"
         >
-          <div className="absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
+          <div className="absolute inset-x-0 top-1/2 h-meter -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
             <div className="h-full rounded-full bg-primary" style={{ width: `${String(pct)}%` }} />
           </div>
-          <div className="pointer-events-none absolute inset-x-0 top-1/2 h-[6px] -translate-y-1/2">
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 h-meter -translate-y-1/2">
             {TICKS.map((i) => (
               <span
                 key={i}
-                className="absolute top-1/2 h-[3px] w-[3px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-line-strong"
+                className="absolute top-1/2 size-tick -translate-x-1/2 -translate-y-1/2 rounded-full bg-line-strong"
                 style={{ left: `${String((i / (MAX - 1)) * 100)}%` }}
               />
             ))}
           </div>
           <div
-            className="absolute top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-[2px] border-primary bg-white shadow-thumb"
+            className="absolute top-1/2 size-glyph -translate-x-1/2 -translate-y-1/2 rounded-full border-[2px] border-primary bg-white shadow-thumb"
             style={{ left: `${String(pct)}%` }}
           />
         </div>
@@ -183,7 +183,7 @@ export function WarmDaysModal({
             <button
               type="button"
               aria-label={t('warming.persona.label')}
-              className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
+              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
             >
               ?
             </button>

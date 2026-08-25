@@ -46,7 +46,7 @@ export function CommentHistoryModal({
         header: () => t('neurocomment.history.col.time'),
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
-          className: 'w-[130px]',
+          className: 'w-stamp',
           cellClassName: 'font-mono text-body text-ink-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
@@ -56,7 +56,7 @@ export function CommentHistoryModal({
         header: () => t('neurocomment.history.col.account'),
         cell: ({ row }) => labelOf.get(row.original.account_id) ?? row.original.account_id,
         meta: {
-          className: 'w-[150px]',
+          className: 'w-col',
           cellClassName: 'text-body font-medium text-ink',
         } satisfies DataTableColumnMeta,
       },
@@ -65,7 +65,7 @@ export function CommentHistoryModal({
         header: () => t('neurocomment.history.col.channel'),
         cell: ({ row }) => row.original.channel,
         meta: {
-          className: 'w-[150px]',
+          className: 'w-col',
           cellClassName: 'text-body text-primary',
         } satisfies DataTableColumnMeta,
       },
@@ -89,7 +89,7 @@ export function CommentHistoryModal({
   );
 
   return (
-    <Modal onClose={onClose} className="w-[760px]" label={t('neurocomment.history.title')}>
+    <Modal onClose={onClose} className="w-table" label={t('neurocomment.history.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="text-title font-bold text-ink">{t('neurocomment.history.title')}</div>
       </div>

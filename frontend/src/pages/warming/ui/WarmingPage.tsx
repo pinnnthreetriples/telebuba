@@ -275,7 +275,7 @@ export function WarmingPage() {
             </div>
             <div className="flex flex-col gap-sm">
               {idle.length === 0 ? (
-                <div className="py-3xl text-center text-body text-ink-subtle">
+                <div className="py-page text-center text-body text-ink-subtle">
                   {t('warming.ready.empty')}
                 </div>
               ) : (
@@ -300,7 +300,7 @@ export function WarmingPage() {
                   const showPhone = account.phone != null && account.phone !== name;
                   const flag = cc ? (
                     <span
-                      className={`fi fi-${cc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}
+                      className={`fi fi-${cc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
                     />
                   ) : null;
                   return (
@@ -310,7 +310,7 @@ export function WarmingPage() {
                     >
                       <AccountAvatar
                         account={account}
-                        className="h-[30px] w-[30px] shrink-0 rounded-full"
+                        className="size-icon shrink-0 rounded-full"
                         fallbackClassName="text-body font-semibold bg-primary-tint text-primary-deep"
                       />
                       <div className="min-w-0 flex-1">
@@ -334,7 +334,7 @@ export function WarmingPage() {
                               <span className="text-tiny text-ink-subtle">·</span>
                               {pc ? (
                                 <span
-                                  className={`fi fi-${pc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}
+                                  className={`fi fi-${pc} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
                                 />
                               ) : null}
                               <span className="text-tiny text-ink-subtle">
@@ -405,7 +405,7 @@ export function WarmingPage() {
                     }}
                     placeholder={t('warming.channels.placeholderSingle')}
                     aria-label={t('warming.channels.placeholderSingle')}
-                    className="w-[150px] border-none bg-transparent text-body outline-none"
+                    className="w-col border-none bg-transparent text-body outline-none"
                   />
                   <button
                     type="button"
@@ -413,7 +413,7 @@ export function WarmingPage() {
                     aria-label={t('warming.channels.add')}
                     disabled={!channelInput.trim()}
                     onClick={addChannel}
-                    className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
                   >
                     <Icon name="check" size={12} />
                   </button>
@@ -422,7 +422,7 @@ export function WarmingPage() {
                     title={t('warming.channels.cancel')}
                     aria-label={t('warming.channels.cancel')}
                     onClick={cancelAddChannel}
-                    className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-line-row text-lead leading-none text-ink-muted"
+                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-lead leading-none text-ink-muted"
                   >
                     ×
                   </button>
@@ -450,7 +450,7 @@ export function WarmingPage() {
             label={t('warming.warmed.title')}
             header={
               <>
-                <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-success-tint">
+                <span className="flex size-icon items-center justify-center rounded-lg bg-success-tint">
                   <Icon name="check" size={16} className="stroke-success" />
                 </span>
                 <span className="text-lead font-bold">{t('warming.warmed.title')}</span>
@@ -470,7 +470,7 @@ export function WarmingPage() {
                 const showPhone = acc.phone != null && acc.phone !== name;
                 const flag = acc.phone_country ? (
                   <span
-                    className={`fi fi-${acc.phone_country.toLowerCase()} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-ring`}
+                    className={`fi fi-${acc.phone_country.toLowerCase()} h-flag w-flag shrink-0 rounded-[2px] shadow-ring`}
                   />
                 ) : null;
                 return (
@@ -478,7 +478,7 @@ export function WarmingPage() {
                     <div className="flex items-start gap-md">
                       <AccountAvatar
                         account={acc}
-                        className="h-8 w-8 shrink-0 rounded-full ring-2 ring-success"
+                        className="size-tile shrink-0 rounded-full ring-2 ring-success"
                         fallbackClassName="text-tiny font-bold bg-primary-tint text-primary-deep"
                       />
                       <div className="min-w-0 flex-1">
@@ -495,7 +495,7 @@ export function WarmingPage() {
                         <div className="mt-tight flex items-center gap-sm">
                           {acc.proxy_country ? (
                             <span
-                              className={`fi fi-${acc.proxy_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
+                              className={`fi fi-${acc.proxy_country.toLowerCase()} h-flag w-flag rounded-[2px]`}
                             />
                           ) : null}
                           <span className="text-tiny text-ink-subtle">
@@ -521,7 +521,7 @@ export function WarmingPage() {
                           })}
                         </div>
                       </div>
-                      <span className="h-[26px] w-px bg-line" />
+                      <span className="h-compact w-px bg-line" />
                       <div className="flex-1 pl-lg">
                         <div className="text-micro text-ink-subtle">
                           {t('warming.warmed.trust')}
@@ -552,7 +552,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
-                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted disabled:opacity-50"
+                        className="flex size-thumbnail shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted disabled:opacity-50"
                       >
                         <svg
                           width="15"
@@ -584,7 +584,7 @@ export function WarmingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <div key={index} className="flex items-start gap-md">
-                  <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
+                  <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
                     {index + 1}
                   </span>
                   <span className="text-body leading-[1.45] text-ink-muted">

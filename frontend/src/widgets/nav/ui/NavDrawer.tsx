@@ -24,10 +24,10 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
       backdrop={0.45}
       className="flex w-[min(84vw,300px)] flex-col"
     >
-      <div className="flex h-14 shrink-0 items-center justify-between border-b border-line px-lg">
+      <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-lg">
         <div className="flex items-center gap-md">
-          <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
-            <div className="h-[9px] w-[9px] rounded-full bg-primary" />
+          <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
+            <div className="size-node rounded-full bg-primary" />
           </div>
           <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
@@ -35,7 +35,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           type="button"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-sm flex h-11 w-11 items-center justify-center rounded-full text-ink-muted"
+          className="-mr-sm flex size-touch items-center justify-center rounded-full text-ink-muted"
         >
           <Icon name="close" size={18} />
         </button>
@@ -47,7 +47,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-[44px] items-center rounded-lg px-md text-lead font-medium transition-colors ${
+            className={`flex min-h-touch items-center rounded-lg px-md text-lead font-medium transition-colors ${
               activeIdx === index ? 'bg-primary-tint text-primary-deep' : 'text-ink-muted'
             }`}
           >

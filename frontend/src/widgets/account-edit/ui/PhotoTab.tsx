@@ -81,7 +81,7 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-scrim text-lead leading-none text-white"
+              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-lead leading-none text-white"
             >
               ×
             </button>

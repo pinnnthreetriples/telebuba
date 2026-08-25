@@ -208,10 +208,10 @@ export function ChannelPostsPanel({
               <img
                 src={preview}
                 alt={file.name}
-                className="h-[38px] w-[38px] rounded-md border border-black/5 object-cover"
+                className="size-thumbnail rounded-md border border-black/5 object-cover"
               />
             ) : (
-              <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
                 <Icon name="video" size={16} />
               </span>
             )}
@@ -223,7 +223,7 @@ export function ChannelPostsPanel({
                   setFile(null);
                 }}
                 aria-label={t('accounts.channel.removeFile')}
-                className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
+                className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
               >
                 ×
               </button>
@@ -266,7 +266,7 @@ export function ChannelPostsPanel({
           >
             {busy ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-white/40 border-t-white" />
+                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.publishing')}
               </span>
             ) : (
@@ -290,7 +290,7 @@ export function ChannelPostsPanel({
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-xl"
         >
-          <span className="tb-spin inline-block h-5 w-5 rounded-full border-2 border-line border-t-primary" />
+          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-primary" />
         </div>
       )}
       {posts.isError && (
@@ -416,7 +416,7 @@ export function ChannelPostsPanel({
         >
           {loadingMore ? (
             <span className="inline-flex items-center gap-sm">
-              <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
+              <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
               {t('accounts.channel.loading')}
             </span>
           ) : (

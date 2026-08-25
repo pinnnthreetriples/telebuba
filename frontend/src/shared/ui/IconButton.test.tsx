@@ -24,34 +24,34 @@ test('is reachable by its accessible name and defaults to a non-submitting butto
   expect(onClick).toHaveBeenCalledTimes(1);
 });
 
-test('size picks both the box and its shape, so 34 is the only circle', () => {
+test('size picks both the box and its shape, so `tile` is the only circle', () => {
   const { rerender } = render(
     <IconButton aria-label="a" size="sm">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-6', 'w-6', 'rounded-sm');
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-chip', 'rounded-sm');
 
   rerender(
     <IconButton aria-label="a" size="md">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-7', 'w-7', 'rounded-md');
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-icon', 'rounded-md');
 
   rerender(
     <IconButton aria-label="a" size="lg">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-[34px]', 'rounded-full');
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-tile', 'rounded-full');
 
   rerender(
     <IconButton aria-label="a" size="touch">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('h-11', 'w-11', 'rounded-md');
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-touch', 'rounded-md');
 });
 
 test('tone paints the hover, and neutral deliberately has none', () => {
@@ -107,5 +107,5 @@ test('extra classes are appended, so a caller can size the glyph it puts inside'
     </IconButton>,
   );
 
-  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-title', 'h-7');
+  expect(screen.getByRole('button', { name: 'Закрыть' })).toHaveClass('text-title', 'size-icon');
 });

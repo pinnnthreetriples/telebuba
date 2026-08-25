@@ -79,7 +79,7 @@ export function ApiKeyField({
           type="button"
           aria-label={toggleLabel}
           onClick={onToggleShow}
-          className="flex w-[42px] items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep"
+          className="flex w-action items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep"
         >
           <EyeIcon off={show} />
         </button>

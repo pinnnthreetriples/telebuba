@@ -42,7 +42,7 @@ export function CampaignPromptModal({
   return (
     <Modal
       onClose={onClose}
-      className="w-[480px]"
+      className="w-form"
       label={t('neurocomment.modal.campaignPrompt.title')}
     >
       <div className="p-2xl">
@@ -85,20 +85,20 @@ export function CampaignPromptModal({
           </span>
         </div>
         {accounts.length > 0 ? (
-          <div className="tb-scroll flex max-h-[184px] flex-col gap-sm overflow-y-auto rounded-lg border border-canvas bg-surface p-tight">
+          <div className="tb-scroll flex max-h-feed flex-col gap-sm overflow-y-auto rounded-lg border border-canvas bg-surface p-tight">
             {accounts.map((account) => (
               <div
                 key={account.account_id}
                 className="flex items-center gap-md rounded-md border border-canvas bg-white px-md py-sm"
               >
-                <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary-deep">
+                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary-deep">
                   {account.initials}
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-lead font-semibold text-ink">{account.phone}</div>
                   <div className="mt-px text-tiny text-ink-muted">{account.channel}</div>
                 </div>
-                <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-success" />
+                <span className="size-dot shrink-0 rounded-full bg-success" />
                 <IconButton
                   size="md"
                   tone="danger"
@@ -146,7 +146,7 @@ export function CampaignPromptModal({
           onClose={() => {
             setConfirm(null);
           }}
-          className="w-[380px]"
+          className="w-confirm"
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
           <div className="p-2xl">

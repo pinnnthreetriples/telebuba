@@ -18,7 +18,7 @@ import {
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
-const CHECKBOX = 'h-[14px] w-[14px] shrink-0 accent-primary disabled:opacity-40';
+const CHECKBOX = 'size-spinner shrink-0 accent-primary disabled:opacity-40';
 
 const SOURCE_STATE = {
   ran: 'sourceRan',
@@ -126,7 +126,7 @@ function CommentsMark({ state }: { state: string }) {
   return (
     <span className="inline-flex items-center gap-tight text-tiny text-ink-subtle">
       <span
-        className={`h-[6px] w-[6px] rounded-full bg-line-strong ${
+        className={`size-dot rounded-full bg-line-strong ${
           state === 'pending' ? 'animate-pulse' : ''
         }`}
       />
@@ -202,7 +202,7 @@ export function DiscoveryResults({
 }: Props) {
   const { t, i18n } = useTranslation();
   // Must be the container query DataTable itself uses, not the viewport one: this table
-  // lives in a 920px modal whose padding leaves it 884px, 4px over the 880px table/card
+  // lives in a 926px modal whose padding leaves it 890px, 10px over the 880px table/card
   // floor — so on a narrower viewport the table renders as cards while a viewport query
   // would still say "table", and the select-all below would go missing.
   const results = useRef<HTMLDivElement>(null);
@@ -259,8 +259,8 @@ export function DiscoveryResults({
       // is the select-all checkbox, so as a card *label* it would render one
       // select-all per card, each toggling the whole result set.
       meta: {
-        className: 'w-[38px]',
-        cellClassName: 'w-[38px]',
+        className: 'w-action',
+        cellClassName: 'w-action',
         cardSlot: 'control',
       } satisfies DataTableColumnMeta,
     },
@@ -276,7 +276,7 @@ export function DiscoveryResults({
       cell: ({ row }) => (
         // Capped only where there is room for it: 240px plus the card's own padding
         // overflows the dialog box at a 320px viewport.
-        <span className="block truncate text-ink-muted md:max-w-[240px]">
+        <span className="block truncate text-ink-muted md:max-w-name">
           {row.original.title ?? ''}
         </span>
       ),
@@ -353,7 +353,7 @@ export function DiscoveryResults({
   // operator has to be told when it finishes or fails without polling the table.
   if (loading) {
     return (
-      <p role="status" className="py-3xl text-center text-body text-ink-subtle">
+      <p role="status" className="py-page text-center text-body text-ink-subtle">
         {t('neurocomment.modal.discovery.results.searching')}
       </p>
     );
@@ -364,7 +364,7 @@ export function DiscoveryResults({
   // operator has made with it.
   if (errored && candidates.length === 0) {
     return (
-      <p role="status" className="py-3xl text-center text-body text-danger">
+      <p role="status" className="py-page text-center text-body text-danger">
         {t('neurocomment.modal.discovery.results.error')}
       </p>
     );
@@ -372,7 +372,7 @@ export function DiscoveryResults({
 
   if (failed && candidates.length === 0) {
     return (
-      <p role="status" className="py-3xl text-center text-body text-danger">
+      <p role="status" className="py-page text-center text-body text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
           reason:
             board?.progress.last_error == null
@@ -387,7 +387,7 @@ export function DiscoveryResults({
 
   if (candidates.length === 0) {
     return (
-      <p className="py-3xl text-center text-body text-ink-subtle">
+      <p className="py-page text-center text-body text-ink-subtle">
         {t('neurocomment.modal.discovery.results.empty')}
       </p>
     );

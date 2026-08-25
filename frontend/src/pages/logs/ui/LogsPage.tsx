@@ -96,7 +96,7 @@ export function LogsPage() {
         header: () => t('logs.col.time'),
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
-          className: 'w-[120px]',
+          className: 'w-stamp',
           cellClassName: 'font-mono text-body text-ink-subtle',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
@@ -105,7 +105,7 @@ export function LogsPage() {
         id: 'level',
         header: () => t('logs.col.level'),
         cell: ({ row }) => <LogStatusBadge status={row.original.status} />,
-        meta: { className: 'w-[110px]', cardSlot: 'control' } satisfies DataTableColumnMeta,
+        meta: { className: 'w-stamp', cardSlot: 'control' } satisfies DataTableColumnMeta,
       },
       {
         id: 'account',
@@ -113,7 +113,7 @@ export function LogsPage() {
         cell: ({ row }) =>
           row.original.account_id ? resolveAccount(row.original.account_id) : '—',
         meta: {
-          className: 'w-[150px]',
+          className: 'w-col',
           cellClassName: 'text-body text-ink-body',
         } satisfies DataTableColumnMeta,
       },
@@ -122,7 +122,7 @@ export function LogsPage() {
         header: () => t('logs.col.channel'),
         cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
         meta: {
-          className: 'w-[170px]',
+          className: 'w-col',
           cellClassName: 'truncate text-body text-ink-body',
         } satisfies DataTableColumnMeta,
       },
@@ -220,7 +220,7 @@ export function LogsPage() {
           ))}
         </div>
         <div className="flex-1" />
-        <div className="w-full shrink-0 sm:w-[200px]">
+        <div className="w-full shrink-0 sm:w-menu">
           <Select
             value={account}
             onChange={pickAccount}
@@ -237,7 +237,7 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-lg py-5xl text-center text-lead text-ink-subtle">
+        <Card className="px-lg py-empty text-center text-lead text-ink-subtle">
           {t('logs.empty')}
         </Card>
       ) : (

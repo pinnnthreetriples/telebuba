@@ -93,7 +93,7 @@ function TypingIndicator() {
         {[0, 1, 2].map((index) => (
           <span
             key={index}
-            className="tb-typing-dot h-[4px] w-[4px] rounded-full bg-primary"
+            className="tb-typing-dot size-tick rounded-full bg-primary"
             style={{ animationDelay: `${String(index * 0.16)}s` }}
           />
         ))}
@@ -128,14 +128,14 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
 
   if (ordered.length === 0) {
     return (
-      <div className="py-4xl text-center text-body text-ink-subtle">
+      <div className="py-page text-center text-body text-ink-subtle">
         {t('warming.dialogues.empty')}
       </div>
     );
   }
 
   return (
-    <div className="tb-scroll flex max-h-[260px] flex-col gap-md overflow-y-auto pr-xs">
+    <div className="tb-scroll flex max-h-feed flex-col gap-md overflow-y-auto pr-xs">
       {ordered.map((message) => {
         const key = messageKey(message);
         return <DialogueRow key={key} message={message} isNew={isNew(key)} />;
@@ -175,7 +175,7 @@ export function DialogueFeed() {
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span
-          className={`h-[7px] w-[7px] shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
+          className={`size-dot shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
         />
         <span className="text-lead font-bold">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
