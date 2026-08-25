@@ -195,33 +195,38 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
    Геометрия живёт один раз в спрайте; здесь только размер и толщина. */
 .i { fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; flex:none; display:block; }
 .i-fill { fill:currentColor; stroke:none; }
-.i-12 { width:12px; height:12px; } .i-13 { width:13px; height:13px; }
-.i-14 { width:14px; height:14px; } .i-15 { width:15px; height:15px; }
-.i-16 { width:16px; height:16px; } .i-18 { width:18px; height:18px; }
-.i-24 { width:24px; height:24px; }
+/* Обводка задана на каждой ступени, а не один раз: в единицах viewBox её толщина
+   делится на размер, и постоянная величина в атрибуте давала бы иконку тем жирнее,
+   чем она мельче. Числа — те же, что считает Icon.tsx: 1.3 CSS-пикселя на любом размере. */
+.i-12 { width:12px; height:12px; stroke-width:2.6; } .i-13 { width:13px; height:13px; stroke-width:2.4; }
+.i-14 { width:14px; height:14px; stroke-width:2.2; } .i-15 { width:15px; height:15px; stroke-width:2.1; }
+.i-16 { width:16px; height:16px; stroke-width:2; } .i-18 { width:18px; height:18px; stroke-width:1.7; }
+.i-24 { width:24px; height:24px; stroke-width:1.3; }
 
 /* Кнопка */
 .btn { font-family:inherit; border:1px solid transparent; border-radius:999px; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; transition:background-color var(--t-state),border-color var(--t-state),color var(--t-state); }
-.btn-lg { padding:9px 22px; font-size:13px; font-weight:600; }
-.btn-md { padding:7px 18px; font-size:12.5px; font-weight:600; }
-.btn-sm { padding:5px 14px; font-size:11.5px; font-weight:500; }
+.btn-md { padding:10px 22px; font-size:13px; font-weight:600; }
+.btn-sm { padding:7px 18px; font-size:12.5px; font-weight:600; }
+.btn-xs { padding:5px 10px; font-size:12.5px; font-weight:500; border-radius:var(--r-md); }
+.btn-block { display:flex; width:100%; padding:10px 0; font-size:13px; font-weight:500; border-radius:var(--r-nest); }
 .b-pri { background:var(--primary); color:#fff; }
 .b-pri:hover, .b-pri.is-hover { background:var(--primary-press); }
-.b-pri:active, .b-pri.is-active { background:var(--primary-press); transform:scale(.98); }
 .b-sec { background:var(--white); border-color:var(--line); color:var(--ink); }
 .b-sec:hover, .b-sec.is-hover { border-color:var(--line-strong); }
-.b-dan { background:var(--danger-tint); border-color:var(--danger-line); color:var(--danger); font-weight:600; }
-.b-dan:hover, .b-dan.is-hover { border-color:#e0b6b2; }
-.b-lnk { background:none; border:0; color:var(--primary); padding:0; font-size:12.5px; font-weight:500; }
-.b-lnk:hover { text-decoration:underline; }
-.btn.is-focus { outline:2px solid var(--primary); outline-offset:3px; }
+.b-dan { background:var(--danger-tint); border-color:var(--danger-line); color:var(--danger-deep); font-weight:600; }
+.b-dan:hover, .b-dan.is-hover { border-color:var(--danger); }
+.b-gho { background:none; border-color:transparent; color:var(--ink-muted); }
+.b-gho:hover, .b-gho.is-hover { background:var(--canvas); color:var(--ink); }
+.b-dsh { background:var(--white); border:1px dashed var(--primary-line); color:var(--primary-deep); }
+.b-dsh:hover, .b-dsh.is-hover { border-color:var(--primary); background:var(--primary-tint); }
+.btn.is-focus { outline:2px solid var(--primary); outline-offset:2px; }
 .btn:disabled, .btn.is-off { opacity:.5; cursor:default; }
 .spin { width:13px; height:13px; border:2px solid rgba(255,255,255,.45); border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; }
 .spin.dark { border-color:var(--line-strong); border-top-color:var(--primary); }
 
 /* Иконочная кнопка */
 .ib { display:grid; place-items:center; border:1px solid var(--line); background:var(--white); color:var(--ink-subtle); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
-.ib-24 { width:24px; height:24px; border-radius:var(--r-sm); }
+.ib-22 { width:22px; height:22px; border-radius:var(--r-sm); }
 .ib-28 { width:28px; height:28px; border-radius:var(--r-md); }
 .ib-34 { width:34px; height:34px; border-radius:999px; }
 .ib-44 { width:44px; height:44px; border-radius:var(--r-md); }
@@ -312,12 +317,13 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .dl i { width:6px; height:6px; border-radius:50%; background:currentColor; }
 
 /* Уведомления */
-.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-nest); padding:11px 13px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
+.note { display:flex; align-items:flex-start; gap:10px; border:1px solid; border-radius:var(--r-nest); padding:10px; font-size:12.5px; line-height:1.5; text-align:left; width:100%; }
 .n-info { border-color:var(--primary-line); background:var(--primary-tint); color:var(--ink-body); }
 .n-warn { border-color:var(--warning-line); background:var(--warning-tint); color:var(--ink-body); }
 .n-bad  { border-color:var(--danger-line); background:var(--danger-tint); color:var(--ink-body); }
+.n-ok   { border-color:var(--success-line); background:var(--success-tint); color:var(--ink-body); }
 .note .ic { flex:none; margin-top:1px; }
-.n-info .ic { color:var(--primary); } .n-warn .ic { color:var(--warning); } .n-bad .ic { color:var(--danger); }
+.n-info .ic { color:var(--primary); } .n-warn .ic { color:var(--warning); } .n-bad .ic { color:var(--danger); } .n-ok .ic { color:var(--success); }
 
 /* Поверхности */
 .card { background:var(--white); border:1px solid var(--line); border-radius:var(--r-card); padding:18px; }
@@ -413,8 +419,8 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
   <symbol id="ic-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
   <symbol id="ic-play" viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></symbol>
   <symbol id="ic-pause" viewBox="0 0 24 24"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></symbol>
-  <symbol id="ic-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
-  <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="ic-pencil" viewBox="0 0 24 24"><path d="M13 21h8"/><path d="m15 5 4 4"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></symbol>
+  <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
   <symbol id="ic-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="ic-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
   <symbol id="ic-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
@@ -424,7 +430,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
   <symbol id="ic-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
   <symbol id="ic-menu" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></symbol>
   <symbol id="ic-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
-  <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
   <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
   <symbol id="ic-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="ic-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
@@ -485,8 +491,8 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div><b>1</b><span>акцент</span></div>
         <div><b>2</b><span>шрифта</span></div>
         <div><b>5</b><span>радиусов</span></div>
-        <div><b>6</b><span>заменённых шкал</span></div>
-        <div><b>20</b><span>компонентов</span></div>
+        <div><b>15</b><span>заменённых шкал</span></div>
+        <div><b>23</b><span>компонента</span></div>
       </div>
     </div>
 
@@ -820,20 +826,20 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
     <section id="icons">
       <div class="eyebrow">Основы</div>
       <h2>Иконки</h2>
-      <p class="intro">Набор <strong>Lucide</strong>: сетка 24, обводка 2, скругления round. Заливка только у «пуск» и «пауза» — сплошная фигура читается на 16px там, где контур сливается. Геометрия хранится один раз в спрайте, вызов задаёт только размер.</p>
+      <p class="intro">Набор <strong>Lucide</strong>: сетка 24, скругления round, зримая толщина 1.3px на любой ступени. Заливка только у «пуск» и «пауза» — сплошная фигура читается на 16px там, где контур сливается. Геометрия хранится один раз в спрайте, вызов задаёт только размер.</p>
       <div class="wells" style="margin-top:18px">
         <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-settings"/></svg></span><span class="cap">settings<i>действия</i></span></div>
         <div><span style="color:var(--success)"><svg class="i i-18 i-fill" aria-hidden="true"><use href="#ic-play"/></svg></span><span class="cap">play<i>запустить</i></span></div>
         <div><span style="color:var(--warning)"><svg class="i i-18 i-fill" aria-hidden="true"><use href="#ic-pause"/></svg></span><span class="cap">pause<i>остановить</i></span></div>
-        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-pencil"/></svg></span><span class="cap">pencil<i>изменить</i></span></div>
-        <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-trash"/></svg></span><span class="cap">trash-2<i>удалить</i></span></div>
+        <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-pencil"/></svg></span><span class="cap">pencil-line<i>изменить</i></span></div>
+        <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-trash"/></svg></span><span class="cap">trash<i>удалить</i></span></div>
         <div><span style="color:var(--success)"><svg class="i i-18" aria-hidden="true"><use href="#ic-check"/></svg></span><span class="cap">check<i>получилось</i></span></div>
         <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-x"/></svg></span><span class="cap">x<i>не получилось</i></span></div>
         <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-info"/></svg></span><span class="cap">info<i>так устроено</i></span></div>
         <div><span style="color:var(--warning)"><svg class="i i-18" aria-hidden="true"><use href="#ic-alert"/></svg></span><span class="cap">triangle-alert<i>внимание</i></span></div>
         <div><span style="color:var(--danger)"><svg class="i i-18" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span class="cap">circle-x<i>ошибка</i></span></div>
         <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-help"/></svg></span><span class="cap">circle-help<i>подсказка</i></span></div>
-        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-refresh"/></svg></span><span class="cap">refresh-cw<i>обновить</i></span></div>
+        <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-refresh"/></svg></span><span class="cap">rotate-cw<i>обновить</i></span></div>
         <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-search"/></svg></span><span class="cap">search<i>поиск</i></span></div>
         <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-arrow-right"/></svg></span><span class="cap">arrow-right<i>перейти</i></span></div>
         <div><span style="color:var(--ink-muted)"><svg class="i i-18" aria-hidden="true"><use href="#ic-chevron"/></svg></span><span class="cap">chevron-down<i>раскрыть</i></span></div>
@@ -842,8 +848,8 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div><span style="color:var(--primary)"><svg class="i i-18" aria-hidden="true"><use href="#ic-audio"/></svg></span><span class="cap">audio-lines<i>слушатель</i></span></div>
       </div>
       <table class="spec">
-        <tr><td>Размеры</td><td class="n">13 в кнопке 24 · 14 в кнопке 28 · 15–16 в шапке и рельсе · 18 в списке</td></tr>
-        <tr><td>Обводка</td><td class="n">2 на любом размере — не масштабируется вместе с иконкой</td></tr>
+        <tr><td>Размеры</td><td class="n">Чётные ступени 10 · 12 · 14 · 16 · 18 · 20, и своего умолчания у них нет: 12 в кнопке 22, 14 в кнопке 28, 16 в шапке и рельсе, 18 в списке</td></tr>
+        <tr><td>Обводка</td><td class="n">1.3px зримой толщины на любой ступени, а в атрибуте — 2.6 на 12, 2.2 на 14, 2 на 16, 1.7 на 18: единицы viewBox делятся на размер, и постоянное число сделало бы мелкую иконку жирной. Пропа для толщины нет — тот, кто может её передать, передаст другую</td></tr>
         <tr><td>Цвет</td><td>Всегда <code>currentColor</code>: иконка наследует цвет кнопки, а не задаёт свой</td></tr>
         <tr><td>Заливка</td><td>Только <code>play</code> и <code>pause</code></td></tr>
         <tr><td>Подпись</td><td>Иконка без текста получает <code>aria-label</code> и подсказку. Крестик в чипе — типографский «×», не иконка: на 10px контур Lucide тяжелее текста</td></tr>
@@ -854,40 +860,39 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
     <section id="button">
       <div class="eyebrow">Действия</div>
       <h2>Кнопка</h2>
-      <p class="intro">Три вида и три размера. Залитая синим — одна на поверхности. Разрушительное действие никогда не заливается красным: красная подложка с красной границей читается однозначно и не приглашает нажать случайно.</p>
+      <p class="intro">Пять видов и четыре размера, и все они — пропсы <code>shared/ui/Button</code>, а не классы на месте. Залитая синим — одна на поверхности. Разрушительное действие никогда не заливается красным: красная подложка с красной границей читается однозначно и не приглашает нажать случайно.</p>
 
       <h3>Виды</h3>
       <div class="wells w2" style="margin-top:18px">
-        <div><button class="btn btn-lg b-pri">Запустить прогрев</button><span class="cap">Основная</span></div>
-        <div><button class="btn btn-lg b-sec">Отмена</button><span class="cap">Вторичная</span></div>
-        <div><button class="btn btn-lg b-dan">Удалить аккаунт</button><span class="cap">Разрушительная</span></div>
-        <div><button class="b-lnk">Сбросить пароль</button><span class="cap">Текстовая</span></div>
+        <div><button class="btn btn-md b-pri">Запустить прогрев</button><span class="cap">primary<i>одно действие на поверхности</i></span></div>
+        <div><button class="btn btn-md b-sec">Отмена</button><span class="cap">secondary<i>всё, что стоит рядом с ним</i></span></div>
+        <div><button class="btn btn-md b-dan">Удалить аккаунт</button><span class="cap">danger<i>действие, которое разрушает</i></span></div>
+        <div><button class="btn btn-md b-gho">Сбросить пароль</button><span class="cap">ghost<i>коробки нет, пока не наведёшь</i></span></div>
+        <div class="left"><button class="btn btn-block b-dsh">+ Добавить сценарий</button><span class="cap">dashed<i>пустое место под то, что добавят</i></span></div>
       </div>
 
       <h3>Размеры</h3>
       <div class="wells">
-        <div><button class="btn btn-sm b-pri">Добавить</button><span class="cap">sm · 14/5 · 11.5<i>11.5px</i></span></div>
-        <div><button class="btn btn-md b-pri">Добавить</button><span class="cap">md · 18/7 · 12.5<i>12.5px</i></span></div>
-        <div><button class="btn btn-lg b-pri">Добавить</button><span class="cap">lg · 22/9 · 13<i>13px</i></span></div>
+        <div><button class="btn btn-md b-pri">Добавить</button><span class="cap">md · 22/10 · 13<i>подвал диалога, действие страницы</i></span></div>
+        <div><button class="btn btn-sm b-pri">Добавить</button><span class="cap">sm · 18/7 · 12.5<i>действие внутри карточки</i></span></div>
+        <div><button class="btn btn-xs b-pri">Добавить</button><span class="cap">xs · 10/5 · 12.5<i>строка таблицы; единственный не-пилюля</i></span></div>
+        <div class="left"><button class="btn btn-block b-pri">Сохранить</button><span class="cap">block · во всю форму · 13<i>последняя строка под полями</i></span></div>
       </div>
 
       <h3>Состояния</h3>
       <div class="wells">
-        <div><button class="btn btn-md b-pri">Сохранить</button><span class="cap">Покой<i>#0066ff</i></span></div>
-        <div><button class="btn btn-md b-pri is-hover">Сохранить</button><span class="cap">Наведение<i>#0057db</i></span></div>
-        <div><button class="btn btn-md b-pri is-active">Сохранить</button><span class="cap">Нажатие<i>scale .98</i></span></div>
-        <div><button class="btn btn-md b-pri is-focus">Сохранить</button><span class="cap">Фокус<i>обводка 2px</i></span></div>
-        <div><button class="btn btn-md b-pri" disabled>Сохранить</button><span class="cap">Недоступна<i>opacity .5</i></span></div>
-        <div><button class="btn btn-md b-pri"><span class="spin"></span>Сохранение</button><span class="cap">В работе<i>спиннер 13px</i></span></div>
-        <div><button class="btn btn-md b-pri"><svg class="i i-13" aria-hidden="true"><use href="#ic-check"/></svg>Сохранено</button><span class="cap">Успех<i>галочка 1.5 c</i></span></div>
+        <div><button class="btn btn-sm b-pri">Сохранить</button><span class="cap">Покой<i>#0066ff</i></span></div>
+        <div><button class="btn btn-sm b-pri is-hover">Сохранить</button><span class="cap">Наведение<i>#0057db</i></span></div>
+        <div><button class="btn btn-sm b-pri is-focus">Сохранить</button><span class="cap">Фокус<i>обводка 2px, отступ 2</i></span></div>
+        <div><button class="btn btn-sm b-pri" disabled>Сохранить</button><span class="cap">Недоступна<i>opacity .5</i></span></div>
+        <div><button class="btn btn-sm b-pri" aria-busy="true" disabled>Сохраняю…</button><span class="cap">В работе<i>aria-busy</i></span></div>
       </div>
       <table class="spec">
-        <tr><td>Покой → наведение</td><td>Основная темнеет до <code>primary-press</code>, вторичная усиливает границу до <code>line-strong</code></td></tr>
-        <tr><td>Нажатие</td><td>Масштаб 0.98 — единственная трансформация в системе кнопок</td></tr>
-        <tr><td>Фокус</td><td>Обводка 2px <code>primary</code> с отступом 3px. Обводку не заменяют тенью</td></tr>
-        <tr><td>Недоступна</td><td>Прозрачность 0.5, курсор обычный. Причину объясняет подсказка рядом, а не сама кнопка</td></tr>
-        <tr><td>В работе</td><td>Спиннер 13px слева, надпись меняется на процесс, кнопка заблокирована</td></tr>
-        <tr><td>Успех</td><td>Галочка на 1.5 секунды, затем возврат к покою</td></tr>
+        <tr><td>Покой → наведение</td><td>Основная темнеет до <code>primary-press</code>, вторичная усиливает границу до <code>line-strong</code>, призрачная получает коробку <code>canvas</code></td></tr>
+        <tr><td>Нажатие</td><td>Своего вида не имеет: ни масштаба, ни сдвига. Под пальцем уже стоит цвет наведения, и второй ответ на то же касание — это дрожь, а не отклик</td></tr>
+        <tr><td>Фокус</td><td>Обводка 2px <code>primary</code> с отступом 2px. Обводку не заменяют тенью: <code>shadow-focus</code> на собственной белизне кнопки даёт 1.18:1 при норме 3:1, и приходил он вместе с <code>outline-none</code>. Тень осталась полям, где рядом с ней граница уходит в <code>primary</code> и несёт указание сама</td></tr>
+        <tr><td>Недоступна</td><td>Прозрачность 0.5, события мыши сняты. Причину объясняет подсказка рядом, а не сама кнопка</td></tr>
+        <tr><td>В работе</td><td><code>aria-busy</code> и отказ от нажатий — и это всё. Спиннера нет намеренно: подпись уже сменилась на «Сохраняю…», и кружок рядом сказал бы то же самое второй раз. Отдельный проп, а не <code>disabled</code>: экранный диктор обязан различать «занята» и «выключена»</td></tr>
       </table>
     </section>
 
@@ -899,10 +904,10 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
 
       <h3>Размеры</h3>
       <div class="wells" style="margin-top:18px">
-        <div><button class="ib ib-24 ib-pri" aria-label="Действия"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button><span class="cap">24 · в строке</span></div>
-        <div><button class="ib ib-28 ib-pri" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">28 · в карточке</span></div>
-        <div><button class="ib ib-34 ib-nut" aria-label="Уведомления"><svg class="i i-15" aria-hidden="true"><use href="#ic-bell"/></svg></button><span class="cap">34 · шапка</span></div>
-        <div><button class="ib ib-44 ib-nut" aria-label="Меню"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></button><span class="cap">44 · тач</span></div>
+        <div><button class="ib ib-22 ib-pri" aria-label="Действия"><svg class="i i-12" aria-hidden="true"><use href="#ic-settings"/></svg></button><span class="cap">sm · 22<i>в строке</i></span></div>
+        <div><button class="ib ib-28 ib-pri" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">md · 28<i>в карточке</i></span></div>
+        <div><button class="ib ib-34 ib-nut" aria-label="Уведомления"><svg class="i i-16" aria-hidden="true"><use href="#ic-bell"/></svg></button><span class="cap">lg · 34<i>шапка</i></span></div>
+        <div><button class="ib ib-44 ib-nut" aria-label="Меню"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></button><span class="cap">touch · 44<i>цель для пальца</i></span></div>
       </div>
 
       <h3>Смысл и состояния</h3>
@@ -1003,7 +1008,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
 
       <table class="spec">
         <tr><td>Раскрытие</td><td class="n">max-height 0 → 240px, 420 мс, пружина без перелёта. Дальше список прокручивается</td></tr>
-        <tr><td>Шеврон</td><td>Поворот на 180°, 400 мс. Тот же жест, что у раскрывающейся карточки</td></tr>
+        <tr><td>Шеврон</td><td>Поворот на 180°, пружина 420ms — та же ступень <code>reveal</code>, что у панели над ним. Один жест на двух элементах тратит одну ступень: шеврон шёл 400 против панельных 420, и эти 20 мс никто не выбирал</td></tr>
         <tr><td>Пункт</td><td>Радиус 6, наведение — <code>primary-tint</code>, выбранный — синий текст и галочка</td></tr>
         <tr><td>Закрытая панель</td><td><code>inert</code>. Проверено в приложении: без него оператор с клавиатуры попадал в скрытые пункты</td></tr>
         <tr><td>Пустой набор</td><td>Не пустая панель, а строка с причиной: «Свободных аккаунтов нет»</td></tr>
@@ -1040,8 +1045,8 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="row" style="justify-content:space-between">
           <b style="font-size:12.5px;font-weight:600">Каналы кампании</b>
           <span class="row" style="gap:6px;flex:none">
-            <button class="btn btn-sm b-sec">Найти каналы</button>
-            <button class="btn btn-sm b-sec" data-check>Проверить каналы</button>
+            <button class="btn btn-xs b-sec">Найти каналы</button>
+            <button class="btn btn-xs b-sec" data-check>Проверить каналы</button>
           </span>
         </div>
         <div class="row" style="margin:10px 0 12px"><span style="font-size:11.5px;font-weight:500;color:var(--primary)">tabacum</span></div>
@@ -1129,18 +1134,20 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
     <section id="notice">
       <div class="eyebrow">Сообщение</div>
       <h2>Уведомление</h2>
-      <p class="intro">Плашка в потоке страницы: объясняет положение дел там, где оператор его встретит. Один компонент, три тона, единый радиус 12 и отступы 11/13 — раньше это были четыре разные плашки с четырьмя радиусами.</p>
+      <p class="intro">Плашка в потоке страницы: объясняет положение дел там, где оператор его встретит. Один компонент <code>shared/ui/Notice</code>, четыре тона, единый радиус 11 и отступы 10/10 — раньше это были четыре разные плашки с четырьмя радиусами. Граница снимается пропом у тех, что вложены в панель со своей.</p>
       <div class="col block">
-        <div class="note n-info"><span class="ic"><svg class="i i-15" aria-hidden="true"><use href="#ic-info"/></svg></span><span>Прогрев стартует медленно: первые пять часов аккаунт только читает. Это заложено намеренно.</span></div>
-        <div class="note n-warn"><span class="ic"><svg class="i i-15" aria-hidden="true"><use href="#ic-alert"/></svg></span><span>Кампаний нет — слушатель запущен, но подписан на ноль каналов. Создайте кампанию, чтобы он начал работать.</span></div>
-        <div class="note n-bad"><span class="ic"><svg class="i i-15" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span>Два канала не разрешаются: <code>@old_name</code>, <code>@dead_link</code>. Ни один пост оттуда не придёт.</span></div>
+        <div class="note n-info"><span class="ic"><svg class="i i-16" aria-hidden="true"><use href="#ic-info"/></svg></span><span>Прогрев стартует медленно: первые пять часов аккаунт только читает. Это заложено намеренно.</span></div>
+        <div class="note n-ok"><span class="ic"><svg class="i i-16" aria-hidden="true"><use href="#ic-check"/></svg></span><span>Все четырнадцать каналов разрешились. Слушатель подпишется на них при следующем запуске.</span></div>
+        <div class="note n-warn"><span class="ic"><svg class="i i-16" aria-hidden="true"><use href="#ic-alert"/></svg></span><span>Кампаний нет — слушатель запущен, но подписан на ноль каналов. Создайте кампанию, чтобы он начал работать.</span></div>
+        <div class="note n-bad"><span class="ic"><svg class="i i-16" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span>Два канала не разрешаются: <code>@old_name</code>, <code>@dead_link</code>. Ни один пост оттуда не придёт.</span></div>
       </div>
       <table class="spec">
         <tr><td>Синее</td><td>Так устроено: объясняет поведение, которое похоже на поломку</td></tr>
+        <tr><td>Зелёное</td><td>Получилось, и результат стоит показать дольше, чем живёт галочка отклика</td></tr>
         <tr><td>Янтарное</td><td>Работает не полностью, оператор может это исправить</td></tr>
         <tr><td>Красное</td><td>Не работает, потеря данных или действий</td></tr>
         <tr><td>Место</td><td>Внутри блока, к которому относится, а не сверху страницы. Тост — только для сбоя, которого оператор не вызывал</td></tr>
-        <tr><td>Нажимаемое</td><td>Плашка может быть кнопкой (перейти к причине) — тогда фон светлеет при наведении</td></tr>
+        <tr><td>Озвучивание</td><td><code>role="status"</code> плашка себе не ставит: почти вся она — статичный текст, который лежал на экране до того, как оператор туда посмотрел. Плашка, сообщающая исход действия, передаёт <code>role="alert"</code> сама</td></tr>
       </table>
     </section>
 
@@ -1208,7 +1215,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
             <div class="surf-face">
               <div class="plaque">
                 <span class="lhs"><span class="pd"></span><span class="st">На паузе</span><span class="cnt live off">1</span></span>
-                <button class="ib ib-24 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
+                <button class="ib ib-22 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
               </div>
             </div>
           </div>
@@ -1224,7 +1231,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
             <div class="surf-face">
               <div class="plaque on">
                 <span class="lhs"><span class="pd a-live"></span><span class="st a-pulse">Слушает</span><span class="cnt live">3</span></span>
-                <button class="ib ib-24 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
+                <button class="ib ib-22 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
               </div>
             </div>
           </div>
@@ -1245,7 +1252,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
                 </span>
                 <span style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex:none">
                   <span class="dl" style="color:var(--success)"><i></i>Активна</span>
-                  <button class="ib ib-24 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
+                  <button class="ib ib-22 ib-pri" data-surf aria-label="Действия" aria-expanded="false"><svg class="i i-13" aria-hidden="true"><use href="#ic-settings"/></svg></button>
                 </span>
               </div>
             </div>
@@ -1268,11 +1275,11 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Поверхности</div>
       <h2>Диалог и подсказка</h2>
       <div class="wells w2" style="margin-top:18px">
-        <div><div class="dialog"><b>Остановить прогрев?</b><p>Аккаунт вернётся в очередь, прогресс за день сохранится.</p><span class="row" style="justify-content:flex-end;gap:8px"><button class="btn btn-md b-sec">Отмена</button><button class="btn btn-md b-dan">Остановить</button></span></div><span class="cap">Диалог по центру</span></div>
+        <div><div class="dialog"><b>Остановить прогрев?</b><p>Аккаунт вернётся в очередь, прогресс за день сохранится.</p><span class="row" style="justify-content:flex-end;gap:8px"><button class="btn btn-sm b-sec">Отмена</button><button class="btn btn-sm b-dan">Остановить</button></span></div><span class="cap">Диалог по центру</span></div>
         <div>
           <span class="row" style="gap:26px">
             <span class="tip open"><span class="cnt">34</span><span class="tip-pop">Действий сегодня</span></span>
-            <span class="tip open" style="margin-left:10px"><button class="ib ib-24 ib-pri" aria-label="Подсказка"><svg class="i i-12" aria-hidden="true"><use href="#ic-help"/></svg></button><span class="hint-card">Лимит — 60 действий в сутки на аккаунт. Счётчик обнуляется в полночь по часовому поясу аккаунта.</span></span>
+            <span class="tip open" style="margin-left:10px"><button class="ib ib-22 ib-pri" aria-label="Подсказка"><svg class="i i-12" aria-hidden="true"><use href="#ic-help"/></svg></button><span class="hint-card">Лимит — 60 действий в сутки на аккаунт. Счётчик обнуляется в полночь по часовому поясу аккаунта.</span></span>
           </span>
           <span class="cap">Подсказка-ярлык и подсказка-объяснение</span>
         </div>
@@ -1323,7 +1330,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <h2>Журнал</h2>
       <p class="intro">Единственная тёмная поверхность в системе. Моно 11px с межстрочным 1.85, метки времени приглушены, каналы синие, исход окрашивается только когда он не рутинный.</p>
       <div class="block">
-        <div class="row" style="margin-bottom:10px"><span class="dot a-live" style="width:7px;height:7px"></span><b style="font-size:13px;font-weight:600">Живой журнал</b><span class="cnt">4 события</span><button class="btn btn-sm b-sec" style="margin-left:auto">Очистить</button></div>
+        <div class="row" style="margin-bottom:10px"><span class="dot a-live" style="width:7px;height:7px"></span><b style="font-size:13px;font-weight:600">Живой журнал</b><span class="cnt">4 события</span><button class="btn btn-xs b-sec" style="margin-left:auto">Очистить</button></div>
         <div class="term">
           <div><span class="t">18:42:07</span> прогрев &nbsp;<span class="c">@devnull_news</span> <span class="t">· вход в канал</span></div>
           <div><span class="t">18:42:19</span> прогрев &nbsp;<span class="c">@devnull_news</span> <span class="t">· реакция поставлена</span></div>
@@ -1394,11 +1401,11 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <table class="merge">
           <thead><tr><th>Было</th><th></th><th>Канон</th><th>Что расходилось</th></tr></thead>
           <tr><td><span class="old">Switch × 3</span></td><td class="arw">→</td><td><span class="new">shared/ui/Switch</span></td><td><span class="done">сведено</span> было 44px, 44px без сжатия пальца и 46px — расхождение видно глазом</td></tr>
-          <tr><td><span class="old">Иконочная кнопка: 7 размеров × 5 радиусов</span></td><td class="arw">→</td><td><span class="new">IconButton</span></td><td><span class="done">сведено</span> было 44 / 34 / 30 / 28 / 26 / 24 / 20 в трёх вариантах наведения</td></tr>
-          <tr><td><span class="old">Основная кнопка: 7 наборов отступов</span></td><td class="arw">→</td><td><span class="new">3 размера</span></td><td><span class="done">сведено</span> было ещё и <code>font-medium</code> вперемешку с <code>font-semibold</code></td></tr>
+          <tr><td><span class="old">Иконочная кнопка: 7 размеров × 5 радиусов</span></td><td class="arw">→</td><td><span class="new">IconButton</span></td><td><span class="done">сведено</span> было 44 / 34 / 30 / 28 / 26 / 24 / 20 в трёх вариантах наведения; канон — 22 / 28 / 34 / 44</td></tr>
+          <tr><td><span class="old">Основная кнопка: 7 наборов отступов</span></td><td class="arw">→</td><td><span class="new">4 размера</span></td><td><span class="done">сведено</span> было ещё и <code>font-medium</code> вперемешку с <code>font-semibold</code></td></tr>
           <tr><td><span class="old">Статус: 3 реализации</span></td><td class="arw">→</td><td><span class="new">одна карта цветов</span></td><td><span class="done">сведено</span> пилюля, бейдж и инлайн-вариант несли по своей копии карты</td></tr>
           <tr><td><span class="old">Счётчик: 5 вариантов</span></td><td class="arw">→</td><td><span class="new">2</span></td><td><span class="done">сведено</span> были три разных серых плюс синий и сплошной</td></tr>
-          <tr><td><span class="old">Уведомление: 4 плашки</span></td><td class="arw">→</td><td><span class="new">Notice, 3 тона</span></td><td><span class="done">сведено</span> радиусы 9, 10, 13 и 14 у одного по смыслу элемента</td></tr>
+          <tr><td><span class="old">Уведомление: 4 плашки</span></td><td class="arw">→</td><td><span class="new">Notice, 4 тона</span></td><td><span class="done">сведено</span> радиусы 9, 10, 13 и 14 у одного по смыслу элемента</td></tr>
           <tr><td><span class="old">Рельс плашки: 48px и 52px</span></td><td class="arw">→</td><td><span class="new">48px</span></td><td><span class="done">сведено</span> было 144 против 156 у одного паттерна</td></tr>
           <tr><td><span class="old">SurfHover в pages/neurocomment</span></td><td class="arw">→</td><td><span class="new">shared/ui</span></td><td><span class="done">сведено</span> переехал в <code>shared/ui</code></td></tr>
           <tr><td><span class="chipdot" style="background:#16b364"></span><span class="old">success-dot #16b364</span></td><td class="arw">→</td><td><span class="new">success</span></td><td>Жил ради одной точки «система активна»; в журнале зелёный исход убран как рутинный</td></tr>
@@ -1437,16 +1444,16 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="intro">Что канон уже требует, а код ещё не даёт. Порядок — по отношению выигрыша к риску: сверху механика без визуальных последствий, снизу то, где нужно решение человека.</p>
 
       <h3>Сделано и проверено гейтами</h3>
-      <p class="body">Шесть шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-2</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
+      <p class="body">Пятнадцать шкал <em>заменены</em>, а не расширены. Разница принципиальная: расширенную шкалу можно обойти по старому имени, а у заменённой старого имени нет — <code>gap-2</code> и <code>text-sm</code> не отговариваются, они просто не рисуют ничего, и ошибку видно на месте.</p>
       <div class="scroll">
         <table class="spec">
           <tr><td class="n">427 замен</td><td>Литеральные хексы → токены: классы, цвета из JS-объектов, инлайновые стили, атрибуты <code>stroke</code>. Точки, повторявшие цвет подписи, взяли <code>bg-current</code></td></tr>
           <tr><td class="n">5 семейств</td><td>Янтарный, зелёный, красный, синий, серый сведены к трём-четырём ролям каждое; три параллельных набора тёмной поверхности — к одному. Два несвязанных янтарных набора красили одну и ту же плашку «внимание» на разных страницах</td></tr>
-          <tr><td class="n">6 шкал</td><td>Заменены целиком: радиусы (20 → 5), ступени текста (19 → 8), зазоры (18 → 4), длительности (8 → 4), кривые (2), слои (14 → 4)</td></tr>
+          <tr><td class="n">15 шкал</td><td>Заменены целиком, то есть объявлены вне <code>extend</code>: радиусы (20 → 5), ступени текста (19 → 8), зазоры (18 → 10 ступеней), длительности (8 → 4), кривые (2), слои (14 → 6), тени (6), роли текста (12), квадраты (11) и шесть размерных шкал — высоты, ширины, обе нижние границы, верхняя граница ширины и предел прокрутки. В <code>extend</code> остались цвета и семейства шрифтов, и только они</td></tr>
           <tr><td class="n">16 → 1</td><td>Тени. Восемь литералов были <code>ring</code>, набранный вручную в двух написаниях, два — <code>thumb</code>, пять — четыре разных высоты для одного смысла «всплывает над страницей». <code>focus</code> стал ролью, потому что его рецепт встретился и в списке, и у каждого поля</td></tr>
           <tr><td class="n">9 → 6 семейств</td><td>Отступы: кнопка (три размера), чип, пилюля статуса, бейдж-счётчик, фильтр-пилюля, сегментная кнопка, строка меню. Одна ступень на семейство вместо десяти вертикальных и четырнадцати горизонтальных значений</td></tr>
           <tr><td class="n">3 жеста</td><td>Внутренне расходились и сведены: шеврон списка шёл 400ms против панели 420, тело карточки 500 против своего шеврона 420, и один и тот же контрол пользовался двумя пружинами, разными на 0.05 перелёта</td></tr>
-          <tr><td class="n">+4 примитива</td><td><code>Select</code>, <code>IconButton</code>, <code>SurfHover</code>, <code>Switch</code> — все с тестами. Нативного <code>&lt;select&gt;</code> в коде больше нет: выбор одного из списка был написан двумя способами в девяти местах</td></tr>
+          <tr><td class="n">23 примитива</td><td><code>Select</code>, <code>IconButton</code>, <code>SurfHover</code>, <code>Switch</code>, следом <code>Button</code>, <code>Badge</code>, <code>Input</code>, <code>Notice</code>, <code>Icon</code> и <code>SegmentedControl</code> — все с тестами. Нативного <code>&lt;select&gt;</code> в коде больше нет: выбор одного из списка был написан двумя способами в девяти местах</td></tr>
           <tr><td class="n">4 читаемости</td><td>Подписи на цветной подложке не проходили по контрасту (3.70, 3.57, 4.26) и стали серыми. Цвет там ничего не несёт: смысл держат заголовок, подложка, рамка и значок</td></tr>
           <tr><td class="n">−2 файла</td><td>Мёртвый <code>WarmingStateBadge</code> и копия хелпера сегментной кнопки, из-за которой два одинаковых контрола молча разошлись на 1px</td></tr>
         </table>
@@ -1457,13 +1464,12 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <table class="wl">
           <thead><tr><th></th><th>Что</th><th>Почему и чем мерить</th></tr></thead>
           <tr><td>1</td><td>Пилюля прогрева</td><td>Двенадцать пилюль статуса из тринадцати сошлись на <code>3 / 10</code> и <code>tiny</code>. Тринадцатая — в таблице прогрева, на <code>1 / 7</code> и <code>micro</code>, самая тесная в приложении. Привести её к семейству значит +2px по высоте на каждой строке самой плотной таблицы. Решение человека, не скрипта</td></tr>
-          <tr><td>2</td><td><code>shadow-sm</code> в трёх местах</td><td>Поднятый сегмент вложенного лотка — связная роль, которой нет имени, поэтому он берёт встроенную шкалу Tailwind. Шкала теней единственная осталась расширенной, а не заменённой, то есть <code>shadow-2xl</code> всё ещё достижим. Заменить — значит выбрать значение для пятой ступени и увидеть, как сегменты сдвинутся</td></tr>
-          <tr><td>3</td><td>Четыре абзаца в нейрошиллинге</td><td>11px янтарным на янтарной подложке — 3.57 при норме 4.5. Та же правка, что уже сделана в трёх местах, но страница не закончена, и там янтарный, возможно, и есть сигнал</td></tr>
-          <tr><td>4</td><td>Две пилюли-исключения</td><td><code>LIVE</code> и «прогрет» намеренно <code>micro</code> и жирные: это акцент, а не нейтральная метка состояния. Возможно, правильный ответ — назвать это отдельным семейством, а не сводить</td></tr>
-          <tr><td>5</td><td>Одна тень и один градиент</td><td>Синее свечение едущей капсулы в логах подкрашивает, а не приподнимает, и вызывается один раз. Градиенты-заглушки аватара — украшение, а не роль. Оба оставлены литералами с комментарием, который объясняет, почему их не надо «исправлять»</td></tr>
+          <tr><td>2</td><td>Четыре абзаца в нейрошиллинге</td><td>11px янтарным на янтарной подложке — 3.57 при норме 4.5. Та же правка, что уже сделана в трёх местах, но страница не закончена, и там янтарный, возможно, и есть сигнал</td></tr>
+          <tr><td>3</td><td>Две пилюли-исключения</td><td><code>LIVE</code> и «прогрет» намеренно <code>micro</code> и жирные: это акцент, а не нейтральная метка состояния. Возможно, правильный ответ — назвать это отдельным семейством, а не сводить</td></tr>
+          <tr><td>4</td><td>Одна тень и один градиент</td><td>Синее свечение едущей капсулы в логах подкрашивает, а не приподнимает, и вызывается один раз. Градиенты-заглушки аватара — украшение, а не роль. Оба оставлены литералами с комментарием, который объясняет, почему их не надо «исправлять»</td></tr>
         </table>
       </div>
-      <p class="body">Ни один пункт больше не механический — механику всю забрали. Осталось пять решений о смысле: где расхождение это ошибка, а где отдельная роль. Пункт 1 самый дорогой: он трогает таблицу, на которую смотрят чаще всего.</p>
+      <p class="body">Ни один пункт больше не механический — механику всю забрали. Осталось четыре решения о смысле: где расхождение это ошибка, а где отдельная роль. Пункт 1 самый дорогой: он трогает таблицу, на которую смотрят чаще всего.</p>
     </section>
 
     <!-- ── Источник правды ───────────────────────────────────────────────── -->
@@ -1471,10 +1477,10 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <div class="eyebrow">Свод</div>
       <h2>Источник правды</h2>
       <div class="scroll"><table class="spec">
-        <tr><td>Токены</td><td><code>frontend/tailwind.config.ts</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Пять шкал <em>заменены</em>, а не расширены: имя мимо канона не рисует ничего. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
+        <tr><td>Токены</td><td><code>frontend/tailwind.config.ts</code> — цвет, шрифты, радиусы, слои, тени, зазоры, ступени текста, длительности. Пятнадцать шкал <em>заменены</em>, а не расширены: всё, что объявлено вне <code>extend</code>, отменяет одноимённую шкалу Tailwind, и имя мимо канона не рисует ничего. В <code>extend</code> остались только цвета и семейства шрифтов. Хекс в компоненте считается ошибкой, а не сокращением</td></tr>
         <tr><td>Кейфреймы, подсказки, раскрытие, полосы прокрутки</td><td><code>frontend/src/app/styles/index.css</code></td></tr>
-        <tr><td>Примитивы</td><td><code>frontend/src/shared/ui/</code> — <code>Button</code> не примитив: 71 вызов с разной разметкой, поэтому приведены классы, а не введена обёртка</td></tr>
-        <tr><td>Иконочная кнопка</td><td><code>shared/ui/IconButton</code> — размеры <code>sm 24</code> / <code>md 28</code> / <code>lg 34</code> / <code>touch 44</code>, тона <code>neutral | primary | danger</code></td></tr>
+        <tr><td>Примитивы</td><td><code>frontend/src/shared/ui/</code> — двадцать три компонента, и <code>Button</code> среди них: 49 файлов зовут его вместо собственной разметки. Вид и размер приходят пропсами, класс рядом с ними — только то, чего база не назначает</td></tr>
+        <tr><td>Иконочная кнопка</td><td><code>shared/ui/IconButton</code> — размеры <code>sm 22</code> / <code>md 28</code> / <code>lg 34</code> / <code>touch 44</code>, тона <code>neutral | primary | danger</code></td></tr>
         <tr><td>Статусы</td><td><code>entities/account/ui/StatusBadge</code> · <code>entities/campaign/ui/ChannelStatusBadge</code> · <code>entities/log/ui/LogStatusBadge</code></td></tr>
         <tr><td>Каркас и навигация</td><td><code>widgets/nav/ui/AppShell</code> · <code>AppNav</code> · <code>NavDrawer</code></td></tr>
         <tr><td>Выпадающий список</td><td><code>shared/ui/Select</code> — единственный способ выбрать одно из списка. Нативный <code>&lt;select&gt;</code> в коде отсутствует: его рисует система, и рядом с полем он читается как другое приложение. Клавиатура: <kbd>↓</kbd> открывает на выбранном, стрелки идут по кругу и перешагивают недоступные, <kbd>Enter</kbd> выбирает, <kbd>Esc</kbd> закрывает список и не роняет диалог</td></tr>
