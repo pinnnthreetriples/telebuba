@@ -261,9 +261,17 @@ code { font:400 11.5px/1.4 var(--mono); color:var(--ink-body); }
 .lab > .t { font-size:12px; font-weight:500; color:var(--ink-body); }
 .lab > .err { font-size:11px; font-weight:500; color:var(--danger); }
 .lab > .hint { font-size:11px; color:var(--ink-subtle); }
-.seg { display:flex; gap:6px; width:100%; }
-.seg button { flex:1; border:1px solid var(--line); background:var(--white); color:var(--ink-muted); border-radius:var(--r-nest); padding:8px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
-.seg button.on { border-color:var(--primary); background:var(--primary-tint); color:var(--primary); }
+/* Голый .seg — вид outline: лотка нет, каждый вариант своя коробка. Два других
+   надевают лоток поверх этой же основы: различие между тремя — заливка активного. */
+.seg { display:flex; gap:7px; width:100%; }
+.seg button { flex:1; border:1px solid var(--line); background:var(--white); color:var(--ink-muted); border-radius:var(--r-nest); padding:7px 10px; font:500 12.5px/1.2 var(--sans); cursor:pointer; transition:border-color var(--t-state),background-color var(--t-state),color var(--t-state); }
+.seg button.on { border-color:var(--primary); background:var(--primary-tint); color:var(--primary-deep); }
+.seg.tray { gap:5px; border-radius:var(--r-nest); background:var(--canvas); padding:3px; }
+.seg.tray button { border-color:transparent; background:none; border-radius:var(--r-sm); }
+.seg.tray button.on { background:var(--white); color:var(--ink); box-shadow:var(--seg); }
+.seg.pill { display:inline-flex; width:auto; gap:0; border:1px solid var(--line); border-radius:999px; background:var(--white); padding:3px; }
+.seg.pill button { flex:none; border-color:transparent; background:none; border-radius:999px; padding:5px 14px; }
+.seg.pill button.on { background:var(--primary); color:#fff; box-shadow:var(--pill); }
 .step { display:inline-flex; align-items:center; gap:6px; }
 .step .v { min-width:44px; text-align:center; font-size:12.5px; font-variant-numeric:tabular-nums; }
 
@@ -462,6 +470,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
     <h4>Ввод</h4>
     <a href="#field">Поле</a>
     <a href="#dropdown">Выпадающий список</a>
+    <a href="#segmented">Сегментная группа</a>
     <a href="#toggle">Переключатели</a>
     <a href="#chip">Чипы</a>
     <h4>Сообщение</h4>
@@ -862,22 +871,38 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <h2>Кнопка</h2>
       <p class="intro">Пять видов и четыре размера, и все они — пропсы <code>shared/ui/Button</code>, а не классы на месте. Залитая синим — одна на поверхности. Разрушительное действие никогда не заливается красным: красная подложка с красной границей читается однозначно и не приглашает нажать случайно.</p>
 
-      <h3>Виды</h3>
       <div class="wells w2" style="margin-top:18px">
-        <div><button class="btn btn-md b-pri">Запустить прогрев</button><span class="cap">primary<i>одно действие на поверхности</i></span></div>
-        <div><button class="btn btn-md b-sec">Отмена</button><span class="cap">secondary<i>всё, что стоит рядом с ним</i></span></div>
-        <div><button class="btn btn-md b-dan">Удалить аккаунт</button><span class="cap">danger<i>действие, которое разрушает</i></span></div>
-        <div><button class="btn btn-md b-gho">Сбросить пароль</button><span class="cap">ghost<i>коробки нет, пока не наведёшь</i></span></div>
-        <div class="left"><button class="btn btn-block b-dsh">+ Добавить сценарий</button><span class="cap">dashed<i>пустое место под то, что добавят</i></span></div>
+        <div><button class="btn btn-md b-pri">Запустить прогрев</button><span class="cap">primary</span></div>
+        <div><button class="btn btn-md b-sec">Отмена</button><span class="cap">secondary</span></div>
+        <div><button class="btn btn-md b-dan">Удалить аккаунт</button><span class="cap">danger</span></div>
+        <div><button class="btn btn-md b-gho">Сбросить пароль</button><span class="cap">ghost</span></div>
+        <div class="left"><button class="btn btn-block b-dsh">+ Добавить сценарий</button><span class="cap">dashed</span></div>
+      </div>
+      <div class="wells">
+        <div><button class="btn btn-md b-pri">Добавить</button><span class="cap">md</span></div>
+        <div><button class="btn btn-sm b-pri">Добавить</button><span class="cap">sm</span></div>
+        <div><button class="btn btn-xs b-pri">Добавить</button><span class="cap">xs</span></div>
+        <div class="left"><button class="btn btn-block b-pri">Сохранить</button><span class="cap">block</span></div>
       </div>
 
+      <!-- ds:gen button-spec -->
+      <h3>Виды</h3>
+      <table class="spec">
+        <tr><td><code>primary</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>bg-primary</code> <code>text-white</code> <code>hover:bg-primary-press</code></span></td><td>Одно завершающее действие на экране</td></tr>
+        <tr><td><code>secondary</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border</code> <code>border-line</code> <code>bg-white</code> <code>text-ink</code> <code>hover:border-line-strong</code></span></td><td>Всё, что стоит рядом с ним</td></tr>
+        <tr><td><code>danger</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border</code> <code>border-danger-line</code> <code>bg-danger-tint</code> <code>text-danger-deep</code> <code>hover:border-danger</code></span></td><td>Завершающее действие, которое разрушает. Кнопка подложкой, а не заливкой: красное здесь — подпись</td></tr>
+        <tr><td><code>ghost</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>text-ink-muted</code> <code>hover:bg-canvas</code> <code>hover:text-ink</code></span></td><td>Коробки нет, пока не наведёшь</td></tr>
+        <tr><td><code>dashed</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border</code> <code>border-dashed</code> <code>border-primary-line</code> <code>bg-white</code> <code>text-primary-deep</code> <code>hover:border-primary</code> <code>hover:bg-primary-tint</code></span></td><td>Ещё один такой же в список над собой, нарисованный пустым местом под то, что добавят. Это заливка, а не форма, и потому стоит здесь: все трое её носителей — <code>block</code>, но <code>block</code> носят три разные заливки. Вторая пунктирная кнопка приложения, приглушённая строчная у поля канала, намеренно не этот вид: она нарисована в <code>line-strong</code>, и свести их значило бы завести ступень, смысл которой не сказать без «или»</td></tr>
+      </table>
       <h3>Размеры</h3>
-      <div class="wells">
-        <div><button class="btn btn-md b-pri">Добавить</button><span class="cap">md · 22/10 · 13<i>подвал диалога, действие страницы</i></span></div>
-        <div><button class="btn btn-sm b-pri">Добавить</button><span class="cap">sm · 18/7 · 12.5<i>действие внутри карточки</i></span></div>
-        <div><button class="btn btn-xs b-pri">Добавить</button><span class="cap">xs · 10/5 · 12.5<i>строка таблицы; единственный не-пилюля</i></span></div>
-        <div class="left"><button class="btn btn-block b-pri">Сохранить</button><span class="cap">block · во всю форму · 13<i>последняя строка под полями</i></span></div>
-      </div>
+      <p class="body">Ступени между <code>sm</code> и <code>xs</code> нет, хотя семь кнопок её просили: пилюля в 27px против 29 у <code>sm</code> и 25 у <code>xs</code>. Два пикселя — это расхождение, а не решение, и все семь стоят внутри карточки, то есть в предложении, на которое <code>sm</code> уже отвечает.</p>
+      <table class="spec">
+        <tr><td><code>md</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22/10 · пилюля · 13px · 600</span></td><td>Подвал диалога и действие страницы</td></tr>
+        <tr><td><code>sm</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">18/7 · пилюля · 12.5px · 600</span></td><td>Действие внутри карточки, где <code>md</code> задал бы высоту её шапки</td></tr>
+        <tr><td><code>xs</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">10/5 · радиус 8 · 12.5px · 500</span></td><td>Действие в строке таблицы рядом со значением. Единственная ступень не-пилюля: на 22px высоты полный радиус и прямоугольник — одна и та же форма</td></tr>
+        <tr><td><code>block</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">0/10 · во всю ширину · радиус 11 · 13px · 500 · <code>flex</code></span></td><td>Действие во всю форму, последней строкой под полями, которые оно отправляет. Единственная ступень со своей шириной и единственная не <code>inline-flex</code>: <code>w-full</code> на строчном боксе всё равно стоит на строке и собирает под собой её межстрочный интервал</td></tr>
+      </table>
+      <!-- /ds:gen button-spec -->
 
       <h3>Состояния</h3>
       <div class="wells">
@@ -902,15 +927,31 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <h2>Иконочная кнопка</h2>
       <p class="intro">Четыре размера и три смысла. Размер выбирает контекст, смысл — последствие: серое наведение ничего не обещает, синее ведёт дальше, красное удаляет. Иконка без подписи всегда несёт <code>aria-label</code> и подсказку.</p>
 
-      <h3>Размеры</h3>
       <div class="wells" style="margin-top:18px">
-        <div><button class="ib ib-22 ib-pri" aria-label="Действия"><svg class="i i-12" aria-hidden="true"><use href="#ic-settings"/></svg></button><span class="cap">sm · 22<i>в строке</i></span></div>
-        <div><button class="ib ib-28 ib-pri" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">md · 28<i>в карточке</i></span></div>
-        <div><button class="ib ib-34 ib-nut" aria-label="Уведомления"><svg class="i i-16" aria-hidden="true"><use href="#ic-bell"/></svg></button><span class="cap">lg · 34<i>шапка</i></span></div>
-        <div><button class="ib ib-44 ib-nut" aria-label="Меню"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></button><span class="cap">touch · 44<i>цель для пальца</i></span></div>
+        <div><button class="ib ib-22 ib-pri" aria-label="Действия"><svg class="i i-12" aria-hidden="true"><use href="#ic-settings"/></svg></button><span class="cap">sm</span></div>
+        <div><button class="ib ib-28 ib-pri" aria-label="Открыть"><svg class="i i-14" aria-hidden="true"><use href="#ic-arrow-right"/></svg></button><span class="cap">md</span></div>
+        <div><button class="ib ib-34 ib-nut" aria-label="Уведомления"><svg class="i i-16" aria-hidden="true"><use href="#ic-bell"/></svg></button><span class="cap">lg</span></div>
+        <div><button class="ib ib-44 ib-nut" aria-label="Меню"><svg class="i i-18" aria-hidden="true"><use href="#ic-menu"/></svg></button><span class="cap">touch</span></div>
       </div>
 
-      <h3>Смысл и состояния</h3>
+      <!-- ds:gen iconbutton-spec -->
+      <h3>Размеры</h3>
+      <p class="body">Форма следует за размером и отдельной ручкой не является. Одна утилита на коробку вместо пары <code>w</code>/<code>h</code>: этот объект писал одну и ту же величину дважды, и квадрат, у которого две стороны — два решения, это квадрат, который умеет перестать им быть.</p>
+      <table class="spec">
+        <tr><td><code>sm</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22×22 · радиус 6</span></td><td>Самое мелкое, что можно нажать. Квадрат: кружок в 22px рядом с 13px текста читается точкой</td></tr>
+        <tr><td><code>md</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">28×28 · радиус 8</span></td><td>Иконочная кнопка по умолчанию</td></tr>
+        <tr><td><code>lg</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">34×34 · круг</span></td><td>Единственный круг набора</td></tr>
+        <tr><td><code>touch</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">44×44 · радиус 8</span></td><td>Цель для пальца — и снова квадрат: круг в 44px это монета, а не контрол</td></tr>
+      </table>
+      <h3>Смысл</h3>
+      <table class="spec">
+        <tr><td><code>neutral</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>text-ink-muted</code></span></td><td>Крестик и шаг, которые дизайн оставляет неподвижными. Наведения нет намеренно: иначе шапка каждого диалога вздрагивала бы на проходе курсора</td></tr>
+        <tr><td><code>primary</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>text-ink-subtle</code> <code>hover:border-primary-line</code> <code>hover:bg-primary-tint</code> <code>hover:text-primary-deep</code></span></td><td>Ведёт дальше</td></tr>
+        <tr><td><code>danger</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>text-ink-subtle</code> <code>hover:border-danger-line</code> <code>hover:bg-danger-tint</code> <code>hover:text-danger-deep</code></span></td><td>Удаляет</td></tr>
+      </table>
+      <!-- /ds:gen iconbutton-spec -->
+
+      <h3>Состояния</h3>
       <div class="wells">
         <div><button class="ib ib-28 ib-nut" aria-label="Обновить"><svg class="i i-14" aria-hidden="true"><use href="#ic-refresh"/></svg></button><span class="cap">Нейтральная<i>ink-subtle / line</i></span></div>
         <div><button class="ib ib-28 ib-nut is-hover" aria-label="Обновить"><svg class="i i-14" aria-hidden="true"><use href="#ic-refresh"/></svg></button><span class="cap">Наведение</span></div>
@@ -921,9 +962,9 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div><button class="ib ib-28 solid" aria-label="Подтвердить"><svg class="i i-13" aria-hidden="true"><use href="#ic-check"/></svg></button><span class="cap">Залитая · подтвердить</span></div>
       </div>
       <table class="spec">
-        <tr><td>Форма</td><td>24 и 28 — квадрат с радиусом 6 и 8; 34 — круг в шапке; 44 — квадрат для тач-экрана</td></tr>
-        <tr><td>Наведение</td><td>Синее: <code>primary-line</code> + <code>primary-tint</code>. Красное: <code>danger-line</code> + <code>danger-tint</code></td></tr>
-        <tr><td>Залитая</td><td>Только подтверждение ввода на месте: галочка 22px в поле добавления</td></tr>
+        <tr><td>Фокус</td><td>Та же обводка, что у <code>Button</code>. Своего стиля фокуса у этой кнопки не было вовсе — она донашивала браузерный, который читался, но был разным на каждой платформе, и это был единственный контрол набора, не рисующий свой</td></tr>
+        <tr><td>Подпись</td><td><code>aria-label</code> обязателен, а не необязателен: внутри иконка или голый знак, и без него диктор объявляет безымянную кнопку, до которой не добраться по имени</td></tr>
+        <tr><td>Залитая</td><td>Только подтверждение ввода на месте: галочка в поле добавления. Своего вида под это нет — заливка приходит классом от вызывающего</td></tr>
       </table>
     </section>
 
@@ -949,13 +990,53 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td>Подсказка и ошибка</td><td>Одно место под полем: ошибка вытесняет подсказку, а не встаёт второй строкой</td></tr>
       </table>
 
+      <!-- ds:gen input-spec -->
+      <h3>Размеры</h3>
+      <table class="spec">
+        <tr><td><code>md</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">10/10 · 13px</span></td><td>Поле собственной формы</td></tr>
+        <tr><td><code>sm</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">10/7 · 12.5px</span></td><td>Поле внутри строки карточки, где <code>md</code> задал бы её высоту</td></tr>
+        <tr><td><code>xs</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">10/5 · радиус 8 · 12.5px</span></td><td>Числовой счётчик, в который вписывают величину рядом с её единицей</td></tr>
+      </table>
+      <h3>Тона</h3>
+      <table class="spec">
+        <tr><td><code>default</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border-line</code></span></td><td>Поле, в которое набирают</td></tr>
+        <tr><td><code>flat</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border-line</code> <code>bg-canvas</code></span></td><td>Поле не для набора: показанный факт или секрет, который читают с экрана один раз. Заливка <code>canvas</code> и есть сообщение, что оно неподвижно</td></tr>
+      </table>
+      <!-- /ds:gen input-spec -->
+
       <h3>Разновидности</h3>
       <div class="wells w2">
         <div class="left"><span class="in-icon"><svg class="i i-14" aria-hidden="true"><use href="#ic-search"/></svg><input class="fld pill" style="padding-left:34px" placeholder="Поиск по номеру или имени" aria-label="Поиск"></span><span class="cap">Поиск</span></div>
         <div class="left"><button class="fld pill" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;text-align:left">Все статусы <svg class="i i-14" aria-hidden="true"><use href="#ic-chevron"/></svg></button><span class="cap">Выбор</span></div>
-        <div class="left"><div class="seg"><button class="on">Каждый день</button><button>По расписанию</button></div><span class="cap">Сегментированный</span></div>
         <div class="left"><div class="step" style="justify-content:center"><button class="ib ib-28 ib-nut" aria-label="Меньше"><svg class="i i-14" aria-hidden="true"><use href="#ic-minus"/></svg></button><span class="v">15</span><button class="ib ib-28 ib-nut" aria-label="Больше"><svg class="i i-14" aria-hidden="true"><use href="#ic-plus"/></svg></button></div><span class="cap">Счётчик</span></div>
       </div>
+    </section>
+
+    <!-- ── Сегментная группа ────────────────────────────────────────────── -->
+    <section id="segmented">
+      <div class="eyebrow">Ввод</div>
+      <h2>Сегментная группа</h2>
+      <p class="intro">Ряд взаимоисключающих вариантов, ровно один залит. Четырнадцать мест рисовали её руками, и ни у одного не было клавиатуры: каждый вариант был своей остановкой табуляции, а стрелки не делали ничего. Здесь это одна остановка, по которой стрелки водят курсор по кругу и перешагивают недоступные.</p>
+      <div class="wells w2" style="margin-top:18px">
+        <div class="left"><div class="seg tray"><button class="on">Каждый день</button><button>По расписанию</button></div><span class="cap">tray</span></div>
+        <div class="left"><div class="seg pill"><button class="on">Все</button><button>Ошибки</button><button>Отладка</button></div><span class="cap">pill</span></div>
+        <div class="left"><div class="seg"><button class="on">Этот аккаунт</button><button>Все аккаунты</button></div><span class="cap">outline</span></div>
+      </div>
+
+      <!-- ds:gen segmented-spec -->
+      <h3>Виды</h3>
+      <p class="body">Один компонент, а не два, и носители — это и есть довод: лоток с поднятым белым сегментом и ряд контурных чипов выглядят разными контролами, но контракт у них один — значение, список вариантов, ровно один активный. Различие между ними — заливка, а расколоть набор по заливке значило бы завести две копии перемещаемого фокуса. Это <em>радиогруппа</em> и только она: вкладки, переключающие панель, просят <code>role="tablist"</code> и <code>aria-controls</code>, которые рисует вызывающий, и такой в приложении ровно один.</p>
+      <table class="spec">
+        <tr><td><code>tray</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">лоток: 3 со всех сторон · радиус 11 · <code>flex</code> <code>gap-tight</code> <code>bg-canvas</code><br>сегмент: 0/7 · поровну в ряду · радиус 6 · 12.5px · 500<br>активный: <code>bg-white</code> <code>text-ink</code> <code>shadow-seg</code></span></td><td>Утопленный лоток на всю ширину строки внутри карточки или диалога, активный сегмент поднят из него</td></tr>
+        <tr><td><code>pill</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">лоток: 3 со всех сторон · пилюля · <code>inline-flex</code> <code>border</code> <code>border-line</code> <code>bg-white</code><br>сегмент: 14/5 · пилюля · 12.5px · 500<br>активный: <code>bg-primary</code> <code>text-white</code> <code>shadow-pill</code></span></td><td>Тот же смысл стадионом по своим подписям, для лотков, которые стоят в конце строки, а не занимают её. Активный сегмент залит синим, а не поднят белым</td></tr>
+        <tr><td><code>outline</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">лоток: <code>flex</code> <code>gap-sm</code><br>сегмент: 10/7 · поровну в ряду · радиус 11 · 12.5px · 500 · <code>border</code><br>активный: <code>border-primary</code> <code>bg-primary-tint</code> <code>text-primary-deep</code></span></td><td>Лотка нет вовсе: каждый вариант — своя контурная коробка, активная подкрашена, а не поднята</td></tr>
+      </table>
+      <!-- /ds:gen segmented-spec -->
+
+      <table class="spec">
+        <tr><td>Фокус</td><td>Обводка на сегменте, и здесь она важнее, чем почти где-либо ещё: группа — одна остановка табуляции, внутри которой стрелки двигают курсор, и не видя, на каком сегменте он стоит, клавиатурой пользоваться нельзя</td></tr>
+        <tr><td>Недоступность</td><td>Только на всю группу. Отдельно взятый недоступный вариант — это список, который врёт о том, из чего выбирают</td></tr>
+      </table>
     </section>
 
     <!-- ── Выпадающий список ────────────────────────────────────────────── -->
@@ -1115,6 +1196,24 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div><span class="dl" style="color:var(--success)"><i></i>Активна</span><span class="cap">Точка с подписью<i>когда пилюля не влезает</i></span></div>
       </div>
 
+      <!-- ds:gen badge-spec -->
+      <h3>Тона</h3>
+      <p class="body">Тон называет обе половины сразу и берёт для текста ступень <code>deep</code>. Пара классов, выбранная на месте, — это то, куда ушёл контраст приложения: на 10.5px <code>danger</code> на <code>danger-tint</code> меряет 4.34:1, а <code>ink-muted</code> на нейтральной заливке 4.10 — оба ниже порога 4.5.</p>
+      <table class="spec">
+        <tr><td><code>neutral</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>bg-canvas</code> <code>text-ink-muted</code></span></td><td>Счётчик и метка, которая ничего не обещает</td></tr>
+        <tr><td><code>primary</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>bg-primary-tint</code> <code>text-primary-deep</code></span></td><td>Идёт прямо сейчас</td></tr>
+        <tr><td><code>success</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>bg-success-tint</code> <code>text-success-deep</code></span></td><td>Работает, проверено</td></tr>
+        <tr><td><code>warning</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>bg-warning-tint</code> <code>text-warning-deep</code></span></td><td>Пауза, ожидание, ограничение</td></tr>
+        <tr><td><code>danger</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>bg-danger-tint</code> <code>text-danger-deep</code></span></td><td>Сломалось, удалено, забанено</td></tr>
+      </table>
+      <h3>Размеры</h3>
+      <table class="spec">
+        <tr><td><code>md</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">10/5 · 12.5px</span></td><td>Метка, стоящая сама по себе, а не при строке</td></tr>
+        <tr><td><code>sm</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">10/3 · 11px</span></td><td>Пилюля статуса — то, что <code>tiny</code> и называет подписью пилюли</td></tr>
+        <tr><td><code>xs</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">7/2 · 10.5px</span></td><td>Счётчик и метка при плотной строке</td></tr>
+      </table>
+      <!-- /ds:gen badge-spec -->
+
       <h3>Счётчики и живое</h3>
       <div class="wells">
         <div><span class="cnt">7 задач</span><span class="cap">Счётчик</span></div>
@@ -1141,11 +1240,17 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="note n-warn"><span class="ic"><svg class="i i-16" aria-hidden="true"><use href="#ic-alert"/></svg></span><span>Кампаний нет — слушатель запущен, но подписан на ноль каналов. Создайте кампанию, чтобы он начал работать.</span></div>
         <div class="note n-bad"><span class="ic"><svg class="i i-16" aria-hidden="true"><use href="#ic-circle-x"/></svg></span><span>Два канала не разрешаются: <code>@old_name</code>, <code>@dead_link</code>. Ни один пост оттуда не придёт.</span></div>
       </div>
+      <!-- ds:gen notice-spec -->
+      <h3>Тона</h3>
       <table class="spec">
-        <tr><td>Синее</td><td>Так устроено: объясняет поведение, которое похоже на поломку</td></tr>
-        <tr><td>Зелёное</td><td>Получилось, и результат стоит показать дольше, чем живёт галочка отклика</td></tr>
-        <tr><td>Янтарное</td><td>Работает не полностью, оператор может это исправить</td></tr>
-        <tr><td>Красное</td><td>Не работает, потеря данных или действий</td></tr>
+        <tr><td><code>primary</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border-primary-line</code> <code>bg-primary-tint</code> <code>text-primary-deep</code></span></td><td>Так устроено: объясняет поведение, которое похоже на поломку</td></tr>
+        <tr><td><code>success</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border-success-line</code> <code>bg-success-tint</code> <code>text-success-deep</code></span></td><td>Получилось, и результат стоит держать дольше, чем живёт галочка отклика</td></tr>
+        <tr><td><code>warning</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border-warning-line</code> <code>bg-warning-tint</code> <code>text-warning-deep</code></span></td><td>Работает не полностью, и оператор может это исправить</td></tr>
+        <tr><td><code>danger</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px"><code>border-danger-line</code> <code>bg-danger-tint</code> <code>text-danger-deep</code></span></td><td>Не работает: потеря данных или действий</td></tr>
+      </table>
+      <!-- /ds:gen notice-spec -->
+
+      <table class="spec">
         <tr><td>Место</td><td>Внутри блока, к которому относится, а не сверху страницы. Тост — только для сбоя, которого оператор не вызывал</td></tr>
         <tr><td>Озвучивание</td><td><code>role="status"</code> плашка себе не ставит: почти вся она — статичный текст, который лежал на экране до того, как оператор туда посмотрел. Плашка, сообщающая исход действия, передаёт <code>role="alert"</code> сама</td></tr>
       </table>
