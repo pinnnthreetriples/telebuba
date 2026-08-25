@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { DataTable, type DataTableColumnMeta } from './DataTable';
 
 interface Item {
@@ -39,7 +40,11 @@ const COLUMNS: ColumnDef<Item>[] = [
   },
   {
     id: 'expander',
-    header: '',
+    // A column with nothing to show in its header still needs a name: the <th> is
+    // read out before every cell under it, and an empty one is announced as blank.
+    // sr-only, so the column stays visually untitled — the same trick AppNav uses
+    // for the connection status text.
+    header: () => <span className="sr-only">Подробности</span>,
     cell: ({ row }) => (
       <button
         type="button"
@@ -88,8 +93,8 @@ function renderTable(extra?: Partial<Parameters<typeof DataTable<Item>>[0]>) {
 
 // The load-bearing assertion of this file: it is what fails if anyone swaps the JS
 // switch for `hidden lg:table` + `lg:hidden`, which would put both trees in the DOM.
-test('a wide viewport renders the table, and each cell exactly once', () => {
-  renderTable();
+test('a wide viewport renders the table, and each cell exactly once', async () => {
+  const { container } = renderTable();
 
   expect(screen.getByRole('table')).toBeInTheDocument();
   expect(screen.getAllByText('first-row')).toHaveLength(1);
@@ -97,6 +102,7 @@ test('a wide viewport renders the table, and each cell exactly once', () => {
   expect(screen.getAllByLabelText('Выбрать first-row')).toHaveLength(1);
   // A labelled column's header appears once (as a <th>), not once per row.
   expect(screen.getAllByText('ЗАМЕТКА')).toHaveLength(1);
+  await expectNoAxeViolations(container);
 });
 
 // The reported bug: on the neurocomment screen a tablet-width viewport passes the
@@ -118,9 +124,11 @@ test('a container as wide as the table renders the table', () => {
   expect(screen.getByRole('table')).toBeInTheDocument();
 });
 
-test('a narrow viewport replaces the table with one card per row', () => {
+// The card branch is a second tree this component renders, not a variant of the
+// first — no <table>, no <th>, list semantics instead — so it gets its own pass.
+test('a narrow viewport replaces the table with one card per row', async () => {
   setViewport(375);
-  renderTable();
+  const { container } = renderTable();
 
   expect(screen.queryByRole('table')).toBeNull();
   // 'title' column: value present, no label.
@@ -132,6 +140,7 @@ test('a narrow viewport replaces the table with one card per row', () => {
   // 'control' column: its header never becomes a per-card label.
   expect(screen.queryByLabelText('Выбрать все')).toBeNull();
   expect(screen.getAllByLabelText(/^Выбрать /)).toHaveLength(DATA.length);
+  await expectNoAxeViolations(container);
 });
 
 // Cards are anonymous divs; without list semantics a screen reader gets one flat run

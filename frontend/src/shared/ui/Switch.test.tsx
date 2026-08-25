@@ -2,14 +2,18 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Switch } from './Switch';
 
 test('reports its state through role/aria and toggles to the opposite value', async () => {
   const onChange = vi.fn();
-  const { rerender } = render(<Switch checked={false} onChange={onChange} label="Резерв" />);
+  const { container, rerender } = render(
+    <Switch checked={false} onChange={onChange} label="Резерв" />,
+  );
 
   const control = screen.getByRole('switch', { name: 'Резерв' });
   expect(control).toHaveAttribute('aria-checked', 'false');
+  await expectNoAxeViolations(container);
 
   await userEvent.click(control);
   expect(onChange).toHaveBeenCalledWith(true);

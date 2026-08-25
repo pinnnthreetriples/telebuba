@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import config from '../../../tailwind.config';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Modal } from './Modal';
 import { Toaster } from './Toaster';
 import { toastError } from './toast';
@@ -35,7 +36,7 @@ test('renders a queued error message and auto-dismisses it', () => {
 // toast is already on screen when the dialog opens: the dialog's portal is appended to
 // body after the toast's, so at an equal z-index it would win the tie and paint over
 // it. Naming the rung is what makes the outcome independent of that order.
-test('a toast raised before a dialog opens still sits above it', () => {
+test('a toast raised before a dialog opens still sits above it', async () => {
   render(<Toaster />);
   act(() => {
     toastError('Something broke');
@@ -51,4 +52,10 @@ test('a toast raised before a dialog opens still sits above it', () => {
   expect(toastLayer).toHaveClass('z-toast');
   expect(dialogLayer).toHaveClass('z-dialog');
   expect(Number(zIndex.toast)).toBeGreaterThan(Number(zIndex.dialog));
+
+  // The axe pass lives in this test rather than the one above it because axe cannot
+  // run on a frozen clock, and this is the test that never advances it. The stack
+  // portals to document.body, so the stack's own element is the root.
+  vi.useRealTimers();
+  await expectNoAxeViolations(toastLayer as Element);
 });

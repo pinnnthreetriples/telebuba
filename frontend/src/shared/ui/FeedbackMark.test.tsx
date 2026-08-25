@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { FeedbackMark } from './FeedbackMark';
 
 test('renders nothing when there is no result', () => {
@@ -8,9 +9,10 @@ test('renders nothing when there is no result', () => {
   expect(container).toBeEmptyDOMElement();
 });
 
-test('renders a success mark', () => {
+test('renders a success mark', async () => {
   const { container } = render(<FeedbackMark result="ok" />);
   expect(container.querySelector('.text-success-deep svg')).toBeInTheDocument();
+  await expectNoAxeViolations(container);
 });
 
 test('renders an error mark', () => {

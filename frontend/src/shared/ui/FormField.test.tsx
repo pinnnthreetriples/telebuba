@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import '@/shared/i18n';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { FormField } from './FormField';
 
 const schema = z.object({ name: z.string().trim().min(1, 'accounts.profile.errFirstName') });
@@ -31,7 +32,7 @@ function Harness({ validator = schema }: { validator?: z.ZodTypeAny }) {
 }
 
 test('renders the label and the input, and shows the translated error once touched', async () => {
-  render(<Harness />);
+  const { container } = render(<Harness />);
   const input = screen.getByLabelText('Name');
   expect(input).toBeInTheDocument();
   // Untouched: no error yet.
@@ -45,6 +46,8 @@ test('renders the label and the input, and shows the translated error once touch
   });
   // The invalid input carries the error border.
   expect(input.className).toContain('border-danger');
+  // Checked in the errored state: that is when the field grows the wiring axe reads.
+  await expectNoAxeViolations(container);
 });
 
 // Pins the contract react-form 1.x changed. 0.x comma-joined a field's issues into

@@ -1,14 +1,15 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { SurfHover } from './SurfHover';
 
 // The unconditional class is `group-hover:-translate-x-[…]`, so a plain substring
 // check would match it too; only the un-prefixed token means "pinned open".
 const PINNED = /(^|\s)-translate-x-\[var\(--shift\)\]/;
 
-test('the surface carries the shift as a custom property, so hover/open reveal exactly the actions', () => {
-  render(
+test('the surface carries the shift as a custom property, so hover/open reveal exactly the actions', async () => {
+  const { container } = render(
     <SurfHover
       shift={144}
       surfaceId="surf"
@@ -24,6 +25,7 @@ test('the surface carries the shift as a custom property, so hover/open reveal e
   // they stay reachable by name for the hover/open state the caller drives.
   expect(screen.getByRole('button', { name: 'pause' })).toBeInTheDocument();
   expect(surface?.className).not.toMatch(PINNED);
+  await expectNoAxeViolations(container);
 });
 
 test('open pins the reveal, so the actions are reachable without a hover', () => {
