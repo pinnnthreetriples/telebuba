@@ -152,6 +152,18 @@ export default {
     // spend ONE rung on both halves — the dropdown's panel and its chevron used to run
     // 420ms against 400ms, which is a 20ms stagger nobody chose.
     transitionDuration: {
+      // `transitionDuration` and `transitionTimingFunction` sit at theme root, which
+      // REPLACES Tailwind's scales — including their `DEFAULT` keys, which is not a
+      // detail. Tailwind bakes those two defaults into every `transition-*` utility,
+      // so replacing the scales without a DEFAULT emitted `.transition-colors` with a
+      // `transition-property` and nothing else, and CSS's initial duration is 0s. The
+      // commit that made these tokens authoritative is the commit that switched 25 of
+      // the app's transitions off; six gates were green over it for a day, because a
+      // transition that does not run is not a raw value, not a contrast failure and
+      // not a drift between the config and the document. `motion.test.ts` compiles the
+      // config and asserts a duration comes out, which is the only shape of check that
+      // could have caught it.
+      DEFAULT: '150ms',
       state: '150ms',
       enter: '250ms',
       reveal: '420ms',
@@ -166,6 +178,9 @@ export default {
     // and used on the very panel whose chevron used `spring` — that is drift, not a
     // third intention, so it is gone.
     transitionTimingFunction: {
+      // See the note on `transitionDuration.DEFAULT`: without this key every
+      // `transition-*` utility loses its easing as well as its duration.
+      DEFAULT: 'cubic-bezier(.16,1,.3,1)',
       out: 'cubic-bezier(.16,1,.3,1)',
       spring: 'cubic-bezier(.34,1.45,.6,1)',
     },

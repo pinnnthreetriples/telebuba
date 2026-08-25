@@ -12,8 +12,17 @@ import { cn } from '@/shared/lib/cn';
 // `IconButton` stays its own component rather than a size here: it is square, it
 // carries no text, and its accessible name comes from `aria-label` — a button
 // whose label is mandatory is a different contract, not a variant.
+// The focus ring is an OUTLINE, not `shadow-focus`. It was the shadow, and the shadow
+// is `rgba(0,102,255,0.12)` — composited on this button's own white that is #e0edff,
+// **1.18:1**, against the 3:1 that WCAG 2.2 asks of a focus indicator. Worse, it came
+// with `outline-none`, so the browser ring it replaced was gone too: every one of the
+// app's remaining hand-written buttons, which style focus not at all, was easier to
+// follow by keyboard than the design system's own. `docs/design-system.html` states the
+// correct rule ("обводку не заменяют тенью") and the component had been contradicting it.
+// `shadow-focus` keeps its job on the FIELDS, where it is a glow beside a border that
+// goes `primary` — 4.83:1, carrying the indication on its own.
 const BASE =
-  'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap transition-colors duration-state focus-visible:shadow-focus focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 aria-busy:cursor-progress';
+  'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50 aria-busy:cursor-progress';
 
 // `md` is the dialog footer and the page-level action; `sm` the action inside a
 // card, where `md` would set the card header's height; `xs` the one that sits in a
