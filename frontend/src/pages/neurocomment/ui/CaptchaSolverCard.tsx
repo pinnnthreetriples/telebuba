@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ChallengeRow } from '@/shared/api';
@@ -22,6 +23,7 @@ export function CaptchaSolverCard({
   accountLabel: (accountId: string) => string;
 }) {
   const { t } = useTranslation();
+  const tipId = useId();
   return (
     <Card className="">
       <div className="flex items-center justify-between gap-md px-lg py-md">
@@ -42,11 +44,22 @@ export function CaptchaSolverCard({
           <div className="min-w-0">
             <div className="flex items-center gap-sm">
               <span className="type-item-title">{t('neurocomment.captcha.title')}</span>
+              {/* `tabIndex` and not a <button>: there is nothing here to activate, only
+                  something to read. See `.tb-tip-pop` in app/styles/index.css. */}
               <span className="tb-tip inline-flex">
-                <span className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-white text-micro font-bold text-ink-subtle">
+                <span
+                  tabIndex={0}
+                  aria-describedby={tipId}
+                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-white text-micro font-bold text-ink-subtle"
+                >
                   ?
                 </span>
-                <span className="tb-tip-pop tb-tip-pop--wide" style={{ textAlign: 'left' }}>
+                <span
+                  id={tipId}
+                  role="tooltip"
+                  className="tb-tip-pop tb-tip-pop--wide"
+                  style={{ textAlign: 'left' }}
+                >
                   {t('neurocomment.captcha.tooltip')}
                 </span>
               </span>

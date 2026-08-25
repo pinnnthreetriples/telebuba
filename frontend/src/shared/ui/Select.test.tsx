@@ -18,7 +18,7 @@ const WITH_DISABLED: SelectOption[] = [
 // The keyboard cursor lives in `aria-activedescendant` on the trigger, pointing at an
 // option's id — DOM focus never leaves the trigger, so that attribute IS the cursor.
 function cursor(): string | null {
-  return screen.getByRole('button', { name: 'Аккаунт' }).getAttribute('aria-activedescendant');
+  return screen.getByRole('combobox', { name: 'Аккаунт' }).getAttribute('aria-activedescendant');
 }
 
 function idOf(name: string): string {
@@ -37,7 +37,7 @@ function renderSelect(over: Partial<Parameters<typeof Select>[0]> = {}) {
       {...over}
     />,
   );
-  return { onChange, trigger: screen.getByRole('button', { name: 'Аккаунт' }) };
+  return { onChange, trigger: screen.getByRole('combobox', { name: 'Аккаунт' }) };
 }
 
 test('the trigger shows the placeholder until an option matches the value', () => {
@@ -72,7 +72,7 @@ test('the option matching the value is the selected one', () => {
 
   expect(screen.getByRole('option', { name: 'Boris' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByRole('option', { name: 'Alisa' })).toHaveAttribute('aria-selected', 'false');
-  expect(screen.getByRole('button', { name: 'Аккаунт' })).toHaveTextContent('Boris');
+  expect(screen.getByRole('combobox', { name: 'Аккаунт' })).toHaveTextContent('Boris');
 });
 
 test('closes on Escape', async () => {
@@ -248,17 +248,100 @@ test('the closed list publishes no active descendant', async () => {
 // The failure this guards against is the one a roving-focus dropdown has: with real
 // focus inside the list, Tab moves it to the next option and a blur handler commits
 // whatever it landed on, so leaving the control silently changes the value. Here the
-// cursor is an attribute and the list is `inert`, so Tab is the trigger's own — it
-// leaves the control and picks nothing.
-test('Tab leaves the trigger and commits nothing', async () => {
-  const { onChange, trigger } = renderSelect();
+// cursor is an attribute, so Tab is the trigger's own — it leaves the CONTROL, not just
+// the trigger, and picks nothing.
+//
+// The list is OPEN in the state this exercises, which is the only state where it can
+// fail: `inert` comes off on open, so the options are ordinary tab stops unless they say
+// otherwise, and until they did, this Tab landed on Alisa — one row inside the list.
+// Hence the sentinel: `not.toHaveFocus()` on the trigger was true either way and could
+// not tell the two apart. Asserting where focus WENT is what makes this test a test.
+test('Tab leaves the whole control, not just the trigger, and commits nothing', async () => {
+  const onChange = vi.fn();
+  render(
+    <>
+      <Select
+        value=""
+        onChange={onChange}
+        options={OPTIONS}
+        placeholder="Выберите"
+        ariaLabel="Аккаунт"
+      />
+      <button type="button">Дальше</button>
+    </>,
+  );
+  const trigger = screen.getByRole('combobox', { name: 'Аккаунт' });
   trigger.focus();
 
   await userEvent.keyboard('{ArrowDown}{ArrowDown}');
   expect(cursor()).toBe(idOf('Boris'));
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
 
   await userEvent.tab();
 
   expect(onChange).not.toHaveBeenCalled();
-  expect(trigger).not.toHaveFocus();
+  expect(screen.getByRole('button', { name: 'Дальше' })).toHaveFocus();
+});
+
+// One Tab per option is what an open twenty-row list costs when the rows keep their
+// default tab stop, and `inert` cannot help: it is off for exactly as long as the list
+// is open. The rows are still programmatically focusable (tabIndex -1, not `inert`),
+// which is what the inert test above relies on.
+test('an open list adds no tab stops of its own', async () => {
+  const { trigger } = renderSelect();
+  await userEvent.click(trigger);
+
+  for (const option of screen.getAllByRole('option')) {
+    expect(option).toHaveAttribute('tabindex', '-1');
+  }
+});
+
+// `aria-activedescendant` is a promise that an id resolves, and it resolves in one of
+// three places only: a DOM descendant, an `aria-owns` descendant, or inside the
+// `aria-controls` target. The trigger is the list's SIBLING, so the first two are out by
+// construction and this is the one that has to hold — before it did, the cursor named an
+// id no assistive technology would look for, and the whole keyboard suite above passed
+// over it, because every one of those tests reads the attribute rather than resolving it.
+test('the cursor resolves: aria-controls names the listbox and the cursor is inside it', async () => {
+  const { trigger } = renderSelect();
+  trigger.focus();
+  await userEvent.keyboard('{ArrowDown}');
+
+  const listbox = screen.getByRole('listbox');
+  expect(trigger).toHaveAttribute('aria-controls', listbox.id);
+  expect(listbox.id).not.toBe('');
+
+  const named = document.getElementById(cursor() ?? '');
+  expect(named).toBe(screen.getByRole('option', { name: 'Alisa' }));
+  expect(listbox.contains(named)).toBe(true);
+});
+
+// And the role that makes the attribute legal at all: `aria-activedescendant` is
+// supported on composite roles, not on `button`.
+test('the trigger is a combobox, so it may carry a cursor', () => {
+  const { trigger } = renderSelect();
+
+  expect(trigger).toHaveAttribute('role', 'combobox');
+  expect(trigger).toHaveAttribute('aria-haspopup', 'listbox');
+});
+
+// `.tb-dd.open` caps the panel at 240px and scrolls; with DOM focus pinned to the
+// trigger the browser never scrolls a row into view on its own, so the cursor walked off
+// the bottom of a long list in silence.
+//
+// happy-dom's `scrollIntoView` is a no-op stub, so this proves the CALL and its
+// arguments, not that anything scrolled — the scrolling itself is browser territory.
+test('moving the cursor scrolls the row it lands on into view', async () => {
+  const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {
+    /* happy-dom stub; see above */
+  });
+  const { trigger } = renderSelect();
+  trigger.focus();
+
+  await userEvent.keyboard('{ArrowDown}{ArrowDown}');
+
+  const last = scrollIntoView.mock.instances.at(-1);
+  expect(last).toBe(screen.getByRole('option', { name: 'Boris' }));
+  expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+  scrollIntoView.mockRestore();
 });
