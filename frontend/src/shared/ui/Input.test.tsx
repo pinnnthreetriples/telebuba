@@ -2,10 +2,11 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Input, Textarea } from './Input';
 
-test('the vertical padding and type size come from the size prop', () => {
-  render(
+test('the vertical padding and type size come from the size prop', async () => {
+  const { container } = render(
     <>
       <Input aria-label="Ключ" />
       <Input aria-label="Порог" size="sm" />
@@ -18,6 +19,7 @@ test('the vertical padding and type size come from the size prop', () => {
   expect(screen.getByLabelText('Ключ').className).toContain('py-md');
   expect(screen.getByLabelText('Порог').className).toContain('py-sm');
   expect(screen.getByLabelText('Лимит').className).toContain('py-tight');
+  await expectNoAxeViolations(container);
 });
 
 // A red border alone is a colour carrying meaning, so the state is published to

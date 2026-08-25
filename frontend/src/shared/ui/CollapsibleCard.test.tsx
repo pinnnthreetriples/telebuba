@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { CollapsibleCard } from './CollapsibleCard';
 
 // The whole a11y claim of the collapsible cards rests on this component: the
@@ -72,7 +73,7 @@ test('a collapsed body is display:none, so out of the a11y tree', () => {
 });
 
 test('opening the card returns its controls to the a11y tree and the tab order', async () => {
-  render(<Card />);
+  const { container } = render(<Card />);
   await userEvent.click(screen.getByText('Действия'));
 
   const remove = screen.getByRole('button', { name: 'Удалить аккаунт' });
@@ -85,6 +86,7 @@ test('opening the card returns its controls to the a11y tree and the tab order',
   await userEvent.tab();
   await userEvent.tab();
   expect(remove).toHaveFocus();
+  await expectNoAxeViolations(container);
 });
 
 test('a control that appears after the open is reachable, not sealed in', async () => {

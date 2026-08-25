@@ -2,11 +2,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { IconButton } from './IconButton';
 
 test('is reachable by its accessible name and defaults to a non-submitting button', async () => {
   const onClick = vi.fn();
-  render(
+  const { container } = render(
     <form
       onSubmit={() => {
         throw new Error('an icon button must not submit its form');
@@ -22,6 +23,7 @@ test('is reachable by its accessible name and defaults to a non-submitting butto
   expect(button).toHaveAttribute('type', 'button');
   await userEvent.click(button);
   expect(onClick).toHaveBeenCalledTimes(1);
+  await expectNoAxeViolations(container);
 });
 
 test('size picks both the box and its shape, so `tile` is the only circle', () => {

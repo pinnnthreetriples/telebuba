@@ -1,13 +1,15 @@
 import { render } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Icon } from './Icon';
 
-test('a name draws the library glyph it is mapped to', () => {
+test('a name draws the library glyph it is mapped to', async () => {
   const { container } = render(<Icon name="check" size={16} />);
 
   expect(container.querySelector('path')).toHaveAttribute('d', 'M20 6 9 17l-5-5');
   expect(container.querySelector('svg')).toHaveAttribute('viewBox', '0 0 24 24');
+  await expectNoAxeViolations(container);
 });
 
 // The table is the whole reason this component still exists: the app's vocabulary and

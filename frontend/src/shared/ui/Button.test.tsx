@@ -2,14 +2,15 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Button } from './Button';
 
 function classesOf(name: string): string {
   return screen.getByRole('button', { name }).className;
 }
 
-test('the shape comes from the size and the fill from the variant', () => {
-  render(
+test('the shape comes from the size and the fill from the variant', async () => {
+  const { container } = render(
     <>
       <Button>Отмена</Button>
       <Button variant="primary" size="sm">
@@ -28,6 +29,7 @@ test('the shape comes from the size and the fill from the variant', () => {
   expect(classesOf('Запустить')).toContain('text-body');
   expect(classesOf('Запустить')).toContain('bg-primary');
   expect(classesOf('Удалить')).toContain('bg-danger-tint');
+  await expectNoAxeViolations(container);
 });
 
 // `block` is the only rung that sets its own width, and the only one that is not

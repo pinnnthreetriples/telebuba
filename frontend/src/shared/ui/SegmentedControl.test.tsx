@@ -4,6 +4,7 @@ import { expect, test, vi } from 'vitest';
 
 import { cn } from '@/shared/lib/cn';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { SegmentedControl, type SegmentedOption } from './SegmentedControl';
 
 const OPTIONS: SegmentedOption<'pool' | 'manual' | 'off'>[] = [
@@ -14,7 +15,7 @@ const OPTIONS: SegmentedOption<'pool' | 'manual' | 'off'>[] = [
 
 function renderControl(over: Partial<Parameters<typeof SegmentedControl>[0]> = {}) {
   const onChange = vi.fn();
-  render(
+  const { container } = render(
     <SegmentedControl
       value="pool"
       onChange={onChange}
@@ -23,14 +24,15 @@ function renderControl(over: Partial<Parameters<typeof SegmentedControl>[0]> = {
       {...over}
     />,
   );
-  return { onChange, radios: screen.getAllByRole('radio') };
+  return { onChange, container, radios: screen.getAllByRole('radio') };
 }
 
-test('renders one radiogroup with one radio per option and exactly one checked', () => {
-  const { radios } = renderControl();
+test('renders one radiogroup with one radio per option and exactly one checked', async () => {
+  const { container, radios } = renderControl();
   expect(screen.getByRole('radiogroup', { name: 'Прокси' })).toBeInTheDocument();
   expect(radios).toHaveLength(3);
   expect(radios.map((r) => r.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false']);
+  await expectNoAxeViolations(container);
 });
 
 test('clicking an option reports its value', async () => {

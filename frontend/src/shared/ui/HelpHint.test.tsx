@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { HelpHint } from './HelpHint';
 
-test('renders the "?" badge with the hint text and example', () => {
-  render(<HelpHint text="Explains the field" example="Example: 3" />);
+test('renders the "?" badge with the hint text and example', async () => {
+  const { container } = render(<HelpHint text="Explains the field" example="Example: 3" />);
 
   const badge = screen.getByRole('note');
   expect(badge).toHaveTextContent('?');
@@ -13,6 +14,7 @@ test('renders the "?" badge with the hint text and example', () => {
   // both the explanation and the example render in the tooltip
   expect(screen.getByRole('tooltip')).toHaveTextContent('Explains the field');
   expect(screen.getByText('Example: 3')).toBeInTheDocument();
+  await expectNoAxeViolations(container);
 });
 
 test('omits the example line when no example is given', () => {

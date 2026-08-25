@@ -1,11 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Badge } from './Badge';
 import { Notice } from './Notice';
 
-test('the tone names the fill and the readable text rung together', () => {
-  render(
+test('the tone names the fill and the readable text rung together', async () => {
+  const { container } = render(
     <>
       <Badge>7</Badge>
       <Badge tone="danger">3 удалено</Badge>
@@ -23,6 +24,7 @@ test('the tone names the fill and the readable text rung together', () => {
   expect(deleted.split(' ')).not.toContain('text-danger');
 
   expect(screen.getByText('Готов').className).toContain('text-success-deep');
+  await expectNoAxeViolations(container);
 });
 
 test('the size picks one of the three pill rungs', () => {
@@ -63,8 +65,9 @@ test('a badge never wraps and a caller can still add layout', () => {
   expect(classes).toContain('ml-auto');
 });
 
-test('a notice carries its tone and drops the border on request', () => {
-  render(
+// Notice has no test file of its own, so its axe pass lives here beside Badge's.
+test('a notice carries its tone and drops the border on request', async () => {
+  const { container } = render(
     <>
       <Notice tone="danger">Не удалось</Notice>
       <Notice tone="warning" bordered={false}>
@@ -81,6 +84,7 @@ test('a notice carries its tone and drops the border on request', () => {
   const careful = screen.getByText('Осторожно').className;
   expect(careful).toContain('bg-warning-tint');
   expect(careful.split(' ')).not.toContain('border');
+  await expectNoAxeViolations(container);
 });
 
 // A notice is prose that was already on screen; only the ones reporting an outcome

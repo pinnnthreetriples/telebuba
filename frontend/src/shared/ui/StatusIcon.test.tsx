@@ -1,11 +1,13 @@
 import { render } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { StatusIcon } from './StatusIcon';
 
-test('renders a checkmark path for ok', () => {
+test('renders a checkmark path for ok', async () => {
   const { container } = render(<StatusIcon kind="ok" />);
   expect(container.querySelector('path')).toHaveAttribute('d', 'M20 6 9 17l-5-5');
+  await expectNoAxeViolations(container);
 });
 
 // Lucide spells the cross as two paths where the hand-copied registry spelled it as

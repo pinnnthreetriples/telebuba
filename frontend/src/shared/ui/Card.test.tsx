@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { expect, test } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Card } from './Card';
 
 test('the surface is the card and the padding is the caller`s', () => {
@@ -18,8 +19,8 @@ test('the surface is the card and the padding is the caller`s', () => {
   expect(card.className).not.toContain('px-xl');
 });
 
-test('the title and subtitle slots render only when given', () => {
-  const { rerender } = render(<Card data-testid="c">тело</Card>);
+test('the title and subtitle slots render only when given', async () => {
+  const { container, rerender } = render(<Card data-testid="c">тело</Card>);
   expect(screen.getByTestId('c').textContent).toBe('тело');
 
   rerender(
@@ -29,6 +30,7 @@ test('the title and subtitle slots render only when given', () => {
   );
   expect(screen.getByText('Ключи')).toBeInTheDocument();
   expect(screen.getByText('откуда берутся')).toBeInTheDocument();
+  await expectNoAxeViolations(container);
 });
 
 // A plain surface has no bottom margin: the pages that stack cards without a flex

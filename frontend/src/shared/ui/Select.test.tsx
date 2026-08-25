@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Select, type SelectOption } from './Select';
 
 const OPTIONS: SelectOption[] = [
@@ -27,7 +28,7 @@ function idOf(name: string): string {
 
 function renderSelect(over: Partial<Parameters<typeof Select>[0]> = {}) {
   const onChange = vi.fn();
-  render(
+  const { container } = render(
     <Select
       value=""
       onChange={onChange}
@@ -37,7 +38,7 @@ function renderSelect(over: Partial<Parameters<typeof Select>[0]> = {}) {
       {...over}
     />,
   );
-  return { onChange, trigger: screen.getByRole('combobox', { name: 'Аккаунт' }) };
+  return { onChange, container, trigger: screen.getByRole('combobox', { name: 'Аккаунт' }) };
 }
 
 test('the trigger shows the placeholder until an option matches the value', () => {
@@ -46,11 +47,14 @@ test('the trigger shows the placeholder until an option matches the value', () =
 });
 
 test('opens on click and closes again on a second click', async () => {
-  const { trigger } = renderSelect();
+  const { container, trigger } = renderSelect();
   expect(trigger).toHaveAttribute('aria-expanded', 'false');
 
   await userEvent.click(trigger);
   expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  // Open is the state worth checking: that is when the listbox, its options and the
+  // trigger's aria-activedescendant all exist to be pointed at one another.
+  await expectNoAxeViolations(container);
 
   await userEvent.click(trigger);
   expect(trigger).toHaveAttribute('aria-expanded', 'false');

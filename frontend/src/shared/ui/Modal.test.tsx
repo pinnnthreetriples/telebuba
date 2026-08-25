@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { Modal } from './Modal';
 
 afterEach(() => {
@@ -125,7 +126,7 @@ test('focuses the dialog on open and restores focus to the opener on close', () 
 // `label` is required, not optional: while it was optional 20 of the 21 call sites
 // left it out and a screen reader announced a nameless "dialog". This is the whole
 // contract — getByRole('dialog', { name }) resolves only through the aria-label.
-test('the dialog carries its accessible name', () => {
+test('the dialog carries its accessible name', async () => {
   render(
     <Modal onClose={vi.fn()} label="Настройки прогрева">
       <div>содержимое</div>
@@ -134,6 +135,8 @@ test('the dialog carries its accessible name', () => {
 
   expect(screen.getByRole('dialog', { name: 'Настройки прогрева' })).toBeInTheDocument();
   expect(screen.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+  // The dialog portals to document.body, so its own root is the axe root here.
+  await expectNoAxeViolations(screen.getByRole('presentation'));
 });
 
 test('Tab is trapped inside the dialog and wraps around', async () => {

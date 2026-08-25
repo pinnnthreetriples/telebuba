@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
+import { expectNoAxeViolations } from './axe.test-helpers';
 import { ConfirmModal } from './ConfirmModal';
 
 test('cancel closes without confirming', async () => {
@@ -18,6 +19,8 @@ test('cancel closes without confirming', async () => {
     />,
   );
   expect(screen.getByText('Удалить канал?')).toBeInTheDocument();
+  // The dialog portals to document.body, so its own root is the axe root here.
+  await expectNoAxeViolations(screen.getByRole('presentation'));
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(onConfirm).not.toHaveBeenCalled();
