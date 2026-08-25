@@ -13,10 +13,10 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, FeedbackMark, Icon, Input } from '@/shared/ui';
+import { Button, FeedbackMark, Icon, Input, SegmentedControl } from '@/shared/ui';
 
 import { Section, Spinner } from './_shared';
-import { LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
+import { LABEL, type CheckState } from './_styles';
 
 // Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
 // shows the real session state — not a hardcoded green "active". Tokens, so the
@@ -218,20 +218,18 @@ export function SessionSection({ account }: { account: AccountRead }) {
       </Button>
       {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
       <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>
-      <div className={SEG_WRAP}>
-        {(['session', 'tdata'] as const).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => {
-              setImportTab(tab);
-            }}
-            className={seg(importTab === tab)}
-          >
-            {tab === 'session' ? '.session' : 'tdata.zip'}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="mb-md"
+        value={importTab}
+        ariaLabel={t('accounts.edit.import')}
+        options={(['session', 'tdata'] as const).map((tab) => ({
+          value: tab,
+          label: tab === 'session' ? '.session' : 'tdata.zip',
+        }))}
+        onChange={(tab) => {
+          setImportTab(tab);
+        }}
+      />
       <button
         type="button"
         onClick={() => uploadInput.current?.click()}

@@ -78,7 +78,7 @@ async function openWithSettings(mode = 'first', wait?: number) {
   routeSettings(mode, undefined, wait);
   const handles = renderModal();
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: REPLY })).toBeEnabled();
+    expect(screen.getByRole('radio', { name: REPLY })).toBeEnabled();
   });
   return handles;
 }
@@ -164,11 +164,11 @@ test('an account picked and then cancelled is never applied', async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test('the stored mode is the pressed one, and the stored wait is in the field', async () => {
+test('the stored mode is the checked one, and the stored wait is in the field', async () => {
   await openWithSettings('reply', 45);
 
-  expect(screen.getByRole('button', { name: REPLY })).toHaveAttribute('aria-pressed', 'true');
-  expect(screen.getByRole('button', { name: FIRST })).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.getByRole('radio', { name: REPLY })).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByRole('radio', { name: FIRST })).toHaveAttribute('aria-checked', 'false');
   expect(screen.getByRole('spinbutton', { name: WAIT })).toHaveValue(45);
 });
 
@@ -181,7 +181,7 @@ test('no wait field while the fleet comments first — the wait does not apply t
 test('a mode picked and then saved goes out with the stored limits intact', async () => {
   await openWithSettings('first');
 
-  await userEvent.click(screen.getByRole('button', { name: REPLY }));
+  await userEvent.click(screen.getByRole('radio', { name: REPLY }));
   await userEvent.click(screen.getByText('Сохранить'));
 
   await waitFor(() => {
@@ -204,8 +204,8 @@ test('a mode picked and then saved goes out with the stored limits intact', asyn
 test('a mode picked and then cancelled sends nothing', async () => {
   const { onClose } = await openWithSettings('first');
 
-  await userEvent.click(screen.getByRole('button', { name: REPLY }));
-  expect(screen.getByRole('button', { name: REPLY })).toHaveAttribute('aria-pressed', 'true');
+  await userEvent.click(screen.getByRole('radio', { name: REPLY }));
+  expect(screen.getByRole('radio', { name: REPLY })).toHaveAttribute('aria-checked', 'true');
 
   await userEvent.click(screen.getByText('Отмена'));
 
@@ -216,8 +216,8 @@ test('a mode picked and then cancelled sends nothing', async () => {
 test('a mode returned to where it started costs no request', async () => {
   await openWithSettings('first');
 
-  await userEvent.click(screen.getByRole('button', { name: REPLY }));
-  await userEvent.click(screen.getByRole('button', { name: FIRST }));
+  await userEvent.click(screen.getByRole('radio', { name: REPLY }));
+  await userEvent.click(screen.getByRole('radio', { name: FIRST }));
   await userEvent.click(screen.getByText('Сохранить'));
 
   await waitFor(() => {
@@ -268,10 +268,10 @@ test('a rejected settings write neither claims "Сохранено" nor closes',
   routeSettings('first', () => Promise.resolve(new Response('nope', { status: 500 })));
   const { onClose } = renderModal();
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: REPLY })).toBeEnabled();
+    expect(screen.getByRole('radio', { name: REPLY })).toBeEnabled();
   });
 
-  await userEvent.click(screen.getByRole('button', { name: REPLY }));
+  await userEvent.click(screen.getByRole('radio', { name: REPLY }));
   await userEvent.click(screen.getByText('Сохранить'));
 
   await waitFor(() => {
@@ -300,7 +300,7 @@ test('the hint is also reachable without hovering', async () => {
   await openWithSettings('first');
 
   // A touch device and a screen reader never hover; the native tooltip carries both halves.
-  const button = screen.getByRole('button', { name: FIRST });
+  const button = screen.getByRole('radio', { name: FIRST });
   expect(button.title).toContain('всегда первые в ветке');
   expect(button.title).toContain('Пост в 12:00');
 });

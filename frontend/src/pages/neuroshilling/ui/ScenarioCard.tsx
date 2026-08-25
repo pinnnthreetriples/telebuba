@@ -7,6 +7,7 @@ import {
   CollapsibleCard,
   HelpHint,
   Input,
+  SegmentedControl,
   Select,
   Switch,
   Textarea,
@@ -141,6 +142,9 @@ function StepRow({
           }}
         />
       ) : (
+        /* A wrapping grid of square glyph tiles, not a row of labelled options: one
+           wearer, so it stays hand-written rather than becoming a fourth
+           `SegmentedControl` variant. */
         <div
           role="radiogroup"
           aria-label={t('neuroshilling.scenario.steps.emoji', { position })}
@@ -347,26 +351,18 @@ export function ScenarioCard({
       }
     >
       <div className="mb-md flex items-center gap-sm">
-        <div
-          role="radiogroup"
-          aria-label={t('neuroshilling.scenario.mode.label')}
-          className="inline-flex rounded-full border border-line bg-white p-xs"
-        >
-          {(['campaign', 'revive'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              role="radio"
-              aria-checked={draft.mode === mode}
-              onClick={() => {
-                onDraft({ ...draft, mode });
-              }}
-              className={`rounded-full px-lg py-tight text-body font-medium ${draft.mode === mode ? 'bg-primary text-white' : 'text-ink-muted'}`}
-            >
-              {t(`neuroshilling.scenario.mode.${mode}`)}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          variant="pill"
+          value={draft.mode}
+          ariaLabel={t('neuroshilling.scenario.mode.label')}
+          options={(['campaign', 'revive'] as const).map((mode) => ({
+            value: mode,
+            label: t(`neuroshilling.scenario.mode.${mode}`),
+          }))}
+          onChange={(mode) => {
+            onDraft({ ...draft, mode });
+          }}
+        />
         <HelpHint text={t('neuroshilling.scenario.mode.hint')} />
       </div>
 

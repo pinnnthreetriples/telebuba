@@ -19,13 +19,14 @@ import {
   FormField,
   Icon,
   Input,
+  SegmentedControl,
   Select,
   type SelectOption,
 } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { Section, Spinner } from './_shared';
-import { LABEL, SEG_WRAP, seg, type CheckState } from './_styles';
+import { LABEL, type CheckState } from './_styles';
 
 // Protocol names, not copy — nothing to translate.
 const PROXY_TYPES: SelectOption[] = [
@@ -233,20 +234,17 @@ export function ProxySection({ account }: { account: AccountRead }) {
       {unassignProxy.isError ? (
         <div className="mb-md type-caption text-danger">{t('accounts.edit.proxyDetachErr')}</div>
       ) : null}
-      <div className={SEG_WRAP}>
-        {(['pool', 'manual'] as const).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            onClick={() => {
-              setProxyMode(mode);
-            }}
-            className={seg(proxyMode === mode)}
-          >
-            {mode === 'pool' ? t('accounts.edit.fromPool') : t('accounts.edit.manual')}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        className="mb-md"
+        value={proxyMode}
+        options={(['pool', 'manual'] as const).map((mode) => ({
+          value: mode,
+          label: mode === 'pool' ? t('accounts.edit.fromPool') : t('accounts.edit.manual'),
+        }))}
+        onChange={(mode) => {
+          setProxyMode(mode);
+        }}
+      />
       {proxyMode === 'manual' ? (
         <>
           <div className="mb-md">

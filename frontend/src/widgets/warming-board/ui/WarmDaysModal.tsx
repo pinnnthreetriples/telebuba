@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
-import { Button, Icon, Modal } from '@/shared/ui';
+import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
 
 const MIN = 1;
 const MAX = 14;
@@ -154,24 +154,20 @@ export function WarmDaysModal({
           <span>{t('warming.days.max')}</span>
         </div>
 
-        <div className="mb-2xl flex gap-sm">
-          {PRESETS.map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => {
-                setDays(n);
-              }}
-              className={`flex-1 rounded-lg border py-sm text-body font-medium transition-colors ${
-                days === n
-                  ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line bg-white text-ink-muted hover:bg-surface'
-              }`}
-            >
-              {String(n)} {t('warming.days.label', { count: n })}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          variant="outline"
+          className="mb-2xl"
+          // The presets are numbers and the control keys on strings, so the value it
+          // carries is the number's own text; the handler puts the number back.
+          value={String(days)}
+          options={PRESETS.map((n) => ({
+            value: String(n),
+            label: `${String(n)} ${t('warming.days.label', { count: n })}`,
+          }))}
+          onChange={(value) => {
+            setDays(Number(value));
+          }}
+        />
 
         <div className="mb-sm flex items-center gap-sm type-item-title">
           {t('warming.persona.label')}
@@ -186,25 +182,24 @@ export function WarmDaysModal({
             <span className="tb-tip-pop">{t('warming.persona.tip')}</span>
           </span>
         </div>
-        <div className="mb-2xl flex gap-sm">
-          {PERSONAS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => {
-                setPersona(p);
-              }}
-              className={`flex-1 rounded-lg border px-sm py-md text-center transition-colors ${
-                persona === p
-                  ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line bg-white text-ink-muted hover:bg-surface'
-              }`}
-            >
-              <div className="type-item-title">{t(`warming.persona.${p}.name`)}</div>
-              <div className="mt-hair type-caption">{t(`warming.persona.${p}.hint`)}</div>
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          variant="outline"
+          className="mb-2xl"
+          value={persona}
+          ariaLabel={t('warming.persona.label')}
+          options={PERSONAS.map((p) => ({
+            value: p,
+            label: (
+              <>
+                <div className="type-item-title">{t(`warming.persona.${p}.name`)}</div>
+                <div className="mt-hair type-caption">{t(`warming.persona.${p}.hint`)}</div>
+              </>
+            ),
+          }))}
+          onChange={(p) => {
+            setPersona(p);
+          }}
+        />
 
         <div className="flex justify-end gap-sm">
           <Button

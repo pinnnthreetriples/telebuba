@@ -100,10 +100,10 @@ function row(label: string): HTMLElement {
   return screen.getByRole('group', { name: label });
 }
 
-// Each row's three buttons carry the row in their accessible name, so nine
-// buttons on the tab are all distinguishable.
+// Each row's three radios carry the row in their accessible name, so nine
+// options on the tab are all distinguishable.
 function levelButton(rowLabel: string, level: string): HTMLElement {
-  return within(row(rowLabel)).getByRole('button', { name: `${rowLabel}: ${level}` });
+  return within(row(rowLabel)).getByRole('radio', { name: `${rowLabel}: ${level}` });
 }
 
 test('renders the three live levels from the query response', async () => {
@@ -115,11 +115,11 @@ test('renders the three live levels from the query response', async () => {
   expect(within(row('Описание (bio)')).getByText('Сейчас: Никто')).toBeInTheDocument();
   expect(within(row('Был в сети')).getByText('Сейчас: Все')).toBeInTheDocument();
 
-  // The pressed button per row is the live level, not a default.
-  expect(within(row('Фото профиля')).getByRole('button', { pressed: true })).toHaveTextContent(
+  // The checked option per row is the live level, not a default.
+  expect(within(row('Фото профиля')).getByRole('radio', { checked: true })).toHaveTextContent(
     'Контакты',
   );
-  expect(within(row('Был в сети')).getByRole('button', { pressed: true })).toHaveTextContent('Все');
+  expect(within(row('Был в сети')).getByRole('radio', { checked: true })).toHaveTextContent('Все');
   // Same visible text, different accessible names (a11y: nine buttons in an
   // element list were indistinguishable).
   expect(levelButton('Фото профиля', 'Все')).toBeInTheDocument();
@@ -143,7 +143,7 @@ test('an unknown level renders as unknown, presses nothing and blocks the fleet 
     ),
   ).toBeInTheDocument();
   // Nothing is preselected anywhere — an unrecognised rule must not read as "Все".
-  expect(screen.queryAllByRole('button', { pressed: true })).toHaveLength(0);
+  expect(screen.queryAllByRole('radio', { checked: true })).toHaveLength(0);
   // Every key is unsendable, so an all-null 422 body cannot be fired.
   expect(screen.getByRole('button', { name: FLEET_BUTTON })).toBeDisabled();
 });

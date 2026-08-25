@@ -9,7 +9,17 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { Button, Card, FieldError, FormField, HelpHint, Icon, Input, Switch } from '@/shared/ui';
+import {
+  Button,
+  Card,
+  FieldError,
+  FormField,
+  HelpHint,
+  Icon,
+  Input,
+  SegmentedControl,
+  Switch,
+} from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
@@ -255,25 +265,18 @@ function SettingsForm({
         title={t('settings.captchaLlm.title')}
         subtitle={t('settings.captchaLlm.subtitle')}
       >
-        <div className="flex gap-sm">
-          {(['gemini', 'openai'] as const).map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={provider === option}
-              onClick={() => {
-                setProvider(option);
-              }}
-              className={`flex-1 rounded-lg border px-md py-md text-lead font-medium transition-colors ${
-                provider === option
-                  ? 'border-primary bg-primary-tint text-primary-deep'
-                  : 'border-line bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
-              }`}
-            >
-              {t(`settings.captchaLlm.${option}`)}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          variant="outline"
+          value={provider}
+          ariaLabel={t('settings.captchaLlm.title')}
+          options={(['gemini', 'openai'] as const).map((option) => ({
+            value: option,
+            label: t(`settings.captchaLlm.${option}`),
+          }))}
+          onChange={(option) => {
+            setProvider(option);
+          }}
+        />
       </Card>
 
       <Card

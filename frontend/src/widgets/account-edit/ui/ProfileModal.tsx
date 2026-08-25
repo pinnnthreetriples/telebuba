@@ -726,6 +726,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           {/* tabs — a real tablist: the active tab was conveyed by colour and a
               bottom border only, so a screen reader announced six plain buttons
               with no way to tell which one is showing. */}
+          {/* Not `shared/ui`'s `SegmentedControl`: that one is a radiogroup, and these
+              six really do switch a panel — they own the `aria-controls`/`tabpanel`
+              pair below. They are also the app's only underline tab strip, with no
+              tray and no filled option, so there is nothing here for a fill variant to
+              carry. One wearer, hand-written. */}
           {/* Six labels overflow a phone-width modal; scroll them rather than wrap,
               so the roving-tabindex row stays a single line. */}
           <div

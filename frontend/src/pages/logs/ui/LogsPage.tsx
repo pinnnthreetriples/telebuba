@@ -1,12 +1,12 @@
 import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
-import { Card, DataTable, Select, type DataTableColumnMeta } from '@/shared/ui';
+import { Card, DataTable, SegmentedControl, Select, type DataTableColumnMeta } from '@/shared/ui';
 import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
@@ -159,32 +159,6 @@ export function LogsPage() {
     [t, accountLabels],
   );
 
-  // Level-filter sliding indicator: measure the active pill and CSS-transition a
-  // single capsule behind it (the GSAP #log-ind slide, like the nav indicator).
-  const pillsRef = useRef<HTMLDivElement>(null);
-  const [indicator, setIndicator] = useState({ left: 0, width: 0, height: 0 });
-  const activeIdx = STATUS_FILTERS.indexOf(status);
-  useLayoutEffect(() => {
-    const group = pillsRef.current;
-    if (!group) return;
-    const move = () => {
-      const active = group.querySelectorAll('button')[activeIdx];
-      if (active instanceof HTMLElement) {
-        setIndicator({
-          left: active.offsetLeft,
-          width: active.offsetWidth,
-          height: active.offsetHeight,
-        });
-      }
-    };
-    move();
-    window.addEventListener('resize', move);
-    void document.fonts?.ready.then(move);
-    return () => {
-      window.removeEventListener('resize', move);
-    };
-  }, [activeIdx]);
-
   const pickAccount = (value: string) => {
     setAccount(value);
     resetPaging();
@@ -195,30 +169,23 @@ export function LogsPage() {
       <h1 className="m-0 mb-xl type-page-title">{t('logs.title')}</h1>
 
       <div className="mb-lg flex flex-wrap items-center gap-sm">
-        <div ref={pillsRef} className="relative flex rounded-full bg-white p-xs">
-          {/* The one shadow with no name and no second site: a BLUE glow that belongs to
-              this sliding capsule alone, tinting the filled pill it sits under rather
-              than lifting anything off the page. `pop`/`ring`/`thumb` are all neutral
-              greys, and a token for one call site is not an improvement. */}
-          <span
-            aria-hidden
-            className="absolute top-[3px] z-0 rounded-full bg-primary shadow-pill transition-[left,width] duration-enter"
-            style={{ left: indicator.left, width: indicator.width, height: indicator.height }}
-          />
-          {STATUS_FILTERS.map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                setStatus(value);
-                resetPaging();
-              }}
-              className={`relative z-raised px-lg py-tight text-body font-medium transition-colors ${status === value ? 'text-white' : 'text-ink-muted'}`}
-            >
-              {t(`logs.filter.${value}`)}
-            </button>
-          ))}
-        </div>
+        {/* The measured capsule that used to slide behind these pills is gone with
+            them: it was one wearer of a two-wearer look, and the shared control paints
+            the active pill directly. The rest is identical — same blue, same
+            `shadow-pill`, same white label. */}
+        <SegmentedControl
+          variant="pill"
+          value={status}
+          ariaLabel={t('logs.filter.status')}
+          options={STATUS_FILTERS.map((value) => ({
+            value,
+            label: t(`logs.filter.${value}`),
+          }))}
+          onChange={(value) => {
+            setStatus(value);
+            resetPaging();
+          }}
+        />
         <div className="flex-1" />
         <div className="w-full shrink-0 sm:w-menu">
           <Select

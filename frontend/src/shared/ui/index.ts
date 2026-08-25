@@ -14,6 +14,8 @@ export { Input, Textarea } from './Input';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';
 export { Notice } from './Notice';
+export { SegmentedControl } from './SegmentedControl';
+export type { SegmentedOption } from './SegmentedControl';
 export { Select } from './Select';
 export type { SelectOption } from './Select';
 export { StatusIcon } from './StatusIcon';
