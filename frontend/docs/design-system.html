@@ -65,10 +65,12 @@
   --r-full:9999px;
 
   /* Движение */
+  --t-DEFAULT:150ms;
   --t-state:150ms;
   --t-enter:250ms;
   --t-reveal:420ms;
   --t-roll:900ms;
+  --e-DEFAULT:cubic-bezier(.16,1,.3,1);
   --e-out:cubic-bezier(.16,1,.3,1);
   --e-spring:cubic-bezier(.34,1.45,.6,1);
 
@@ -794,6 +796,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="intro">Четыре длительности и две кривые. Короткое — смена состояния, среднее — появление, длинное — раскрытие. Циклическое движение означает только одно: процесс идёт.</p>
       <table class="spec">
         <!-- ds:gen motion-scale -->
+        <tr><td><code>DEFAULT</code> · 150ms</td><td></td></tr>
         <tr><td><code>state</code> · 150ms</td><td>Смена состояния: цвет, граница, фон</td></tr>
         <tr><td><code>enter</code> · 250ms</td><td>Появление: диалог, строка, событие, тост. Одно на всю систему</td></tr>
         <tr><td><code>reveal</code> · 420ms</td><td>Шеврон и раскрытие карточки — <code>spring</code>, <code>cubic-bezier(.34,1.45,.6,1)</code>. Один жест — одна длительность на обе половины</td></tr>

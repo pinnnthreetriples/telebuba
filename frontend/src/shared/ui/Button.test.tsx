@@ -81,7 +81,7 @@ test('every button carries the same disabled and focus treatment', () => {
 
   for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
-    expect(classesOf(name)).toContain('focus-visible:shadow-focus');
+    expect(classesOf(name)).toContain('focus-visible:outline-primary');
   }
 });
 
@@ -135,4 +135,16 @@ test('the default type is button and a caller can still submit', () => {
 
   expect(screen.getByRole('button', { name: 'Показать' })).toHaveAttribute('type', 'button');
   expect(screen.getByRole('button', { name: 'Сохранить' })).toHaveAttribute('type', 'submit');
+});
+
+// The indicator a keyboard operator navigates by. It was `shadow-focus` — 1.18:1 once
+// composited, beside `outline-none` that removed the browser's own — so this asserts the
+// two halves that were wrong: that the ring is an outline, and that nothing suppresses it.
+test('focus is an outline, and the browser ring is not thrown away', () => {
+  render(<Button>Сохранить</Button>);
+  const cls = screen.getByRole('button').className;
+  expect(cls).toContain('focus-visible:outline-2');
+  expect(cls).toContain('focus-visible:outline-primary');
+  expect(cls).not.toContain('outline-none');
+  expect(cls).not.toContain('shadow-focus');
 });
