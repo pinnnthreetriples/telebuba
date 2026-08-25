@@ -230,9 +230,7 @@ export function AccountsPage() {
       ) : (
         <>
           {items.length === 0 ? (
-            <Card className="px-lg py-empty text-center text-lead text-ink-subtle">
-              {t('accounts.empty')}
-            </Card>
+            <Card className="px-lg py-empty text-center type-prose">{t('accounts.empty')}</Card>
           ) : (
             <AccountsTable
               data={items}

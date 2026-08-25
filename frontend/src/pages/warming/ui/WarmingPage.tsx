@@ -275,9 +275,7 @@ export function WarmingPage() {
             </div>
             <div className="flex flex-col gap-sm">
               {idle.length === 0 ? (
-                <div className="py-page text-center text-body text-ink-subtle">
-                  {t('warming.ready.empty')}
-                </div>
+                <div className="py-page text-center type-prose">{t('warming.ready.empty')}</div>
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;

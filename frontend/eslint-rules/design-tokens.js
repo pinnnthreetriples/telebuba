@@ -68,12 +68,20 @@ const INK_RAMP = String.raw`text-ink(?:-(?:body|muted|subtle))?(?![\w-])`;
 
 // What this pattern deliberately does NOT reach, and why:
 //
-//   a class list that also paints a box — a fill, a border, a radius or its own padding.
-//   That is a CONTROL being drawn, and a control's face is its own business: a status
-//   pill, a hand-written button, a glyph badge, a field. Those belong to `Badge`,
-//   `Button` and `Input`, and the ~100 drawn by hand above `shared/ui` are a layering
-//   debt to pay by moving them down — not by inventing `type-pill` and `type-control`,
-//   which would put the debt in the canon and call it design.
+//   a class list that also paints a box — a fill, a border, a radius, an elevation or a
+//   focus ring. That is a CONTROL being drawn, and a control's face is its own business:
+//   a status pill, a hand-written button, a glyph badge, a field. Those belong to
+//   `Badge`, `Button` and `Input`, and the ~100 drawn by hand above `shared/ui` are a
+//   layering debt to pay by moving them down — not by inventing `type-pill` and
+//   `type-control`, which would put the debt in the canon and call it design.
+//
+//   Padding used to be on that list and is not any more. It was there because a control
+//   pads its own label, but padding paints nothing: it is the commonest utility in the
+//   app, so `p-*` alone exempted 18 class lists that draw no box at all. Every one was a
+//   page's empty, loading or error state — a centred sentence in a padded gap — written
+//   across three rungs (`lead` eight times, `body` nine, `micro` once) and three greys.
+//   That is the exact drift this pattern exists to stop, let through by the one prefix
+//   that says nothing about whether a box is being drawn.
 //
 //   a class list that reacts to the pointer (`hover:`, `focus`, `active:`, `disabled:`,
 //   `transition`, `cursor-`). Same category, reached from the other side: three of them
@@ -92,7 +100,7 @@ const INK_RAMP = String.raw`text-ink(?:-(?:body|muted|subtle))?(?![\w-])`;
 //   where the weight is the figure's emphasis and not a heading's. A pattern cannot
 //   tell a bold heading from a bold number, so the weight half of the canon is carried
 //   by the role table and its documentation rather than by this gate.
-const PAINTS_A_BOX = String.raw`(?:^|\s)(?:[\w-]+:)*(?:bg-|border(?![\w-])|border-|rounded|p-|px-|py-|pt-|pb-|pl-|pr-|shadow-|ring-)`;
+const PAINTS_A_BOX = String.raw`(?:^|\s)(?:[\w-]+:)*(?:bg-|border(?![\w-])|border-|rounded|shadow-|ring-)`;
 const IS_A_CONTROL = String.raw`(?:^|\s)(?:hover|focus|focus-visible|focus-within|active|disabled|aria-[\w-]+|data-[\w-]+):|(?:^|\s)transition|(?:^|\s)cursor-`;
 const IS_A_GLYPH = String.raw`(?:^|\s)(?:leading-none|absolute|fixed)(?![\w-])`;
 

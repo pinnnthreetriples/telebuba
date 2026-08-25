@@ -95,7 +95,7 @@ export function NeuroshillingAccountsModal({
           );
         })}
         {accounts.length === 0 ? (
-          <div className="px-md py-page text-center text-lead text-ink-subtle">
+          <div className="px-md py-page text-center type-prose">
             {t('neuroshilling.modal.accounts.empty')}
           </div>
         ) : null}

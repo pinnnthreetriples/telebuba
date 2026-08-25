@@ -204,9 +204,7 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <Card className="px-lg py-empty text-center text-lead text-ink-subtle">
-          {t('logs.empty')}
-        </Card>
+        <Card className="px-lg py-empty text-center type-prose">{t('logs.empty')}</Card>
       ) : (
         <>
           <Card className="overflow-hidden">

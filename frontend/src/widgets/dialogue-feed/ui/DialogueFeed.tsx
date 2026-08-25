@@ -127,11 +127,7 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
   }, [messages]);
 
   if (ordered.length === 0) {
-    return (
-      <div className="py-page text-center text-body text-ink-subtle">
-        {t('warming.dialogues.empty')}
-      </div>
-    );
+    return <div className="py-page text-center type-prose">{t('warming.dialogues.empty')}</div>;
   }
 
   return (

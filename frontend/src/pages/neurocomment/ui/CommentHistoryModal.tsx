@@ -96,17 +96,13 @@ export function CommentHistoryModal({
 
       <div className="px-2xl pb-lg pt-md">
         {isPending ? (
-          <p className="py-[40px] text-center text-lead text-ink-muted">
-            {t('neurocomment.history.loading')}
-          </p>
+          <p className="py-[40px] text-center type-prose">{t('neurocomment.history.loading')}</p>
         ) : isError ? (
-          <p role="alert" className="py-[40px] text-center text-lead text-danger">
+          <p role="alert" className="py-[40px] text-center type-prose text-danger">
             {t('neurocomment.history.error')}
           </p>
         ) : items.length === 0 ? (
-          <div className="py-[48px] text-center text-lead text-ink-subtle">
-            {t('neurocomment.history.empty')}
-          </div>
+          <div className="py-[48px] text-center type-prose">{t('neurocomment.history.empty')}</div>
         ) : (
           <Card className="overflow-hidden">
             <div className="tb-scroll overflow-x-auto">

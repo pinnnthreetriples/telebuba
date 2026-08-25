@@ -59,9 +59,7 @@ export function PreviewCard({
       ) : null}
 
       {steps.length === 0 ? (
-        <div className="py-xl text-center text-body text-ink-subtle">
-          {t('neuroshilling.preview.none')}
-        </div>
+        <div className="py-xl text-center type-prose">{t('neuroshilling.preview.none')}</div>
       ) : (
         <div className="flex flex-col">
           {steps.map((step, index) => {

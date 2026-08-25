@@ -351,7 +351,7 @@ export function DiscoveryResults({
   // operator has to be told when it finishes or fails without polling the table.
   if (loading) {
     return (
-      <p role="status" className="py-page text-center text-body text-ink-subtle">
+      <p role="status" className="py-page text-center type-prose">
         {t('neurocomment.modal.discovery.results.searching')}
       </p>
     );
@@ -385,7 +385,7 @@ export function DiscoveryResults({
 
   if (candidates.length === 0) {
     return (
-      <p className="py-page text-center text-body text-ink-subtle">
+      <p className="py-page text-center type-prose">
         {t('neurocomment.modal.discovery.results.empty')}
       </p>
     );

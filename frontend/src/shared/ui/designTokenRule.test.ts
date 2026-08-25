@@ -48,6 +48,10 @@ if (rule) {
         name: 'a class list that paints a box is drawing a control',
       },
       {
+        code: 'const t3b = "px-lg py-empty text-center type-prose"; const t3c = "p-page type-prose text-ink";',
+        name: 'a padded gap holding a role, with and without a colour override',
+      },
+      {
         code: 'const t4 = "text-body text-ink-muted hover:text-primary";',
         name: 'a class list that reacts to the pointer is drawing a control',
       },
@@ -132,6 +136,22 @@ if (rule) {
       },
       {
         code: 'const m = "truncate text-lead font-semibold text-ink";',
+        errors: [{ message: /A rung plus a grey/ }],
+      },
+      // Padding used to buy the same exemption a fill does, on the grounds that a control
+      // pads its own label. It bought it for 18 class lists that draw no box at all —
+      // every empty, loading and error state in the app, spelled across three rungs and
+      // three greys. A gap with a sentence in it is not a control.
+      {
+        code: 'const n = "px-lg py-empty text-center text-lead text-ink-subtle";',
+        errors: [{ message: /A rung plus a grey/ }],
+      },
+      {
+        code: 'const o = "py-[40px] text-center text-body text-ink-muted";',
+        errors: [{ message: /A rung plus a grey/ }],
+      },
+      {
+        code: 'const p = "p-page text-lead text-ink";',
         errors: [{ message: /A rung plus a grey/ }],
       },
     ],
