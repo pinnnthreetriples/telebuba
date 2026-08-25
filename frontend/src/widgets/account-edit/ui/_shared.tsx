@@ -73,7 +73,7 @@ export function Section({
       headerClassName="px-xl py-lg"
       bodyClassName={bodyClassName}
       header={
-        <span className="flex items-center gap-sm text-lead font-semibold text-ink">
+        <span className="flex items-center gap-sm type-card-title">
           {title}
           {icon}
         </span>

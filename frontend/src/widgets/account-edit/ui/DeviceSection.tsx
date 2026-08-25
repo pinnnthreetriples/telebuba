@@ -29,7 +29,7 @@ export function DeviceSection({ account }: { account: AccountRead }) {
         </svg>
       }
     >
-      <div className="mb-lg text-body text-ink-subtle">{t('accounts.edit.deviceLocked')}</div>
+      <div className="mb-lg type-prose">{t('accounts.edit.deviceLocked')}</div>
       <div className="flex flex-col gap-md">
         <label>
           <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>

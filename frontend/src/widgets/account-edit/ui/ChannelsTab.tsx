@@ -29,7 +29,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      <div className="mb-md text-body text-ink-subtle">{t('accounts.channel.hint')}</div>
+      <div className="mb-md type-prose">{t('accounts.channel.hint')}</div>
 
       {channels.isPending && (
         <div
@@ -70,8 +70,8 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
               className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
             >
               <div className="min-w-0 flex-1">
-                <div className="truncate text-lead font-semibold">{channel.title}</div>
-                <div className="mt-hair flex items-center gap-sm text-tiny text-ink-subtle">
+                <div className="truncate type-card-title">{channel.title}</div>
+                <div className="mt-hair flex items-center gap-sm type-caption">
                   <span
                     className={`rounded-sm px-tight py-px font-medium ${
                       channel.username != null

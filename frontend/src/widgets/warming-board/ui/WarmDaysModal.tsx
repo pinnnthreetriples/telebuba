@@ -77,7 +77,7 @@ export function WarmDaysModal({
               <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
             </svg>
           </div>
-          <div className="flex-1 text-title font-bold">{t('warming.days.title')}</div>
+          <div className="flex-1 type-dialog-title">{t('warming.days.title')}</div>
           <span className="tb-tip inline-flex shrink-0">
             <button
               type="button"
@@ -103,17 +103,13 @@ export function WarmDaysModal({
             <span className="tb-tip-pop">{t('warming.days.spamTip')}</span>
           </span>
         </div>
-        <div className="mb-2xl text-lead text-ink-muted">
-          {t('warming.days.subtitle', { phone })}
-        </div>
+        <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
 
         <div className="mb-xl text-center">
           <div className="text-hero font-bold leading-none tracking-[-0.02em] text-primary">
             {days}
           </div>
-          <div className="mt-xs text-lead text-ink-muted">
-            {t('warming.days.label', { count: days })}
-          </div>
+          <div className="mt-xs type-dialog-body">{t('warming.days.label', { count: days })}</div>
         </div>
 
         <div
@@ -153,7 +149,7 @@ export function WarmDaysModal({
             style={{ left: `${String(pct)}%` }}
           />
         </div>
-        <div className="mx-md mb-xl flex justify-between text-tiny text-ink-subtle">
+        <div className="mx-md mb-xl flex justify-between type-caption">
           <span>{t('warming.days.min')}</span>
           <span>{t('warming.days.max')}</span>
         </div>
@@ -177,7 +173,7 @@ export function WarmDaysModal({
           ))}
         </div>
 
-        <div className="mb-sm flex items-center gap-sm text-body font-semibold">
+        <div className="mb-sm flex items-center gap-sm type-item-title">
           {t('warming.persona.label')}
           <span className="tb-tip inline-flex">
             <button
@@ -204,10 +200,8 @@ export function WarmDaysModal({
                   : 'border-line bg-white text-ink-muted hover:bg-surface'
               }`}
             >
-              <div className="text-body font-semibold">{t(`warming.persona.${p}.name`)}</div>
-              <div className="mt-hair text-tiny text-ink-subtle">
-                {t(`warming.persona.${p}.hint`)}
-              </div>
+              <div className="type-item-title">{t(`warming.persona.${p}.name`)}</div>
+              <div className="mt-hair type-caption">{t(`warming.persona.${p}.hint`)}</div>
             </button>
           ))}
         </div>

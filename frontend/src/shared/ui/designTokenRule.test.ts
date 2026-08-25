@@ -37,6 +37,28 @@ if (rule) {
       { code: 'const g = "p-0 m-0 gap-px";', name: 'zero and the hairline are not steps' },
       // Not utility classes at all: the pattern is anchored to a class boundary.
       { code: 'const h = "https://example.com/to-3/blue-500";', name: 'a url is not a class' },
+      // The type roles, and the four things the role pattern deliberately cannot reach.
+      // RuleTester reports no filename, so these run as if they were above `shared/ui`.
+      {
+        code: 'const t1 = "mt-px type-caption"; const t2 = "type-caption text-danger";',
+        name: 'a role, and a role recoloured',
+      },
+      {
+        code: 'const t3 = "rounded-full border border-line bg-white px-md py-xs text-tiny text-ink-muted";',
+        name: 'a class list that paints a box is drawing a control',
+      },
+      {
+        code: 'const t4 = "text-body text-ink-muted hover:text-primary";',
+        name: 'a class list that reacts to the pointer is drawing a control',
+      },
+      {
+        code: 'const t5 = "text-lead leading-none text-ink-subtle"; const t6 = "absolute left-lg text-lead text-ink-subtle";',
+        name: 'at `lead` the scale doubles as a glyph size',
+      },
+      {
+        code: 'const t7 = "min-w-badge text-body font-semibold";',
+        name: "a weight with no grey is a number's emphasis, which no role can absorb",
+      },
     ],
     invalid: [
       // The quiet one: `border-line-input` still renders a border, in preflight's own
@@ -97,6 +119,20 @@ if (rule) {
       {
         code: 'const FIELD = `w-full px-3 text-[13px]`;',
         errors: [{ message: /type scale is closed/ }],
+      },
+      // The role pattern: a rung and a grey in one class list, in either order, is the
+      // spelling the twelve roles replaced.
+      {
+        code: 'const k = "mt-px text-tiny text-ink-subtle";',
+        errors: [{ message: /A rung plus a grey/ }],
+      },
+      {
+        code: 'const l = "text-ink-muted mb-md text-body";',
+        errors: [{ message: /A rung plus a grey/ }],
+      },
+      {
+        code: 'const m = "truncate text-lead font-semibold text-ink";',
+        errors: [{ message: /A rung plus a grey/ }],
       },
     ],
   });

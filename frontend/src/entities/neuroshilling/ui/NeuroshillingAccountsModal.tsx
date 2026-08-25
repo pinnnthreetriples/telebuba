@@ -57,10 +57,8 @@ export function NeuroshillingAccountsModal({
   return (
     <Modal onClose={onClose} className="w-panel" label={t('neuroshilling.modal.accounts.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
-        <div className="text-title font-bold text-ink">
-          {t('neuroshilling.modal.accounts.title')}
-        </div>
-        <div className="mt-hair text-body text-ink-subtle">
+        <div className="type-dialog-title">{t('neuroshilling.modal.accounts.title')}</div>
+        <div className="mt-hair type-prose">
           {t('neuroshilling.modal.accounts.sub', { count: accounts.length })}
         </div>
       </div>
@@ -72,9 +70,7 @@ export function NeuroshillingAccountsModal({
           return (
             <div key={account.account_id} className="border-b border-line-row py-md">
               <div className="flex flex-wrap items-center gap-md">
-                <span className="min-w-0 flex-1 truncate text-lead font-semibold text-ink">
-                  {account.title}
-                </span>
+                <span className="min-w-0 flex-1 truncate type-card-title">{account.title}</span>
                 <button
                   type="button"
                   // A held account cannot be added, but one already on the roster
@@ -94,7 +90,7 @@ export function NeuroshillingAccountsModal({
                     : t('neuroshilling.modal.accounts.add')}
                 </button>
               </div>
-              {held ? <div className="mt-tight text-tiny text-ink-subtle">{held}</div> : null}
+              {held ? <div className="mt-tight type-caption">{held}</div> : null}
             </div>
           );
         })}

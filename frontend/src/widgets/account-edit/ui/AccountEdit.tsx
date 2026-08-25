@@ -46,15 +46,15 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           {mono(account)}
         </div>
         <div className="min-w-col flex-1">
-          <div className="text-title font-bold">{account.phone ?? account.account_id}</div>
-          <div className="text-body text-ink-subtle">
+          <div className="type-dialog-title">{account.phone ?? account.account_id}</div>
+          <div className="type-prose">
             {account.username ? `@${account.username}` : (account.label ?? '—')}
           </div>
         </div>
         <StatusBadge status={account.status} />
         <div className="min-w-col">
           <div className="flex items-center justify-end gap-sm">
-            <span className="text-body text-ink-muted">{t('accounts.edit.trust')}</span>
+            <span className="type-prose">{t('accounts.edit.trust')}</span>
             <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
           </div>
           <div className="mt-tight h-meter overflow-hidden rounded-full bg-canvas">

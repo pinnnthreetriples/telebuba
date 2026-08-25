@@ -78,7 +78,7 @@ export function TwoFactorForm({
 
   return (
     <>
-      <div className="mb-md text-body text-ink-subtle">{t('accounts.edit.twofaExplain')}</div>
+      <div className="mb-md type-prose">{t('accounts.edit.twofaExplain')}</div>
       <div className={SEG_WRAP}>
         {(['generate', 'custom'] as const).map((option) => (
           <button
@@ -151,7 +151,7 @@ export function TwoFactorForm({
           )}
         </twofaForm.Field>
       </div>
-      <div className="mb-lg text-tiny text-ink-subtle">{t('accounts.edit.twofaHintWarn')}</div>
+      <div className="mb-lg type-caption">{t('accounts.edit.twofaHintWarn')}</div>
       <Button
         size="block"
         onClick={() => {

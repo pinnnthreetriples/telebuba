@@ -400,9 +400,7 @@ export function NeuroshillingPage() {
 
   return (
     <div className="tb-fadeup mx-auto max-w-page">
-      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">
-        {t('neuroshilling.title')}
-      </h1>
+      <h1 className="m-0 mb-xl type-page-title">{t('neuroshilling.title')}</h1>
 
       <div className="flex flex-col gap-lg">
         <CampaignsCard

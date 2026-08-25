@@ -36,16 +36,14 @@ export function PrivacyLevelRow({
       className="flex items-center gap-md rounded-lg border border-line px-lg py-md"
     >
       <div className="min-w-0 flex-1">
-        <div className="truncate text-lead font-semibold">{label}</div>
-        <div className="mt-hair text-tiny text-ink-subtle">
+        <div className="truncate type-card-title">{label}</div>
+        <div className="mt-hair type-caption">
           {t('accounts.profile.privacy.current', {
             value: t(`accounts.profile.privacy.level.${current}`),
           })}
         </div>
         {current === 'unknown' && (
-          <div className="mt-hair text-tiny text-ink-muted">
-            {t('accounts.profile.privacy.unknownNote')}
-          </div>
+          <div className="mt-hair type-caption">{t('accounts.profile.privacy.unknownNote')}</div>
         )}
       </div>
       <div className="flex shrink-0 gap-tight">

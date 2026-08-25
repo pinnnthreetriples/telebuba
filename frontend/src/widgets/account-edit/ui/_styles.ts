@@ -2,7 +2,7 @@
 // the AccountEdit sections. Non-component module (keeps _shared.tsx components-only
 // for React Fast Refresh).
 
-export const LABEL = 'mb-tight block text-body font-medium text-ink-body';
+export const LABEL = 'mb-tight block type-label';
 export const SEG_WRAP = 'mb-md flex gap-tight rounded-lg bg-canvas p-xs';
 // The canon's segmented rung is `8px 10px`; only the vertical half is applied. These
 // segments are `flex-1` in a fixed tray, so their width comes from the tray and a 10px

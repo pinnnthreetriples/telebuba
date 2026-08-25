@@ -484,9 +484,7 @@ export function NeurocommentPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">
-        {t('neurocomment.title')}
-      </h1>
+      <h1 className="m-0 mb-xl type-page-title">{t('neurocomment.title')}</h1>
 
       {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
           one-column grid sprout an implicit second column and sit both children side
@@ -568,7 +566,7 @@ export function NeurocommentPage() {
             onPickListener={pickListener}
           />
           {showWarmingBlock ? (
-            <p className="mt-sm text-tiny font-medium text-danger">
+            <p className="mt-sm type-caption font-medium text-danger">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}

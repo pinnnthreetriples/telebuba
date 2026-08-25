@@ -23,7 +23,7 @@ export function SessionErrorPanel() {
   const retrying = useRouterState({ select: (state) => state.isLoading });
   return (
     <div role="alert" className="p-page">
-      <p className="text-lead text-ink">{i18n.t('shell.sessionError')}</p>
+      <p className="type-dialog-body text-ink">{i18n.t('shell.sessionError')}</p>
       <div className="mt-lg flex items-center gap-sm">
         <Button
           variant="primary"

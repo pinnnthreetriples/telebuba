@@ -242,7 +242,7 @@ function WarmingCard({
                 border. The card's own grid track has a fixed 320px minimum, so the
                 name cannot widen the track — it can only spill. `title` keeps the
                 whole name reachable now that the card shows a prefix of it. */}
-            <div className="truncate text-lead font-semibold" title={primaryId}>
+            <div className="truncate type-card-title" title={primaryId}>
               {primaryId}
             </div>
             <div className="mt-hair flex items-center gap-sm">
@@ -341,10 +341,8 @@ function WarmingCard({
           this — faint enough to double as a divider fill. */}
       <div className="rounded-lg border border-primary-hairline bg-primary-tint px-lg pb-md pt-md">
         <div className="mb-sm flex items-center justify-between">
-          <span className="text-micro font-medium text-ink-muted">
-            {t('warming.inProgress.days')}
-          </span>
-          <span className="text-micro font-bold text-ink">
+          <span className="type-meta font-medium">{t('warming.inProgress.days')}</span>
+          <span className="type-meta font-bold text-ink">
             {t('warming.card.dayProgress', { days, target, count: target })}
           </span>
         </div>
@@ -423,7 +421,7 @@ function WarmingCard({
           {/* current activity */}
           <div className="mt-md flex items-center gap-md rounded-md border border-primary-line bg-primary-tint px-md py-sm">
             <span className="tb-livedot size-dot shrink-0 rounded-full bg-primary" />
-            <span className="tb-pulse text-tiny font-semibold text-primary">
+            <span className="tb-pulse type-caption font-semibold text-primary">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
             </span>
             {(hold || STAGES[active] === 'pause') && account.next_run_at ? (
@@ -521,7 +519,7 @@ function WarmingCard({
               <Icon name="check" size={14} className="stroke-white" />
             </span>
             <div className="min-w-0">
-              <div className="text-body font-bold text-success-deep">
+              <div className="type-item-title text-success-deep">
                 {t('warming.card.completeTitle')}
               </div>
               {/* Grey, while the heading above it is green: the green is already carried by
@@ -530,7 +528,7 @@ function WarmingCard({
                   only way it reaches AA — every green dark enough to pass on `success-tint`
                   is indistinguishable from the heading's `success-deep` (10.05:1 here
                   against 3.70:1 for the old literal). Do not "restore the family". */}
-              <div className="mt-px text-micro text-ink-body">
+              <div className="mt-px type-meta text-ink-body">
                 {t('warming.card.completeSub', {
                   days: t('warming.card.dayProgress', { days, target, count: target }),
                 })}
@@ -600,7 +598,7 @@ export function WarmingBoard({
               <path d="M3 12h4l3 8 4-16 3 8h4" />
             </svg>
           </span>
-          <span className="text-lead font-bold">{t('warming.inProgress.title')}</span>
+          <span className="type-card-title">{t('warming.inProgress.title')}</span>
         </div>
         {warming.length > 0 ? (
           <span className="tb-pulse rounded-full bg-success-tint px-md py-xs text-tiny font-semibold text-success-deep">

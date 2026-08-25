@@ -129,6 +129,11 @@ export function AppNav() {
           <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
             <div className="size-node rounded-full bg-primary" />
           </div>
+          {/* The wordmark is not a type role: it is one mark rendered in two places (this
+              bar and the drawer), not a kind of text the app has. Naming it would put a
+              rung with a single wearer in the canon, and borrowing another role's name
+              would make that name lie — it wore `type-dialog-title` for exactly as long
+              as it took to read it back. Hand-written, and staying that way. */}
           <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
 
@@ -177,7 +182,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only text-body font-medium lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-ink-muted'}`}
+              className={`sr-only type-label lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>

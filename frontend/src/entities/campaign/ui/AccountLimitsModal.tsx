@@ -85,7 +85,7 @@ function LimitRow({
   return (
     <div className="border-b border-line-row py-lg last:border-b-0">
       <div className="flex items-baseline justify-between gap-md">
-        <span className="text-lead font-semibold text-ink">{label}</span>
+        <span className="type-card-title">{label}</span>
         <span
           className={`font-mono text-body font-semibold tabular-nums ${
             state === 'full' ? 'text-danger' : 'text-ink-muted'
@@ -98,7 +98,7 @@ function LimitRow({
         <div className={`h-full rounded-[3px] ${BAR[state]}`} style={{ width: `${width}%` }} />
       </div>
       <div className="mt-md flex flex-wrap items-center justify-between gap-md">
-        <span className="min-w-col flex-1 text-tiny text-ink-subtle">
+        <span className="min-w-col flex-1 type-caption">
           {hint}
           {resets ? ` · ${t('neurocomment.modal.limits.resetsAt', { at: resets })}` : ''}
         </span>
@@ -123,7 +123,7 @@ function LimitRow({
           className="w-readout rounded-md border border-line bg-white px-md py-tight text-right font-mono text-body font-semibold text-ink"
         />
       </div>
-      <div className="mt-tight text-tiny text-ink-subtle">
+      <div className="mt-tight type-caption">
         {value === ''
           ? t('neurocomment.modal.limits.fleetValue', { value: gauge.fleet_default })
           : t('neurocomment.modal.limits.ownValue', { value: gauge.fleet_default })}
@@ -219,12 +219,8 @@ export function AccountLimitsModal({
           </svg>
         </span>
         <div>
-          <div className="text-title font-bold text-ink">
-            {t('neurocomment.modal.limits.title', { name })}
-          </div>
-          <div className="mt-hair text-body text-ink-subtle">
-            {t('neurocomment.modal.limits.sub')}
-          </div>
+          <div className="type-dialog-title">{t('neurocomment.modal.limits.title', { name })}</div>
+          <div className="mt-hair type-prose">{t('neurocomment.modal.limits.sub')}</div>
         </div>
       </div>
 

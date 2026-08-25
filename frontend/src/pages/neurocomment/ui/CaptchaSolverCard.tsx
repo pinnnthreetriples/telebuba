@@ -41,9 +41,7 @@ export function CaptchaSolverCard({
           </span>
           <div className="min-w-0">
             <div className="flex items-center gap-sm">
-              <span className="text-body font-semibold text-ink">
-                {t('neurocomment.captcha.title')}
-              </span>
+              <span className="type-item-title">{t('neurocomment.captcha.title')}</span>
               <span className="tb-tip inline-flex">
                 <span className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-white text-micro font-bold text-ink-subtle">
                   ?
@@ -53,9 +51,7 @@ export function CaptchaSolverCard({
                 </span>
               </span>
             </div>
-            <div className="text-micro leading-[1.35] text-ink-subtle">
-              {t('neurocomment.captcha.sub')}
-            </div>
+            <div className="type-meta leading-[1.35]">{t('neurocomment.captcha.sub')}</div>
           </div>
         </div>
         <Switch
@@ -82,7 +78,7 @@ export function CaptchaSolverCard({
               <path d="M12 8v4" />
               <path d="M12 16h.01" />
             </svg>
-            <span className="text-tiny font-semibold uppercase tracking-[.03em] text-warning-deep">
+            <span className="type-eyebrow text-warning-deep">
               {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
             </span>
           </div>

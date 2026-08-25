@@ -44,7 +44,7 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
   // uniqueness note and a reason do not fit beside the found-count without collapsing
   // into an ellipsis.
   return (
-    <p className="text-tiny text-ink-subtle">
+    <p className="type-caption">
       {sources
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
@@ -124,7 +124,7 @@ function CommentsMark({ state }: { state: string }) {
   // pass is doing while the operator watches. 'unknown' and 'notChecked' are final,
   // so they stay still.
   return (
-    <span className="inline-flex items-center gap-tight text-tiny text-ink-subtle">
+    <span className="inline-flex items-center gap-tight type-caption">
       <span
         className={`size-dot rounded-full bg-line-strong ${
           state === 'pending' ? 'animate-pulse' : ''
@@ -156,9 +156,7 @@ function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; se
     <div className="flex flex-col items-start gap-xs">
       <CommentsMark state={state} />
       {unanswered ? (
-        <span className="text-tiny text-ink-subtle">
-          {t('neurocomment.modal.discovery.verdict.unknown')}
-        </span>
+        <span className="type-caption">{t('neurocomment.modal.discovery.verdict.unknown')}</span>
       ) : null}
       {(verdict == null ? [] : verdictMarks(verdict)).map((mark) => (
         <span
@@ -294,7 +292,7 @@ export function DiscoveryResults({
               without this the operator reads a number that plainly breaks their own
               filter, or an em dash that looks like a row which passed it. */}
           {row.original.uncounted === true ? (
-            <span className="text-tiny text-ink-subtle">
+            <span className="type-caption">
               {t('neurocomment.modal.discovery.results.uncounted')}
             </span>
           ) : null}
@@ -312,7 +310,7 @@ export function DiscoveryResults({
         const found = row.original.sources ?? [];
         const sources = found.length > 0 ? found : [row.original.source];
         return (
-          <span className="text-tiny text-ink-subtle">
+          <span className="type-caption">
             {sources
               // The stored label outlives the build that wrote it, so an unmapped code
               // renders as itself instead of as a raw i18n key.
@@ -395,7 +393,7 @@ export function DiscoveryResults({
 
   return (
     <div className="flex flex-col gap-md">
-      <div className="flex items-center justify-between gap-sm text-tiny text-ink-subtle">
+      <div className="flex items-center justify-between gap-sm type-caption">
         {/* The card layout has no column headers, and select-all lives in one — so on
             a phone the operator could otherwise only tap candidates one at a time.
             Branch on the same JS query DataTable uses, not `lg:hidden`: two

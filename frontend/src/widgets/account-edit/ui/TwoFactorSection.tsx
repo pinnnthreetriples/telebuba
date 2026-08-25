@@ -20,8 +20,8 @@ import { Section, Spinner } from './_shared';
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-md border-b border-line-row py-md">
-      <span className="text-body text-ink-muted">{label}</span>
-      <span className="text-right text-body font-medium text-ink">{value}</span>
+      <span className="type-prose">{label}</span>
+      <span className="text-right type-label text-ink">{value}</span>
     </div>
   );
 }
@@ -208,9 +208,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           </div>
         ) : created ? (
           <>
-            <div className="mb-md text-body font-semibold text-ink">
-              {t('accounts.edit.twofaCreatedTitle')}
-            </div>
+            <div className="mb-md type-item-title">{t('accounts.edit.twofaCreatedTitle')}</div>
             {created.stored === false && !keptPrevious ? (
               // The RPC landed but the DB write did not, so this response is the
               // ONLY copy and change/removal are gone until it is set again. NOT the
@@ -268,12 +266,12 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               </button>
             ) : null}
             {clipboard ? null : (
-              <div className="mb-md text-tiny leading-[1.45] text-ink-subtle">
+              <div className="mb-md type-caption leading-[1.45]">
                 {t('accounts.edit.twofaCopyManual')}
               </div>
             )}
             {copyState === 'failed' ? (
-              <div className="mb-md text-tiny font-medium leading-[1.45] text-danger">
+              <div className="mb-md type-caption font-medium leading-[1.45] text-danger">
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
@@ -291,7 +289,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           <>
             {/* A set, change or disable against an account whose live state we could
                 not read is a guess, so this branch offers none of them. */}
-            <div className="text-tiny text-danger">
+            <div className="type-caption text-danger">
               {t('accounts.edit.twofaReadErr', {
                 reason: readError
                   ? t(`shell.code.${readError}`, { defaultValue: readError })
@@ -374,7 +372,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
             {hasStored ? null : (
-              <div className="mt-md text-tiny leading-[1.45] text-ink-subtle">
+              <div className="mt-md type-caption leading-[1.45]">
                 {t('accounts.edit.twofaNotStoredNote')}
               </div>
             )}

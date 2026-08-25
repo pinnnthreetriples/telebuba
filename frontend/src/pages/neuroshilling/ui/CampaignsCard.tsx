@@ -46,7 +46,7 @@ export function CampaignsCard({
       label={t('neuroshilling.campaigns.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="text-lead font-semibold">{t('neuroshilling.campaigns.title')}</span>}
+      header={<span className="type-card-title">{t('neuroshilling.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
@@ -67,10 +67,10 @@ export function CampaignsCard({
               className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
               <div className="flex justify-between gap-md">
-                <div className="min-w-0 flex-1 text-lead font-semibold">{campaign.name}</div>
+                <div className="min-w-0 flex-1 type-card-title">{campaign.name}</div>
                 <div className="flex shrink-0 items-center gap-md">
                   <span
-                    className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
+                    className={`inline-flex items-center gap-tight type-caption font-medium ${tone}`}
                   >
                     {/* `bg-current` — the dot can never disagree with its label. */}
                     <span className="size-dot rounded-full bg-current" />

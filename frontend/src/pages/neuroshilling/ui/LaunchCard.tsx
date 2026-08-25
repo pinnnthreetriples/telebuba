@@ -95,7 +95,7 @@ function Tile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-line bg-surface px-md py-md text-center">
       <div className="text-title font-bold tabular-nums">{value}</div>
-      <div className="mt-hair text-micro text-ink-subtle">{label}</div>
+      <div className="mt-hair type-meta">{label}</div>
     </div>
   );
 }
@@ -158,7 +158,7 @@ export function LaunchCard({
       bodyClassName="px-lg pb-lg"
       header={
         <>
-          <span className="text-lead font-semibold">{t('neuroshilling.launch.title')}</span>
+          <span className="type-card-title">{t('neuroshilling.launch.title')}</span>
           {live ? (
             // An accent marker, not a neutral state label — `micro`/`bold` on purpose, so
             // it reads as emphasis beside the title rather than as another status pill.
@@ -195,7 +195,7 @@ export function LaunchCard({
 
       <div className="mb-sm flex flex-wrap items-center gap-sm">
         <span
-          className={`inline-flex items-center gap-tight text-tiny font-medium ${STATUS_TONE[status]}`}
+          className={`inline-flex items-center gap-tight type-caption font-medium ${STATUS_TONE[status]}`}
         >
           {/* `bg-current` — the dot can never disagree with its label. */}
           <span className="size-dot rounded-full bg-current" />
@@ -211,7 +211,7 @@ export function LaunchCard({
         {/* `sent` / `total` counts MESSAGE steps only: reactions are journalled but
             a skipped reaction is not lost progress, so presenting the bar as
             counting every step would make it lie downward. */}
-        <span className="ml-auto text-tiny tabular-nums text-ink-subtle">
+        <span className="ml-auto type-caption tabular-nums">
           {t(looping ? 'neuroshilling.launch.sentTotal' : 'neuroshilling.launch.progress', {
             sent,
             total,

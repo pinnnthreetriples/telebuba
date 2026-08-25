@@ -258,7 +258,7 @@ export function AddStoryModal({
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
-          <span className="text-title font-bold">{t('accounts.addStory.title')}</span>
+          <span className="type-dialog-title">{t('accounts.addStory.title')}</span>
           <IconButton
             size="md"
             onClick={onClose}
@@ -273,9 +273,7 @@ export function AddStoryModal({
           </IconButton>
         </div>
 
-        <div className="mb-tight text-body font-medium text-ink-body">
-          {t('accounts.addStory.audience')}
-        </div>
+        <div className="mb-tight type-label">{t('accounts.addStory.audience')}</div>
         <div className="mb-lg flex gap-tight rounded-lg bg-canvas p-xs">
           {(['contacts', 'closeFriends', 'public'] as const).map((value) => (
             <button
@@ -292,9 +290,7 @@ export function AddStoryModal({
         </div>
 
         <label className="mb-lg block">
-          <span className="mb-tight block text-body font-medium text-ink-body">
-            {t('accounts.addStory.caption')}
-          </span>
+          <span className="mb-tight block type-label">{t('accounts.addStory.caption')}</span>
           <Input
             value={caption}
             onChange={(event) => {
@@ -320,15 +316,13 @@ export function AddStoryModal({
           >
             {noForward && <Icon name="check" size={14} className="stroke-white" />}
           </span>
-          <span className="text-lead text-ink-body">{t('accounts.addStory.noForward')}</span>
+          <span className="type-dialog-body text-ink-body">{t('accounts.addStory.noForward')}</span>
         </button>
 
         <div className="mb-tight flex items-center justify-between">
-          <span className="text-body font-medium text-ink-body">
-            {t('accounts.addStory.media')}
-          </span>
+          <span className="type-label">{t('accounts.addStory.media')}</span>
           {video === null && count > 0 && (
-            <span className="text-tiny text-ink-subtle">
+            <span className="type-caption">
               {t('accounts.addStory.photoCount', { n: count, max: MAX_COLLAGE_IMAGES })}
             </span>
           )}
@@ -363,10 +357,10 @@ export function AddStoryModal({
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="truncate text-body font-semibold">
+              <div className="truncate type-item-title">
                 {hasMedia ? t('accounts.addStory.addMore') : t('accounts.addStory.dropTitle')}
               </div>
-              <div className="mt-px text-tiny text-ink-subtle">
+              <div className="mt-px type-caption">
                 {t('accounts.addStory.collageHint', { max: MAX_COLLAGE_IMAGES })}
               </div>
             </div>
@@ -474,9 +468,7 @@ export function AddStoryModal({
         {/* Layout picker — only for a 2..6 photo collage. */}
         {isCollage && (
           <div className="mt-lg">
-            <div className="mb-sm text-body font-medium text-ink-body">
-              {t('accounts.addStory.layout')}
-            </div>
+            <div className="mb-sm type-label">{t('accounts.addStory.layout')}</div>
             <div className="flex flex-wrap gap-sm">
               {layoutsForCount(count).map((layout) => {
                 const selected = collageLayout === layout.id;
@@ -508,7 +500,7 @@ export function AddStoryModal({
                 <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-body font-semibold">{video.name}</div>
+                <div className="truncate type-item-title">{video.name}</div>
                 <div className={`mt-px text-micro ${metaTone}`}>{metaText}</div>
               </div>
               {!busy && !done && (
@@ -533,7 +525,7 @@ export function AddStoryModal({
         {hasMedia && (busy || done || failed) && (
           <div className="mt-md tb-fadeup flex items-center gap-md rounded-lg border border-line bg-white px-md py-md">
             <div className="min-w-0 flex-1">
-              <div className={`text-tiny font-medium ${metaTone}`}>{metaText}</div>
+              <div className={`type-caption font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
                 <div className="mt-sm h-meter overflow-hidden rounded-full bg-canvas">
                   <div

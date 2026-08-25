@@ -104,7 +104,7 @@ export function CampaignSetupCard({
       label={t('neuroshilling.setup.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="text-lead font-semibold">{t('neuroshilling.setup.title')}</span>}
+      header={<span className="type-card-title">{t('neuroshilling.setup.title')}</span>}
       trailing={
         dirty ? (
           <span className="shrink-0 rounded-full bg-warning-tint px-md py-xs text-tiny font-semibold text-warning-deep">
@@ -119,7 +119,7 @@ export function CampaignSetupCard({
         </div>
       ) : null}
 
-      <span className="mb-tight flex items-center gap-sm text-body font-medium text-ink-muted">
+      <span className="mb-tight flex items-center gap-sm type-label">
         {t('neuroshilling.setup.targets.label')}
         <HelpHint text={t('neuroshilling.setup.targets.hint')} />
         <Badge className="ml-auto tabular-nums">
@@ -142,9 +142,7 @@ export function CampaignSetupCard({
         }}
       />
 
-      <span className="mb-tight block text-body font-medium text-ink-muted">
-        {t('neuroshilling.setup.runMode.label')}
-      </span>
+      <span className="mb-tight block type-label">{t('neuroshilling.setup.runMode.label')}</span>
       <div
         role="radiogroup"
         aria-label={t('neuroshilling.setup.runMode.label')}
@@ -169,10 +167,10 @@ export function CampaignSetupCard({
               }}
               className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
             >
-              <span className="block text-body font-semibold">
+              <span className="block type-item-title">
                 {t(`neuroshilling.setup.runMode.${mode}.title`)}
               </span>
-              <span className="mt-xs block text-tiny leading-snug text-ink-subtle">
+              <span className="mt-xs block type-caption leading-snug">
                 {t(
                   unavailable
                     ? 'neuroshilling.setup.runMode.parallel.unavailable'
@@ -187,13 +185,13 @@ export function CampaignSetupCard({
       {/* «Пауза между целями, сек», not the mockup's «Пауза (мин)» / «Пауза (макс)»:
           the two numbers are a MINIMUM and a MAXIMUM, and the unit is seconds. The
           mockup's wording reads as minutes beside a value like `10с`. */}
-      <span className="mb-tight flex items-center gap-sm text-body font-medium text-ink-muted">
+      <span className="mb-tight flex items-center gap-sm type-label">
         {t('neuroshilling.setup.pause.label')}
         <HelpHint text={t('neuroshilling.setup.pause.hint')} />
       </span>
       <div className="mb-lg flex flex-wrap items-center gap-md">
         {(['min', 'max'] as const).map((bound) => (
-          <span key={bound} className="flex items-center gap-sm text-tiny text-ink-subtle">
+          <span key={bound} className="flex items-center gap-sm type-caption">
             {t(`neuroshilling.setup.pause.${bound}`)}
             <Input
               size="xs"

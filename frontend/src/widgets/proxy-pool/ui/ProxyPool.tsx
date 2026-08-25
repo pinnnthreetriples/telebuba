@@ -82,10 +82,8 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
     <Card className="mb-lg px-xl py-lg">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div>
-          <span className="text-lead font-semibold">{t('accounts.proxyPool.title')}</span>
-          <span className="ml-sm text-body text-ink-subtle">
-            {t('accounts.proxyPool.subtitle')}
-          </span>
+          <span className="type-card-title">{t('accounts.proxyPool.title')}</span>
+          <span className="ml-sm type-prose">{t('accounts.proxyPool.subtitle')}</span>
         </div>
         {!empty && (
           <Button variant="primary" size="sm" onClick={onAdd}>
@@ -109,10 +107,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               <path d="M6 12h.01M10 12h4" />
             </svg>
           </div>
-          <div className="mb-xs text-lead font-semibold">{t('accounts.proxyPool.emptyTitle')}</div>
+          <div className="mb-xs type-card-title">{t('accounts.proxyPool.emptyTitle')}</div>
           <div
             // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the sentence in this widget's own empty state
-            className="mb-lg max-w-[300px] text-body text-ink-subtle"
+            className="mb-lg max-w-[300px] type-prose"
           >
             {t('accounts.proxyPool.emptyBody')}
           </div>
@@ -209,10 +207,10 @@ function ProxyCard({
           <span title={geoTitle} className="h-flag w-flag shrink-0 rounded-[3px] bg-line" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-body font-semibold">
+          <div className="truncate type-item-title">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex items-center gap-tight text-tiny text-ink-subtle">
+          <div className="mt-px flex items-center gap-tight type-caption">
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
             <span className="text-ink-subtle">·</span>
             <span
@@ -250,7 +248,7 @@ function ProxyCard({
       </div>
       <div>
         <div className="mb-tight flex items-center justify-between">
-          <span className="text-tiny text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
+          <span className="type-caption">{t('accounts.proxyPool.accounts')}</span>
           <span
             className={`text-tiny font-semibold ${full ? 'text-danger-deep' : 'text-success-deep'}`}
           >

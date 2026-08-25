@@ -17,7 +17,7 @@ export function Odometer({ value, tone }: { value: number; tone: string }) {
   }, []);
   return (
     <div
-      className={`inline-flex h-[1.1em] overflow-hidden text-stat font-bold leading-[1.1] tabular-nums ${tone}`}
+      className={`inline-flex h-[1.1em] overflow-hidden type-stat leading-[1.1] tabular-nums ${tone}`}
     >
       {String(value)
         .split('')

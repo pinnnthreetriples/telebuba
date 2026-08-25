@@ -47,9 +47,7 @@ export function CampaignPromptModal({
     >
       <div className="p-2xl">
         <div className="mb-tight flex items-center justify-between">
-          <span className="text-title font-bold">
-            {t('neurocomment.modal.campaignPrompt.title')}
-          </span>
+          <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
           <IconButton
             size="md"
             aria-label={t('neurocomment.modal.close')}
@@ -59,7 +57,7 @@ export function CampaignPromptModal({
             ×
           </IconButton>
         </div>
-        <div className="mb-lg text-body text-ink-subtle">
+        <div className="mb-lg type-prose">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}
         </div>
         <textarea
@@ -77,7 +75,7 @@ export function CampaignPromptModal({
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
-          <span className="text-body font-semibold tracking-[.04em] text-ink-body">
+          <span className="type-item-title tracking-[.04em] text-ink-body">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
           <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
@@ -95,8 +93,8 @@ export function CampaignPromptModal({
                   {account.initials}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-lead font-semibold text-ink">{account.phone}</div>
-                  <div className="mt-px text-tiny text-ink-muted">{account.channel}</div>
+                  <div className="truncate type-card-title">{account.phone}</div>
+                  <div className="mt-px type-caption">{account.channel}</div>
                 </div>
                 <span className="size-dot shrink-0 rounded-full bg-success" />
                 <IconButton
@@ -150,10 +148,10 @@ export function CampaignPromptModal({
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
           <div className="p-2xl">
-            <div className="mb-sm text-title font-bold">
+            <div className="mb-sm type-dialog-title">
               {t('neurocomment.modal.campaignPrompt.removeTitle')}
             </div>
-            <div className="mb-xl text-lead leading-[1.5] text-ink-muted">
+            <div className="mb-xl type-dialog-body leading-[1.5]">
               {t('neurocomment.modal.campaignPrompt.removeBody', {
                 phone: confirm.phone,
                 channel: confirm.channel,

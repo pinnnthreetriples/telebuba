@@ -23,7 +23,7 @@ export function StoriesTab({
   const { t } = useTranslation();
   return (
     <div>
-      <div className="mb-md text-body text-ink-subtle">{t('accounts.profile.storiesHint')}</div>
+      <div className="mb-md type-prose">{t('accounts.profile.storiesHint')}</div>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-md">
         {stories.map((story) => (
           <div key={story.story_id} className="relative">

@@ -15,13 +15,41 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // tailwind-merge has never seen. The other replaced scales (gap, duration, z-index,
 // shadow) share their prefix with nothing else, so an unknown value there conflicts
 // with the right group by prefix alone.
-const merge = extendTailwindMerge({
+// The `type-*` roles are a third group, and they cannot join `font-size`: a role sets a
+// size, a weight AND a colour, so folding it into the size group would let a later
+// `text-lead` delete all three and leave the text unweighted and unpainted — the same
+// shape of bug as the one above, one layer up. It gets its own group instead, declared
+// to beat the three groups it subsumes when it comes last, and NOT declared as
+// something they beat: `cn('type-caption', 'text-danger')` has to keep both, because
+// naming the role and then recolouring it is the intended way to write an error line.
+const merge = extendTailwindMerge<'type-role'>({
   extend: {
     classGroups: {
       'font-size': [
         { text: ['micro', 'tiny', 'body', 'lead', 'title', 'stat', 'display', 'hero'] },
       ],
       rounded: [{ rounded: ['card'] }],
+      'type-role': [
+        {
+          type: [
+            'page-title',
+            'dialog-title',
+            'dialog-body',
+            'card-title',
+            'item-title',
+            'eyebrow',
+            'label',
+            'value',
+            'prose',
+            'caption',
+            'meta',
+            'stat',
+          ],
+        },
+      ],
+    },
+    conflictingClassGroups: {
+      'type-role': ['font-size', 'font-weight', 'text-color'],
     },
   },
 });

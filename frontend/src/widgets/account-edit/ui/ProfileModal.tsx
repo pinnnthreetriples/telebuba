@@ -99,7 +99,7 @@ function SyncLabel({ updatedAt }: { updatedAt: number }) {
   if (!updatedAt) return null;
   const mins = Math.floor((Date.now() - updatedAt) / 60000);
   return (
-    <span className="text-tiny text-ink-subtle">
+    <span className="type-caption">
       {mins < 1
         ? t('accounts.profile.updatedJustNow')
         : t('accounts.profile.updatedMinAgo', { n: mins })}
@@ -673,8 +673,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               {/* A heading, not a div: the dialog's own name is fixed (see above), so
                   this is the only place the account's identity is exposed, and heading
                   navigation is how a screen-reader user reaches it. */}
-              <h2 className="truncate text-title font-bold">{fullName}</h2>
-              <div className="truncate text-body text-ink-subtle">
+              <h2 className="truncate type-dialog-title">{fullName}</h2>
+              <div className="truncate type-prose">
                 {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}
               </div>
@@ -777,7 +777,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
                 <span className="tb-spin inline-block size-tile rounded-full border-[3px] border-line-strong border-t-primary" />
-                <span className="text-body font-medium text-ink-muted">
+                <span className="type-label">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
                     : t('accounts.profile.syncing')}
@@ -826,7 +826,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block text-tiny font-medium text-danger"
+                          className="mt-tight block type-caption font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -857,7 +857,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block text-tiny font-medium text-danger"
+                          className="mt-tight block type-caption font-medium text-danger"
                         >
                           {saveErrorText}
                         </span>
@@ -866,7 +866,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         <span
                           role="alert"
                           data-testid="bio-not-applied"
-                          className="mt-tight block text-tiny font-medium text-warning-deep"
+                          className="mt-tight block type-caption font-medium text-warning-deep"
                         >
                           {t('accounts.profile.bioNotApplied')}
                         </span>
@@ -1001,7 +1001,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               <div
                 role="alert"
                 title={saveErrorText}
-                className="mr-auto min-w-0 truncate text-body font-medium text-danger"
+                className="mr-auto min-w-0 truncate type-label text-danger"
               >
                 {saveErrorText}
               </div>

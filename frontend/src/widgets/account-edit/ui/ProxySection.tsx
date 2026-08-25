@@ -213,11 +213,11 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   return (
     <Section title={t('accounts.edit.proxy')}>
-      <div className="mb-md text-body text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
+      <div className="mb-md type-prose">{t('accounts.edit.proxyRequired')}</div>
       <div className="mb-md flex items-center justify-between gap-sm rounded-lg bg-canvas px-md py-md">
         <span className="flex items-center gap-sm">
           <span className={`size-dot rounded-full ${proxyDot}`} />
-          <span className="text-body text-ink-body">{proxyStateText}</span>
+          <span className="type-value">{proxyStateText}</span>
         </span>
         {account.proxy_id ? (
           <Button
@@ -231,7 +231,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
         ) : null}
       </div>
       {unassignProxy.isError ? (
-        <div className="mb-md text-tiny text-danger">{t('accounts.edit.proxyDetachErr')}</div>
+        <div className="mb-md type-caption text-danger">{t('accounts.edit.proxyDetachErr')}</div>
       ) : null}
       <div className={SEG_WRAP}>
         {(['pool', 'manual'] as const).map((mode) => (
@@ -367,7 +367,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
             : t('accounts.edit.proxyCheck')}
         </Button>
         {proxyCheck === 'loading' && (
-          <span className="text-body text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
+          <span className="type-prose">{t('accounts.edit.proxyChecking')}</span>
         )}
         {proxyCheck === 'ok' && (
           <Badge tone="success" size="md" className="tb-pop gap-sm">
@@ -382,7 +382,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </Badge>
         )}
         {proxyCheck === 'err' && (
-          <span className="inline-flex items-center gap-sm text-body font-medium text-danger">
+          <span className="inline-flex items-center gap-sm type-label text-danger">
             <Icon name="x-circle" size={14} />
             {t('accounts.edit.proxyDown')}
           </span>

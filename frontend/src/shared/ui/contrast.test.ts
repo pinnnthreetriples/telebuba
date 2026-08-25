@@ -54,6 +54,9 @@ const PAIRS: [string, string][] = [
   ['ink.subtle', 'white'],
   ['ink.subtle', 'surface'],
   ['ink.subtle', 'canvas'],
+  // WarmingBoard's pipeline panel is `primary-tint`, and its axis labels are the
+  // `caption` and `meta` roles, which paint `ink.subtle`.
+  ['ink.subtle', 'primary.tint'],
   ['primary', 'white'],
   ['primary.deep', 'primary.tint'],
   ['success.deep', 'success.tint'],

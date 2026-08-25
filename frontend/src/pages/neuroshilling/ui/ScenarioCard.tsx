@@ -43,7 +43,7 @@ function Stepper({
   const { t } = useTranslation();
   return (
     <div className="flex items-center gap-sm">
-      <span className="text-body text-ink-muted">{label}</span>
+      <span className="type-prose">{label}</span>
       <div className="inline-flex items-center gap-hair rounded-full border border-line bg-white px-xs py-hair">
         <button
           type="button"
@@ -190,7 +190,7 @@ function StepRow({
             ariaLabel={linkLabel}
           />
         </div>
-        <div className="flex items-center gap-tight text-tiny text-ink-subtle">
+        <div className="flex items-center gap-tight type-caption">
           <span>{t('neuroshilling.scenario.steps.delay')}</span>
           <Input
             size="xs"
@@ -325,7 +325,7 @@ export function ScenarioCard({
       label={t('neuroshilling.scenario.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="text-lead font-semibold">{t('neuroshilling.scenario.title')}</span>}
+      header={<span className="type-card-title">{t('neuroshilling.scenario.title')}</span>}
       trailing={
         // The approval dies on THIS card, so it has to be visible on THIS card.
         // Every edit below returns the campaign to `draft` the moment it is saved,
@@ -373,7 +373,7 @@ export function ScenarioCard({
       {/* A <span>, not a <label>: the control carries its own `aria-label`, and a
           second label element for the same field only makes the accessible name
           ambiguous. */}
-      <span className="mb-tight flex items-center gap-sm text-body font-medium text-ink-muted">
+      <span className="mb-tight flex items-center gap-sm type-label">
         {t('neuroshilling.scenario.topic.label')}
         <HelpHint text={t('neuroshilling.scenario.topic.hint')} />
       </span>
@@ -437,7 +437,7 @@ export function ScenarioCard({
         ))}
       </div>
 
-      <span className="mb-tight flex items-center gap-sm text-body font-medium text-ink-muted">
+      <span className="mb-tight flex items-center gap-sm type-label">
         {t('neuroshilling.scenario.media.label')}
         <HelpHint text={t('neuroshilling.scenario.media.hint')} />
       </span>
@@ -485,7 +485,7 @@ export function ScenarioCard({
         </div>
       </div>
 
-      <div className="mb-sm flex items-center gap-sm text-body font-semibold">
+      <div className="mb-sm flex items-center gap-sm type-item-title">
         {t('neuroshilling.scenario.roles.title')}
         <HelpHint text={t('neuroshilling.scenario.roles.hint')} />
       </div>
@@ -547,7 +547,7 @@ export function ScenarioCard({
           </div>
         ))}
         {draft.roles.length === 0 ? (
-          <div className="text-body text-ink-subtle">{t('neuroshilling.scenario.roles.none')}</div>
+          <div className="type-prose">{t('neuroshilling.scenario.roles.none')}</div>
         ) : null}
       </div>
       <button
@@ -564,7 +564,7 @@ export function ScenarioCard({
         {t('neuroshilling.scenario.roles.add')}
       </button>
 
-      <div className="mb-sm flex items-center gap-sm text-body font-semibold">
+      <div className="mb-sm flex items-center gap-sm type-item-title">
         {t('neuroshilling.scenario.steps.title')}
         <HelpHint text={t('neuroshilling.scenario.steps.hint')} />
       </div>
@@ -589,7 +589,7 @@ export function ScenarioCard({
           />
         ))}
         {draft.steps.length === 0 ? (
-          <div className="text-body text-ink-subtle">{t('neuroshilling.scenario.steps.none')}</div>
+          <div className="type-prose">{t('neuroshilling.scenario.steps.none')}</div>
         ) : null}
       </div>
       <div className="mb-lg flex gap-sm">
@@ -610,7 +610,7 @@ export function ScenarioCard({
 
       <div className="flex flex-wrap items-center justify-end gap-sm">
         {namelessRole ? (
-          <span className="mr-auto text-tiny text-danger">
+          <span className="mr-auto type-caption text-danger">
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}

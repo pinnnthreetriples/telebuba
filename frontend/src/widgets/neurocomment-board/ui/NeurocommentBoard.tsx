@@ -151,7 +151,7 @@ function AccountComments({
       <div className="mb-sm flex items-center justify-between">
         <div className="flex items-center gap-sm">
           <span className="pl-pulse size-dot shrink-0 rounded-full bg-primary" />
-          <span className="text-body font-semibold">{t('neurocomment.feed.title')}</span>
+          <span className="type-item-title">{t('neurocomment.feed.title')}</span>
           <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-ink-muted">
             {comments.length}
           </span>
@@ -239,7 +239,7 @@ export function NeurocommentBoard({
         header: t('neurocomment.board.col.account'),
         cell: (info) => info.getValue<string>(),
         meta: {
-          cellClassName: 'whitespace-nowrap text-body font-medium',
+          cellClassName: 'whitespace-nowrap type-item-title',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -267,7 +267,7 @@ export function NeurocommentBoard({
           </span>
         ),
         meta: {
-          cellClassName: 'whitespace-nowrap text-body text-primary',
+          cellClassName: 'whitespace-nowrap type-prose text-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -293,8 +293,7 @@ export function NeurocommentBoard({
             row.original.text
           ),
         meta: {
-          cellClassName:
-            'max-w-name overflow-hidden text-ellipsis whitespace-nowrap text-body text-ink-muted',
+          cellClassName: 'max-w-name overflow-hidden text-ellipsis whitespace-nowrap type-prose',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -351,7 +350,7 @@ export function NeurocommentBoard({
       bodyClassName="tb-scroll overflow-x-auto"
       header={
         <>
-          <span className="text-lead font-semibold">{t('neurocomment.board.title')}</span>
+          <span className="type-card-title">{t('neurocomment.board.title')}</span>
           <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
@@ -368,9 +367,7 @@ export function NeurocommentBoard({
             // Hidden on a phone: the header already carries a title, a count pill, the
             // gear and the chevron, and this static label is the one part of it that
             // says nothing actionable — keeping it forced the row to wrap.
-            <span className="hidden text-tiny text-ink-muted sm:inline">
-              {t('neurocomment.board.updated')}
-            </span>
+            <span className="hidden type-caption sm:inline">{t('neurocomment.board.updated')}</span>
           )}
           <button
             type="button"

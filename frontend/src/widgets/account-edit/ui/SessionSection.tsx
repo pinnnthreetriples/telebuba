@@ -156,7 +156,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <div className="mb-md flex items-center justify-between gap-md rounded-lg bg-canvas px-md py-md">
         <span className="flex items-center gap-sm">
           <span className={`size-dot rounded-full ${sessionDot}`} />
-          <span className="text-body text-ink-body">{sessionText}</span>
+          <span className="type-value">{sessionText}</span>
         </span>
         <span className="flex items-center gap-sm">
           <FeedbackMark
@@ -173,9 +173,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         </span>
       </div>
       <div className="mb-md mt-lg flex items-center justify-between gap-sm">
-        <span className="text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
-          {t('accounts.edit.loginByCode')}
-        </span>
+        <span className="type-eyebrow">{t('accounts.edit.loginByCode')}</span>
         <button
           type="button"
           onClick={onRequestCode}
@@ -218,10 +216,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <Button size="block" onClick={onConfirmLogin} disabled={submitCode.isPending || !code}>
         {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
       </Button>
-      {loginNote ? <div className="mt-sm text-tiny text-ink-muted">{loginNote}</div> : null}
-      <div className="mb-md mt-xl text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
-        {t('accounts.edit.import')}
-      </div>
+      {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
+      <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>
       <div className={SEG_WRAP}>
         {(['session', 'tdata'] as const).map((tab) => (
           <button
@@ -245,8 +241,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
           <Icon name="upload-cloud" size={20} />
         </div>
         <div className="min-w-0">
-          <div className="text-body font-semibold">{t('accounts.edit.dropTitle')}</div>
-          <div className="mt-px text-tiny text-ink-subtle">{t('accounts.edit.dropHint')}</div>
+          <div className="type-item-title">{t('accounts.edit.dropTitle')}</div>
+          <div className="mt-px type-caption">{t('accounts.edit.dropHint')}</div>
         </div>
       </button>
       <input
@@ -273,8 +269,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-sm">
                   <div className="min-w-0">
-                    <div className="truncate text-body font-semibold">{file.name}</div>
-                    <div className="mt-px text-micro text-ink-subtle">
+                    <div className="truncate type-item-title">{file.name}</div>
+                    <div className="mt-px type-meta">
                       {t(`accounts.edit.upload.${file.status}`)}
                     </div>
                   </div>

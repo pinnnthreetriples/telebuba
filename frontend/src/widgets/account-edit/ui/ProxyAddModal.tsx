@@ -45,7 +45,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
     <Modal onClose={onClose} className="w-form" label={t('accounts.proxyAdd.title')}>
       <div className="p-2xl">
         <div className="mb-lg flex items-center justify-between">
-          <span className="text-title font-bold">{t('accounts.proxyAdd.title')}</span>
+          <span className="type-dialog-title">{t('accounts.proxyAdd.title')}</span>
           <IconButton
             size="md"
             onClick={onClose}

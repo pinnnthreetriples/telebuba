@@ -156,9 +156,7 @@ function AccountRow({
     <div className="border-b border-line-row py-md">
       <div className="flex flex-wrap items-center gap-md">
         <FeedbackMark result={result} />
-        <span className="min-w-0 flex-1 truncate text-lead font-semibold text-ink">
-          {account.name}
-        </span>
+        <span className="min-w-0 flex-1 truncate type-card-title">{account.name}</span>
         {account.linked ? (
           <LimitsChip
             accountId={account.account_id}
@@ -220,7 +218,7 @@ function AccountRow({
         // A per-pair ban is permanent — no retry, no un-ban — so the line states the
         // fact and nothing else; the operator's move is the "Добавить в кампанию"
         // button already on this screen.
-        <div className="mt-tight text-tiny text-danger">
+        <div className="mt-tight type-caption text-danger">
           {t('neurocomment.modal.neuroAccounts.banned', {
             channels: banned.map(shortChannel).join(', '),
           })}
@@ -353,10 +351,8 @@ export function NeuroAccountsModal({
           </svg>
         </span>
         <div>
-          <div className="text-title font-bold text-ink">
-            {t('neurocomment.modal.neuroAccounts.title')}
-          </div>
-          <div className="mt-hair text-body text-ink-subtle">
+          <div className="type-dialog-title">{t('neurocomment.modal.neuroAccounts.title')}</div>
+          <div className="mt-hair type-prose">
             {t('neurocomment.modal.neuroAccounts.sub', { count: accounts.length })}
           </div>
         </div>

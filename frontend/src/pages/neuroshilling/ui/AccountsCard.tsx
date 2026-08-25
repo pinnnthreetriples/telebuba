@@ -19,7 +19,7 @@ export function AccountsCard({
       label={t('neuroshilling.accounts.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="text-lead font-semibold">{t('neuroshilling.accounts.title')}</span>}
+      header={<span className="type-card-title">{t('neuroshilling.accounts.title')}</span>}
     >
       <div className="mb-md flex items-center gap-sm">
         <span className="rounded-full border border-line bg-canvas px-md py-xs text-tiny font-medium text-ink-body">
@@ -42,7 +42,7 @@ export function AccountsCard({
           ))}
         </div>
       ) : (
-        <div className="mb-md text-body text-ink-subtle">{t('neuroshilling.accounts.none')}</div>
+        <div className="mb-md type-prose">{t('neuroshilling.accounts.none')}</div>
       )}
 
       <Button variant="dashed" size="block" onClick={onPick}>

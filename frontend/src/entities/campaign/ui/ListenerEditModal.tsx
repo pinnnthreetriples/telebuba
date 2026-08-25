@@ -102,10 +102,8 @@ export function ListenerEditModal({
             <Icon name="chart" size={18} />
           </span>
           <div className="flex-1">
-            <div className="text-title font-bold">{t('neurocomment.listener.title')}</div>
-            <div className="mt-px text-body text-ink-subtle">
-              {t('neurocomment.modal.listenerEdit.sub')}
-            </div>
+            <div className="type-dialog-title">{t('neurocomment.listener.title')}</div>
+            <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
           </div>
           <IconButton
             size="md"
@@ -117,9 +115,7 @@ export function ListenerEditModal({
           </IconButton>
         </div>
 
-        <div className="mb-sm mt-xl text-body font-medium text-ink-body">
-          {t('neurocomment.modal.listenerEdit.account')}
-        </div>
+        <div className="mb-sm mt-xl type-label">{t('neurocomment.modal.listenerEdit.account')}</div>
         <Select
           value={pick ?? ''}
           onChange={setPick}
