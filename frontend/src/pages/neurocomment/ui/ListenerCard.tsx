@@ -59,7 +59,7 @@ export function ListenerCard({
           <Icon name="chart" size={16} />
         </span>
         <div className="min-w-0">
-          <div className="text-body font-semibold text-ink">{t('neurocomment.listener.title')}</div>
+          <div className="type-item-title">{t('neurocomment.listener.title')}</div>
         </div>
       </div>
 
@@ -110,7 +110,7 @@ export function ListenerCard({
                     className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
                   />
                   <span
-                    className={`text-body font-semibold ${working ? 'tb-pulse text-success-deep' : 'text-ink-muted'}`}
+                    className={`type-item-title ${working ? 'tb-pulse text-success-deep' : 'text-ink-muted'}`}
                   >
                     {statusLabel}
                   </span>
@@ -161,7 +161,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-sm text-tiny font-medium text-danger">
+        <p className="mt-sm type-caption font-medium text-danger">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

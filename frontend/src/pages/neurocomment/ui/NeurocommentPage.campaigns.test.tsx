@@ -49,9 +49,11 @@ test('campaign edit-prompt saves and delete removes the campaign', async () => {
 
   await userEvent.click(screen.getByTitle('Редактировать промт'));
   // Bug fix: an unpinned account shows the CAMPAIGN scope in the modal, not an
-  // arbitrary first-readiness channel (`@news`). The account subtitle is the only
-  // muted-text 'Promo' on the page.
-  expect(await screen.findByText('Promo', { selector: '.text-ink-muted' })).toBeInTheDocument();
+  // arbitrary first-readiness channel (`@news`). Both 'Promo's on the page wear the
+  // caption role; the account subtitle is the one that does not recolour it.
+  expect(
+    await screen.findByText('Promo', { selector: '.type-caption:not(.text-primary)' }),
+  ).toBeInTheDocument();
   await userEvent.click(await screen.findByText('Сохранить'));
   await waitFor(() => {
     const saved = vi.mocked(fetch).mock.calls.some(([input]) => {

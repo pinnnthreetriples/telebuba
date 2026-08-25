@@ -57,7 +57,7 @@ export function PipelineCard({
     <div className="rounded-card border border-primary-hairline bg-primary-tint px-xl py-lg text-ink">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
-          <span className="text-lead font-semibold">{t('neurocomment.pipeline.title')}</span>
+          <span className="type-card-title">{t('neurocomment.pipeline.title')}</span>
           <span
             className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
           >
@@ -134,14 +134,14 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-md text-center text-tiny font-semibold text-primary-deep md:hidden">
+        <div className="mb-md text-center type-caption font-semibold text-primary-deep md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
       <div className="mb-lg flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-lg py-md">
         <span className="pl-pulse size-dot shrink-0 rounded-full bg-primary" />
-        <span className="tb-pulse text-body font-medium text-primary-deep">
+        <span className="tb-pulse type-label text-primary-deep">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}
@@ -155,7 +155,7 @@ export function PipelineCard({
           // tile across both columns, and stays right as stats are added or removed.
           <div key={stat.label} className="bg-white px-lg py-lg max-md:odd:last:col-span-2">
             <Odometer value={stat.value} tone={stat.color} />
-            <div className="mt-hair text-tiny text-ink-subtle">{stat.label}</div>
+            <div className="mt-hair type-caption">{stat.label}</div>
           </div>
         ))}
       </div>

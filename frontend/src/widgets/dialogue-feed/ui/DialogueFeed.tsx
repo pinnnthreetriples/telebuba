@@ -64,7 +64,7 @@ function participant(
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
-      <div className="mb-xs flex items-center gap-tight text-micro text-ink-subtle">
+      <div className="mb-xs flex items-center gap-tight type-meta">
         <span className="font-medium text-ink-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
@@ -72,7 +72,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         <span className="font-medium text-ink-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums text-micro text-ink-subtle">
+        <span className="ml-auto shrink-0 tabular-nums type-meta">
           {formatLocalTime(message.created_at)}
         </span>
       </div>
@@ -88,7 +88,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-hair flex items-center gap-sm text-micro text-ink-subtle">
+    <div className="mt-hair flex items-center gap-sm type-meta">
       <span className="flex items-center gap-xs">
         {[0, 1, 2].map((index) => (
           <span
@@ -177,7 +177,7 @@ export function DialogueFeed() {
         <span
           className={`size-dot shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
         />
-        <span className="text-lead font-bold">{t('warming.dialogues.title')}</span>
+        <span className="type-card-title">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
           <Badge tone="success" className="font-bold">
             {/* One page, not a total: at the limit there is more history behind

@@ -59,8 +59,8 @@ function ChoiceCard({
         {icon}
       </span>
       <span className="flex-1">
-        <span className="block text-lead font-semibold">{title}</span>
-        <span className="mt-px block text-tiny text-ink-subtle">{desc}</span>
+        <span className="block type-card-title">{title}</span>
+        <span className="mt-px block type-caption">{desc}</span>
       </span>
       {chevron && <Icon name="chevron-right" size={16} className="stroke-line-strong" />}
     </button>
@@ -258,8 +258,8 @@ export function AddAccountModal({
       <div className="px-2xl pb-xl pt-2xl">
         <div className="mb-lg flex items-start justify-between">
           <div>
-            <div className="text-title font-bold">{t('accounts.addWizard.title')}</div>
-            <div className="mt-hair text-body text-ink-subtle">
+            <div className="type-dialog-title">{t('accounts.addWizard.title')}</div>
+            <div className="mt-hair type-prose">
               {step === 1
                 ? t('accounts.addWizard.step1Label')
                 : step === 2
@@ -350,7 +350,7 @@ export function AddAccountModal({
 
               {method === 'phone' && (
                 <div className="tb-fadeup flex flex-col gap-md rounded-lg border border-line bg-white px-md py-lg">
-                  <label className="block text-tiny font-medium text-ink-subtle">
+                  <label className="block type-caption font-medium">
                     {t('accounts.addWizard.phoneLabel')}
                   </label>
                   <input
@@ -378,7 +378,7 @@ export function AddAccountModal({
                         : t('accounts.addWizard.phoneContinue')}
                   </Button>
                   {startLogin.isError && (
-                    <div className="text-tiny text-danger">
+                    <div className="type-caption text-danger">
                       {t('accounts.addWizard.phoneError')}
                     </div>
                   )}
@@ -403,10 +403,10 @@ export function AddAccountModal({
                       <Icon name="upload-cloud" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-lead font-semibold">
+                      <span className="block type-card-title">
                         {t('accounts.addWizard.dropTitle')}
                       </span>
-                      <span className="mt-px block text-tiny text-ink-subtle">
+                      <span className="mt-px block type-caption">
                         {method === 'tdata'
                           ? t('accounts.addWizard.dropDescTdata')
                           : t('accounts.addWizard.dropDescSession')}
@@ -427,7 +427,7 @@ export function AddAccountModal({
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-body font-semibold">{fileName}</div>
+                          <div className="truncate type-item-title">{fileName}</div>
                           {/* Import verdict tone from the tokens the states MEAN. */}
                           <div
                             className={`mt-px text-tiny ${importFailed ? 'text-danger' : createdAccountId ? 'text-success-deep' : 'text-ink-subtle'}`}
@@ -485,9 +485,7 @@ export function AddAccountModal({
           <>
             <div className="mb-lg flex items-center gap-sm rounded-lg bg-success-tint px-md py-md">
               <Icon name="check" size={16} className="stroke-success" />
-              <span className="text-body font-medium text-success-deep">
-                {t('accounts.addWizard.added')}
-              </span>
+              <span className="type-label text-success-deep">{t('accounts.addWizard.added')}</span>
             </div>
             <div className="flex flex-col gap-md">
               <ChoiceCard
@@ -580,15 +578,15 @@ export function AddAccountModal({
                       />
                     ) : null}
                     <span className="flex-1">
-                      <span className="block text-lead font-semibold">
+                      <span className="block type-card-title">
                         {(proxy.country_code ?? '—').toUpperCase()} ·{' '}
                         {proxyTypeLabel(proxy.proxy_type)}
                       </span>
-                      <span className="block font-mono text-tiny text-ink-subtle">
+                      <span className="block font-mono type-caption">
                         {proxy.host}:{proxy.port}
                       </span>
                     </span>
-                    <span className="text-body font-medium text-success-deep">
+                    <span className="type-label text-success-deep">
                       {t('accounts.addWizard.poolFree', { count: proxy.free })}
                     </span>
                   </button>
@@ -598,7 +596,7 @@ export function AddAccountModal({
                   refusal has to be visible — otherwise the only signal is a
                   screen that did not change. */}
               {assignProxy.isError && (
-                <div role="alert" className="text-tiny text-danger">
+                <div role="alert" className="type-caption text-danger">
                   {t('accounts.addWizard.proxyAssignError')}
                 </div>
               )}

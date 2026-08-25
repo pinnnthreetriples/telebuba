@@ -81,7 +81,7 @@ export function CampaignsCard({
       label={t('neurocomment.campaigns.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="text-lead font-semibold">{t('neurocomment.campaigns.title')}</span>}
+      header={<span className="type-card-title">{t('neurocomment.campaigns.title')}</span>}
     >
       <div className="flex flex-col gap-sm">
         {campaignList.map((campaign) => {
@@ -148,8 +148,8 @@ export function CampaignsCard({
                 >
                   <div className="flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
-                      <div className="mb-tight text-lead font-semibold">{campaign.name}</div>
-                      <div className="text-tiny text-ink-muted">
+                      <div className="mb-tight type-card-title">{campaign.name}</div>
+                      <div className="type-caption">
                         {t('neurocomment.campaign.meta', {
                           channels: campaign.channel_count ?? 0,
                           accounts: campaign.account_count ?? 0,
@@ -158,7 +158,7 @@ export function CampaignsCard({
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-sm">
                       <span
-                        className={`inline-flex items-center gap-tight text-tiny font-medium ${tone}`}
+                        className={`inline-flex items-center gap-tight type-caption font-medium ${tone}`}
                       >
                         {/* `bg-current` — the dot can never disagree with its label. */}
                         <span className="size-dot rounded-full bg-current" />
@@ -203,12 +203,10 @@ export function CampaignsCard({
           headerClassName="px-0 py-0"
           bodyClassName="px-0 pb-0 pt-md"
           label={t('neurocomment.channels.title')}
-          header={
-            <span className="text-body font-semibold">{t('neurocomment.channels.title')}</span>
-          }
+          header={<span className="type-item-title">{t('neurocomment.channels.title')}</span>}
         >
           <div className="mb-md flex items-center justify-between gap-sm">
-            <span className="min-w-0 truncate text-tiny font-medium text-primary">
+            <span className="min-w-0 truncate type-caption font-medium text-primary">
               {activeCampaign?.name ?? ''}
             </span>
             <div className="flex shrink-0 items-center gap-sm">

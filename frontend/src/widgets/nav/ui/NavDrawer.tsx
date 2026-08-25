@@ -29,7 +29,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
             <div className="size-node rounded-full bg-primary" />
           </div>
-          <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="type-dialog-title tracking-[-0.01em]">Telebuba</span>
         </div>
         <button
           type="button"

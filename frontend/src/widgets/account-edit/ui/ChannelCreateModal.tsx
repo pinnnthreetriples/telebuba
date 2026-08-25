@@ -206,7 +206,7 @@ export function ChannelCreateModal({
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
-          <span className="text-title font-bold">{t('accounts.channel.createTitle')}</span>
+          <span className="type-dialog-title">{t('accounts.channel.createTitle')}</span>
           <IconButton
             size="md"
             onClick={onClose}
@@ -228,7 +228,7 @@ export function ChannelCreateModal({
             }}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-xs block text-tiny text-danger">
+            <span className="mt-xs block type-caption text-danger">
               {t('accounts.channel.errTitle')}
             </span>
           )}

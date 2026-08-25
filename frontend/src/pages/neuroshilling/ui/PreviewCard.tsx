@@ -43,7 +43,7 @@ export function PreviewCard({
       label={t('neuroshilling.preview.title')}
       headerClassName="px-lg py-lg"
       bodyClassName="px-lg pb-lg"
-      header={<span className="text-lead font-semibold">{t('neuroshilling.preview.title')}</span>}
+      header={<span className="type-card-title">{t('neuroshilling.preview.title')}</span>}
       trailing={
         <span
           className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
@@ -78,7 +78,7 @@ export function PreviewCard({
                 {index > 0 ? (
                   <div className="my-sm flex items-center gap-sm">
                     <span className="h-px flex-1 bg-line" />
-                    <span className="text-micro tabular-nums text-ink-subtle">
+                    <span className="type-meta tabular-nums">
                       {t('neuroshilling.preview.pause', {
                         min: step.delay_min_seconds ?? 60,
                         max: step.delay_max_seconds ?? 180,
@@ -98,10 +98,10 @@ export function PreviewCard({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="mb-xs flex items-center gap-sm">
-                      <span className={`text-body font-semibold ${tone.text}`}>
+                      <span className={`type-item-title ${tone.text}`}>
                         {role?.name ?? t('neuroshilling.preview.noRole')}
                       </span>
-                      <span className="text-micro tabular-nums text-ink-subtle">
+                      <span className="type-meta tabular-nums">
                         {t('neuroshilling.preview.at', { time: clock(elapsed) })}
                       </span>
                     </div>
@@ -133,7 +133,7 @@ export function PreviewCard({
       )}
 
       <div className="mt-lg flex flex-wrap items-center gap-sm">
-        <span className="mr-auto text-tiny tabular-nums text-ink-subtle">
+        <span className="mr-auto type-caption tabular-nums">
           {t('neuroshilling.preview.total', { time: clock(total) })}
         </span>
         <Button

@@ -170,7 +170,7 @@ export function AccountsPage() {
       />
 
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
-        <h1 className="m-0 text-display font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
+        <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
         <div className="flex w-full items-center gap-sm sm:w-auto">
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
@@ -215,8 +215,8 @@ export function AccountsPage() {
             key={stat.label}
             className="min-w-col rounded-lg border border-line bg-white px-lg py-md"
           >
-            <div className={`text-stat font-bold ${stat.cls}`}>{stat.value}</div>
-            <div className="mt-px text-tiny text-ink-muted">{stat.label}</div>
+            <div className={`type-stat ${stat.cls}`}>{stat.value}</div>
+            <div className="mt-px type-caption">{stat.label}</div>
           </div>
         ))}
       </div>

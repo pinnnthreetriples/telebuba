@@ -52,10 +52,10 @@ export function MusicTab({
                 </svg>
               </span>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-lead font-semibold">
+                <div className="truncate type-card-title">
                   {track.title ?? t('accounts.profile.trackTitle')}
                 </div>
-                <div className="truncate text-body text-ink-subtle">
+                <div className="truncate type-prose">
                   {track.performer ?? t('accounts.profile.trackArtist')}
                 </div>
               </div>

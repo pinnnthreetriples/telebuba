@@ -175,8 +175,8 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   return (
     <Modal onClose={onClose} className="w-table" label={t('neurocomment.modal.discovery.title')}>
       <div className="p-xl">
-        <h2 className="text-title font-semibold">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-xs text-body text-ink-subtle">
+        <h2 className="type-dialog-title">{t('neurocomment.modal.discovery.title')}</h2>
+        <p className="mt-xs type-prose">
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
         </p>
 
@@ -201,7 +201,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         </div>
 
         {refused ? (
-          <p className="mt-md text-body text-danger">
+          <p className="mt-md type-prose text-danger">
             {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
           </p>
         ) : null}
@@ -210,13 +210,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             toast fires outside the modal with a raw error code, and the form alone
             would just re-enable its button. */}
         {startSearch.isError ? (
-          <p role="status" className="mt-md text-body text-danger">
+          <p role="status" className="mt-md type-prose text-danger">
             {t('neurocomment.modal.discovery.startFailed')}
           </p>
         ) : null}
 
         {adopted !== null && adopted.refused > 0 ? (
-          <p role="status" className="mt-md text-body text-warning-deep">
+          <p role="status" className="mt-md type-prose text-warning-deep">
             {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
           </p>
         ) : null}
@@ -224,13 +224,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {/* Its own line, not folded into "already taken": the operator's next move is
             to drop the channel, not to look for the campaign holding it. */}
         {adopted !== null && adopted.commentsOff > 0 ? (
-          <p role="status" className="mt-md text-body text-warning-deep">
+          <p role="status" className="mt-md type-prose text-warning-deep">
             {t('neurocomment.modal.discovery.addedCommentsOff', { count: adopted.commentsOff })}
           </p>
         ) : null}
 
         {adopted !== null && adopted.failed > 0 ? (
-          <p role="status" className="mt-md text-body text-danger">
+          <p role="status" className="mt-md type-prose text-danger">
             {t('neurocomment.modal.discovery.addedFailed', { count: adopted.failed })}
           </p>
         ) : null}
@@ -238,7 +238,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {/* The request itself never landed, so nothing can be read from the outcomes —
             silence would read as "nothing happened". */}
         {adopt.isError ? (
-          <p role="status" className="mt-md text-body text-danger">
+          <p role="status" className="mt-md type-prose text-danger">
             {t('neurocomment.modal.discovery.addFailed')}
           </p>
         ) : null}

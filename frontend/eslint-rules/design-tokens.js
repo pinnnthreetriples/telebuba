@@ -46,6 +46,56 @@
 //   from each other; naming them would put two single-use roles in the canon and
 //   imply the UI means something by them. Both carry an inline suppression.
 
+// The type-role pattern below is the one rule here that does not apply everywhere, and
+// the exception is the point rather than a hole. `shared/ui` is the layer allowed to
+// compose primitives by hand: `Button` deciding that its label is 13px semibold IS the
+// design system, said in the place the system is kept. Every layer above it —
+// `pages/`, `widgets/`, `features/`, `entities/`, `routes/` — is a consumer, and a
+// consumer respelling a rung, a weight and a grey is how one job came to have three
+// spellings. Above `shared/ui` a page names the ROLE the text plays.
+// A test file is exempt too, and for the opposite reason: `cn.test.ts` and
+// `designTokenRule.test.ts` assert on the very spellings this bans, and a fixture is
+// data about the code rather than a decision inside it.
+const NOT_A_CONSUMER = /(?:^|[\\/])src[\\/]shared[\\/]ui[\\/]|\.test\.tsx?$/;
+
+// `hero` is left out on purpose. The config calls it "the one empty-state numeral" and
+// means it: one element in the whole app is 42px, WarmDaysModal's day count. A role
+// needs two wearers in two slices — a rung worn once is a literal with a name — so
+// there is no `type-*` for it to move onto, and flagging it would be asking for a
+// thirteenth role with nothing to defend it.
+const TYPE_RUNG = 'micro|tiny|body|lead|title|stat|display';
+const INK_RAMP = String.raw`text-ink(?:-(?:body|muted|subtle))?(?![\w-])`;
+
+// What this pattern deliberately does NOT reach, and why:
+//
+//   a class list that also paints a box — a fill, a border, a radius or its own padding.
+//   That is a CONTROL being drawn, and a control's face is its own business: a status
+//   pill, a hand-written button, a glyph badge, a field. Those belong to `Badge`,
+//   `Button` and `Input`, and the ~100 drawn by hand above `shared/ui` are a layering
+//   debt to pay by moving them down — not by inventing `type-pill` and `type-control`,
+//   which would put the debt in the canon and call it design.
+//
+//   a class list that reacts to the pointer (`hover:`, `focus`, `active:`, `disabled:`,
+//   `transition`, `cursor-`). Same category, reached from the other side: three of them
+//   draw no box but are still controls — a text button, a nav tab, a tooltip trigger.
+//
+//   a class list carrying `leading-none`, `absolute` or `fixed`. At `lead` the type
+//   scale doubles as a GLYPH size, exactly the way `IconButton` wears `text-title` to
+//   size a `×`: all six such sites in the tree are one character — the `×` that removes
+//   a chip in CreateCampaignModal, CampaignsCard and WarmingPage, and the `@` prefix
+//   inside the username fields of ChannelCreateModal and ProfileModal. A glyph is not
+//   text playing a role, and no `type-*` should pretend it is.
+//
+//   a rung beside a WEIGHT with no grey in the list. Measured, not assumed: that
+//   variant flags seven sites no role can honestly absorb, and every one of them is a
+//   number — a trust score, a spend gauge, a tile's figure, an avatar's initials —
+//   where the weight is the figure's emphasis and not a heading's. A pattern cannot
+//   tell a bold heading from a bold number, so the weight half of the canon is carried
+//   by the role table and its documentation rather than by this gate.
+const PAINTS_A_BOX = String.raw`(?:^|\s)(?:[\w-]+:)*(?:bg-|border(?![\w-])|border-|rounded|p-|px-|py-|pt-|pb-|pl-|pr-|shadow-|ring-)`;
+const IS_A_CONTROL = String.raw`(?:^|\s)(?:hover|focus|focus-visible|focus-within|active|disabled|aria-[\w-]+|data-[\w-]+):|(?:^|\s)transition|(?:^|\s)cursor-`;
+const IS_A_GLYPH = String.raw`(?:^|\s)(?:leading-none|absolute|fixed)(?![\w-])`;
+
 const PALETTE =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
 const COLOUR = 'bg|text|border|ring|fill|stroke|from|to|via|divide|outline|decoration|caret|accent';
@@ -112,6 +162,17 @@ const PATTERNS = [
     message:
       'Four motion rungs, one per kind of gesture (`state`, `enter`, `reveal`, `roll`). A duration in milliseconds is how one gesture came to run 420ms on one element against 400ms on the other.',
   },
+  {
+    above: NOT_A_CONSUMER,
+    unless: new RegExp(`${PAINTS_A_BOX}|${IS_A_CONTROL}|${IS_A_GLYPH}`),
+    test: new RegExp(
+      // A rung and a grey from the ink ramp, in either order, anywhere in one class list.
+      String.raw`(?:^|\s)(?:[\w-]+:)*text-(?:${TYPE_RUNG})(?![\w-])[\s\S]*(?:^|\s)(?:[\w-]+:)*${INK_RAMP}` +
+        String.raw`|(?:^|\s)(?:[\w-]+:)*${INK_RAMP}[\s\S]*(?:^|\s)(?:[\w-]+:)*text-(?:${TYPE_RUNG})(?![\w-])`,
+    ),
+    message:
+      'A rung plus a grey is a role spelled out, and spelling it out is how one job came to have three spellings: the same small caption was written `ink-subtle` 53 times, `ink-muted` 13 times, and with no colour at all 9 times — three greys nobody chose between. Above `shared/ui` the page names the role instead: `type-page-title`, `type-dialog-title`, `type-dialog-body`, `type-card-title`, `type-item-title`, `type-eyebrow`, `type-label`, `type-value`, `type-prose`, `type-caption`, `type-meta`, `type-stat`. They are declared as `typeRole` in tailwind.config.ts, each with the one sentence it has to answer to. A role plus an override — `type-caption text-danger`, `type-meta font-bold` — is the intended way to say the same text in another colour or another weight.',
+  },
 ];
 
 /** @type {import('eslint').Rule.RuleModule} */
@@ -122,9 +183,12 @@ const noRawValues = {
     schema: [],
   },
   create(context) {
+    const filename = context.filename ?? context.getFilename();
     const check = (node, text) => {
       if (typeof text !== 'string' || text.length === 0) return;
-      for (const { test, message } of PATTERNS) {
+      for (const { test, message, above, unless } of PATTERNS) {
+        if (above !== undefined && above.test(filename)) continue;
+        if (unless !== undefined && unless.test(text)) continue;
         const hit = test.exec(text);
         if (hit) {
           context.report({ node, message: `${message}\n  found: ${hit[0].trim()}` });

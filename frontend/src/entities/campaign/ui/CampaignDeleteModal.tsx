@@ -20,10 +20,10 @@ export function CampaignDeleteModal({
       label={t('neurocomment.modal.campaignDelete.title', { name })}
     >
       <div className="p-2xl">
-        <div className="mb-sm text-title font-bold">
+        <div className="mb-sm type-dialog-title">
           {t('neurocomment.modal.campaignDelete.title', { name })}
         </div>
-        <div className="mb-2xl text-lead leading-[1.5] text-ink-muted">
+        <div className="mb-2xl type-dialog-body leading-[1.5]">
           {t('neurocomment.modal.campaignDelete.body')}
         </div>
         <div className="flex justify-end gap-sm">

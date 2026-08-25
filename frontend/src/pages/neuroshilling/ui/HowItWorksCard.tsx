@@ -12,7 +12,7 @@ export function HowItWorksCard() {
       label={t('neuroshilling.howto.title')}
       wrapperClassName="rounded-card border border-line bg-canvas"
       headerClassName="px-lg py-lg"
-      header={<span className="text-lead font-semibold">{t('neuroshilling.howto.title')}</span>}
+      header={<span className="type-card-title">{t('neuroshilling.howto.title')}</span>}
     >
       <div className="flex flex-col gap-md">
         {HOW_STEPS.map((index) => (
@@ -20,7 +20,7 @@ export function HowItWorksCard() {
             <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
               {index + 1}
             </span>
-            <span className="text-body leading-[1.5] text-ink-muted">
+            <span className="type-prose leading-[1.5]">
               {t(`neuroshilling.howto.steps.${String(index)}`)}
             </span>
           </div>

@@ -129,7 +129,7 @@ export function AppNav() {
           <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
             <div className="size-node rounded-full bg-primary" />
           </div>
-          <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="type-dialog-title tracking-[-0.01em]">Telebuba</span>
         </div>
 
         <nav
@@ -177,7 +177,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only text-body font-medium lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-ink-muted'}`}
+              className={`sr-only type-label lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>

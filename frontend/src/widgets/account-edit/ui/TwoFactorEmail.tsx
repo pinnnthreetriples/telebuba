@@ -194,7 +194,7 @@ export function TwoFactorEmail({
             pending || !hasRecovery ? 'mb-md' : ''
           }`}
         >
-          <span className="text-body text-ink-muted">
+          <span className="type-prose">
             {t('accounts.edit.twofaRecovery')}:{' '}
             {hasRecovery ? t('accounts.edit.twofaRecoveryOn') : t('accounts.edit.twofaRecoveryOff')}
           </span>
@@ -214,7 +214,7 @@ export function TwoFactorEmail({
       )}
       {pending ? (
         <>
-          <div className="mb-md text-body text-ink-muted">
+          <div className="mb-md type-prose">
             {t('accounts.edit.twofaEmailSent', { pattern: pending })}
           </div>
           <label className="mb-md block">
@@ -279,12 +279,12 @@ export function TwoFactorEmail({
               maxLength={MAX_EMAIL_LENGTH}
             />
             {email && !addressValid ? (
-              <span className="mt-tight block text-tiny font-medium text-danger">
+              <span className="mt-tight block type-caption font-medium text-danger">
                 {t('accounts.edit.twofaEmailErrShape')}
               </span>
             ) : null}
           </label>
-          <div className="mb-md text-tiny text-ink-subtle">{t('accounts.edit.twofaEmailWarn')}</div>
+          <div className="mb-md type-caption">{t('accounts.edit.twofaEmailWarn')}</div>
           <Button
             size="block"
             onClick={onAttach}

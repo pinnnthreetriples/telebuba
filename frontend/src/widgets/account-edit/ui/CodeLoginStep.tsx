@@ -59,7 +59,7 @@ export function CodeLoginStep({
               : t('accounts.addWizard.sendCode')}
           </Button>
           {requestCode.isError && (
-            <div className="text-body text-danger">{t('accounts.addWizard.loginErr')}</div>
+            <div className="type-prose text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
         </div>
       ) : (
@@ -67,7 +67,7 @@ export function CodeLoginStep({
           <div className="rounded-lg bg-success-tint px-md py-md text-body font-medium text-success-deep">
             {t('accounts.addWizard.codeSent', { phone })}
           </div>
-          <label className="block text-tiny font-medium text-ink-subtle">
+          <label className="block type-caption font-medium">
             {t('accounts.addWizard.smsCode')}
             <input
               type="text"
@@ -80,7 +80,7 @@ export function CodeLoginStep({
               className="mt-tight w-full rounded-lg border border-line bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
             />
           </label>
-          <label className="block text-tiny font-medium text-ink-subtle">
+          <label className="block type-caption font-medium">
             {t('accounts.addWizard.twoFA')}
             <input
               type="password"
@@ -96,7 +96,7 @@ export function CodeLoginStep({
             />
           </label>
           {submitCode.isError && (
-            <div className="text-body text-danger">{t('accounts.addWizard.loginErr')}</div>
+            <div className="type-prose text-danger">{t('accounts.addWizard.loginErr')}</div>
           )}
         </div>
       )}

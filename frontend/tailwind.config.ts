@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
 
 // Design tokens — the single source of truth for the SPA's palette/typography.
 // Every colour the UI paints has a name here; a raw `#hex` in a component is a
@@ -57,6 +58,74 @@ export default {
       stat: '20px',
       display: '22px',
       hero: '42px',
+    },
+    // The roles the type scale is spent on, and the layer above `shared/ui` names one
+    // of these instead of respelling a rung, a weight and a grey at every site. The
+    // rungs above answer "how big"; a role answers "what is this text to the reader",
+    // which is the question a page can actually get right.
+    //
+    // The scale it replaces was not eight rungs, it was ninety-six spellings: 528
+    // places wrote a rung beside a weight and an ink, and the same job came out three
+    // ways at a time. A caption was `ink-subtle` 57 times, `ink-muted` 13 and colourless
+    // 9; a card's heading was `semibold` 30 times, `bold` 5 and `medium` 4. Neither
+    // spread was a decision — nobody can see 600 against 700 at 13px, and the grey a
+    // caption ended up in was the grey the file next door happened to use.
+    //
+    // Each role had to be nameable in one sentence without the word "or", and had to be
+    // worn by two components in different slices. That is what kept the set at twelve:
+    // a status pill's label, a hand-written button's label and an avatar's initials all
+    // looked like candidates and are none — they are a control's own face, which is what
+    // `shared/ui` exists to own, and giving them a role here would make that layering
+    // debt permanent by naming it.
+    //
+    // The colour is the token's own name, resolved by the plugin below, so a role cannot
+    // drift from the palette. Line height is deliberately NOT part of a role, for the
+    // same reason it is not part of a rung: `leading-*` stays its own decision.
+    typeRole: {
+      // The heading that names the screen the operator is on. Six `<h1>`s, one per page,
+      // and the only role whose wearers cannot span two slices — a page title lives in
+      // `pages/` by definition, so the second-wearer test is six independent features.
+      'page-title': { size: 'display', weight: '700', ink: 'ink', tracking: '-0.02em' },
+      // The heading a dialog opens with (ConfirmModal, every delete sheet, ProfileModal,
+      // ChannelDiscoveryModal). Four slices; the widest-worn role in the set.
+      'dialog-title': { size: 'title', weight: '700', ink: 'ink' },
+      // The sentence a dialog asks before its buttons. Its own role rather than `prose`
+      // because every confirm sheet in the app — and ConfirmModal, which is the one in
+      // `shared/ui` they were all copied from — asks it one rung up and one grey darker
+      // than a page explains itself in, and that is a decision, not a drift.
+      'dialog-body': { size: 'lead', weight: '400', ink: 'ink-muted' },
+      // The heading of the block it stands in — CollapsibleCard's `header` slot, the name
+      // on a card that is one account, the name of a setting over its own description.
+      'card-title': { size: 'lead', weight: '600', ink: 'ink' },
+      // The name of one item inside a card: a row's subject, a group of fields' subject.
+      'item-title': { size: 'body', weight: '600', ink: 'ink' },
+      // The label that opens a group of settings, set in caps. The one role that carries
+      // letter-spacing, which is why it exists rather than being `caption` in bold: its
+      // four wearers agreed on 0.04em and a fifth had drifted to 0.03em.
+      eyebrow: {
+        size: 'tiny',
+        weight: '600',
+        ink: 'ink-subtle',
+        tracking: '0.04em',
+        caps: 'uppercase',
+      },
+      // The name of the control beside it — a field's label, a setting's name in a row.
+      label: { size: 'body', weight: '500', ink: 'ink-body' },
+      // The datum a row reads out: a table cell, the right-hand half of a key/value line.
+      // Same rung as `prose` and a step darker, because it is the thing the operator
+      // came to read and prose is the explanation around it.
+      value: { size: 'body', weight: '400', ink: 'ink-body' },
+      // A sentence the operator reads: an explanation, an empty state, a dialog's question.
+      prose: { size: 'body', weight: '400', ink: 'ink-subtle' },
+      // The small line that qualifies the control above it — a hint, a unit, a field error
+      // once it takes `text-danger`. The most-worn role in the app.
+      caption: { size: 'tiny', weight: '400', ink: 'ink-subtle' },
+      // The smallest line: what dates or counts the row beside it.
+      meta: { size: 'micro', weight: '400', ink: 'ink-subtle' },
+      // The number a counter puts on the screen. Colourless in practice — every wearer
+      // passes the tone the number MEANS — but it resolves to `ink` so the class is
+      // complete on its own.
+      stat: { size: 'stat', weight: '700', ink: 'ink' },
     },
     // Four corner radii and the pill, replacing Tailwind's scale outright so the
     // names that are left are the only ones a component can reach for: `sm` for
@@ -420,5 +489,32 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    // One utility per role, emitted into the `components` layer so that a utility on
+    // the same element still wins: `type-caption text-danger` is a caption in the error
+    // colour, and `type-card-title font-bold` is a card title someone still has to argue
+    // for. That ordering is the whole reason this is a plugin and not a `@apply` recipe.
+    plugin(({ addComponents, theme }) => {
+      type Role = { size: string; weight: string; ink: string; tracking?: string; caps?: string };
+      const roles = theme('typeRole') as Record<string, Role>;
+      addComponents(
+        Object.fromEntries(
+          Object.entries(roles).map(([name, role]) => [
+            `.type-${name}`,
+            {
+              fontSize: theme(`fontSize.${role.size}`) as string,
+              fontWeight: role.weight,
+              // `ink` and `ink-subtle` are how the utility spells it; `colors` nests the
+              // ramp, so the DEFAULT rung has to be said out loud on the way through.
+              color: theme(
+                `colors.${role.ink === 'ink' ? 'ink.DEFAULT' : role.ink.replace('-', '.')}`,
+              ) as string,
+              ...(role.tracking === undefined ? {} : { letterSpacing: role.tracking }),
+              ...(role.caps === undefined ? {} : { textTransform: role.caps }),
+            },
+          ]),
+        ),
+      );
+    }),
+  ],
 } satisfies Config;

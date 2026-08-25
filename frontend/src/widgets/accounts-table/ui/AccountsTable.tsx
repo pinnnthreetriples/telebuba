@@ -124,10 +124,8 @@ export function AccountsTable({
           <div className="flex items-center gap-md">
             <RowAvatar account={account} />
             <div>
-              <div className="text-lead font-semibold">{accountDisplayName(account)}</div>
-              <div className="text-tiny text-ink-subtle">
-                {account.username ? `@${account.username}` : '—'}
-              </div>
+              <div className="type-card-title">{accountDisplayName(account)}</div>
+              <div className="type-caption">{account.username ? `@${account.username}` : '—'}</div>
             </div>
           </div>
         );
@@ -155,10 +153,10 @@ export function AccountsTable({
                 className={`fi fi-${account.proxy_country_code.toLowerCase()} h-flag w-flag rounded-[2px] shadow-ring`}
               />
             ) : null}
-            <span className="text-body text-ink-body">{proxyMeta(account)}</span>
+            <span className="type-value">{proxyMeta(account)}</span>
           </div>
         ) : (
-          <span className="text-body text-ink-subtle">—</span>
+          <span className="type-prose">—</span>
         );
       },
     },
@@ -166,9 +164,7 @@ export function AccountsTable({
       id: 'device',
       header: () => t('accounts.table.device'),
       meta: LEFT_META,
-      cell: ({ row }) => (
-        <span className="text-body text-ink-muted">{deviceLabel(row.original)}</span>
-      ),
+      cell: ({ row }) => <span className="type-prose">{deviceLabel(row.original)}</span>,
     },
     {
       id: 'trust',
@@ -177,7 +173,7 @@ export function AccountsTable({
       cell: ({ row }) => {
         const trust = row.original.trust_score;
         return trust == null ? (
-          <span className="text-body text-ink-subtle">—</span>
+          <span className="type-prose">—</span>
         ) : (
           <div className="flex items-center gap-sm">
             <div

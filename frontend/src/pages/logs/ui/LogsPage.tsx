@@ -97,7 +97,7 @@ export function LogsPage() {
         cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
         meta: {
           className: 'w-stamp',
-          cellClassName: 'font-mono text-body text-ink-subtle',
+          cellClassName: 'font-mono type-prose',
           cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
@@ -114,7 +114,7 @@ export function LogsPage() {
           row.original.account_id ? resolveAccount(row.original.account_id) : '—',
         meta: {
           className: 'w-col',
-          cellClassName: 'text-body text-ink-body',
+          cellClassName: 'type-value',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -123,7 +123,7 @@ export function LogsPage() {
         cell: ({ row }) => extraChannel(row.original.extra) ?? '—',
         meta: {
           className: 'w-col',
-          cellClassName: 'truncate text-body text-ink-body',
+          cellClassName: 'truncate type-value',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -137,7 +137,7 @@ export function LogsPage() {
             {eventLabel(t, row.original.event)}
           </span>
         ),
-        meta: { cellClassName: 'text-body text-ink-body' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'type-value' } satisfies DataTableColumnMeta,
       },
       {
         id: 'reason',
@@ -150,7 +150,7 @@ export function LogsPage() {
         // remaining width and the table already scrolls horizontally.
         cell: ({ row }) => eventReason(t, row.original) || '—',
         meta: {
-          cellClassName: 'text-body text-ink-body',
+          cellClassName: 'type-value',
         } satisfies DataTableColumnMeta,
       },
     ],
@@ -192,7 +192,7 @@ export function LogsPage() {
 
   return (
     <div className="tb-fadeup">
-      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
+      <h1 className="m-0 mb-xl type-page-title">{t('logs.title')}</h1>
 
       <div className="mb-lg flex flex-wrap items-center gap-sm">
         <div ref={pillsRef} className="relative flex rounded-full bg-white p-xs">

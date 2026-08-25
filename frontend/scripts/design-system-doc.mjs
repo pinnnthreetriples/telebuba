@@ -76,6 +76,7 @@ function readConfig() {
     minHeight: block(src, 'minHeight'),
     maxHeight: block(src, 'maxHeight'),
     fontSize: block(src, 'fontSize'),
+    typeRole: block(src, 'typeRole'),
     borderRadius: block(src, 'borderRadius'),
     boxShadow: block(src, 'boxShadow'),
     transitionDuration: block(src, 'transitionDuration'),
@@ -159,6 +160,60 @@ const SWATCH_GROUPS = [
   },
   { title: 'Прочее', keys: [], prose: '' },
 ];
+
+// Роли типографики: русская формулировка того, чем текст является читателю. Одно
+// предложение на роль и без слова «или» — роль, которую нельзя описать одной фразой,
+// это две роли, слитые размером. `sample` — то, что роль реально набирает в интерфейсе.
+const TYPE_ROLE = {
+  'page-title': {
+    text: 'Заголовок, который называет экран. Шесть <code>&lt;h1&gt;</code>, по одному на страницу',
+    sample: 'Прогрев',
+  },
+  'dialog-title': {
+    text: 'Заголовок, с которого начинается диалог. Самая широко надетая роль набора: четыре слоя',
+    sample: 'Удалить аккаунт?',
+  },
+  'dialog-body': {
+    text: 'Фраза, которую диалог говорит перед кнопками. Своя роль, а не <code>prose</code>: все подтверждения приложения — и ConfirmModal, с которого их списали, — говорят её на ступень крупнее и на тон темнее, чем страница объясняет себя',
+    sample: 'Аккаунт и его сессия будут удалены безвозвратно.',
+  },
+  'card-title': {
+    text: 'Заголовок блока, в котором стоит: шапка CollapsibleCard, имя аккаунта на его карточке, название настройки над её описанием',
+    sample: 'Каналы кампании',
+  },
+  'item-title': {
+    text: 'Имя одного предмета внутри карточки: то, о чём строка, и то, о чём группа полей',
+    sample: 'Основной прокси',
+  },
+  eyebrow: {
+    text: 'Подпись, которая открывает группу настроек. Единственная роль с трекингом — четыре носителя сошлись на 0.04em, пятый уехал на 0.03em',
+    sample: 'Сессия',
+  },
+  label: {
+    text: 'Имя контрола, стоящего рядом: подпись поля, название настройки в строке',
+    sample: 'Часовой пояс',
+  },
+  value: {
+    text: 'Величина, которую строка показывает: ячейка таблицы, правая половина пары «ключ — значение»',
+    sample: '+7 900 123-45-67',
+  },
+  prose: {
+    text: 'Предложение, которое читает оператор: пояснение, пустое состояние, вопрос диалога',
+    sample: 'Пока ничего не найдено',
+  },
+  caption: {
+    text: 'Мелкая строка, которая уточняет контрол над собой: подсказка, единица, ошибка поля — когда берёт <code>text-danger</code>. Самая частая роль приложения',
+    sample: 'Не больше 30 символов',
+  },
+  meta: {
+    text: 'Самая мелкая строка: то, что датирует или считает строку рядом',
+    sample: '18:42 · 12 сообщений',
+  },
+  stat: {
+    text: 'Число, которое счётчик выносит на экран',
+    sample: '1 284',
+  },
+};
 
 const RUNG = {
   fontSize: {
@@ -316,6 +371,7 @@ const COUNT = [
   'девять',
   'десять',
   'одиннадцать',
+  'двенадцать',
 ];
 
 // Число ступеней тоже приходит из конфига: «четыре ступени» над таблицей из
@@ -385,6 +441,45 @@ function renderTypeScale(config, indent) {
       specRow(indent, `<code>${e.name}</code> · ${px(e.value)}`, RUNG.fontSize[e.name] ?? ''),
     )
     .join('\n');
+}
+
+// Роли рисуются из конфига целиком: размер берётся из ступени, которую роль называет,
+// цвет — из токена, а не из своего значения, поэтому подкрутка `ink-subtle` доезжает и
+// до образца на этой странице. Роль без русской подписи выводится с пустой ячейкой —
+// это и есть сигнал, что в конфиг добавили имя, которому ещё не назначили смысл.
+function renderTypeRoles(config, indent) {
+  const sizes = Object.fromEntries(config.fontSize.map((e) => [e.name, e.value]));
+  const prose = `${count(config.typeRole.length, 'ролей')}, и над <code>shared/ui</code> страница называет одну из них вместо того, чтобы заново выписывать ступень, начертание и серый. Заменяемая запись была не восемью ступенями, а девяноста шестью написаниями: 528 мест писали ступень рядом с начертанием и чернилами, и одна и та же задача выходила тремя способами сразу — подпись была <code>ink-subtle</code> 53 раза, <code>ink-muted</code> 13 и без цвета 9. Роль обязана называться одним предложением без слова «или» и быть надетой двумя компонентами в разных слоях; именно это удержало набор на двенадцати. Межстрочное в роль не входит — по той же причине, по которой его нет в ступени.`;
+  const rows = config.typeRole.map((entry) => {
+    const role = Object.fromEntries(entry.children.map((c) => [c.name, c.value]));
+    const note = TYPE_ROLE[entry.name] ?? { text: '', sample: '' };
+    const spec = [
+      `${px(sizes[role.size])} · ${role.weight} · ${role.ink}`,
+      role.tracking === undefined ? '' : ` · ${role.tracking}`,
+      role.caps === undefined ? '' : ' · заглавные',
+    ].join('');
+    const style = [
+      `font-size:${sizes[role.size]}`,
+      `font-weight:${role.weight}`,
+      `color:var(--${role.ink})`,
+      role.tracking === undefined ? '' : `;letter-spacing:${role.tracking}`,
+      role.caps === undefined ? '' : `;text-transform:${role.caps}`,
+    ]
+      .join(';')
+      .replace(/;;/g, ';')
+      .replace(/;$/, '');
+    return specRow(
+      `${indent}  `,
+      `<code>type-${entry.name}</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">${spec}</span>`,
+      `<span style="${style}">${note.sample}</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">${note.text}</span>`,
+    );
+  });
+  return [
+    `${indent}<p class="body">${prose}</p>`,
+    `${indent}<table class="spec">`,
+    ...rows,
+    `${indent}</table>`,
+  ].join('\n');
 }
 
 function renderSpacingScale(config, indent) {
@@ -575,6 +670,7 @@ const REGIONS = {
   'root-tokens': (config) => renderRootTokens(config),
   'color-swatches': (config) => renderColorSwatches(config, '      '),
   'type-scale': (config) => renderTypeScale(config, '          '),
+  'type-roles': (config) => renderTypeRoles(config, '      '),
   'radius-scale': (config) => renderRadiusScale(config, '        '),
   'spacing-scale': (config) => renderSpacingScale(config, '      '),
   'size-scale': (config) => renderSizeScale(config, '      '),

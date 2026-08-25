@@ -14,7 +14,7 @@ import { Button, Card, FieldError, FormField, HelpHint, Icon, Input, Switch } fr
 import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
 
-const FIELD_LABEL = 'mb-tight block text-body font-medium text-ink-body';
+const FIELD_LABEL = 'mb-tight block type-label';
 
 // The three real, engine-used warming toggles surfaced as the design's flag rows.
 const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
@@ -303,9 +303,7 @@ function SettingsForm({
               <form.Field name="delayFrom">
                 {(field) => (
                   <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-white px-md py-md">
-                    <span className="shrink-0 text-tiny text-ink-subtle">
-                      {t('settings.range.from')}
-                    </span>
+                    <span className="shrink-0 type-caption">{t('settings.range.from')}</span>
                     <input
                       inputMode="numeric"
                       value={field.state.value}
@@ -322,9 +320,7 @@ function SettingsForm({
               <form.Field name="delayTo">
                 {(field) => (
                   <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-white px-md py-md">
-                    <span className="shrink-0 text-tiny text-ink-subtle">
-                      {t('settings.range.to')}
-                    </span>
+                    <span className="shrink-0 type-caption">{t('settings.range.to')}</span>
                     <input
                       inputMode="numeric"
                       value={field.state.value}
@@ -369,10 +365,8 @@ function SettingsForm({
             className="flex items-center justify-between gap-md border-b border-line-row py-lg"
           >
             <div>
-              <div className="text-lead font-medium">{t(`settings.flag.${flag}.label`)}</div>
-              <div className="mt-px text-tiny text-ink-subtle">
-                {t(`settings.flag.${flag}.desc`)}
-              </div>
+              <div className="type-card-title">{t(`settings.flag.${flag}.label`)}</div>
+              <div className="mt-px type-caption">{t(`settings.flag.${flag}.desc`)}</div>
             </div>
             <Switch
               checked={toggles[flag]}
@@ -437,7 +431,7 @@ export function SettingsPage() {
   return (
     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this page's own settings column
     <div className="tb-fadeup max-w-[760px]">
-      <h1 className="m-0 mb-xl text-display font-bold tracking-[-0.02em]">{t('settings.title')}</h1>
+      <h1 className="m-0 mb-xl type-page-title">{t('settings.title')}</h1>
       {loading ? (
         <p className="text-ink-muted">{t('settings.loading')}</p>
       ) : failed ? (

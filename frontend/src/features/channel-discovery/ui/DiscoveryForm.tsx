@@ -19,13 +19,13 @@ import {
 
 // The project has no shared input primitive; this literal is the established
 // convention (duplicated in _styles.ts, ApiKeyField.tsx, SettingsPage.tsx).
-const LABEL = 'mb-tight block text-body font-medium text-ink-body';
+const LABEL = 'mb-tight block type-label';
 // A HelpHint must sit OUTSIDE the <label>, so the label text needs its own row and the
 // control needs an id: a label click activates its control, and on a phone tapping the
 // badge is the only way to open a hover tooltip — which silently joined the tooltip
 // prose to the field's accessible name.
 const LABEL_ROW = `${LABEL} flex items-center gap-sm`;
-const HINT = 'mt-tight block text-tiny text-ink-subtle';
+const HINT = 'mt-tight block type-caption';
 
 // Same contract as DiscoveryResults' reasonKey: the server sends short locale-neutral
 // codes, and an unmapped one falls back to the code itself so a value added later
@@ -139,7 +139,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         {/* Say why the button went dead rather than truncating a topic the operator
             wrote — a silent cut would ask the model about something else. */}
         {topicTooLong ? (
-          <p role="status" className="mt-tight text-tiny text-danger">
+          <p role="status" className="mt-tight type-caption text-danger">
             {t('neurocomment.modal.discovery.form.expandTooLong', { max: KEYWORD_MAX_LENGTH })}
           </p>
         ) : null}
@@ -147,7 +147,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         {/* A 200 carrying a code: nothing was expanded, and each code points at a
             different fix. Unmapped codes fall back to the raw code. */}
         {expand.data?.error != null ? (
-          <p role="status" className="mt-tight text-tiny text-danger">
+          <p role="status" className="mt-tight type-caption text-danger">
             {t(expandErrorKey(expand.data.error), { defaultValue: expand.data.error })}
           </p>
         ) : null}
@@ -155,7 +155,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         {/* The request itself never landed, so there is no code to translate — and the
             button silently re-enabling would read as "the model had nothing to say". */}
         {expand.isError ? (
-          <p role="status" className="mt-tight text-tiny text-danger">
+          <p role="status" className="mt-tight type-caption text-danger">
             {t('neurocomment.modal.discovery.form.expandFailed')}
           </p>
         ) : null}
@@ -197,7 +197,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
       {/* The API refuses members_min > members_max, and canSubmit blocks it — without
           this the Search button would just go dead naming no field. */}
       {inverted ? (
-        <p className="text-tiny text-danger">
+        <p className="type-caption text-danger">
           {t('neurocomment.modal.discovery.form.boundsInverted')}
         </p>
       ) : null}

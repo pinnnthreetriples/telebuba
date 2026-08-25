@@ -28,7 +28,7 @@ export function CheckRow({
       >
         {on && <Icon name="check" size={14} className="stroke-white" />}
       </span>
-      <span className="text-lead text-ink-body">{label}</span>
+      <span className="type-dialog-body text-ink-body">{label}</span>
     </button>
   );
 }
