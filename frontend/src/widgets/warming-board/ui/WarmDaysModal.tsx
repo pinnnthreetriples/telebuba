@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
@@ -34,6 +34,8 @@ export function WarmDaysModal({
   const [spam, setSpam] = useState<SpamState>('idle');
   const spamMutation = useMutation(spamCheckAccountMutation());
   const trackRef = useRef<HTMLDivElement>(null);
+  const spamTipId = useId();
+  const personaTipId = useId();
   const pct = ((days - MIN) / (MAX - MIN)) * 100;
 
   // Real @SpamBot probe against this account; the result is shown on the pill.
@@ -79,8 +81,11 @@ export function WarmDaysModal({
           </div>
           <div className="flex-1 type-dialog-title">{t('warming.days.title')}</div>
           <span className="tb-tip inline-flex shrink-0">
+            {/* Already a tab stop, so `:focus-within` reveals the bubble for free; the
+                `aria-describedby` is what names it. See app/styles/index.css. */}
             <button
               type="button"
+              aria-describedby={spamTipId}
               disabled={spam === 'loading'}
               onClick={runSpamCheck}
               className={`inline-flex items-center gap-sm rounded-full border bg-white px-md py-tight text-body font-medium disabled:opacity-60 ${
@@ -100,7 +105,9 @@ export function WarmDaysModal({
                     ? t('warming.days.spamLimited')
                     : t('warming.days.spamCheck')}
             </button>
-            <span className="tb-tip-pop">{t('warming.days.spamTip')}</span>
+            <span id={spamTipId} role="tooltip" className="tb-tip-pop">
+              {t('warming.days.spamTip')}
+            </span>
           </span>
         </div>
         <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
@@ -175,11 +182,14 @@ export function WarmDaysModal({
             <button
               type="button"
               aria-label={t('warming.persona.label')}
+              aria-describedby={personaTipId}
               className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
             >
               ?
             </button>
-            <span className="tb-tip-pop">{t('warming.persona.tip')}</span>
+            <span id={personaTipId} role="tooltip" className="tb-tip-pop">
+              {t('warming.persona.tip')}
+            </span>
           </span>
         </div>
         <SegmentedControl

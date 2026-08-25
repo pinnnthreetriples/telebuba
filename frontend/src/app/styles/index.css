@@ -196,13 +196,42 @@
 .tb-typing-dot {
   animation: dotspin 1.2s ease-in-out infinite;
 }
-/* Motion is decorative here; honour the user's reduced-motion preference for
-   the dialogue feed's enter animation, typing dots and the nav drawer's slide. */
+/* Every animation in this file and every transition below it is decorative — a pulse
+   that says a process is alive, a spinner, an enter, a state change — so under
+   `prefers-reduced-motion: reduce` they all stop. This used to name three classes, which
+   covered the dialogue feed and the nav drawer and left the rest running: fourteen
+   `animation:` declarations here (six of them INFINITE — `.tb-spin`, `.pl-pulse`,
+   `.tb-pulse`, `.tb-dotspin`, `.tb-livedot`, `.tb-loadlead`) plus eight
+   `[animation:…]` arbitrary utilities written inline in five components. A blanket rule
+   is what reaches all three spellings; naming classes could never have reached the
+   inline ones.
+
+   Near-zero durations and NOT `animation: none` / `transition: none`, because two
+   transitions carry LOGIC on their completion event and a removed transition fires no
+   event at all:
+     · `.tb-collapse` — CollapsibleCard keys `.tb-settled` off the open's `max-height`
+       transitionend and `hidden` off the close's `opacity` one. No event and every
+       collapsed card keeps its whole body in the tab order and the a11y tree.
+     · `.tb-subrow` — DataTable unmounts a closing sub-row on its `grid-template-rows`
+       transitionend. No event and the row stays collapsed-but-present.
+   Nothing in the app listens for `animationend` (there is no `onAnimationEnd` in `src/`
+   and no `[animation:…]` utility whose end is read), so the animation half only has to
+   stop moving — but it takes `animation-iteration-count` as well as a duration, since a
+   near-zero duration repeated forever is still a flicker.
+
+   `!important` on the universal selector so it beats the `transition` and `animation`
+   SHORTHANDS above and in the utilities: a media query adds no specificity, and a
+   shorthand declared later resets whatever longhand a plain override set. That is the
+   trap the old `.tb-subrow` exemption was written around; it is now this rule's job. */
 @media (prefers-reduced-motion: reduce) {
-  .tb-swapin,
-  .tb-typing-dot,
-  .tb-drawerin {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
   }
 }
 
@@ -233,7 +262,14 @@
   z-index: 20;
   box-shadow: theme('boxShadow.pop');
 }
-.tb-tip:hover .tb-tip-pop {
+/* `:focus-within` beside `:hover`, the same pair `HelpHint`'s light bubble already wears
+   as `group-hover:block group-focus-within:block`. Keeping two tooltip LOOKS is a
+   deliberate call in the canon — dark for a control's label, light for an explanation —
+   but a look is not a reason for one of them to open on a pointer only. Each of the six
+   wearers now has a focusable trigger and an `aria-describedby` pointing at its
+   `role="tooltip"` bubble, so this selector is what those triggers actually reveal. */
+.tb-tip:hover .tb-tip-pop,
+.tb-tip:focus-within .tb-tip-pop {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
@@ -350,16 +386,11 @@
 .tb-subrow.tb-closing {
   grid-template-rows: minmax(0, 0fr);
 }
-/* Declared AFTER the base rule, not up in the reduced-motion block near the other
-   three: same specificity, and a media query adds none, so the later `transition`
-   shorthand there would have reset this duration and the override was dead.
-   Near-zero duration and NOT `none`: removing the transition kills the transitionend
-   that unmounts a closing sub-row, leaving it collapsed-but-present in the a11y tree. */
-@media (prefers-reduced-motion: reduce) {
-  .tb-subrow {
-    transition-duration: 0.01ms;
-  }
-}
+/* The reduced-motion exemption this rule used to carry lives in the blanket rule above
+   now: `!important` wins over the shorthand here from anywhere in the file, which is what
+   forced the old override to sit down here in the first place. Its reason survives in
+   that comment — a near-zero duration and not `none`, so the transitionend below still
+   fires and a closing sub-row still unmounts. */
 .tb-subrow > * {
   min-height: 0;
   overflow: hidden;

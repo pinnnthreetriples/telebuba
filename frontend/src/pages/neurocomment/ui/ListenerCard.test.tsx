@@ -91,7 +91,7 @@ test('a closed listener dropdown takes no focus, an open one does', async () => 
   closed.focus();
   expect(closed).not.toHaveFocus();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Аккаунт-слушатель' }));
+  await userEvent.click(screen.getByRole('combobox', { name: 'Аккаунт-слушатель' }));
   const open = screen.getByRole('option', { name: 'Boris' });
   open.focus();
   expect(open).toHaveFocus();

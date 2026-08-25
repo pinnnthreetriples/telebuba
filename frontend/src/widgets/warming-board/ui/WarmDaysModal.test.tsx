@@ -72,6 +72,29 @@ test('cancel closes without confirming', async () => {
   expect(onConfirm).not.toHaveBeenCalled();
 });
 
+// Both of this dialog's tooltips hang off `.tb-tip`, which opens on `:hover` and
+// `:focus-within` (the stylesheet's half is asserted in src/app/styles/index.test.ts;
+// happy-dom applies no CSS, so the reveal cannot be seen from here). Both triggers were
+// already tab stops, so the missing piece was only the description: a `.tb-tip-pop` with
+// no `role` and nothing pointing at it is a sibling <span> of text as far as a screen
+// reader is concerned, revealed or not.
+test('both tooltips are named by the control they explain', () => {
+  renderWithClient(
+    <WarmDaysModal accountId="a1" phone="+79991234567" onClose={vi.fn()} onConfirm={vi.fn()} />,
+  );
+
+  for (const [trigger, text] of [
+    [screen.getByText('Спам-чек').closest('button'), /на @SpamBot/],
+    [screen.getByRole('button', { name: 'Тип пользователя' }), /Как часто аккаунт заходит/],
+  ] as const) {
+    trigger?.focus();
+    expect(trigger).toHaveFocus();
+    const tip = document.getElementById(trigger?.getAttribute('aria-describedby') ?? '');
+    expect(tip).toHaveAttribute('role', 'tooltip');
+    expect(tip).toHaveTextContent(text);
+  }
+});
+
 test('spam-check button runs the real @SpamBot probe and shows the verdict', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

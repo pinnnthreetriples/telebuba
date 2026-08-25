@@ -126,7 +126,7 @@ test('a closed dropdown takes no focus, an open one does', async () => {
 test('Escape closes the open dropdown without closing the modal', async () => {
   routeSettings();
   const { onClose } = renderModal();
-  const trigger = screen.getByRole('button', {
+  const trigger = screen.getByRole('combobox', {
     name: 'Аккаунт',
   });
 

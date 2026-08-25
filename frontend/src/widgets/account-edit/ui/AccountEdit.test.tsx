@@ -209,7 +209,7 @@ test('proxy: manual creates+assigns, pool select assigns', async () => {
   await userEvent.type(screen.getByLabelText('Порт'), '1080');
   await userEvent.type(screen.getByLabelText('Логин'), 'u');
   await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'p');
-  await userEvent.click(screen.getByRole('button', { name: 'Тип' }));
+  await userEvent.click(screen.getByRole('combobox', { name: 'Тип' }));
   await userEvent.click(screen.getByRole('option', { name: 'HTTPS' }));
   // Manual mode creates + assigns (it never was a "check"), and ACCOUNT already
   // has a proxy, so the replacement is confirmed first.
@@ -543,7 +543,7 @@ test('the pool select still lists the proxy this account already holds at capaci
 
   expect(await screen.findByRole('option', { name: '7.7.7.7:1080' })).toBeInTheDocument();
   // The trigger names the assigned proxy rather than falling back to «Выберите из пула».
-  expect(screen.getByRole('button', { name: 'Прокси-пул' })).toHaveTextContent('7.7.7.7:1080');
+  expect(screen.getByRole('combobox', { name: 'Прокси-пул' })).toHaveTextContent('7.7.7.7:1080');
 });
 
 test('a proxyless account shows the unassigned state and no detach control', () => {

@@ -35,6 +35,18 @@ export function Select({
   // whole time — the list is `inert` while closed, and moving real focus into it would
   // fight both that and the Modal Tab trap — so the cursor is published as
   // `aria-activedescendant` instead, pointing at the option ids minted below.
+  //
+  // That attribute only means something if the reference RESOLVES, and ARIA resolves it
+  // in one of three places: a DOM descendant of the referring element, an `aria-owns`
+  // logical descendant, or inside the element `aria-controls` names. The trigger is a
+  // sibling of the list, so none of the three applied and the cursor pointed at nothing
+  // — arrowing an open list announced the list once and then went silent. `listId` now
+  // sits on the listbox itself and the trigger `aria-controls` it, which supplies the
+  // third. `role="combobox"` is the other half: `aria-activedescendant` is only
+  // supported on composite roles, and a `button` is not one of them, so the attribute
+  // was being dropped for the role as well as for the dangling id. This is the APG
+  // select-only combobox shape, and it costs the native button nothing — Enter and
+  // Space still activate it, because a role never changes behaviour.
   const [active, setActive] = useState(-1);
   const rootRef = useRef<HTMLDivElement>(null);
   const listId = useId();
@@ -72,6 +84,17 @@ export function Select({
       document.removeEventListener('mousedown', onDown);
     };
   }, [open]);
+
+  // `.tb-dd.open` is a 240px scroller and these lists run to 20 rows, so past the sixth
+  // option the cursor is a highlight on a row nobody can see — and because DOM focus
+  // never enters the list, the browser's own scroll-focus-into-view never fires either.
+  // `block: 'nearest'` scrolls the minimum and does nothing while the row is already in
+  // view, and there is no `behavior: 'smooth'` here, so this adds no motion to exempt
+  // under `prefers-reduced-motion`.
+  useEffect(() => {
+    if (!open || active < 0) return;
+    document.getElementById(`${listId}-${String(active)}`)?.scrollIntoView({ block: 'nearest' });
+  }, [open, active, listId]);
 
   return (
     <div
@@ -113,7 +136,9 @@ export function Select({
     >
       <button
         type="button"
+        role="combobox"
         aria-haspopup="listbox"
+        aria-controls={listId}
         aria-expanded={open}
         aria-activedescendant={open && active >= 0 ? optionId(active) : undefined}
         aria-label={ariaLabel}
@@ -132,6 +157,7 @@ export function Select({
         </span>
       </button>
       <div
+        id={listId}
         role="listbox"
         // .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so every option
         // below stays rendered and focusable while the list is closed — a keyboard
@@ -151,6 +177,13 @@ export function Select({
               type="button"
               role="option"
               aria-selected={option.value === value}
+              // `inert` keeps a keyboard operator out of the CLOSED list, and comes off
+              // the moment it opens — so without this an open twenty-row list put twenty
+              // tab stops between the trigger and the next control, in a list whose whole
+              // keyboard contract is that DOM focus never leaves the trigger. A row is
+              // reached with the arrows and committed with Enter; Tab belongs to the
+              // trigger in both states.
+              tabIndex={-1}
               disabled={option.disabled}
               onClick={() => {
                 onChange(option.value);

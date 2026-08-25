@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
@@ -165,6 +165,11 @@ function WarmingCard({
   const [open, setOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
+  // One card per account, so the two tooltip ids have to be per-INSTANCE: a literal
+  // would collide across the board's rows and `aria-describedby` would resolve every
+  // card's badge to the first card's bubble.
+  const actionsTipId = useId();
+  const cycleTipId = useId();
   // Real per-account activity log, fetched only while the terminal is expanded.
   // `warming_` alone now covers the engine's own gateway calls too: the gateway
   // stamps the calling domain onto its event names, so warming's actions arrive as
@@ -258,11 +263,20 @@ function WarmingCard({
                 <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
               </span>
+              {/* The app's only two `.tb-tip` triggers that are plain <span>s — the
+                  counter here and the "?" below. See `.tb-tip-pop` in
+                  app/styles/index.css for what `tabIndex` buys them. */}
               <span className="tb-tip inline-flex items-center">
-                <span className="cursor-help text-micro font-medium text-ink-subtle">
+                <span
+                  tabIndex={0}
+                  aria-describedby={actionsTipId}
+                  className="cursor-help text-micro font-medium text-ink-subtle"
+                >
                   {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
-                <span className="tb-tip-pop tb-tip-pop--wide">{t('warming.card.actionsTip')}</span>
+                <span id={actionsTipId} role="tooltip" className="tb-tip-pop tb-tip-pop--wide">
+                  {t('warming.card.actionsTip')}
+                </span>
               </span>
             </div>
           </div>
@@ -271,10 +285,14 @@ function WarmingCard({
             the actions instead, and the "Стоп" button loses its label. */}
         <div className="flex shrink-0 items-center gap-sm">
           <span className="tb-tip inline-flex">
-            <span className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-primary-line bg-white text-tiny font-bold text-ink-subtle">
+            <span
+              tabIndex={0}
+              aria-describedby={cycleTipId}
+              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-primary-line bg-white text-tiny font-bold text-ink-subtle"
+            >
               ?
             </span>
-            <span className="tb-tip-pop">
+            <span id={cycleTipId} role="tooltip" className="tb-tip-pop">
               {t('warming.card.cycleTip', { count: account.cycles_completed ?? 0 })}
               <br />
               <span className={account.dm_allowed ? 'text-term-success' : 'text-term-error'}>

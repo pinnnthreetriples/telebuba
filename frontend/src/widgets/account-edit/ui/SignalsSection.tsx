@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button, Icon } from '@/shared/ui';
@@ -23,6 +23,7 @@ const SPAM_DOT: Record<NonNullable<AccountRead['spam_status']>, string> = {
 export function SignalsSection({ account }: { account: AccountRead }) {
   const { t } = useTranslation();
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
+  const tipId = useId();
   const queryClient = useQueryClient();
   const later = useClearedTimeouts();
   const spamMutation = useMutation(spamCheckAccountMutation());
@@ -78,6 +79,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
         <span className="tb-tip">
           <Button
             size="xs"
+            aria-describedby={tipId}
             onClick={runSpamCheck}
             className={`gap-sm rounded-full ${
               spamCheck === 'ok'
@@ -100,7 +102,9 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             )}
             {t('accounts.edit.signalsCheck')}
           </Button>
-          <span className="tb-tip-pop">{t('accounts.edit.signalsTip')}</span>
+          <span id={tipId} role="tooltip" className="tb-tip-pop">
+            {t('accounts.edit.signalsTip')}
+          </span>
         </span>
       }
     >
