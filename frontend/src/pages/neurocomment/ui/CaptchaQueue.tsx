@@ -45,7 +45,10 @@ export function CaptchaQueue({
       },
       {
         id: 'status',
-        header: '',
+        // Untitled on screen, but not to a screen reader: the <th> is announced
+        // before every cell under it, and an empty one is announced as blank. The
+        // column already has a name in the table this one mirrors, so it reuses it.
+        header: () => <span className="sr-only">{t('neurocomment.board.col.status')}</span>,
         // "within five minutes" is the sweep interval, which is the honest ceiling: the
         // retry fires on the first tick after the failure, so it lands anywhere from
         // seconds to that. A countdown would have to promise an exact moment the rule

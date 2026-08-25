@@ -40,7 +40,11 @@ const COLUMNS: ColumnDef<Item>[] = [
   },
   {
     id: 'expander',
-    header: '',
+    // A column with nothing to show in its header still needs a name: the <th> is
+    // read out before every cell under it, and an empty one is announced as blank.
+    // sr-only, so the column stays visually untitled — the same trick AppNav uses
+    // for the connection status text.
+    header: () => <span className="sr-only">Подробности</span>,
     cell: ({ row }) => (
       <button
         type="button"
