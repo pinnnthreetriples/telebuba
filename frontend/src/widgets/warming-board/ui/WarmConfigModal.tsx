@@ -10,7 +10,7 @@ import {
 import type { WarmingSettings } from '@/shared/api';
 import { mutationErrorText } from '@/shared/lib';
 
-import { Button, Icon, Modal, Switch } from '@/shared/ui';
+import { Button, Icon, Modal, SegmentedControl, Switch } from '@/shared/ui';
 
 // The three behaviour toggles + the readiness gate map 1:1 onto the real,
 // GLOBAL warming settings row (WarmingSettingsUpdate has no account_id). Quiet
@@ -221,27 +221,21 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
       </div>
 
       <div className="border-t border-line-row px-2xl pb-xl pt-lg">
-        <div className="mb-lg flex gap-sm rounded-lg bg-line-row p-xs">
-          <button
-            type="button"
-            title={t('warming.cfg.scopeOneNote')}
-            onClick={() => {
-              setScope('one');
-            }}
-            className={`flex-1 rounded-md py-sm text-body font-medium transition-colors ${scope === 'one' ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`}
-          >
-            {t('warming.cfg.scopeOne')}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setScope('all');
-            }}
-            className={`flex-1 rounded-md py-sm text-body font-medium transition-colors ${scope === 'all' ? 'bg-white text-ink shadow-seg' : 'text-ink-muted'}`}
-          >
-            {t('warming.cfg.scopeAll')}
-          </button>
-        </div>
+        <SegmentedControl
+          className="mb-lg"
+          value={scope}
+          options={[
+            {
+              value: 'one',
+              label: t('warming.cfg.scopeOne'),
+              title: t('warming.cfg.scopeOneNote'),
+            },
+            { value: 'all', label: t('warming.cfg.scopeAll') },
+          ]}
+          onChange={(next) => {
+            setScope(next);
+          }}
+        />
         {scope === 'one' ? (
           <div className="mb-md type-caption leading-[1.45] text-warning-deep">
             {t('warming.cfg.scopeOneNote')}

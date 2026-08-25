@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Button, CollapsibleCard, HelpHint, Input, Switch, Textarea } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CollapsibleCard,
+  HelpHint,
+  Input,
+  SegmentedControl,
+  Switch,
+  Textarea,
+} from '@/shared/ui';
 
 import type { SetupDraft } from './setupDraft';
 import {
@@ -15,10 +24,6 @@ import {
   MAX_TARGETS_RAW,
   MAX_TOTAL_PER_ACCOUNT,
 } from './setupDraft';
-
-// The filter-pill rung (`6px 14px`), shared with the logs level filter and the
-// warming board's state filter — the same control in a different card.
-const SEGMENT = 'rounded-full px-lg py-tight text-body font-medium disabled:opacity-60';
 
 // One labelled numeric box. Inline rather than a shared primitive: five of them
 // live on this card and nowhere else, and `shared/ui` has no numeric field.
@@ -143,6 +148,10 @@ export function CampaignSetupCard({
       />
 
       <span className="mb-tight block type-label">{t('neuroshilling.setup.runMode.label')}</span>
+      {/* Hand-written rather than `SegmentedControl`, on both of that component's own
+          rules: this is a two-up grid of description cards, a shape with exactly one
+          wearer in the app, and its second option is disabled on its own while the
+          first stays live — which a group-wide `disabled` cannot say. */}
       <div
         role="radiogroup"
         aria-label={t('neuroshilling.setup.runMode.label')}
@@ -326,31 +335,23 @@ export function CampaignSetupCard({
               <span className="min-w-0 flex-1 text-body">
                 {t(`neuroshilling.setup.${field}.label`)}
               </span>
-              <div
-                role="radiogroup"
-                aria-label={t(`neuroshilling.setup.${field}.label`)}
-                className="inline-flex rounded-full border border-line bg-canvas p-xs"
-              >
-                {options.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    role="radio"
-                    aria-checked={current === option}
-                    disabled={live}
-                    onClick={() => {
-                      onDraft(
-                        field === 'autoresponder'
-                          ? { ...draft, autoresponder: option as SetupDraft['autoresponder'] }
-                          : { ...draft, replyActivity: option as SetupDraft['replyActivity'] },
-                      );
-                    }}
-                    className={`${SEGMENT} ${current === option ? 'bg-white text-ink' : 'text-ink-subtle'}`}
-                  >
-                    {t(`neuroshilling.setup.${field}.${option}`)}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl
+                variant="pill"
+                value={current}
+                disabled={live}
+                ariaLabel={t(`neuroshilling.setup.${field}.label`)}
+                options={options.map((option) => ({
+                  value: option,
+                  label: t(`neuroshilling.setup.${field}.${option}`),
+                }))}
+                onChange={(option) => {
+                  onDraft(
+                    field === 'autoresponder'
+                      ? { ...draft, autoresponder: option as SetupDraft['autoresponder'] }
+                      : { ...draft, replyActivity: option as SetupDraft['replyActivity'] },
+                  );
+                }}
+              />
             </div>
           ))}
 

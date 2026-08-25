@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { setAccountTwofaMutation } from '@/entities/account';
 import type { AccountTwoFactorCreated, AccountTwoFactorUpdateRequest } from '@/shared/api';
-import { Button, FormField, Icon, Input } from '@/shared/ui';
+import { Button, FormField, Icon, Input, SegmentedControl } from '@/shared/ui';
 
 import {
   EMPTY_TWOFA_FORM,
@@ -14,7 +14,6 @@ import {
   type TwofaFormValue,
 } from './twofaFormValue';
 import { Spinner } from './_shared';
-import { SEG_WRAP, seg } from './_styles';
 
 // Only the fields the operator actually filled in are sent: a bare `{}` is the
 // documented "generate one for me", and the backend forbids unknown keys, so
@@ -79,26 +78,24 @@ export function TwoFactorForm({
   return (
     <>
       <div className="mb-md type-prose">{t('accounts.edit.twofaExplain')}</div>
-      <div className={SEG_WRAP}>
-        {(['generate', 'custom'] as const).map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => {
-              twofaForm.setFieldValue('mode', option);
-              // Switching back to "generate" drops the typed password: it is no
-              // longer sent, and leaving it behind would keep the hint-leak
-              // check firing against a field nobody can see.
-              if (option === 'generate') twofaForm.setFieldValue('password', '');
-            }}
-            className={seg(mode === option)}
-          >
-            {option === 'generate'
+      <SegmentedControl
+        className="mb-md"
+        value={mode}
+        options={(['generate', 'custom'] as const).map((option) => ({
+          value: option,
+          label:
+            option === 'generate'
               ? t('accounts.edit.twofaGenerate')
-              : t('accounts.edit.twofaCustom')}
-          </button>
-        ))}
-      </div>
+              : t('accounts.edit.twofaCustom'),
+        }))}
+        onChange={(option) => {
+          twofaForm.setFieldValue('mode', option);
+          // Switching back to "generate" drops the typed password: it is no
+          // longer sent, and leaving it behind would keep the hint-leak
+          // check firing against a field nobody can see.
+          if (option === 'generate') twofaForm.setFieldValue('password', '');
+        }}
+      />
       {mode === 'custom' ? (
         <div className="mb-md">
           <twofaForm.Field name="password">

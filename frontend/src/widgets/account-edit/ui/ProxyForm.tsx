@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Badge, Button, FormField, Icon, Input } from '@/shared/ui';
+import { Badge, Button, FormField, Icon, Input, SegmentedControl } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
-import { seg } from './_styles';
 
 // Shared proxy-form fields (host / port / type / login / password+eye + a real
 // connectivity probe), now on @tanstack/react-form + zod. The form owns field
@@ -148,20 +147,17 @@ export function ProxyForm({
         <span className={LABEL}>{t('accounts.proxyForm.type')}</span>
         <form.Field name="proxy_type">
           {(field) => (
-            <div className="flex gap-tight rounded-lg bg-canvas p-xs">
-              {(['socks5', 'https'] as const).map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => {
-                    field.handleChange(option);
-                  }}
-                  className={seg(field.state.value === option)}
-                >
-                  {option.toUpperCase()}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              value={field.state.value}
+              ariaLabel={t('accounts.proxyForm.type')}
+              options={(['socks5', 'https'] as const).map((option) => ({
+                value: option,
+                label: option.toUpperCase(),
+              }))}
+              onChange={(option) => {
+                field.handleChange(option);
+              }}
+            />
           )}
         </form.Field>
       </div>

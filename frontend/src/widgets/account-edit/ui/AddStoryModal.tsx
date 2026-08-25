@@ -3,11 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
-import { Button, Icon, IconButton, Input, Modal } from '@/shared/ui';
+import { Button, Icon, IconButton, Input, Modal, SegmentedControl } from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
-import { seg } from './_styles';
 import {
   type CollageCell,
   MAX_COLLAGE_IMAGES,
@@ -274,20 +273,18 @@ export function AddStoryModal({
         </div>
 
         <div className="mb-tight type-label">{t('accounts.addStory.audience')}</div>
-        <div className="mb-lg flex gap-tight rounded-lg bg-canvas p-xs">
-          {(['contacts', 'closeFriends', 'public'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                setAudience(value);
-              }}
-              className={seg(audience === value)}
-            >
-              {t(`accounts.addStory.${value}`)}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          className="mb-lg"
+          value={audience}
+          ariaLabel={t('accounts.addStory.audience')}
+          options={(['contacts', 'closeFriends', 'public'] as const).map((value) => ({
+            value,
+            label: t(`accounts.addStory.${value}`),
+          }))}
+          onChange={(value) => {
+            setAudience(value);
+          }}
+        />
 
         <label className="mb-lg block">
           <span className="mb-tight block type-label">{t('accounts.addStory.caption')}</span>

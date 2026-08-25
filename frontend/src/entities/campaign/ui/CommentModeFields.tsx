@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { HintBubble } from '@/shared/ui';
+import { HintBubble, SegmentedControl } from '@/shared/ui';
 
 // Fleet-wide choice of WHICH message the fleet answers: the post itself, or a human's
 // comment under it — plus how long the reply mode holds a post open waiting for that
@@ -46,45 +46,40 @@ export function CommentModeFields({
 
   return (
     <div className="mt-xl">
-      <div role="group" aria-label={t('neurocomment.mode.label')}>
-        <div className="mb-sm type-label">{t('neurocomment.mode.label')}</div>
-        <div className="flex gap-tight">
-          {MODES.map((option) => (
-            // `group relative` is what anchors the bubble; the wrapper carries the `flex-1`
-            // the button used to, so the two options still split the row evenly. The hint
-            // hangs off the BUTTON rather than a "?" badge beside it — the badge is
-            // focusable, and nesting it inside a <button> would be invalid markup.
-            <span key={option} className="group relative flex-1">
-              <button
-                type="button"
-                // The aria-pressed idiom PrivacyLevelRow documents: two honest toggles, not a
-                // radiogroup whose arrow-key navigation the app does not implement.
-                aria-pressed={mode === option}
-                // Nothing to pick until the stored settings land: the save needs them to
-                // build the PUT body, so a draft made before that could not be honoured.
-                disabled={disabled}
-                onClick={() => {
-                  onModeChange(option);
-                }}
-                // `title` is the native fallback the styled bubble does not replace: it is
-                // what a touch device and a screen reader get, since neither hovers.
-                title={`${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`}
-                className={`w-full rounded-md border px-md py-tight text-body font-medium transition-colors disabled:opacity-60 ${
-                  mode === option
-                    ? 'border-primary bg-primary-tint text-primary-deep'
-                    : 'border-line bg-white text-ink-muted hover:border-line-strong hover:bg-surface'
-                }`}
-              >
-                {t(`neurocomment.mode.${option}.label`)}
-              </button>
+      <div className="mb-sm type-label">{t('neurocomment.mode.label')}</div>
+      <SegmentedControl
+        variant="outline"
+        value={mode}
+        ariaLabel={t('neurocomment.mode.label')}
+        // Nothing to pick until the stored settings land: the save needs them to
+        // build the PUT body, so a draft made before that could not be honoured.
+        disabled={disabled}
+        options={MODES.map((option) => ({
+          value: option,
+          // The hint hangs off the segment itself rather than a "?" badge beside it —
+          // the badge is focusable, and nesting it inside a <button> would be invalid
+          // markup. The bubble is not: it anchors on the segment's own `group relative`.
+          label: (
+            <>
+              {t(`neurocomment.mode.${option}.label`)}
               <HintBubble
                 text={t(`neurocomment.mode.${option}.hint`)}
                 example={t(`neurocomment.mode.${option}.example`)}
               />
-            </span>
-          ))}
-        </div>
-      </div>
+            </>
+          ),
+          // `title` is the native fallback the styled bubble does not replace: it is
+          // what a touch device and a screen reader get, since neither hovers.
+          title: `${t(`neurocomment.mode.${option}.hint`)}\n${t(`neurocomment.mode.${option}.example`)}`,
+          // The bubble now lives INSIDE the option, so without this the option's
+          // accessible name would be its label with the whole hint and example read
+          // out after it. The name is the label; the hint stays the description.
+          ariaLabel: t(`neurocomment.mode.${option}.label`),
+        }))}
+        onChange={(option) => {
+          onModeChange(option);
+        }}
+      />
 
       {/* Only in reply mode, because that is the only mode the wait exists in: shown beside
           "пишем первыми" it would be a number the operator turns to no effect. */}
