@@ -176,7 +176,7 @@ export function LogsPage() {
         <SegmentedControl
           variant="pill"
           value={status}
-          ariaLabel={t('logs.col.status')}
+          ariaLabel={t('logs.filter.status')}
           options={STATUS_FILTERS.map((value) => ({
             value,
             label: t(`logs.filter.${value}`),
