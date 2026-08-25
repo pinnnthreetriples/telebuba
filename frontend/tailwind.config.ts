@@ -224,6 +224,29 @@ export default {
     // included; `roll` is the odometer counting. A gesture that spans two elements must
     // spend ONE rung on both halves — the dropdown's panel and its chevron used to run
     // 420ms against 400ms, which is a 20ms stagger nobody chose.
+    //
+    // These rungs reach the TRANSITIONS and nothing else. The app's animations are still
+    // untokenised on both sides: index.css spends fourteen raw durations on its
+    // `animation:` shorthands, and eight `[animation:…]` arbitrary utilities in five
+    // components spend four more (0.2s, 0.25s, 0.3s and a 0.09s stagger) plus the bare
+    // keyword `ease`. The lint rule bans `duration-[` and reaches none of it, which is
+    // measured and left open rather than missed: this note is what was chosen over
+    // closing it, so the next reader does not have to redo the sums.
+    //
+    // The eight inline ones are four gestures with two wearers each — an overlay fading
+    // in (Modal, ProfileModal's syncing wash), a card arriving (Modal, Toaster), and the
+    // two halves of a saved-state swap (CampaignPromptModal, ListenerEditModal) — and two
+    // of the four already have a named class in index.css sitting 20ms away: `.tb-swapin`
+    // at 0.32s against their 0.3s, `.tb-fadeup` at 0.4s against their 0.25s. Naming the
+    // other two is cheap. Consolidating `fadeup` is not, and it is the whole cost: 0.25s
+    // is `enter`, which this table defines as "something arriving (a toast, an opacity
+    // fade-in)" and which therefore already agrees with the toast, while 0.4s is fifteen
+    // page sections and cards, a rung nearer `reveal`. One keyframe, two rungs, two
+    // readings — either fifteen elements get retimed to make one name true, or the canon
+    // carries a second name for one gesture. That is a decision about how the product
+    // should feel, not a sweep, and it is worth less than it costs today: the blanket
+    // `prefers-reduced-motion` rule at the bottom of index.css already reaches every one
+    // of these, so what is open here is tidiness, not behaviour.
     transitionDuration: {
       // `transitionDuration` and `transitionTimingFunction` sit at theme root, which
       // REPLACES Tailwind's scales — including their `DEFAULT` keys, which is not a
@@ -246,10 +269,22 @@ export default {
     // which was used, and `out` deliberately takes the name `ease-out` so that the one
     // "settle" curve in the app is the one a component reaches for. `out` decelerates
     // hard and stops (a rail filling, a number rolling); `spring` overshoots slightly
-    // and settles back (a panel opening, a chevron flipping). The CSS side carried a
-    // third curve, `cubic-bezier(.34,1.4,.6,1)`, 0.05 of overshoot away from `spring`
-    // and used on the very panel whose chevron used `spring` — that is drift, not a
-    // third intention, so it is gone.
+    // and settles back (a panel opening, a chevron flipping).
+    //
+    // Three strays came home, not one, and the note that used to sit here claimed the
+    // job was finished when it had covered a third of it. `cubic-bezier(.34,1.4,.6,1)`
+    // was 0.05 of overshoot from `spring`, on the very panel whose chevron used
+    // `spring`; that one went when the TRANSITION declarations in index.css were
+    // tokenised. The file's `animation:` shorthands were never touched by that sweep and
+    // kept two more: `.tb-blur` at `(.34,1.56,.64,1)` — the same overshoot-and-settle,
+    // 9.78% past the target where `spring` goes 6.60%, which on a 52px avatar's
+    // 0.78→1 scale is 1.1px of bounce against 0.75px — and `.tb-drawerin` at
+    // `(.22,1,.36,1)`, a decelerate-and-stop with no overshoot at all, 9.6% of the
+    // travel behind `out` at its widest and inside 1% of it by the halfway point.
+    // Neither difference is a third intention; both are the same two gestures written
+    // from memory, so both now name the rung they always meant. The claim and the
+    // stylesheet agree again, and `index.test.ts` asserts a literal curve cannot come
+    // back into that file.
     transitionTimingFunction: {
       // See the note on `transitionDuration.DEFAULT`: without this key every
       // `transition-*` utility loses its easing as well as its duration.
@@ -497,10 +532,49 @@ export default {
         // reads as a different colour at all, and no filled thing in the app ever lies
         // straight on the page for the difference to have to carry.
         canvas: '#f1efed',
-        // The wash over an image that a control has to stay legible on — a photo tile's
-        // remove button. Dark ink at 55%, not a flat grey: what is behind it is a
-        // photograph, and a solid fill would read as a hole punched in it.
+        // The wash over an image that a control has to stay legible on — PhotoTab's
+        // remove button over a profile photo. Dark ink at 55%, not a flat grey: what is
+        // behind it is a photograph, and a solid fill would read as a hole punched in it.
+        //
+        // AddStoryModal's story preview does the same job with `bg-black/55` and is NOT
+        // this token, which is a measured decision and not an omission. The two washes
+        // differ by 11 units of warmth, 6 once 55% of them lands, invisible over any
+        // photograph — but the worst case a photograph offers is a blown-out white
+        // region, and there `bg-black/55` composites to #737373 and this to #797979,
+        // which puts the white index numeral on the preview at 4.74:1 against 4.35:1.
+        // Unifying the spelling would spend 0.39 of contrast to tidy a colour nobody can
+        // see, and would push a numeral under the floor to do it. What that measurement
+        // actually says is that 55% is marginal for white text at ALL — PhotoTab's own
+        // control sits at the same 4.35:1 — so the open question is whether this rung
+        // should be darker, which is a change to what the app looks like and belongs to
+        // whoever owns that, not to a sweep.
         scrim: 'rgba(11,11,12,0.55)',
+        // The other dark wash, and the pair is the point: `scrim` sits over ONE
+        // photograph so a white control on top of it clears 4.5:1, `veil` sits over the
+        // whole page so the page recedes behind the dialog that took it. Nothing is
+        // painted on `veil` — the dialog card is opaque white on top of it — so it is
+        // dimming, not contrast, and 40% is where the page reads as put away rather
+        // than as removed.
+        //
+        // One wearer, which the canon otherwise treats as a literal with a name. It
+        // earns the name the way `minWidth.table` does: what it replaces is worse than a
+        // literal. `Modal` took an unbounded `backdrop?: number` and wrote
+        // `rgba(11,11,12,${backdrop})` into the app's only inline style-object colour,
+        // so every dialog in the app carried a continuous dimming knob no gate could
+        // read. Four call sites had turned it to 0.45 — AddStoryModal, which is where
+        // the design source's single 0.45 landed, plus ChannelCreateModal,
+        // ChannelEditModal and NavDrawer, each of which copied AddStoryModal's whole
+        // `<Modal>` line including its `z={75}` and its `w-[460px]`. That is one value
+        // propagated by copy, not four dialogs asking for more dark; the twenty-two
+        // others, ProfileModal and its photographs included, were already on 0.40. The
+        // knob is gone with the prop.
+        veil: 'rgba(11,11,12,0.40)',
+        // The one step off white: a row under the pointer (`.tb-row:hover`), and the fill
+        // of a box that invites something into it rather than holding something already
+        // there — SessionSection's dashed import drop zone. That drop zone said
+        // `bg-canvas/40`, which over the white card it sits on composites to #f9f9f8:
+        // one unit from this, and a translucent restatement of a token that is already
+        // "canvas, weakened" by definition.
         surface: '#faf9f7',
         // `muted` and `subtle` are the two greys small text is written in, so both sit
         // at the AA floor rather than where they looked best: `muted` cleared only
@@ -517,10 +591,21 @@ export default {
         primary: {
           DEFAULT: '#0066ff',
           press: '#0057db',
-          // Also the hover fill. `wash` was a second pale blue four units lighter, which
-          // is a difference a flat area cannot show; the one place the two ever met is
-          // WarmingBoard's pipeline panel inside its tinted card, where four units never
-          // bought a visible edge in the first place.
+          // Also the hover fill, and the fill of the SELECTED one in a set of cards or
+          // tiles under a `border-primary`. `wash` was a second pale blue four units
+          // lighter, which is a difference a flat area cannot show; the one place the two
+          // ever met is WarmingBoard's pipeline panel inside its tinted card, where four
+          // units never bought a visible edge in the first place.
+          //
+          // The selected-card job used to be spelled as an alpha instead — `bg-primary/…`
+          // at 0.06 three times, 0.08 once and 5 once, five tiles doing one job across
+          // four slices. Composited on the white they all sit on those are #f0f6ff,
+          // #ebf3ff and #f2f7ff: within four units of this rung, the same margin the
+          // paragraph above rejects a whole token for. They are this colour, written from
+          // memory five times, and the spread between the first two is the same 0.02 of
+          // nothing that the `wash` merge was about. Being opaque also fixes what
+          // SurfHover had to work around — a 6% fill let the action buttons parked under
+          // a campaign card show through it.
           tint: '#eef4ff',
           line: '#cbd7ec',
           // Not `line` a notch lighter by accident: this is a border faint enough to
@@ -532,6 +617,15 @@ export default {
           // The blue that small text on `tint` is written in. DEFAULT measures
           // 4.38:1 there — under the 4.5:1 floor by a margin nobody can see and every
           // contrast checker reports. Same role `success.deep` and `warning.deep` play.
+          //
+          // It is also the ONLY blue that reads on `tint`, which is what settled
+          // WarmingBoard's pause countdown. That countdown sits inside the tinted
+          // activity strip beside a `text-primary-deep` label and was written
+          // `text-primary/70` to sit behind it — 11px mono at 2.81:1, the worst pairing
+          // in the app and invisible to `contrast.test.ts`, whose ink pattern stops at
+          // the `/`. Nothing in the ramp both recedes and reads, so the countdown takes
+          // this rung (6.18:1) and recedes by being mono and regular next to a
+          // semibold label instead.
           deep: '#0052cc',
         },
         // `deep` and `press` mirror the amber and blue rungs: `deep` is the darkest green,

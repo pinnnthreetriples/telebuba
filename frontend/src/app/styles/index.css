@@ -155,8 +155,13 @@
     width: 92%;
   }
 }
+/* `spring` and not the `(.34,1.56,.64,1)` this used to carry: the same overshoot-and-
+   settle, written 0.11 of overshoot away from the token — 1.1px of bounce against
+   0.75px on a 52px avatar. The config's two curves are the app's two intentions, and
+   the sweep that tokenised the `transition:` declarations in this file never reached
+   the `animation:` shorthands. */
 .tb-blur {
-  animation: blurswap 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: blurswap 0.34s theme('transitionTimingFunction.spring') both;
 }
 .tb-spin {
   animation: spin 0.7s linear infinite;
@@ -188,8 +193,12 @@
 .tb-upbar {
   animation: upbar 1.7s ease-out forwards;
 }
+/* `out`, the app's decelerate-and-stop, and not the `(.22,1,.36,1)` this used to
+   carry: neither curve overshoots, they part by 9.6% of the travel at their widest
+   (29px of a 300px drawer, 29ms in) and agree to within 1% from the halfway point on.
+   A drawer arriving is the same gesture as a rail filling. */
 .tb-drawerin {
-  animation: drawerin 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: drawerin 0.24s theme('transitionTimingFunction.out');
 }
 /* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
    opacity keyframe, staggered so the wave reads as ongoing chatter. */

@@ -160,7 +160,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`size-icon rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary/[0.08]' : 'border-line bg-white'}`}
+              className={`size-icon rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
             >
               {emoji}
             </button>

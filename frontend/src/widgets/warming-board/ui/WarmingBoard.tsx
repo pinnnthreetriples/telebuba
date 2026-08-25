@@ -138,7 +138,7 @@ function PauseCountdown({ nextRunAt }: { nextRunAt: string }) {
   const pad = (n: number) => String(n).padStart(2, '0');
   const time = h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
   return (
-    <span className="ml-auto shrink-0 font-mono text-tiny tabular-nums text-primary/70">
+    <span className="ml-auto shrink-0 font-mono text-tiny tabular-nums text-primary-deep">
       {t('warming.card.pauseCountdown', { time })}
     </span>
   );

@@ -50,9 +50,18 @@ const SHELL = {
 
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
 // card (fadeup). Backdrop-click and Escape close; the card stops propagation.
-// Backdrop opacity matches the design's per-modal values. Focus moves into
-// the dialog on open, Tab cycles inside it, and the previously-focused element
-// gets focus back on close.
+// Focus moves into the dialog on open, Tab cycles inside it, and the
+// previously-focused element gets focus back on close.
+//
+// The backdrop is `bg-veil`, one colour for every dialog. It used to be an unbounded
+// `backdrop?: number` composed into `rgba(11,11,12,${backdrop})` — the app's only
+// inline style-object colour, and a continuous knob where the design has one value.
+// Four of the twenty-two call sites had it at 0.45: AddStoryModal, which is where the
+// design source's single 0.45 landed, and three that copied AddStoryModal's whole
+// `<Modal>` line — its `z={75}` and its `w-[460px]` came along with it. Nothing about
+// those four asks for more dark than the rest (ProfileModal, the one full of
+// photographs, was on the default), so the second value went rather than acquiring a
+// name it could not defend.
 //
 // Every dialog sits on the same `z-dialog` rung of the config's five-layer
 // ladder. There is no per-modal z any more: the six hand-picked values it used to
@@ -67,7 +76,6 @@ export function Modal({
   className = 'w-confirm',
   variant = 'center',
   label,
-  backdrop = 0.4,
 }: {
   onClose: () => void;
   children: ReactNode;
@@ -77,7 +85,6 @@ export function Modal({
   // optional 20 of the 21 call sites left it out and a screen reader announced a
   // nameless "dialog". Every one of them already renders a title; pass that.
   label: string;
-  backdrop?: number;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const idRef = useRef<object>({});
@@ -149,8 +156,7 @@ export function Modal({
     <div
       role="presentation"
       onClick={onClose}
-      className={`fixed inset-0 z-dialog flex [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
-      style={{ background: `rgba(11,11,12,${String(backdrop)})` }}
+      className={`fixed inset-0 z-dialog flex bg-veil [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
     >
       <div
         ref={dialogRef}

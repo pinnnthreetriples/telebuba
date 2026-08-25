@@ -144,7 +144,7 @@ export function CampaignsCard({
                   // Background lives in both branches, never in the base: two `bg-*`
                   // utilities in one class list are resolved by stylesheet order, and
                   // `bg-white` wins over the selected tint.
-                  className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
+                  className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
                 >
                   <div className="flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
