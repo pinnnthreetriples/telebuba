@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { setAccountTwofaMutation } from '@/entities/account';
 import type { AccountTwoFactorCreated, AccountTwoFactorUpdateRequest } from '@/shared/api';
-import { FormField, Icon, Input } from '@/shared/ui';
+import { Button, FormField, Icon, Input } from '@/shared/ui';
 
 import {
   EMPTY_TWOFA_FORM,
@@ -152,16 +152,15 @@ export function TwoFactorForm({
         </twofaForm.Field>
       </div>
       <div className="mb-lg text-tiny text-ink-subtle">{t('accounts.edit.twofaHintWarn')}</div>
-      <button
-        type="button"
+      <Button
+        size="block"
         onClick={() => {
           void twofaForm.handleSubmit();
         }}
         disabled={setTwofa.isPending || !canSubmit}
-        className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
       >
         {setTwofa.isPending ? <Spinner size={14} /> : submitLabel}
-      </button>
+      </Button>
     </>
   );
 }

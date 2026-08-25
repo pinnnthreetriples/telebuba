@@ -3,7 +3,7 @@ import { useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { expandDiscoveryKeywordsMutation } from '@/entities/campaign';
-import { HelpHint, Input } from '@/shared/ui';
+import { Button, HelpHint, Input } from '@/shared/ui';
 
 import {
   boundsInverted,
@@ -227,15 +227,11 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
         >
           {t('neurocomment.modal.discovery.form.reset')}
         </button>
-        <button
-          type="submit"
-          disabled={!canSubmit(form) || submitting}
-          className="rounded-lg bg-primary px-lg py-sm text-tiny font-semibold text-white disabled:opacity-50"
-        >
+        <Button type="submit" variant="primary" size="sm" disabled={!canSubmit(form) || submitting}>
           {submitting
             ? t('neurocomment.modal.discovery.form.searching')
             : t('neurocomment.modal.discovery.form.submit')}
-        </button>
+        </Button>
       </div>
     </form>
   );

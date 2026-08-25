@@ -10,7 +10,7 @@ import {
 import type { WarmingSettings } from '@/shared/api';
 import { mutationErrorText } from '@/shared/lib';
 
-import { Icon, Modal, Switch } from '@/shared/ui';
+import { Button, Icon, Modal, Switch } from '@/shared/ui';
 
 // The three behaviour toggles + the readiness gate map 1:1 onto the real,
 // GLOBAL warming settings row (WarmingSettingsUpdate has no account_id). Quiet
@@ -260,21 +260,17 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           </div>
         ) : null}
         <div className="flex gap-sm">
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            className="flex-1"
             disabled={save.isPending || scope === 'one' || !settings}
             onClick={onSave}
-            className="flex-1 rounded-full bg-primary px-lg py-md text-lead font-semibold text-white transition-colors hover:bg-primary-press disabled:opacity-50"
           >
             {t('warming.cfg.save')}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-full border border-line bg-white px-lg py-md text-lead font-semibold text-ink"
-          >
+          </Button>
+          <Button className="flex-1" onClick={onClose}>
             {t('warming.cfg.cancel')}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

@@ -18,22 +18,49 @@ const BASE =
 // `md` is the dialog footer and the page-level action; `sm` the action inside a
 // card, where `md` would set the card header's height; `xs` the one that sits in a
 // table row beside a value, and the only rung that is not a pill — at 22px tall a
-// full radius and a rectangle are the same shape anyway.
+// full radius and a rectangle are the same shape anyway. `block` is the action that
+// spans its form, standing as the last row under the fields it commits.
+//
+// `block` is the one rung whose width is its own: the other three are as wide as
+// their label, and a caller that wants them wider says so. It is also the one rung
+// that is not `inline-flex`, because `w-full` on an inline-level box still sits on a
+// line and collects that line's leading underneath it — a few pixels of space under
+// six buttons that nobody chose, and exactly the kind of difference this component
+// exists to stop carrying. Its `rounded-lg` is the radius scale's own name for a
+// panel nested in a card, which is the shape a full-width row has; a pill here would
+// be a 200px stadium.
+//
+// There is no rung between `sm` and `xs`, though seven buttons asked for one — a
+// pill at `px-lg py-sm text-tiny`, 27px tall against `sm`'s 29 and `xs`'s 25. Two
+// pixels is drift, not a decision, and every one of the seven sits inside a card,
+// which is the sentence `sm` already answers. They are on `sm` now.
 const SIZE = {
   md: 'rounded-full px-2xl py-md text-lead font-semibold',
   sm: 'rounded-full px-xl py-sm text-body font-semibold',
   xs: 'rounded-md px-md py-tight text-body font-medium',
+  block: 'flex w-full rounded-lg py-md text-lead font-medium',
 } as const;
 
 // `primary` is the one committing action on a screen and `secondary` everything
 // beside it; `danger` is the committing action when that action destroys something
 // (it is a tinted button, not a red one — the red is the label); `ghost` has no box
-// until you point at it.
+// until you point at it; `dashed` adds one more of whatever the list above it holds,
+// drawn as the empty slot the new thing will fill.
+//
+// `dashed` is a fill and not a shape, which is why it is here rather than in `SIZE`:
+// its three wearers are all `block`, but `block` is worn by three different fills, so
+// the two do not travel together. There is a SECOND dashed button in the app — the
+// muted inline one that opens a channel field (neurocomment's CampaignsCard, the
+// warming page) — and it is deliberately not this variant: it is drawn in
+// `line-strong` and `ink-muted` rather than in blue, so folding it in would need a
+// rung whose purpose could not be said without an "or". Those two stay hand-written.
 const VARIANT = {
   primary: 'bg-primary text-white hover:bg-primary-press',
   secondary: 'border border-line bg-white text-ink hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
   ghost: 'text-ink-muted hover:bg-canvas hover:text-ink',
+  dashed:
+    'border border-dashed border-primary-line bg-white text-primary-deep hover:border-primary hover:bg-primary-tint',
 } as const;
 
 export function Button({

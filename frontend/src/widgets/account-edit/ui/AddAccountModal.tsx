@@ -364,18 +364,19 @@ export function AddAccountModal({
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
                     className="rounded-lg border border-line bg-white px-md py-md text-lead outline-none focus:border-primary"
                   />
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="self-start"
                     onClick={onStartPhone}
                     disabled={!phone.trim() || startLogin.isPending || Boolean(createdAccountId)}
-                    className="self-start rounded-full bg-primary px-lg py-sm text-body font-medium text-white disabled:opacity-50"
                   >
                     {startLogin.isPending
                       ? t('accounts.addWizard.phoneCreating')
                       : createdAccountId
                         ? t('accounts.addWizard.phoneCreated')
                         : t('accounts.addWizard.phoneContinue')}
-                  </button>
+                  </Button>
                   {startLogin.isError && (
                     <div className="text-tiny text-danger">
                       {t('accounts.addWizard.phoneError')}

@@ -215,14 +215,9 @@ export function SessionSection({ account }: { account: AccountRead }) {
           />
         </label>
       </div>
-      <button
-        type="button"
-        onClick={onConfirmLogin}
-        disabled={submitCode.isPending || !code}
-        className="w-full rounded-lg border border-line bg-white py-md text-lead font-medium disabled:opacity-50"
-      >
+      <Button size="block" onClick={onConfirmLogin} disabled={submitCode.isPending || !code}>
         {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
-      </button>
+      </Button>
       {loginNote ? <div className="mt-sm text-tiny text-ink-muted">{loginNote}</div> : null}
       <div className="mb-md mt-xl text-tiny font-semibold uppercase tracking-[0.04em] text-ink-subtle">
         {t('accounts.edit.import')}

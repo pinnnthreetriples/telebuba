@@ -10,7 +10,7 @@ import {
   startCampaignDiscoveryMutation,
 } from '@/entities/campaign';
 import { useLogEventStream } from '@/shared/lib';
-import { Modal, StatusIcon } from '@/shared/ui';
+import { Button, Modal, StatusIcon } from '@/shared/ui';
 
 import {
   buildSearchRequest,
@@ -265,8 +265,9 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               >
                 {t('neurocomment.modal.close')}
               </button>
-              <button
-                type="button"
+              <Button
+                variant="primary"
+                size="sm"
                 // The outcome stays set through the close delay, so a fast second click
                 // cannot re-post channels that are already settled. Failed links are the
                 // one outcome worth retrying, so they keep the button live.
@@ -276,7 +277,6 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                   (adopted !== null && adopted.failed === 0)
                 }
                 onClick={submitAdopt}
-                className="inline-flex items-center gap-sm rounded-lg bg-primary px-lg py-sm text-tiny font-semibold text-white disabled:opacity-50"
               >
                 {adopted === null ? (
                   t('neurocomment.modal.discovery.add', { count: picks.length })
@@ -291,7 +291,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                     {t('neurocomment.modal.discovery.added', { count: adopted.linked })}
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}

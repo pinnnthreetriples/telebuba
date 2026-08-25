@@ -430,6 +430,8 @@ export function WarmingPage() {
               ) : (
                 <button
                   type="button"
+                  // The muted inline adder, not `Button variant="dashed"` — see the
+                  // note on its twin in neurocomment's CampaignsCard.
                   onClick={() => {
                     setAddingChannel(true);
                   }}

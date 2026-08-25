@@ -130,24 +130,20 @@ export function CreateCampaignModal({
       </div>
 
       <div className="flex gap-sm border-t border-line-row px-2xl pb-xl pt-lg">
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          className="flex-1"
           disabled={!name.trim() || !prompt.trim()}
           onClick={() => {
             onCreate({ name: name.trim(), prompt: prompt.trim(), channels });
             onClose();
           }}
-          className="flex-1 rounded-full border border-primary bg-primary px-lg py-md text-lead font-semibold text-white disabled:opacity-50"
         >
           {t('neurocomment.modal.createCampaign.confirm')}
-        </button>
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex-1 rounded-full border border-line bg-white px-lg py-md text-lead font-semibold text-ink"
-        >
+        </Button>
+        <Button className="flex-1" onClick={onClose}>
           {t('neurocomment.modal.cancel')}
-        </button>
+        </Button>
       </div>
     </Modal>
   );

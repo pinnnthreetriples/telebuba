@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { CollapsibleCard, Icon, IconButton } from '@/shared/ui';
+import { Button, CollapsibleCard, Icon, IconButton } from '@/shared/ui';
 
 // Status tone, in the tokens the neurocomment campaign rows already use — the
 // meaning of the status, not a hex, so the two cards cannot drift apart.
@@ -118,14 +118,9 @@ export function CampaignsCard({
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
             className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-md py-sm text-body outline-none"
           />
-          <button
-            type="button"
-            disabled={!createName.trim()}
-            onClick={onCreate}
-            className="shrink-0 rounded-full bg-primary px-lg py-sm text-tiny font-semibold text-white disabled:opacity-50"
-          >
+          <Button variant="primary" size="sm" disabled={!createName.trim()} onClick={onCreate}>
             {t('neuroshilling.campaigns.confirm')}
-          </button>
+          </Button>
           <button
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
@@ -136,13 +131,9 @@ export function CampaignsCard({
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={onStartCreate}
-          className="mt-md flex w-full items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint"
-        >
+        <Button variant="dashed" size="block" className="mt-md" onClick={onStartCreate}>
           {t('neuroshilling.campaigns.create')}
-        </button>
+        </Button>
       )}
     </CollapsibleCard>
   );
