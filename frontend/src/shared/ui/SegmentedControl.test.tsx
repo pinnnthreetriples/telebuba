@@ -134,7 +134,14 @@ test.each([
 
 test('every option carries the focus ring the hand-written versions had none of', () => {
   const { radios } = renderControl();
-  for (const radio of radios) expect(radio).toHaveClass('focus-visible:shadow-focus');
+  for (const radio of radios) {
+    expect(radio).toHaveClass('focus-visible:outline-primary');
+    // The glow this replaced measured 1.18:1, and it came with `outline-none`. On a
+    // control that is one tab stop with an arrow-key cursor, an invisible focus ring
+    // does not degrade the keyboard contract — it removes it.
+    expect(radio.className).not.toContain('shadow-focus');
+    expect(radio.className).not.toContain('outline-none');
+  }
 });
 
 // cn() runs tailwind-merge, and tailwind-merge only keeps a class whose group it

@@ -65,11 +65,19 @@ const OFF = {
 // nearest `group`, and with an option list the segment itself is the only element the
 // caller can hang it on. Both utilities paint nothing on their own.
 //
-// `focus-visible:shadow-focus` is the state none of the fourteen had — the same recipe
-// `Button` and `Select`'s trigger wear, so a segment reached by Tab or by an arrow key
-// says so the way every other control in the app does.
+// A focus ring is the state none of the fourteen had, and it matters more here than
+// almost anywhere else in the app: this control is ONE tab stop whose arrow keys move a
+// cursor between options, so an operator who cannot see which segment holds focus cannot
+// use the keyboard contract this component exists to provide.
+//
+// It is an outline rather than `shadow-focus`, which is what `Button` and `Select` wore
+// when this file was written. That recipe composites to 1.18:1 against the surfaces it
+// sits on, where WCAG 2.2 asks 3:1 of a focus indicator, and it carried `outline-none`
+// beside it so the browser's own ring was discarded too. `Button` and `IconButton` moved
+// to this outline; `shadow-focus` keeps its job on the fields, where it is a glow beside
+// a border that goes `primary` and carries the indication on its own.
 const BASE =
-  'group relative transition-colors duration-state focus-visible:shadow-focus focus-visible:outline-none disabled:opacity-60';
+  'group relative transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60';
 
 export type SegmentedOption<T extends string> = {
   value: T;
