@@ -167,9 +167,7 @@ function AccountComments({
         ) : null}
       </div>
       {comments.length === 0 ? (
-        <div className="py-lg text-center text-body text-ink-subtle">
-          {t('neurocomment.feed.empty')}
-        </div>
+        <div className="py-lg text-center type-prose">{t('neurocomment.feed.empty')}</div>
       ) : (
         <div className="tb-scroll max-h-feed overflow-y-auto">
           {comments.map((c) => {
@@ -395,9 +393,7 @@ export function NeurocommentBoard({
           )}
         />
       ) : (
-        <div className="px-lg py-page text-center text-body text-ink-subtle">
-          {t('neurocomment.board.empty')}
-        </div>
+        <div className="px-lg py-page text-center type-prose">{t('neurocomment.board.empty')}</div>
       )}
     </CollapsibleCard>
   );

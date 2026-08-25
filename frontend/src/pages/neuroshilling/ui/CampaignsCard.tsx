@@ -94,9 +94,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-xl text-center text-body text-ink-subtle">
-            {t('neuroshilling.campaigns.none')}
-          </div>
+          <div className="py-xl text-center type-prose">{t('neuroshilling.campaigns.none')}</div>
         ) : null}
       </div>
 

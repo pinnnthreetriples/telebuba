@@ -376,7 +376,7 @@ function WarmingCard({
             />
           ))}
         </div>
-        <div className="mt-sm flex justify-between px-hair text-micro text-ink-subtle">
+        <div className="mt-sm flex justify-between px-hair type-meta">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
@@ -422,7 +422,7 @@ function WarmingCard({
                     index < active
                       ? 'font-medium text-success-deep'
                       : index === active
-                        ? 'font-semibold text-primary'
+                        ? 'font-semibold text-primary-deep'
                         : 'text-ink-subtle'
                   }`}
                 >
@@ -439,7 +439,7 @@ function WarmingCard({
           {/* current activity */}
           <div className="mt-md flex items-center gap-md rounded-md border border-primary-line bg-primary-tint px-md py-sm">
             <span className="tb-livedot size-dot shrink-0 rounded-full bg-primary" />
-            <span className="tb-pulse type-caption font-semibold text-primary">
+            <span className="tb-pulse type-caption font-semibold text-primary-deep">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
             </span>
             {(hold || STAGES[active] === 'pause') && account.next_run_at ? (
@@ -471,7 +471,7 @@ function WarmingCard({
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
-                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-micro text-ink-muted transition-colors hover:border-primary-line hover:text-primary"
+                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-micro text-ink-muted transition-colors hover:border-primary-line hover:text-primary-deep"
                   >
                     <svg
                       width="10"

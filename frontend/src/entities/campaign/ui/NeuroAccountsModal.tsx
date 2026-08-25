@@ -373,7 +373,7 @@ export function NeuroAccountsModal({
             />
           ))
         ) : (
-          <div className="px-md py-page text-center text-lead text-ink-subtle">
+          <div className="px-md py-page text-center type-prose">
             {t('neurocomment.modal.neuroAccounts.empty')}
           </div>
         )}

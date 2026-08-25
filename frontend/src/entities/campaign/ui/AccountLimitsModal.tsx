@@ -240,7 +240,7 @@ export function AccountLimitsModal({
             />
           ))
         ) : (
-          <div className="px-md py-page text-center text-lead text-ink-subtle">
+          <div className="px-md py-page text-center type-prose">
             {query.isError
               ? t('neurocomment.modal.limits.loadFailed')
               : t('neurocomment.modal.limits.loading')}

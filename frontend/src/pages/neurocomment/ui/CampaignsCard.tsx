@@ -185,9 +185,7 @@ export function CampaignsCard({
           );
         })}
         {campaignList.length === 0 ? (
-          <div className="py-xl text-center text-body text-ink-subtle">
-            {t('neurocomment.campaigns.none')}
-          </div>
+          <div className="py-xl text-center type-prose">{t('neurocomment.campaigns.none')}</div>
         ) : null}
       </div>
 

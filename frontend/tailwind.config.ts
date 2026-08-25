@@ -465,11 +465,17 @@ export default {
         // for the heading of a notice on a green surface (WarmingBoard's "прогрет" block,
         // where DEFAULT measures only 2.97:1 on `tint` and this measures 5.85:1), and
         // `press` is the filled green button's hover, exactly as `primary.press` is the
-        // blue one's — it also lifts the white label on it from 3.37:1 to 4.32:1.
+        // blue one's: a step DOWN from the fill it replaces. It used to be a step up —
+        // lighter than `deep` — on the theory that it was `DEFAULT`'s hover, and it left
+        // the white label on the app's one green button at 4.32:1, under the floor, with
+        // that number written here as if it were the fix. The button is `deep` (6.62:1),
+        // so its hover has to be darker than `deep`, not lighter: this measures 8.12:1
+        // under white and sits 1.23 from `deep`, the same step `primary.press` is from
+        // `primary`.
         success: {
           DEFAULT: '#12a150',
           deep: '#0b6b37',
-          press: '#0e8c45',
+          press: '#0a5c2f',
           tint: '#ddf7e9',
           line: '#b8ecce',
         },
