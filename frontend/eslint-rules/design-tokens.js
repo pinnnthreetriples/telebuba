@@ -58,6 +58,14 @@
 //   two sites used to spell it `[1.1]` and `[1.1em]`; they are one spelling now, so the
 //   carve-out has one shape to allow rather than two.
 //
+//   `tracking-[-0.01em]` on the wordmark (2 sites, `AppNav` and `NavDrawer`) — the mark
+//   is drawn from the design source `Telebuba.dc.html`, and that spacing is a value the
+//   source sets, not one this app chose. The sweep that closed this axis dropped it as
+//   sub-threshold, which it is — 0.16px per character — and that is the wrong test to
+//   apply: a lint rule about typographic scales has no standing over a brand mark. The
+//   same file already refuses to give the wordmark a type role for the same reason, so
+//   this is the second half of one decision rather than a new exception.
+//
 //   `tracking-[…]` inside `shared/ui` (2 sites, DataTable's `TH` and `CARD_LABEL`) —
 //   the same `above` carve-out the type-role pattern makes, for the same reason:
 //   `shared/ui` is the layer allowed to compose primitives by hand. Both are
@@ -218,6 +226,8 @@ const PATTERNS = [
   },
   {
     above: NOT_A_CONSUMER,
+    // The wordmark keeps the source's own spacing; see the header.
+    unless: /tracking-\[-0\.01em\]/,
     test: at(String.raw`(?:[\w-]+:)*tracking-\[[^\]]*\]`),
     message:
       'Letter-spacing is not a scale in this app, and that is the decision rather than an omission: the two values type actually spends are declared by the roles that need them — `type-eyebrow` carries 0.04em, `type-page-title` carries -0.02em — and a `tracking-*` rung for either would be a second way to say what the role already says. `tracking-code` is the one name, and it is a field’s affordance rather than typography: the spacing that lets a one-time code be read back character by character as it is typed.',

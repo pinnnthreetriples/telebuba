@@ -82,6 +82,10 @@ if (rule) {
         filename: 'src/shared/ui/DataTable.tsx',
         name: '`shared/ui` composes a column label by hand, letter-spacing included',
       },
+      {
+        code: 'const w = "text-title font-bold tracking-[-0.01em]";',
+        name: "the wordmark keeps the design source's own spacing",
+      },
     ],
     invalid: [
       // The quiet one: `border-line-input` still renders a border, in preflight's own
@@ -199,10 +203,6 @@ if (rule) {
       // typographic rung; type's own spacing belongs to the roles that declare it.
       {
         code: 'const v = "type-item-title tracking-[.04em]";',
-        errors: [{ message: /Letter-spacing is not a scale/ }],
-      },
-      {
-        code: 'const w = "text-title font-bold tracking-[-0.01em]";',
         errors: [{ message: /Letter-spacing is not a scale/ }],
       },
       {
