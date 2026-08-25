@@ -180,7 +180,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
 
   return (
     <div>
-      <div className="mb-md type-prose leading-relaxed">{t('accounts.profile.privacy.hint')}</div>
+      <div className="mb-md type-prose">{t('accounts.profile.privacy.hint')}</div>
 
       {privacy.isPending && (
         <div

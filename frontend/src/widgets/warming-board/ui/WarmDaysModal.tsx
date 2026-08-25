@@ -113,9 +113,7 @@ export function WarmDaysModal({
         <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
 
         <div className="mb-xl text-center">
-          <div className="text-hero font-bold leading-none tracking-[-0.02em] text-primary">
-            {days}
-          </div>
+          <div className="text-hero font-bold leading-none text-primary">{days}</div>
           <div className="mt-xs type-dialog-body">{t('warming.days.label', { count: days })}</div>
         </div>
 

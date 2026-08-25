@@ -71,11 +71,11 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="w-full resize-none rounded-lg border border-line bg-white px-lg py-md font-[inherit] text-lead leading-[1.5] outline-none"
+          className="w-full resize-none rounded-lg border border-line bg-white px-lg py-md font-[inherit] text-lead outline-none"
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
-          <span className="type-item-title tracking-[.04em] text-ink-body">
+          <span className="type-item-title text-ink-body">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
           <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
@@ -151,7 +151,7 @@ export function CampaignPromptModal({
             <div className="mb-sm type-dialog-title">
               {t('neurocomment.modal.campaignPrompt.removeTitle')}
             </div>
-            <div className="mb-xl type-dialog-body leading-[1.5]">
+            <div className="mb-xl type-dialog-body">
               {t('neurocomment.modal.campaignPrompt.removeBody', {
                 phone: confirm.phone,
                 channel: confirm.channel,

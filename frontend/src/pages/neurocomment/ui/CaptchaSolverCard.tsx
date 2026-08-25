@@ -64,7 +64,7 @@ export function CaptchaSolverCard({
                 </span>
               </span>
             </div>
-            <div className="type-meta leading-[1.35]">{t('neurocomment.captcha.sub')}</div>
+            <div className="type-meta">{t('neurocomment.captcha.sub')}</div>
           </div>
         </div>
         <Switch

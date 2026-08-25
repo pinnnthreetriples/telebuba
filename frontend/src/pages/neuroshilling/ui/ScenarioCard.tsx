@@ -131,7 +131,7 @@ function StepRow({
       {step.kind === 'message' ? (
         <Textarea
           size="sm"
-          className="mb-sm resize-none font-[inherit] leading-[1.5]"
+          className="mb-sm resize-none font-[inherit]"
           rows={2}
           value={step.text}
           maxLength={1000}
@@ -375,7 +375,7 @@ export function ScenarioCard({
       </span>
       <Textarea
         size="sm"
-        className="mb-md resize-none font-[inherit] leading-[1.5]"
+        className="mb-md resize-none font-[inherit]"
         rows={3}
         value={draft.topic}
         maxLength={2000}

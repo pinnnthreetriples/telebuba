@@ -135,7 +135,7 @@ export function CampaignSetupCard({
       </span>
       <Textarea
         size="sm"
-        className="mb-lg resize-none font-mono text-body leading-[1.6]"
+        className="mb-lg resize-none font-mono text-body"
         rows={4}
         value={draft.targetsRaw}
         maxLength={MAX_TARGETS_RAW}
@@ -179,7 +179,7 @@ export function CampaignSetupCard({
               <span className="block type-item-title">
                 {t(`neuroshilling.setup.runMode.${mode}.title`)}
               </span>
-              <span className="mt-xs block type-caption leading-snug">
+              <span className="mt-xs block type-caption">
                 {t(
                   unavailable
                     ? 'neuroshilling.setup.runMode.parallel.unavailable'
@@ -372,7 +372,7 @@ export function CampaignSetupCard({
               combination that publishes anything a stranger's message provoked —
               and it is the one thing on this page an outsider gets a say in. */}
           {draft.replyToHumans && draft.autoresponder === 'neurodialog' ? (
-            <div className="rounded-lg bg-warning-tint px-md py-sm text-tiny leading-snug text-warning-deep">
+            <div className="rounded-lg bg-warning-tint px-md py-sm text-tiny text-warning-deep">
               {t('neuroshilling.setup.replyToHumans.warning')}
             </div>
           ) : null}

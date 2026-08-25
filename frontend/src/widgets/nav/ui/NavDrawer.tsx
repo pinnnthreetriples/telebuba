@@ -34,7 +34,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
               rung with a single wearer in the canon, and borrowing another role's name
               would make that name lie — it wore `type-dialog-title` for exactly as long
               as it took to read it back. Hand-written, and staying that way. */}
-          <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
+          <span className="text-title font-bold">Telebuba</span>
         </div>
         <button
           type="button"

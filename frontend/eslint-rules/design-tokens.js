@@ -1,6 +1,7 @@
 // The design system is a closed set — tailwind.config.ts names every colour, type
-// rung, radius, elevation, motion rung and unit of rhythm the UI has — and a closed
-// set only stays closed if reopening it is an error rather than a habit.
+// rung, radius, elevation, motion rung, line-height, letter-spacing and unit of rhythm
+// the UI has — and a closed set only stays closed if reopening it is an error rather
+// than a habit.
 //
 // Every pattern below flags ZERO sites in the tree it landed on, which is the bar the
 // repo's other custom rule set: a rule that has to be suppressed to pass is not a
@@ -40,6 +41,31 @@
 //   reopens. Each of the twelve carries its own inline suppression rather than a hole in
 //   the pattern, so the second component to reach for the same measurement is flagged
 //   and has to argue for a rung.
+//
+//   `leading-none` (8 sites) — a declared rung, and deliberately not a text one. Its
+//   wearers are single characters, not lines: the `×` that removes a chip in five
+//   places, HelpHint's `?`, and WarmDaysModal's 42px day count. It is also the marker
+//   the type-role pattern below reads to tell a glyph from text, which is the second
+//   reason it keeps Tailwind's name.
+//
+//   `leading-[1.1em]` (2 sites, Odometer) — the em carve-out, and the only one the
+//   line-height pattern makes. It is the same argument the dimension pattern already
+//   makes for `h-[1.1em]`, which is the class sitting beside it: this is a measurement
+//   against the text, not a rung a design system could hold. Concretely it is a
+//   geometric constant said in four places — the column's height, each digit cell's
+//   height, this line-height, and the `translateY(-n * 1.1em)` that rolls the digit into
+//   place. Round the line-height to a typographic rung and the digits stop landing. The
+//   two sites used to spell it `[1.1]` and `[1.1em]`; they are one spelling now, so the
+//   carve-out has one shape to allow rather than two.
+//
+//   `tracking-[…]` inside `shared/ui` (2 sites, DataTable's `TH` and `CARD_LABEL`) —
+//   the same `above` carve-out the type-role pattern makes, for the same reason:
+//   `shared/ui` is the layer allowed to compose primitives by hand. Both are
+//   `text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle`, which is
+//   `type-eyebrow` exactly except for the weight — the role is 600 and these are 500.
+//   That is worth knowing and is NOT worth fixing here: moving them onto the role would
+//   change what a table header looks like in every table in the app, to make a role fit.
+//   Left as it is, on purpose, and written down so the next reader does not rediscover it.
 //
 //   two decorative gradients (ProfileModal, _profileShared) — placeholder fills
 //   behind an avatar or a thumbnail that has not loaded. They exist only to differ
@@ -122,6 +148,16 @@ const at = (body) => new RegExp(String.raw`(?:^|\s)(?:${body})`);
 // where the app is warm. That one comes back looking right.
 const RETIRED = 'track|line-input|primary-wash|success-dot';
 
+// Tailwind's own line-height and letter-spacing names, which this config replaces
+// outright the way it replaced the type scale. They are listed rather than left to fail
+// on their own for the reason the retired colours are: an unknown utility emits no rule
+// at all, so `leading-relaxed` after this change is not an error, it is a class that
+// silently does nothing and leaves the element at whatever it inherited. Half of these
+// were in the tree — `snug` on three explanations, `relaxed` on two, `tight` on an
+// account name — and none of them would have announced its own removal.
+const RETIRED_LEADING = '10|3|4|5|6|7|8|9|tight|snug|normal|relaxed|loose';
+const RETIRED_TRACKING = 'tighter|tight|normal|wide|wider|widest';
+
 const PATTERNS = [
   {
     test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${RETIRED})(?![\w-])`),
@@ -169,6 +205,27 @@ const PATTERNS = [
     test: at(String.raw`duration-\[`),
     message:
       'Four motion rungs, one per kind of gesture (`state`, `enter`, `reveal`, `roll`). A duration in milliseconds is how one gesture came to run 420ms on one element against 400ms on the other.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*leading-\[[0-9.]+(?:px|rem)?\](?![\w-])`),
+    message:
+      'This app already has a body line-height and it is not written anywhere: preflight sets `html { line-height: 1.5 }` and the type rungs are bare strings, so everything inherits it. Sixteen sites wrote `leading-[1.5]` and every one was restating the value it already had; the rest spent 1.35, 1.375, 1.4, 1.45, 1.6 and 1.625 on the one job of setting a sentence. Delete the class and inherit, or use `leading-stack` (a heading over its own detail line) or `leading-log` (a monospace stream on a `term` surface).',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*leading-(?:${RETIRED_LEADING})(?![\w-])`),
+    message:
+      'Tailwind’s line-height scale is replaced, so this name no longer emits a rule — the element silently keeps whatever it inherited rather than failing visibly. Three rungs are left: `none` for a single glyph, `stack` for a heading over its own detail line, `log` for a monospace stream. A sentence needs none of them; it inherits 1.5 already.',
+  },
+  {
+    above: NOT_A_CONSUMER,
+    test: at(String.raw`(?:[\w-]+:)*tracking-\[[^\]]*\]`),
+    message:
+      'Letter-spacing is not a scale in this app, and that is the decision rather than an omission: the two values type actually spends are declared by the roles that need them — `type-eyebrow` carries 0.04em, `type-page-title` carries -0.02em — and a `tracking-*` rung for either would be a second way to say what the role already says. `tracking-code` is the one name, and it is a field’s affordance rather than typography: the spacing that lets a one-time code be read back character by character as it is typed.',
+  },
+  {
+    test: at(String.raw`(?:[\w-]+:)*tracking-(?:${RETIRED_TRACKING})(?![\w-])`),
+    message:
+      'Tailwind’s letter-spacing scale is replaced, so this name emits nothing and the element silently keeps the spacing it inherited. `tracking-code` is the only rung; type’s own spacing belongs to `type-eyebrow` and `type-page-title`.',
   },
   {
     above: NOT_A_CONSUMER,

@@ -284,7 +284,7 @@ function SettingsForm({
         title={t('settings.warmLimits.title')}
         subtitle={t('settings.warmLimits.subtitle')}
       >
-        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md text-body leading-relaxed text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md text-body text-ink-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>

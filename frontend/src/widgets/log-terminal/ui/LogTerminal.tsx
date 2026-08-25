@@ -151,7 +151,7 @@ export function LogTerminal({
         </>
       }
     >
-      <div className="term tb-scroll max-h-feed overflow-y-auto rounded-lg bg-term px-lg py-md font-mono text-tiny leading-[1.85]">
+      <div className="term tb-scroll max-h-feed overflow-y-auto rounded-lg bg-term px-lg py-md font-mono text-tiny leading-log">
         {shown.length === 0 ? (
           <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (
