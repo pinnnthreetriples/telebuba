@@ -15,9 +15,9 @@ import plugin from 'tailwindcss/plugin';
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
-    // Five elevations, one per purpose, replacing Tailwind's `sm…2xl` scale outright —
-    // the last scale still sitting in `extend`, which is how `shadow-2xl` stayed
-    // reachable next to a canon that names five. `pop` is anything that floats over the
+    // Six elevations, one per purpose, replacing Tailwind's `sm…2xl` scale outright —
+    // this was the last scale sitting in `extend`, which is how `shadow-2xl` stayed
+    // reachable next to a canon that named six. `pop` is anything that floats over the
     // page (dropdown, tooltip, toast, menu — ALL of them, which is the point: those four
     // things had four different shadows); `ring` is the hairline outline that stands in
     // for a border on a tinted pill; `thumb` is a knob you can drag (the switch, the
@@ -184,7 +184,7 @@ export default {
       out: 'cubic-bezier(.16,1,.3,1)',
       spring: 'cubic-bezier(.34,1.45,.6,1)',
     },
-    // Five stacking layers, lowest to highest, so a component never has to guess a
+    // Six stacking layers, lowest to highest, so a component never has to guess a
     // number: `raised` lifts content over its own siblings, `sticky` is the app
     // header that survives scrolling, `pop` is anything that floats over the page
     // (dropdown, tooltip, menu) and therefore must clear the sticky header,

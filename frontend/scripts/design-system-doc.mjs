@@ -1,16 +1,27 @@
-// Держит docs/design-system.html в согласии с tailwind.config.ts.
+// Держит docs/design-system.html в согласии с tailwind.config.ts и с примитивами
+// shared/ui.
 //
 // Документ писался руками и от этого отстал: пять слитых веток поменяли значения
 // токенов и добавили новые, а страница осталась со старыми. Половина её содержимого
 // — это значения из конфига, и её незачем набирать второй раз. Скрипт берёт эту
-// половину из конфига и подставляет между парами меток `ds:gen <имя>`; всё, что вне
-// меток, — живые примеры компонентов, принципы, свод унификации и план работ —
-// скрипт не трогает.
+// половину из конфига и подставляет между парами меток `ds:gen <имя>`.
 //
-// Конфиг читается как текст, а не импортируется: импорт .ts из Node требует либо
-// загрузчика в зависимостях, либо флага снятия типов и достаточно свежего Node.
-// Гейт, который падает от версии рантайма, хуже отсутствующего гейта, а нужных
-// форм записи в конфиге всего две — строка и вложенный объект.
+// Токенами дело не кончилось: разделы про компоненты тоже отстали, и хуже — гейт
+// этого видеть не мог. Документ сверяется сам с собой, где вне меток он тождественно
+// равен себе, поэтому `--check` умеет падать только на порождённой части. Пока состав
+// примитива был написан руками, он лежал ровно в той части, которую гейт не видит: у
+// кнопки стояло «три вида и три размера» при пяти и четырёх, а таблица источника
+// правды утверждала, что примитива вовсе нет. Теперь наборы `SIZE`/`VARIANT`/`TONE`
+// читаются из самих компонентов — той же формы записи, что и шкалы конфига.
+//
+// Чего это НЕ чинит: прозу. Скрипт знает, какие у компонента ступени и чем они
+// нарисованы, и не знает, зачем они нужны — подписи ролей остаются ручными, ровно как
+// у токенов. Живые примеры рядом с таблицами тоже ручные: это показ, а не запись.
+//
+// Конфиг и компоненты читаются как текст, а не импортируются: импорт .ts/.tsx из Node
+// требует либо загрузчика в зависимостях, либо флага снятия типов и достаточно свежего
+// Node. Гейт, который падает от версии рантайма, хуже отсутствующего гейта, а нужных
+// форм записи и там и там всего две — строка и вложенный объект.
 //
 // Вывод побайтово устойчив: порядок — как в конфиге, переводы строк LF, ничего
 // зависящего от времени запуска. Поэтому разница в diff означает разницу в системе,
@@ -20,6 +31,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 
 const CONFIG_PATH = new URL('../tailwind.config.ts', import.meta.url);
 const DOC_PATH = new URL('../docs/design-system.html', import.meta.url);
+const UI_DIR = new URL('../src/shared/ui/', import.meta.url);
 
 /* ── Разбор конфига ───────────────────────────────────────────────────────── */
 
@@ -41,7 +53,7 @@ function parseObject(src, open) {
       continue;
     }
     const key = /^(['"]?)([\w$-]+)\1\s*:\s*/.exec(src.slice(i));
-    if (!key) throw new Error(`tailwind.config.ts: не разобрать ключ у «${src.slice(i, i + 40)}»`);
+    if (!key) throw new Error(`не разобрать ключ у «${src.slice(i, i + 40)}»`);
     i += key[0].length;
     if (src[i] === '{') {
       const inner = parseObject(src, i);
@@ -49,12 +61,12 @@ function parseObject(src, open) {
       i = inner.end;
     } else {
       const value = /^'([^']*)'/.exec(src.slice(i));
-      if (!value) throw new Error(`tailwind.config.ts: у «${key[2]}» не строковое значение`);
+      if (!value) throw new Error(`у «${key[2]}» не строковое значение`);
       entries.push({ name: key[2], value: value[1] });
       i += value[0].length;
     }
   }
-  throw new Error('tailwind.config.ts: объект не закрыт');
+  throw new Error('объект не закрыт');
 }
 
 function block(src, key) {
@@ -83,6 +95,106 @@ function readConfig() {
     transitionTimingFunction: block(src, 'transitionTimingFunction'),
     zIndex: block(src, 'zIndex'),
   };
+}
+
+/* ── Разбор компонентов ───────────────────────────────────────────────────── */
+
+// Наборы видов и размеров у примитивов записаны той же формой, что и шкалы конфига:
+// `as const`-объект из строк в одинарных кавычках. Поэтому их читает тот же разборщик,
+// и документ перестаёт хранить вторую копию того, какие у компонента ступени.
+//
+// Компонент читается как текст по той же причине, что и конфиг: импортировать .tsx из
+// Node нечем, а нужная форма записи здесь ровно одна.
+//
+// Разбирается только СОСТАВ набора — имена ступеней и классы, которыми они нарисованы.
+// Зачем ступень нужна, скрипт не знает и знать не может: это остаётся русской подписью
+// ниже, ровно как у токенов.
+const COMPONENT_MAPS = {
+  Button: ['SIZE', 'VARIANT'],
+  IconButton: ['SIZE', 'TONE'],
+  Badge: ['TONE', 'SIZE'],
+  Input: ['SIZE', 'TONE'],
+  SegmentedControl: ['WRAP', 'SEG', 'ON'],
+  Notice: ['TONE'],
+};
+
+function mapOf(src, file, name) {
+  const at = src.search(new RegExp(`^const ${name} = \\{$`, 'm'));
+  if (at < 0) throw new Error(`shared/ui/${file}.tsx: объект «${name}» не найден`);
+  return parseObject(src, src.indexOf('{', at)).entries;
+}
+
+function readComponents() {
+  const out = {};
+  for (const [file, names] of Object.entries(COMPONENT_MAPS)) {
+    const src = readFileSync(new URL(`${file}.tsx`, UI_DIR), 'utf8');
+    out[file] = Object.fromEntries(names.map((n) => [n, mapOf(src, file, n)]));
+  }
+  return out;
+}
+
+// Класс → величина, которую он рисует. Разбираются только те приставки, которыми
+// разобранные наборы написаны; всё остальное уходит в вывод как есть — и это не
+// недоделка: в наборе видов классы И ЕСТЬ ответ («залито primary, текст белый»), а не
+// запись величины, которую надо во что-то развернуть.
+//
+// Величина берётся из конфига, а не из таблицы рядом: подкрутка ступени `2xl` обязана
+// доехать до строки «22/10» под кнопкой, иначе документ снова начнёт расходиться —
+// только теперь не с компонентом, а с конфигом, и через число, которое никто не писал.
+function resolve(classes, config) {
+  const scale = (key) => Object.fromEntries(config[key].map((e) => [e.name, e.value]));
+  const spacing = scale('spacing');
+  const fontSize = scale('fontSize');
+  const radius = scale('borderRadius');
+  const square = scale('size');
+  const WEIGHT = { 'font-semibold': '600', 'font-medium': '500' };
+  const WORD = { 'w-full': 'во всю ширину', 'flex-1': 'поровну в ряду' };
+
+  const pad = {};
+  const size = [];
+  const chips = [];
+  // Полный радиус на квадрате — это круг, а не пилюля, и назвать его пилюлей значило бы
+  // соврать про форму ровно в той строке, которая форму и описывает.
+  const isSquare = /(^|\s)size-/.test(classes);
+  for (const cls of classes.split(/\s+/).filter(Boolean)) {
+    const axis = /^p([xy]?)-([\w$-]+)$/.exec(cls);
+    if (axis && spacing[axis[2]] !== undefined) {
+      pad[axis[1] || 'a'] = px(spacing[axis[2]]);
+      continue;
+    }
+    const text = /^text-([\w$-]+)$/.exec(cls);
+    if (text && fontSize[text[1]] !== undefined) {
+      size.push(`${px(fontSize[text[1]])}px`);
+      continue;
+    }
+    const round = /^rounded-([\w$-]+)$/.exec(cls);
+    if (round && radius[round[1]] !== undefined) {
+      const pill = isSquare ? 'круг' : 'пилюля';
+      size.push(round[1] === 'full' ? pill : `радиус ${px(radius[round[1]])}`);
+      continue;
+    }
+    const box = /^size-([\w$-]+)$/.exec(cls);
+    if (box && square[box[1]] !== undefined) {
+      size.unshift(`${px(square[box[1]])}×${px(square[box[1]])}`);
+      continue;
+    }
+    if (WEIGHT[cls]) {
+      size.push(WEIGHT[cls]);
+      continue;
+    }
+    if (WORD[cls]) {
+      size.push(WORD[cls]);
+      continue;
+    }
+    chips.push(`<code>${cls}</code>`);
+  }
+  // Горизонтальный и вертикальный отступ пишутся парой «бока/верх»: это одна мера с
+  // двух сторон, и врозь они читаются как два несвязанных числа.
+  const box = pad.a !== undefined ? [`${pad.a} со всех сторон`] : [];
+  if (pad.a === undefined && (pad.x !== undefined || pad.y !== undefined)) {
+    box.push(`${pad.x ?? 0}/${pad.y ?? 0}`);
+  }
+  return [...box, ...size, chips.join(' ')].filter(Boolean).join(' · ');
 }
 
 /* ── Русские подписи ──────────────────────────────────────────────────────── */
@@ -356,6 +468,124 @@ const RUNG = {
   },
 };
 
+// Зачем ступень нужна. Состав набора приходит из компонента, эта таблица отвечает на
+// то, чего в компоненте нет: какую задачу ступень закрывает и почему она отдельная.
+// Ступень без подписи выводится с пустой ячейкой — это и есть сигнал, что в примитив
+// добавили вид, которому ещё не назначили смысл.
+const COMPONENT = {
+  Button: {
+    VARIANT: {
+      title: 'Виды',
+      rungs: {
+        primary: 'Одно завершающее действие на экране',
+        secondary: 'Всё, что стоит рядом с ним',
+        danger:
+          'Завершающее действие, которое разрушает. Кнопка подложкой, а не заливкой: красное здесь — подпись',
+        ghost: 'Коробки нет, пока не наведёшь',
+        dashed:
+          'Ещё один такой же в список над собой, нарисованный пустым местом под то, что добавят. Это заливка, а не форма, и потому стоит здесь: все трое её носителей — <code>block</code>, но <code>block</code> носят три разные заливки. Вторая пунктирная кнопка приложения, приглушённая строчная у поля канала, намеренно не этот вид: она нарисована в <code>line-strong</code>, и свести их значило бы завести ступень, смысл которой не сказать без «или»',
+      },
+    },
+    SIZE: {
+      title: 'Размеры',
+      rungs: {
+        md: 'Подвал диалога и действие страницы',
+        sm: 'Действие внутри карточки, где <code>md</code> задал бы высоту её шапки',
+        xs: 'Действие в строке таблицы рядом со значением. Единственная ступень не-пилюля: на 22px высоты полный радиус и прямоугольник — одна и та же форма',
+        block:
+          'Действие во всю форму, последней строкой под полями, которые оно отправляет. Единственная ступень со своей шириной и единственная не <code>inline-flex</code>: <code>w-full</code> на строчном боксе всё равно стоит на строке и собирает под собой её межстрочный интервал',
+      },
+      prose:
+        'Ступени между <code>sm</code> и <code>xs</code> нет, хотя семь кнопок её просили: пилюля в 27px против 29 у <code>sm</code> и 25 у <code>xs</code>. Два пикселя — это расхождение, а не решение, и все семь стоят внутри карточки, то есть в предложении, на которое <code>sm</code> уже отвечает.',
+    },
+  },
+  IconButton: {
+    SIZE: {
+      title: 'Размеры',
+      rungs: {
+        sm: 'Самое мелкое, что можно нажать. Квадрат: кружок в 22px рядом с 13px текста читается точкой',
+        md: 'Иконочная кнопка по умолчанию',
+        lg: 'Единственный круг набора',
+        touch: 'Цель для пальца — и снова квадрат: круг в 44px это монета, а не контрол',
+      },
+      prose:
+        'Форма следует за размером и отдельной ручкой не является. Одна утилита на коробку вместо пары <code>w</code>/<code>h</code>: этот объект писал одну и ту же величину дважды, и квадрат, у которого две стороны — два решения, это квадрат, который умеет перестать им быть.',
+    },
+    TONE: {
+      title: 'Смысл',
+      rungs: {
+        neutral:
+          'Крестик и шаг, которые дизайн оставляет неподвижными. Наведения нет намеренно: иначе шапка каждого диалога вздрагивала бы на проходе курсора',
+        primary: 'Ведёт дальше',
+        danger: 'Удаляет',
+      },
+    },
+  },
+  Badge: {
+    TONE: {
+      title: 'Тона',
+      rungs: {
+        neutral: 'Счётчик и метка, которая ничего не обещает',
+        primary: 'Идёт прямо сейчас',
+        success: 'Работает, проверено',
+        warning: 'Пауза, ожидание, ограничение',
+        danger: 'Сломалось, удалено, забанено',
+      },
+      prose:
+        'Тон называет обе половины сразу и берёт для текста ступень <code>deep</code>. Пара классов, выбранная на месте, — это то, куда ушёл контраст приложения: на 10.5px <code>danger</code> на <code>danger-tint</code> меряет 4.34:1, а <code>ink-muted</code> на нейтральной заливке 4.10 — оба ниже порога 4.5.',
+    },
+    SIZE: {
+      title: 'Размеры',
+      rungs: {
+        md: 'Метка, стоящая сама по себе, а не при строке',
+        sm: 'Пилюля статуса — то, что <code>tiny</code> и называет подписью пилюли',
+        xs: 'Счётчик и метка при плотной строке',
+      },
+    },
+  },
+  Input: {
+    SIZE: {
+      title: 'Размеры',
+      rungs: {
+        md: 'Поле собственной формы',
+        sm: 'Поле внутри строки карточки, где <code>md</code> задал бы её высоту',
+        xs: 'Числовой счётчик, в который вписывают величину рядом с её единицей',
+      },
+    },
+    TONE: {
+      title: 'Тона',
+      rungs: {
+        default: 'Поле, в которое набирают',
+        flat: 'Поле не для набора: показанный факт или секрет, который читают с экрана один раз. Заливка <code>canvas</code> и есть сообщение, что оно неподвижно',
+      },
+    },
+  },
+  SegmentedControl: {
+    WRAP: {
+      title: 'Виды',
+      rungs: {
+        tray: 'Утопленный лоток на всю ширину строки внутри карточки или диалога, активный сегмент поднят из него',
+        pill: 'Тот же смысл стадионом по своим подписям, для лотков, которые стоят в конце строки, а не занимают её. Активный сегмент залит синим, а не поднят белым',
+        outline:
+          'Лотка нет вовсе: каждый вариант — своя контурная коробка, активная подкрашена, а не поднята',
+      },
+      prose:
+        'Один компонент, а не два, и носители — это и есть довод: лоток с поднятым белым сегментом и ряд контурных чипов выглядят разными контролами, но контракт у них один — значение, список вариантов, ровно один активный. Различие между ними — заливка, а расколоть набор по заливке значило бы завести две копии перемещаемого фокуса. Это <em>радиогруппа</em> и только она: вкладки, переключающие панель, просят <code>role="tablist"</code> и <code>aria-controls</code>, которые рисует вызывающий, и такой в приложении ровно один.',
+    },
+  },
+  Notice: {
+    TONE: {
+      title: 'Тона',
+      rungs: {
+        primary: 'Так устроено: объясняет поведение, которое похоже на поломку',
+        success: 'Получилось, и результат стоит держать дольше, чем живёт галочка отклика',
+        warning: 'Работает не полностью, и оператор может это исправить',
+        danger: 'Не работает: потеря данных или действий',
+      },
+    },
+  },
+};
+
 /* ── Отрисовка ────────────────────────────────────────────────────────────── */
 
 const COUNT = [
@@ -618,6 +848,53 @@ function renderMotionScale(config, indent) {
     .join('\n');
 }
 
+// У сегментной группы одна ступень разложена по трём объектам: обёртка, сам сегмент и
+// его активное состояние. Читателю это ОДИН вид, поэтому в строке они сходятся обратно
+// — но каждый со своей подписью, иначе два <code>rounded</code> в одной строке
+// притворятся спором.
+const JOINED = {
+  SegmentedControl: [
+    ['WRAP', 'лоток'],
+    ['SEG', 'сегмент'],
+    ['ON', 'активный'],
+  ],
+};
+
+function valueOf(entries, name) {
+  const hit = entries.find((e) => e.name === name);
+  if (!hit) throw new Error(`shared/ui: у ступени «${name}» нет пары в соседнем объекте`);
+  return hit.value;
+}
+
+// Одна таблица на набор: слева ступень и то, чем она нарисована, справа — зачем она.
+// Величины разворачиваются из классов по конфигу, поэтому «22/10» под кнопкой не
+// написано НИГДЕ — ни в документе, ни в компоненте, — и разойтись ему не с чем.
+function renderComponent(config, components, file, indent) {
+  const maps = components[file];
+  const out = [];
+  for (const [name, note] of Object.entries(COMPONENT[file])) {
+    out.push(`${indent}<h3>${note.title}</h3>`);
+    if (note.prose) out.push(`${indent}<p class="body">${note.prose}</p>`);
+    out.push(`${indent}<table class="spec">`);
+    for (const entry of maps[name]) {
+      const spec = JOINED[file]
+        ? JOINED[file]
+            .map(([key, label]) => `${label}: ${resolve(valueOf(maps[key], entry.name), config)}`)
+            .join('<br>')
+        : resolve(entry.value, config);
+      out.push(
+        specRow(
+          `${indent}  `,
+          `<code>${entry.name}</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">${spec}</span>`,
+          note.rungs[entry.name] ?? '',
+        ),
+      );
+    }
+    out.push(`${indent}</table>`);
+  }
+  return out.join('\n');
+}
+
 // Документ рисует живые примеры компонентов на собственных переменных, поэтому
 // значения токенов должны стоять и здесь, иначе свотчи показывают одно, а кнопки
 // рядом — другое. Имена переменных оставлены те, которыми документ уже написан:
@@ -678,6 +955,14 @@ const REGIONS = {
   'layer-scale': (config) => renderLayerScale(config, '      '),
   'shadow-scale': (config) => renderShadowScale(config, '      '),
   'motion-scale': (config) => renderMotionScale(config, '        '),
+  // Составы примитивов. Живые примеры рядом с ними скрипт по-прежнему не трогает: это
+  // показ, а не запись. Запись — здесь, и её больше нельзя набрать второй раз.
+  'button-spec': (config, ui) => renderComponent(config, ui, 'Button', '      '),
+  'iconbutton-spec': (config, ui) => renderComponent(config, ui, 'IconButton', '      '),
+  'input-spec': (config, ui) => renderComponent(config, ui, 'Input', '      '),
+  'segmented-spec': (config, ui) => renderComponent(config, ui, 'SegmentedControl', '      '),
+  'badge-spec': (config, ui) => renderComponent(config, ui, 'Badge', '      '),
+  'notice-spec': (config, ui) => renderComponent(config, ui, 'Notice', '      '),
 };
 
 function replaceRegion(doc, name, body) {
@@ -693,9 +978,10 @@ function replaceRegion(doc, name, body) {
 
 function generate() {
   const config = readConfig();
+  const ui = readComponents();
   let doc = readFileSync(DOC_PATH, 'utf8').replace(/\r\n/g, '\n');
   for (const [name, render] of Object.entries(REGIONS)) {
-    doc = replaceRegion(doc, name, render(config));
+    doc = replaceRegion(doc, name, render(config, ui));
   }
   return doc;
 }
@@ -708,13 +994,13 @@ function main() {
     if (actual !== wanted) writeFileSync(DOC_PATH, wanted, 'utf8');
     process.stdout.write(
       actual === wanted
-        ? 'design-system.html: уже соответствует tailwind.config.ts\n'
-        : 'design-system.html: обновлён из tailwind.config.ts\n',
+        ? 'design-system.html: уже соответствует конфигу и примитивам\n'
+        : 'design-system.html: обновлён из конфига и примитивов\n',
     );
     return 0;
   }
   if (actual === wanted) {
-    process.stdout.write('design-system.html: соответствует tailwind.config.ts\n');
+    process.stdout.write('design-system.html: соответствует конфигу и примитивам\n');
     return 0;
   }
   // Расхождение показывается построчно: увидеть надо не «файлы разные», а какое
@@ -725,10 +1011,10 @@ function main() {
   for (let i = 0; i < Math.max(from.length, to.length); i += 1) {
     if (from[i] === to[i]) continue;
     if (from[i] !== undefined) lines.push(`  документ ${i + 1}: ${from[i].trim()}`);
-    if (to[i] !== undefined) lines.push(`  конфиг   ${i + 1}: ${to[i].trim()}`);
+    if (to[i] !== undefined) lines.push(`  код      ${i + 1}: ${to[i].trim()}`);
   }
   process.stderr.write(
-    'design-system.html разошёлся с tailwind.config.ts.\n' +
+    'design-system.html разошёлся с конфигом или примитивами.\n' +
       `${lines.slice(0, 40).join('\n')}\n` +
       (lines.length > 40 ? `  … и ещё строк: ${lines.length - 40}\n` : '') +
       'Собрать заново: npm run ds:doc\n',
