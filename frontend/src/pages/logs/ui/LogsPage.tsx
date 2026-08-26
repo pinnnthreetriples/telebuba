@@ -6,7 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
-import { Card, DataTable, SegmentedControl, Select, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Button,
+  Card,
+  DataTable,
+  SegmentedControl,
+  Select,
+  type DataTableColumnMeta,
+} from '@/shared/ui';
 import { eventLabel, eventReason, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
@@ -213,26 +220,24 @@ export function LogsPage() {
             </div>
           </Card>
           <div className="mt-lg flex items-center justify-end gap-sm">
-            <button
-              type="button"
+            <Button
+              size="sm"
               disabled={!hasPrev}
               onClick={() => {
                 setCursorStack((stack) => stack.slice(0, -1));
               }}
-              className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
             >
               {t('logs.pagination.prev')}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              size="sm"
               disabled={!hasNext}
               onClick={() => {
                 setCursorStack((stack) => [...stack, data.next_cursor ?? null]);
               }}
-              className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
             >
               {t('logs.pagination.next')}
-            </button>
+            </Button>
           </div>
         </>
       )}

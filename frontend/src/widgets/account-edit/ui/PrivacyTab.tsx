@@ -199,15 +199,16 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           role="alert"
         >
           <span>{t('accounts.profile.privacy.loadError', { reason })}</span>
-          <button
-            type="button"
+          <Button
+            size="xs"
+            variant="danger"
+            className="bg-white"
             onClick={() => {
               void privacy.refetch();
             }}
-            className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
           >
             {t('accounts.profile.privacy.retry')}
-          </button>
+          </Button>
         </Notice>
       )}
 
