@@ -63,6 +63,29 @@ if (rule) {
         code: 'const t7 = "min-w-badge text-body font-semibold";',
         name: "a weight with no grey is a number's emphasis, which no role can absorb",
       },
+      // The two line-heights and the one letter-spacing that are left, and the two
+      // things the line-height pattern deliberately cannot reach.
+      {
+        code: 'const u1 = "leading-stack leading-log tracking-code";',
+        name: 'the named rungs, which is the whole point',
+      },
+      {
+        code: 'const u2 = "text-lead leading-none text-white";',
+        name: 'a single glyph has no line-height, and `none` is the rung that says so',
+      },
+      {
+        code: 'const u3 = "h-[1.1em] type-stat leading-[1.1em] tabular-nums";',
+        name: "the odometer's line-height is measured against the text, like the box beside it",
+      },
+      {
+        code: 'const u4 = "text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle";',
+        filename: 'src/shared/ui/DataTable.tsx',
+        name: '`shared/ui` composes a column label by hand, letter-spacing included',
+      },
+      {
+        code: 'const w = "text-title font-bold tracking-[-0.01em]";',
+        name: "the wordmark keeps the design source's own spacing",
+      },
     ],
     invalid: [
       // The quiet one: `border-line-input` still renders a border, in preflight's own
@@ -153,6 +176,38 @@ if (rule) {
       {
         code: 'const p = "p-page text-lead text-ink";',
         errors: [{ message: /A rung plus a grey/ }],
+      },
+      // The line-height axis. `[1.5]` is the interesting one: it was the single most
+      // written value in the tree and every one of its sixteen sites was restating the
+      // line-height the element already inherited from preflight.
+      {
+        code: 'const q = "type-dialog-body leading-[1.5]";',
+        errors: [{ message: /already has a body line-height/ }],
+      },
+      {
+        code: 'const r = "text-body leading-[1.45] md:leading-[1.7]";',
+        errors: [{ message: /already has a body line-height/ }],
+      },
+      // The quiet half, and the reason the retired names are listed rather than left to
+      // fail on their own: the scale is replaced, so these emit no rule at all and the
+      // element keeps whatever it inherited. Nothing on screen says the name is gone.
+      {
+        code: 'const s = "text-tiny leading-snug";',
+        errors: [{ message: /line-height scale is replaced/ }],
+      },
+      {
+        code: 'const t = "leading-relaxed hover:leading-tight md:leading-6";',
+        errors: [{ message: /line-height scale is replaced/ }],
+      },
+      // The letter-spacing axis. Above `shared/ui` there is one name and it is not a
+      // typographic rung; type's own spacing belongs to the roles that declare it.
+      {
+        code: 'const v = "type-item-title tracking-[.04em]";',
+        errors: [{ message: /Letter-spacing is not a scale/ }],
+      },
+      {
+        code: 'const x = "text-micro uppercase tracking-wide";',
+        errors: [{ message: /letter-spacing scale is replaced/ }],
       },
     ],
   });

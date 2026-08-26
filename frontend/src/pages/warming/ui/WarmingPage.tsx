@@ -361,7 +361,7 @@ export function WarmingPage() {
             header={<span className="type-card-title">{t('warming.channels.title')}</span>}
             label={t('warming.channels.title')}
           >
-            <div className="mb-md type-caption leading-[1.4]">{t('warming.channels.hint')}</div>
+            <div className="mb-md type-caption">{t('warming.channels.hint')}</div>
             <div className="flex flex-wrap gap-sm">
               {channels.map((channel) => (
                 <Badge
@@ -477,7 +477,7 @@ export function WarmingPage() {
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">
-                          <span className="truncate type-card-title leading-tight">{name}</span>
+                          <span className="truncate type-card-title leading-stack">{name}</span>
                           {showPhone ? null : flag}
                         </div>
                         {showPhone ? (
@@ -500,7 +500,7 @@ export function WarmingPage() {
                       {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
-                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-micro font-bold tracking-[0.03em] text-success-deep">
+                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-micro font-bold text-success-deep">
                         <Icon name="check" size={10} className="stroke-success" />
                         {t('warming.warmed.badge')}
                       </span>
@@ -570,16 +570,14 @@ export function WarmingPage() {
             wrapperClassName="rounded-card border border-line bg-canvas"
             header={<span className="type-card-title">{t('warming.howto.title')}</span>}
           >
-            <div className="mb-lg type-caption leading-[1.4]">{t('warming.howto.hint')}</div>
+            <div className="mb-lg type-caption">{t('warming.howto.hint')}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <div key={index} className="flex items-start gap-md">
                   <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
                     {index + 1}
                   </span>
-                  <span className="type-prose leading-[1.45]">
-                    {t(`warming.howto.steps.${String(index)}`)}
-                  </span>
+                  <span className="type-prose">{t(`warming.howto.steps.${String(index)}`)}</span>
                 </div>
               ))}
             </div>

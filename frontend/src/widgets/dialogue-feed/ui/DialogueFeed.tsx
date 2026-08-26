@@ -76,7 +76,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
           {formatLocalTime(message.created_at)}
         </span>
       </div>
-      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-md py-sm text-body leading-[1.45] text-ink-body">
+      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-md py-sm text-body text-ink-body">
         {message.text}
       </div>
     </div>

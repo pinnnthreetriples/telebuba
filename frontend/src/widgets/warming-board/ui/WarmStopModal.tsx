@@ -20,9 +20,7 @@ export function WarmStopModal({
     <Modal onClose={onClose} className="w-form" label={t('warming.stopModal.title')}>
       <div className="p-2xl">
         <div className="mb-sm type-dialog-title">{t('warming.stopModal.title')}</div>
-        <div className="mb-2xl type-dialog-body leading-[1.5]">
-          {t('warming.stopModal.body', { phone })}
-        </div>
+        <div className="mb-2xl type-dialog-body">{t('warming.stopModal.body', { phone })}</div>
         <div className="flex gap-sm">
           <Button
             variant="primary"

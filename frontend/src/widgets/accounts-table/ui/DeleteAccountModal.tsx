@@ -21,9 +21,7 @@ export function DeleteAccountModal({
     >
       <div className="p-2xl">
         <div className="mb-sm type-dialog-title">{t('accounts.deleteModal.title', { phone })}</div>
-        <div className="mb-2xl type-dialog-body leading-[1.5]">
-          {t('accounts.deleteModal.body')}
-        </div>
+        <div className="mb-2xl type-dialog-body">{t('accounts.deleteModal.body')}</div>
         <div className="flex justify-end gap-sm">
           <Button onClick={onClose}>{t('accounts.deleteModal.cancel')}</Button>
           <Button

@@ -41,3 +41,26 @@ test('a colour after a role recolours it instead of replacing it', () => {
 test('two roles still collapse to the last one', () => {
   expect(cn('type-caption', 'type-meta')).toBe('type-meta');
 });
+
+// The named line-heights and the one letter-spacing are not lengths and not arbitrary
+// values, so tailwind-merge matches them against neither half of its own `leading` and
+// `tracking` groups. Untaught, it files them under no group at all and keeps the loser
+// beside the winner: `cn('leading-log', 'leading-none')` returns both, and which one
+// paints is decided by the order Tailwind emitted the two rules, not by the caller.
+test('a named line-height collapses with the rung written after it', () => {
+  expect(cn('leading-log', 'leading-none')).toBe('leading-none');
+  expect(cn('leading-none', 'leading-stack')).toBe('leading-stack');
+  expect(cn('text-tiny leading-stack', 'leading-log')).toBe('text-tiny leading-log');
+});
+
+test('the code letter-spacing collapses with the one written after it', () => {
+  expect(cn('tracking-code', 'tracking-[0.04em]')).toBe('tracking-[0.04em]');
+  expect(cn('tracking-[0.04em]', 'tracking-code')).toBe('tracking-code');
+});
+
+// A line-height is its own axis: it must not be swallowed by a rung or a role, the way
+// the config's own note insists `leading-*` stays an independent decision.
+test('a line-height survives a rung and a role', () => {
+  expect(cn('leading-log', 'text-micro')).toBe('leading-log text-micro');
+  expect(cn('type-caption', 'leading-stack')).toBe('type-caption leading-stack');
+});

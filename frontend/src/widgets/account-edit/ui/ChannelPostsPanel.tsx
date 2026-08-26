@@ -390,9 +390,7 @@ export function ChannelPostsPanel({
                 </div>
               ) : (
                 post.text !== '' && (
-                  <div className="mt-tight whitespace-pre-wrap text-lead leading-[1.45]">
-                    {post.text}
-                  </div>
+                  <div className="mt-tight whitespace-pre-wrap text-lead">{post.text}</div>
                 )
               )}
             </div>

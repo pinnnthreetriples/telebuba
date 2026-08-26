@@ -54,7 +54,7 @@ function ToggleRow({
     <div className="flex items-start justify-between gap-lg">
       <div className="min-w-0 flex-1">
         <div className="type-card-title">{title}</div>
-        <div className="mt-hair type-caption leading-[1.45]">{desc}</div>
+        <div className="mt-hair type-caption">{desc}</div>
       </div>
       <Switch checked={on} label={title} onChange={onToggle} />
     </div>
@@ -213,9 +213,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 className="w-number rounded-lg border border-line bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
               />
             </div>
-            <div className="mt-md text-right type-caption leading-[1.4]">
-              {t('warming.cfg.quietNote')}
-            </div>
+            <div className="mt-md text-right type-caption">{t('warming.cfg.quietNote')}</div>
           </div>
         ) : null}
       </div>
@@ -237,7 +235,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           }}
         />
         {scope === 'one' ? (
-          <div className="mb-md type-caption leading-[1.45] text-warning-deep">
+          <div className="mb-md type-caption text-warning-deep">
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}
@@ -245,7 +243,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           // The same text the global mutation toast shows, not the generic copy:
           // this alert is the in-context report and must not be the less
           // informative of the two. Falls back to shell.mutationError itself.
-          <div role="alert" className="mb-md type-caption leading-[1.45] text-danger">
+          <div role="alert" className="mb-md type-caption text-danger">
             {mutationErrorText(save.error)}
           </div>
         ) : null}

@@ -20,9 +20,7 @@ export function HowItWorksCard() {
             <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
               {index + 1}
             </span>
-            <span className="type-prose leading-[1.5]">
-              {t(`neurocomment.howto.steps.${String(index)}`)}
-            </span>
+            <span className="type-prose">{t(`neurocomment.howto.steps.${String(index)}`)}</span>
           </div>
         ))}
       </div>

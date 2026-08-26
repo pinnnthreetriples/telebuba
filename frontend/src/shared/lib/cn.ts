@@ -15,6 +15,16 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // tailwind-merge has never seen. The other replaced scales (gap, duration, z-index,
 // shadow) share their prefix with nothing else, so an unknown value there conflicts
 // with the right group by prefix alone.
+//
+// `leading` and `tracking` are a third case, and the reason they are listed is the
+// opposite of the `text-*` one: tailwind-merge DOES know both prefixes, but it matches
+// them against Tailwind's own names plus a length or an arbitrary value, and
+// `leading-stack`, `leading-log` and `tracking-code` are none of those. An unrecognised
+// class joins no group, so it conflicts with nothing and `cn('leading-log',
+// 'leading-none')` keeps BOTH — the winner then decided by the order the two rules
+// happen to sit in the stylesheet rather than by the caller's last word. That is the
+// same shape as the bug that switched off every filled Button's font size, one axis
+// over, and it fails silently in exactly the same way.
 // The `type-*` roles are a third group, and they cannot join `font-size`: a role sets a
 // size, a weight AND a colour, so folding it into the size group would let a later
 // `text-lead` delete all three and leave the text unweighted and unpainted — the same
@@ -22,13 +32,30 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // to beat the three groups it subsumes when it comes last, and NOT declared as
 // something they beat: `cn('type-caption', 'text-danger')` has to keep both, because
 // naming the role and then recolouring it is the intended way to write an error line.
+//
+// The `override` below is the other half of that, and it is a conflict tailwind-merge
+// is right about everywhere except here. Stock Tailwind's `fontSize` entries are
+// [size, line-height] tuples, so `text-lg` really does set a line-height and really
+// does have to clear the `leading-*` written before it. This config's rungs are bare
+// strings for exactly the opposite reason — the note above `fontSize` says pairing a
+// line-height into them would silently re-space 694 sites — so `text-*` here sets a
+// size and nothing else, and letting it clear a line-height drops a class the caller
+// asked for: `cn('leading-log', 'text-micro')` returned `text-micro` alone. That is
+// the same silent-drop shape as the Button bug, arriving from the other direction, and
+// it was reachable before this axis had names at all, because an arbitrary
+// `leading-[1.5]` lands in the same group a named rung does.
 const merge = extendTailwindMerge<'type-role'>({
+  override: {
+    conflictingClassGroups: { 'font-size': [] },
+  },
   extend: {
     classGroups: {
       'font-size': [
         { text: ['micro', 'tiny', 'body', 'lead', 'title', 'stat', 'display', 'hero'] },
       ],
       rounded: [{ rounded: ['card'] }],
+      leading: [{ leading: ['stack', 'log'] }],
+      tracking: [{ tracking: ['code'] }],
       'type-role': [
         {
           type: [

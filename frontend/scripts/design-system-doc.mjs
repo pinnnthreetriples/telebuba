@@ -89,6 +89,8 @@ function readConfig() {
     maxHeight: block(src, 'maxHeight'),
     fontSize: block(src, 'fontSize'),
     typeRole: block(src, 'typeRole'),
+    lineHeight: block(src, 'lineHeight'),
+    letterSpacing: block(src, 'letterSpacing'),
     borderRadius: block(src, 'borderRadius'),
     boxShadow: block(src, 'boxShadow'),
     transitionDuration: block(src, 'transitionDuration'),
@@ -454,6 +456,14 @@ const RUNG = {
   },
   // %curve% — место, куда подставляется кривая: имя ступени берётся здесь, а её
   // значение из конфига, чтобы длительность и кривая одного жеста не разъехались.
+  lineHeight: {
+    none: 'Одиночный глиф: крестик в плашке, знак вопроса подсказки, крупная цифра',
+    stack: 'Заголовок строки над своей же подписью — имя над телефоном, метка над пояснением',
+    log: 'Моноширинный поток на тёмной поверхности: журнал и его врезка в карточке',
+  },
+  letterSpacing: {
+    code: 'Разовый код в поле: SMS при входе и письмо второго фактора',
+  },
   transitionDuration: {
     state: { text: 'Смена состояния: цвет, граница, фон', curve: '' },
     enter: { text: 'Появление: диалог, строка, событие, тост. Одно на всю систему', curve: '' },
@@ -832,6 +842,27 @@ function renderShadowScale(config, indent) {
   ].join('\n');
 }
 
+// Межстрочное и трекинг рисуются одной формой, но по разным причинам. У межстрочного
+// ступеней мало не потому, что шкала бедная, а потому, что основное значение уже
+// действует и не написано нигде: preflight ставит 1.5 на <html>, ступени размера —
+// голые строки, поэтому абзац получает 1.5 по наследству. Ступень для него была бы
+// именем без носителя. У трекинга ступень одна, и она не про шрифт, а про поле.
+function renderLeadingScale(config, indent) {
+  return config.lineHeight
+    .map((e) =>
+      specRow(indent, `<code>${e.name}</code> · ${e.value}`, RUNG.lineHeight[e.name] ?? ''),
+    )
+    .join('\n');
+}
+
+function renderTrackingScale(config, indent) {
+  return config.letterSpacing
+    .map((e) =>
+      specRow(indent, `<code>${e.name}</code> · ${e.value}`, RUNG.letterSpacing[e.name] ?? ''),
+    )
+    .join('\n');
+}
+
 function renderMotionScale(config, indent) {
   const curves = Object.fromEntries(config.transitionTimingFunction.map((e) => [e.name, e.value]));
   return config.transitionDuration
@@ -948,6 +979,8 @@ const REGIONS = {
   'color-swatches': (config) => renderColorSwatches(config, '      '),
   'type-scale': (config) => renderTypeScale(config, '          '),
   'type-roles': (config) => renderTypeRoles(config, '      '),
+  'leading-scale': (config) => renderLeadingScale(config, '          '),
+  'tracking-scale': (config) => renderTrackingScale(config, '          '),
   'radius-scale': (config) => renderRadiusScale(config, '        '),
   'spacing-scale': (config) => renderSpacingScale(config, '      '),
   'size-scale': (config) => renderSizeScale(config, '      '),

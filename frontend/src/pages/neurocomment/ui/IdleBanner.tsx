@@ -28,7 +28,7 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
         </svg>
       </span>
       <div className="min-w-0 flex-1">
-        <div className="type-item-title leading-[1.25] text-warning-deep">
+        <div className="type-item-title leading-stack text-warning-deep">
           {t('neurocomment.idle.label', { count })}
         </div>
         {/* Grey under an amber heading, for the reason WarmingBoard's twin is grey: the

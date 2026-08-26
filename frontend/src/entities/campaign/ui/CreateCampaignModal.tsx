@@ -59,7 +59,7 @@ export function CreateCampaignModal({
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <Textarea
-          className="mb-lg resize-y font-[inherit] leading-[1.5]"
+          className="mb-lg resize-y font-[inherit]"
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);

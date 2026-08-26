@@ -220,7 +220,7 @@ export function TwoFactorEmail({
           <label className="mb-md block">
             <span className={LABEL}>{t('accounts.edit.twofaEmailCode')}</span>
             <Input
-              className="font-mono tracking-[0.18em]"
+              className="font-mono tracking-code"
               ref={codeRef}
               value={code}
               onChange={(event) => {

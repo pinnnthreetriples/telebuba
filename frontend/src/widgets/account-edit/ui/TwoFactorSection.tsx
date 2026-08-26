@@ -214,7 +214,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // ONLY copy and change/removal are gone until it is set again. NOT the
               // unconfirmed-change cases: nothing failed there, the previous password
               // was kept on purpose (`true` or `null`) and the warning below says so.
-              <Notice tone="danger" className="mb-md py-md text-tiny font-medium leading-[1.45]">
+              <Notice tone="danger" className="mb-md py-md text-tiny font-medium">
                 {t('accounts.edit.twofaStoreFailed')}
               </Notice>
             ) : null}
@@ -228,7 +228,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // the read that would have proved Telegram holds ANY password answered
               // nothing either (`previous_kept: null`), and then not even "one of
               // these two is in force" is sayable.
-              <Notice tone="danger" className="mb-md py-md text-tiny font-medium leading-[1.45]">
+              <Notice tone="danger" className="mb-md py-md text-tiny font-medium">
                 {created.previous_kept === true
                   ? t('accounts.edit.twofaUnconfirmedChange')
                   : created.previous_kept === null
@@ -266,12 +266,10 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               </button>
             ) : null}
             {clipboard ? null : (
-              <div className="mb-md type-caption leading-[1.45]">
-                {t('accounts.edit.twofaCopyManual')}
-              </div>
+              <div className="mb-md type-caption">{t('accounts.edit.twofaCopyManual')}</div>
             )}
             {copyState === 'failed' ? (
-              <div className="mb-md type-caption font-medium leading-[1.45] text-danger">
+              <div className="mb-md type-caption font-medium text-danger">
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
@@ -372,9 +370,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}
             </div>
             {hasStored ? null : (
-              <div className="mt-md type-caption leading-[1.45]">
-                {t('accounts.edit.twofaNotStoredNote')}
-              </div>
+              <div className="mt-md type-caption">{t('accounts.edit.twofaNotStoredNote')}</div>
             )}
             <TwoFactorEmail
               // Keyed on the server-side email state: a write's optimistic

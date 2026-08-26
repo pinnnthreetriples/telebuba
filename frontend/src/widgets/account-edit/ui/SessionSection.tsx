@@ -187,7 +187,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         <label>
           <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
           <Input
-            className="tracking-[0.18em]"
+            className="tracking-code"
             value={smsCode}
             onChange={(event) => {
               setSmsCode(event.target.value);

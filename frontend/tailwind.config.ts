@@ -127,6 +127,79 @@ export default {
       // complete on its own.
       stat: { size: 'stat', weight: '700', ink: 'ink' },
     },
+    // Two line-heights and the glyph, replacing Tailwind's `leading-3…10/tight/snug/
+    // normal/relaxed/loose` scale outright — the ninth axis to close, and the one where
+    // closing it mostly meant DELETING classes rather than renaming them.
+    //
+    // The reason is that this app already has a body line-height and it is not written
+    // anywhere: preflight sets `html { line-height: 1.5 }`, `body` inherits it, and the
+    // form controls inherit it too. The `fontSize` rungs above are bare strings on
+    // purpose, so no rung overrides it. Every element in the app is at 1.5 unless it
+    // says otherwise — which is why there is no `leading-body` here. Sixteen sites used
+    // to write `leading-[1.5]`, and all sixteen were restating the value they already
+    // had; a rung for them would be a name with nothing to wear it, which is worse than
+    // the one-wearer rung the dimension scales already refuse.
+    //
+    // Twenty-one more sites were spending 1.35, 1.375, 1.4, 1.45, 1.6 and 1.625 on ONE
+    // job — a sentence the operator reads — and the spread was not a decision. The same
+    // component wore two of them three separate times: the numbered how-to step is
+    // copied into neurocomment, neuroshilling and warming and came out 1.5, 1.5 and
+    // 1.45; the chat bubble is 1.5 in PreviewCard and 1.45 in DialogueFeed; `Notice`
+    // draws itself at 1.5 in `shared/ui` and TwoFactorSection passes 1.45 back into it.
+    // That is the argument `transitionTimingFunction` makes about its third curve, and
+    // it is stronger here: there the two values met on one gesture, here they meet on
+    // one component. At 12.5px, 0.05 of line-height is 0.625px — under a pixel, and no
+    // site in the tree could have been leaning on it, because the app has no
+    // `line-clamp` and not one of those sentences sits in a fixed-height box. All of
+    // them are gone, back to the 1.5 they were already inheriting.
+    //
+    // What is left is the two places the app genuinely departs from its body leading,
+    // each named for what wears it and each worn twice:
+    //
+    // `stack` is the heading line of a two-line row — a name with a detail line under
+    // it. IdleBanner's amber label over its explanation, and the account name over its
+    // phone in WarmingPage's graduated list. Both pull the second line up with `mt-px`,
+    // and at 1.5 the heading's own leading undoes that; 1.25 is what makes the pair read
+    // as one block. It absorbs `leading-tight`, which was this value under Tailwind's
+    // name for it, so neither wearer moves a pixel.
+    //
+    // `log` is the monospace stream on a `term` surface: LogTerminal, and the embedded
+    // log inside WarmingBoard's card. A log line is scanned, not read, and the air
+    // between rows is what makes a row findable. Two components, 1.85 against 1.7 — the
+    // same drift as above, so it takes the value of the one the other is a copy of.
+    //
+    // `none` is not a text rung and stays out of that count, the way `borderRadius.none`
+    // does: it is the absence of leading, worn by things that are a single character
+    // rather than a line of text — the `×` that removes a chip in five places,
+    // HelpHint's `?`, and WarmDaysModal's one 42px numeral. The lint rule already reads
+    // it as the marker that a class list is drawing a glyph, so it keeps Tailwind's name.
+    lineHeight: {
+      none: '1',
+      stack: '1.25',
+      log: '1.85',
+    },
+    // Not a scale, and the entry below is the exception that says why. Letter-spacing is
+    // the one axis where the canon already had the answer before it was asked: the two
+    // values the app spends on TYPE are declared by the roles that need them —
+    // `eyebrow` carries 0.04em because caps at 11px close up without it, and
+    // `page-title` carries -0.02em because 22px bold opens up with it. A `tracking-*`
+    // rung for either would be a second way to say what a role already says, which is
+    // the ninety-six-spellings failure the roles were introduced to end. The remaining
+    // three literals were not rungs either: 0.03em on the warmed badge is the fifth
+    // eyebrow the role's own note records as having drifted, -0.02em on WarmDaysModal's
+    // numeral is `page-title`'s value on the one element too big to be a role, and
+    // -0.01em on the wordmark is 0.16px per character on one mark rendered twice, which
+    // is below every threshold this file has called drift. All five are gone.
+    //
+    // `code` is the one that survives, and it survives because it is not typography: it
+    // is a FIELD's affordance, the spacing that lets a one-time code be read back
+    // character by character while it is typed. Two independent wearers — the SMS login
+    // code in SessionSection and the 2FA email code in TwoFactorEmail — and the app
+    // already depends on it in prose: both fields pair it with a "1 2 3 4 5" placeholder,
+    // and both trim the spaces that invites before Telegram sees them.
+    letterSpacing: {
+      code: '0.18em',
+    },
     // Four corner radii and the pill, replacing Tailwind's scale outright so the
     // names that are left are the only ones a component can reach for: `sm` for
     // controls that sit inside another box (checkbox, tiny icon button), `md` for
