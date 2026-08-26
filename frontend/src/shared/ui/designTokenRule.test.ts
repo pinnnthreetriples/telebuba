@@ -35,6 +35,18 @@ if (rule) {
         name: 'a dimension relative to the viewport or the text is not a rung',
       },
       { code: 'const g = "p-0 m-0 gap-px";', name: 'zero and the hairline are not steps' },
+      {
+        code: 'const g2 = "bg-white/85 bg-black/10 border-white/40 border-black/5";',
+        name: 'an alpha on white or black is a wash over content the palette cannot know',
+      },
+      {
+        code: 'const g3 = "bg-primary-tint text-primary-deep bg-scrim bg-veil bg-surface";',
+        name: 'the tokens the seven alpha sites turned out to be',
+      },
+      {
+        code: "const g4 = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';",
+        name: 'hex in a style value: the two decorative gradients keep their exemption',
+      },
       // Not utility classes at all: the pattern is anchored to a class boundary.
       { code: 'const h = "https://example.com/to-3/blue-500";', name: 'a url is not a class' },
       // The type roles, and the four things the role pattern deliberately cannot reach.
@@ -109,6 +121,39 @@ if (rule) {
       {
         code: 'const c = "text-[12.5px]";',
         errors: [{ message: /type scale is closed/ }],
+      },
+      // The alpha channel: a named colour plus a modifier is a composite with no name,
+      // and it is invisible to the contrast scan because that scan's ink pattern stops
+      // at the `/`. Both spellings of the modifier, and a rung as well as a root.
+      {
+        code: 'const q = "border-primary bg-primary/[0.06]";',
+        errors: [{ message: /alpha modifier on a named colour/ }],
+      },
+      {
+        code: 'const r = "bg-canvas/40";',
+        errors: [{ message: /alpha modifier on a named colour/ }],
+      },
+      {
+        code: 'const s = "font-mono text-primary/70";',
+        errors: [{ message: /alpha modifier on a named colour/ }],
+      },
+      {
+        code: 'const s2 = "hover:bg-primary-tint/50 text-ink-subtle/80";',
+        errors: [{ message: /alpha modifier on a named colour/ }],
+      },
+      // The style-object channel, which no class pattern could ever reach: the colour
+      // is composed from a prop at the call site.
+      {
+        code: 'const u = { background: "rgba(11,11,12,0.45)" };',
+        errors: [{ message: /colour function in a string/ }],
+      },
+      {
+        code: 'const v = `rgba(11,11,12,${String(backdrop)})`;',
+        errors: [{ message: /colour function in a string/ }],
+      },
+      {
+        code: 'const w = { color: "hsl(210 100% 50%)" };',
+        errors: [{ message: /colour function in a string/ }],
       },
       {
         code: 'const d = "px-3 py-2";',

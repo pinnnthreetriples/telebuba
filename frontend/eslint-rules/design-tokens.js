@@ -18,6 +18,25 @@
 //   palette does not have to name. An alias would be a synonym rather than a role,
 //   and there is no second theme for it to point somewhere else in.
 //
+//   an ALPHA modifier on white or black (13 sites) — `bg-white/85` under the nav bar's
+//   blur, `bg-white/70` over a photo grid mid-drag, `bg-black/55` over a story preview,
+//   `bg-black/10` over a syncing modal body, `border-black/5` and `border-white/40`
+//   hairlines drawn on a photograph. Same
+//   carve-out as the line above, and for a sharper reason: the palette holds flat
+//   colours, and what is behind each of these is a photograph or a scrolling page, so
+//   there is no composite for a token to be. The pattern below therefore bans an alpha
+//   only on a colour the palette DOES name, which is the case where a composite exists
+//   and something else already has its name. AddStoryModal's `bg-black/55` is the
+//   closest any of the eleven comes to failing that test — it is `scrim` with 11 units
+//   of warmth left out — and measuring it is what kept it out here: over the whitest
+//   thing a photograph can be, the two washes put a white numeral at 4.74:1 and 4.35:1.
+//   The token comment carries the working.
+//
+//   `#rrggbb` inside a style VALUE rather than a class (2 sites) — the two decorative
+//   gradients above. The colour-function pattern below reaches `rgb()`/`hsl()` in a
+//   string and deliberately stops short of bare hex, so those two keep the exemption
+//   they already have and no new suppression is added to buy it.
+//
 //   `rounded-[1px|2px|3px]` (24 sites) — a hairline's radius. Snapping a 2px progress
 //   bar or a chat bubble's tail up to the 6px rung would round it away, so the radius
 //   pattern starts at 4px.
@@ -166,6 +185,13 @@ const RETIRED = 'track|line-input|primary-wash|success-dot';
 const RETIRED_LEADING = '10|3|4|5|6|7|8|9|tight|snug|normal|relaxed|loose';
 const RETIRED_TRACKING = 'tighter|tight|normal|wide|wider|widest';
 
+// The palette's own names, as a class list spells them — the roots only, since a rung
+// (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. A
+// literal list rather than a read of the config, the same way `RETIRED` and `PALETTE`
+// are: this file has never imported the config, and a name that leaves it is a rename
+// the sweep has to notice anyway.
+const TOKEN = 'canvas|scrim|veil|surface|ink|line|primary|success|warning|danger|term';
+
 const PATTERNS = [
   {
     test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${RETIRED})(?![\w-])`),
@@ -183,6 +209,18 @@ const PATTERNS = [
     ),
     message:
       'A colour written into a class is a colour the design system does not know about. Name it in tailwind.config.ts — every colour there carries its role and, where it is text, its measured contrast — and use that name.',
+  },
+  {
+    test: at(
+      String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${TOKEN})(?:-[a-z]+)?/(?:\[[0-9.]+\]|\d{1,3})(?![\w-])`,
+    ),
+    message:
+      'An alpha modifier on a named colour paints a colour the palette does not name, and the palette cannot see it: `contrast.test.ts` reads a token per class and its ink pattern stops at the `/`. Seven sites wrote one this way and every one already had a name — five selected cards and tiles spelled `bg-primary` at 0.06, 0.08 and 5 across four slices, all of them `bg-primary-tint` to within four units on the white they sit on; a drop zone spelled `bg-canvas/40`, which is `bg-surface` to within one; and a countdown spelled `text-primary/70`, which measured 2.81:1 on the tint it sits in. Alpha on `white` or `black` is the exception, and the header says why. Name the composite, or use the token that already is it.',
+  },
+  {
+    test: /(?:rgba?|hsla?)\(/,
+    message:
+      'A CSS colour function in a string is a colour computed at the call site, which is where the modal backdrop lived: an unbounded `backdrop?: number` composed into `rgba(11,11,12,${n})` on the app’s only inline style-object colour, so twenty-two dialogs carried a continuous dimming knob no gate could read. A wash over the page is `bg-veil` and a wash over a photograph is `bg-scrim`; both are in tailwind.config.ts with the alpha they were argued down to.',
   },
   {
     test: at(String.raw`text-\[[0-9.]+(?:px|rem|em)\]`),

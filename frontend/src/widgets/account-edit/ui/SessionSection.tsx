@@ -233,7 +233,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <button
         type="button"
         onClick={() => uploadInput.current?.click()}
-        className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-canvas/40 px-lg py-lg text-left"
+        className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-surface px-lg py-lg text-left"
       >
         <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
           <Icon name="upload-cloud" size={20} />

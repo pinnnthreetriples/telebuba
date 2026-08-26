@@ -159,7 +159,6 @@ export function ChannelEditModal({
     <>
       <Modal
         onClose={requestClose}
-        backdrop={0.45}
         className="w-panel"
         // A fixed name, unlike the visible heading below it: this dialog opens
         // while the detail is still loading, and an ARIA name that changes after

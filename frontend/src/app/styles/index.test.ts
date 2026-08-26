@@ -97,6 +97,30 @@ describe('prefers-reduced-motion', () => {
   });
 });
 
+// The config says the app has two easing curves and that a third one this file carried
+// "is gone". That was true of the `transition:` declarations, which were tokenised, and
+// false of the `animation:` shorthands, which the same sweep never touched and which
+// kept two more curves for months: `.tb-blur` at `(.34,1.56,.64,1)` beside `spring`, and
+// `.tb-drawerin` at `(.22,1,.36,1)` beside `out`. A config that documents a value as
+// gone while the stylesheet still paints it is worse than one that never claimed it, so
+// the claim gets a gate rather than a comment.
+//
+// Asserted against the SOURCE text and not the compiled `root` above: every `theme()`
+// call resolves to a literal `cubic-bezier(...)` on the way through, so the compiled
+// sheet is full of them by design. The compiled side is still what proves the names
+// resolve — an unknown `transitionTimingFunction` key throws in the PostCSS run at the
+// top of this file, before any test here gets to make an assertion.
+test('the stylesheet spends the config’s curves and never writes one out', () => {
+  const literals = [...source.matchAll(/cubic-bezier\([^)]*\)/g)].map((hit) => hit[0]);
+  expect(literals).toEqual([]);
+  // The other half of the claim: the two that were strays still ease. A rule with no
+  // easing at all would satisfy the assertion above and silently drop both to `ease`.
+  for (const selector of ['.tb-blur', '.tb-drawerin']) {
+    const rule = source.slice(source.indexOf(`${selector} {`));
+    expect(rule.slice(0, rule.indexOf('}'))).toMatch(/theme\('transitionTimingFunction\.\w+'\)/);
+  }
+});
+
 // The dark tooltip and the light one (`HelpHint`'s `HintBubble`) are two deliberate
 // LOOKS — dark for a control's label, light for an explanation, per the canon. A look is
 // not a reason for one of them to be pointer-only, and the light one has carried

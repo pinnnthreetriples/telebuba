@@ -38,9 +38,11 @@ export function SurfHover({
       {/* `bg-white` on the surface, not just on what the caller puts inside it: the
           actions above are always rendered and only ever hidden by being covered, so
           a caller with a translucent surface leaks them. The selected campaign card
-          is exactly that — the design tints it `bg-primary/[0.06]`, 6% over white —
-          and pause/edit/delete showed through it unhovered. The tint composites over
-          this and keeps its intended colour. */}
+          was exactly that — a hand-rolled `bg-primary/…` at 6% over white, through
+          which pause/edit/delete showed on an unhovered card. It is `bg-primary-tint`
+          now and opaque on its own, so this backstop has no wearer that needs it and
+          stays for the next caller that does: nothing in the class list a caller
+          passes can be relied on to be opaque. */}
       <div
         id={surfaceId}
         className={`relative rounded-lg bg-white transition-transform duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}

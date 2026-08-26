@@ -174,7 +174,7 @@ export function CampaignSetupCard({
               onClick={() => {
                 onDraft({ ...draft, runMode: mode });
               }}
-              className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-primary bg-primary/[0.06]' : 'border-line bg-white'}`}
+              className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
             >
               <span className="block type-item-title">
                 {t(`neuroshilling.setup.runMode.${mode}.title`)}

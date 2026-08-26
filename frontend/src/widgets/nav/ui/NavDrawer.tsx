@@ -21,7 +21,6 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
       onClose={onClose}
       variant="drawer-left"
       label={t('shell.menu')}
-      backdrop={0.45}
       className="flex w-[min(84vw,300px)] flex-col"
     >
       <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-lg">

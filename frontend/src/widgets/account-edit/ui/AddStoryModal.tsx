@@ -251,7 +251,6 @@ export function AddStoryModal({
     // unmounting mid-flight drops the onSuccess and loses the grid refresh.
     <Modal
       onClose={busy ? () => undefined : onClose}
-      backdrop={0.45}
       className="w-form"
       label={t('accounts.addStory.title')}
     >
@@ -479,7 +478,7 @@ export function AddStoryModal({
                     aria-label={t('accounts.addStory.layoutOption', { id: layout.id })}
                     aria-pressed={selected}
                     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the collage-layout tile's own box, one component's internal layout
-                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-md border text-primary transition ${selected ? 'border-primary bg-primary/5' : 'border-line bg-white'}`}
+                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-md border text-primary transition ${selected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
                   >
                     <LayoutIcon cells={layout.cells} selected={selected} />
                   </button>

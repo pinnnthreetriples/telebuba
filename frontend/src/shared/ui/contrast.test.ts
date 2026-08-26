@@ -208,7 +208,14 @@ function elementEnd(src: string, openEnd: number, name: string): number {
   return src.length;
 }
 
-const GLYPH = /<svg\b[\s\S]*?<\/svg>|<(?:Icon|Spinner)\b[^<>]*\/>/g;
+// `LayoutIcon` joined the list when AddStoryModal's collage tile stopped painting its
+// selected fill as `bg-primary/5` and started saying `bg-primary-tint`: the fill became
+// measurable and the tile came up as `primary on primary-tint — 4.38:1`, held to the
+// text floor. Its entire content is one `aria-hidden` `<svg>` whose cells are
+// `fill-current`, which is a graphic under 1.4.11 and clears the 3:1 that asks of it.
+// The list is components-whose-whole-render-is-an-svg, and it was short only because
+// nothing measurable had ever sat behind this one.
+const GLYPH = /<svg\b[\s\S]*?<\/svg>|<(?:Icon|Spinner|LayoutIcon)\b[^<>]*\/>/g;
 
 /** An element whose whole content is an icon is a graphic, not text. */
 function glyphOnly(body: string): boolean {

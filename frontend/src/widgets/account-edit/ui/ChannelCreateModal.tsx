@@ -200,7 +200,6 @@ export function ChannelCreateModal({
     // both the list refresh and the editor hand-off).
     <Modal
       onClose={busy ? () => undefined : onClose}
-      backdrop={0.45}
       className="w-form"
       label={t('accounts.channel.createTitle')}
     >
