@@ -44,6 +44,18 @@ import { extendTailwindMerge } from 'tailwind-merge';
 // the same silent-drop shape as the Button bug, arriving from the other direction, and
 // it was reachable before this axis had names at all, because an arbitrary
 // `leading-[1.5]` lands in the same group a named rung does.
+// The rhythm is the same case as `leading`/`tracking`, and it is the widest one: this
+// config replaces Tailwind's numeric `spacing` with names, and tailwind-merge validates
+// a padding, margin or gap value with `isLength` — which `tight`, `md` and `2xl` are
+// not. So they join no group, conflict with nothing, and `cn('py-tight', 'py-xs')` keeps
+// BOTH. The winner is then whichever class name happens to sort later in the emitted
+// stylesheet, in either caller order, which means a component's own padding can beat the
+// override its caller passed. Every `cn`-based component that takes a `className` is
+// affected, and it fails the way all of these fail: silently, looking right most of the
+// time. Found while trying to hold a button's height with a padding override — the
+// override would have been discarded.
+const RHYTHM = ['0', 'px', 'hair', 'xs', 'tight', 'sm', 'md', 'lg', 'xl', '2xl', 'page', 'empty'];
+
 const merge = extendTailwindMerge<'type-role'>({
   override: {
     conflictingClassGroups: { 'font-size': [] },
@@ -56,6 +68,29 @@ const merge = extendTailwindMerge<'type-role'>({
       rounded: [{ rounded: ['card'] }],
       leading: [{ leading: ['stack', 'log'] }],
       tracking: [{ tracking: ['code'] }],
+      // One entry per utility tailwind-merge resolves separately: `p` conflicts with
+      // `px`/`py` and each of those with its own two sides, and that whole lattice is
+      // already declared in the stock config — it is only the VALUES it does not
+      // recognise. Naming them here restores the lattice rather than rebuilding it.
+      p: [{ p: RHYTHM }],
+      px: [{ px: RHYTHM }],
+      py: [{ py: RHYTHM }],
+      pt: [{ pt: RHYTHM }],
+      pr: [{ pr: RHYTHM }],
+      pb: [{ pb: RHYTHM }],
+      pl: [{ pl: RHYTHM }],
+      m: [{ m: RHYTHM }],
+      mx: [{ mx: RHYTHM }],
+      my: [{ my: RHYTHM }],
+      mt: [{ mt: RHYTHM }],
+      mr: [{ mr: RHYTHM }],
+      mb: [{ mb: RHYTHM }],
+      ml: [{ ml: RHYTHM }],
+      gap: [{ gap: RHYTHM }],
+      'gap-x': [{ 'gap-x': RHYTHM }],
+      'gap-y': [{ 'gap-y': RHYTHM }],
+      'space-x': [{ 'space-x': RHYTHM }],
+      'space-y': [{ 'space-y': RHYTHM }],
       'type-role': [
         {
           type: [
