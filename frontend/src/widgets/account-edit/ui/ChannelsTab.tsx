@@ -44,15 +44,16 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       {channels.isError && (
         <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
           <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
-          <button
-            type="button"
+          <Button
+            size="xs"
+            variant="danger"
+            className="bg-white"
             onClick={() => {
               void channels.refetch();
             }}
-            className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
           >
             {t('accounts.channel.retry')}
-          </button>
+          </Button>
         </Notice>
       )}
 

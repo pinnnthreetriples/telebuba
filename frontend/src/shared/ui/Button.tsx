@@ -40,9 +40,18 @@ const BASE =
 // be a 200px stadium.
 //
 // There is no rung between `sm` and `xs`, though seven buttons asked for one — a
-// pill at `px-lg py-sm text-tiny`, 27px tall against `sm`'s 29 and `xs`'s 25. Two
-// pixels is drift, not a decision, and every one of the seven sits inside a card,
-// which is the sentence `sm` already answers. They are on `sm` now.
+// pill at `px-lg py-sm text-tiny`, 32.5px tall against `sm`'s 34.75 and `xs`'s 30.75.
+// Two pixels is drift, not a decision, and every one of the seven sits inside a card,
+// which is the sentence `sm` already answers. They are on `sm` now. (Every height here
+// is a bordered fill measured in Chrome; nothing sets a line-height, so preflight's
+// `html { line-height: 1.5 }` is what each rung's text is spaced by. The 27/29/25 this
+// note used to quote came from spacing the text at 1.0, which is a rung the app has
+// nowhere — the GAPS it decided on survived the correction, the absolutes did not.)
+//
+// There is no fifth rung for the app's six pagination buttons either, and their case
+// is weaker still: `px-lg py-sm text-lead` at weight 400 stands 35.5px, three quarters
+// of a pixel over `sm`. The rest of the difference was never chosen — nothing else in
+// the app sets `lead` at 400 — so `sm` takes them, four pixels wider a side.
 const SIZE = {
   md: 'rounded-full px-2xl py-md text-lead font-semibold',
   sm: 'rounded-full px-xl py-sm text-body font-semibold',
@@ -63,6 +72,13 @@ const SIZE = {
 // warming page) — and it is deliberately not this variant: it is drawn in
 // `line-strong` and `ink-muted` rather than in blue, so folding it in would need a
 // rung whose purpose could not be said without an "or". Those two stay hand-written.
+//
+// There is no white-filled `danger`, though five buttons wear one: the retry beside
+// the error sentence inside a `Notice tone="danger"`, where this variant's own
+// `bg-danger-tint` is the tint it is already standing on. The white is a real
+// decision, so those five say it as `className="bg-white"` instead of losing it — but
+// all five live in `widgets/account-edit`, and a fill is not given a name until two
+// independent slices ask for it.
 const VARIANT = {
   primary: 'bg-primary text-white hover:bg-primary-press',
   secondary: 'border border-line bg-white text-ink hover:border-line-strong',

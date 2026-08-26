@@ -114,26 +114,24 @@ export function CommentHistoryModal({
 
       <div className="flex items-center justify-between border-t border-line-row px-2xl pb-xl pt-lg">
         <div className="flex gap-sm">
-          <button
-            type="button"
+          <Button
+            size="sm"
             disabled={!hasPrev}
             onClick={() => {
               setCursorStack((stack) => stack.slice(0, -1));
             }}
-            className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
           >
             {t('neurocomment.history.prev')}
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            size="sm"
             disabled={!hasNext}
             onClick={() => {
               setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
             }}
-            className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
           >
             {t('neurocomment.history.next')}
-          </button>
+          </Button>
         </div>
         <Button variant="primary" onClick={onClose}>
           {t('neurocomment.history.done')}

@@ -252,26 +252,24 @@ export function AccountsPage() {
               A genuinely empty FIRST page still shows the bare empty state. */}
           {items.length > 0 || hasPrev ? (
             <div className="mt-lg flex items-center justify-end gap-sm">
-              <button
-                type="button"
+              <Button
+                size="sm"
                 disabled={!hasPrev}
                 onClick={() => {
                   setCursorStack((stack) => stack.slice(0, -1));
                 }}
-                className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.prev')}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                size="sm"
                 disabled={!hasNext}
                 onClick={() => {
                   setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
                 }}
-                className="rounded-full border border-line bg-white px-lg py-sm text-lead disabled:opacity-50"
               >
                 {t('accounts.pagination.next')}
-              </button>
+              </Button>
             </div>
           ) : null}
         </>

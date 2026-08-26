@@ -291,15 +291,16 @@ export function ChannelPostsPanel({
       {posts.isError && (
         <Notice tone="danger" className="mt-md flex items-center justify-between gap-md">
           <span>{channelErrorText(posts.error, t, t('accounts.channel.postsError'))}</span>
-          <button
-            type="button"
+          <Button
+            size="xs"
+            variant="danger"
+            className="bg-white"
             onClick={() => {
               void posts.refetch();
             }}
-            className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
           >
             {t('accounts.channel.retry')}
-          </button>
+          </Button>
         </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (

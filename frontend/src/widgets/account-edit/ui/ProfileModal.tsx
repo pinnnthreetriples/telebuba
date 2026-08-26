@@ -792,16 +792,17 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
               <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
-                <button
-                  type="button"
+                <Button
+                  size="xs"
+                  variant="danger"
+                  className="bg-white"
                   disabled={refreshState === 'loading' || syncing}
                   onClick={() => {
                     void onRefresh();
                   }}
-                  className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium disabled:opacity-60"
                 >
                   {t('accounts.profile.refresh')}
-                </button>
+                </Button>
               </Notice>
             )}
             {tab === 'text' && (

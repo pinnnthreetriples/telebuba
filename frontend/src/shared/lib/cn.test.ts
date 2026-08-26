@@ -64,3 +64,31 @@ test('a line-height survives a rung and a role', () => {
   expect(cn('leading-log', 'text-micro')).toBe('leading-log text-micro');
   expect(cn('type-caption', 'leading-stack')).toBe('type-caption leading-stack');
 });
+
+// The rhythm, and the reason it is the widest case of the three: a component's own
+// padding is written FIRST and the caller's override LAST, so a scale tailwind-merge
+// cannot parse does not merely leave two classes on the element — it lets the component
+// beat its own caller, decided by which name sorts later in the stylesheet. Before the
+// rungs were named here, `cn('py-tight', 'py-xs')` returned both and rendered `py-tight`.
+describe('a caller overrides the rhythm a component wrote first', () => {
+  for (const [base, override] of [
+    ['py-tight', 'py-xs'],
+    ['px-md', 'px-lg'],
+    ['p-lg', 'p-2xl'],
+    ['gap-sm', 'gap-md'],
+    ['mt-page', 'mt-empty'],
+  ] as const) {
+    test(`${base} then ${override}`, () => {
+      expect(cn(base, override)).toBe(override);
+    });
+  }
+});
+
+// The lattice stock tailwind-merge already declares, which naming the values restores
+// rather than replaces: an axis clears the two sides it covers, and `p` clears all four.
+test('the shorthand still beats the sides it covers', () => {
+  expect(cn('pt-md', 'py-lg')).toBe('py-lg');
+  expect(cn('px-md', 'py-md', 'p-lg')).toBe('p-lg');
+  // ...and not the other way round: a side written after an axis survives it.
+  expect(cn('py-lg', 'pt-md')).toBe('py-lg pt-md');
+});

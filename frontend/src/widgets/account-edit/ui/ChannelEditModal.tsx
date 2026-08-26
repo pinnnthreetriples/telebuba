@@ -200,15 +200,16 @@ export function ChannelEditModal({
           {detail.isError && (
             <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
-              <button
-                type="button"
+              <Button
+                size="xs"
+                variant="danger"
+                className="bg-white"
                 onClick={() => {
                   void detail.refetch();
                 }}
-                className="shrink-0 rounded-full border border-danger-line bg-white px-md py-xs text-body font-medium"
               >
                 {t('accounts.channel.retry')}
-              </button>
+              </Button>
             </Notice>
           )}
 
