@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-17
+last_updated: 2026-08-27
 edges:
   - target: context/runtime-warming.md
     condition: the other writer of the account-ownership registry
@@ -15,6 +15,7 @@ A campaign replays one approved multi-account dialogue into target chats; `reviv
 replays it round and round in one chat the operator owns.
 
 - An account may be ASSIGNED to any number of campaigns but HELD by at most one running one, and never while warming or a neurocomment campaign holds it. One in-memory registry answers that, keyed by an identity (the run or campaign holding it) rather than a flag, so a late callback from an evicted generation cannot release the claim its successor now holds.
+- A channel-discovery run is the one Telegram-paced runtime that neither claims against a campaign nor is claimed against by one: it keeps its own in-process claim, which warming learned to ask and the registry never absorbed. One session can therefore carry a run and a running campaign at once. That is an unclosed gap rather than a decision — the ownership answer now lives in three shapes (this registry, the listener columns, discovery's map), and the next feature to need it is the one that should collapse them.
 - The neurocomment listener is deliberately not a holder in that registry. Enrolling it would mean a claim, a release and a restart-time restore inside a runtime whose restart logic is load-bearing, so the exclusion is paid as point checks against the listener's own durable state, in both directions, instead. That is a trade rather than a claim that point checks are better; the next feature needing the answer is the one that should stop paying it.
 - The rolling daily join budget is counted out of neurocomment's join log rather than a private counter, because Telegram counts joins per ACCOUNT and does not care which of our features spent them. Two private counters let one account join twice its cap with both features certain they had stayed under it. The price — neurocomment reaches its own cap sooner while a campaign runs — is the point, not a side effect.
 - Text de-duplication is scoped to the target, never global: replaying ONE dialogue into many chats is the feature, so a global reservation would pass the first target and refuse every other as a duplicate of it. Scoped, the gate still fires on the real signal — the same words twice in the same chat. `revive` narrows it once more, to the cycle, because saying the same lines into the same chat again IS that mode rather than an accident of it; without that the second cycle publishes nothing for the length of the dedup window.
