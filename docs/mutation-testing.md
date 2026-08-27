@@ -11,20 +11,33 @@ preserves every available partial snapshot and diagnostic log.
 
 | Result | Count |
 |---|---:|
-| Total | 15,772 |
-| Killed | 13,057 |
-| Survived | 2,499 |
-| Timeout | 216 |
-| Score | 83.9355% |
+| Total | 19,766 |
+| Killed | 16,358 |
+| Survived | 3,185 |
+| Timeout | 223 |
+| Score | 83.7026% |
 
 The original baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because current `main` and the new tests
 cover additional production paths.
 
+The floor above replaces a 15,772-mutant one (13,057/2,499/216, 83.9355%) seeded
+on 2026-08-15, and the reseed is the case the paragraph below describes rather
+than a concession. `services/neuroshilling` landed whole between the 08-17 and
+08-18 sweeps — roughly 6,900 lines and 3,322 new mutants, killed at about 81%
+against a tree that kills at 84.3% — so from 08-18 every Nightly failed on a
+floor measured before that subsystem existed. Ten nights of follow-up tests
+narrowed the gap from 0.50pp to 0.23pp, or 46 mutants, and no other module
+regressed: the mutants carried over from the old catalogue are still killed at
+84.07%, above the floor they set. What the old number had stopped measuring was
+the tree being swept. Neuroshilling's own rate is the debt this leaves behind —
+`_dispatch::_record`, `_steps::_replay` and `_substitution::substitute` hold 119
+survivors between them — and it is a test-writing job, not a baseline one.
+
 The current calibration uses CPython 3.13.14, mutmut 3.6.0, the deterministic
 `mutation` Hypothesis profile, four mutmut workers, `PYTHONHASHSEED=0`, and
 `TZ=UTC`. Its catalogue digest is
-`6c88cb83ff9c1aaf3b3f7944d1acfdf09f699e383d44ab19d229ff7e3706b1db`;
+`e116cd66d865c1989506c5b68b2e1022421c06d527dd8d0d710953f06ce82dc5`;
 the digest binds mutant identities to the exact Python source paths and bytes,
 so a semantic source change cannot silently reuse a reviewed identity.
 
@@ -61,7 +74,7 @@ serial recheck: one seen under four-worker load is rerun alone before it counts,
 which is how `start_neurocomment__mutmut_1` was caught as noise and kept out of
 the floor.
 
-The 13,057/2,499/216 floor is measured on `main` itself, not on a branch racing
+The 16,358/3,185/223 floor is measured on `main` itself, not on a branch racing
 it. Every merge from `main` changes source bytes under the measured paths and so
 changes the digest, and a sweep costs hours — three reseeds on one branch were
 each invalidated by the next merge before they could be confirmed. Calibrate
