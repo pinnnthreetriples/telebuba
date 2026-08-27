@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
@@ -43,16 +44,27 @@ async def check_telegram_session(
         )
     result: TelegramSessionCheckResult
     try:
-        client = await _probe_client(profile.account_id)
-        if not await client.is_user_authorized():
-            result = _status_session_check_result(profile, status="unauthorized")
-        else:
-            me = await client.get_me()
-            # A frozen account keeps an authorized session and get_me() succeeds,
-            # so probe the app config for a freeze signal before declaring alive.
-            result = await _frozen_session_check_result(
-                client, profile
-            ) or _alive_session_check_result(profile, me, await _download_avatar_thumb(client, me))
+        # One deadline over the whole probe — see ``session_check_timeout_seconds``.
+        # Nothing below bounds itself: the borrow queues on the pool's per-account
+        # connect lock with no timeout, and every RPC after it (``is_user_authorized``,
+        # ``get_me``, the freeze probe, the avatar) rides Telethon's ``users._call``,
+        # which awaits the response future forever. Expiry raises ``TimeoutError``,
+        # which ``_NETWORK_ERRORS`` already classifies as a temporary transport fault —
+        # the same verdict the pool's own refusal gets, for the same reason: nothing
+        # was learned about this session, so the row must not be marked broken.
+        async with asyncio.timeout(settings.telegram.session_check_timeout_seconds):
+            client = await _probe_client(profile.account_id)
+            if not await client.is_user_authorized():
+                result = _status_session_check_result(profile, status="unauthorized")
+            else:
+                me = await client.get_me()
+                # A frozen account keeps an authorized session and get_me() succeeds,
+                # so probe the app config for a freeze signal before declaring alive.
+                result = await _frozen_session_check_result(
+                    client, profile
+                ) or _alive_session_check_result(
+                    profile, me, await _download_avatar_thumb(client, me)
+                )
     except _SESSION_ERRORS as exc:
         result = _error_session_check_result(profile, exc, status="session_error")
     except _ACCOUNT_ERRORS as exc:
@@ -144,7 +156,8 @@ _ACCOUNT_ERRORS = (
 # this session and the verdict must not read as a fault of the account. It used to
 # reach the catch-all as a bare ``RuntimeError`` and answer ``unknown_error``, which
 # ``services.accounts.sessions`` PERSISTS: pressing Check while a login was in
-# flight left a healthy row looking broken until the next check.
+# flight left a healthy row looking broken until the next check. ``TimeoutError`` is
+# load-bearing for the same reason: it is what the probe's own deadline above raises.
 _NETWORK_ERRORS = (ConnectionError, OSError, TimeoutError, TelegramClientUnavailableError)
 _PROXY_ERRORS = (ProxyConnectionError, ProxyError, ProxyTimeoutError)
 

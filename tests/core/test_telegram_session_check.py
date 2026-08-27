@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -11,11 +12,17 @@ from python_socks import ProxyConnectionError
 from core.config import settings
 from core.db import configure_database
 from core.telegram_client import check_telegram_session
-from core.telegram_client._pool import TelegramClientPoolError, removing_client
+from core.telegram_client._pool import (
+    TelegramClientPoolError,
+    _connect_lock,
+    _reset_for_tests,
+    removing_client,
+)
 from core.telegram_client._session import _download_avatar_thumb
 from schemas.telegram_session import TelegramSessionCheckRequest
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from pathlib import Path
 
 
@@ -23,9 +30,15 @@ if TYPE_CHECKING:
 def _isolate_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.telegram, "session_dir", tmp_path / "sessions")
+    # The deadline tests below take a real per-account lock, and an ``asyncio.Lock``
+    # binds the loop it was first awaited on — leaving one in the module dict would
+    # break the next test's fresh loop.
+    _reset_for_tests()
+    yield
+    _reset_for_tests()
 
 
 @pytest.mark.asyncio
@@ -161,6 +174,59 @@ async def test_a_live_tombstone_does_not_become_an_unknown_error_verdict(
     assert result.status == "network_error"
     assert result.is_temporary is True
     assert result.error_type == "TelegramClientUnavailableError"
+
+
+class _MuteClient:
+    """A borrowed client whose first RPC never answers (half-open socket)."""
+
+    async def is_user_authorized(self) -> bool:
+        await asyncio.Event().wait()
+        return True
+
+
+@pytest.mark.asyncio
+async def test_a_silent_pooled_client_cannot_hang_the_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The RPC that never answers must end as a verdict, not as a forever-spinner.
+
+    Telethon's ``users._call`` awaits the response future with no timeout, and a
+    pooled client whose socket went half-open still reports ``is_connected()``
+    True — so the check borrowed it on the pool's fast path and blocked for good.
+    """
+    _with_credentials(monkeypatch)
+    monkeypatch.setattr(settings.telegram, "session_check_timeout_seconds", 0.05)
+
+    async def fake_get_client(_account_id: str) -> object:
+        return _MuteClient()
+
+    monkeypatch.setattr("core.telegram_client._session.get_client", fake_get_client)
+
+    result = await check_telegram_session(TelegramSessionCheckRequest(account_id="acc-1"))
+
+    assert result.status == "network_error"
+    assert result.is_temporary is True
+    assert result.error_type == "TimeoutError"
+
+
+@pytest.mark.asyncio
+async def test_a_held_connect_lock_cannot_hang_the_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pool's per-account connect lock is acquired with no timeout of its own.
+
+    A borrower already inside ``get_client`` for this account keeps every other
+    borrower queued, so the check must carry its own deadline to the lock too.
+    """
+    _with_credentials(monkeypatch)
+    monkeypatch.setattr(settings.telegram, "session_check_timeout_seconds", 0.05)
+
+    async with _connect_lock("acc-1"):
+        result = await check_telegram_session(TelegramSessionCheckRequest(account_id="acc-1"))
+
+    assert result.status == "network_error"
+    assert result.is_temporary is True
+    assert result.error_type == "TimeoutError"
 
 
 @pytest.mark.asyncio
