@@ -7,7 +7,7 @@ edges:
   - target: context/conventions.md
     condition: backend implementation or review
   - target: context/frontend.md
-    condition: React, FSD, TypeScript, i18n, or frontend gates
+    condition: React, FSD, TypeScript, i18n, design tokens, or frontend gates
   - target: context/runtime-telegram.md
     condition: Telegram client, sessions, proxies, profile, privacy, or account removal
   - target: context/runtime-warming.md
@@ -22,7 +22,7 @@ edges:
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-08-17
+last_updated: 2026-08-27
 ---
 
 # Telebuba Router
