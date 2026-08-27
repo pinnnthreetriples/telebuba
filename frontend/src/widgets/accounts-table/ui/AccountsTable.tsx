@@ -10,7 +10,7 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import type { FeedbackResult } from '@/shared/lib';
+import { cn, type FeedbackResult } from '@/shared/lib';
 import { Card, DataTable, type DataTableColumnMeta, Icon, StatusIcon } from '@/shared/ui';
 
 interface AccountsTableProps {
@@ -210,7 +210,20 @@ export function AccountsTable({
                 event.stopPropagation();
                 onCheck(account.account_id);
               }}
-              className={`${ACTION_BTN} transition-colors duration-enter ${CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')]}`}
+              // `cn`, not a template string, and this is the one button here that
+              // needs it: `ACTION_BTN` paints `bg-white` and a verdict paints over
+              // it, which is the same utility group at the same specificity — so
+              // the winner is decided by the order the two rules sit in the
+              // stylesheet, not by which was written last. Tailwind emits colours
+              // alphabetically, `.bg-white` lands after `.bg-success-deep` and
+              // `.bg-danger`, and both verdicts lost their fill while keeping
+              // `text-white`: a white glyph on a white circle, for every check this
+              // table has ever run. tailwind-merge drops the loser instead.
+              className={cn(
+                ACTION_BTN,
+                'transition-colors duration-enter',
+                CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')],
+              )}
             >
               {busy ? (
                 <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-primary" />
