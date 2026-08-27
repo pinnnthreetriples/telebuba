@@ -14,7 +14,8 @@
     "test": "vitest run --coverage",
     "ds:doc": "node scripts/design-system-doc.mjs",
     "ds:doc:check": "node scripts/design-system-doc.mjs --check",
-    "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run test",
+    "ds:dead": "node scripts/dead-tokens.mjs",
+    "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run ds:dead && npm run test",
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
   },
   "overrides": {
