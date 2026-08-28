@@ -16,7 +16,10 @@
 //
 //   `bg-white` / `text-white` (213 sites) — white and black are the two colours a
 //   palette does not have to name. An alias would be a synonym rather than a role,
-//   and there is no second theme for it to point somewhere else in.
+//   and there is no second theme for it to point somewhere else in. They are rungs of
+//   `theme.colors` now rather than leftovers of Tailwind's palette underneath it, which
+//   is what makes them nameable at all: the palette REPLACES Tailwind's, so a colour the
+//   config does not carry does not compile.
 //
 //   an ALPHA modifier on white or black (13 sites) — `bg-white/85` under the nav bar's
 //   blur, `bg-white/70` over a photo grid mid-drag, `bg-black/55` over a story preview,
@@ -109,14 +112,33 @@
 // A test file is exempt too, and for the opposite reason: `cn.test.ts` and
 // `designTokenRule.test.ts` assert on the very spellings this bans, and a fixture is
 // data about the code rather than a decision inside it.
+import { colorRoots, scaleNames } from '../scripts/configScales.mjs';
+
+// The composition of every scale comes from `src/shared/design-system/tokens` — the same
+// objects `ds:dead`, the doc generator, `cn.ts` and Tailwind itself read. That is the
+// point: the gate that bans a value outside the scale and the gate that bans a scale rung
+// nobody wears can no longer disagree about what the scale IS.
+
 const NOT_A_CONSUMER = /(?:^|[\\/])src[\\/]shared[\\/]ui[\\/]|\.test\.tsx?$/;
+
+// The token modules themselves: the one place a raw value is the correct thing to write.
+const IS_THE_SYSTEM = /(?:^|[\\/])src[\\/]shared[\\/]design-system[\\/]tokens[\\/]/;
 
 // `hero` is left out on purpose. The config calls it "the one empty-state numeral" and
 // means it: one element in the whole app is 42px, WarmDaysModal's day count. A role
 // needs two wearers in two slices — a rung worn once is a literal with a name — so
 // there is no `type-*` for it to move onto, and flagging it would be asking for a
 // thirteenth role with nothing to defend it.
-const TYPE_RUNG = 'micro|tiny|body|lead|title|stat|display';
+//
+// The rest of the set is READ from the config rather than spelled here. It used to be
+// spelled, with the note that "a name that leaves this file is a rename the sweep has to
+// notice anyway" — which is true of a rename and false of an ADDITION, and an addition is
+// what actually happens: a ninth rung or a twelfth colour lands in the config, this list
+// does not grow, and the pattern below quietly stops covering it. A gate that goes green
+// by looking at less is the failure mode the design system's own gates exist to catch.
+const TYPE_RUNG = scaleNames('fontSize')
+  .filter((rung) => rung !== 'hero')
+  .join('|');
 const INK_RAMP = String.raw`text-ink(?:-(?:body|muted|subtle))?(?![\w-])`;
 
 // What this pattern deliberately does NOT reach, and why:
@@ -157,6 +179,15 @@ const PAINTS_A_BOX = String.raw`(?:^|\s)(?:[\w-]+:)*(?:bg-|border(?![\w-])|borde
 const IS_A_CONTROL = String.raw`(?:^|\s)(?:hover|focus|focus-visible|focus-within|active|disabled|aria-[\w-]+|data-[\w-]+):|(?:^|\s)transition|(?:^|\s)cursor-`;
 const IS_A_GLYPH = String.raw`(?:^|\s)(?:leading-none|absolute|fixed)(?![\w-])`;
 
+// Tailwind's own palette, and the pattern it feeds changed job. While the app's colours
+// sat in `theme.extend`, `bg-blue-500` compiled and painted a blue nobody chose, and this
+// pattern was the only thing standing between the two palettes — inside `src`, outside a
+// test file. The palette is at `theme.colors` now, so the class emits NOTHING and the
+// element silently keeps what it inherited; the pattern stays for the reason
+// `RETIRED_LEADING` does, to name a class that does nothing rather than let it look right.
+//
+// A literal list rather than a read of the config, unlike `TOKEN` and `TYPE_RUNG`: these
+// are not this design system's names, and nothing in this repo renames them.
 const PALETTE =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
 const COLOUR = 'bg|text|border|ring|fill|stroke|from|to|via|divide|outline|decoration|caret|accent';
@@ -186,11 +217,18 @@ const RETIRED_LEADING = '10|3|4|5|6|7|8|9|tight|snug|normal|relaxed|loose';
 const RETIRED_TRACKING = 'tighter|tight|normal|wide|wider|widest';
 
 // The palette's own names, as a class list spells them — the roots only, since a rung
-// (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. A
-// literal list rather than a read of the config, the same way `RETIRED` and `PALETTE`
-// are: this file has never imported the config, and a name that leaves it is a rename
-// the sweep has to notice anyway.
-const TOKEN = 'canvas|scrim|veil|surface|ink|line|primary|success|warning|danger|term';
+// (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. Read
+// from the config for the reason given at `TYPE_RUNG`.
+//
+// `white` and `black` come out: the pattern this feeds bans an alpha modifier on a named
+// colour, and alpha on those two is the documented exception — `border-black/5` on a
+// photograph, `bg-black/55` on a story tile. `transparent` and `current` come out because
+// an alpha on a keyword is not a colour the palette failed to name; it is nonsense that
+// emits nothing.
+const NOT_A_TINTABLE_COLOUR = new Set(['white', 'black', 'transparent', 'current']);
+const TOKEN = colorRoots()
+  .filter((name) => !NOT_A_TINTABLE_COLOUR.has(name))
+  .join('|');
 
 const PATTERNS = [
   {
@@ -201,7 +239,7 @@ const PATTERNS = [
   {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
     message:
-      "Tailwind's own palette is not this app's. The config adds a named set beside it, so `bg-blue-500` would sit next to `bg-primary` and disagree with it by a shade nobody chose. Use the semantic colour.",
+      "Tailwind's own palette is not this app's, and the config no longer keeps it reachable: `theme.colors` REPLACES it, so this class emits no rule at all and the element silently keeps whatever colour it inherited. Use the semantic colour.",
   },
   {
     test: at(
@@ -292,11 +330,18 @@ const PATTERNS = [
 const noRawValues = {
   meta: {
     type: 'problem',
-    docs: { description: 'Design values come from the Tailwind config, not from the call site.' },
+    docs: { description: 'Design values come from the design system, not from the call site.' },
     schema: [],
   },
   create(context) {
     const filename = context.filename ?? context.getFilename();
+    // The token modules are where a value is SUPPOSED to be written, so the whole rule is
+    // off inside them. Not a hole and not a suppression: this rule's proposition is "a
+    // value belongs to the design system, not to the call site", and these files are the
+    // design system. Exempting them is the same move as `NOT_A_CONSUMER` exempting
+    // `shared/ui` from the type-role pattern, one level down — and it is scoped to
+    // `tokens/`, not to `design-system/`, so a recipe next door still cannot write a hex.
+    if (IS_THE_SYSTEM.test(filename)) return {};
     const check = (node, text) => {
       if (typeof text !== 'string' || text.length === 0) return;
       for (const { test, message, above, unless } of PATTERNS) {

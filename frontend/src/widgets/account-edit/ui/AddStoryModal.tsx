@@ -394,7 +394,7 @@ export function AddStoryModal({
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-micro font-semibold text-white">
+                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-tiny font-semibold text-white">
                     {index + 1}
                   </span>
                   <button
@@ -497,7 +497,7 @@ export function AddStoryModal({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate type-item-title">{video.name}</div>
-                <div className={`mt-px text-micro ${metaTone}`}>{metaText}</div>
+                <div className={`mt-px text-tiny ${metaTone}`}>{metaText}</div>
               </div>
               {!busy && !done && (
                 <button

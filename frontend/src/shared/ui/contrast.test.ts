@@ -10,12 +10,18 @@ const AA = 4.5;
 const NON_TEXT = 3;
 
 type Ramp = Record<string, string> & { DEFAULT?: string };
-const colors = config.theme?.extend?.colors as Record<string, string | Ramp>;
+const colors = config.theme?.colors as Record<string, string | Ramp>;
 
 // The palette as a class list spells it: `ink`, `ink-subtle`, `primary-tint`. The
 // config nests the ramps, so DEFAULT loses its rung on the way out. Anything that is
-// not a flat hex (`scrim` is an rgba wash over a photograph) has no ratio to measure.
-const HEX: Record<string, string> = { white: '#ffffff' };
+// not a flat hex has no ratio to measure — `scrim` is an rgba wash over a photograph,
+// and `transparent`/`current` are keywords rather than colours.
+//
+// `white` used to be seeded here by hand, because the palette lived in `theme.extend`
+// and white was Tailwind's. Now that the palette REPLACES Tailwind's it carries its own
+// white, and this table reads it like every other rung — which is the point of the move:
+// a colour the app paints and a colour this gate measures can no longer be two sets.
+const HEX: Record<string, string> = {};
 for (const [name, value] of Object.entries(colors)) {
   if (typeof value === 'string') {
     if (value.startsWith('#')) HEX[name] = value;

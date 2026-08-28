@@ -64,7 +64,7 @@ function participant(
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
-      <div className="mb-xs flex items-center gap-tight type-meta">
+      <div className="mb-xs flex items-center gap-tight type-caption">
         <span className="font-medium text-ink-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
@@ -72,7 +72,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         <span className="font-medium text-ink-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums type-meta">
+        <span className="ml-auto shrink-0 tabular-nums type-caption">
           {formatLocalTime(message.created_at)}
         </span>
       </div>
@@ -88,7 +88,7 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-hair flex items-center gap-sm type-meta">
+    <div className="mt-hair flex items-center gap-sm type-caption">
       <span className="flex items-center gap-xs">
         {[0, 1, 2].map((index) => (
           <span

@@ -36,7 +36,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="mb-lg inline-flex items-center gap-sm bg-transparent p-0 text-lead font-medium text-ink-muted hover:text-ink"
+        className="mb-lg inline-flex items-center gap-sm bg-transparent p-0 text-body font-medium text-ink-muted hover:text-ink"
       >
         ← {t('accounts.edit.back')}
       </button>

@@ -258,7 +258,7 @@ export function AccountLimitsModal({
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
           }}
-          className="rounded-full border border-line-strong bg-white px-xl py-md text-lead font-medium text-ink-muted"
+          className="rounded-full border border-line-strong bg-white px-xl py-md text-body font-medium text-ink-muted"
         >
           {t('neurocomment.modal.limits.resetAll')}
         </button>
@@ -266,7 +266,7 @@ export function AccountLimitsModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-strong bg-white px-xl py-md text-lead font-medium text-ink-muted"
+            className="rounded-full border border-line-strong bg-white px-xl py-md text-body font-medium text-ink-muted"
           >
             {t('neurocomment.modal.cancel')}
           </button>

@@ -263,7 +263,7 @@ export function ChannelEditModal({
                   type="button"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line bg-white px-lg py-sm text-lead font-medium disabled:opacity-60"
+                  className="rounded-full border border-line bg-white px-lg py-sm text-body font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">

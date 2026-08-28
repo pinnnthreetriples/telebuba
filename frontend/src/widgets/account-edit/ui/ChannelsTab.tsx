@@ -109,7 +109,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                   setConfirmDelete(channel);
                 }}
                 aria-label={t('accounts.channel.delete')}
-                className="text-lead"
+                className="text-body"
               >
                 ×
               </IconButton>

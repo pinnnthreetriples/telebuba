@@ -3,9 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
 import { expectNoAxeViolations } from './axe.test-helpers';
+import { Button } from './Button';
 import { Input, Textarea } from './Input';
 
-test('the vertical padding and type size come from the size prop', async () => {
+// Высота ФИКСИРОВАННАЯ, а не сумма padding и интерлиньяжа. Разница не косметическая:
+// пока она складывалась, смена рунга размера меняла высоту контрола, и `size="md"` значил
+// 41px у поля против 40px у кнопки рядом.
+test('the height and type size come from the size prop', async () => {
   const { container } = render(
     <>
       <Input aria-label="Ключ" />
@@ -14,12 +18,34 @@ test('the vertical padding and type size come from the size prop', async () => {
     </>,
   );
 
-  // On one rhythm the three rungs share their horizontal padding and differ
-  // vertically, which is what they were reaching for at 12/11/9px apart.
-  expect(screen.getByLabelText('Ключ').className).toContain('py-md');
-  expect(screen.getByLabelText('Порог').className).toContain('py-sm');
-  expect(screen.getByLabelText('Лимит').className).toContain('py-tight');
+  expect(screen.getByLabelText('Ключ').className).toContain('h-control');
+  expect(screen.getByLabelText('Порог').className).toContain('h-field');
+  expect(screen.getByLabelText('Лимит').className).toContain('h-compact');
+  // Ни одна ступень не набирает вертикальный padding: он и был тем, из чего высота
+  // складывалась.
+  expect(screen.getByLabelText('Ключ').className).not.toMatch(/py-/);
   await expectNoAxeViolations(container);
+});
+
+// Это и есть то, что рецепт контрола ДОБАВЛЯЕТ: имя ступени значит одно и то же у кнопки
+// и у поля. Раньше не значило, и увидеть это можно было только линейкой на экране.
+test('a size name means the same height in Button and Input', () => {
+  render(
+    <>
+      <Button size="md">Сохранить</Button>
+      <Input aria-label="Ключ" size="md" />
+      <Button size="sm">Отмена</Button>
+      <Input aria-label="Порог" size="sm" />
+    </>,
+  );
+
+  const height = (node: Element) => /h-[\w-]+/.exec(node.className)?.[0];
+  expect(height(screen.getByRole('button', { name: 'Сохранить' }))).toBe(
+    height(screen.getByLabelText('Ключ')),
+  );
+  expect(height(screen.getByRole('button', { name: 'Отмена' }))).toBe(
+    height(screen.getByLabelText('Порог')),
+  );
 });
 
 // A red border alone is a colour carrying meaning, so the state is published to
@@ -53,13 +79,16 @@ test('a caller class wins over the tone it collides with', () => {
   expect(screen.getByLabelText('Пароль').className).toContain('text-ink');
 });
 
-test('Textarea takes the same shape and reaches its element by ref', async () => {
+// У области высота приходит из `rows`, поэтому она — единственный контрол, который
+// фиксированную высоту НЕ берёт: зафиксировать её значило бы обрезать написанный текст.
+test('Textarea takes the same shape but keeps padding instead of a height', async () => {
   const onChange = vi.fn();
   render(<Textarea aria-label="Промпт" size="sm" onChange={onChange} />);
 
   const area = screen.getByLabelText('Промпт');
   expect(area.tagName).toBe('TEXTAREA');
-  expect(area.className).toContain('py-sm');
+  expect(area.className).toContain('py-tight');
+  expect(area.className).not.toMatch(/h-/);
   await userEvent.type(area, 'ок');
   expect(onChange).toHaveBeenCalled();
 });

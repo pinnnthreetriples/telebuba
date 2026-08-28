@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { surface } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
+
 import { getToasts, subscribe, type Toast } from './toast';
 
 // Renders the toast queue (see toast.ts). Mounted once at the app root; styling
@@ -27,7 +30,10 @@ export function Toaster() {
         <div
           key={toast.id}
           role="alert"
-          className="pointer-events-auto max-w-[90vw] rounded-lg bg-term px-lg py-md text-lead text-white shadow-pop [animation:fadeup_0.25s_ease]"
+          className={cn(
+            'pointer-events-auto max-w-[90vw] px-lg py-md text-body text-white shadow-pop tb-arrive',
+            surface('inverse'),
+          )}
         >
           {toast.message}
         </div>

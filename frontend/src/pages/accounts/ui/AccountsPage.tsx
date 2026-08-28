@@ -194,7 +194,7 @@ export function AccountsPage() {
               }}
               placeholder={t('accounts.searchPlaceholder')}
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the search pill's own height, one component's internal layout
-              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-[36px] pr-md text-lead outline-none sm:w-tip"
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-[36px] pr-md text-body outline-none sm:w-tip"
             />
           </div>
           <Button

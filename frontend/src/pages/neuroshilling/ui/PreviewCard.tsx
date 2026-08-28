@@ -76,7 +76,7 @@ export function PreviewCard({
                 {index > 0 ? (
                   <div className="my-sm flex items-center gap-sm">
                     <span className="h-px flex-1 bg-line" />
-                    <span className="type-meta tabular-nums">
+                    <span className="type-caption tabular-nums">
                       {t('neuroshilling.preview.pause', {
                         min: step.delay_min_seconds ?? 60,
                         max: step.delay_max_seconds ?? 180,
@@ -99,7 +99,7 @@ export function PreviewCard({
                       <span className={`type-item-title ${tone.text}`}>
                         {role?.name ?? t('neuroshilling.preview.noRole')}
                       </span>
-                      <span className="type-meta tabular-nums">
+                      <span className="type-caption tabular-nums">
                         {t('neuroshilling.preview.at', { time: clock(elapsed) })}
                       </span>
                     </div>

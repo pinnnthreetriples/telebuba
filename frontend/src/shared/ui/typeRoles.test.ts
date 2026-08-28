@@ -13,7 +13,7 @@ type Role = { size: string; weight: string; ink: string; tracking?: string; caps
 
 const roles = (config.theme as { typeRole: Record<string, Role> }).typeRole;
 const fontSize = config.theme.fontSize as Record<string, string>;
-const ink = config.theme.extend.colors.ink;
+const ink = config.theme.colors.ink;
 
 function inkHex(token: string): string {
   if (token === 'ink') return ink.DEFAULT;

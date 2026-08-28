@@ -145,12 +145,10 @@ export function ListenerEditModal({
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="inline-flex [animation:swapin_0.3s_ease_both]">
+                <span className="inline-flex tb-swapin">
                   <Icon name="check" size={16} />
                 </span>
-                <span className="inline-block [animation:swapin_0.3s_ease_0.09s_both]">
-                  {t('neurocomment.modal.saved')}
-                </span>
+                <span className="inline-block tb-swapin-late">{t('neurocomment.modal.saved')}</span>
               </span>
             ) : (
               t('neurocomment.modal.save')

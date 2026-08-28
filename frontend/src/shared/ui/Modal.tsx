@@ -1,6 +1,8 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import { surface } from '@/shared/design-system';
+
 // Everything a keyboard can land on inside the dialog (for the Tab trap).
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -37,14 +39,17 @@ let overflowBeforeLock = '';
 // `m-auto` on the card rather than `items-center` on the overlay: centring a flex item
 // with `align-items` makes the overflowing top unreachable once the container scrolls,
 // whereas auto margins centre it and still yield to the scroll.
+// Поверхность диалога приходит из `recipes/surfaces.ts` — того же набора, что у Card и у
+// выпадающей панели. Шторка её не берёт: она прилегает к краю экрана, поэтому у неё нет
+// ни радиуса, ни тени, и «поверхность диалога» описывала бы её неверно.
 const SHELL = {
   center: {
     overlay: 'justify-center overflow-y-auto overscroll-contain p-lg sm:p-xl',
-    card: 'm-auto rounded-card [animation:fadeup_0.25s_ease]',
+    card: `m-auto tb-arrive ${surface('dialog')}`,
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
-    card: 'h-full overflow-y-auto overscroll-contain tb-drawerin',
+    card: 'h-full overflow-y-auto overscroll-contain bg-white tb-drawerin',
   },
 } as const;
 
@@ -156,7 +161,7 @@ export function Modal({
     <div
       role="presentation"
       onClick={onClose}
-      className={`fixed inset-0 z-dialog flex bg-veil [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
+      className={`fixed inset-0 z-dialog flex bg-veil tb-ovfade ${SHELL[variant].overlay}`}
     >
       <div
         ref={dialogRef}
@@ -168,7 +173,7 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={`max-w-full bg-white outline-none ${SHELL[variant].card} ${className}`}
+        className={`max-w-full outline-none ${SHELL[variant].card} ${className}`}
       >
         {children}
       </div>

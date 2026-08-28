@@ -63,7 +63,7 @@ export function PhotoTab({
       className={`relative rounded-lg border-[1.5px] border-dashed p-md transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-lead font-medium text-primary">
+        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-body font-medium text-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
@@ -81,7 +81,7 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-lead leading-none text-white"
+              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-body leading-none text-white"
             >
               ×
             </button>

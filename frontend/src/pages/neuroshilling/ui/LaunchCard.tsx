@@ -95,7 +95,7 @@ function Tile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-line bg-surface px-md py-md text-center">
       <div className="text-title font-bold tabular-nums">{value}</div>
-      <div className="mt-hair type-meta">{label}</div>
+      <div className="mt-hair type-caption">{label}</div>
     </div>
   );
 }
@@ -164,7 +164,7 @@ export function LaunchCard({
             // it reads as emphasis beside the title rather than as another status pill.
             // Two such markers in the app (the other is the warming page's "прогрет"), and
             // two call sites do not earn a token. Do not fold this into the pill family.
-            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-hair text-micro font-bold text-success-deep">
+            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-hair text-tiny font-bold text-success-deep">
               <span className="tb-livedot size-dot rounded-full bg-success" />
               LIVE
             </span>

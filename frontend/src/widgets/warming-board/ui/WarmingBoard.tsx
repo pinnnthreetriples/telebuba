@@ -258,7 +258,7 @@ function WarmingCard({
                   with, which is a worse disagreement than differing from the twelve
                   pills on other screens. Twelve on the rung, plus this documented pair. */}
               <span
-                className={`inline-flex items-center gap-tight rounded-full px-sm py-px text-micro font-semibold ${statusTone}`}
+                className={`inline-flex items-center gap-tight rounded-full px-sm py-px text-tiny font-semibold ${statusTone}`}
               >
                 <span className="size-dot rounded-full bg-current" />
                 {t(`warming.warmStatus.${account.state}`)}
@@ -270,7 +270,7 @@ function WarmingCard({
                 <span
                   tabIndex={0}
                   aria-describedby={actionsTipId}
-                  className="cursor-help text-micro font-medium text-ink-subtle"
+                  className="cursor-help text-tiny font-medium text-ink-subtle"
                 >
                   {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
@@ -359,8 +359,8 @@ function WarmingCard({
           this — faint enough to double as a divider fill. */}
       <div className="rounded-lg border border-primary-hairline bg-primary-tint px-lg pb-md pt-md">
         <div className="mb-sm flex items-center justify-between">
-          <span className="type-meta font-medium">{t('warming.inProgress.days')}</span>
-          <span className="type-meta font-bold text-ink">
+          <span className="type-caption font-medium">{t('warming.inProgress.days')}</span>
+          <span className="type-caption font-bold text-ink">
             {t('warming.card.dayProgress', { days, target, count: target })}
           </span>
         </div>
@@ -376,7 +376,7 @@ function WarmingCard({
             />
           ))}
         </div>
-        <div className="mt-sm flex justify-between px-hair type-meta">
+        <div className="mt-sm flex justify-between px-hair type-caption">
           {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
@@ -418,7 +418,7 @@ function WarmingCard({
                   )}
                 </div>
                 <span
-                  className={`mt-sm text-center text-micro ${
+                  className={`mt-sm text-center text-tiny ${
                     index < active
                       ? 'font-medium text-success-deep'
                       : index === active
@@ -471,7 +471,7 @@ function WarmingCard({
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
-                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-micro text-ink-muted transition-colors hover:border-primary-line hover:text-primary-deep"
+                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-tiny text-ink-muted transition-colors hover:border-primary-line hover:text-primary-deep"
                   >
                     <svg
                       width="10"
@@ -491,7 +491,7 @@ function WarmingCard({
               ) : null}
               <div
                 // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own embedded log, one component's internal layout
-                className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-md font-mono text-micro leading-log"
+                className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-md font-mono text-tiny leading-log"
               >
                 {visibleLines.length === 0 ? (
                   <div className="text-term-dim">
@@ -546,7 +546,7 @@ function WarmingCard({
                   only way it reaches AA — every green dark enough to pass on `success-tint`
                   is indistinguishable from the heading's `success-deep` (10.05:1 here
                   against 3.70:1 for the old literal). Do not "restore the family". */}
-              <div className="mt-px type-meta text-ink-body">
+              <div className="mt-px type-caption text-ink-body">
                 {t('warming.card.completeSub', {
                   days: t('warming.card.dayProgress', { days, target, count: target }),
                 })}
@@ -639,7 +639,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-primary-line px-md py-[50px] text-center text-lead text-ink-subtle">
+          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-primary-line px-md py-[50px] text-center text-body text-ink-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

@@ -377,7 +377,7 @@ export function WarmingPage() {
                     onClick={() => {
                       setChannelToRemove(channel.channel);
                     }}
-                    className="text-lead leading-none text-ink-subtle"
+                    className="text-body leading-none text-ink-subtle"
                   >
                     ×
                   </button>
@@ -414,7 +414,7 @@ export function WarmingPage() {
                     title={t('warming.channels.cancel')}
                     aria-label={t('warming.channels.cancel')}
                     onClick={cancelAddChannel}
-                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-lead leading-none text-ink-muted"
+                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-body leading-none text-ink-muted"
                   >
                     ×
                   </button>
@@ -500,15 +500,15 @@ export function WarmingPage() {
                       {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
-                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-micro font-bold text-success-deep">
+                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-tiny font-bold text-success-deep">
                         <Icon name="check" size={10} className="stroke-success" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
                     <div className="mt-lg flex items-center rounded-lg bg-surface px-lg py-md">
                       <div className="flex-1">
-                        <div className="type-meta">{t('warming.warmed.days')}</div>
-                        <div className="text-lead font-bold">
+                        <div className="type-caption">{t('warming.warmed.days')}</div>
+                        <div className="text-body font-bold">
                           {t('warming.warmed.daysValue', {
                             days: acc.warming_days,
                             target: acc.target_days,
@@ -517,8 +517,8 @@ export function WarmingPage() {
                       </div>
                       <span className="h-compact w-px bg-line" />
                       <div className="flex-1 pl-lg">
-                        <div className="type-meta">{t('warming.warmed.trust')}</div>
-                        <div className="text-lead font-bold text-success-deep">
+                        <div className="type-caption">{t('warming.warmed.trust')}</div>
+                        <div className="text-body font-bold text-success-deep">
                           {acc.trust_score ?? '—'}
                         </div>
                       </div>
@@ -574,7 +574,7 @@ export function WarmingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <div key={index} className="flex items-start gap-md">
-                  <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
+                  <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-tiny font-semibold text-white">
                     {index + 1}
                   </span>
                   <span className="type-prose">{t(`warming.howto.steps.${String(index)}`)}</span>

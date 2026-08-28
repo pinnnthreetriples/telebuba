@@ -161,59 +161,84 @@
    the sweep that tokenised the `transition:` declarations in this file never reached
    the `animation:` shorthands. */
 .tb-blur {
-  animation: blurswap 0.34s theme('transitionTimingFunction.spring') both;
+  animation: blurswap theme('transitionDuration.swap') theme('transitionTimingFunction.spring') both;
 }
 .tb-spin {
-  animation: spin 0.7s linear infinite;
+  animation: spin theme('transitionDuration.spin') theme('transitionTimingFunction.linear') infinite;
 }
 .tb-pop {
-  animation: okpop 0.35s ease both;
+  animation: okpop theme('transitionDuration.swap') theme('transitionTimingFunction.out') both;
 }
 .pl-pulse {
-  animation: plpulse 2s ease-out infinite;
+  animation: plpulse theme('transitionDuration.pulse') theme('transitionTimingFunction.out')
+    infinite;
 }
 .tb-pulse {
-  animation: textpulse 1.4s ease-in-out infinite;
+  animation: textpulse theme('transitionDuration.pulse') theme('transitionTimingFunction.breathe')
+    infinite;
 }
 .tb-dotspin {
-  animation: spin 0.85s linear infinite;
+  animation: spin theme('transitionDuration.spin') theme('transitionTimingFunction.linear') infinite;
 }
 .tb-livedot {
-  animation: livepulse 1.2s ease-out infinite;
+  animation: livepulse theme('transitionDuration.pulse') theme('transitionTimingFunction.out')
+    infinite;
 }
 .tb-loadlead {
-  animation: loadpulse 1.1s ease-in-out infinite;
+  animation: loadpulse theme('transitionDuration.pulse') theme('transitionTimingFunction.breathe')
+    infinite;
 }
 .tb-fadeup {
-  animation: fadeup 0.4s ease both;
+  animation: fadeup theme('transitionDuration.reveal') theme('transitionTimingFunction.out') both;
 }
 .tb-swapin {
-  animation: swapin 0.32s ease both;
+  animation: swapin theme('transitionDuration.swap') theme('transitionTimingFunction.out') both;
 }
 .tb-upbar {
-  animation: upbar 1.7s ease-out forwards;
+  animation: upbar theme('transitionDuration.roll') theme('transitionTimingFunction.out') forwards;
 }
 /* `out`, the app's decelerate-and-stop, and not the `(.22,1,.36,1)` this used to
    carry: neither curve overshoots, they part by 9.6% of the travel at their widest
    (29px of a 300px drawer, 29ms in) and agree to within 1% from the halfway point on.
    A drawer arriving is the same gesture as a rail filling. */
 .tb-drawerin {
-  animation: drawerin 0.24s theme('transitionTimingFunction.out');
+  animation: drawerin theme('transitionDuration.enter') theme('transitionTimingFunction.out');
+}
+/* Вторая половина парной подмены: тот же жест, что у `.tb-swapin`, со сдвигом. Класс, а
+   не `[animation:…]` на месте — сдвиг был написан как `0.09s` в двух диалогах, и правило
+   линтера до арбитрарной утилиты не достаёт. */
+.tb-swapin-late {
+  animation: swapin theme('transitionDuration.swap') theme('transitionTimingFunction.out')
+    theme('transitionDuration.stagger') both;
+}
+/* Приезд: карточка диалога и тост. Тот же кадр, что у `.tb-fadeup`, но другой рунг, и это
+   не расхождение, а два жеста на одном кадре: `.tb-fadeup` — раскрытие пятнадцати блоков
+   страницы (`reveal`), здесь — прибытие одной вещи (`enter`). Раньше оба сайта писали
+   `[animation:fadeup_0.25s_ease]`, то есть уже спорили с классом, просто молча. */
+.tb-arrive {
+  animation: fadeup theme('transitionDuration.enter') theme('transitionTimingFunction.out') both;
+}
+/* Проявление завесы: подложка диалога и мойка синхронизации. Оба писали `0.2s` инлайном. */
+.tb-ovfade {
+  animation: ovfade theme('transitionDuration.enter') theme('transitionTimingFunction.out');
 }
 /* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
    opacity keyframe, staggered so the wave reads as ongoing chatter. */
 .tb-typing-dot {
-  animation: dotspin 1.2s ease-in-out infinite;
+  animation: dotspin theme('transitionDuration.pulse') theme('transitionTimingFunction.breathe')
+    infinite;
 }
 /* Every animation in this file and every transition below it is decorative — a pulse
    that says a process is alive, a spinner, an enter, a state change — so under
    `prefers-reduced-motion: reduce` they all stop. This used to name three classes, which
-   covered the dialogue feed and the nav drawer and left the rest running: fourteen
-   `animation:` declarations here (six of them INFINITE — `.tb-spin`, `.pl-pulse`,
-   `.tb-pulse`, `.tb-dotspin`, `.tb-livedot`, `.tb-loadlead`) plus eight
-   `[animation:…]` arbitrary utilities written inline in five components. A blanket rule
-   is what reaches all three spellings; naming classes could never have reached the
-   inline ones.
+   covered the dialogue feed and the nav drawer and left the rest running: sixteen
+   `animation:` declarations here, six of them INFINITE — `.tb-spin`, `.pl-pulse`,
+   `.tb-pulse`, `.tb-dotspin`, `.tb-livedot`, `.tb-loadlead`. It also had to reach eight
+   `[animation:…]` arbitrary utilities written inline in five components, which no class
+   list could ever have named; those are gone now — `.tb-swapin`, `.tb-swapin-late`,
+   `.tb-arrive` and `.tb-ovfade` replaced them, so every animation in the app is a class
+   in this file. The blanket rule stays: what made it right was never the inline spellings
+   but that a moving thing should stop by default rather than by being remembered.
 
    Near-zero durations and NOT `animation: none` / `transition: none`, because two
    transitions carry LOGIC on their completion event and a removed transition fires no
@@ -223,8 +248,8 @@
        collapsed card keeps its whole body in the tab order and the a11y tree.
      · `.tb-subrow` — DataTable unmounts a closing sub-row on its `grid-template-rows`
        transitionend. No event and the row stays collapsed-but-present.
-   Nothing in the app listens for `animationend` (there is no `onAnimationEnd` in `src/`
-   and no `[animation:…]` utility whose end is read), so the animation half only has to
+   Nothing in the app listens for `animationend` (there is no `onAnimationEnd` in `src/`),
+   so the animation half only has to
    stop moving — but it takes `animation-iteration-count` as well as a duration, since a
    near-zero duration repeated forever is still a flicker.
 
@@ -249,26 +274,30 @@
 }
 .tb-tip-pop {
   position: absolute;
-  top: calc(100% + 7px);
+  top: calc(100% + theme('spacing.sm'));
   left: 50%;
+  /* The 3px is the distance the bubble slides, not a unit of rhythm: it is the `from`
+     half of the transition below, and the rung nearest it (`xs`) means "separate two
+     stacked hairlines". Naming travel with a spacing rung is how a token comes to mean
+     two things. */
   transform: translateX(-50%) translateY(3px);
   background: theme('colors.term.DEFAULT');
   /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
-     a one-line label on the same surface. Plain white, so it stays a literal. */
-  color: #fff;
-  border-radius: 8px;
-  padding: 7px 10px;
-  font-size: 11px;
+     a one-line label on the same surface. */
+  color: theme('colors.white');
+  border-radius: theme('borderRadius.md');
+  padding: theme('spacing.sm') theme('spacing.md');
+  font-size: theme('fontSize.tiny');
   line-height: 1.5;
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transition:
-    opacity theme('transitionDuration.state') ease,
-    transform theme('transitionDuration.state') ease;
-  /* The `pop` rung of tailwind.config.ts's z ladder, as a literal: this tooltip is
-     a pseudo-element-bearing plain-CSS component, so it cannot take `z-pop`. */
-  z-index: 20;
+    opacity theme('transitionDuration.state') theme('transitionTimingFunction.out'),
+    transform theme('transitionDuration.state') theme('transitionTimingFunction.out');
+  /* This tooltip is a pseudo-element-bearing plain-CSS component, so it cannot take
+     `z-pop` as a class — but it can spend the same rung the class does. */
+  z-index: theme('zIndex.pop');
   box-shadow: theme('boxShadow.pop');
 }
 /* `:focus-within` beside `:hover`, the same pair `HelpHint`'s light bubble already wears
@@ -288,6 +317,8 @@
   bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
+  /* The arrow is a bordered box with three transparent sides; 5px is the leg of that
+     triangle, which is geometry and not rhythm. */
   border: 5px solid transparent;
   border-bottom-color: theme('colors.term.DEFAULT');
 }
@@ -305,7 +336,7 @@
 }
 .tb-scroll::-webkit-scrollbar-thumb {
   background: theme('colors.line.strong');
-  border-radius: 8px;
+  border-radius: theme('borderRadius.md');
 }
 .tb-scroll::-webkit-scrollbar-track {
   background: transparent;
@@ -317,8 +348,8 @@
   /* The one shade with no name: a thumb that reads on `term` without becoming
      `term.dim` (which is the terminal's own muted TEXT). One scrollbar is not worth a
      role in the canon, so it stays a literal — deliberately, not by omission. */
-  background: #2b2b2e;
-  border-radius: 6px;
+  background: theme('colors.term.thumb');
+  border-radius: theme('borderRadius.sm');
 }
 
 .tb-row:hover {
@@ -331,7 +362,7 @@
   opacity: 0;
   transition:
     max-height theme('transitionDuration.reveal') theme('transitionTimingFunction.spring'),
-    opacity theme('transitionDuration.enter') ease;
+    opacity theme('transitionDuration.enter') theme('transitionTimingFunction.out');
 }
 .tb-collapse.tb-open {
   max-height: var(--mh, 600px);
@@ -405,7 +436,7 @@
   overflow: hidden;
 }
 .tb-sw-thumb {
-  transition: transform theme('transitionDuration.state') ease;
+  transition: transform theme('transitionDuration.state') theme('transitionTimingFunction.out');
 }
 .tb-sw:active .tb-sw-thumb {
   transform: scale(0.86);
@@ -416,7 +447,7 @@
   overflow: hidden;
   transition:
     max-height theme('transitionDuration.reveal') theme('transitionTimingFunction.spring'),
-    opacity theme('transitionDuration.enter') ease;
+    opacity theme('transitionDuration.enter') theme('transitionTimingFunction.out');
 }
 .tb-dd.open {
   max-height: 240px;
@@ -431,10 +462,15 @@
 }
 .tb-time {
   transition:
-    border-color theme('transitionDuration.state') ease,
-    box-shadow theme('transitionDuration.state') ease;
+    border-color theme('transitionDuration.state') theme('transitionTimingFunction.out'),
+    box-shadow theme('transitionDuration.state') theme('transitionTimingFunction.out');
 }
 .tb-time:focus-within {
-  border-color: theme('colors.primary.DEFAULT') !important;
+  /* No `!important`, and the cascade is why it never needed one: `@layer base` closes at
+     the top of this file, so this rule is UNLAYERED and sits after `@tailwind utilities`.
+     It beats a field's own `border-line` (one class against a class plus a pseudo-class)
+     and its `focus-within:border-*` (equal specificity, later in the source), so the
+     override was winning an argument it had already won. */
+  border-color: theme('colors.primary.DEFAULT');
   box-shadow: theme('boxShadow.focus');
 }

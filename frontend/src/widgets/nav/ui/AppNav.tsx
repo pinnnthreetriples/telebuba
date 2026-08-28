@@ -145,7 +145,7 @@ export function AppNav() {
             <Link
               key={link.to}
               to={link.to}
-              className={`relative flex items-center self-stretch text-lead font-medium transition-colors ${activeIdx === index ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}
+              className={`relative flex items-center self-stretch text-body font-medium transition-colors ${activeIdx === index ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}
             >
               {t(`nav.${link.key}`)}
             </Link>
@@ -212,7 +212,7 @@ export function AppNav() {
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="flex size-touch items-center justify-center rounded-full bg-primary text-lead font-semibold text-white lg:size-tile"
+              className="flex size-touch items-center justify-center rounded-full bg-primary text-body font-semibold text-white lg:size-tile"
             >
               {initials}
             </button>
@@ -247,7 +247,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-sm px-md py-sm text-left text-lead font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
+                    className="flex w-full items-center gap-sm px-md py-sm text-left text-body font-medium text-danger-deep transition-colors max-lg:min-h-touch hover:bg-danger-tint"
                   >
                     <svg
                       width="15"

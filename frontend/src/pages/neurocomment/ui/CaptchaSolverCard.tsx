@@ -50,7 +50,7 @@ export function CaptchaSolverCard({
                 <span
                   tabIndex={0}
                   aria-describedby={tipId}
-                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-white text-micro font-bold text-ink-subtle"
+                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-white text-tiny font-bold text-ink-subtle"
                 >
                   ?
                 </span>
@@ -64,7 +64,7 @@ export function CaptchaSolverCard({
                 </span>
               </span>
             </div>
-            <div className="type-meta">{t('neurocomment.captcha.sub')}</div>
+            <div className="type-caption">{t('neurocomment.captcha.sub')}</div>
           </div>
         </div>
         <Switch

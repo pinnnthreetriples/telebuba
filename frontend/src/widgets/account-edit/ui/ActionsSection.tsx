@@ -160,7 +160,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             onClick={() => {
               setConfirmDelete(true);
             }}
-            className="shrink-0 px-xs py-sm text-lead font-medium text-danger"
+            className="shrink-0 px-xs py-sm text-body font-medium text-danger"
           >
             {t('accounts.edit.deleteAccount')}
           </button>

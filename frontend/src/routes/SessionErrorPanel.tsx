@@ -36,7 +36,7 @@ export function SessionErrorPanel() {
         </Button>
         <Link
           to="/login"
-          className="rounded-full border border-line bg-white px-2xl py-md text-lead font-semibold text-ink"
+          className="rounded-full border border-line bg-white px-2xl py-md text-body font-semibold text-ink"
         >
           {i18n.t('shell.sessionLogin')}
         </Link>

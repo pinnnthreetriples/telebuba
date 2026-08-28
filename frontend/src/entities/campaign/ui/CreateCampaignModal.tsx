@@ -90,7 +90,7 @@ export function CreateCampaignModal({
                   onClick={() => {
                     setChannels((list) => list.filter((_, i) => i !== index));
                   }}
-                  className="cursor-pointer text-lead leading-none text-ink-subtle"
+                  className="cursor-pointer text-body leading-none text-ink-subtle"
                 >
                   ×
                 </button>

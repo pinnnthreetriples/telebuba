@@ -237,7 +237,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-tight py-px text-micro font-medium text-danger-deep"
+                    className="rounded-full bg-danger-tint px-tight py-px text-tiny font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>
@@ -248,7 +248,7 @@ export function CampaignsCard({
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-lead leading-none text-ink-subtle"
+                  className="text-body leading-none text-ink-subtle"
                 >
                   ×
                 </button>

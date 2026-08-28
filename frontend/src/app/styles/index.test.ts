@@ -36,9 +36,12 @@ function reducedMotionBlocks(): AtRule[] {
 
 describe('prefers-reduced-motion', () => {
   // One blanket block, not a list of class names. The list is what this used to be, and
-  // it reached three of the app's twenty-odd moving things: it could never have reached
+  // it reached three of the app's twenty-odd moving things — it could never have reached
   // the eight `[animation:…]` arbitrary utilities written inline in five components,
-  // because those classes are minted by Tailwind and named nowhere in this file.
+  // because those classes were minted by Tailwind and named nowhere in this file. Those
+  // eight are named classes now, so the blanket could in principle go back to being a
+  // list; it does not, because a moving thing should stop by default rather than by
+  // someone remembering to add it here.
   test('is one blanket block covering every element and pseudo-element', () => {
     const blocks = reducedMotionBlocks();
     expect(blocks).toHaveLength(1);

@@ -181,7 +181,7 @@ export function WarmDaysModal({
               type="button"
               aria-label={t('warming.persona.label')}
               aria-describedby={personaTipId}
-              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
+              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-tiny font-bold text-ink-subtle"
             >
               ?
             </button>

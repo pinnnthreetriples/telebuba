@@ -16,7 +16,10 @@
     "ds:doc:check": "node scripts/design-system-doc.mjs --check",
     "ds:dead": "node scripts/dead-tokens.mjs",
     "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run ds:dead && npm run test",
-    "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
+    "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\"",
+    "catalog": "vite --port 8132 --strictPort --host 127.0.0.1",
+    "visual": "playwright test",
+    "visual:update": "playwright test --update-snapshots"
   },
   "overrides": {
     "js-yaml": "^4.3.1",
@@ -44,6 +47,7 @@
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
+    "@playwright/test": "1.56.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
@@ -54,6 +58,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "autoprefixer": "^10.4.20",
     "axe-core": "^4.13.0",
+    "esbuild": "0.25.12",
     "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",

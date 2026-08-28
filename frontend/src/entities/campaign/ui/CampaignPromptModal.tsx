@@ -71,7 +71,7 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="w-full resize-none rounded-lg border border-line bg-white px-lg py-md font-[inherit] text-lead outline-none"
+          className="w-full resize-none rounded-lg border border-line bg-white px-lg py-md font-[inherit] text-body outline-none"
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
@@ -124,12 +124,10 @@ export function CampaignPromptModal({
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="inline-flex [animation:swapin_0.3s_ease_both]">
+                <span className="inline-flex tb-swapin">
                   <Icon name="check" size={16} />
                 </span>
-                <span className="inline-block [animation:swapin_0.3s_ease_0.09s_both]">
-                  {t('neurocomment.modal.saved')}
-                </span>
+                <span className="inline-block tb-swapin-late">{t('neurocomment.modal.saved')}</span>
               </span>
             ) : (
               t('neurocomment.modal.save')

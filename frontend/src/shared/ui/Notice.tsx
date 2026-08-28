@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { type NoticeTone, noticeTone } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The tinted block that explains something on the screen it explains: a failed
@@ -11,12 +12,9 @@ import { cn } from '@/shared/lib/cn';
 // screen before the operator looked at it, and a live region that announces itself
 // on every render is worse than none. A notice that reports the outcome of an
 // action passes `role="alert"` itself.
-const TONE = {
-  primary: 'border-primary-line bg-primary-tint text-primary-deep',
-  success: 'border-success-line bg-success-tint text-success-deep',
-  warning: 'border-warning-line bg-warning-tint text-warning-deep',
-  danger: 'border-danger-line bg-danger-tint text-danger-deep',
-} as const;
+// Тон приходит из `recipes/feedback.ts` — того же набора, что у Badge. `neutral` здесь
+// намеренно недоступен: уведомление сообщает СМЫСЛ, и уведомление без смысла — это абзац,
+// для которого есть карточка. Тип `NoticeTone` этот запрет и выражает.
 
 export function Notice({
   tone = 'primary',
@@ -25,7 +23,7 @@ export function Notice({
   children,
   ...rest
 }: {
-  tone?: keyof typeof TONE;
+  tone?: NoticeTone;
   // The border is what separates a notice from the card behind it. It comes off
   // for the ones nested inside a panel that already has one.
   bordered?: boolean;
@@ -34,12 +32,7 @@ export function Notice({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className'>) {
   return (
     <div
-      className={cn(
-        'rounded-lg px-md py-md text-body',
-        bordered && 'border',
-        TONE[tone],
-        className,
-      )}
+      className={cn('rounded-lg px-md py-md text-body', noticeTone(tone, bordered), className)}
       {...rest}
     >
       {children}

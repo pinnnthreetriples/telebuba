@@ -266,7 +266,7 @@ export function ChannelCreateModal({
           <label className="mb-lg block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
-              <span className="absolute left-lg text-lead text-ink-subtle">@</span>
+              <span className="absolute left-lg text-body text-ink-subtle">@</span>
               <Input
                 className="pl-page"
                 value={username}

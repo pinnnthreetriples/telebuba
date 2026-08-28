@@ -1,10 +1,13 @@
+import { surface } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
+
 // A small "?" badge that reveals a short plain-language explanation on hover or
 // keyboard focus. Pure CSS (group-hover / focus-within) so there's no popover
 // library; `title` is the accessible/native fallback. Used next to settings
 // labels where the field's effect isn't obvious from its name.
 const BADGE =
   'flex size-glyph shrink-0 cursor-help items-center justify-center rounded-full ' +
-  'border border-line text-micro font-bold leading-none text-ink-subtle ' +
+  'border border-line text-tiny font-bold leading-none text-ink-subtle ' +
   'transition-colors hover:border-primary hover:text-primary focus:outline-none ' +
   'focus-visible:border-primary focus-visible:text-primary';
 
@@ -22,7 +25,10 @@ export function HintBubble({ text, example }: { text: string; example?: string }
        to the same rect can overlap. Fix properly with measurement, not a media
        query, if the clipping ever actually bites. */
     <span
-      className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 rounded-lg border border-line bg-white p-md text-left text-tiny text-ink-muted shadow-pop group-hover:block group-focus-within:block"
+      className={cn(
+        'pointer-events-none absolute left-1/2 top-[calc(100%+7px)] z-pop hidden w-tip -translate-x-1/2 p-md text-left text-tiny text-ink-muted group-hover:block group-focus-within:block',
+        surface('panel'),
+      )}
       role="tooltip"
     >
       {text}

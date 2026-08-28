@@ -20,7 +20,7 @@ if (rule) {
   ruleTester.run('no-raw-values', rule, {
     valid: [
       // The named set, which is the whole point.
-      'const a = "bg-primary text-white px-2xl py-md rounded-full text-lead";',
+      'const a = "bg-primary text-white px-2xl py-md rounded-full text-body";',
       'const b = "gap-md mb-lg border-line-row shadow-pop duration-state";',
       // The written exceptions.
       { code: 'const c = "bg-white text-white";', name: 'white needs no name' },
@@ -68,7 +68,7 @@ if (rule) {
         name: 'a class list that reacts to the pointer is drawing a control',
       },
       {
-        code: 'const t5 = "text-lead leading-none text-ink-subtle"; const t6 = "absolute left-lg text-lead text-ink-subtle";',
+        code: 'const t5 = "text-body leading-none text-ink-subtle"; const t6 = "absolute left-lg text-body text-ink-subtle";',
         name: 'at `lead` the scale doubles as a glyph size',
       },
       {
@@ -82,7 +82,7 @@ if (rule) {
         name: 'the named rungs, which is the whole point',
       },
       {
-        code: 'const u2 = "text-lead leading-none text-white";',
+        code: 'const u2 = "text-body leading-none text-white";',
         name: 'a single glyph has no line-height, and `none` is the rung that says so',
       },
       {
@@ -203,7 +203,7 @@ if (rule) {
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
-        code: 'const m = "truncate text-lead font-semibold text-ink";',
+        code: 'const m = "truncate text-body font-semibold text-ink";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       // Padding used to buy the same exemption a fill does, on the grounds that a control
@@ -211,7 +211,7 @@ if (rule) {
       // every empty, loading and error state in the app, spelled across three rungs and
       // three greys. A gap with a sentence in it is not a control.
       {
-        code: 'const n = "px-lg py-empty text-center text-lead text-ink-subtle";',
+        code: 'const n = "px-lg py-empty text-center text-body text-ink-subtle";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
@@ -219,7 +219,7 @@ if (rule) {
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
-        code: 'const p = "p-page text-lead text-ink";',
+        code: 'const p = "p-page text-body text-ink";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       // The line-height axis. `[1.5]` is the interesting one: it was the single most
@@ -251,7 +251,7 @@ if (rule) {
         errors: [{ message: /Letter-spacing is not a scale/ }],
       },
       {
-        code: 'const x = "text-micro uppercase tracking-wide";',
+        code: 'const x = "text-tiny uppercase tracking-wide";',
         errors: [{ message: /letter-spacing scale is replaced/ }],
       },
     ],

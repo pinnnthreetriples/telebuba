@@ -34,7 +34,7 @@ export function CaptchaQueue({
               <div className="truncate type-item-title">
                 {accountLabel(row.original.account_id)}
               </div>
-              <div className="type-meta">
+              <div className="type-caption">
                 {row.original.channel} ·{' '}
                 {formatLocalTime(row.original.decided_at, { seconds: true })}
               </div>

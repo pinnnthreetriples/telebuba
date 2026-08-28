@@ -53,7 +53,7 @@ function Stepper({
           onClick={() => {
             onChange(value - 1);
           }}
-          className="size-chip rounded-full text-lead text-ink-muted disabled:opacity-40"
+          className="size-chip rounded-full text-body text-ink-muted disabled:opacity-40"
         >
           −
         </button>
@@ -67,7 +67,7 @@ function Stepper({
           onClick={() => {
             onChange(value + 1);
           }}
-          className="size-chip rounded-full text-lead text-ink-muted disabled:opacity-40"
+          className="size-chip rounded-full text-body text-ink-muted disabled:opacity-40"
         >
           +
         </button>
@@ -160,7 +160,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`size-icon rounded-md border text-lead ${step.emoji === emoji ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+              className={`size-icon rounded-md border text-body ${step.emoji === emoji ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
             >
               {emoji}
             </button>

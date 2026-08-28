@@ -268,7 +268,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                 <div className="flex items-start justify-between gap-sm">
                   <div className="min-w-0">
                     <div className="truncate type-item-title">{file.name}</div>
-                    <div className="mt-px type-meta">
+                    <div className="mt-px type-caption">
                       {t(`accounts.edit.upload.${file.status}`)}
                     </div>
                   </div>

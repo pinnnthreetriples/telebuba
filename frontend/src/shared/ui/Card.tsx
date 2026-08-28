@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 
+import { surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The app's card surface: white, hairline border, `rounded-card`. It lived as a
@@ -26,8 +27,8 @@ export function Card({
   children: ReactNode;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'title'>) {
   return (
-    <div className={cn('rounded-card border border-line bg-white', mb, className)} {...rest}>
-      {title ? <div className="mb-xs text-lead font-semibold">{title}</div> : null}
+    <div className={cn(surface('card'), mb, className)} {...rest}>
+      {title ? <div className="mb-xs text-body font-semibold">{title}</div> : null}
       {subtitle ? <div className="mb-lg text-body text-ink-subtle">{subtitle}</div> : null}
       {children}
     </div>

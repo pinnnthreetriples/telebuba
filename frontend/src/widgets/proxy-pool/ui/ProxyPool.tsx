@@ -261,7 +261,7 @@ function ProxyCard({
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div className={`mt-tight text-micro ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
+        <div className={`mt-tight text-tiny ${full ? 'text-danger-deep' : 'text-success-deep'}`}>
           {full
             ? t('accounts.proxyPool.full')
             : t('accounts.proxyPool.free', { count: proxy.free })}

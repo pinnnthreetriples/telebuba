@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
 
+import { surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // One row of mutually exclusive options, exactly one of them filled. Fourteen sites
@@ -31,7 +32,7 @@ import { cn } from '@/shared/lib/cn';
 const WRAP = {
   // The inset tray: a sunken grey groove the options sit in, active one raised out of
   // it. Six wearers, all of them a full-width row inside a modal or a card section.
-  tray: 'flex gap-tight rounded-lg bg-canvas p-xs',
+  tray: `flex gap-tight p-xs ${surface('inset')}`,
   // The same idea drawn as a stadium and sized by its labels, for the trays that sit
   // inline at the end of a row rather than spanning it. Its active segment is filled
   // blue instead of raised white — `shadow-pill` is the token for exactly that, "the

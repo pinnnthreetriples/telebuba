@@ -315,7 +315,7 @@ function SettingsForm({
                       }}
                       onBlur={field.handleBlur}
                       aria-label={t('settings.neuroLimits.delayFrom')}
-                      className="min-w-0 flex-1 border-none bg-transparent text-right text-lead outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
                     />
                   </label>
                 )}
@@ -332,7 +332,7 @@ function SettingsForm({
                       }}
                       onBlur={field.handleBlur}
                       aria-label={t('settings.neuroLimits.delayTo')}
-                      className="min-w-0 flex-1 border-none bg-transparent text-right text-lead outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
                     />
                   </label>
                 )}
