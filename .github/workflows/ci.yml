@@ -425,21 +425,36 @@ jobs:
       - name: Design-system screenshots
         run: npm run visual
 
-      # Both directories, and the second one is the point: baselines are scoped by
-      # PLATFORM (font rasterisation differs — the same button measures 126px on
-      # Windows and 125px here), so the Linux set can only be produced by a Linux
-      # run. Playwright writes a missing baseline and fails, so the first run after
-      # a deliberate look change publishes the new Linux baselines here for whoever
-      # is on Windows to commit. `.artifacts/` carries the diffs of the ordinary
-      # case: a baseline that exists and no longer matches.
+      # Baselines are scoped by PLATFORM (font rasterisation differs — the same button
+      # measures 126px on Windows and 125px here), so the Linux set can only be
+      # produced by a Linux run, and the run that fails is the one that has to hand it
+      # over. It did not, for two reasons, and both are fixed here.
+      #
+      # First: Playwright rewrites a baseline only when asked. On a plain failure it
+      # writes `<name>-actual.png` into the output dir and leaves the baseline alone —
+      # so the artifact carried the OLD baselines, byte for byte, and the documented
+      # procedure «take the generated ones from CI» could never have worked. Hence the
+      # forced rewrite below: it runs only after a failure, and it produces files that
+      # are committable as they are.
+      #
+      # Second: `actions/upload-artifact` silently drops paths whose component starts
+      # with a dot, and the diffs live in `e2e/.artifacts/`. Nothing said so — the
+      # upload reported success with that half missing. `include-hidden-files` is what
+      # keeps the diffs in.
+      - name: Regenerate the Linux baselines for the failure artifact
+        if: failure()
+        working-directory: frontend
+        run: npx playwright test --update-snapshots=all || true
+
       - name: Upload screenshot diffs and generated baselines
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: design-system-screenshots
+          include-hidden-files: true
           path: |
             frontend/e2e/.artifacts/
-            frontend/e2e/__screenshots__/
+            frontend/e2e/__screenshots__/linux/
           retention-days: 7
 
       - name: Build
