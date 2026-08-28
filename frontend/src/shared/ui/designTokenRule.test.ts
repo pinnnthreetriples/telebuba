@@ -116,6 +116,10 @@ if (rule) {
         errors: [{ message: /collapsed into another one/ }],
       },
       {
+        code: 'const bp = "xl:flex-row";',
+        errors: [{ message: /breakpoint scale is closed/ }],
+      },
+      {
         code: 'const a = "bg-blue-500";',
         errors: [{ message: /palette/ }],
       },

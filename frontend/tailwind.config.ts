@@ -2,6 +2,7 @@ import type { Config } from 'tailwindcss';
 import plugin from 'tailwindcss/plugin';
 
 import {
+  breakpoint,
   channel,
   duration,
   easing,
@@ -49,6 +50,16 @@ export default {
   // каталог, всё равно мёртвая.
   content: ['./index.html', './src/**/*.{ts,tsx}', './catalog/**/*.{html,ts,tsx}'],
   theme: {
+    // Шкала брейкпоинтов закрыта, как и все остальные: три ступени, которые приложение
+    // носит (16 сайтов `sm:`, 22 `md:`, 27 `lg:`), и ни одной, которую не носит. Числа
+    // приходят из `breakpoint` — той же основы, что читает `useWideViewport.ts`, потому
+    // что «таблица или карточки» решается и в CSS, и в JavaScript. Умолчания Tailwind
+    // (`xl`, `2xl`) заменены, а не расширены: правило ESLint называет три существующие.
+    screens: {
+      sm: `${String(breakpoint.card)}px`,
+      md: `${String(breakpoint.split)}px`,
+      lg: `${String(breakpoint.wide)}px`,
+    },
     colors: flatColors,
     // Не шкала утилит: `channel` не выпускает ни одного класса и существует только для
     // `theme()` в кейфреймах, которым нужна краска с альфой. См. заметку в `primitives.ts`.

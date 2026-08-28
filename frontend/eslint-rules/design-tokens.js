@@ -273,6 +273,14 @@ const PATTERNS = [
       'A focus indicator painted with the ACTION colour ties the two together: recolouring the buttons would recolour the focus ring. They are one value and two decisions — use `outline-focus`, `border-focus` or `shadow-focus`.',
   },
   {
+    // Брейкпоинт, которого нет. Шкала `screens` тоже закрыта — три ступени, которые
+    // приложение носит, — и `xl:`/`2xl:` теперь не выпускают НИ ОДНОГО правила: класс
+    // выглядит работающим и молчит. Ровно тот же дефект, что у палитры Tailwind рядом.
+    test: at(String.raw`(?:xl|2xl):[a-z]`),
+    message:
+      "The breakpoint scale is closed at three rungs — `sm` (640), `md` (768), `lg` (1024) — and `theme.screens` REPLACES Tailwind's, so `xl:`/`2xl:` emit no rule at all and the element silently keeps the layout it had. The numbers live in `breakpoint` in the token tree, which `useWideViewport.ts` reads too; add a rung there if the layout genuinely needs a fourth.",
+  },
+  {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
     message:
       "Tailwind's own palette is not this app's, and the config no longer keeps it reachable: `theme.colors` REPLACES it, so this class emits no rule at all and the element silently keeps whatever colour it inherited. Use the semantic colour.",
