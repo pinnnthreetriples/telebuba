@@ -65,14 +65,18 @@ export function Controls() {
         </Row>
       ))}
 
-      <Row label="Button · состояния" hint="hover, focus и active снимает тест">
+      <Row label="Button · состояния" hint="hover, focus и зажатие вызывает тест">
         <Cell caption="hover" probe="hover">
           <Button variant="primary">Наведение</Button>
         </Cell>
         <Cell caption="focus-visible" probe="focus">
           <Button variant="primary">Фокус</Button>
         </Cell>
-        <Cell caption="active" probe="active">
+        {/* Зажатие делит заливку с наведением — у Button нет отдельного `active:`. Это
+            намеренно (три синих на одну кнопку операторская панель не просит), но видно
+            это стало только после того, как проба научилась ДЕРЖАТЬ кнопку нажатой:
+            `click()` отпускал её до снимка, и «active» показывал покой. */}
+        <Cell caption="active = hover" probe="press">
           <Button variant="primary">Нажатие</Button>
         </Cell>
         <Cell caption="loading">
@@ -203,7 +207,7 @@ export function Controls() {
             />
           </div>
         </Cell>
-        <Cell caption="открыт" probe="active">
+        <Cell caption="открыт" probe="open">
           <div className="w-menu">
             <Select
               value={proxy}

@@ -8,7 +8,7 @@ import {
   RHYTHM_NAMES,
   TRACKING_NAMES,
   TYPE_ROLE_NAMES,
-} from '@/shared/design-system';
+} from '@/shared/design-system/tokens/names';
 
 // The shadcn/ui class-merge helper: clsx for conditional joins, tailwind-merge to
 // dedupe conflicting Tailwind utilities (last one wins).
@@ -73,6 +73,13 @@ import {
 //
 // Импорт токенов, а не конфига Tailwind: конфиг тянет `tailwindcss/plugin`, и это код
 // приложения — плагин уехал бы в браузерный бандл. Модули токенов не импортируют ничего.
+//
+// И импорт ГЛУБОКИЙ, `tokens/names`, а не через `@/shared/design-system`. Через баррель
+// получался цикл: `cn.ts` → баррель → `recipes/*` → `cn.ts`. Vite такой цикл разрешает
+// молча, поэтому он и прожил до ревью, но молчание тут — свойство сборщика, а не кода:
+// в цикле порядок инициализации модулей зависит от того, кто вошёл первым, и `RHYTHM_NAMES`
+// имеет право оказаться `undefined` у того, кто вошёл вторым. `tokens/` не импортирует
+// ничего, поэтому глубокий путь цикла не образует ни в какую сторону.
 const RHYTHM = RHYTHM_NAMES;
 
 const merge = extendTailwindMerge<'type-role'>({
