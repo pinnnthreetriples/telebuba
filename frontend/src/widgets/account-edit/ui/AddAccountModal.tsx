@@ -362,7 +362,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-action-primary"
+                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-focus"
                   />
                   <Button
                     variant="primary"

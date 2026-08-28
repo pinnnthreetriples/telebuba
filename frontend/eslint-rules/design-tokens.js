@@ -261,6 +261,18 @@ const PATTERNS = [
       'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`. An alpha form — `bg-white/85`, `border-black/5` — stays legal: there the colour is the end of the range and not a role, and the thing behind it is a photograph or a scrolling page, so no flat composite exists for it to be.',
   },
   {
+    // Индикатор фокуса краской ДЕЙСТВИЯ. `border.focus` был объявлен ступенью с самого
+    // начала и не доходил ни до одного класса: восемь контролов рисовали фокус через
+    // `outline-action-primary`, поэтому перекрасить кнопку означало перекрасить фокус.
+    // Значение у них одно и остаётся одним — разъединены имена, и это правило держит
+    // разъединение, потому что классы выглядят одинаково работающими.
+    test: at(
+      String.raw`focus(?:-visible|-within)?:(?:outline|border|shadow|ring)-action-(?:primary|hover|pressed)(?![\w-])`,
+    ),
+    message:
+      'A focus indicator painted with the ACTION colour ties the two together: recolouring the buttons would recolour the focus ring. They are one value and two decisions — use `outline-focus`, `border-focus` or `shadow-focus`.',
+  },
+  {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
     message:
       "Tailwind's own palette is not this app's, and the config no longer keeps it reachable: `theme.colors` REPLACES it, so this class emits no rule at all and the element silently keeps whatever colour it inherited. Use the semantic colour.",

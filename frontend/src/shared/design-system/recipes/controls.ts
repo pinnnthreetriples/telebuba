@@ -79,7 +79,7 @@ const SHAPE = {
 // `shadow-focus` сохраняет работу на ПОЛЯХ, где это свечение рядом с меняющей цвет
 // рамкой, а не единственный признак.
 const FOCUS_RING =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary';
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
 
 // Поле анимирует рамку и свечение через `.tb-time` (index.css) — общий рецепт, а не класс
 // на каждом поле, и `:focus-within`, а не `:focus`, потому что поле бывает обёрткой

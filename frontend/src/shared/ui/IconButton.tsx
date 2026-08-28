@@ -56,7 +56,7 @@ export function IconButton({
     <button
       type="button"
       {...rest}
-      className={`inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary ${SIZE[size]} ${TONE[tone]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${SIZE[size]} ${TONE[tone]} ${className}`}
     >
       {children}
     </button>

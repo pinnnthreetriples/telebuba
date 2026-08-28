@@ -20,7 +20,7 @@ export type SelectOption = { value: string; label: string; disabled?: boolean };
 const TRIGGER = cn(
   fieldBase({ size: 'md' }),
   'flex items-center justify-between gap-sm text-left text-content-primary',
-  'border-line hover:border-line-strong focus-visible:border-action-primary focus-visible:shadow-focus',
+  'border-line hover:border-line-strong focus-visible:border-focus focus-visible:shadow-focus',
   'disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-content-subtle',
 );
 const OPTION =

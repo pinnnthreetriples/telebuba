@@ -79,7 +79,7 @@ const OFF = {
 // to this outline; `shadow-focus` keeps its job on the fields, where it is a glow beside
 // a border that goes `primary` and carries the indication on its own.
 const BASE =
-  'group relative transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary disabled:opacity-60';
+  'group relative transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-60';
 
 export type SegmentedOption<T extends string> = {
   value: T;

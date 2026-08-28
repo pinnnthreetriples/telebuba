@@ -83,7 +83,7 @@ test('every button carries the same disabled and focus treatment', () => {
 
   for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
-    expect(classesOf(name)).toContain('focus-visible:outline-action-primary');
+    expect(classesOf(name)).toContain('focus-visible:outline-focus');
   }
 });
 
@@ -146,7 +146,7 @@ test('focus is an outline, and the browser ring is not thrown away', () => {
   render(<Button>Сохранить</Button>);
   const cls = screen.getByRole('button').className;
   expect(cls).toContain('focus-visible:outline-2');
-  expect(cls).toContain('focus-visible:outline-action-primary');
+  expect(cls).toContain('focus-visible:outline-focus');
   expect(cls).not.toContain('outline-none');
   expect(cls).not.toContain('shadow-focus');
 });

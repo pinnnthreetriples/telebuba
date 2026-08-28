@@ -119,6 +119,13 @@ if (rule) {
         code: 'const a = "bg-blue-500";',
         errors: [{ message: /palette/ }],
       },
+      // Фокус краской действия: класс работает, выглядит правильным и связывает два
+      // решения в одно. Единственный дефект из этой таблицы, который НИЧЕГО не портит на
+      // экране — до первой перекраски кнопок.
+      {
+        code: 'const f = "focus-visible:outline-action-primary";',
+        errors: [{ message: /focus indicator painted with the ACTION colour/ }],
+      },
       {
         code: 'const b = "text-[#0066ff]";',
         errors: [{ message: /colour written into a class/ }],
