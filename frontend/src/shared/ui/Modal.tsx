@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 import { surface } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
 
 // Everything a keyboard can land on inside the dialog (for the Tab trap).
 const FOCUSABLE =
@@ -161,7 +162,7 @@ export function Modal({
     <div
       role="presentation"
       onClick={onClose}
-      className={`fixed inset-0 z-dialog flex bg-veil tb-ovfade ${SHELL[variant].overlay}`}
+      className={cn('fixed inset-0 z-dialog flex bg-veil tb-ovfade', SHELL[variant].overlay)}
     >
       <div
         ref={dialogRef}
@@ -173,7 +174,7 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={`max-w-full outline-none ${SHELL[variant].card} ${className}`}
+        className={cn('max-w-full outline-none', SHELL[variant].card, className)}
       >
         {children}
       </div>

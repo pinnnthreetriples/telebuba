@@ -1,5 +1,7 @@
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import { cn } from '@/shared/lib/cn';
+
 import { Icon } from './Icon';
 
 // The design's collapsible accordion card: a header row (free-form content +
@@ -82,8 +84,8 @@ export function CollapsibleCard({
   }, [open, children]);
 
   return (
-    <div className={`overflow-hidden ${wrapperClassName}`}>
-      <div className={`flex items-center gap-md ${headerClassName}`}>
+    <div className={cn('overflow-hidden', wrapperClassName)}>
+      <div className={cn('flex items-center gap-md', headerClassName)}>
         <button
           type="button"
           onClick={toggle}

@@ -78,7 +78,11 @@ const SHAPE = {
 //
 // `shadow-focus` сохраняет работу на ПОЛЯХ, где это свечение рядом с меняющей цвет
 // рамкой, а не единственный признак.
-const FOCUS_RING =
+// Экспортируется — единственная из внутренних строк этого файла. Рецепты `buttonBase`
+// и `fieldBase` собирают контрол целиком, а `IconButton` и `SegmentedControl` собой не
+// являются контролами этой формы (у них своя высота и свой контракт доступности) и брали
+// те же четыре класса СПИСКОМ. Решение о фокусе одно, и место у него теперь тоже одно.
+export const FOCUS_RING =
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
 
 // Поле анимирует рамку и свечение через `.tb-time` (index.css) — общий рецепт, а не класс

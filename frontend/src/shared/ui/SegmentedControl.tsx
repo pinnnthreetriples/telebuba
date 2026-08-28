@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 
-import { surface } from '@/shared/design-system';
+import { FOCUS_RING, surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // One row of mutually exclusive options, exactly one of them filled. Fourteen sites
@@ -78,8 +78,7 @@ const OFF = {
 // beside it so the browser's own ring was discarded too. `Button` and `IconButton` moved
 // to this outline; `shadow-focus` keeps its job on the fields, where it is a glow beside
 // a border that goes `primary` and carries the indication on its own.
-const BASE =
-  'group relative transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-60';
+const BASE = cn('group relative transition-colors duration-state disabled:opacity-60', FOCUS_RING);
 
 export type SegmentedOption<T extends string> = {
   value: T;
