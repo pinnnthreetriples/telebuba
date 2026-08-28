@@ -10,9 +10,9 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, ConfirmModal, FeedbackMark, Icon } from '@/shared/ui';
+import { Button, ConfirmModal, FeedbackMark, Icon, Spinner } from '@/shared/ui';
 
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 import { type CheckState } from './_styles';
 
 // Actions card: liveness check, reset-session, and delete-account (with a
@@ -123,7 +123,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
                 <Icon name="refresh" size={18} />
               </span>
             )}
-            {aliveCheck === 'loading' && <Spinner size={15} />}
+            {aliveCheck === 'loading' && <Spinner />}
             {aliveCheck === 'ok' && (
               <span className="tb-blur inline-flex">
                 <Icon name="check" size={18} />
@@ -146,7 +146,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
             <Button size="sm" onClick={onReset} loading={resetSession.isPending}>
-              {resetCheck === 'loading' ? <Spinner size={14} /> : t('accounts.edit.reset')}
+              {resetCheck === 'loading' ? <Spinner /> : t('accounts.edit.reset')}
             </Button>
           </span>
         </div>

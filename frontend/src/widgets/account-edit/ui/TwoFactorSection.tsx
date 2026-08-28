@@ -10,11 +10,11 @@ import {
 } from '@/entities/account';
 import type { AccountRead, AccountTwoFactorCreated } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, ConfirmModal, Notice, Textarea } from '@/shared/ui';
+import { Button, ConfirmModal, Notice, Spinner, Textarea } from '@/shared/ui';
 
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
@@ -172,7 +172,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
         }}
         right={
           twofa.isFetching ? (
-            <Spinner size={13} />
+            <Spinner />
           ) : (
             <span
               className={`shrink-0 rounded-full px-md py-xs text-tiny font-medium ${
@@ -204,7 +204,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
         ) : null}
         {twofa.isPending ? (
           <div className="py-sm">
-            <Spinner size={16} />
+            <Spinner />
           </div>
         ) : created ? (
           <>

@@ -2,13 +2,13 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon } from '@/shared/ui';
+import { Button, Icon, Spinner } from '@/shared/ui';
 
 import { invalidateAccountViews, spamCheckAccountMutation } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
 
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 import { type CheckState } from './_styles';
 
 // Real spam-status dot per verdict (matches the design's traffic-light tints).
@@ -89,7 +89,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
                   : 'text-content-muted'
             }`}
           >
-            {spamCheck === 'loading' && <Spinner size={13} />}
+            {spamCheck === 'loading' && <Spinner />}
             {spamCheck === 'ok' && (
               <span className="tb-blur inline-flex">
                 <Icon name="check" size={14} className="stroke-white" />

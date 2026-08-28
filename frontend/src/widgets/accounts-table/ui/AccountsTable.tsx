@@ -11,7 +11,7 @@ import {
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 import { cn, type FeedbackResult } from '@/shared/lib';
-import { Card, DataTable, type DataTableColumnMeta, Icon, StatusIcon } from '@/shared/ui';
+import { Card, DataTable, Icon, Spinner, StatusIcon, type DataTableColumnMeta } from '@/shared/ui';
 
 interface AccountsTableProps {
   data: AccountRead[];
@@ -226,7 +226,7 @@ export function AccountsTable({
               )}
             >
               {busy ? (
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-action-primary" />
+                <Spinner />
               ) : checked ? (
                 // Named, not colour-only: the fill and the glyph say nothing to a
                 // screen reader, and `title` stays the constant action label.

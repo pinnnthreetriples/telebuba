@@ -13,9 +13,9 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, FeedbackMark, Icon, Input, SegmentedControl } from '@/shared/ui';
+import { Button, FeedbackMark, Icon, Input, SegmentedControl, Spinner } from '@/shared/ui';
 
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 import { LABEL, type CheckState } from './_styles';
 
 // Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
@@ -168,7 +168,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
             onClick={onLogout}
             loading={logout.isPending}
           >
-            {logoutCheck === 'loading' ? <Spinner size={12} /> : t('accounts.edit.logout')}
+            {logoutCheck === 'loading' ? <Spinner /> : t('accounts.edit.logout')}
           </Button>
         </span>
       </div>
@@ -180,7 +180,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           disabled={requestCode.isPending}
           className="rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-action-primary disabled:opacity-50"
         >
-          {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
+          {requestCode.isPending ? <Spinner /> : t('accounts.edit.sendCode')}
         </button>
       </div>
       <div className="mb-md grid grid-cols-1 md:grid-cols-2 gap-md">
@@ -214,7 +214,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         </label>
       </div>
       <Button size="block" onClick={onConfirmLogin} disabled={submitCode.isPending || !code}>
-        {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
+        {submitCode.isPending ? <Spinner /> : t('accounts.edit.confirmLogin')}
       </Button>
       {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
       <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>
@@ -282,7 +282,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                         <Icon name="x-circle" size={18} />
                       </span>
                     ) : (
-                      <Spinner size={13} />
+                      <Spinner />
                     )}
                     <button
                       type="button"

@@ -32,15 +32,6 @@ export function DashedAdd({
   );
 }
 
-export function Spinner({ size }: { size: number }) {
-  return (
-    <span
-      className="tb-spin inline-block rounded-full border-2 border-line-strong border-t-action-primary"
-      style={{ width: size, height: size }}
-    />
-  );
-}
-
 // The account-edit cards' accordion: the shared CollapsibleCard with this
 // slice's header padding and title style. It used to be a second implementation
 // that omitted the `--mh` measurement (so a tall body was clipped at the CSS

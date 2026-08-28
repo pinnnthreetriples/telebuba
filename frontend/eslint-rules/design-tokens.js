@@ -273,6 +273,20 @@ const PATTERNS = [
       'A focus indicator painted with the ACTION colour ties the two together: recolouring the buttons would recolour the focus ring. They are one value and two decisions — use `outline-focus`, `border-focus` or `shadow-focus`.',
   },
   {
+    // Кольцо ожидания, собранное руками. Оно было собрано так семнадцать раз, и дорожка
+    // разошлась на два серых (`line` в семи местах, `line-strong` в пяти) — то есть
+    // повторение строки не осталось повторением. `tb-spin` САМ ПО СЕБЕ законен: им же
+    // крутится иконка обновления в ProfileModal, и это не кольцо. Ищется именно кольцо:
+    // анимация вместе с окрашенной верхней границей.
+    // Порядок классов в строке не гарантирован, поэтому совпадение с проверкой второй
+    // половины через опережение: `hit[0]` при этом остаётся осмысленным для сообщения.
+    test: /border-t-[a-z][\w-]*(?=[\s\S]*tb-spin)|tb-spin(?=[\s\S]*border-t-[a-z])/,
+    // Кроме самого компонента: он и есть то место, где кольцо собрано.
+    above: /[\\/]Spinner\.tsx$/,
+    message:
+      'A waiting ring assembled by hand. `Spinner` is the component: `size` is `sm`/`md`/`lg` and `tone` is `default`/`inverse`/`danger`. Seventeen copies of these classes drifted into two different track greys, and four call sites set the size in raw pixels 12–15px apart.',
+  },
+  {
     // Брейкпоинт, которого нет. Шкала `screens` тоже закрыта — три ступени, которые
     // приложение носит, — и `xl:`/`2xl:` теперь не выпускают НИ ОДНОГО правила: класс
     // выглядит работающим и молчит. Ровно тот же дефект, что у палитры Tailwind рядом.

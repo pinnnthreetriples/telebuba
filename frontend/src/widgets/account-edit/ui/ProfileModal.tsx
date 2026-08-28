@@ -29,6 +29,7 @@ import {
   Input,
   Modal,
   Notice,
+  Spinner,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -781,7 +782,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 {/* `line-strong`, not the default line: this ring sits on the modal's own
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
-                <span className="tb-spin inline-block size-tile rounded-full border-[3px] border-line-strong border-t-action-primary" />
+                <Spinner size="lg" />
                 <span className="type-label">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
@@ -1025,7 +1026,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">
-                  <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                  <Spinner tone="inverse" />
                   {t('accounts.profile.saving')}
                 </span>
               ) : saved ? (

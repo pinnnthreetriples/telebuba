@@ -15,6 +15,7 @@ import {
   Input,
   Modal,
   Notice,
+  Spinner,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -267,7 +268,7 @@ export function ChannelEditModal({
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary" />
+                      <Spinner />
                       {t('accounts.channel.avatarUpload')}
                     </span>
                   ) : (
@@ -278,7 +279,7 @@ export function ChannelEditModal({
                 <Button variant="primary" onClick={save} disabled={!canSave}>
                   {update.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                      <Spinner tone="inverse" />
                       {t('accounts.channel.saving')}
                     </span>
                   ) : (

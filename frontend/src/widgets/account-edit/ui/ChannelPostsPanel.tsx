@@ -9,7 +9,16 @@ import {
   publishAccountChannelPostMutation,
 } from '@/entities/account';
 import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
-import { Button, ConfirmModal, Icon, IconButton, Notice, Textarea, toastError } from '@/shared/ui';
+import {
+  Button,
+  ConfirmModal,
+  Icon,
+  IconButton,
+  Notice,
+  Spinner,
+  Textarea,
+  toastError,
+} from '@/shared/ui';
 
 import {
   channelErrorText,
@@ -261,7 +270,7 @@ export function ChannelPostsPanel({
           <Button variant="primary" size="sm" onClick={doPublish} disabled={!canPublish}>
             {busy ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                <Spinner tone="inverse" />
                 {t('accounts.channel.publishing')}
               </span>
             ) : (
@@ -285,7 +294,7 @@ export function ChannelPostsPanel({
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-xl"
         >
-          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-action-primary" />
+          <Spinner size="md" />
         </div>
       )}
       {posts.isError && (
@@ -409,7 +418,7 @@ export function ChannelPostsPanel({
         >
           {loadingMore ? (
             <span className="inline-flex items-center gap-sm">
-              <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary" />
+              <Spinner />
               {t('accounts.channel.loading')}
             </span>
           ) : (

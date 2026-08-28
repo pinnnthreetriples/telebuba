@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from './Button';
 import { Modal } from './Modal';
+import { Spinner } from './Spinner';
 
 // Generic delete/remove confirm dialog (rule: any destructive action asks
 // first). Mirrors DeleteAccountModal/ProxyDeleteModal/CampaignDeleteModal's
@@ -50,7 +51,7 @@ export function ConfirmModal({
           <Button variant="danger" onClick={confirm} loading={pending}>
             {pending ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-danger-line border-t-danger" />
+                <Spinner tone="danger" />
                 {confirmLabel}
               </span>
             ) : (

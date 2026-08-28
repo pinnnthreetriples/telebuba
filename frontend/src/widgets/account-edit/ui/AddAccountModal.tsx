@@ -13,7 +13,7 @@ import {
   proxyPoolQueryOptions,
   proxyTypeLabel,
 } from '@/entities/proxy';
-import { Button, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, Icon, IconButton, Modal, Spinner } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ProxyForm } from './ProxyForm';
@@ -442,7 +442,7 @@ export function AddAccountModal({
                           </div>
                         </div>
                         {importing ? (
-                          <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-action-primary" />
+                          <Spinner className="m-tight" />
                         ) : importFailed ? (
                           <span className="m-xs inline-flex text-danger">
                             <Icon name="x-circle" size={18} />

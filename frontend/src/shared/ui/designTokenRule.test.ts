@@ -100,6 +100,10 @@ if (rule) {
         name: '`shared/ui` composes a column label by hand, letter-spacing included',
       },
       {
+        code: 'const sp2 = "inline-flex tb-spin";',
+        name: '`tb-spin` alone is the refresh icon turning, which is not a ring',
+      },
+      {
         code: 'const w = "text-title font-bold tracking-[-0.01em]";',
         name: "the wordmark keeps the design source's own spacing",
       },
@@ -114,6 +118,11 @@ if (rule) {
       {
         code: 'const y = "hover:bg-primary-wash";',
         errors: [{ message: /collapsed into another one/ }],
+      },
+      // Кольцо руками: анимация плюс окрашенная верхняя граница. Один `tb-spin` — нет.
+      {
+        code: 'const sp = "tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary";',
+        errors: [{ message: /waiting ring assembled by hand/ }],
       },
       {
         code: 'const bp = "xl:flex-row";',

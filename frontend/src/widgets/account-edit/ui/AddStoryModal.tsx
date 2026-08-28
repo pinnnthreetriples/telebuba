@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
-import { Button, Icon, IconButton, Input, Modal, SegmentedControl } from '@/shared/ui';
+import { Button, Icon, IconButton, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
@@ -533,9 +533,7 @@ export function AddStoryModal({
               )}
             </div>
             <div className="flex shrink-0 items-center gap-hair">
-              {busy && (
-                <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-action-primary" />
-              )}
+              {busy && <Spinner className="m-tight" />}
               {done && (
                 <span className="tb-pop m-xs inline-flex text-success-deep">
                   <Icon name="check-circle" size={18} />

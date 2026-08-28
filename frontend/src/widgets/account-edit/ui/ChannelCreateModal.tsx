@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, IconButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
+import { Button, IconButton, Input, Modal, Notice, Spinner, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -308,7 +308,7 @@ export function ChannelCreateModal({
               t('accounts.channel.edit')
             ) : busy ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                <Spinner tone="inverse" />
                 {t('accounts.channel.creating')}
               </span>
             ) : (

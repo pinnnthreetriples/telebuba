@@ -10,9 +10,9 @@ import {
   resendAccountTwofaEmailMutation,
   setAccountTwofaEmailMutation,
 } from '@/entities/account';
-import { Button, ConfirmModal, Input } from '@/shared/ui';
+import { Button, ConfirmModal, Input, Spinner } from '@/shared/ui';
 
-import { Spinner } from './_shared';
+import {} from './_shared';
 import { LABEL } from './_styles';
 
 // The exact bounds `schemas/twofa` enforces. Gating on anything looser makes the
@@ -238,11 +238,7 @@ export function TwoFactorEmail({
               disabled={confirmEmail.isPending || !code.trim()}
               className="rounded-lg border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-50"
             >
-              {confirmEmail.isPending ? (
-                <Spinner size={13} />
-              ) : (
-                t('accounts.edit.twofaEmailConfirm')
-              )}
+              {confirmEmail.isPending ? <Spinner /> : t('accounts.edit.twofaEmailConfirm')}
             </button>
             <Button
               size="xs"
@@ -250,7 +246,7 @@ export function TwoFactorEmail({
               onClick={onResend}
               loading={resendEmail.isPending}
             >
-              {resendEmail.isPending ? <Spinner size={12} /> : t('accounts.edit.twofaEmailResend')}
+              {resendEmail.isPending ? <Spinner /> : t('accounts.edit.twofaEmailResend')}
             </Button>
             <button
               type="button"
@@ -290,7 +286,7 @@ export function TwoFactorEmail({
             onClick={onAttach}
             disabled={setEmail.isPending || !addressValid || !hasStored}
           >
-            {setEmail.isPending ? <Spinner size={14} /> : t('accounts.edit.twofaEmailAttach')}
+            {setEmail.isPending ? <Spinner /> : t('accounts.edit.twofaEmailAttach')}
           </Button>
         </>
       ) : null}

@@ -3,13 +3,23 @@
 // Badge и Notice носят один набор тонов — neutral, primary, success, warning, danger, —
 // и стоят рядом именно для этого: тон означает одно и то же в строчной плашке и в
 // блочном уведомлении. `neutral` у Notice нет, и это видно здесь, а не в чьей-то памяти.
-import { Badge, FeedbackMark, HelpHint, HintBubble, Notice, StatusIcon } from '@/shared/ui';
+import {
+  Badge,
+  FeedbackMark,
+  HelpHint,
+  HintBubble,
+  Notice,
+  Spinner,
+  StatusIcon,
+} from '@/shared/ui';
 
 import { Cell, Row, Section } from './Frame';
 
 const BADGE_TONES = ['neutral', 'primary', 'success', 'warning', 'danger'] as const;
 const BADGE_SIZES = ['md', 'sm', 'xs'] as const;
 const NOTICE_TONES = ['primary', 'success', 'warning', 'danger'] as const;
+const SPINNER_SIZES = ['sm', 'md', 'lg'] as const;
+const SPINNER_TONES = ['default', 'inverse', 'danger'] as const;
 
 export function Feedback() {
   return (
@@ -63,6 +73,26 @@ export function Feedback() {
           </Cell>
         ))}
       </Row>
+
+      {/* Девять сочетаний, и они здесь не для полноты: кольцо рисуется только в момент
+          ожидания, поэтому на снимках страниц его нет ни на одном. Каталог — единственное
+          место, где его вид вообще можно сравнить с эталоном. `inverse` стоит на залитом
+          действии, потому что на белом его не видно — в этом и смысл тона. */}
+      {SPINNER_SIZES.map((size) => (
+        <Row key={size} label={`Spinner · ${size}`}>
+          {SPINNER_TONES.map((tone) => (
+            <Cell key={tone} caption={tone}>
+              {tone === 'inverse' ? (
+                <span className="inline-flex items-center rounded-md bg-action-primary p-sm">
+                  <Spinner size={size} tone={tone} />
+                </span>
+              ) : (
+                <Spinner size={size} tone={tone} />
+              )}
+            </Cell>
+          ))}
+        </Row>
+      ))}
 
       <Row label="StatusIcon">
         <Cell caption="ok">

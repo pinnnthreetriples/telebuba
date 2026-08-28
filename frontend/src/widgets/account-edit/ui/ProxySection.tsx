@@ -21,11 +21,12 @@ import {
   Input,
   SegmentedControl,
   Select,
+  Spinner,
   type SelectOption,
 } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 import { LABEL, type CheckState } from './_styles';
 
 // Protocol names, not copy — nothing to translate.
@@ -227,7 +228,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
             onClick={onUnassign}
             loading={unassignProxy.isPending}
           >
-            {unassignProxy.isPending ? <Spinner size={12} /> : t('accounts.edit.proxyDetach')}
+            {unassignProxy.isPending ? <Spinner /> : t('accounts.edit.proxyDetach')}
           </Button>
         ) : null}
       </div>
@@ -346,7 +347,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
         >
           {proxyCheck === 'loading' ? (
-            <Spinner size={13} />
+            <Spinner />
           ) : (
             <svg
               width="14"

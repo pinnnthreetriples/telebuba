@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountChannelsQueryOptions, deleteAccountChannelMutation } from '@/entities/account';
 import type { ChannelView } from '@/shared/api';
-import { Button, ConfirmModal, IconButton, Notice } from '@/shared/ui';
+import { Button, ConfirmModal, IconButton, Notice, Spinner } from '@/shared/ui';
 
 import { channelErrorText } from './_channelsShared';
 import { ChannelCreateModal } from './ChannelCreateModal';
@@ -37,7 +37,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-2xl"
         >
-          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-action-primary" />
+          <Spinner size="md" />
         </div>
       )}
 

@@ -8,7 +8,7 @@ import {
   setAllAccountsPrivacyMutation,
 } from '@/entities/account';
 import type { AccountPrivacyUpdateRequest, PrivacySettingsResult } from '@/shared/api';
-import { Button, ConfirmModal, Notice } from '@/shared/ui';
+import { Button, ConfirmModal, Notice, Spinner } from '@/shared/ui';
 
 import { envelopeMessage } from './_channelsShared';
 import { PrivacyLevelRow, type PrivacyLevel, type PrivacyShown } from './PrivacyLevelRow';
@@ -188,7 +188,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           aria-label={t('accounts.profile.privacy.loading')}
           className="flex justify-center py-2xl"
         >
-          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-action-primary" />
+          <Spinner size="md" />
         </div>
       )}
 
