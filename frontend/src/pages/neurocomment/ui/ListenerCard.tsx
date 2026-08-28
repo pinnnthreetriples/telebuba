@@ -66,7 +66,6 @@ export function ListenerCard({
       {listenerId ? (
         <div className="mt-md">
           <SurfHover
-            shift={144}
             surfaceId="lsn-surf"
             open={listenerActionsOpen}
             actions={

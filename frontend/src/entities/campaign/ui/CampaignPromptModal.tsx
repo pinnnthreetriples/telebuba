@@ -40,11 +40,7 @@ export function CampaignPromptModal({
   };
 
   return (
-    <Modal
-      onClose={onClose}
-      className="w-form"
-      label={t('neurocomment.modal.campaignPrompt.title')}
-    >
+    <Modal onClose={onClose} size="form" label={t('neurocomment.modal.campaignPrompt.title')}>
       <div className="p-2xl">
         <div className="mb-tight flex items-center justify-between">
           <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
@@ -142,7 +138,7 @@ export function CampaignPromptModal({
           onClose={() => {
             setConfirm(null);
           }}
-          className="w-confirm"
+          size="confirm"
           label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
           <div className="p-2xl">

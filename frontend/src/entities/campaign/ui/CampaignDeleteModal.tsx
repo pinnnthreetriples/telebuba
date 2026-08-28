@@ -16,7 +16,7 @@ export function CampaignDeleteModal({
   return (
     <Modal
       onClose={onClose}
-      className="w-confirm"
+      size="confirm"
       label={t('neurocomment.modal.campaignDelete.title', { name })}
     >
       <div className="p-2xl">

@@ -200,7 +200,7 @@ export function ChannelCreateModal({
     // both the list refresh and the editor hand-off).
     <Modal
       onClose={busy ? () => undefined : onClose}
-      className="w-form"
+      size="form"
       label={t('accounts.channel.createTitle')}
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">

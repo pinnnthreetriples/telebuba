@@ -89,7 +89,7 @@ export function CommentHistoryModal({
   );
 
   return (
-    <Modal onClose={onClose} className="w-table" label={t('neurocomment.history.title')}>
+    <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="type-dialog-title">{t('neurocomment.history.title')}</div>
       </div>

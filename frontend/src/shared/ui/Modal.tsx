@@ -50,8 +50,28 @@ const SHELL = {
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
-    card: 'h-full overflow-y-auto overscroll-contain bg-surface-card tb-drawerin',
+    // Ширина шторки живёт ЗДЕСЬ, а не приходит от вызывающего. Она не одна из четырёх
+    // ступеней ниже — это доля экрана с потолком, — и шторка в приложении одна, поэтому
+    // её ширина принадлежит варианту, а не месту вызова. Пока она приходила классом,
+    // `className` нельзя было закрыть.
+    card: 'flex h-full w-[min(84vw,300px)] flex-col overflow-y-auto overscroll-contain bg-surface-card tb-drawerin',
   },
+} as const;
+
+// Четыре ширины диалога, и это ровно та шкала, ради которой она есть: 22 модалки тратили
+// 11 ширин. `confirm` — вопрос с двумя кнопками, `form` — диалог, который заполняют,
+// `panel` — со списком или табами, `table` — построенный вокруг таблицы.
+//
+// Ступенью, а не классом: `size="form"` был открытым концом. Через него приходила
+// не только ширина — четыре сайта унесли из скопированной строки чужой `z={75}` и
+// `w-[460px]`, — и он же позволял передать ЛЮБОЙ класс диалогу, включая тот, что спорит с
+// его собственной поверхностью. Шторка ширину теперь не передаёт (см. выше), поэтому
+// `className` у диалога больше нет вовсе.
+const SIZE = {
+  confirm: 'w-confirm',
+  form: 'w-form',
+  panel: 'w-panel',
+  table: 'w-table',
 } as const;
 
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
@@ -79,13 +99,14 @@ const SHELL = {
 export function Modal({
   onClose,
   children,
-  className = 'w-confirm',
+  size = 'confirm',
   variant = 'center',
   label,
 }: {
   onClose: () => void;
   children: ReactNode;
-  className?: string;
+  // Ширина диалога. Шторка её игнорирует: её ширина принадлежит варианту.
+  size?: keyof typeof SIZE;
   variant?: keyof typeof SHELL;
   // Accessible name for the dialog — REQUIRED, not optional: while it was
   // optional 20 of the 21 call sites left it out and a screen reader announced a
@@ -174,7 +195,11 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={cn('max-w-full outline-none', SHELL[variant].card, className)}
+        className={cn(
+          'max-w-full outline-none',
+          SHELL[variant].card,
+          variant === 'center' && SIZE[size],
+        )}
       >
         {children}
       </div>

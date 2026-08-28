@@ -63,7 +63,7 @@ export function WarmDaysModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-confirm" label={t('warming.days.title')}>
+    <Modal onClose={onClose} size="confirm" label={t('warming.days.title')}>
       <div className="p-2xl">
         <div className="mb-xs flex items-start gap-md">
           <div className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">

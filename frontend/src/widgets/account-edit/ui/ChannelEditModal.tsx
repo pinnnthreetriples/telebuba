@@ -160,7 +160,7 @@ export function ChannelEditModal({
     <>
       <Modal
         onClose={requestClose}
-        className="w-panel"
+        size="panel"
         // A fixed name, unlike the visible heading below it: this dialog opens
         // while the detail is still loading, and an ARIA name that changes after
         // the announcement is never re-announced — so the operator would only ever

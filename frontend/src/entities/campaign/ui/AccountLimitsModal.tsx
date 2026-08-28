@@ -198,11 +198,7 @@ export function AccountLimitsModal({
   };
 
   return (
-    <Modal
-      onClose={onClose}
-      className="w-confirm"
-      label={t('neurocomment.modal.limits.title', { name })}
-    >
+    <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
         <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <svg

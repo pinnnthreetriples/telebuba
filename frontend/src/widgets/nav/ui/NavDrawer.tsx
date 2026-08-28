@@ -17,12 +17,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
   const { t } = useTranslation();
 
   return (
-    <Modal
-      onClose={onClose}
-      variant="drawer-left"
-      label={t('shell.menu')}
-      className="flex w-[min(84vw,300px)] flex-col"
-    >
+    <Modal onClose={onClose} variant="drawer-left" label={t('shell.menu')}>
       <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-lg">
         <div className="flex items-center gap-md">
           <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">

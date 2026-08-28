@@ -251,7 +251,7 @@ export function AddStoryModal({
     // unmounting mid-flight drops the onSuccess and loses the grid refresh.
     <Modal
       onClose={busy ? () => undefined : onClose}
-      className="w-form"
+      size="form"
       label={t('accounts.addStory.title')}
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">

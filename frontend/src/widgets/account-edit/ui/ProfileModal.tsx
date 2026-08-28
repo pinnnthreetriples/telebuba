@@ -640,7 +640,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     <>
       <Modal
         onClose={requestClose}
-        className="w-panel"
+        size="panel"
         // A fixed name, unlike the visible heading below it — the same choice as
         // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
         // after a rename saves, and an ARIA name change while a dialog is open is

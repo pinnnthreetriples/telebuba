@@ -93,7 +93,6 @@ export function CampaignsCard({
           return (
             <SurfHover
               key={campaign.campaign_id}
-              shift={144}
               surfaceId={`camp-surf-${campaign.campaign_id}`}
               open={openCampaignActions === campaign.campaign_id}
               actions={

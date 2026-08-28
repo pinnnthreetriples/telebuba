@@ -136,7 +136,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
   };
 
   return (
-    <Modal onClose={onClose} className="w-panel" label={t('warming.cfg.title')}>
+    <Modal onClose={onClose} size="panel" label={t('warming.cfg.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
         <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <Icon name="gear" size={18} />

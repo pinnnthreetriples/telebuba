@@ -254,7 +254,7 @@ export function AddAccountModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-form" label={t('accounts.addWizard.title')}>
+    <Modal onClose={onClose} size="form" label={t('accounts.addWizard.title')}>
       <div className="px-2xl pb-xl pt-2xl">
         <div className="mb-lg flex items-start justify-between">
           <div>

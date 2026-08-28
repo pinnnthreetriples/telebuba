@@ -155,12 +155,16 @@ function SettingsForm({
   return (
     <form
       noValidate
+      // Зазор между карточками раздаёт форма, а не карточки: `mb` у `Card` больше нет.
+      // Ступень одна — `lg`; пятая карточка носила `mb-xl`, и это была drift на 4px, а не
+      // решение (четыре предыдущие говорили `lg`).
+      className="flex flex-col gap-lg"
       onSubmit={(event) => {
         event.preventDefault();
         void form.handleSubmit();
       }}
     >
-      <Card mb="mb-lg" title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
+      <Card title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
         <div className="space-y-lg">
           <ApiKeyField
             label={t('settings.api.geminiKey')}
@@ -260,11 +264,7 @@ function SettingsForm({
         </div>
       </Card>
 
-      <Card
-        mb="mb-lg"
-        title={t('settings.captchaLlm.title')}
-        subtitle={t('settings.captchaLlm.subtitle')}
-      >
+      <Card title={t('settings.captchaLlm.title')} subtitle={t('settings.captchaLlm.subtitle')}>
         <SegmentedControl
           variant="outline"
           value={provider}
@@ -279,21 +279,13 @@ function SettingsForm({
         />
       </Card>
 
-      <Card
-        mb="mb-lg"
-        title={t('settings.warmLimits.title')}
-        subtitle={t('settings.warmLimits.subtitle')}
-      >
+      <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
         <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md text-body text-content-subtle">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
 
-      <Card
-        mb="mb-lg"
-        title={t('settings.neuroLimits.title')}
-        subtitle={t('settings.neuroLimits.subtitle')}
-      >
+      <Card title={t('settings.neuroLimits.title')} subtitle={t('settings.neuroLimits.subtitle')}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
           <form.Field name="cpd">
             {(field) => (
@@ -361,7 +353,7 @@ function SettingsForm({
         </div>
       </Card>
 
-      <Card className="px-xl py-tight" mb="mb-xl">
+      <Card className="px-xl py-tight">
         {WARMING_TOGGLES.map((flag) => (
           <div
             key={flag}

@@ -96,7 +96,6 @@ export function Surfaces() {
         <Cell caption="в покое">
           <div className="w-panel">
             <SurfHover
-              shift={92}
               actions={
                 <>
                   <IconButton size="sm" tone="primary" aria-label="Изменить">
@@ -120,7 +119,6 @@ export function Surfaces() {
           <div className="w-panel">
             <SurfHover
               open
-              shift={92}
               actions={
                 <>
                   <IconButton size="sm" tone="primary" aria-label="Изменить">
@@ -183,7 +181,7 @@ export function Surfaces() {
       {modal && (
         <Modal
           label="Настройки прогрева"
-          className="w-form"
+          size="form"
           onClose={() => {
             setModal(false);
           }}

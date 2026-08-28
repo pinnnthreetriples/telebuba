@@ -55,7 +55,7 @@ export function NeuroshillingAccountsModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-panel" label={t('neuroshilling.modal.accounts.title')}>
+    <Modal onClose={onClose} size="panel" label={t('neuroshilling.modal.accounts.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="type-dialog-title">{t('neuroshilling.modal.accounts.title')}</div>
         <div className="mt-hair type-prose">
