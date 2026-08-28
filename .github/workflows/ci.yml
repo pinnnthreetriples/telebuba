@@ -425,12 +425,21 @@ jobs:
       - name: Design-system screenshots
         run: npm run visual
 
-      - name: Upload screenshot diffs
+      # Both directories, and the second one is the point: baselines are scoped by
+      # PLATFORM (font rasterisation differs — the same button measures 126px on
+      # Windows and 125px here), so the Linux set can only be produced by a Linux
+      # run. Playwright writes a missing baseline and fails, so the first run after
+      # a deliberate look change publishes the new Linux baselines here for whoever
+      # is on Windows to commit. `.artifacts/` carries the diffs of the ordinary
+      # case: a baseline that exists and no longer matches.
+      - name: Upload screenshot diffs and generated baselines
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: design-system-screenshots
-          path: frontend/e2e/.artifacts/
+          path: |
+            frontend/e2e/.artifacts/
+            frontend/e2e/__screenshots__/
           retention-days: 7
 
       - name: Build
