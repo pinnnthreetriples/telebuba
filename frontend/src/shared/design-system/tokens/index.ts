@@ -12,7 +12,7 @@ export * as semantic from './semantic';
 export * as spacing from './spacing';
 export * as typography from './typography';
 
-export { layer, radius, shadow, font, palette } from './primitives';
+export { layer, radius, shadow, font, palette, channel } from './primitives';
 export { flatColors, background, content, border, action, feedback, inverse } from './semantic';
 export { fontSize, typeRole, lineHeight, letterSpacing } from './typography';
 export { rhythm, size, height, width, minWidth, maxWidth, minHeight, maxHeight } from './spacing';

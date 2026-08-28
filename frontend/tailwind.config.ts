@@ -2,6 +2,7 @@ import type { Config } from 'tailwindcss';
 import plugin from 'tailwindcss/plugin';
 
 import {
+  channel,
   duration,
   easing,
   flatColors,
@@ -49,6 +50,9 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}', './catalog/**/*.{html,ts,tsx}'],
   theme: {
     colors: flatColors,
+    // Не шкала утилит: `channel` не выпускает ни одного класса и существует только для
+    // `theme()` в кейфреймах, которым нужна краска с альфой. См. заметку в `primitives.ts`.
+    channel,
     fontFamily: font,
     fontSize,
     typeRole,

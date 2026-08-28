@@ -113,6 +113,43 @@ describe('prefers-reduced-motion', () => {
 // sheet is full of them by design. The compiled side is still what proves the names
 // resolve — an unknown `transitionTimingFunction` key throws in the PostCSS run at the
 // top of this file, before any test here gets to make an assertion.
+// Тот же довод, что у кривых, одной осью в сторону — и он держался хуже: восемь
+// объявлений `box-shadow` внутри кейфреймов носили `rgba(0, 102, 255, 0.3)` литералом.
+// Это была вторая запись значения, которое палитра уже хранит, поэтому перекрасив
+// `blue600`, кольцо пульса осталось бы прежним. Нашло ревью, а не этот файл, и причина
+// поучительна: прежняя проверка искала `cubic-bezier` — то есть ровно то, что однажды
+// сломалось, — а не КЛАСС «литерал вместо токена».
+//
+// Банится именно ЛИТЕРАЛ: `rgb(theme('channel.action') / 0.3)` — законная форма, и она
+// тоже содержит `rgb(`. Отличие в первом аргументе: у литерала там число.
+//
+// Скан ПОСТРОЧНЫЙ, через `RegExp.test`, а не `matchAll` по всему тексту. Причина
+// эмпирическая и неприятная: в этом окружении `matchAll` дважды вернул пустой список на
+// строке, где совпадение заведомо есть (здесь и в `e2e/pages.spec.ts`), при том что
+// `test` на той же строке и та же регулярка в изолированном тесте работают. Причину я не
+// нашёл, и это ровно повод не оставлять его в гейте: проверка, чьё поведение непонятно,
+// зеленеет молча. Построчный `test` — самый простой примитив, какой тут возможен, и он
+// заодно называет номер строки.
+const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\(\s*[\d.]/;
+
+test('в таблице стилей нет ни одной краски литералом', () => {
+  const offenders = source
+    .split(/\r?\n/)
+    .map((line, at) => ({ line: line.trim(), at: at + 1 }))
+    .filter(({ line }) => COLOUR_LITERAL.test(line))
+    .map(({ line, at }) => `${String(at)}: ${line}`);
+
+  expect(offenders).toEqual([]);
+
+  // Вторая половина утверждения: кадры, которые красились, красятся до сих пор. Правило
+  // вообще без краски удовлетворило бы проверку выше и молча погасило бы кольцо.
+  for (const name of ['plpulse', 'livepulse', 'loadpulse']) {
+    const frame = source.slice(source.indexOf(`@keyframes ${name} {`));
+    const body = frame.slice(0, frame.search(/^\}/m));
+    expect(body).toMatch(/rgb\(theme\('channel\.\w+'\)/);
+  }
+});
+
 test('the stylesheet spends the config’s curves and never writes one out', () => {
   const literals = [...source.matchAll(/cubic-bezier\([^)]*\)/g)].map((hit) => hit[0]);
   expect(literals).toEqual([]);

@@ -33,13 +33,13 @@
    ─────────────────────────────────────────────────────────────────────────── */
 @keyframes plpulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(0, 102, 255, 0.3);
+    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0.3);
   }
   70% {
-    box-shadow: 0 0 0 7px rgba(0, 102, 255, 0);
+    box-shadow: 0 0 0 7px rgb(theme('channel.action') / 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 102, 255, 0);
+    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0);
   }
 }
 @keyframes fadeup {
@@ -128,25 +128,25 @@
 }
 @keyframes livepulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(0, 102, 255, 0.55);
+    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0.55);
     transform: scale(1);
   }
   60% {
-    box-shadow: 0 0 0 5px rgba(0, 102, 255, 0);
+    box-shadow: 0 0 0 5px rgb(theme('channel.action') / 0);
     transform: scale(1.18);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(0, 102, 255, 0);
+    box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0);
     transform: scale(1);
   }
 }
 @keyframes loadpulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(91, 163, 255, 0);
+    box-shadow: 0 0 0 0 rgb(theme('channel.glow') / 0);
   }
   50% {
-    box-shadow: 0 0 7px 1px rgba(91, 163, 255, 0.9);
+    box-shadow: 0 0 7px 1px rgb(theme('channel.glow') / 0.9);
   }
 }
 /* Story-upload progress fill: no real upload-progress events, so simulate the
@@ -293,7 +293,10 @@
   border-radius: theme('borderRadius.md');
   padding: theme('spacing.sm') theme('spacing.md');
   font-size: theme('fontSize.tiny');
-  line-height: 1.5;
+  /* Телесный интерлиньяж, а не литерал. Здесь он объявлен явно, потому что подсказка —
+     единственный элемент файла, который НЕ наследует его от `body`: она рисуется
+     псевдоэлементом в собственном контексте. */
+  line-height: theme('lineHeight.body');
   white-space: nowrap;
   opacity: 0;
   pointer-events: none;
