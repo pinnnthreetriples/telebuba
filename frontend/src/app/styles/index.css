@@ -327,7 +327,7 @@
   transform: translateX(-50%);
   /* The arrow is a bordered box with three transparent sides; 5px is the leg of that
      triangle, which is geometry and not rhythm. */
-  border: 5px solid transparent;
+  border: 5px solid theme('colors.transparent');
   border-bottom-color: theme('colors.term.DEFAULT');
 }
 /* Wider, wrapping variant for tooltips that carry a full explanation
@@ -347,15 +347,14 @@
   border-radius: theme('borderRadius.md');
 }
 .tb-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: theme('colors.transparent');
 }
 .term::-webkit-scrollbar {
   width: 6px;
 }
 .term::-webkit-scrollbar-thumb {
-  /* The one shade with no name: a thumb that reads on `term` without becoming
-     `term.dim` (which is the terminal's own muted TEXT). One scrollbar is not worth a
-     role in the canon, so it stays a literal — deliberately, not by omission. */
+  /* A thumb that reads on `term` without becoming `term.dim` — which is the terminal's
+     own muted TEXT, and a scrollbar is not text. Its own rung for that reason. */
   background: theme('colors.term.thumb');
   border-radius: theme('borderRadius.sm');
 }

@@ -113,43 +113,6 @@ describe('prefers-reduced-motion', () => {
 // sheet is full of them by design. The compiled side is still what proves the names
 // resolve — an unknown `transitionTimingFunction` key throws in the PostCSS run at the
 // top of this file, before any test here gets to make an assertion.
-// Тот же довод, что у кривых, одной осью в сторону — и он держался хуже: восемь
-// объявлений `box-shadow` внутри кейфреймов носили `rgba(0, 102, 255, 0.3)` литералом.
-// Это была вторая запись значения, которое палитра уже хранит, поэтому перекрасив
-// `blue600`, кольцо пульса осталось бы прежним. Нашло ревью, а не этот файл, и причина
-// поучительна: прежняя проверка искала `cubic-bezier` — то есть ровно то, что однажды
-// сломалось, — а не КЛАСС «литерал вместо токена».
-//
-// Банится именно ЛИТЕРАЛ: `rgb(theme('channel.action') / 0.3)` — законная форма, и она
-// тоже содержит `rgb(`. Отличие в первом аргументе: у литерала там число.
-//
-// Скан ПОСТРОЧНЫЙ, через `RegExp.test`, а не `matchAll` по всему тексту. Причина
-// эмпирическая и неприятная: в этом окружении `matchAll` дважды вернул пустой список на
-// строке, где совпадение заведомо есть (здесь и в `e2e/pages.spec.ts`), при том что
-// `test` на той же строке и та же регулярка в изолированном тесте работают. Причину я не
-// нашёл, и это ровно повод не оставлять его в гейте: проверка, чьё поведение непонятно,
-// зеленеет молча. Построчный `test` — самый простой примитив, какой тут возможен, и он
-// заодно называет номер строки.
-const COLOUR_LITERAL = /#[0-9a-fA-F]{3,8}|(?:rgba?|hsla?)\(\s*[\d.]/;
-
-test('в таблице стилей нет ни одной краски литералом', () => {
-  const offenders = source
-    .split(/\r?\n/)
-    .map((line, at) => ({ line: line.trim(), at: at + 1 }))
-    .filter(({ line }) => COLOUR_LITERAL.test(line))
-    .map(({ line, at }) => `${String(at)}: ${line}`);
-
-  expect(offenders).toEqual([]);
-
-  // Вторая половина утверждения: кадры, которые красились, красятся до сих пор. Правило
-  // вообще без краски удовлетворило бы проверку выше и молча погасило бы кольцо.
-  for (const name of ['plpulse', 'livepulse', 'loadpulse']) {
-    const frame = source.slice(source.indexOf(`@keyframes ${name} {`));
-    const body = frame.slice(0, frame.search(/^\}/m));
-    expect(body).toMatch(/rgb\(theme\('channel\.\w+'\)/);
-  }
-});
-
 test('the stylesheet spends the config’s curves and never writes one out', () => {
   const literals = [...source.matchAll(/cubic-bezier\([^)]*\)/g)].map((hit) => hit[0]);
   expect(literals).toEqual([]);
@@ -158,6 +121,121 @@ test('the stylesheet spends the config’s curves and never writes one out', () 
   for (const selector of ['.tb-blur', '.tb-drawerin']) {
     const rule = source.slice(source.indexOf(`${selector} {`));
     expect(rule.slice(0, rule.indexOf('}'))).toMatch(/theme\('transitionTimingFunction\.\w+'\)/);
+  }
+});
+
+// Тот же довод, что у кривых, одной осью в сторону — и он держался хуже: восемь
+// объявлений `box-shadow` внутри кейфреймов носили `rgba(0, 102, 255, 0.3)` литералом.
+// Это была вторая запись значения, которое палитра уже хранит, поэтому, перекрасив
+// `blue600`, кольцо пульса осталось бы прежним. Нашло ревью, а не этот файл, и причина
+// поучительна: прежняя проверка искала `cubic-bezier` — то есть ровно то, что однажды
+// сломалось, — а не КЛАСС «литерал вместо токена».
+//
+// Первая версия этой проверки повторила ту же ошибку на шаг выше: она искала ФОРМАТЫ
+// (`#hex`, `rgb(`, `hsl(`) и потому пропускала `transparent`, `red`, `oklch()`,
+// `color()`, `currentColor` и любое системное имя вроде `Canvas`. Перечислить все
+// форматы краски нельзя — их набор в CSS растёт. Поэтому проверок теперь две, и вторая
+// лишь сеть под первой.
+//
+// ── (1) Белый список: всё, чем красят, — жетон ──────────────────────────────────────
+//
+// Для КАЖДОГО объявления на свойстве, способном нести краску, законные формы стягиваются
+// в один непрозрачный жетон, и в остатке не должно остаться ни одного слова, кроме
+// структурных (`solid`, `none`, …). Утверждение закрытое: неизвестное слово — нарушение
+// по умолчанию, а значит правило ловит и `transparent`, и `red`, и функцию цвета,
+// которой в CSS ещё нет. Цена — ложное срабатывание на новом СТРУКТУРНОМ слове (`dashed`
+// рядом с `solid`); лечится одним словом в списке, и это дешевле пропущенной краски.
+//
+// Разбор — plain PostCSS по ИСХОДНИКУ, а не скомпилированный `root` из шапки файла: там
+// каждый `theme()` уже развёрнут в литерал, и отличить токен от краски нечем.
+//
+// ── (2) Чёрный список: сеть под остальными свойствами ───────────────────────────────
+//
+// Краска пролезает и туда, где свойство краской не считается: `filter: drop-shadow(#000
+// …)`, `mask`, `background-image`. Перечислить такие свойства тоже нельзя, поэтому по
+// всему тексту, построчно, ищутся hex и функциональные записи — уже ПОСЛЕ стягивания
+// законных форм, так что различение «первый аргумент — число» больше не нужно: любой
+// оставшийся `rgb(` незаконен сам по себе.
+//
+// Скан построчный, через `RegExp.test`, а не `matchAll` по всему тексту. Причина
+// эмпирическая и неприятная: в этом окружении `matchAll` дважды вернул пустой список на
+// строке, где совпадение заведомо есть (здесь и в `e2e/pages.spec.ts`), при том что
+// `test` на той же строке и та же регулярка в изолированном тесте работают. Причину я не
+// нашёл, и это ровно повод не оставлять его в гейте: проверка, чьё поведение непонятно,
+// зеленеет молча. Построчный `test` — самый простой примитив, какой тут возможен, и он
+// заодно называет номер строки.
+//
+// `@apply` отдельной проверки не требует: класс несуществующего цвета до гейта не
+// доживает — он падает при компиляции в шапке этого файла, потому что палитра Tailwind
+// ЗАМЕНЕНА, а не расширена.
+function withoutTokens(text: string): string {
+  return (
+    text
+      // Альфа поверх канала — законная форма, и в ней тоже есть `rgb(`. Стягивается
+      // первой, иначе её съел бы чёрный список.
+      .replace(/rgba?\(\s*theme\((['"])[^'"]+\1\)\s*\/\s*[\d.]+\s*\)/g, 'TOKEN')
+      .replace(/theme\((['"])[^'"]+\1\)/g, 'TOKEN')
+  );
+}
+
+// Свойство, способное нести краску: любое со словом `color`, набор шорткатов и
+// пользовательские свойства — значение переменной видно только в месте применения, а
+// туда этот разбор не дойдёт.
+function paints(prop: string): boolean {
+  return (
+    prop.startsWith('--') ||
+    /colou?r/.test(prop) ||
+    /^(?:background|border(?:-(?:top|right|bottom|left))?|outline|box-shadow|text-shadow|fill|stroke)$/.test(
+      prop,
+    )
+  );
+}
+
+// Значение разбирается на атомы по разделителям CSS, и законны ровно три вида: число с
+// единицей, структурное слово и сам жетон. Всё прочее — краска: и `transparent`, и
+// `#fff`, и имя функции, которой в CSS ещё нет.
+const ATOM = /[^\s,()/]+/g;
+const LENGTH = /^-?[\d.]+[a-z%]*$/i;
+const STRUCTURAL = new Set(['TOKEN', 'solid', 'dashed', 'dotted', 'none', 'inset']);
+
+const COLOUR_NOTATION =
+  /#[0-9a-fA-F]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color|color-mix|light-dark|device-cmyk)\(/;
+
+test('всё, чем этот файл красит, приходит жетоном', () => {
+  const offenders: string[] = [];
+  let examined = 0;
+
+  postcss.parse(source).walkDecls((decl) => {
+    if (!paints(decl.prop)) return;
+    examined += 1;
+    const stray = (withoutTokens(decl.value).match(ATOM) ?? []).filter(
+      (atom) => !LENGTH.test(atom) && !STRUCTURAL.has(atom),
+    );
+    if (stray.length > 0) {
+      offenders.push(`${String(decl.source?.start?.line)}: ${decl.prop}: ${decl.value}`);
+    }
+  });
+
+  expect(offenders).toEqual([]);
+  // Если это когда-нибудь прочтётся нулём, утверждение выше перестало что-либо значить.
+  expect(examined).toBeGreaterThan(15);
+});
+
+test('и ни одной краски литералом — ни в одном формате, ни на одном свойстве', () => {
+  const offenders = source
+    .split(/\r?\n/)
+    .map((line, at) => ({ line: line.trim(), at: at + 1 }))
+    .filter(({ line }) => COLOUR_NOTATION.test(withoutTokens(line)))
+    .map(({ line, at }) => `${String(at)}: ${line}`);
+
+  expect(offenders).toEqual([]);
+
+  // Вторая половина утверждения: кадры, которые красились, красятся до сих пор. Правило
+  // вообще без краски удовлетворило бы обе проверки выше и молча погасило бы кольцо.
+  for (const name of ['plpulse', 'livepulse', 'loadpulse']) {
+    const frame = source.slice(source.indexOf(`@keyframes ${name} {`));
+    const body = frame.slice(0, frame.search(/^\}/m));
+    expect(body).toMatch(/rgb\(theme\('channel\.\w+'\)/);
   }
 });
 
