@@ -94,7 +94,14 @@ export default {
     // `type-card-title font-bold` — заголовок, за который кому-то ещё придётся спорить.
     // Этот порядок и есть причина, по которой здесь плагин, а не рецепт на `@apply`.
     plugin(({ addComponents, theme }) => {
-      type Role = { size: string; weight: string; ink: string; tracking?: string; caps?: string };
+      type Role = {
+        size: string;
+        weight: string;
+        ink: string;
+        leading: string;
+        tracking?: string;
+        caps?: string;
+      };
       const roles = theme('typeRole') as Record<string, Role>;
       addComponents(
         Object.fromEntries(
@@ -108,6 +115,9 @@ export default {
               // рунга» больше нет: у `content` каждая ступень названа, и `ink` как
               // отдельное имя ушло вместе с переездом на роли.
               color: theme(`colors.${role.ink.replace('-', '.')}`) as string,
+              // Роль называет интерлиньяж сама: иначе он приходил от предка, и роль внутри
+              // журнала (`leading-log`) выглядела не тем, чем называлась.
+              lineHeight: theme(`lineHeight.${role.leading}`) as string,
               ...(role.tracking === undefined ? {} : { letterSpacing: role.tracking }),
               ...(role.caps === undefined ? {} : { textTransform: role.caps }),
             },

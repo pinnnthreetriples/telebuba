@@ -15,9 +15,9 @@ import {
 
 import { Cell, Row, Section } from './Frame';
 
-const BADGE_TONES = ['neutral', 'primary', 'success', 'warning', 'danger'] as const;
+const BADGE_TONES = ['neutral', 'info', 'success', 'warning', 'danger'] as const;
 const BADGE_SIZES = ['md', 'sm', 'xs'] as const;
-const NOTICE_TONES = ['primary', 'success', 'warning', 'danger'] as const;
+const NOTICE_TONES = ['info', 'success', 'warning', 'danger'] as const;
 const SPINNER_SIZES = ['sm', 'md', 'lg'] as const;
 const SPINNER_TONES = ['default', 'inverse', 'danger'] as const;
 

@@ -82,7 +82,7 @@ export function Surfaces() {
             <CollapsibleCard
               defaultOpen
               header={<span className="type-card-title">Ограничения</span>}
-              trailing={<Badge tone="primary">3</Badge>}
+              trailing={<Badge tone="info">3</Badge>}
             >
               <p className="type-prose">
                 Раскрытие — один жест: и панель, и шеврон тратят рунг `reveal`.

@@ -9,7 +9,14 @@ import config from '../../../tailwind.config';
 // Every expectation below is derived from the config's own rungs and colour tokens: a
 // role whose ink is retuned has to stay correct here without the test being edited,
 // and a role that stops resolving its token fails loudly instead of painting nothing.
-type Role = { size: string; weight: string; ink: string; tracking?: string; caps?: string };
+type Role = {
+  size: string;
+  weight: string;
+  ink: string;
+  leading: string;
+  tracking?: string;
+  caps?: string;
+};
 
 const roles = (config.theme as { typeRole: Record<string, Role> }).typeRole;
 const fontSize = config.theme.fontSize as Record<string, string>;
@@ -63,11 +70,23 @@ test('a role carries letter-spacing and case only where it declares them', () =>
   expect(rule('caption')).not.toContain('text-transform');
 });
 
-// Line height is not a role's business, for the same reason it is not a rung's: the
-// config's fontSize entries are bare strings so `leading-*` stays an independent
-// decision, and a role that shipped one would re-space every site it landed on.
-test('no role sets a line height', () => {
-  for (const name of Object.keys(roles)) expect(rule(name)).not.toContain('line-height');
+// Интерлиньяж — дело РОЛИ, но не дело рунга размера, и это два разных утверждения.
+// Прежде здесь стояло «ни одна роль не ставит интерлиньяж» с доводом, что роль с ним
+// «переверстала бы каждый сайт, куда попала». Довод верен ровно для того значения, которое
+// сайты уже носят: у всех двенадцати ролей он `body` — то самое, что они наследовали от
+// `body`, — поэтому не переверстал ни одного. Зато роль перестала зависеть от предка:
+// `type-caption` внутри `leading-log` разъезжался на 1.85 и выглядел не собой.
+//
+// Рунг размера при этом остаётся голой строкой (не парой `[размер, интерлиньяж]`): на нём
+// стоит `text-*`, и вписать туда интерлиньяж значило бы переверстать сайты, которые взяли
+// рунг, а не роль.
+test('каждая роль называет свой интерлиньяж, и это ступень шкалы', () => {
+  const scale = config.theme.lineHeight as Record<string, string>;
+  for (const [name, role] of Object.entries(roles)) {
+    const declared = scale[role.leading];
+    expect(declared, `роль ${name} ссылается на несуществующую ступень`).toBeDefined();
+    expect(rule(name)).toContain(`line-height: ${String(declared)}`);
+  }
 });
 
 // The reason this is `addComponents` and not a utility: a role has to lose to a utility

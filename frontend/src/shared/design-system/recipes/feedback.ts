@@ -5,8 +5,13 @@
 // дважды, поэтому `neutral` был только у одного, а рамка — только у другого, и никто не
 // решал ни того, ни другого.
 //
-// Пять тонов: `neutral` — без смысла, просто счётчик или ярлык; `primary` — живое
-// состояние; `success`, `warning`, `danger` — исход. У уведомления `neutral` намеренно
+// Пять тонов: `neutral` — без смысла, просто счётчик или ярлык; `info` — живое состояние;
+// `success`, `warning`, `danger` — исход.
+//
+// `info`, а не `primary`, и это не косметика: тон обратной связи и цвет ДЕЙСТВИЯ звались
+// одним словом, притом что красятся они разными ступенями (`info-tint`/`info-strong`
+// против `action-primary`) и меняются по разным причинам. У `IconButton` тон `primary`
+// остаётся — там это и есть «главное действие», другая шкала и другой вопрос. У уведомления `neutral` намеренно
 // нет: уведомление сообщает СМЫСЛ, и уведомление без смысла — это абзац, для которого
 // есть карточка.
 //
@@ -18,7 +23,7 @@ import { cn } from '@/shared/lib/cn';
 
 const TONE = {
   neutral: { tint: 'bg-canvas', ink: 'text-content-muted', line: 'border-line' },
-  primary: { tint: 'bg-info-tint', ink: 'text-info-strong', line: 'border-info-line' },
+  info: { tint: 'bg-info-tint', ink: 'text-info-strong', line: 'border-info-line' },
   success: { tint: 'bg-success-tint', ink: 'text-success-deep', line: 'border-success-line' },
   warning: { tint: 'bg-warning-tint', ink: 'text-warning-deep', line: 'border-warning-line' },
   danger: { tint: 'bg-danger-tint', ink: 'text-danger-deep', line: 'border-danger-line' },

@@ -244,7 +244,7 @@ export function CampaignSetupCard({
       >
         {t('neuroshilling.setup.advanced.title')}
         {changed > 0 ? (
-          <Badge tone="primary" className="font-semibold tabular-nums">
+          <Badge tone="info" className="font-semibold tabular-nums">
             {changed}
           </Badge>
         ) : null}

@@ -17,7 +17,7 @@ import { cn } from '@/shared/lib/cn';
 // для которого есть карточка. Тип `NoticeTone` этот запрет и выражает.
 
 export function Notice({
-  tone = 'primary',
+  tone = 'info',
   bordered = true,
   className,
   children,
