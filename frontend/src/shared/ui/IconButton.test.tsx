@@ -70,9 +70,9 @@ test('tone paints the hover, and neutral deliberately has none', () => {
     </IconButton>,
   );
   expect(screen.getByRole('button', { name: 'a' })).toHaveClass(
-    'hover:border-primary-line',
-    'hover:bg-primary-tint',
-    'hover:text-primary-deep',
+    'hover:border-info-line',
+    'hover:bg-action-hover',
+    'hover:text-info-strong',
   );
 
   rerender(

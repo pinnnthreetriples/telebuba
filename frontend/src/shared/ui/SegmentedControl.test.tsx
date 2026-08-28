@@ -123,9 +123,9 @@ test('a disabled group takes neither clicks nor arrows', async () => {
 /* ── the three fills ─────────────────────────────────────────────────────── */
 
 test.each([
-  ['tray', 'shadow-seg', 'text-ink-muted'],
-  ['pill', 'shadow-pill', 'text-ink-muted'],
-  ['outline', 'bg-primary-tint', 'bg-white'],
+  ['tray', 'shadow-seg', 'text-content-muted'],
+  ['pill', 'shadow-pill', 'text-content-muted'],
+  ['outline', 'bg-info-tint', 'bg-surface-card'],
 ] as const)('the %s variant fills the checked option only', (variant, on, off) => {
   const { radios } = renderControl({ variant });
   expect(radios[0]).toHaveClass(on);
@@ -137,7 +137,7 @@ test.each([
 test('every option carries the focus ring the hand-written versions had none of', () => {
   const { radios } = renderControl();
   for (const radio of radios) {
-    expect(radio).toHaveClass('focus-visible:outline-primary');
+    expect(radio).toHaveClass('focus-visible:outline-action-primary');
     // The glow this replaced measured 1.18:1, and it came with `outline-none`. On a
     // control that is one tab stop with an arrow-key cursor, an invisible focus ring
     // does not degrade the keyboard contract — it removes it.
@@ -151,12 +151,17 @@ test('every option carries the focus ring the hand-written versions had none of'
 // config's own names; if a future class group is added without teaching cn.ts, the
 // paint is dropped silently rather than erroring. Assert the merge keeps both halves.
 test('cn keeps the size and the fill of a segment together', () => {
-  expect(cn('flex-1 rounded-sm py-sm text-body font-medium', 'bg-white text-ink shadow-seg')).toBe(
-    'flex-1 rounded-sm py-sm text-body font-medium bg-white text-ink shadow-seg',
+  expect(
+    cn(
+      'flex-1 rounded-sm py-sm text-body font-medium',
+      'bg-surface-card text-content-primary shadow-seg',
+    ),
+  ).toBe(
+    'flex-1 rounded-sm py-sm text-body font-medium bg-surface-card text-content-primary shadow-seg',
   );
-  expect(cn('rounded-full px-lg py-tight text-body', 'bg-primary text-white shadow-pill')).toBe(
-    'rounded-full px-lg py-tight text-body bg-primary text-white shadow-pill',
-  );
+  expect(
+    cn('rounded-full px-lg py-tight text-body', 'bg-action-primary text-on-action shadow-pill'),
+  ).toBe('rounded-full px-lg py-tight text-body bg-action-primary text-on-action shadow-pill');
 });
 
 /* ── per-option escape hatches ───────────────────────────────────────────── */

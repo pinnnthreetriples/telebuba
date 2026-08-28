@@ -164,7 +164,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           />
           <Button
             size="xs"
-            className="text-ink-muted"
+            className="text-content-muted"
             onClick={onLogout}
             loading={logout.isPending}
           >
@@ -178,7 +178,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           type="button"
           onClick={onRequestCode}
           disabled={requestCode.isPending}
-          className="rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-primary disabled:opacity-50"
+          className="rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-action-primary disabled:opacity-50"
         >
           {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
         </button>
@@ -235,7 +235,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         onClick={() => uploadInput.current?.click()}
         className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-surface px-lg py-lg text-left"
       >
-        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
           <Icon name="upload-cloud" size={20} />
         </div>
         <div className="min-w-0">
@@ -254,10 +254,10 @@ export function SessionSection({ account }: { account: AccountRead }) {
         {uploads.map((file) => (
           <div
             key={file.id}
-            className="tb-fadeup rounded-lg border border-line bg-white px-md py-md"
+            className="tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md"
           >
             <div className="flex items-center gap-md">
-              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
                 {file.archive ? (
                   <Icon name="alert-square" size={16} />
                 ) : (
@@ -290,7 +290,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                       onClick={() => {
                         setUploads((list) => list.filter((item) => item.id !== file.id));
                       }}
-                      className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
+                      className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
                     >
                       <Icon name="close" size={14} />
                     </button>

@@ -106,7 +106,7 @@ export function CommentModeFields({
                 if (event.key === 'Enter') event.currentTarget.blur();
               }}
               aria-label={t('neurocomment.mode.waitLabel')}
-              className="tb-time w-number rounded-md border border-line bg-white px-md py-tight text-body font-medium text-ink disabled:opacity-60"
+              className="tb-time w-number rounded-md border border-line bg-surface-card px-md py-tight text-body font-medium text-content-primary disabled:opacity-60"
             />
             <span className="type-caption">{t('neurocomment.mode.waitHint')}</span>
           </span>

@@ -108,7 +108,7 @@ export function Surfaces() {
                 </>
               }
               surface={
-                <div className="rounded-lg border border-line bg-white px-md py-sm">
+                <div className="rounded-lg border border-line bg-surface-card px-md py-sm">
                   <div className="type-item-title">Кампания «Крипта»</div>
                   <div className="type-caption">4 канала · 120 комментариев</div>
                 </div>
@@ -132,7 +132,7 @@ export function Surfaces() {
                 </>
               }
               surface={
-                <div className="rounded-lg border border-line bg-white px-md py-sm">
+                <div className="rounded-lg border border-line bg-surface-card px-md py-sm">
                   <div className="type-item-title">Кампания «Крипта»</div>
                   <div className="type-caption">4 канала · 120 комментариев</div>
                 </div>

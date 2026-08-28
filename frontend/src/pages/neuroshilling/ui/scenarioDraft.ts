@@ -21,7 +21,7 @@ import type {
 // editor's chips and by the preview's bubbles, so a role wears one colour on
 // both cards.
 const ROLE_TONES = [
-  { bg: 'bg-primary', text: 'text-primary', border: 'border-primary' },
+  { bg: 'bg-action-primary', text: 'text-action-primary', border: 'border-action-primary' },
   { bg: 'bg-success-deep', text: 'text-success-deep', border: 'border-success' },
   { bg: 'bg-warning-deep', text: 'text-warning-deep', border: 'border-warning' },
 ] as const;

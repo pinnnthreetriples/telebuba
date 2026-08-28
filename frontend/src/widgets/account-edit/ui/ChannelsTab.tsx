@@ -37,7 +37,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-2xl"
         >
-          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-primary" />
+          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-action-primary" />
         </div>
       )}
 
@@ -47,7 +47,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
           <Button
             size="xs"
             variant="danger"
-            className="bg-white"
+            className="bg-surface-card"
             onClick={() => {
               void channels.refetch();
             }}
@@ -58,7 +58,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       )}
 
       {channels.isSuccess && items.length === 0 && (
-        <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
           {t('accounts.channel.empty')}
         </div>
       )}
@@ -76,8 +76,8 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                   <span
                     className={`rounded-sm px-tight py-px font-medium ${
                       channel.username != null
-                        ? 'bg-primary-tint text-primary-deep'
-                        : 'bg-canvas text-ink-muted'
+                        ? 'bg-info-tint text-info-strong'
+                        : 'bg-canvas text-content-muted'
                     }`}
                   >
                     {channel.username != null
@@ -96,7 +96,7 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
               </div>
               <Button
                 size="xs"
-                className="rounded-full hover:border-primary-line hover:text-primary"
+                className="rounded-full hover:border-info-line hover:text-action-primary"
                 onClick={() => {
                   setEditingId(channel.channel_id);
                 }}

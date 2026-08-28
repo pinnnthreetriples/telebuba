@@ -91,7 +91,7 @@
 //   `tracking-[…]` inside `shared/ui` (2 sites, DataTable's `TH` and `CARD_LABEL`) —
 //   the same `above` carve-out the type-role pattern makes, for the same reason:
 //   `shared/ui` is the layer allowed to compose primitives by hand. Both are
-//   `text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle`, which is
+//   `text-tiny font-medium uppercase tracking-[0.04em] text-content-subtle`, which is
 //   `type-eyebrow` exactly except for the weight — the role is 600 and these are 500.
 //   That is worth knowing and is NOT worth fixing here: moving them onto the role would
 //   change what a table header looks like in every table in the app, to make a role fit.
@@ -139,7 +139,7 @@ const IS_THE_SYSTEM = /(?:^|[\\/])src[\\/]shared[\\/]design-system[\\/]tokens[\\
 const TYPE_RUNG = scaleNames('fontSize')
   .filter((rung) => rung !== 'hero')
   .join('|');
-const INK_RAMP = String.raw`text-ink(?:-(?:body|muted|subtle))?(?![\w-])`;
+const INK_RAMP = String.raw`text-content-(?:primary|secondary|muted|subtle)(?![\w-])`;
 
 // What this pattern deliberately does NOT reach, and why:
 //
@@ -204,7 +204,20 @@ const at = (body) => new RegExp(String.raw`(?:^|\s)(?:${body})`);
 // unknown `border-*` on an element that also carries `border` falls through to
 // preflight's own default, Tailwind's `gray-200`, three units from `line` and cool
 // where the app is warm. That one comes back looking right.
-const RETIRED = 'track|line-input|primary-wash|success-dot';
+const RETIRED =
+  'track|line-input|primary-wash|success-dot|' +
+  // The names the semantic pass retired. Listed for the reason the four above are: an
+  // unknown `bg-*` emits nothing and the element loses its fill, which a reviewer sees —
+  // but an unknown `border-*` on an element that also carries `border` falls through to
+  // preflight's own `gray-200`, three units from `line` and cool where the app is warm.
+  // That one comes back looking almost right.
+  //
+  // Each of these was one colour doing two jobs, which is why they went: `white` was a
+  // card's fill AND a filled button's label, `primary` was an action's fill AND a link's
+  // ink AND the dark blue that reads on a tint, `ink` was named after the material rather
+  // than the role.
+  'ink|ink-body|ink-muted|ink-subtle|' +
+  'primary|primary-press|primary-tint|primary-deep|primary-line|primary-hairline';
 
 // Tailwind's own line-height and letter-spacing names, which this config replaces
 // outright the way it replaced the type scale. They are listed rather than left to fail
@@ -235,6 +248,17 @@ const PATTERNS = [
     test: at(String.raw`(?:[\w-]+:)*(?:${COLOUR})-(?:${RETIRED})(?![\w-])`),
     message:
       'That colour was collapsed into another one and no longer exists: `track` and `primary-wash` are `canvas` and `primary-tint`, `line-input` is `line`, `success-dot` is `success`. The unification ledger in docs/design-system.html carries the reason for each.',
+  },
+  {
+    // `bg-white` / `text-white` without an alpha: both were one class doing two jobs, and
+    // the split is the whole point of the semantic pass — a card's fill is
+    // `bg-surface-card`, a filled action's label is `text-on-action`, ink on the dark
+    // surface is `text-on-inverse`. WITH an alpha they stay legal: white at 85% under the
+    // nav's blur and white at 40% as a hairline on a photograph are the extreme of the
+    // range rather than a role, and there is no flat composite for them to be.
+    test: at(String.raw`(?:bg|text|border)-(?:white|black)(?![\w-/])`),
+    message:
+      'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`. An alpha form — `bg-white/85`, `border-black/5` — stays legal: there the colour is the end of the range and not a role, and the thing behind it is a photograph or a scrolling page, so no flat composite exists for it to be.',
   },
   {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
@@ -322,7 +346,7 @@ const PATTERNS = [
         String.raw`|(?:^|\s)(?:[\w-]+:)*${INK_RAMP}[\s\S]*(?:^|\s)(?:[\w-]+:)*text-(?:${TYPE_RUNG})(?![\w-])`,
     ),
     message:
-      'A rung plus a grey is a role spelled out, and spelling it out is how one job came to have three spellings: the same small caption was written `ink-subtle` 53 times, `ink-muted` 13 times, and with no colour at all 9 times — three greys nobody chose between. Above `shared/ui` the page names the role instead: `type-page-title`, `type-dialog-title`, `type-dialog-body`, `type-card-title`, `type-item-title`, `type-eyebrow`, `type-label`, `type-value`, `type-prose`, `type-caption`, `type-meta`, `type-stat`. They are declared as `typeRole` in tailwind.config.ts, each with the one sentence it has to answer to. A role plus an override — `type-caption text-danger`, `type-meta font-bold` — is the intended way to say the same text in another colour or another weight.',
+      'A rung plus a grey is a role spelled out, and spelling it out is how one job came to have three spellings: the same small caption was written `content-subtle` 53 times, `content-muted` 13 times, and with no colour at all 9 times — three greys nobody chose between. Above `shared/ui` the page names the role instead: `type-page-title`, `type-dialog-title`, `type-dialog-body`, `type-card-title`, `type-item-title`, `type-eyebrow`, `type-label`, `type-value`, `type-prose`, `type-caption`, `type-meta`, `type-stat`. They are declared as `typeRole` in src/shared/design-system/tokens/typography.ts, each with the one sentence it has to answer to. A role plus an override — `type-caption text-danger`, `type-meta font-bold` — is the intended way to say the same text in another colour or another weight.',
   },
 ];
 

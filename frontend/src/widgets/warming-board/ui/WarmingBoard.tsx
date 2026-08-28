@@ -43,7 +43,7 @@ const WARMING_DAYS = 14;
 const WARM_STATUS: Record<WarmingState, string> = {
   active: 'bg-success-tint text-success-deep',
   sleeping: 'bg-warning-tint text-warning-deep',
-  idle: 'bg-canvas text-ink-muted',
+  idle: 'bg-canvas text-content-muted',
   flood_wait: 'bg-warning-tint text-warning-deep',
   quarantine: 'bg-warning-tint text-warning-deep',
   error: 'bg-danger-tint text-danger-deep',
@@ -138,7 +138,7 @@ function PauseCountdown({ nextRunAt }: { nextRunAt: string }) {
   const pad = (n: number) => String(n).padStart(2, '0');
   const time = h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
   return (
-    <span className="ml-auto shrink-0 font-mono text-tiny tabular-nums text-primary-deep">
+    <span className="ml-auto shrink-0 font-mono text-tiny tabular-nums text-info-strong">
       {t('warming.card.pauseCountdown', { time })}
     </span>
   );
@@ -232,14 +232,14 @@ function WarmingCard({
   const primaryId = accountDisplayName(account);
 
   return (
-    <div className="rounded-lg border border-primary-line bg-primary-tint px-xl py-lg">
+    <div className="rounded-lg border border-info-line bg-info-tint px-xl py-lg">
       {/* header */}
       <div className="mb-lg flex items-center justify-between">
         <div className="flex min-w-0 items-center gap-md">
           <AccountAvatar
             account={account}
             className="size-icon shrink-0 rounded-full"
-            fallbackClassName="text-tiny font-semibold bg-primary-tint text-primary-deep"
+            fallbackClassName="text-tiny font-semibold bg-info-tint text-info-strong"
           />
           <div className="min-w-0">
             {/* Telegram supplies this name, so it can be one 90-char word with nowhere
@@ -270,7 +270,7 @@ function WarmingCard({
                 <span
                   tabIndex={0}
                   aria-describedby={actionsTipId}
-                  className="cursor-help text-tiny font-medium text-ink-subtle"
+                  className="cursor-help text-tiny font-medium text-content-subtle"
                 >
                   {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
@@ -288,7 +288,7 @@ function WarmingCard({
             <span
               tabIndex={0}
               aria-describedby={cycleTipId}
-              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-primary-line bg-white text-tiny font-bold text-ink-subtle"
+              className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-info-line bg-surface-card text-tiny font-bold text-content-subtle"
             >
               ?
             </span>
@@ -320,7 +320,7 @@ function WarmingCard({
                 onClick={() => {
                   setStopOpen(true);
                 }}
-                className="rounded-full border border-line bg-white px-md py-tight text-tiny font-medium text-ink-muted disabled:opacity-50"
+                className="rounded-full border border-line bg-surface-card px-md py-tight text-tiny font-medium text-content-muted disabled:opacity-50"
               >
                 {t('warming.actions.stopShort')}
               </button>
@@ -357,10 +357,10 @@ function WarmingCard({
           blues used to meet, and with them collapsed it would paint its parent's
           colour and have no edge at all. `primary-hairline` is the rung for exactly
           this — faint enough to double as a divider fill. */}
-      <div className="rounded-lg border border-primary-hairline bg-primary-tint px-lg pb-md pt-md">
+      <div className="rounded-lg border border-info-hairline bg-info-tint px-lg pb-md pt-md">
         <div className="mb-sm flex items-center justify-between">
           <span className="type-caption font-medium">{t('warming.inProgress.days')}</span>
-          <span className="type-caption font-bold text-ink">
+          <span className="type-caption font-bold text-content-primary">
             {t('warming.card.dayProgress', { days, target, count: target })}
           </span>
         </div>
@@ -372,7 +372,7 @@ function WarmingCard({
               key={index}
               // Days done, the day in progress, days to come — tokens, so the bar
               // reads the same green/blue/grey as the rest of the board.
-              className={`h-bar flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-primary' : 'bg-line'}`}
+              className={`h-bar flex-1 rounded-[1.5px] transition-[background] duration-reveal ${index < filled ? 'bg-success' : index === filled ? 'bg-action-primary' : 'bg-line'}`}
             />
           ))}
         </div>
@@ -392,7 +392,7 @@ function WarmingCard({
             and stop for the `active / (STAGES.length - 1)` fill to land on a dot. */}
         <div className="relative">
           <div
-            className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-primary-line"
+            className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-info-line"
             style={{
               left: `${String(50 / STAGES.length)}%`,
               right: `${String(50 / STAGES.length)}%`,
@@ -412,9 +412,9 @@ function WarmingCard({
                       <Icon name="check" size={10} className="stroke-white" />
                     </span>
                   ) : index === active ? (
-                    <span className="tb-livedot size-node rounded-full bg-primary" />
+                    <span className="tb-livedot size-node rounded-full bg-action-primary" />
                   ) : (
-                    <span className="size-node rounded-full border-[1.5px] border-line-strong bg-white" />
+                    <span className="size-node rounded-full border-[1.5px] border-line-strong bg-surface-card" />
                   )}
                 </div>
                 <span
@@ -422,8 +422,8 @@ function WarmingCard({
                     index < active
                       ? 'font-medium text-success-deep'
                       : index === active
-                        ? 'font-semibold text-primary-deep'
-                        : 'text-ink-subtle'
+                        ? 'font-semibold text-info-strong'
+                        : 'text-content-subtle'
                   }`}
                 >
                   {t(`warming.stage.${stage}`)}
@@ -437,9 +437,9 @@ function WarmingCard({
       {!complete ? (
         <>
           {/* current activity */}
-          <div className="mt-md flex items-center gap-md rounded-md border border-primary-line bg-primary-tint px-md py-sm">
-            <span className="tb-livedot size-dot shrink-0 rounded-full bg-primary" />
-            <span className="tb-pulse type-caption font-semibold text-primary-deep">
+          <div className="mt-md flex items-center gap-md rounded-md border border-info-line bg-info-tint px-md py-sm">
+            <span className="tb-livedot size-dot shrink-0 rounded-full bg-action-primary" />
+            <span className="tb-pulse type-caption font-semibold text-info-strong">
               {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
             </span>
             {(hold || STAGES[active] === 'pause') && account.next_run_at ? (
@@ -453,7 +453,7 @@ function WarmingCard({
             onClick={() => {
               setOpen((v) => !v);
             }}
-            className="mt-md flex w-full items-center justify-center gap-tight border-t border-line-row pt-md text-tiny text-ink-muted"
+            className="mt-md flex w-full items-center justify-center gap-tight border-t border-line-row pt-md text-tiny text-content-muted"
           >
             {t('warming.card.logToggle')}
             <span
@@ -471,7 +471,7 @@ function WarmingCard({
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
-                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-tiny text-ink-muted transition-colors hover:border-primary-line hover:text-primary-deep"
+                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-tiny text-content-muted transition-colors hover:border-info-line hover:text-info-strong"
                   >
                     <svg
                       width="10"
@@ -546,7 +546,7 @@ function WarmingCard({
                   only way it reaches AA — every green dark enough to pass on `success-tint`
                   is indistinguishable from the heading's `success-deep` (10.05:1 here
                   against 3.70:1 for the old literal). Do not "restore the family". */}
-              <div className="mt-px type-caption text-ink-body">
+              <div className="mt-px type-caption text-content-secondary">
                 {t('warming.card.completeSub', {
                   days: t('warming.card.dayProgress', { days, target, count: target }),
                 })}
@@ -561,7 +561,7 @@ function WarmingCard({
               onClick={() => {
                 onPromote(account.account_id);
               }}
-              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success-deep px-lg py-md text-body font-semibold text-white transition-colors hover:bg-success-press disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success-deep px-lg py-md text-body font-semibold text-on-action transition-colors hover:bg-success-press disabled:opacity-50"
             >
               <svg
                 width="14"
@@ -602,7 +602,7 @@ export function WarmingBoard({
     <Card className="p-lg">
       <div className="mb-lg flex items-center justify-between">
         <div className="flex items-center gap-md">
-          <span className="flex size-icon items-center justify-center rounded-md bg-primary">
+          <span className="flex size-icon items-center justify-center rounded-md bg-action-primary">
             <svg
               width="16"
               height="16"
@@ -639,7 +639,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-primary-line px-md py-[50px] text-center text-body text-ink-subtle">
+          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-[50px] text-center text-body text-content-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

@@ -35,7 +35,7 @@ test('selecting a campaign card marks it selected', async () => {
     .find((node): node is HTMLElement => node !== null);
   expect(card).toBeDefined();
   await userEvent.click(card as HTMLElement);
-  expect((card as HTMLElement).className).toContain('border-primary');
+  expect((card as HTMLElement).className).toContain('border-action-primary');
   // sanity: status pill uses the active campaign-status key path
   within(card as HTMLElement).getByText('Активна');
 });
@@ -52,7 +52,7 @@ test('campaign edit-prompt saves and delete removes the campaign', async () => {
   // arbitrary first-readiness channel (`@news`). Both 'Promo's on the page wear the
   // caption role; the account subtitle is the one that does not recolour it.
   expect(
-    await screen.findByText('Promo', { selector: '.type-caption:not(.text-primary)' }),
+    await screen.findByText('Promo', { selector: '.type-caption:not(.text-action-primary)' }),
   ).toBeInTheDocument();
   await userEvent.click(await screen.findByText('Сохранить'));
   await waitFor(() => {

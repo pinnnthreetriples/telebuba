@@ -68,16 +68,16 @@ const SIZE: Record<
 // There is no white-filled `danger`, though five buttons wear one: the retry beside
 // the error sentence inside a `Notice tone="danger"`, where this variant's own
 // `bg-danger-tint` is the tint it is already standing on. The white is a real
-// decision, so those five say it as `className="bg-white"` instead of losing it — but
+// decision, so those five say it as `className="bg-surface-card"` instead of losing it — but
 // all five live in `widgets/account-edit`, and a fill is not given a name until two
 // independent slices ask for it.
 const VARIANT = {
-  primary: 'bg-primary text-white hover:bg-primary-press',
-  secondary: 'border border-line bg-white text-ink hover:border-line-strong',
+  primary: 'bg-action-primary text-on-action hover:bg-action-pressed',
+  secondary: 'border border-line bg-surface-card text-content-primary hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
-  ghost: 'text-ink-muted hover:bg-canvas hover:text-ink',
+  ghost: 'text-content-muted hover:bg-canvas hover:text-content-primary',
   dashed:
-    'border border-dashed border-primary-line bg-white text-primary-deep hover:border-primary hover:bg-primary-tint',
+    'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-action-hover',
 } as const;
 
 export function Button({

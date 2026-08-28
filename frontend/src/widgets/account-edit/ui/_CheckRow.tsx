@@ -24,11 +24,11 @@ export function CheckRow({
       className="mb-lg flex w-full items-center gap-md text-left disabled:opacity-60"
     >
       <span
-        className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-primary bg-primary' : 'border-line bg-white'}`}
+        className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
       >
         {on && <Icon name="check" size={14} className="stroke-white" />}
       </span>
-      <span className="type-dialog-body text-ink-body">{label}</span>
+      <span className="type-dialog-body text-content-secondary">{label}</span>
     </button>
   );
 }

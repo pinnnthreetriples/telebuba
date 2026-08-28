@@ -8,7 +8,7 @@ import { Icon } from './Icon';
 function Chevron({ open }: { open: boolean }) {
   return (
     <span
-      className={`flex text-ink-subtle transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
+      className={`flex text-content-subtle transition-transform duration-reveal ease-spring ${open ? 'rotate-180' : ''}`}
     >
       <Icon name="chevron-down" size={16} />
     </span>
@@ -21,7 +21,7 @@ export function CollapsibleCard({
   label,
   defaultOpen = false,
   onOpenChange,
-  wrapperClassName = 'rounded-card border border-line bg-white',
+  wrapperClassName = 'rounded-card border border-line bg-surface-card',
   headerClassName = 'px-lg py-lg',
   bodyClassName = 'px-lg pb-lg',
   children,

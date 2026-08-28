@@ -22,12 +22,12 @@ test('the shape comes from the size and the fill from the variant', async () => 
 
   expect(classesOf('Отмена')).toContain('px-2xl');
   expect(classesOf('Отмена')).toContain('text-body');
-  expect(classesOf('Отмена')).toContain('bg-white');
+  expect(classesOf('Отмена')).toContain('bg-surface-card');
   expect(classesOf('Запустить')).toContain('px-xl');
   // The rung has to survive the variant's colour: both are `text-*`, and an
   // untaught tailwind-merge drops the size in favour of the colour (see cn.ts).
   expect(classesOf('Запустить')).toContain('text-body');
-  expect(classesOf('Запустить')).toContain('bg-primary');
+  expect(classesOf('Запустить')).toContain('bg-action-primary');
   expect(classesOf('Удалить')).toContain('bg-danger-tint');
   await expectNoAxeViolations(container);
 });
@@ -62,7 +62,7 @@ test('dashed is a fill that keeps whatever rung it is given', () => {
 
   for (const name of ['Добавить кампанию', 'Добавить']) {
     expect(classesOf(name)).toContain('border-dashed');
-    expect(classesOf(name)).toContain('text-primary-deep');
+    expect(classesOf(name)).toContain('text-info-strong');
   }
   expect(classesOf('Добавить кампанию')).toContain('w-full');
   expect(classesOf('Добавить')).toContain('px-xl');
@@ -83,7 +83,7 @@ test('every button carries the same disabled and focus treatment', () => {
 
   for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
-    expect(classesOf(name)).toContain('focus-visible:outline-primary');
+    expect(classesOf(name)).toContain('focus-visible:outline-action-primary');
   }
 });
 
@@ -96,7 +96,7 @@ test('a caller class wins over the variant it collides with', () => {
 
   const classes = classesOf('Сохранено').split(' ');
   expect(classes).toContain('bg-success');
-  expect(classes).not.toContain('bg-primary');
+  expect(classes).not.toContain('bg-action-primary');
 });
 
 // `loading` and `disabled` both stop the click, but a screen reader has to hear
@@ -146,7 +146,7 @@ test('focus is an outline, and the browser ring is not thrown away', () => {
   render(<Button>Сохранить</Button>);
   const cls = screen.getByRole('button').className;
   expect(cls).toContain('focus-visible:outline-2');
-  expect(cls).toContain('focus-visible:outline-primary');
+  expect(cls).toContain('focus-visible:outline-action-primary');
   expect(cls).not.toContain('outline-none');
   expect(cls).not.toContain('shadow-focus');
 });

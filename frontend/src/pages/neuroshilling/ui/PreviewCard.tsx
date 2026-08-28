@@ -46,7 +46,7 @@ export function PreviewCard({
       header={<span className="type-card-title">{t('neuroshilling.preview.title')}</span>}
       trailing={
         <span
-          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${status === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
         >
           {t(`neuroshilling.preview.status.${status}`)}
         </span>
@@ -90,7 +90,7 @@ export function PreviewCard({
                   style={{ animationDelay: `${String(index * 0.12)}s` }}
                 >
                   <span
-                    className={`flex size-icon shrink-0 items-center justify-center rounded-full text-tiny font-bold text-white ${tone.bg}`}
+                    className={`flex size-icon shrink-0 items-center justify-center rounded-full text-tiny font-bold text-on-action ${tone.bg}`}
                   >
                     {(role?.name ?? '?').slice(0, 1).toUpperCase()}
                   </span>
@@ -104,7 +104,7 @@ export function PreviewCard({
                       </span>
                     </div>
                     {step.kind === 'reaction' ? (
-                      <span className="inline-flex items-center gap-tight rounded-full border border-line bg-white px-md py-xs text-tiny text-ink-muted">
+                      <span className="inline-flex items-center gap-tight rounded-full border border-line bg-surface-card px-md py-xs text-tiny text-content-muted">
                         <span aria-hidden="true">{step.emoji ?? '·'}</span>
                         {step.target_position === null || step.target_position === undefined
                           ? t('neuroshilling.preview.reactionLoose')
@@ -114,7 +114,7 @@ export function PreviewCard({
                       <div className="rounded-lg rounded-tl-[3px] border border-line bg-surface px-md py-sm text-body">
                         {quoted ? (
                           <span
-                            className={`mb-tight block border-l-2 pl-sm text-tiny text-ink-subtle ${tone.border}`}
+                            className={`mb-tight block border-l-2 pl-sm text-tiny text-content-subtle ${tone.border}`}
                           >
                             {quoted.text}
                           </span>
@@ -143,7 +143,7 @@ export function PreviewCard({
         >
           {t('neuroshilling.preview.play')}
         </Button>
-        <Button size="sm" className="text-primary" disabled={busy} onClick={onRegenerate}>
+        <Button size="sm" className="text-action-primary" disabled={busy} onClick={onRegenerate}>
           {t('neuroshilling.preview.regenerate')}
         </Button>
       </div>

@@ -91,7 +91,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             <div className="type-card-title">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
+              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-content-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')
@@ -112,10 +112,10 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             aria-label={t('accounts.edit.aliveBtnTitle')}
             className={`flex size-icon shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-enter ${
               aliveCheck === 'ok'
-                ? 'border-success bg-success-deep text-white'
+                ? 'border-success bg-success-deep text-on-action'
                 : aliveCheck === 'err'
-                  ? 'border-danger bg-danger text-white'
-                  : 'border-line bg-white text-ink-muted'
+                  ? 'border-danger bg-danger text-on-action'
+                  : 'border-line bg-surface-card text-content-muted'
             }`}
           >
             {aliveCheck === 'idle' && (

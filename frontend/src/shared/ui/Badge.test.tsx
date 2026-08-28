@@ -15,7 +15,7 @@ test('the tone names the fill and the readable text rung together', async () => 
   );
 
   expect(screen.getByText('7').className).toContain('bg-canvas');
-  expect(screen.getByText('7').className).toContain('text-ink-muted');
+  expect(screen.getByText('7').className).toContain('text-content-muted');
 
   // `text-danger` would be 4.34:1 on this fill; the pairing is what `deep` is for.
   const deleted = screen.getByText('3 удалено').className;

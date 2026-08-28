@@ -31,7 +31,7 @@ export function Toaster() {
           key={toast.id}
           role="alert"
           className={cn(
-            'pointer-events-auto max-w-[90vw] px-lg py-md text-body text-white shadow-pop tb-arrive',
+            'pointer-events-auto max-w-[90vw] px-lg py-md text-body text-on-inverse shadow-pop tb-arrive',
             surface('inverse'),
           )}
         >

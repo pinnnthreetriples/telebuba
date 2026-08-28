@@ -82,7 +82,7 @@ export function NeuroshillingAccountsModal({
                   className={`w-full shrink-0 rounded-md border px-md py-sm text-body font-medium disabled:opacity-50 sm:w-menu ${
                     isPicked
                       ? 'border-danger-line bg-danger-tint text-danger-deep'
-                      : 'border-dashed border-line-strong bg-white text-primary hover:border-primary'
+                      : 'border-dashed border-line-strong bg-surface-card text-action-primary hover:border-action-primary'
                   }`}
                 >
                   {isPicked

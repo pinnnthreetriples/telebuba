@@ -126,8 +126,8 @@ export function AppNav() {
         </IconButton>
 
         <div className="flex shrink-0 items-center gap-md">
-          <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
-            <div className="size-node rounded-full bg-primary" />
+          <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">
+            <div className="size-node rounded-full bg-action-primary" />
           </div>
           {/* The wordmark is not a type role: it is one mark rendered in two places (this
               bar and the drawer), not a kind of text the app has. Naming it would put a
@@ -145,14 +145,14 @@ export function AppNav() {
             <Link
               key={link.to}
               to={link.to}
-              className={`relative flex items-center self-stretch text-body font-medium transition-colors ${activeIdx === index ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}
+              className={`relative flex items-center self-stretch text-body font-medium transition-colors ${activeIdx === index ? 'text-content-primary' : 'text-content-muted hover:text-content-primary'}`}
             >
               {t(`nav.${link.key}`)}
             </Link>
           ))}
           <span
             aria-hidden
-            className="pointer-events-none absolute left-0 top-0 h-rail rounded-b-[2px] bg-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-reveal ease-spring"
+            className="pointer-events-none absolute left-0 top-0 h-rail rounded-b-[2px] bg-action-primary will-change-transform [transform:translateZ(0)] transition-[transform,width,opacity] duration-reveal ease-spring"
             style={{
               width: indicator.width,
               // Position via GPU transform (matches the design's layoutId slide),
@@ -173,7 +173,7 @@ export function AppNav() {
             className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
           >
             <span
-              className={`size-dot rounded-full ${systemActive ? 'bg-success' : 'bg-ink-subtle'}`}
+              className={`size-dot rounded-full ${systemActive ? 'bg-success' : 'bg-content-subtle'}`}
             />
             {/* sr-only, not `hidden`: below `lg` only the dot shows, but the text has
                 to stay in the accessibility tree — a display:none span leaves the
@@ -182,7 +182,7 @@ export function AppNav() {
                 No role="status" here: EventSource reconnects on every blip, and a live
                 region in the app shell would announce each one on every route. */}
             <span
-              className={`sr-only type-label lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-ink-muted'}`}
+              className={`sr-only type-label lg:not-sr-only ${systemActive ? 'text-success-deep' : 'text-content-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
@@ -190,7 +190,7 @@ export function AppNav() {
           <button
             type="button"
             aria-label={t('shell.notifications')}
-            className="relative flex size-touch items-center justify-center rounded-full border border-line bg-white text-ink-muted lg:size-tile"
+            className="relative flex size-touch items-center justify-center rounded-full border border-line bg-surface-card text-content-muted lg:size-tile"
           >
             <svg
               width="16"
@@ -203,7 +203,7 @@ export function AppNav() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="absolute right-[11px] top-[9px] size-dot rounded-full border-[1.5px] border-white bg-primary lg:right-[8px] lg:top-[6px]" />
+            <span className="absolute right-[11px] top-[9px] size-dot rounded-full border-[1.5px] border-surface-card bg-action-primary lg:right-[8px] lg:top-[6px]" />
           </button>
           <div className="relative">
             <button
@@ -212,7 +212,7 @@ export function AppNav() {
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="flex size-touch items-center justify-center rounded-full bg-primary text-body font-semibold text-white lg:size-tile"
+              className="flex size-touch items-center justify-center rounded-full bg-action-primary text-body font-semibold text-on-action lg:size-tile"
             >
               {initials}
             </button>
@@ -227,9 +227,9 @@ export function AppNav() {
                   }}
                   className="fixed inset-0 z-raised cursor-default"
                 />
-                <div className="absolute right-0 top-[48px] z-pop w-menu overflow-hidden rounded-lg border border-line bg-white py-xs shadow-pop lg:top-[42px]">
+                <div className="absolute right-0 top-[48px] z-pop w-menu overflow-hidden rounded-lg border border-line bg-surface-card py-xs shadow-pop lg:top-[42px]">
                   {me.data ? (
-                    <div className="truncate border-b border-line-row px-md py-sm text-body text-ink-muted">
+                    <div className="truncate border-b border-line-row px-md py-sm text-body text-content-muted">
                       {me.data.username}
                     </div>
                   ) : null}

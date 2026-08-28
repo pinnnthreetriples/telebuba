@@ -25,5 +25,5 @@ export const RADIUS_NAMES = Object.keys(radius);
 export const LINE_HEIGHT_NAMES = Object.keys(lineHeight);
 export const TRACKING_NAMES = Object.keys(letterSpacing);
 
-// Корни палитры, как их пишет класс: `bg-primary` и `bg-primary-tint` — оба `primary`.
+// Корни палитры, как их пишет класс: `bg-action-primary` и `bg-info-tint` — оба `primary`.
 export const COLOUR_ROOTS = Object.keys(flatColors);

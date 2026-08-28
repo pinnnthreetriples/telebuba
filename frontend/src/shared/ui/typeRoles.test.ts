@@ -13,12 +13,14 @@ type Role = { size: string; weight: string; ink: string; tracking?: string; caps
 
 const roles = (config.theme as { typeRole: Record<string, Role> }).typeRole;
 const fontSize = config.theme.fontSize as Record<string, string>;
-const ink = config.theme.colors.ink;
+const content = config.theme.colors.content;
 
+// Краска роли пишется так, как её пишет класс — `content-primary`, — а палитра рампу
+// вкладывает. Спецслучая «краска без рунга» больше нет: у `content` каждая ступень
+// названа, и одноимённого корня `ink` не осталось.
 function inkHex(token: string): string {
-  if (token === 'ink') return ink.DEFAULT;
-  const rung = token.slice('ink-'.length) as 'body' | 'muted' | 'subtle';
-  return ink[rung];
+  const rung = token.slice('content-'.length) as keyof typeof content;
+  return content[rung];
 }
 
 // One compile for the whole suite: Tailwind only emits a component whose class appears

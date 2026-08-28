@@ -61,36 +61,36 @@ export const fontSize = {
 // весом: 600 против 700.
 export const typeRole = {
   // Заголовок, который называет экран.
-  'page-title': { size: 'display', weight: '700', ink: 'ink', tracking: '-0.02em' },
+  'page-title': { size: 'display', weight: '700', ink: 'content-primary', tracking: '-0.02em' },
   // Заголовок, с которого начинается диалог.
-  'dialog-title': { size: 'title', weight: '700', ink: 'ink' },
+  'dialog-title': { size: 'title', weight: '700', ink: 'content-primary' },
   // Фраза, которую диалог говорит перед кнопками. Своя роль, а не `prose`: все
   // подтверждения приложения говорят её на тон темнее, чем страница объясняет себя.
-  'dialog-body': { size: 'body', weight: '400', ink: 'ink-muted' },
+  'dialog-body': { size: 'body', weight: '400', ink: 'content-muted' },
   // Заголовок блока, в котором стоит.
-  'card-title': { size: 'title', weight: '600', ink: 'ink' },
+  'card-title': { size: 'title', weight: '600', ink: 'content-primary' },
   // Название одного элемента внутри карточки.
-  'item-title': { size: 'body', weight: '600', ink: 'ink' },
+  'item-title': { size: 'body', weight: '600', ink: 'content-primary' },
   // Надпись, открывающая группу настроек, капителью. Единственная роль с межбуквенным:
   // капитель без него смыкается.
   eyebrow: {
     size: 'tiny',
     weight: '600',
-    ink: 'ink-subtle',
+    ink: 'content-subtle',
     tracking: '0.04em',
     caps: 'uppercase',
   },
   // Название контрола рядом.
-  label: { size: 'body', weight: '500', ink: 'ink-body' },
+  label: { size: 'body', weight: '500', ink: 'content-secondary' },
   // Данное, которое строка сообщает. Та же ступень, что у `prose`, и тон темнее: это то,
   // за чем оператор пришёл, а проза — объяснение вокруг.
-  value: { size: 'body', weight: '400', ink: 'ink-body' },
+  value: { size: 'body', weight: '400', ink: 'content-secondary' },
   // Фраза, которую оператор читает.
-  prose: { size: 'body', weight: '400', ink: 'ink-subtle' },
+  prose: { size: 'body', weight: '400', ink: 'content-subtle' },
   // Мелкая строка, уточняющая контрол над ней, и то, чем датирована строка рядом.
-  caption: { size: 'tiny', weight: '400', ink: 'ink-subtle' },
+  caption: { size: 'tiny', weight: '400', ink: 'content-subtle' },
   // Число, которое счётчик выводит на экран.
-  stat: { size: 'stat', weight: '700', ink: 'ink' },
+  stat: { size: 'stat', weight: '700', ink: 'content-primary' },
 } as const;
 
 // Два интерлиньяжа и глиф. Шкала Tailwind заменена целиком, и закрытие этой оси в

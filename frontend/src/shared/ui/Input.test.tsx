@@ -74,9 +74,9 @@ test('the flat tone drops the white fill for the inert one', () => {
 });
 
 test('a caller class wins over the tone it collides with', () => {
-  render(<Input aria-label="Пароль" tone="flat" className="text-ink" />);
+  render(<Input aria-label="Пароль" tone="flat" className="text-content-primary" />);
 
-  expect(screen.getByLabelText('Пароль').className).toContain('text-ink');
+  expect(screen.getByLabelText('Пароль').className).toContain('text-content-primary');
 });
 
 // У области высота приходит из `rows`, поэтому она — единственный контрол, который

@@ -10,7 +10,7 @@ import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } fr
 const STATUS_TONE = {
   active: 'text-success-deep',
   paused: 'text-warning-deep',
-  archived: 'text-ink-muted',
+  archived: 'text-content-muted',
 } as const;
 
 // Channel-chip tone driven by the live "Проверить каналы" verdict: banned = red
@@ -18,7 +18,7 @@ const STATUS_TONE = {
 const CHANNEL_CHIP = {
   banned: 'border-danger bg-danger-tint text-danger-deep',
   ok: 'border-success bg-success-tint text-success-deep',
-  default: 'border-line bg-canvas text-ink-body',
+  default: 'border-line bg-canvas text-content-secondary',
 } as const;
 
 // The campaigns card: per-campaign run/pause/edit/delete (SurfHover-revealed),
@@ -118,7 +118,7 @@ export function CampaignsCard({
                       // prompt modal's account list) on THIS campaign (finding #5).
                       onEditPrompt(campaign);
                     }}
-                    className="flex w-action items-center justify-center border-none bg-transparent text-primary"
+                    className="flex w-action items-center justify-center border-none bg-transparent text-action-primary"
                   >
                     <Icon name="pencil" size={18} />
                   </button>
@@ -143,8 +143,8 @@ export function CampaignsCard({
                   }}
                   // Background lives in both branches, never in the base: two `bg-*`
                   // utilities in one class list are resolved by stylesheet order, and
-                  // `bg-white` wins over the selected tint.
-                  className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+                  // `bg-surface-card` wins over the selected tint.
+                  className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
                 >
                   <div className="flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
@@ -204,7 +204,7 @@ export function CampaignsCard({
           header={<span className="type-item-title">{t('neurocomment.channels.title')}</span>}
         >
           <div className="mb-md flex items-center justify-between gap-sm">
-            <span className="min-w-0 truncate type-caption font-medium text-primary">
+            <span className="min-w-0 truncate type-caption font-medium text-action-primary">
               {activeCampaign?.name ?? ''}
             </span>
             <div className="flex shrink-0 items-center gap-sm">
@@ -213,7 +213,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null || checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                className="shrink-0 rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-content-muted transition-colors hover:border-action-primary hover:text-action-primary disabled:opacity-50"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -248,14 +248,14 @@ export function CampaignsCard({
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-body leading-none text-ink-subtle"
+                  className="text-body leading-none text-content-subtle"
                 >
                   ×
                 </button>
               </span>
             ))}
             {addingChannel ? (
-              <span className="inline-flex items-center gap-tight rounded-full border border-primary bg-white py-xs pl-md pr-xs">
+              <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
                 <input
                   autoFocus
                   value={channelInput}
@@ -275,7 +275,7 @@ export function CampaignsCard({
                   aria-label={t('neurocomment.modal.add')}
                   disabled={!channelInput.trim()}
                   onClick={onAddChannel}
-                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
                 >
                   <Icon name="check" size={12} />
                 </button>
@@ -290,7 +290,7 @@ export function CampaignsCard({
                 // page's; if a third appears, that is the moment it earns a rung.
                 disabled={campaignId === null}
                 onClick={onStartAdd}
-                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-md py-tight text-body text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary disabled:opacity-50"
               >
                 {t('neurocomment.channels.addPill')}
               </button>

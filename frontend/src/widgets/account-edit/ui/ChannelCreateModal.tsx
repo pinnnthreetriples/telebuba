@@ -192,7 +192,7 @@ export function ChannelCreateModal({
       ? 'text-success-deep'
       : usernameHint?.tone === 'error'
         ? 'text-danger'
-        : 'text-ink-subtle';
+        : 'text-content-subtle';
 
   return (
     // Escape / backdrop-click route through Modal's onClose — locked while the
@@ -266,7 +266,7 @@ export function ChannelCreateModal({
           <label className="mb-lg block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
-              <span className="absolute left-lg text-body text-ink-subtle">@</span>
+              <span className="absolute left-lg text-body text-content-subtle">@</span>
               <Input
                 className="pl-page"
                 value={username}

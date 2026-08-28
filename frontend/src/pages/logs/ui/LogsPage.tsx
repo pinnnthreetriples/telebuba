@@ -205,7 +205,7 @@ export function LogsPage() {
       </div>
 
       {isPending ? (
-        <p className="text-ink-muted">{t('logs.loading')}</p>
+        <p className="text-content-muted">{t('logs.loading')}</p>
       ) : isError ? (
         <p role="alert" className="text-danger">
           {t('logs.error')}

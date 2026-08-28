@@ -14,7 +14,7 @@ test('the surface is the card and the padding is the caller`s', () => {
   const card = screen.getByTestId('plain');
   expect(card.className).toContain('rounded-card');
   expect(card.className).toContain('border-line');
-  expect(card.className).toContain('bg-white');
+  expect(card.className).toContain('bg-surface-card');
   expect(card.className).toContain('p-lg');
   expect(card.className).not.toContain('px-xl');
 });

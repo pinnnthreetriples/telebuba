@@ -203,7 +203,7 @@ export function ChannelEditModal({
               <Button
                 size="xs"
                 variant="danger"
-                className="bg-white"
+                className="bg-surface-card"
                 onClick={() => {
                   void detail.refetch();
                 }}
@@ -263,11 +263,11 @@ export function ChannelEditModal({
                   type="button"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line bg-white px-lg py-sm text-body font-medium disabled:opacity-60"
+                  className="rounded-full border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
+                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary" />
                       {t('accounts.channel.avatarUpload')}
                     </span>
                   ) : (

@@ -98,7 +98,7 @@ export function ListenerEditModal({
     <Modal onClose={onClose} className="w-confirm" label={t('neurocomment.listener.title')}>
       <div className="p-2xl">
         <div className="mb-tight flex items-center gap-md">
-          <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+          <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
             <Icon name="chart" size={18} />
           </span>
           <div className="flex-1">

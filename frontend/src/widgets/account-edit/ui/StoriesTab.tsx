@@ -32,7 +32,7 @@ export function StoriesTab({
               style={tileStyle(story.thumb_url, '9 / 16')}
             />
             {(story.views != null || story.reactions != null) && (
-              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-tiny font-medium text-white">
+              <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-sm rounded-sm bg-scrim px-tight py-hair text-tiny font-medium text-on-inverse">
                 {story.views != null && (
                   <span
                     title={t('accounts.profile.storyViews', { n: story.views })}
@@ -71,7 +71,7 @@ export function StoriesTab({
               onClick={() => {
                 onRemove(story);
               }}
-              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-body leading-none text-white"
+              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-body leading-none text-on-inverse"
             >
               ×
             </button>
@@ -85,12 +85,12 @@ export function StoriesTab({
                 onPinToggle(story);
               }}
               className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-sm px-tight py-hair text-center text-tiny font-medium disabled:opacity-50 ${
-                story.is_pinned ? 'bg-primary text-white' : 'bg-scrim text-white'
+                story.is_pinned ? 'bg-action-primary text-on-action' : 'bg-scrim text-on-inverse'
               }`}
             >
               {t(story.is_pinned ? 'accounts.profile.pinnedForever' : 'accounts.profile.pin24h')}
             </button>
-            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-scrim px-tight py-hair text-center text-tiny font-medium text-white">
+            <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-sm bg-scrim px-tight py-hair text-center text-tiny font-medium text-on-inverse">
               {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
             </span>
           </div>

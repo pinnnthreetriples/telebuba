@@ -134,7 +134,7 @@ export function ProxyForm({
                     setShowPass((shown) => !shown);
                   }}
                   aria-label={t('accounts.proxyForm.password')}
-                  className="absolute right-[6px] top-1/2 flex size-icon -translate-y-1/2 items-center justify-center text-ink-subtle"
+                  className="absolute right-[6px] top-1/2 flex size-icon -translate-y-1/2 items-center justify-center text-content-subtle"
                 >
                   {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                 </button>
@@ -164,7 +164,7 @@ export function ProxyForm({
       <div className="flex flex-wrap items-center gap-md">
         <Button size="sm" className="items-center gap-sm" onClick={runDetect} disabled={!canProbe}>
           {detect === 'loading' ? (
-            <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-primary" />
+            <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-action-primary" />
           ) : (
             <svg
               width="14"

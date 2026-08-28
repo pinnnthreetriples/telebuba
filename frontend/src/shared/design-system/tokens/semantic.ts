@@ -8,29 +8,35 @@
 //
 // ── Как это доходит до классов ─────────────────────────────────────────────────────
 //
-// Tailwind получает ПЛОСКИЕ имена, и они не переименовываются в `background-canvas`:
-// класс — это то, что набрано в 700 местах приложения, а `bg-canvas` уже говорит ровно
-// то, что говорит `background.canvas`. Переименование стоило бы 700 правок и не сказало
-// бы ничего нового. Структура ниже — авторитет, `flatColors` — её проекция на классы, а
-// таблица соответствий одна и лежит здесь же, а не в чьей-то голове:
+// Tailwind получает ПЛОСКИЕ имена, и роль названа в самом имени — это и есть разница с
+// первой версией этого файла. Тогда структура ниже была авторитетом на словах, а классы
+// оставались прежними: `bg-white`, `text-white`, `bg-primary`, `text-ink`. То есть белый
+// цвет карточки и белый цвет надписи на залитой кнопке были ОДНИМ классом, и перекрасить
+// одно, не перекрасив другое, было нельзя. Семантический уровень, который нельзя
+// применить, — это комментарий, а не уровень.
 //
-//   background.canvas   → canvas          content.primary   → ink
-//   background.surface  → surface         content.secondary → ink-body
-//   background.muted    → line-row        content.muted     → ink-muted
-//   background.inverse  → term            content.subtle    → ink-subtle
-//   background.scrim    → scrim           content.inverse   → term-text
-//   background.veil     → veil            content.disabled  → ink-subtle
+//   background.canvas   → canvas          content.primary   → content-primary
+//   background.surface  → surface         content.secondary → content-secondary
+//   background.card     → surface-card     content.muted     → content-muted
+//   background.inverse  → term            content.subtle    → content-subtle
+//   background.scrim    → scrim           action.onPrimary  → on-action
+//   background.veil     → veil            (белый на тёмном) → on-inverse
 //
-//   border.default → line                 action.primary        → primary
-//   border.strong  → line-strong          action.primaryHover   → primary-tint
-//   border.subtle  → line-row             action.primaryPressed → primary-press
-//   border.focus   → primary              action.onPrimary      → white
+//   border.default → line                 action.primary        → action-primary
+//   border.strong  → line-strong          action.primaryHover   → action-hover
+//   border.subtle  → line-row             action.primaryPressed → action-pressed
+//   border.focus   → action-primary
 //
-//   feedback.success → success            feedback.warning → warning
-//   feedback.danger  → danger             feedback.info    → primary
+//   feedback.info    → info               feedback.warning → warning
+//   feedback.success → success            feedback.danger  → danger
 //
-// Каждая семантическая группа, кроме `feedback`, разворачивается в один плоский ключ;
-// `feedback` — в рампу из пяти рунгов, потому что тон носит и текст, и подложку, и рамку.
+// Что НЕ переименовано и почему: `canvas`, `line`, `term`, `success`, `warning`, `danger`
+// уже были ролями — они называют назначение, а не значение, и второго смысла ни один не
+// несёт. Переименование стоило бы 400 правок и не добавило бы ни одной новой
+// независимости. Работа была не в приставках, а в трёх краcках, которые делали по две
+// работы разом: белый (поверхность и надпись на действии), синий (заливка действия,
+// краска ссылки и тёмный синий, читаемый на тоне) и `ink` — имя по материалу, а не по роли.
+
 import { palette } from './primitives';
 
 export const background = {
@@ -145,6 +151,21 @@ export const inverse = {
 
 // Проекция семантики на плоские имена, которые набирает класс. Всё, что ниже, — ссылки:
 // ни одного значения, только пути в структуры выше.
+//
+// ── Почему имена именно такие ───────────────────────────────────────────────────────
+//
+// См. таблицу в шапке файла: роль теперь названа в самом классе, а не только в структуре.
+// Коротко, что появилось:
+//
+//   bg-surface-card      белая поверхность, на которую кладут содержимое
+//   text-content-primary основные чернила (и -secondary/-muted/-subtle)
+//   text-on-action       чернила НА залитом действии
+//   text-on-inverse      одна строка на тёмной поверхности (тост, подсказка)
+//   bg-action-primary    заливка действия (и -hover/-pressed)
+//   text-info-strong     тёмная краска смысла «в работе» на его же тоне
+//
+// `white` и `black` остаются, но только под альфой над фотографией — единственное место,
+// где «белый» это не роль, а край диапазона. Голые `bg-white`/`text-white` банит линтер.
 export const flatColors = {
   transparent: palette.transparent,
   current: palette.currentColor,
@@ -152,31 +173,60 @@ export const flatColors = {
   black: palette.black,
 
   canvas: background.canvas,
-  surface: background.surface,
+  surface: {
+    // Шаг от белого: строка под курсором, шапка таблицы, вложенный блок.
+    DEFAULT: background.surface,
+    // Белая поверхность: карточка, диалог, панель, поле ввода. Отдельно от
+    // `content['on-action']`, хотя значение то же — в этом весь смысл правки.
+    card: palette.white,
+    // Приглушённой ступени тут нет умышленно: то же значение носит `line-row`, и оно
+    // носится как РАМКА — разделитель строк таблицы. Второе имя для той же краски было бы
+    // синонимом, а не ролью, и гейт мёртвых токенов справедливо на него пожаловался.
+  },
   scrim: background.scrim,
   veil: background.veil,
 
-  ink: {
-    DEFAULT: content.primary,
-    body: content.secondary,
+  content: {
+    primary: content.primary,
+    secondary: content.secondary,
     muted: content.muted,
     subtle: content.subtle,
+    // `inverse` тут нет умышленно: чернила потока лога на тёмной поверхности — это
+    // `term-text`, и второе имя для того же значения было бы синонимом, а не ролью.
+    // Одна строка на той же поверхности (тост, подсказка) — это `on-inverse`, и она
+    // ЯРЧЕ: её читают один раз, а лог сканируют.
   },
+  // Чернила НА залитом действии. Своя ступень, а не `white`: перекрасить надпись кнопки,
+  // не перекрасив карточку, — это то, чего раньше было нельзя.
+  'on-action': action.onPrimary,
+  // Чернила на тёмной поверхности, когда это ОДНА строка, а не поток лога: тост и
+  // подсказка. Ярче `term-text` намеренно — тот — основные чернила журнала, который
+  // сканируют, а это надпись, которую читают один раз.
+  'on-inverse': palette.white,
+
   line: {
     DEFAULT: border.default,
     strong: border.strong,
     row: border.subtle,
   },
-  primary: {
-    DEFAULT: action.primary,
-    press: action.primaryPressed,
-    tint: action.primaryHover,
+  action: {
+    primary: action.primary,
+    // Заливка при наведении на НЕзалитый контрол и подложка выбранной плитки.
+    hover: action.primaryHover,
+    // Нажатие залитой кнопки: шаг вниз от заливки.
+    pressed: action.primaryPressed,
+  },
+  // Смысл «в работе». Отдельно от `action`, хотя базовое значение то же: тон сообщает
+  // состояние, действие приглашает нажать, и перекрасить одно без другого должно быть
+  // возможно. Здесь же живёт `strong` — единственный синий, который читается на `tint`.
+  info: {
+    strong: feedback.info.strong,
+    tint: feedback.info.tint,
     line: feedback.info.line,
-    // Рамка настолько бледная, что годится и как ЗАЛИВКА разделителя: neurocomment
-    // PipelineCard берёт из одной краски обе работы — рамку карточки и фон сетки, чьи
-    // 1px-щели И ЕСТЬ разделители плиток.
+    // Рамка настолько бледная, что годится и как ЗАЛИВКА разделителя: PipelineCard берёт
+    // из одной краски обе работы — рамку карточки и фон сетки, чьи 1px-щели И ЕСТЬ
+    // разделители плиток.
     hairline: palette.blue100,
-    deep: feedback.info.strong,
   },
   success: {
     DEFAULT: feedback.success.base,

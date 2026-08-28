@@ -174,7 +174,7 @@ export function CampaignSetupCard({
               onClick={() => {
                 onDraft({ ...draft, runMode: mode });
               }}
-              className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+              className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
             >
               <span className="block type-item-title">
                 {t(`neuroshilling.setup.runMode.${mode}.title`)}
@@ -248,11 +248,11 @@ export function CampaignSetupCard({
             {changed}
           </Badge>
         ) : null}
-        <span className="ml-auto text-ink-subtle">{advanced ? '−' : '+'}</span>
+        <span className="ml-auto text-content-subtle">{advanced ? '−' : '+'}</span>
       </button>
 
       {advanced ? (
-        <div className="mb-lg flex flex-col gap-md rounded-lg border border-line bg-white p-md">
+        <div className="mb-lg flex flex-col gap-md rounded-lg border border-line bg-surface-card p-md">
           <NumberField
             label={t('neuroshilling.setup.perHour.label')}
             hint={t('neuroshilling.setup.perHour.hint')}

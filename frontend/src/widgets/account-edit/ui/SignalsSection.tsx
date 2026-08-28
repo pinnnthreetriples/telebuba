@@ -83,10 +83,10 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             onClick={runSpamCheck}
             className={`gap-sm rounded-full ${
               spamCheck === 'ok'
-                ? 'border-success bg-success-deep text-white hover:border-success'
+                ? 'border-success bg-success-deep text-on-action hover:border-success'
                 : spamCheck === 'err'
-                  ? 'border-danger bg-danger text-white hover:border-danger'
-                  : 'text-ink-muted'
+                  ? 'border-danger bg-danger text-on-action hover:border-danger'
+                  : 'text-content-muted'
             }`}
           >
             {spamCheck === 'loading' && <Spinner size={13} />}
@@ -119,7 +119,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
               <span className={`size-dot shrink-0 rounded-full ${signal.dot}`} />
               {signal.label}
             </span>
-            <span className="text-right type-label text-ink">{signal.value}</span>
+            <span className="text-right type-label text-content-primary">{signal.value}</span>
           </div>
         ))}
       </div>

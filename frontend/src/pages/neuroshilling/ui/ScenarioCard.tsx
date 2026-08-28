@@ -26,7 +26,7 @@ import {
 } from './scenarioDraft';
 
 const GHOST_BUTTON =
-  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-primary-line bg-white py-md text-body font-medium text-primary-deep hover:border-primary hover:bg-primary-tint disabled:opacity-50';
+  'flex items-center justify-center gap-tight rounded-lg border border-dashed border-info-line bg-surface-card py-md text-body font-medium text-info-strong hover:border-action-primary hover:bg-action-hover disabled:opacity-50';
 
 function Stepper({
   label,
@@ -45,7 +45,7 @@ function Stepper({
   return (
     <div className="flex items-center gap-sm">
       <span className="type-prose">{label}</span>
-      <div className="inline-flex items-center gap-hair rounded-full border border-line bg-white px-xs py-hair">
+      <div className="inline-flex items-center gap-hair rounded-full border border-line bg-surface-card px-xs py-hair">
         <button
           type="button"
           aria-label={t('neuroshilling.scenario.stepper.less', { label })}
@@ -53,7 +53,7 @@ function Stepper({
           onClick={() => {
             onChange(value - 1);
           }}
-          className="size-chip rounded-full text-body text-ink-muted disabled:opacity-40"
+          className="size-chip rounded-full text-body text-content-muted disabled:opacity-40"
         >
           −
         </button>
@@ -67,7 +67,7 @@ function Stepper({
           onClick={() => {
             onChange(value + 1);
           }}
-          className="size-chip rounded-full text-body text-ink-muted disabled:opacity-40"
+          className="size-chip rounded-full text-body text-content-muted disabled:opacity-40"
         >
           +
         </button>
@@ -100,7 +100,7 @@ function StepRow({
       : t('neuroshilling.scenario.steps.replyTo', { position });
 
   return (
-    <div className="rounded-lg border border-line bg-white p-md">
+    <div className="rounded-lg border border-line bg-surface-card p-md">
       <div className="mb-sm flex items-center gap-sm">
         <Badge className="font-semibold tabular-nums">
           {t('neuroshilling.scenario.steps.position', { position })}
@@ -122,7 +122,7 @@ function StepRow({
           type="button"
           aria-label={t('neuroshilling.scenario.steps.remove', { position })}
           onClick={onRemove}
-          className="h-bar shrink-0 rounded-sm border border-line bg-white px-sm text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
+          className="h-bar shrink-0 rounded-sm border border-line bg-surface-card px-sm text-body text-content-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
         >
           ×
         </button>
@@ -160,7 +160,7 @@ function StepRow({
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`size-icon rounded-md border text-body ${step.emoji === emoji ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+              className={`size-icon rounded-md border text-body ${step.emoji === emoji ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
             >
               {emoji}
             </button>
@@ -341,7 +341,7 @@ export function ScenarioCard({
               ? 'bg-warning-tint text-warning-deep'
               : status === 'approved'
                 ? 'bg-success-tint text-success-deep'
-                : 'bg-canvas text-ink-muted'
+                : 'bg-canvas text-content-muted'
           }`}
         >
           {dirty && status === 'approved'
@@ -536,7 +536,7 @@ export function ScenarioCard({
                   ),
                 });
               }}
-              className="h-compact shrink-0 rounded-md border border-line bg-white px-md text-body text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
+              className="h-compact shrink-0 rounded-md border border-line bg-surface-card px-md text-body text-content-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep"
             >
               ×
             </button>

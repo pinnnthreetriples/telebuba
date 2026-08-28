@@ -49,7 +49,7 @@ const SHELL = {
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
-    card: 'h-full overflow-y-auto overscroll-contain bg-white tb-drawerin',
+    card: 'h-full overflow-y-auto overscroll-contain bg-surface-card tb-drawerin',
   },
 } as const;
 

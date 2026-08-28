@@ -6,10 +6,10 @@ import { Button, CollapsibleCard, Icon, IconButton } from '@/shared/ui';
 // Status tone, in the tokens the neurocomment campaign rows already use — the
 // meaning of the status, not a hex, so the two cards cannot drift apart.
 const STATUS_TONE = {
-  idle: 'text-ink-muted',
+  idle: 'text-content-muted',
   running: 'text-success-deep',
   stopping: 'text-warning-deep',
-  done: 'text-primary',
+  done: 'text-action-primary',
   failed: 'text-danger',
 } as const;
 
@@ -63,8 +63,8 @@ export function CampaignsCard({
               }}
               // Background in both branches, never in the base: two `bg-*` utilities
               // in one class list are resolved by stylesheet order, so a base
-              // `bg-white` would beat the selected tint.
-              className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+              // `bg-surface-card` would beat the selected tint.
+              className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
             >
               <div className="flex justify-between gap-md">
                 <div className="min-w-0 flex-1 type-card-title">{campaign.name}</div>
@@ -114,7 +114,7 @@ export function CampaignsCard({
             }}
             placeholder={t('neuroshilling.campaigns.namePlaceholder')}
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
-            className="min-w-0 flex-1 rounded-lg border border-primary bg-white px-md py-sm text-body outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-action-primary bg-surface-card px-md py-sm text-body outline-none"
           />
           <Button variant="primary" size="sm" disabled={!createName.trim()} onClick={onCreate}>
             {t('neuroshilling.campaigns.confirm')}
@@ -123,7 +123,7 @@ export function CampaignsCard({
             type="button"
             aria-label={t('neuroshilling.campaigns.cancel')}
             onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line bg-white px-md py-sm text-body text-ink-muted"
+            className="shrink-0 rounded-full border border-line bg-surface-card px-md py-sm text-body text-content-muted"
           >
             ×
           </button>

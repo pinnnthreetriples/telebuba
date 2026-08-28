@@ -7,8 +7,10 @@ import { cn } from './cn';
 // spelled `text-*` — and drops it in favour of the colour that follows, which is
 // exactly the order a variant component paints in.
 test('a type rung survives the colour painted after it', () => {
-  expect(cn('text-body', 'text-white')).toBe('text-body text-white');
-  expect(cn('bg-canvas text-ink-muted', 'text-tiny')).toBe('bg-canvas text-ink-muted text-tiny');
+  expect(cn('text-body', 'text-on-action')).toBe('text-body text-on-action');
+  expect(cn('bg-canvas text-content-muted', 'text-tiny')).toBe(
+    'bg-canvas text-content-muted text-tiny',
+  );
 });
 
 test('two type rungs still collapse to the last one', () => {
@@ -16,8 +18,8 @@ test('two type rungs still collapse to the last one', () => {
 });
 
 test('two colours still collapse to the last one', () => {
-  expect(cn('text-ink', 'text-danger-deep')).toBe('text-danger-deep');
-  expect(cn('bg-primary', 'bg-success')).toBe('bg-success');
+  expect(cn('text-content-primary', 'text-danger-deep')).toBe('text-danger-deep');
+  expect(cn('bg-action-primary', 'bg-success')).toBe('bg-success');
 });
 
 test('the card radius belongs to the radius group', () => {
@@ -29,7 +31,7 @@ test('the card radius belongs to the radius group', () => {
 // reads `type-caption` as an unknown class and keeps it next to the `text-body` it was
 // meant to replace — two sizes on one element, last-one-in-the-stylesheet wins.
 test('a role replaces the rung, weight and colour written before it', () => {
-  expect(cn('text-body font-semibold text-ink-muted', 'type-caption')).toBe('type-caption');
+  expect(cn('text-body font-semibold text-content-muted', 'type-caption')).toBe('type-caption');
   expect(cn('text-body', 'type-prose')).toBe('type-prose');
 });
 

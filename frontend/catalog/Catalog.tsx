@@ -26,7 +26,7 @@ export function Catalog() {
           <span className="type-card-title">Дизайн-система Telebuba</span>
           <nav className="flex flex-wrap gap-md">
             {NAV.map(([id, label]) => (
-              <a key={id} href={`#${id}`} className="type-caption hover:text-primary-deep">
+              <a key={id} href={`#${id}`} className="type-caption hover:text-info-strong">
                 {label}
               </a>
             ))}

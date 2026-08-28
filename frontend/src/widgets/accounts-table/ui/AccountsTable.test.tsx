@@ -167,16 +167,16 @@ test('a verdict keeps its own fill instead of the button base white', () => {
   );
   // The class list, not the accessible name: the test above asserts the verdict
   // is announced, and it stayed green for months while the verdict was invisible
-  // on screen. `bg-white` and the verdict's fill are one utility group at one
+  // on screen. `bg-surface-card` and the verdict's fill are one utility group at one
   // specificity, so leaving both on the element hands the choice to the order
   // Tailwind happens to emit them in — which it lost. jsdom paints nothing, so
   // the resolved class list is the only thing here that can catch this.
   const ok = screen.getByLabelText('Аккаунт живой').closest('button');
   const err = screen.getByLabelText('Аккаунт недоступен').closest('button');
   expect(ok).toHaveClass('bg-success-deep');
-  expect(ok).not.toHaveClass('bg-white');
+  expect(ok).not.toHaveClass('bg-surface-card');
   expect(err).toHaveClass('bg-danger');
-  expect(err).not.toHaveClass('bg-white');
+  expect(err).not.toHaveClass('bg-surface-card');
 });
 
 test('a re-checked row drops its old verdict instead of spinning on top of it', () => {

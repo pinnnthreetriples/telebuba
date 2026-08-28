@@ -127,7 +127,7 @@ export function TwoFactorForm({
                       setShowPass((value) => !value);
                     }}
                     aria-label={t('accounts.edit.twofaReveal')}
-                    className="absolute right-sm top-1/2 -translate-y-1/2 text-ink-subtle"
+                    className="absolute right-sm top-1/2 -translate-y-1/2 text-content-subtle"
                   >
                     {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                   </button>

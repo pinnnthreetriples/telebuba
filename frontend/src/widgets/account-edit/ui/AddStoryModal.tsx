@@ -75,7 +75,7 @@ function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; select
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
       {/* Tokens, not hexes: the selected frame matches the button's own
-          `border-primary`, and the cells inherit the button's `text-primary`. */}
+          `border-action-primary`, and the cells inherit the button's `text-action-primary`. */}
       <rect
         x="0.5"
         y="0.5"
@@ -83,7 +83,7 @@ function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; select
         height={h - 1}
         rx="4"
         fill="none"
-        className={selected ? 'stroke-primary' : 'stroke-line-strong'}
+        className={selected ? 'stroke-action-primary' : 'stroke-line-strong'}
       />
       {cells.map(([x, y, cw, ch], i) => (
         <rect
@@ -157,7 +157,7 @@ export function AddStoryModal({
   let metaText = fileSize(video, t);
   // Tone from the token the upload state MEANS, so the line matches every other
   // failed/done/neutral hint in the app.
-  let metaTone = 'text-ink-subtle';
+  let metaTone = 'text-content-subtle';
   if (failed) {
     metaText = t('accounts.addStory.stError');
     metaTone = 'text-danger';
@@ -308,11 +308,13 @@ export function AddStoryModal({
           className="mb-lg flex w-full items-center gap-md text-left"
         >
           <span
-            className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-primary bg-primary' : 'border-line bg-white'}`}
+            className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
           >
             {noForward && <Icon name="check" size={14} className="stroke-white" />}
           </span>
-          <span className="type-dialog-body text-ink-body">{t('accounts.addStory.noForward')}</span>
+          <span className="type-dialog-body text-content-secondary">
+            {t('accounts.addStory.noForward')}
+          </span>
         </button>
 
         <div className="mb-tight flex items-center justify-between">
@@ -336,9 +338,9 @@ export function AddStoryModal({
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy || done}
-            className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-white px-lg py-lg text-left disabled:opacity-50"
+            className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-lg text-left disabled:opacity-50"
           >
-            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+            <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
               <svg
                 width="20"
                 height="20"
@@ -363,7 +365,7 @@ export function AddStoryModal({
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-surface px-lg py-md text-tiny text-ink-subtle">
+          <div className="rounded-lg border border-line bg-surface px-lg py-md text-tiny text-content-subtle">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -394,7 +396,7 @@ export function AddStoryModal({
                     alt={image.name}
                     className="h-full w-full object-cover"
                   />
-                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-tiny font-semibold text-white">
+                  <span className="absolute left-[3px] top-[3px] flex h-badge min-w-badge items-center justify-center rounded-full bg-black/55 px-xs text-tiny font-semibold text-on-inverse">
                     {index + 1}
                   </span>
                   <button
@@ -404,7 +406,7 @@ export function AddStoryModal({
                     }}
                     disabled={busy || done}
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-40"
+                    className="absolute right-[3px] top-[3px] inline-flex size-glyph items-center justify-center rounded-full bg-black/55 text-on-inverse disabled:opacity-40"
                   >
                     <Icon name="close" size={10} />
                   </button>
@@ -418,7 +420,7 @@ export function AddStoryModal({
                     // moveImage also resets the mutation — see the add control.
                     disabled={index === 0 || busy || done}
                     aria-label={t('accounts.addStory.moveLeft', { n: index + 1 })}
-                    className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
+                    className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-surface-card text-content-muted transition hover:bg-canvas hover:text-content-primary active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface-card disabled:hover:text-content-muted"
                   >
                     <svg
                       width="12"
@@ -440,7 +442,7 @@ export function AddStoryModal({
                     }}
                     disabled={index === count - 1 || busy || done}
                     aria-label={t('accounts.addStory.moveRight', { n: index + 1 })}
-                    className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-white text-ink-muted transition hover:bg-canvas hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-white disabled:hover:text-ink-muted"
+                    className="inline-flex h-bar flex-1 items-center justify-center rounded-sm border border-line bg-surface-card text-content-muted transition hover:bg-canvas hover:text-content-primary active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface-card disabled:hover:text-content-muted"
                   >
                     <svg
                       width="12"
@@ -478,7 +480,7 @@ export function AddStoryModal({
                     aria-label={t('accounts.addStory.layoutOption', { id: layout.id })}
                     aria-pressed={selected}
                     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the collage-layout tile's own box, one component's internal layout
-                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-md border text-primary transition ${selected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+                    className={`flex h-[62px] w-[46px] items-center justify-center rounded-md border text-action-primary transition ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
                   >
                     <LayoutIcon cells={layout.cells} selected={selected} />
                   </button>
@@ -490,9 +492,9 @@ export function AddStoryModal({
 
         {/* Single-video row: filename + size + remove (mirrors the photo path). */}
         {video !== null && (
-          <div className="mt-md tb-fadeup rounded-lg border border-line bg-white px-md py-md">
+          <div className="mt-md tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md">
             <div className="flex items-center gap-md">
-              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
                 <Icon name="video" size={16} />
               </div>
               <div className="min-w-0 flex-1">
@@ -507,7 +509,7 @@ export function AddStoryModal({
                     post.reset();
                   }}
                   aria-label={t('accounts.addStory.removeFile')}
-                  className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
+                  className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
                 >
                   <Icon name="close" size={14} />
                 </button>
@@ -519,20 +521,20 @@ export function AddStoryModal({
         {/* Per-publish status: uploading spinner + bar → success check + full
             bar → error icon (hover = reason) + retry. Shared by both modes. */}
         {hasMedia && (busy || done || failed) && (
-          <div className="mt-md tb-fadeup flex items-center gap-md rounded-lg border border-line bg-white px-md py-md">
+          <div className="mt-md tb-fadeup flex items-center gap-md rounded-lg border border-line bg-surface-card px-md py-md">
             <div className="min-w-0 flex-1">
               <div className={`type-caption font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
                 <div className="mt-sm h-meter overflow-hidden rounded-full bg-canvas">
                   <div
-                    className={`h-full rounded-full ${done ? 'w-full bg-success' : 'tb-upbar bg-primary'}`}
+                    className={`h-full rounded-full ${done ? 'w-full bg-success' : 'tb-upbar bg-action-primary'}`}
                   />
                 </div>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-hair">
               {busy && (
-                <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
+                <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-action-primary" />
               )}
               {done && (
                 <span className="tb-pop m-xs inline-flex text-success-deep">
@@ -555,7 +557,7 @@ export function AddStoryModal({
                     </svg>
                     <span
                       role="tooltip"
-                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal text-white shadow-pop group-hover:block"
+                      className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-pop hidden w-max max-w-name whitespace-normal rounded-md bg-term px-md py-sm text-left text-tiny font-normal text-on-inverse shadow-pop group-hover:block"
                     >
                       {errorDetail}
                     </span>
@@ -564,7 +566,7 @@ export function AddStoryModal({
                     type="button"
                     onClick={publish}
                     aria-label={t('accounts.addStory.retry')}
-                    className="inline-flex size-chip items-center justify-center rounded-full text-ink-muted"
+                    className="inline-flex size-chip items-center justify-center rounded-full text-content-muted"
                   >
                     <svg
                       width="13"

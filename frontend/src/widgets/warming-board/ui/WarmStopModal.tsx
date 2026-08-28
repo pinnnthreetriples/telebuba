@@ -43,7 +43,7 @@ export function WarmStopModal({
               border, the ink and the states; the resting fill is the override. */}
           <Button
             variant="danger"
-            className="flex-1 bg-white hover:border-danger-line hover:bg-danger-tint"
+            className="flex-1 bg-surface-card hover:border-danger-line hover:bg-danger-tint"
             onClick={() => {
               onStop();
               onClose();

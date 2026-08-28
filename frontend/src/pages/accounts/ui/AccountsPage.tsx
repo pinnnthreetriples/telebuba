@@ -126,10 +126,18 @@ export function AccountsPage() {
   // problem, each with its own colour. Values come from the fleet-wide stats
   // query, not the current page, so they hold across pagination and search.
   const stats: { label: string; value: number; cls: string }[] = [
-    { label: t('accounts.stats.total'), value: fleetStats?.total ?? 0, cls: 'text-ink' },
+    {
+      label: t('accounts.stats.total'),
+      value: fleetStats?.total ?? 0,
+      cls: 'text-content-primary',
+    },
     { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-success-deep' },
     { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-warning-deep' },
-    { label: t('accounts.stats.code'), value: fleetStats?.needs_code ?? 0, cls: 'text-primary' },
+    {
+      label: t('accounts.stats.code'),
+      value: fleetStats?.needs_code ?? 0,
+      cls: 'text-action-primary',
+    },
     { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
   ];
 
@@ -175,7 +183,7 @@ export function AccountsPage() {
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
             <svg
-              className="pointer-events-none absolute left-lg text-ink-subtle"
+              className="pointer-events-none absolute left-lg text-content-subtle"
               width="15"
               height="15"
               viewBox="0 0 24 24"
@@ -194,7 +202,7 @@ export function AccountsPage() {
               }}
               placeholder={t('accounts.searchPlaceholder')}
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the search pill's own height, one component's internal layout
-              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-[36px] pr-md text-body outline-none sm:w-tip"
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-surface-card pl-[36px] pr-md text-body outline-none sm:w-tip"
             />
           </div>
           <Button
@@ -213,7 +221,7 @@ export function AccountsPage() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="min-w-col rounded-lg border border-line bg-white px-lg py-md"
+            className="min-w-col rounded-lg border border-line bg-surface-card px-lg py-md"
           >
             <div className={`type-stat ${stat.cls}`}>{stat.value}</div>
             <div className="mt-px type-caption">{stat.label}</div>
@@ -222,7 +230,7 @@ export function AccountsPage() {
       </div>
 
       {isPending ? (
-        <p className="text-ink-muted">{t('accounts.loading')}</p>
+        <p className="text-content-muted">{t('accounts.loading')}</p>
       ) : isError ? (
         <p role="alert" className="text-danger">
           {t('accounts.error')}

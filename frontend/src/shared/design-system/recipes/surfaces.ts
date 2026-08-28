@@ -10,12 +10,12 @@ import { cn } from '@/shared/lib/cn';
 export const SURFACE = {
   // Карточка на странице: самый большой радиус, волосяная рамка, без тени — она лежит на
   // подложке, а не висит над ней.
-  card: 'rounded-card border border-line bg-white',
+  card: 'rounded-card border border-line bg-surface-card',
   // Диалог: та же карточка, но над завесой, поэтому с тенью всплывающего.
-  dialog: 'rounded-card bg-white shadow-pop',
+  dialog: 'rounded-card bg-surface-card shadow-pop',
   // Панель, вложенная в карточку: выпадающий список, меню, поповер. Радиус на ступень
   // меньше карточкиного — вложенная коробка с тем же радиусом читается как приклеенная.
-  panel: 'rounded-lg border border-line bg-white shadow-pop',
+  panel: 'rounded-lg border border-line bg-surface-card shadow-pop',
   // Вдавленная область: лоток сегментированного контрола, зона перетаскивания. Не белая —
   // это единственная поверхность, которая уходит ВНУТРЬ.
   inset: 'rounded-lg bg-canvas',

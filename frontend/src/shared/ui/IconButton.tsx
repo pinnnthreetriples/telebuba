@@ -21,10 +21,11 @@ const SIZE = {
 // has no hover state: it is the close/step glyph the design leaves inert, and
 // giving it one would make every modal header twitch on the way past.
 const TONE = {
-  neutral: 'text-ink-muted',
+  neutral: 'text-content-muted',
   primary:
-    'text-ink-subtle hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep',
-  danger: 'text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
+    'text-content-subtle hover:border-info-line hover:bg-action-hover hover:text-info-strong',
+  danger:
+    'text-content-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
 } as const;
 
 // The same outline ring `Button` wears. This component never set a focus style at
@@ -55,7 +56,7 @@ export function IconButton({
     <button
       type="button"
       {...rest}
-      className={`inline-flex shrink-0 items-center justify-center border border-line bg-white transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${SIZE[size]} ${TONE[tone]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary ${SIZE[size]} ${TONE[tone]} ${className}`}
     >
       {children}
     </button>

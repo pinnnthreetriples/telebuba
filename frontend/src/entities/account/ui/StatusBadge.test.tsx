@@ -17,9 +17,15 @@ test('the account pill leads with its dot', () => {
   expect(screen.getByText('Активен').querySelector('.bg-current')).toBeInTheDocument();
 });
 
+// `text-info-strong`, and the exact rung matters. This used to assert `text-primary`
+// while the badge painted `text-primary-deep`, and it passed — `toContain` is a substring
+// check and one name was a prefix of the other. The semantic rename broke the accident and
+// nothing else, which is the argument for naming the rung a component actually paints.
 test('uses the design needs-code colour for unauthorized', () => {
   render(<StatusBadge status="unauthorized" />);
-  expect(screen.getByText('Не авторизован').className).toContain('text-primary');
+  const classes = screen.getByText('Не авторизован').className;
+  expect(classes).toContain('text-info-strong');
+  expect(classes).toContain('bg-info-tint');
 });
 
 test('uses the design banned colour for a permanent-failure status', () => {

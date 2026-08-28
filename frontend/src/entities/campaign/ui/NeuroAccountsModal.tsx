@@ -67,7 +67,7 @@ function LimitsChip({ accountId, onOpen }: { accountId: string; onOpen: () => vo
       ? 'border-danger-line bg-danger-tint text-danger-deep'
       : worst >= 0.8
         ? 'border-warning-line bg-warning-tint text-warning-deep'
-        : 'border-line bg-white text-ink-muted hover:border-line-strong';
+        : 'border-line bg-surface-card text-content-muted hover:border-line-strong';
 
   return (
     <button
@@ -183,12 +183,12 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-white px-md py-sm text-body text-ink sm:w-menu"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-body text-content-primary sm:w-menu"
           >
-            <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
+            <span className={`min-w-0 truncate ${selected.length ? '' : 'text-content-subtle'}`}>
               {triggerLabel}
             </span>
-            <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
+            <span className={`tb-ddchev flex shrink-0 text-content-subtle ${open ? 'open' : ''}`}>
               <Icon name="chevron-down" size={14} />
             </span>
           </button>
@@ -198,7 +198,7 @@ function AccountRow({
             onClick={() => {
               onPick(account.account_id);
             }}
-            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-white px-md py-sm text-body font-medium text-primary hover:border-primary sm:w-menu"
+            className="w-full shrink-0 rounded-md border border-dashed border-line-strong bg-surface-card px-md py-sm text-body font-medium text-action-primary hover:border-action-primary sm:w-menu"
           >
             {t('neurocomment.modal.neuroAccounts.assign')}
           </button>
@@ -237,7 +237,7 @@ function AccountRow({
           // .tb-dd collapses visually only; without this every channel option of
           // every linked row kept its tab stop while closed. See the note in LogsPage.
           inert={!open}
-          className={`tb-dd ${open ? 'open mt-sm rounded-lg border border-line bg-white p-xs shadow-pop' : ''}`}
+          className={`tb-dd ${open ? 'open mt-sm rounded-lg border border-line bg-surface-card p-xs shadow-pop' : ''}`}
         >
           <button
             key={ALL_CHANNELS}
@@ -247,8 +247,8 @@ function AccountRow({
             onClick={() => {
               onChannelChange(account.account_id, []);
             }}
-            className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-primary-tint ${
-              selected.length === 0 ? 'font-medium text-primary-deep' : 'text-ink'
+            className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-action-hover ${
+              selected.length === 0 ? 'font-medium text-info-strong' : 'text-content-primary'
             }`}
           >
             <span className="min-w-0 truncate">{allChannels}</span>
@@ -265,8 +265,8 @@ function AccountRow({
                 onClick={() => {
                   toggleChannel(channel);
                 }}
-                className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-primary-tint ${
-                  isSelected ? 'font-medium text-primary-deep' : 'text-ink'
+                className={`flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left text-body transition-colors hover:bg-action-hover ${
+                  isSelected ? 'font-medium text-info-strong' : 'text-content-primary'
                 }`}
                 title={channel}
               >
@@ -336,7 +336,7 @@ export function NeuroAccountsModal({
       label={t('neurocomment.modal.neuroAccounts.title')}
     >
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <svg
             width="18"
             height="18"

@@ -236,7 +236,7 @@ export function TwoFactorEmail({
               type="button"
               onClick={onConfirmCode}
               disabled={confirmEmail.isPending || !code.trim()}
-              className="rounded-lg border border-line bg-white px-lg py-sm text-body font-medium disabled:opacity-50"
+              className="rounded-lg border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-50"
             >
               {confirmEmail.isPending ? (
                 <Spinner size={13} />
@@ -246,7 +246,7 @@ export function TwoFactorEmail({
             </button>
             <Button
               size="xs"
-              className="text-ink-muted"
+              className="text-content-muted"
               onClick={onResend}
               loading={resendEmail.isPending}
             >

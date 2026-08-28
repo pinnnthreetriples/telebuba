@@ -17,8 +17,8 @@
 import { cn } from '@/shared/lib/cn';
 
 const TONE = {
-  neutral: { tint: 'bg-canvas', ink: 'text-ink-muted', line: 'border-line' },
-  primary: { tint: 'bg-primary-tint', ink: 'text-primary-deep', line: 'border-primary-line' },
+  neutral: { tint: 'bg-canvas', ink: 'text-content-muted', line: 'border-line' },
+  primary: { tint: 'bg-info-tint', ink: 'text-info-strong', line: 'border-info-line' },
   success: { tint: 'bg-success-tint', ink: 'text-success-deep', line: 'border-success-line' },
   warning: { tint: 'bg-warning-tint', ink: 'text-warning-deep', line: 'border-warning-line' },
   danger: { tint: 'bg-danger-tint', ink: 'text-danger-deep', line: 'border-danger-line' },

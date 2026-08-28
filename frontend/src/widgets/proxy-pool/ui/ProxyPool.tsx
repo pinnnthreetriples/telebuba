@@ -22,7 +22,7 @@ import { ProxyDeleteModal } from './ProxyDeleteModal';
 const PROXY_STATUS_TONE: Record<ProxyRead['status'], string> = {
   tcp_working: 'text-success-deep',
   failed: 'text-danger',
-  unknown: 'text-ink-subtle',
+  unknown: 'text-content-subtle',
 };
 
 // The design's proxy-pool card: one card per pool proxy with a usage bar
@@ -94,7 +94,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
       </div>
       {empty ? (
         <div className="flex flex-col items-center justify-center px-lg pb-page pt-page text-center">
-          <div className="mb-lg flex size-touch items-center justify-center rounded-lg bg-canvas text-ink-subtle">
+          <div className="mb-lg flex size-touch items-center justify-center rounded-lg bg-canvas text-content-subtle">
             <svg
               width="22"
               height="22"
@@ -182,7 +182,7 @@ function ProxyCard({
           ? 'border-danger-line bg-danger-tint'
           : geoConflict
             ? 'border-warning-line bg-warning-tint'
-            : 'border-line bg-white'
+            : 'border-line bg-surface-card'
       }`}
     >
       <div className="flex items-center gap-md">
@@ -212,7 +212,7 @@ function ProxyCard({
           </div>
           <div className="mt-px flex items-center gap-tight type-caption">
             <span>{proxyTypeLabel(proxy.proxy_type)}</span>
-            <span className="text-ink-subtle">·</span>
+            <span className="text-content-subtle">·</span>
             <span
               className={`inline-flex items-center gap-xs font-medium ${statusTone}`}
               title={proxy.last_error ?? undefined}
@@ -228,10 +228,10 @@ function ProxyCard({
           onClick={onCheck}
           disabled={busy}
           aria-label={t('accounts.proxyForm.detect')}
-          className="flex size-chip shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
+          className="flex size-chip shrink-0 items-center justify-center rounded-full text-content-subtle disabled:opacity-50"
         >
           {busy ? (
-            <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-primary" />
+            <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-action-primary" />
           ) : (
             <Icon name="refresh" size={14} />
           )}
@@ -241,7 +241,7 @@ function ProxyCard({
           onClick={onDelete}
           disabled={busy}
           aria-label={t('accounts.actions.delete')}
-          className="flex size-chip shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
+          className="flex size-chip shrink-0 items-center justify-center rounded-full text-content-subtle disabled:opacity-50"
         >
           <Icon name="close" size={14} />
         </button>
@@ -257,7 +257,7 @@ function ProxyCard({
         </div>
         <div className="h-meter overflow-hidden rounded-full bg-canvas">
           <div
-            className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-primary'}`}
+            className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-action-primary'}`}
             style={{ width: `${String(pct)}%` }}
           />
         </div>

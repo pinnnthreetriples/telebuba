@@ -79,7 +79,7 @@ const SHAPE = {
 // `shadow-focus` сохраняет работу на ПОЛЯХ, где это свечение рядом с меняющей цвет
 // рамкой, а не единственный признак.
 const FOCUS_RING =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary';
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-action-primary';
 
 // Поле анимирует рамку и свечение через `.tb-time` (index.css) — общий рецепт, а не класс
 // на каждом поле, и `:focus-within`, а не `:focus`, потому что поле бывает обёрткой
@@ -131,7 +131,7 @@ export function fieldBase({
   className?: string;
 }): string {
   return cn(
-    'w-full border bg-white',
+    'w-full border bg-surface-card',
     CONTROL_HEIGHT[size],
     FIELD_PAD[size],
     CONTROL_TEXT[size],
@@ -154,7 +154,7 @@ export function areaBase({
   className?: string;
 }): string {
   return cn(
-    'w-full border bg-white',
+    'w-full border bg-surface-card',
     // Вертикальные поля вместо высоты: у области высота приходит из `rows`, и фиксировать
     // её значило бы обрезать написанный в неё текст. Значения подобраны так, чтобы
     // однострочная область совпала по высоте с полем той же ступени.

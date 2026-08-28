@@ -253,7 +253,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                 // next run's rows have nothing to do with the ones ticked here.
                 setSelected(new Set());
               }}
-              className="text-body text-ink-muted hover:text-primary"
+              className="text-body text-content-muted hover:text-action-primary"
             >
               {t('neurocomment.modal.discovery.results.back')}
             </button>
@@ -261,7 +261,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-lg py-sm text-body text-ink-muted hover:text-primary"
+                className="rounded-lg px-lg py-sm text-body text-content-muted hover:text-action-primary"
               >
                 {t('neurocomment.modal.close')}
               </button>

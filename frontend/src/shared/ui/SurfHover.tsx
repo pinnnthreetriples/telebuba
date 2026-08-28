@@ -35,17 +35,17 @@ export function SurfHover({
       <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-stretch justify-end rounded-lg bg-canvas">
         {actions}
       </div>
-      {/* `bg-white` on the surface, not just on what the caller puts inside it: the
+      {/* `bg-surface-card` on the surface, not just on what the caller puts inside it: the
           actions above are always rendered and only ever hidden by being covered, so
           a caller with a translucent surface leaks them. The selected campaign card
-          was exactly that — a hand-rolled `bg-primary/…` at 6% over white, through
-          which pause/edit/delete showed on an unhovered card. It is `bg-primary-tint`
+          was exactly that — a hand-rolled `bg-action-primary/…` at 6% over white, through
+          which pause/edit/delete showed on an unhovered card. It is `bg-info-tint`
           now and opaque on its own, so this backstop has no wearer that needs it and
           stays for the next caller that does: nothing in the class list a caller
           passes can be relied on to be opaque. */}
       <div
         id={surfaceId}
-        className={`relative rounded-lg bg-white transition-transform duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
+        className={`relative rounded-lg bg-surface-card transition-transform duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
         style={{ ['--shift' as string]: `${String(shift)}px` }}
       >
         {surface}

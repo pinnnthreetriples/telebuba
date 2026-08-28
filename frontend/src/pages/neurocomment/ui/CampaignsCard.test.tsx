@@ -90,23 +90,23 @@ function campaignCard(): HTMLElement {
 
 // Naming the two colours rather than counting `bg-*` utilities: jsdom has no
 // cascade, so the tint that actually wins is unobservable, but the defect was
-// `bg-white` sitting in the base list beside it — and a count also reddens on
+// `bg-surface-card` sitting in the base list beside it — and a count also reddens on
 // `bg-clip-padding` and friends, which carry no colour at all.
 test('the selected campaign card carries the tint and not the white it lost to', () => {
   renderCard({ campaignList: [CAMPAIGN], campaignId: 'c1' });
-  expect(campaignCard().className).toContain('bg-primary-tint');
-  expect(campaignCard().className).not.toContain('bg-white');
+  expect(campaignCard().className).toContain('bg-info-tint');
+  expect(campaignCard().className).not.toContain('bg-surface-card');
   // The row's actions sit UNDER this card, hidden only by being covered, so the
   // sliding surface has to bring its own opaque backdrop or pause/edit/delete show
   // through an unhovered card. The tint used to be 6% alpha, which is how that was
   // found; it is opaque now and the backstop is still what the assertion guards.
-  expect(document.getElementById('camp-surf-c1')?.className).toContain('bg-white');
+  expect(document.getElementById('camp-surf-c1')?.className).toContain('bg-surface-card');
 });
 
 test('an unselected campaign card still carries a background of its own', () => {
   // The other branch: with the colour only asserted on the selected card,
-  // deleting `bg-white` from this one goes unnoticed.
+  // deleting `bg-surface-card` from this one goes unnoticed.
   renderCard({ campaignList: [CAMPAIGN], campaignId: null });
-  expect(campaignCard().className).toContain('bg-white');
-  expect(campaignCard().className).not.toContain('bg-primary-tint');
+  expect(campaignCard().className).toContain('bg-surface-card');
+  expect(campaignCard().className).not.toContain('bg-info-tint');
 });

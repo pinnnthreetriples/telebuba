@@ -24,7 +24,7 @@ export function DashedAdd({
       disabled={disabled}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
-      className="flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-white text-body font-medium text-ink-muted disabled:opacity-60"
+      className="flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-surface-card text-body font-medium text-content-muted disabled:opacity-60"
     >
       <Icon name="plus" size={20} />
       {label}
@@ -35,7 +35,7 @@ export function DashedAdd({
 export function Spinner({ size }: { size: number }) {
   return (
     <span
-      className="tb-spin inline-block rounded-full border-2 border-line-strong border-t-primary"
+      className="tb-spin inline-block rounded-full border-2 border-line-strong border-t-action-primary"
       style={{ width: size, height: size }}
     />
   );
@@ -69,7 +69,7 @@ export function Section({
       label={title}
       trailing={right}
       onOpenChange={onOpenChange}
-      wrapperClassName="self-start rounded-card border border-line bg-white"
+      wrapperClassName="self-start rounded-card border border-line bg-surface-card"
       headerClassName="px-xl py-lg"
       bodyClassName={bodyClassName}
       header={

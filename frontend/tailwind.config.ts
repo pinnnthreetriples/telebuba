@@ -88,11 +88,11 @@ export default {
             {
               fontSize: theme(`fontSize.${role.size}`) as string,
               fontWeight: role.weight,
-              // `ink` и `ink-subtle` — как это пишет утилита; палитра рампу вкладывает,
-              // поэтому ступень DEFAULT приходится проговорить по дороге.
-              color: theme(
-                `colors.${role.ink === 'ink' ? 'ink.DEFAULT' : role.ink.replace('-', '.')}`,
-              ) as string,
+              // `content-primary` — как это пишет утилита; палитра рампу вкладывает,
+              // поэтому дефис на пути превращается в точку. Спецслучая для «краски без
+              // рунга» больше нет: у `content` каждая ступень названа, и `ink` как
+              // отдельное имя ушло вместе с переездом на роли.
+              color: theme(`colors.${role.ink.replace('-', '.')}`) as string,
               ...(role.tracking === undefined ? {} : { letterSpacing: role.tracking }),
               ...(role.caps === undefined ? {} : { textTransform: role.caps }),
             },

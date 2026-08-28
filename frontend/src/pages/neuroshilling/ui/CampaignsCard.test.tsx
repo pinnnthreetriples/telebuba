@@ -60,8 +60,8 @@ test('the selected row is the only one carrying the selected border', () => {
 
   const selected = screen.getByText('Промо').closest('[role="button"]');
   const other = screen.getByText('Вторая').closest('[role="button"]');
-  expect(selected?.className).toContain('border-primary');
-  expect(other?.className).not.toContain('border-primary');
+  expect(selected?.className).toContain('border-action-primary');
+  expect(other?.className).not.toContain('border-action-primary');
   expect(screen.getByText('Работает')).toBeInTheDocument();
 });
 

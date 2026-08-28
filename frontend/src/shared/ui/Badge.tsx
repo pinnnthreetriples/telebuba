@@ -5,7 +5,7 @@ import { cn } from '@/shared/lib/cn';
 
 // The tinted pill that labels a row — a count, a state, a "N удалено". Forty of
 // them were written by hand, and the tone was a pair of classes the site picked
-// itself: `bg-danger-tint text-danger-deep`, `bg-canvas text-ink-muted`. That pairing is
+// itself: `bg-danger-tint text-danger-deep`, `bg-canvas text-content-muted`. That pairing is
 // where the app's contrast went: at 10.5px, `danger` on `danger-tint` measures
 // 4.34:1 and `ink-muted` on the neutral fill 4.10:1, both under the 4.5:1 floor. The tone
 // now names both halves at once, and it names the `deep` rung for the text.

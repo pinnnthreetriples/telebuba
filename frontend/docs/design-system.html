@@ -17,21 +17,25 @@
   --black:#000000;
   --canvas:#f1efed;
   --surface:#faf9f7;
+  --surface-card:#ffffff;
   --scrim:rgba(11,11,12,0.55);
   --veil:rgba(11,11,12,0.40);
-  --ink:#0b0b0c;
-  --ink-body:#3a3a3a;
-  --ink-muted:#63615d;
-  --ink-subtle:#6e6b66;
+  --content-primary:#0b0b0c;
+  --content-secondary:#3a3a3a;
+  --content-muted:#63615d;
+  --content-subtle:#6e6b66;
+  --on-action:#ffffff;
+  --on-inverse:#ffffff;
   --line:#e6e5e3;
   --line-strong:#d8d6d2;
   --line-row:#f0eeeb;
-  --primary:#0066ff;
-  --primary-press:#0057db;
-  --primary-tint:#eef4ff;
-  --primary-line:#cbd7ec;
-  --primary-hairline:#e4ecfa;
-  --primary-deep:#0052cc;
+  --action-primary:#0066ff;
+  --action-hover:#eef4ff;
+  --action-pressed:#0057db;
+  --info-strong:#0052cc;
+  --info-tint:#eef4ff;
+  --info-line:#cbd7ec;
+  --info-hairline:#e4ecfa;
   --success:#12a150;
   --success-deep:#0b6b37;
   --success-press:#0a5c2f;
@@ -523,16 +527,8 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <div class="sw"><i style="background:#000000"></i><b>black</b><em>#000000</em><span>Только под альфой над фотографией: рамка снимка, плашка на кадре истории</span></div>
         <div class="sw"><i style="background:#f1efed"></i><b>canvas</b><em>#f1efed</em><span>Фон страницы, рельс под плашкой и всё заполняемое: дорожка прогресса, чип, счётчик</span></div>
         <div class="sw"><i style="background:#faf9f7"></i><b>surface</b><em>#faf9f7</em><span>Шапка таблицы, наведение на строку, вложенный блок</span></div>
+        <div class="sw"><i style="background:#ffffff"></i><b>surface-card</b><em>#ffffff</em><span></span></div>
         <div class="sw"><i style="background:rgba(11,11,12,0.55)"></i><b>scrim</b><em>rgba(11,11,12,0.55)</em><span>Завеса над фотографией: тёмные чернила на 55%, чтобы кнопка поверх снимка осталась читаемой</span></div>
-      </div>
-
-      <h3>Текст</h3>
-      <p class="body"><strong>muted</strong> и <strong>subtle</strong> — два серых, которыми набран мелкий текст, и оба стоят на пороге AA, а не там, где выглядели лучше: <strong>muted</strong> давал 4.10:1 на заливке чипа, <strong>subtle</strong> — 2.88:1 на белом. Запас между ними и <strong>body</strong> сжат намеренно; другой выход — ступень, про которую система знает, что её не прочесть.</p>
-      <div class="sw-grid">
-        <div class="sw"><i style="background:#0b0b0c"></i><b>ink</b><em>#0b0b0c</em><span>Заголовки, основной текст</span></div>
-        <div class="sw"><i style="background:#3a3a3a"></i><b>ink-body</b><em>#3a3a3a</em><span>Плотные строки, значения в чипах</span></div>
-        <div class="sw"><i style="background:#63615d"></i><b>ink-muted</b><em>#63615d</em><span>Второстепенный текст, контурные кнопки</span></div>
-        <div class="sw"><i style="background:#6e6b66"></i><b>ink-subtle</b><em>#6e6b66</em><span>Подписи, плейсхолдеры, иконки в покое</span></div>
       </div>
 
       <h3>Линии</h3>
@@ -545,12 +541,6 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <h3>Смысл</h3>
       <p class="body">У каждого смысла три роли: <strong>основной</strong> — текст и иконка, <strong>tint</strong> — подложка, <strong>line</strong> — граница подложки. Синий добавляет <strong>press</strong>, наведение на залитую кнопку, а его <strong>tint</strong> работает заодно и заливкой наведения. <strong>deep</strong> появляется там, где основной оттенок не проходит по контрасту на собственной подложке. <strong>term</strong> — единственная тёмная поверхность: журнал и подсказки, которые делят с ним чернила.</p>
       <div class="sw-grid">
-        <div class="sw"><i style="background:#0066ff"></i><b>primary</b><em>#0066ff</em><span>Действие, живое состояние, фокус</span></div>
-        <div class="sw"><i style="background:#0057db"></i><b>primary-press</b><em>#0057db</em><span>Наведение и нажатие залитой кнопки</span></div>
-        <div class="sw"><i style="background:#eef4ff"></i><b>primary-tint</b><em>#eef4ff</em><span>Выбранная строка, синий чип, заливка наведения</span></div>
-        <div class="sw"><i style="background:#cbd7ec"></i><b>primary-line</b><em>#cbd7ec</em><span>Граница синей подложки и пунктира</span></div>
-        <div class="sw"><i style="background:#e4ecfa"></i><b>primary-hairline</b><em>#e4ecfa</em><span>Рамка настолько бледная, что работает и разделителем плитки</span></div>
-        <div class="sw"><i style="background:#0052cc"></i><b>primary-deep</b><em>#0052cc</em><span>Синий для мелкого текста на tint: основной даёт там 4.38:1</span></div>
         <div class="sw"><i style="background:#12a150"></i><b>success</b><em>#12a150</em><span>Работает, проверено</span></div>
         <div class="sw"><i style="background:#0b6b37"></i><b>success-deep</b><em>#0b6b37</em><span>Заголовок на зелёной подложке — единственный проходит по читаемости</span></div>
         <div class="sw"><i style="background:#0a5c2f"></i><b>success-press</b><em>#0a5c2f</em><span>Наведение и нажатие залитой зелёной кнопки</span></div>
@@ -578,6 +568,19 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <h3>Прочее</h3>
       <div class="sw-grid">
         <div class="sw"><i style="background:rgba(11,11,12,0.40)"></i><b>veil</b><em>rgba(11,11,12,0.40)</em><span></span></div>
+        <div class="sw"><i style="background:#0b0b0c"></i><b>content-primary</b><em>#0b0b0c</em><span></span></div>
+        <div class="sw"><i style="background:#3a3a3a"></i><b>content-secondary</b><em>#3a3a3a</em><span></span></div>
+        <div class="sw"><i style="background:#63615d"></i><b>content-muted</b><em>#63615d</em><span></span></div>
+        <div class="sw"><i style="background:#6e6b66"></i><b>content-subtle</b><em>#6e6b66</em><span></span></div>
+        <div class="sw"><i style="background:#ffffff"></i><b>on-action</b><em>#ffffff</em><span></span></div>
+        <div class="sw"><i style="background:#ffffff"></i><b>on-inverse</b><em>#ffffff</em><span></span></div>
+        <div class="sw"><i style="background:#0066ff"></i><b>action-primary</b><em>#0066ff</em><span></span></div>
+        <div class="sw"><i style="background:#eef4ff"></i><b>action-hover</b><em>#eef4ff</em><span></span></div>
+        <div class="sw"><i style="background:#0057db"></i><b>action-pressed</b><em>#0057db</em><span></span></div>
+        <div class="sw"><i style="background:#0052cc"></i><b>info-strong</b><em>#0052cc</em><span></span></div>
+        <div class="sw"><i style="background:#eef4ff"></i><b>info-tint</b><em>#eef4ff</em><span></span></div>
+        <div class="sw"><i style="background:#cbd7ec"></i><b>info-line</b><em>#cbd7ec</em><span></span></div>
+        <div class="sw"><i style="background:#e4ecfa"></i><b>info-hairline</b><em>#e4ecfa</em><span></span></div>
       </div>
       <!-- /ds:gen color-swatches -->
 
@@ -602,17 +605,17 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <!-- ds:gen type-roles -->
       <p class="body">Одиннадцать ролей, и над <code>shared/ui</code> страница называет одну из них вместо того, чтобы заново выписывать ступень, начертание и серый. Заменяемая запись была не восемью ступенями, а девяноста шестью написаниями: 528 мест писали ступень рядом с начертанием и чернилами, и одна и та же задача выходила тремя способами сразу — подпись была <code>ink-subtle</code> 53 раза, <code>ink-muted</code> 13 и без цвета 9. Роль обязана называться одним предложением без слова «или» и быть надетой двумя компонентами в разных слоях; именно это удержало набор на двенадцати. Межстрочное в роль не входит — по той же причине, по которой его нет в ступени.</p>
       <table class="spec">
-        <tr><td><code>type-page-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22 · 700 · ink · -0.02em</span></td><td><span style="font-size:22px;font-weight:700;color:var(--ink);letter-spacing:-0.02em">Прогрев</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, который называет экран. Шесть <code>&lt;h1&gt;</code>, по одному на страницу</span></td></tr>
-        <tr><td><code>type-dialog-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 700 · ink</span></td><td><span style="font-size:16px;font-weight:700;color:var(--ink)">Удалить аккаунт?</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, с которого начинается диалог. Самая широко надетая роль набора: четыре слоя</span></td></tr>
-        <tr><td><code>type-dialog-body</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · ink-muted</span></td><td><span style="font-size:14px;font-weight:400;color:var(--ink-muted)">Аккаунт и его сессия будут удалены безвозвратно.</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Фраза, которую диалог говорит перед кнопками. Своя роль, а не <code>prose</code>: все подтверждения приложения — и ConfirmModal, с которого их списали, — говорят её на ступень крупнее и на тон темнее, чем страница объясняет себя</span></td></tr>
-        <tr><td><code>type-card-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 600 · ink</span></td><td><span style="font-size:16px;font-weight:600;color:var(--ink)">Каналы кампании</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок блока, в котором стоит: шапка CollapsibleCard, имя аккаунта на его карточке, название настройки над её описанием</span></td></tr>
-        <tr><td><code>type-item-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 600 · ink</span></td><td><span style="font-size:14px;font-weight:600;color:var(--ink)">Основной прокси</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя одного предмета внутри карточки: то, о чём строка, и то, о чём группа полей</span></td></tr>
-        <tr><td><code>type-eyebrow</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 600 · ink-subtle · 0.04em · заглавные</span></td><td><span style="font-size:12px;font-weight:600;color:var(--ink-subtle);letter-spacing:0.04em;text-transform:uppercase">Сессия</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Подпись, которая открывает группу настроек. Единственная роль с трекингом — четыре носителя сошлись на 0.04em, пятый уехал на 0.03em</span></td></tr>
-        <tr><td><code>type-label</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 500 · ink-body</span></td><td><span style="font-size:14px;font-weight:500;color:var(--ink-body)">Часовой пояс</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя контрола, стоящего рядом: подпись поля, название настройки в строке</span></td></tr>
-        <tr><td><code>type-value</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · ink-body</span></td><td><span style="font-size:14px;font-weight:400;color:var(--ink-body)">+7 900 123-45-67</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Величина, которую строка показывает: ячейка таблицы, правая половина пары «ключ — значение»</span></td></tr>
-        <tr><td><code>type-prose</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · ink-subtle</span></td><td><span style="font-size:14px;font-weight:400;color:var(--ink-subtle)">Пока ничего не найдено</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Предложение, которое читает оператор: пояснение, пустое состояние, вопрос диалога</span></td></tr>
-        <tr><td><code>type-caption</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 400 · ink-subtle</span></td><td><span style="font-size:12px;font-weight:400;color:var(--ink-subtle)">Не больше 30 символов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Мелкая строка, которая уточняет контрол над собой: подсказка, единица, ошибка поля — когда берёт <code>text-danger</code>. Самая частая роль приложения</span></td></tr>
-        <tr><td><code>type-stat</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">20 · 700 · ink</span></td><td><span style="font-size:20px;font-weight:700;color:var(--ink)">1 284</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Число, которое счётчик выносит на экран</span></td></tr>
+        <tr><td><code>type-page-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">22 · 700 · content-primary · -0.02em</span></td><td><span style="font-size:22px;font-weight:700;color:var(--content-primary);letter-spacing:-0.02em">Прогрев</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, который называет экран. Шесть <code>&lt;h1&gt;</code>, по одному на страницу</span></td></tr>
+        <tr><td><code>type-dialog-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 700 · content-primary</span></td><td><span style="font-size:16px;font-weight:700;color:var(--content-primary)">Удалить аккаунт?</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок, с которого начинается диалог. Самая широко надетая роль набора: четыре слоя</span></td></tr>
+        <tr><td><code>type-dialog-body</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-muted</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-muted)">Аккаунт и его сессия будут удалены безвозвратно.</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Фраза, которую диалог говорит перед кнопками. Своя роль, а не <code>prose</code>: все подтверждения приложения — и ConfirmModal, с которого их списали, — говорят её на ступень крупнее и на тон темнее, чем страница объясняет себя</span></td></tr>
+        <tr><td><code>type-card-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">16 · 600 · content-primary</span></td><td><span style="font-size:16px;font-weight:600;color:var(--content-primary)">Каналы кампании</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Заголовок блока, в котором стоит: шапка CollapsibleCard, имя аккаунта на его карточке, название настройки над её описанием</span></td></tr>
+        <tr><td><code>type-item-title</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 600 · content-primary</span></td><td><span style="font-size:14px;font-weight:600;color:var(--content-primary)">Основной прокси</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя одного предмета внутри карточки: то, о чём строка, и то, о чём группа полей</span></td></tr>
+        <tr><td><code>type-eyebrow</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 600 · content-subtle · 0.04em · заглавные</span></td><td><span style="font-size:12px;font-weight:600;color:var(--content-subtle);letter-spacing:0.04em;text-transform:uppercase">Сессия</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Подпись, которая открывает группу настроек. Единственная роль с трекингом — четыре носителя сошлись на 0.04em, пятый уехал на 0.03em</span></td></tr>
+        <tr><td><code>type-label</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 500 · content-secondary</span></td><td><span style="font-size:14px;font-weight:500;color:var(--content-secondary)">Часовой пояс</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Имя контрола, стоящего рядом: подпись поля, название настройки в строке</span></td></tr>
+        <tr><td><code>type-value</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-secondary</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-secondary)">+7 900 123-45-67</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Величина, которую строка показывает: ячейка таблицы, правая половина пары «ключ — значение»</span></td></tr>
+        <tr><td><code>type-prose</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">14 · 400 · content-subtle</span></td><td><span style="font-size:14px;font-weight:400;color:var(--content-subtle)">Пока ничего не найдено</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Предложение, которое читает оператор: пояснение, пустое состояние, вопрос диалога</span></td></tr>
+        <tr><td><code>type-caption</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">12 · 400 · content-subtle</span></td><td><span style="font-size:12px;font-weight:400;color:var(--content-subtle)">Не больше 30 символов</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Мелкая строка, которая уточняет контрол над собой: подсказка, единица, ошибка поля — когда берёт <code>text-danger</code>. Самая частая роль приложения</span></td></tr>
+        <tr><td><code>type-stat</code><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">20 · 700 · content-primary</span></td><td><span style="font-size:20px;font-weight:700;color:var(--content-primary)">1 284</span><br><span class="n" style="color:var(--ink-subtle);font-size:11.5px">Число, которое счётчик выносит на экран</span></td></tr>
       </table>
       <!-- /ds:gen type-roles -->
       <h3>Ступени</h3>

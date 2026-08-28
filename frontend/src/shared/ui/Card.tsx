@@ -29,7 +29,7 @@ export function Card({
   return (
     <div className={cn(surface('card'), mb, className)} {...rest}>
       {title ? <div className="mb-xs text-body font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-lg text-body text-ink-subtle">{subtitle}</div> : null}
+      {subtitle ? <div className="mb-lg text-body text-content-subtle">{subtitle}</div> : null}
       {children}
     </div>
   );

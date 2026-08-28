@@ -88,7 +88,7 @@ function LimitRow({
         <span className="type-card-title">{label}</span>
         <span
           className={`font-mono text-body font-semibold tabular-nums ${
-            state === 'full' ? 'text-danger' : 'text-ink-muted'
+            state === 'full' ? 'text-danger' : 'text-content-muted'
           }`}
         >
           {gauge.used} / {gauge.limit > 0 ? gauge.limit : '∞'}
@@ -120,7 +120,7 @@ function LimitRow({
                 : Math.min(CAP_MAX, Math.max(min, Math.trunc(Number(e.target.value)) || min)),
             );
           }}
-          className="w-readout rounded-md border border-line bg-white px-md py-tight text-right font-mono text-body font-semibold text-ink"
+          className="w-readout rounded-md border border-line bg-surface-card px-md py-tight text-right font-mono text-body font-semibold text-content-primary"
         />
       </div>
       <div className="mt-tight type-caption">
@@ -204,7 +204,7 @@ export function AccountLimitsModal({
       label={t('neurocomment.modal.limits.title', { name })}
     >
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <svg
             width="18"
             height="18"
@@ -248,7 +248,7 @@ export function AccountLimitsModal({
         )}
       </div>
 
-      <div className="mx-2xl mb-xs rounded-lg border border-line bg-surface px-md py-md text-tiny text-ink-muted">
+      <div className="mx-2xl mb-xs rounded-lg border border-line bg-surface px-md py-md text-tiny text-content-muted">
         {t('neurocomment.modal.limits.sharedJoins')}
       </div>
 
@@ -258,7 +258,7 @@ export function AccountLimitsModal({
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
           }}
-          className="rounded-full border border-line-strong bg-white px-xl py-md text-body font-medium text-ink-muted"
+          className="rounded-full border border-line-strong bg-surface-card px-xl py-md text-body font-medium text-content-muted"
         >
           {t('neurocomment.modal.limits.resetAll')}
         </button>
@@ -266,7 +266,7 @@ export function AccountLimitsModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-strong bg-white px-xl py-md text-body font-medium text-ink-muted"
+            className="rounded-full border border-line-strong bg-surface-card px-xl py-md text-body font-medium text-content-muted"
           >
             {t('neurocomment.modal.cancel')}
           </button>

@@ -128,8 +128,8 @@ function deriveRows(
 function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   const { t } = useTranslation();
   return (
-    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-md py-xs text-tiny font-medium text-primary-deep">
-      <span className="size-dot rounded-full bg-primary" />
+    <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-info-tint px-md py-xs text-tiny font-medium text-info-strong">
+      <span className="size-dot rounded-full bg-action-primary" />
       {t('neurocomment.board.onboarding', { ready, total })}
     </span>
   );
@@ -150,9 +150,9 @@ function AccountComments({
     <div className="border-t border-line-row bg-surface px-lg py-md">
       <div className="mb-sm flex items-center justify-between">
         <div className="flex items-center gap-sm">
-          <span className="pl-pulse size-dot shrink-0 rounded-full bg-primary" />
+          <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
           <span className="type-item-title">{t('neurocomment.feed.title')}</span>
-          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-content-muted">
             {comments.length}
           </span>
         </div>
@@ -160,7 +160,7 @@ function AccountComments({
           <button
             type="button"
             onClick={onOpenHistory}
-            className="rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-primary hover:border-primary"
+            className="rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-action-primary hover:border-action-primary"
           >
             {t('neurocomment.feed.history')}
           </button>
@@ -177,15 +177,17 @@ function AccountComments({
                 key={`${c.channel}:${String(c.post_id)}`}
                 className="flex flex-wrap items-baseline gap-x-md gap-y-hair border-b border-line-row py-sm text-body last:border-b-0"
               >
-                <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
+                <span className="shrink-0 text-content-subtle">
+                  {formatLocalTime(c.created_at)}
+                </span>
                 {/* Was shrink-0, which let a long channel (a t.me invite link) push the
                     comment past the card and get clipped by its overflow-hidden. */}
-                <span className="min-w-0 truncate text-primary">{c.channel}</span>
+                <span className="min-w-0 truncate text-action-primary">{c.channel}</span>
                 <span
                   // Own line, wrapped, on a phone: sharing one line with the time and
                   // the channel left the comment about a dozen characters of ellipsis,
                   // and the comment is what the operator expanded the row to read.
-                  className={`w-full min-w-0 sm:w-auto sm:flex-1 sm:truncate ${deleted ? 'text-ink-subtle line-through' : 'text-ink-muted'}`}
+                  className={`w-full min-w-0 sm:w-auto sm:flex-1 sm:truncate ${deleted ? 'text-content-subtle line-through' : 'text-content-muted'}`}
                 >
                   {c.comment_text ?? '—'}
                 </span>
@@ -265,7 +267,7 @@ export function NeurocommentBoard({
           </span>
         ),
         meta: {
-          cellClassName: 'whitespace-nowrap type-prose text-primary',
+          cellClassName: 'whitespace-nowrap type-prose text-action-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -320,7 +322,7 @@ export function NeurocommentBoard({
             // The row's only control, and a 16px glyph is not a thumb target — the
             // padding/negative-margin pair grows the hit box to 40px without moving the
             // chevron or widening the column it is sized to.
-            className={`-m-md flex p-md text-ink-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+            className={`-m-md flex p-md text-content-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
           >
             <Icon name="chevron-down" size={16} />
           </button>
@@ -349,7 +351,7 @@ export function NeurocommentBoard({
       header={
         <>
           <span className="type-card-title">{t('neurocomment.board.title')}</span>
-          <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
+          <span className="rounded-full bg-info-tint px-sm py-hair text-tiny font-semibold text-info-strong">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
         </>
@@ -357,8 +359,8 @@ export function NeurocommentBoard({
       trailing={
         <div className="flex shrink-0 items-center gap-md">
           {onboarding ? (
-            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-primary-tint px-md py-xs text-tiny font-semibold text-primary-deep">
-              <span className="size-dot rounded-full bg-primary" />
+            <span className="inline-flex animate-pulse items-center gap-tight rounded-full bg-info-tint px-md py-xs text-tiny font-semibold text-info-strong">
+              <span className="size-dot rounded-full bg-action-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>
           ) : (
@@ -372,7 +374,7 @@ export function NeurocommentBoard({
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex size-tile items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep lg:size-icon"
+            className="flex size-tile items-center justify-center rounded-lg border border-line bg-surface-card text-content-muted transition-colors hover:border-info-line hover:bg-action-hover hover:text-info-strong lg:size-icon"
           >
             <Icon name="gear" size={16} />
           </button>

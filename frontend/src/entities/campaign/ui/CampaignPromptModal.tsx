@@ -71,14 +71,14 @@ export function CampaignPromptModal({
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="w-full resize-none rounded-lg border border-line bg-white px-lg py-md font-[inherit] text-body outline-none"
+          className="w-full resize-none rounded-lg border border-line bg-surface-card px-lg py-md font-[inherit] text-body outline-none"
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
-          <span className="type-item-title text-ink-body">
+          <span className="type-item-title text-content-secondary">
             {t('neurocomment.modal.campaignPrompt.accounts')}
           </span>
-          <span className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-semibold text-primary-deep">
+          <span className="rounded-full bg-info-tint px-sm py-hair text-tiny font-semibold text-info-strong">
             {accounts.length}
           </span>
         </div>
@@ -87,9 +87,9 @@ export function CampaignPromptModal({
             {accounts.map((account) => (
               <div
                 key={account.account_id}
-                className="flex items-center gap-md rounded-md border border-canvas bg-white px-md py-sm"
+                className="flex items-center gap-md rounded-md border border-canvas bg-surface-card px-md py-sm"
               >
-                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-primary-tint text-tiny font-bold text-primary-deep">
+                <span className="flex size-icon shrink-0 items-center justify-center rounded-full bg-info-tint text-tiny font-bold text-info-strong">
                   {account.initials}
                 </span>
                 <div className="min-w-0 flex-1">
@@ -111,7 +111,7 @@ export function CampaignPromptModal({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center text-body text-ink-subtle">
+          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center text-body text-content-subtle">
             {t('neurocomment.modal.campaignPrompt.empty')}
           </div>
         )}
