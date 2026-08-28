@@ -69,3 +69,80 @@ test('ширина диалога с таблицей больше пола та
   const { breakpoint, width } = await import('./spacing');
   expect(Number.parseInt(width.table, 10)).toBeGreaterThan(breakpoint.table);
 });
+
+// ── Семантический уровень закрыт с двух концов ──────────────────────────────────────
+//
+// Оба конца ломались молча и по-разному, и оба были найдены не гейтом:
+//
+//   • роль объявлена и НЕ доходит до класса. Таких было восемь: `background.muted`,
+//     `background.inverse`, `content.inverse`, `content.disabled`, `action.disabled`,
+//     `feedback.info.base`, `feedback.info.pressed`, `feedback.danger.pressed`. Каждая
+//     выглядела частью системы и не была применима ничем; три последние стояли «для
+//     симметрии» тонов.
+//   • класс объявлен и обходит роль, ссылаясь прямо на примитив. Таких было три, и среди
+//     них самый носимый класс приложения: `surface-card` брал `palette.white` напрямую,
+//     то есть 143 сайта белой поверхности не проходили через уровень назначения вообще.
+//
+// Проверка идёт по ИСХОДНИКУ, а не по значениям. Сверка по значениям слепа именно там, где
+// нужна: `content.disabled` и `content.subtle` — один и тот же серый, поэтому «значение
+// носится» выполнялось бы для мёртвой ступени за счёт живой. Роль — это путь, а не цвет.
+const TECHNICAL = new Set(['transparent', 'current', 'white', 'black']);
+const GROUPS = ['background', 'content', 'border', 'action', 'feedback', 'inverse'];
+
+async function semanticSource(): Promise<{ declared: string; projection: string }> {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const source = readFileSync(
+    join(process.cwd(), 'src', 'shared', 'design-system', 'tokens', 'semantic.ts'),
+    'utf8',
+  );
+  const at = source.indexOf('export const flatColors');
+  return { declared: source.slice(0, at), projection: source.slice(at) };
+}
+
+/** Пути всех объявленных ролей: `content.subtle`, `feedback.info.tint`, … */
+function declaredRoles(declared: string): string[] {
+  const roles: string[] = [];
+  for (const group of GROUPS) {
+    const at = declared.indexOf(`export const ${group} = {`);
+    if (at < 0) continue;
+    const body = declared.slice(at, declared.indexOf('\n} as const;', at));
+    let tone: string | null = null;
+    for (const line of body.split('\n').slice(1)) {
+      const opens = /^ {2}(\w+): \{$/.exec(line);
+      if (opens) {
+        tone = opens[1] ?? null;
+        continue;
+      }
+      if (/^ {2}\},?$/.test(line)) {
+        tone = null;
+        continue;
+      }
+      const leaf = / {2,4}(\w+): /.exec(line);
+      if (leaf) roles.push(tone === null ? `${group}.${leaf[1]}` : `${group}.${tone}.${leaf[1]}`);
+    }
+  }
+  return roles;
+}
+
+test('каждая объявленная роль доходит до класса', async () => {
+  const { declared, projection } = await semanticSource();
+  const roles = declaredRoles(declared);
+
+  // Если разбор перестанет находить роли, утверждение ниже выполнится на пустом списке.
+  expect(roles.length).toBeGreaterThan(30);
+  expect(roles.filter((role) => !projection.includes(role))).toEqual([]);
+});
+
+test('ни один класс не обходит роль ссылкой на примитив', async () => {
+  const { projection } = await semanticSource();
+
+  const offenders = projection
+    .split(/\r?\n/)
+    .map((line, at) => ({ line: line.trim(), at: at + 1 }))
+    .filter(({ line }) => /^'?[\w-]+'?:\s*palette\./.test(line))
+    .filter(({ line }) => !TECHNICAL.has(/^'?([\w-]+)'?:/.exec(line)?.[1] ?? ''))
+    .map(({ line, at }) => `${String(at)}: ${line}`);
+
+  expect(offenders).toEqual([]);
+});

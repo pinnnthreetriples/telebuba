@@ -23,7 +23,7 @@ import { LABEL, type CheckState } from './_styles';
 // three tiers read the same as every other health signal.
 const HEALTH_DOT: Record<ReturnType<typeof accountHealth>, string> = {
   ok: 'bg-success',
-  warn: 'bg-warning-strong',
+  warn: 'bg-warning-press',
   fail: 'bg-danger',
 };
 

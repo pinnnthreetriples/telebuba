@@ -15,20 +15,23 @@
 // одно, не перекрасив другое, было нельзя. Семантический уровень, который нельзя
 // применить, — это комментарий, а не уровень.
 //
-//   background.canvas   → canvas          content.primary   → content-primary
-//   background.surface  → surface         content.secondary → content-secondary
-//   background.card     → surface-card     content.muted     → content-muted
-//   background.inverse  → term            content.subtle    → content-subtle
-//   background.scrim    → scrim           action.onPrimary  → on-action
-//   background.veil     → veil            (белый на тёмном) → on-inverse
+//   background.canvas  → canvas       content.primary   → content-primary
+//   background.surface → surface      content.secondary → content-secondary
+//   background.card    → surface-card  content.muted     → content-muted
+//   background.scrim   → scrim        content.subtle    → content-subtle
+//   background.veil    → veil         content.onInverse → on-inverse
 //
-//   border.default → line                 action.primary        → action-primary
-//   border.strong  → line-strong          action.primaryHover   → action-hover
-//   border.subtle  → line-row             action.primaryPressed → action-pressed
-//   border.focus   → action-primary
+//   border.default → line             action.primary        → action-primary
+//   border.strong  → line-strong      action.primaryHover   → action-hover
+//   border.subtle  → line-row         action.primaryPressed → action-pressed
+//   border.focus   → focus            action.onPrimary      → on-action
 //
-//   feedback.info    → info               feedback.warning → warning
-//   feedback.success → success            feedback.danger  → danger
+//   feedback.info    → info           feedback.warning → warning
+//   feedback.success → success        feedback.danger  → danger
+//   inverse.*        → term-*
+//
+// Таблица полная, и это утверждение, а не обещание: `tokens.test.ts` проверяет её в обе
+// стороны — ни одной объявленной роли без класса, ни одного класса мимо роли.
 //
 // Что НЕ переименовано и почему: `canvas`, `line`, `term`, `success`, `warning`, `danger`
 // уже были ролями — они называют назначение, а не значение, и второго смысла ни один не
@@ -47,10 +50,11 @@ export const background = {
   canvas: palette.warmGrey100,
   // Один шаг от белого: строка под курсором и коробка, которая приглашает в себя.
   surface: palette.warmGrey050,
-  // Приглушённая подложка — разделитель строк таблицы, он же фон вложенного блока.
-  muted: palette.warmGrey200,
-  // Тёмная поверхность: терминал логов и подсказки, которые делят с ним чернила.
-  inverse: palette.ink900,
+  // Белая поверхность, на которую кладут содержимое: карточка, диалог, панель, поле.
+  // Отдельная ступень от `action.onPrimary`, хотя значение то же — в этом весь смысл
+  // семантического уровня. До этой правки её несло `palette.white` НАПРЯМУЮ, то есть
+  // самый носимый класс приложения (143 сайта) обходил уровень назначения целиком.
+  card: palette.white,
   // Завеса над ОДНОЙ фотографией: белый контроль поверх должен брать 4.5:1.
   scrim: palette.scrim55,
   // Завеса над всей страницей: на ней ничего не пишут, она приглушает, а не контрастит.
@@ -65,12 +69,9 @@ export const content = {
   // ступень, про которую дизайн-система знает, что её нельзя прочесть.
   muted: palette.warmGrey700,
   subtle: palette.warmGrey600,
-  // Чернила на тёмной поверхности.
-  inverse: palette.inkGrey200,
-  // Отдельная ступень, а не `subtle`, хотя значение то же: недоступный контрол и мелкая
-  // подпись — разные решения, и первое обычно меняют вместе с непрозрачностью, а не с
-  // серым. Слитые, они меняются вместе поневоле.
-  disabled: palette.warmGrey600,
+  // ОДНА строка на тёмной поверхности: тост, подсказка. Ярче чернил журнала намеренно —
+  // её читают один раз, а лог сканируют. Тоже шла напрямую из палитры.
+  onInverse: palette.white,
 } as const;
 
 export const border = {
@@ -89,26 +90,31 @@ export const action = {
   primaryPressed: palette.blue700,
   // Чернила на залитом действии.
   onPrimary: palette.white,
-  // Недоступное действие. Значение — та же приглушённая краска: непрозрачность добавляет
-  // сам контрол, и ступень описывает краску, а не итог.
-  disabled: palette.warmGrey600,
 } as const;
 
-// Смысл, который сообщает интерфейс. У каждого тона одни и те же пять работ, чтобы
-// компоненту никогда не приходилось изобретать оттенок: `base` — текст и иконка,
-// `strong` — самая тёмная ступень для заголовка НА тонированной подложке, `pressed` —
-// нажатие залитой кнопки этого тона, `tint` — сама подложка, `line` — её рамка.
+// Смысл, который сообщает интерфейс: `base` — текст и иконка, `strong` — самая тёмная
+// ступень для надписи НА тонированной подложке, `pressed` — нажатие залитой кнопки этого
+// тона, `tint` — сама подложка, `line` — её рамка.
+//
+// Раньше тут стояло «у каждого тона одни и те же пять работ», и это было обещание
+// СИММЕТРИИ, за которое платили мёртвыми ступенями: `info.base`, `info.pressed` и
+// `danger.pressed` не доходили ни до одного класса. Набор у тона теперь такой, какие
+// работы этот тон действительно делает.
 //
 // `strong` существует не для красоты: `success.base` на `success.tint` даёт 2.97:1,
 // `warning.base` — 4.0:1 на белом, `danger.base` — 4.34:1 на своём тоне, а каждая плашка
 // «удалён» в приложении набрана мелким. Пол AA — 4.5:1, и `strong` его берёт.
 export const feedback = {
+  // У «в работе» нет ни `base`, ни `pressed`, и это не пропуск: базовый синий тона — это
+  // тот же синий, что заливка действия, и носит его `action-primary`; нажатие синего —
+  // `action-pressed`. Две ступени, объявленные тут «для симметрии», не доходили ни до
+  // одного класса. Зато есть `hairline`, которого нет ни у одного другого тона: см. ниже.
   info: {
-    base: palette.blue600,
     strong: palette.blue800,
-    pressed: palette.blue700,
     tint: palette.blue050,
     line: palette.blue200,
+    // Рамка настолько бледная, что годится и как ЗАЛИВКА разделителя.
+    hairline: palette.blue100,
   },
   success: {
     base: palette.green500,
@@ -129,7 +135,6 @@ export const feedback = {
   danger: {
     base: palette.red500,
     strong: palette.red600,
-    pressed: palette.red600,
     tint: palette.red050,
     line: palette.red200,
   },
@@ -177,8 +182,8 @@ export const flatColors = {
     // Шаг от белого: строка под курсором, шапка таблицы, вложенный блок.
     DEFAULT: background.surface,
     // Белая поверхность: карточка, диалог, панель, поле ввода. Отдельно от
-    // `content['on-action']`, хотя значение то же — в этом весь смысл правки.
-    card: palette.white,
+    // `on-action`, хотя значение то же — в этом весь смысл правки.
+    card: background.card,
     // Приглушённой ступени тут нет умышленно: то же значение носит `line-row`, и оно
     // носится как РАМКА — разделитель строк таблицы. Второе имя для той же краски было бы
     // синонимом, а не ролью, и гейт мёртвых токенов справедливо на него пожаловался.
@@ -202,7 +207,7 @@ export const flatColors = {
   // Чернила на тёмной поверхности, когда это ОДНА строка, а не поток лога: тост и
   // подсказка. Ярче `term-text` намеренно — тот — основные чернила журнала, который
   // сканируют, а это надпись, которую читают один раз.
-  'on-inverse': palette.white,
+  'on-inverse': content.onInverse,
 
   line: {
     DEFAULT: border.default,
@@ -233,7 +238,7 @@ export const flatColors = {
     // Рамка настолько бледная, что годится и как ЗАЛИВКА разделителя: PipelineCard берёт
     // из одной краски обе работы — рамку карточки и фон сетки, чьи 1px-щели И ЕСТЬ
     // разделители плиток.
-    hairline: palette.blue100,
+    hairline: feedback.info.hairline,
   },
   success: {
     DEFAULT: feedback.success.base,
@@ -245,7 +250,10 @@ export const flatColors = {
   warning: {
     DEFAULT: feedback.warning.base,
     deep: feedback.warning.strong,
-    strong: feedback.warning.pressed,
+    // `press`, а не `strong`: под именем `-strong` тут стояло НАЖАТИЕ, тогда как у «в
+    // работе» `-strong` — это тёмная краска на тоне. Один суффикс, два разных смысла в
+    // соседних тонах — ровно то, что семантический уровень должен был исключить.
+    press: feedback.warning.pressed,
     tint: feedback.warning.tint,
     line: feedback.warning.line,
   },
