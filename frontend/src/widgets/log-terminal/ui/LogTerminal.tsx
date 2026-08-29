@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
-import { CollapsibleCard, Icon, IconButton } from '@/shared/ui';
+import { Button, CollapsibleCard, Icon, IconButton } from '@/shared/ui';
 
 // Activity-feed line tone by the event's display severity (see `logSeverity`). The
 // dark-surface tokens, shared with the warming card's log — three parallel triples
@@ -115,18 +115,19 @@ export function LogTerminal({
             // toggle <button>, and a nested button is invalid HTML. Sits in the head
             // row either way, so it stays visible while the rows scroll — otherwise a
             // filter you scrolled past just looks like an empty log.
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
               title={t('logTerminal.showAll')}
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="rounded-full bg-info-tint px-sm py-hair text-tiny font-medium text-info-strong hover:bg-danger-tint hover:text-danger-deep"
+              className="bg-info-tint text-info-strong hover:bg-danger-tint hover:text-danger-deep"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,
               })}
-            </button>
+            </Button>
           ) : null}
           {onClear && logLines.length > 0 ? (
             <IconButton

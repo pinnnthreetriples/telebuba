@@ -229,16 +229,19 @@ export function CampaignsCard({
             </span>
             <div className="flex shrink-0 items-center gap-sm">
               {discoverySlot}
-              <button
-                type="button"
-                disabled={campaignId === null || checkingChannels}
+              <Button
+                size="xs"
+                disabled={campaignId === null}
+                loading={checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-content-muted transition-colors hover:border-action-primary hover:text-action-primary disabled:opacity-50"
+                // `text-tiny` — см. `ChannelDiscoveryButton`: пара стоит в узкой колонке
+                // рядом с именем кампании, и на рунге контрола имя не остаётся.
+                className="text-tiny text-content-muted hover:border-action-primary hover:text-action-primary"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
                   : t('neurocomment.channels.check')}
-              </button>
+              </Button>
             </div>
           </div>
           <div className="flex flex-wrap gap-sm">
@@ -301,19 +304,14 @@ export function CampaignsCard({
                 </button>
               </span>
             ) : (
-              <button
-                type="button"
-                // Not `Button variant="dashed"`, and deliberately: this is the muted
-                // inline adder that stands in a row of channel chips, drawn in
-                // `line-strong` and `ink-muted` where the block adder under a list is
-                // drawn in blue. It shares only the dash. Its twin is the warming
-                // page's; if a third appears, that is the moment it earns a rung.
+              <Button
+                variant="dashedMuted"
+                size="xs"
                 disabled={campaignId === null}
                 onClick={onStartAdd}
-                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary disabled:opacity-50"
               >
                 {t('neurocomment.channels.addPill')}
-              </button>
+              </Button>
             )}
           </div>
         </CollapsibleCard>

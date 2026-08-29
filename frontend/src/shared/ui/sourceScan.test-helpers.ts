@@ -20,13 +20,19 @@ import { join } from 'node:path';
 
 let cache: { path: string; source: string }[] | null = null;
 
-/** Все `.tsx` приложения, кроме тестов, прочитанные один раз за прогон. */
+/**
+ * Все `.tsx` приложения, кроме тестов, прочитанные один раз за прогон.
+ *
+ * Путь отдаётся в косых чертах на любой платформе: гейты сравнивают его с префиксами вида
+ * `src/shared/ui/`, и на Windows `join` даёт обратные — сравнение молча не совпало бы, то
+ * есть исключение перестало бы исключать.
+ */
 export function tsxSources(): { path: string; source: string }[] {
   cache ??= readdirSync(join(process.cwd(), 'src'), { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.tsx'))
     .filter((entry) => !entry.name.includes('.test.'))
     .map((entry) => {
-      const path = join(entry.parentPath, entry.name);
+      const path = join(entry.parentPath, entry.name).replaceAll('\\', '/');
       return { path: path.slice(path.indexOf('src')), source: readFileSync(path, 'utf8') };
     });
   return cache;
@@ -88,7 +94,40 @@ export function elementBodies(source: string, tag: string): { at: number; body: 
   return bodies;
 }
 
-/** Строки в кавычках внутри куска исходника: списки классов, как их написали. */
+/**
+ * Классы, которые элемент носит НА САМОМ ДЕЛЕ: свои строки плюс значения поднятых
+ * константс ВЕРХНЕГО регистра, на которые он ссылается по имени.
+ *
+ * Без второй половины гейт слеп ровно там, где список классов вынесли: `className={PILL}`
+ * с `const PILL = 'rounded-full … px-md …'` над компонентом проходил насквозь, и именно так
+ * пятнадцатая рукописная пилюля дожила до ревью. Проверка, которую обходит вынос строки в
+ * переменную, — это проверка стиля записи, а не того, что записано.
+ *
+ * Верхний регистр — соглашение этого репозитория для поднятых списков классов (`PILL`,
+ * `ACTION_BTN`, `CHECK_BTN`), и он же отсекает вызовы функций и имена компонентов.
+ */
+export function wornClasses(source: string, start: number): string {
+  const own = ownAttributes(source, start);
+  const named = [...new Set(own.match(/\b[A-Z][A-Z0-9_]{2,}\b/g) ?? [])];
+  const hoisted = named.flatMap((name) => {
+    const at = source.search(new RegExp(`\\bconst ${name}\\b`));
+    if (at < 0) return [];
+    const end = source.indexOf(';', at);
+    return quotedStrings(source.slice(at, end < 0 ? source.length : end));
+  });
+  return [...quotedStrings(own), ...hoisted].join(' ');
+}
+
+/**
+ * Строки в кавычках внутри куска исходника: списки классов, как их написали.
+ *
+ * Комментарии снимаются ПЕРЕД разбором, и это не аккуратность, а исправление: апостроф в
+ * английской прозе (`the row's only control`) открывает строку, которая тянется до
+ * следующего апострофа и приносит в список классов слова из прозы. На двух кнопках это
+ * давало ложные срабатывания гейта — то есть проверку, которая жалуется не по делу, а
+ * такую перестают читать.
+ */
 export function quotedStrings(text: string): string[] {
-  return [...text.matchAll(/'([^']*)'|"([^"]*)"/g)].map((hit) => hit[1] ?? hit[2] ?? '');
+  const code = text.replaceAll(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '');
+  return [...code.matchAll(/'([^']*)'|"([^"]*)"/g)].map((hit) => hit[1] ?? hit[2] ?? '');
 }

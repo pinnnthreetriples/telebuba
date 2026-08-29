@@ -9,7 +9,14 @@ import type {
   NeurocommentChannelRow,
 } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { Badge, CollapsibleCard, DataTable, type DataTableColumnMeta, Icon } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CollapsibleCard,
+  DataTable,
+  type DataTableColumnMeta,
+  Icon,
+} from '@/shared/ui';
 
 interface BoardRow {
   account: string;
@@ -157,13 +164,13 @@ function AccountComments({
           </span>
         </div>
         {onOpenHistory ? (
-          <button
-            type="button"
+          <Button
+            size="xs"
             onClick={onOpenHistory}
-            className="rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-action-primary hover:border-action-primary"
+            className="text-action-primary hover:border-action-primary"
           >
             {t('neurocomment.feed.history')}
-          </button>
+          </Button>
         ) : null}
       </div>
       {comments.length === 0 ? (

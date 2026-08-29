@@ -205,6 +205,10 @@ function AccountRow({
         )}
         <IconButton
           size="lg"
+          // Круг здесь остался: корзина стоит одна в правом торце строки, и квадрат на
+          // 34px рядом с широкой пунктирной кнопкой читается второй такой же коробкой.
+          // Теперь это решение места вызова, а не следствие ступени `lg`.
+          shape="circle"
           tone="danger"
           aria-label={t('neurocomment.modal.neuroAccounts.remove')}
           onClick={() => {

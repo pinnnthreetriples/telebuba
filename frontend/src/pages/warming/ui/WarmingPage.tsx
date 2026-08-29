@@ -424,17 +424,15 @@ export function WarmingPage() {
                   </button>
                 </span>
               ) : (
-                <button
-                  type="button"
-                  // The muted inline adder, not `Button variant="dashed"` — see the
-                  // note on its twin in neurocomment's CampaignsCard.
+                <Button
+                  variant="dashedMuted"
+                  size="xs"
                   onClick={() => {
                     setAddingChannel(true);
                   }}
-                  className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary"
                 >
                   {t('warming.channels.addPill')}
-                </button>
+                </Button>
               )}
             </div>
           </CollapsibleCard>
@@ -528,17 +526,19 @@ export function WarmingPage() {
                       </div>
                     </div>
                     <div className="mt-lg flex items-center gap-md">
-                      <button
-                        type="button"
+                      <Button
+                        variant="primary"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex flex-1 items-center justify-center gap-sm rounded-full bg-content-primary px-lg py-md text-body font-semibold text-on-action disabled:opacity-50"
+                        // Чернильная заливка — решение места вызова: у `VARIANT` нет
+                        // залитого «нейтрального тёмного», и одного носителя для имени мало.
+                        className="flex-1 shrink gap-sm bg-content-primary hover:bg-content-primary"
                       >
                         {t('warming.warmed.toNeuro')}
                         <Icon name="arrow-right" size={14} />
-                      </button>
+                      </Button>
                       <FeedbackMark result={accountFeedback.feedback[acc.account_id]} />
                       <button
                         type="button"
