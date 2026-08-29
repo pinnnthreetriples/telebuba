@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { badgeTone, type Tone } from '@/shared/design-system';
+import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The tinted pill that labels a row — a count, a state, a "N удалено". Forty of
@@ -35,7 +35,9 @@ const SIZE = {
 // is why it is written out rather than taken from the scale.
 const DOT = 'size-dot shrink-0 rounded-full bg-current';
 
-export type BadgeTone = Tone;
+// Имя набора приходит из рецепта, а не объявляется здесь псевдонимом: пока оно было
+// `Tone` в рецепте и `BadgeTone` тут, у одного множества было два имени.
+export type { BadgeTone };
 
 export function Badge({
   tone = 'neutral',

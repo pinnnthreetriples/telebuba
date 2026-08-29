@@ -276,15 +276,13 @@ export function ChannelEditModal({
                   )}
                 </button>
                 <span className="flex-1" />
-                <Button variant="primary" onClick={save} disabled={!canSave}>
-                  {update.isPending ? (
-                    <span className="inline-flex items-center gap-sm">
-                      <Spinner tone="onAction" />
-                      {t('accounts.channel.saving')}
-                    </span>
-                  ) : (
-                    t('accounts.channel.save')
-                  )}
+                <Button
+                  variant="primary"
+                  onClick={save}
+                  disabled={!canSave}
+                  loading={update.isPending}
+                >
+                  {update.isPending ? t('accounts.channel.saving') : t('accounts.channel.save')}
                 </Button>
               </div>
               <input

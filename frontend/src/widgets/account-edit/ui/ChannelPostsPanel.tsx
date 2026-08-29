@@ -267,15 +267,14 @@ export function ChannelPostsPanel({
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
           </div>
-          <Button variant="primary" size="sm" onClick={doPublish} disabled={!canPublish}>
-            {busy ? (
-              <span className="inline-flex items-center gap-sm">
-                <Spinner tone="onAction" />
-                {t('accounts.channel.publishing')}
-              </span>
-            ) : (
-              t('accounts.channel.publish')
-            )}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={doPublish}
+            disabled={!canPublish}
+            loading={busy}
+          >
+            {busy ? t('accounts.channel.publishing') : t('accounts.channel.publish')}
           </Button>
         </div>
         <input
@@ -414,16 +413,9 @@ export function ChannelPostsPanel({
           onClick={() => {
             void loadMore();
           }}
-          disabled={loadingMore}
+          loading={loadingMore}
         >
-          {loadingMore ? (
-            <span className="inline-flex items-center gap-sm">
-              <Spinner />
-              {t('accounts.channel.loading')}
-            </span>
-          ) : (
-            t('accounts.channel.loadMore')
-          )}
+          {loadingMore ? t('accounts.channel.loading') : t('accounts.channel.loadMore')}
         </Button>
       )}
 

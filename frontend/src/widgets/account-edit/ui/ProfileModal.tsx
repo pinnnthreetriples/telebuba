@@ -1021,14 +1021,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               onClick={() => {
                 void form.handleSubmit();
               }}
-              disabled={updateProfile.isPending || !canSave || !isDirty}
+              disabled={!canSave || !isDirty}
+              loading={updateProfile.isPending}
               className={saved ? 'bg-success-deep hover:bg-success-deep' : ''}
             >
               {updateProfile.isPending ? (
-                <span className="inline-flex items-center gap-sm">
-                  <Spinner tone="onAction" />
-                  {t('accounts.profile.saving')}
-                </span>
+                t('accounts.profile.saving')
               ) : saved ? (
                 <span className="inline-flex items-center gap-sm">
                   <span className="tb-swapin inline-flex">

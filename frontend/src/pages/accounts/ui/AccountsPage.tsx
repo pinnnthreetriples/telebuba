@@ -171,11 +171,17 @@ export function AccountsPage() {
 
   return (
     <div className="tb-fadeup">
-      <ProxyPool
-        onAdd={() => {
-          setProxyAdding(true);
-        }}
-      />
+      {/* Зазор ставит страница, а не карточка пула. Обёрткой, а не `gap` на колонке:
+          у этой страницы ритм из двух шагов — `lg` между блоками и `xl` под заголовком,
+          что видно и на других страницах, — а `gap` умеет выразить только один. Замена
+          обоих на один `lg` подровняла бы страницу, разойдясь с двумя соседними. */}
+      <div className="mb-lg">
+        <ProxyPool
+          onAdd={() => {
+            setProxyAdding(true);
+          }}
+        />
+      </div>
 
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>

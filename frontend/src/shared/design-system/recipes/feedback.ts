@@ -29,17 +29,29 @@ const TONE = {
   danger: { tint: 'bg-danger-tint', ink: 'text-danger-deep', line: 'border-danger-line' },
 } as const;
 
-export type Tone = keyof typeof TONE;
+// Четыре тона, которые сообщают СМЫСЛ, — и это имя концепции, а не имя компонента.
+// Раньше здесь было наоборот: авторитетным был `Tone` (все пять), а четвёрка называлась
+// `NoticeTone`, то есть через компонент, который её первым попросил. Смысл при этом
+// принадлежит не компоненту: те же четыре тона носят плашка, уведомление, столбик
+// состояния прогрева и роли `on-success`/`on-warning`/`on-danger` в семантике. Имя,
+// названное по первому потребителю, второму потребителю приходится либо переименовывать,
+// либо повторять — WARM_STATUS повторил, парами классов.
+export type FeedbackTone = Exclude<keyof typeof TONE, 'neutral'>;
 
-// Уведомление не носит `neutral`; см. шапку.
-export type NoticeTone = Exclude<Tone, 'neutral'>;
+// Те же четыре плюс `neutral` — ярлык, у которого смысла нет вовсе: счётчик, «черновик».
+// Носит его только плашка; у уведомления `neutral` намеренно недоступен, см. шапку.
+//
+// Отдельного `Tone` больше нет: он был третьим именем того же набора (`Tone`,
+// `BadgeTone`, `NoticeTone` на два множества), и `BadgeTone` объявлялся псевдонимом к
+// нему в `Badge.tsx`. Множеств два, имён теперь тоже два.
+export type BadgeTone = FeedbackTone | 'neutral';
 
 /** Строчная плашка: заливка тона и его краска, без рамки. */
-export function badgeTone(tone: Tone): string {
+export function badgeTone(tone: BadgeTone): string {
   return cn(TONE[tone].tint, TONE[tone].ink);
 }
 
 /** Блочное уведомление: то же плюс рамка, которая отделяет его от карточки под ним. */
-export function noticeTone(tone: NoticeTone, bordered: boolean): string {
+export function noticeTone(tone: FeedbackTone, bordered: boolean): string {
   return cn(TONE[tone].tint, TONE[tone].ink, bordered && cn('border', TONE[tone].line));
 }

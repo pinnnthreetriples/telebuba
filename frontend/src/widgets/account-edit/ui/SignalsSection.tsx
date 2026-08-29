@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Spinner } from '@/shared/ui';
+import { Button, Icon } from '@/shared/ui';
 
 import { invalidateAccountViews, spamCheckAccountMutation } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
@@ -81,23 +81,23 @@ export function SignalsSection({ account }: { account: AccountRead }) {
             size="xs"
             aria-describedby={tipId}
             onClick={runSpamCheck}
+            loading={spamCheck === 'loading'}
             className={`gap-sm rounded-full ${
               spamCheck === 'ok'
-                ? 'border-success bg-success-deep text-on-action hover:border-success'
+                ? 'border-success bg-success-deep text-on-success hover:border-success'
                 : spamCheck === 'err'
-                  ? 'border-danger bg-danger text-on-action hover:border-danger'
+                  ? 'border-danger bg-danger text-on-danger hover:border-danger'
                   : 'text-content-muted'
             }`}
           >
-            {spamCheck === 'loading' && <Spinner />}
             {spamCheck === 'ok' && (
               <span className="tb-blur inline-flex">
-                <Icon name="check" size={14} className="stroke-white" />
+                <Icon name="check" size={14} className="stroke-on-success" />
               </span>
             )}
             {spamCheck === 'err' && (
               <span className="tb-blur inline-flex">
-                <Icon name="close" size={14} className="stroke-white" />
+                <Icon name="close" size={14} className="stroke-on-danger" />
               </span>
             )}
             {t('accounts.edit.signalsCheck')}

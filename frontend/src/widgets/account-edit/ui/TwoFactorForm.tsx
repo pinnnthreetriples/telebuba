@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { setAccountTwofaMutation } from '@/entities/account';
 import type { AccountTwoFactorCreated, AccountTwoFactorUpdateRequest } from '@/shared/api';
-import { Button, FormField, Icon, Input, SegmentedControl, Spinner } from '@/shared/ui';
+import { Button, FormField, Icon, Input, SegmentedControl } from '@/shared/ui';
 
 import {
   EMPTY_TWOFA_FORM,
@@ -154,9 +154,10 @@ export function TwoFactorForm({
         onClick={() => {
           void twofaForm.handleSubmit();
         }}
-        disabled={setTwofa.isPending || !canSubmit}
+        disabled={!canSubmit}
+        loading={setTwofa.isPending}
       >
-        {setTwofa.isPending ? <Spinner /> : submitLabel}
+        {submitLabel}
       </Button>
     </>
   );

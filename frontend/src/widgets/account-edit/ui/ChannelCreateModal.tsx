@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, IconButton, Input, Modal, Notice, Spinner, Textarea } from '@/shared/ui';
+import { Button, IconButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -303,17 +303,13 @@ export function ChannelCreateModal({
                   }
             }
             disabled={createdId === null && !canSubmit}
+            loading={createdId === null && busy}
           >
-            {createdId !== null ? (
-              t('accounts.channel.edit')
-            ) : busy ? (
-              <span className="inline-flex items-center gap-sm">
-                <Spinner tone="onAction" />
-                {t('accounts.channel.creating')}
-              </span>
-            ) : (
-              t('accounts.channel.createBtn')
-            )}
+            {createdId !== null
+              ? t('accounts.channel.edit')
+              : busy
+                ? t('accounts.channel.creating')
+                : t('accounts.channel.createBtn')}
           </Button>
         </div>
       </div>

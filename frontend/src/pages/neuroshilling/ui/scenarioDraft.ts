@@ -20,10 +20,30 @@ import type {
 // token, because the preview paints a role on all three. ONE array, read by the
 // editor's chips and by the preview's bubbles, so a role wears one colour on
 // both cards.
+//
+// `on` — чернила НА заливке роли, и до появления ролей `on-success`/`on-warning` их носил
+// один общий `text-on-action`: белая цифра на янтарном кружке была набрана «чернилами на
+// действии». Значение у всех трёх сегодня одно (белый), решений три, и янтарное из них
+// шаткое — см. группу `feedback` в `semantic.ts`.
 const ROLE_TONES = [
-  { bg: 'bg-action-primary', text: 'text-action-primary', border: 'border-action-primary' },
-  { bg: 'bg-success-deep', text: 'text-success-deep', border: 'border-success' },
-  { bg: 'bg-warning-deep', text: 'text-warning-deep', border: 'border-warning' },
+  {
+    bg: 'bg-action-primary',
+    text: 'text-action-primary',
+    border: 'border-action-primary',
+    on: 'text-on-action',
+  },
+  {
+    bg: 'bg-success-deep',
+    text: 'text-success-deep',
+    border: 'border-success',
+    on: 'text-on-success',
+  },
+  {
+    bg: 'bg-warning-deep',
+    text: 'text-warning-deep',
+    border: 'border-warning',
+    on: 'text-on-warning',
+  },
 ] as const;
 
 /** The tone a role at this position wears, cycling through the three. */

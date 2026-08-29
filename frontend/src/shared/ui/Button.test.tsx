@@ -4,6 +4,7 @@ import { expect, test, vi } from 'vitest';
 
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { Button } from './Button';
+import { elementBodies, tsxSources } from './sourceScan.test-helpers';
 
 function classesOf(name: string): string {
   return screen.getByRole('button', { name }).className;
@@ -149,4 +150,73 @@ test('focus is an outline, and the browser ring is not thrown away', () => {
   expect(cls).toContain('focus-visible:outline-focus');
   expect(cls).not.toContain('outline-none');
   expect(cls).not.toContain('shadow-focus');
+});
+
+// Ожидание — одно состояние, и его следствия перечислены здесь целиком, потому что раньше
+// они были разложены по местам вызова: проп давал `disabled` и `aria-busy`, а кольцо
+// рисовал вызывающий — тринадцатью рукописными сборками, из которых шесть ставили кольцо
+// РЯДОМ с подписью, а семь ВМЕСТО неё. Второе хуже: доступное имя кнопки — это её
+// содержимое, поэтому на время запроса кнопка теряла имя, и `getByRole` уже не нашёл бы её
+// по нему. Утверждение про имя стоит первым именно за этим.
+test('ожидание рисует кольцо, сохраняя подпись и имя кнопки', () => {
+  render(
+    <Button variant="primary" loading>
+      Публикую…
+    </Button>,
+  );
+
+  const button = screen.getByRole('button', { name: 'Публикую…' });
+  const ring = button.querySelector('.tb-spin');
+  expect(ring).not.toBeNull();
+  // Кольцо — картинка состояния, о котором уже сказано `aria-busy`; вторым голосом оно
+  // читало бы то же самое.
+  expect(ring).toHaveAttribute('aria-hidden', 'true');
+  expect(button.textContent).toBe('Публикую…');
+});
+
+// Тон кольца — следствие заливки, а не второе решение вызывающего: до этой правки три
+// сайта на залитой кнопке передавали `onAction` вручную, а один не передавал ничего и
+// рисовал синюю дугу на синем.
+test('тон кольца следует за заливкой кнопки', () => {
+  render(
+    <>
+      <Button variant="primary" loading>
+        Синяя
+      </Button>
+      <Button variant="danger" loading>
+        Красная
+      </Button>
+      <Button loading>Обычная</Button>
+    </>,
+  );
+
+  const ringOf = (name: string) =>
+    screen.getByRole('button', { name }).querySelector('.tb-spin')?.className ?? '';
+
+  expect(ringOf('Синяя')).toContain('border-t-on-action');
+  expect(ringOf('Красная')).toContain('border-t-danger');
+  expect(ringOf('Обычная')).toContain('border-t-action-primary');
+});
+
+// Гейт на возврат: кольцо внутри кнопки собирает КНОПКА.
+//
+// Правило ESLint этого не видит — оно читает списки классов, а не вложенность элементов, —
+// и правило про рукописное кольцо (`tb-spin` + `border-t-*`) тоже нет: `<Spinner>` внутри
+// `<Button>` собран из правильных ролей, он просто собран не там. Дефект от этого не
+// меньше: пока кольцо ставит вызывающий, тон выбирает он же, зазор набирает он же, и
+// «кольцо вместо подписи» остаётся возможным.
+test('ни один вызывающий не собирает кольцо внутри кнопки сам', () => {
+  const offenders: string[] = [];
+  let buttons = 0;
+
+  for (const { path, source } of tsxSources()) {
+    for (const { body } of elementBodies(source, 'Button')) {
+      buttons += 1;
+      if (body.includes('<Spinner')) offenders.push(path);
+    }
+  }
+
+  expect(offenders).toEqual([]);
+  // Если обход перестанет находить кнопки, список нарушителей тоже окажется пустым.
+  expect(buttons).toBeGreaterThan(50);
 });

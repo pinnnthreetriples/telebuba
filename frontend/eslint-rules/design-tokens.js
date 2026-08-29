@@ -197,10 +197,6 @@ const COLOUR =
   'bg|text|border|border-x|border-y|border-t|border-r|border-b|border-l|' +
   'ring|ring-offset|fill|stroke|from|to|via|divide|divide-x|divide-y|' +
   'outline|decoration|caret|accent|shadow|placeholder';
-// То же, за вычетом `stroke`/`fill`: см. паттерн голого `white`/`black` ниже.
-const BARE_INK = COLOUR.split('|')
-  .filter((prefix) => prefix !== 'stroke' && prefix !== 'fill')
-  .join('|');
 const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y';
 const DIMENSION = 'size|min-w|max-w|min-h|max-h|w|h';
 
@@ -266,24 +262,21 @@ const PATTERNS = [
     // surface is `text-on-inverse`. WITH an alpha they stay legal: white at 85% under the
     // nav's blur and white at 40% as a hairline on a photograph are the extreme of the
     // range rather than a role, and there is no flat composite for them to be.
-    // Список приставок свой, а не `COLOUR`, и разница ровно в двух: `stroke` и `fill`.
-    //
-    // Свой прежний список знал `border-` и не знал `border-t-`, поэтому `border-t-white`
+    // Прежний список знал `border-` и не знал `border-t-`, поэтому `border-t-white`
     // проходил насквозь — им была набрана дуга кольца ожидания в четырёх местах. Это
     // закрыто: направление не другая краска.
     //
-    // А `stroke`/`fill` исключены с измеренной причиной, не по вкусу: `stroke-white`
-    // стоит в восьми местах, и это белая галочка на ЗАЛИТОМ контроле — тот же дефект,
-    // что был у кольца. Две из восьми на `bg-action-primary`, то есть `stroke-on-action`,
-    // и они исправлены. Остальные шесть — на `bg-success`, а роли «чернила на залитом
-    // тоне» в системе нет: `on-action` называет действие, и надеть его на успех значило
-    // бы соврать именем. Правильное имя фило-агностично (`on-fill`) и переименовывает
-    // роль в 14 местах — это отдельная правка, а не эта. Пока её нет, приставка
-    // исключена ЦЕЛИКОМ, а не заглушена шестью `eslint-disable`: правило, которое надо
-    // шесть раз подавить, чтобы оно прошло, — не правило.
-    test: at(String.raw`(?:${BARE_INK})-(?:white|black)(?![\w-/])`),
+    // `stroke` и `fill` были исключены ЦЕЛИКОМ, и причина была измеренная: `stroke-white`
+    // стоял в восьми местах — белая галочка на ЗАЛИТОМ контроле, тот же дефект, что у
+    // кольца, — но роли «чернила на залитом тоне» в системе не было, а надеть `on-action`
+    // на успех значило бы соврать именем. Правило, которое надо шесть раз подавить, чтобы
+    // оно прошло, — не правило, поэтому исключалась приставка, а не сайты.
+    //
+    // Роли появились (`on-success`, `on-warning`, `on-danger`), все восемь мест на них
+    // перешли, и исключение снято: список приставок здесь снова тот же `COLOUR`.
+    test: at(String.raw`(?:${COLOUR})-(?:white|black)(?![\w-/])`),
     message:
-      'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`; the muted ink ON a filled action (a waiting ring’s track) is `on-action-track`. An alpha form — `bg-white/85`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be: over a known flat fill the composite exists and has a name.',
+      'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on a filled feedback tone is `on-success`/`on-warning`/`on-danger`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`; the muted ink ON a filled action (a waiting ring’s track) is `on-action-track`. An alpha form — `bg-white/85`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be: over a known flat fill the composite exists and has a name.',
   },
   {
     // Индикатор фокуса краской ДЕЙСТВИЯ. `border.focus` был объявлен ступенью с самого

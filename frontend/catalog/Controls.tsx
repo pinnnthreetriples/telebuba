@@ -79,9 +79,20 @@ export function Controls() {
         <Cell caption="active = hover" probe="press">
           <Button variant="primary">Нажатие</Button>
         </Cell>
-        <Cell caption="loading">
+        {/* Три тона кольца, а не один: тон следует за заливкой, и «синяя дуга на синем»
+            — тот дефект, из-за которого тон вообще перестали передавать вручную. Видно
+            это только рядом. */}
+        <Cell caption="loading · primary">
           <Button variant="primary" loading>
             Сохраняю…
+          </Button>
+        </Cell>
+        <Cell caption="loading · secondary">
+          <Button loading>Проверяю…</Button>
+        </Cell>
+        <Cell caption="loading · danger">
+          <Button variant="danger" loading>
+            Удаляю…
           </Button>
         </Cell>
         <Cell caption="disabled">

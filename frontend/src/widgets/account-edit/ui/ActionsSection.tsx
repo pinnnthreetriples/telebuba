@@ -146,7 +146,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
             <Button size="sm" onClick={onReset} loading={resetSession.isPending}>
-              {resetCheck === 'loading' ? <Spinner /> : t('accounts.edit.reset')}
+              {t('accounts.edit.reset')}
             </Button>
           </span>
         </div>
