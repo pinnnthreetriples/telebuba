@@ -192,12 +192,10 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         </div>
       )}
 
+      {/* Без `mb-lg` у уведомления: `reason != null` означает, что настройки не
+          прочитались, то есть `settings` пусто и под ним не стоит ничего. */}
       {reason != null && (
-        <Notice
-          tone="danger"
-          className="mb-lg flex items-center justify-between gap-md"
-          role="alert"
-        >
+        <Notice tone="danger" className="flex items-center justify-between gap-md" role="alert">
           <span>{t('accounts.profile.privacy.loadError', { reason })}</span>
           <Button
             size="xs"

@@ -20,6 +20,7 @@
 //   background.card    → surface-card  content.muted     → content-muted
 //   background.scrim   → scrim        content.subtle    → content-subtle
 //   background.veil    → veil         content.onInverse → on-inverse
+//                                     content.onNeutral → on-neutral
 //
 //   border.default → line             action.primary        → action-primary
 //   border.strong  → line-strong      action.primaryHover   → action-hover
@@ -74,6 +75,16 @@ export const content = {
   // ОДНА строка на тёмной поверхности: тост, подсказка. Ярче чернил журнала намеренно —
   // её читают один раз, а лог сканируют. Тоже шла напрямую из палитры.
   onInverse: palette.white,
+  // Чернила НА залитом НЕЙТРАЛЬНОМ: чернильная кнопка «остановить» и счётчик кампаний в
+  // покое. Заливка — `content-primary` (19.67:1) или `content-muted` (6.18:1), то есть
+  // не про контраст: четыре носителя носили тут `on-action`, «чернила на ДЕЙСТВИИ», и
+  // перекрасить кнопку, не перекрасив надпись на сером счётчике, было нельзя — ровно та
+  // связь, ради разрыва которой роли `on-*` и разделили.
+  //
+  // Не `onInverse`: та — одна строка на ТЁМНОЙ ПОВЕРХНОСТИ (тост, подсказка), у которой
+  // своя рампа `inverse.*` и свой вопрос «ярче или как лог». Тут поверхности нет, есть
+  // залитый контрол.
+  onNeutral: palette.white,
 } as const;
 
 export const border = {
@@ -243,6 +254,11 @@ export const flatColors = {
   // подсказка. Ярче `term-text` намеренно — тот — основные чернила журнала, который
   // сканируют, а это надпись, которую читают один раз.
   'on-inverse': content.onInverse,
+  // Чернила НА залитом нейтральном: `bg-content-primary` у чернильной кнопки «остановить»
+  // и `bg-content-muted` у счётчика кампаний в покое. Четвёртая роль семейства `on-*`, и
+  // она закрывает последнюю дыру в нём: заливка бывает действием, тоном, тёмной
+  // поверхностью — и просто серой.
+  'on-neutral': content.onNeutral,
 
   line: {
     DEFAULT: border.default,

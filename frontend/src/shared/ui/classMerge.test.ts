@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { expect, test } from 'vitest';
 
-import { lineAt, ownAttributes, quotedStrings, tsxSources } from './sourceScan.test-helpers';
+import { lineAt, tsxSources, wornClasses } from './sourceScan.test-helpers';
 
 // Примитив, который СКЛЕИВАЕТ свой базовый класс с классом вызывающего, вместо того чтобы
 // их слить, — это примитив, у которого перекрытие вызывающего может молча проиграть.
@@ -62,24 +62,61 @@ test('ни один примитив shared/ui не склеивает клас�
 //
 // Обход исходников — общий (`sourceScan.test-helpers.ts`), и там же записано, почему он
 // останавливается на первом вложенном элементе, а не на своём `>`.
-const SPACER = /(?:^|\s)-?m[xytblr]?-[\w[]/;
-const CARD = /<(?:Card|CollapsibleCard)\b/g;
+// `Notice` держится тем же признаком, и это не расширение ради симметрии: уведомление —
+// такая же коробка на тонированной подложке, и про то, что стоит под ней, она знает
+// ровно столько же, сколько карточка. Отступ у неё носили ОДИННАДЦАТЬ мест.
+//
+// Восемь сняты. Четыре ничего не ставили: под уведомлением либо край условной ветки
+// (`ChannelsTab`, `PrivacyTab`, `ChannelEditModal` на ошибке загрузки), либо подвал со
+// своим `mt-xl` — соседние вертикальные отступы в блочном потоке слипаются, и 16px против
+// 20px не давали ни пикселя. Два получили `gap` у родителя (`ProfileModal` — панель
+// вкладки, `ChannelEditModal` — 16px переехали на строку под ним). Два в
+// `ChannelPostsPanel` сняты вместе с `mt-sm` у соседей: там все три ребёнка носили одну
+// ступень, и `gap-sm` воспроизвёл расстояние точно.
+//
+// Три остались, и это ДОЛГ, а не решение: ритм их родителей набран отступом у каждого
+// блока, и перевод такого тела на `gap` двигает картинку — у него будут свои эталоны
+// снимков. Исключение названо парой «файл + ступень», а не строкой: строка съезжает от
+// любой правки выше, а ступень называет ровно тот отступ, который сегодня терпят, — новый
+// отступ другой ступени в том же файле гейт увидит.
+const BOX_MARGIN_DEBT = new Set([
+  // Уведомление об ошибке списка постов: `mt-md` — расстояние ВВЕРХ до композера.
+  'src/widgets/account-edit/ui/ChannelPostsPanel.tsx mt-md',
+  // Два предупреждения о несохранённом пароле 2FA в теле, где `mb-md` носят ещё пять
+  // соседей — от заголовка до кнопки копирования.
+  'src/widgets/account-edit/ui/TwoFactorSection.tsx mb-md',
+]);
 
-test('ни один вызывающий не передаёт карточке внешний отступ', () => {
+// Ступень захватывается, а не только опознаётся: без неё исключение пришлось бы называть
+// номером строки.
+const SPACER = /(?:^|\s)(-?m[xytblr]?-[\w[\]]+)/g;
+const BOX = /<(?:Card|CollapsibleCard|Notice)\b/g;
+
+test('ни один вызывающий не передаёт карточке или уведомлению внешний отступ', () => {
   const offenders: string[] = [];
+  const excused = new Set<string>();
   let calls = 0;
 
   for (const { path, source } of tsxSources()) {
-    for (const hit of source.matchAll(CARD)) {
+    for (const hit of source.matchAll(BOX)) {
       calls += 1;
-      const own = quotedStrings(ownAttributes(source, hit.index));
-      if (own.some((value) => SPACER.test(value))) {
-        offenders.push(`${path}:${String(lineAt(source, hit.index))}`);
+      // `wornClasses`, а не `quotedStrings(ownAttributes(…))`: вторая читает только
+      // литералы, поэтому `className={CARD_BOX}` с поднятой константой проходил насквозь.
+      // Это та же щель, через которую в прошлом раунде прошла пятнадцатая рукописная
+      // пилюля, и закрыта она тем же способом — проверка, которую обходит вынос строки в
+      // переменную, проверяет стиль записи, а не то, что записано.
+      for (const [, spacer] of wornClasses(source, hit.index).matchAll(SPACER)) {
+        const key = `${path} ${spacer ?? ''}`;
+        if (BOX_MARGIN_DEBT.has(key)) excused.add(key);
+        else offenders.push(`${path}:${String(lineAt(source, hit.index))} — ${spacer ?? ''}`);
       }
     }
   }
 
   expect(offenders).toEqual([]);
   // Если обход перестанет находить вызовы, список нарушителей тоже окажется пустым.
-  expect(calls).toBeGreaterThan(20);
+  expect(calls).toBeGreaterThan(30);
+  // Исключение, которому больше нечего исключать, — это разрешение, выданное навсегда:
+  // отступ сняли, а щель осталась открытой. Долг обязан быть носимым.
+  expect([...excused].sort()).toEqual([...BOX_MARGIN_DEBT].sort());
 });

@@ -10,8 +10,17 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
+import { verdictFill } from '@/shared/design-system';
 import { cn, type FeedbackResult } from '@/shared/lib';
-import { Card, DataTable, Icon, Spinner, StatusIcon, type DataTableColumnMeta } from '@/shared/ui';
+import {
+  Card,
+  DataTable,
+  Icon,
+  IconButton,
+  Spinner,
+  StatusIcon,
+  type DataTableColumnMeta,
+} from '@/shared/ui';
 
 interface AccountsTableProps {
   data: AccountRead[];
@@ -28,17 +37,6 @@ interface AccountsTableProps {
 
 const ACTION_BTN =
   'flex size-icon items-center justify-center rounded-full border border-line bg-surface-card disabled:opacity-50';
-
-// The check button wears its own verdict (repo rule: every mutation ends in a
-// green check or a red cross), so the ✓/✗ lands where the click did. A busy row
-// falls back to `idle`: the button re-enables the moment its spinner clears, so
-// a second click inside the flash window would otherwise spin on the previous
-// verdict's fill — the old answer asserted over an unresolved check.
-const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
-  idle: 'text-content-muted',
-  ok: 'border-success bg-success-deep text-on-action',
-  err: 'border-danger bg-danger text-on-action',
-};
 
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
@@ -199,50 +197,52 @@ export function AccountsTable({
       cell: ({ row }) => {
         const account = row.original;
         const busy = busyIds.has(account.account_id);
-        const checked = checkResults[account.account_id];
+        // The check button wears its own verdict (repo rule: every mutation ends in a
+        // green check or a red cross), so the ✓/✗ lands where the click did. A busy row
+        // drops the verdict — fill, glyph AND name: the button re-enables the moment its
+        // spinner clears, so a second click inside the flash window would otherwise spin
+        // on the previous verdict's fill, the old answer asserted over an unresolved
+        // check. One expression, because three of them drifted apart once already.
+        const verdict = busy ? undefined : checkResults[account.account_id];
         return (
           <div className="flex items-center justify-end gap-sm">
-            <button
-              type="button"
+            <IconButton
+              shape="circle"
               title={t('accounts.actions.check')}
+              // Named, not colour-only: the fill and the glyph say nothing to a screen
+              // reader. The name sits on the BUTTON now: `IconButton` requires
+              // `aria-label`, and that label wins over the content, so the nested
+              // `role="img"` this used to carry would have stopped being announced.
+              // `title` stays the constant action label — it is the tooltip.
+              aria-label={
+                verdict === undefined
+                  ? t('accounts.actions.check')
+                  : t(verdict === 'ok' ? 'accounts.edit.aliveOk' : 'accounts.edit.aliveErr')
+              }
               disabled={busy}
               onClick={(event) => {
                 event.stopPropagation();
                 onCheck(account.account_id);
               }}
-              // `cn`, not a template string, and this is the one button here that
-              // needs it: `ACTION_BTN` paints `bg-surface-card` and a verdict paints over
-              // it, which is the same utility group at the same specificity — so
-              // the winner is decided by the order the two rules sit in the
-              // stylesheet, not by which was written last. Tailwind emits colours
-              // alphabetically, `.bg-surface-card` lands after `.bg-success-deep` and
-              // `.bg-danger`, and both verdicts lost their fill while keeping
-              // `text-white`: a white glyph on a white circle, for every check this
-              // table has ever run. tailwind-merge drops the loser instead.
-              className={cn(
-                ACTION_BTN,
-                'transition-colors duration-enter',
-                CHECK_BTN[busy ? 'idle' : (checked ?? 'idle')],
-              )}
+              // The fill arrives as an override, and `IconButton` MERGES it through `cn`
+              // rather than appending: `bg-surface-card` and a verdict's fill are one
+              // utility group at one specificity, so with both on the element the winner
+              // is the order Tailwind emits, not the order written. `.bg-surface-card`
+              // lands after `.bg-success-deep` alphabetically, and both verdicts used to
+              // lose their fill while keeping their white glyph — a white check on a white
+              // circle, for every check this table ever ran.
+              className={cn('duration-enter', verdictFill(verdict))}
             >
               {busy ? (
                 <Spinner />
-              ) : checked ? (
-                // Named, not colour-only: the fill and the glyph say nothing to a
-                // screen reader, and `title` stays the constant action label.
-                <span
-                  className="tb-pop inline-flex"
-                  role="img"
-                  aria-label={t(
-                    checked === 'ok' ? 'accounts.edit.aliveOk' : 'accounts.edit.aliveErr',
-                  )}
-                >
-                  <StatusIcon kind={checked} />
+              ) : verdict ? (
+                <span className="tb-pop inline-flex">
+                  <StatusIcon kind={verdict} />
                 </span>
               ) : (
                 <Icon name="refresh" size={14} />
               )}
-            </button>
+            </IconButton>
             <button
               type="button"
               title={t('accounts.actions.profile')}

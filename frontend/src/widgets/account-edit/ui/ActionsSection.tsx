@@ -9,8 +9,9 @@ import {
   resetAccountSessionMutation,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { useClearedTimeouts } from '@/shared/lib';
-import { Button, ConfirmModal, FeedbackMark, Icon, Spinner } from '@/shared/ui';
+import { verdictFill } from '@/shared/design-system';
+import { cn, useClearedTimeouts } from '@/shared/lib';
+import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Spinner } from '@/shared/ui';
 
 import { Section } from './_shared';
 import { type CheckState } from './_styles';
@@ -100,8 +101,8 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
                   : t('accounts.edit.aliveHint')}
             </div>
           </div>
-          <button
-            type="button"
+          <IconButton
+            shape="circle"
             onClick={runAliveCheck}
             // Same guard the reset button carries: a second click before the
             // first check settles takes over the mutation's one callback slot,
@@ -110,13 +111,10 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             disabled={aliveMutation.isPending}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
-            className={`flex size-icon shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-enter ${
-              aliveCheck === 'ok'
-                ? 'border-success bg-success-deep text-on-action'
-                : aliveCheck === 'err'
-                  ? 'border-danger bg-danger text-on-action'
-                  : 'border-line bg-surface-card text-content-muted'
-            }`}
+            // Тот же рецепт исхода, что у кнопки проверки в таблице аккаунтов: три рунга
+            // были набраны здесь вложенным тернарником. Сведение `loading` к заливке покоя
+            // держит рецепт, а не это место — оно и было тем, что разошлось бы.
+            className={cn('duration-enter', verdictFill(aliveCheck))}
           >
             {aliveCheck === 'idle' && (
               <span className="tb-blur inline-flex">
@@ -134,7 +132,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
                 <Icon name="close" size={18} />
               </span>
             )}
-          </button>
+          </IconButton>
         </div>
         <div className="flex items-center justify-between gap-md border-b border-line-row py-lg">
           <div>

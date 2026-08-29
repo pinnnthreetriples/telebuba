@@ -65,11 +65,11 @@ export function PipelineCard({
           </span>
         </div>
         <Button
-          variant="primary"
+          variant={running ? 'neutral' : 'primary'}
           size="sm"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`gap-sm ${running ? 'bg-content-primary hover:bg-content-primary' : ''}`}
+          className="gap-sm"
         >
           {running ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}

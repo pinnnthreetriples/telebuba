@@ -242,7 +242,7 @@ export function WarmingPage() {
             <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
           </div>
           <Button
-            variant="primary"
+            variant={poolOn ? 'neutral' : 'primary'}
             size="sm"
             disabled={bulkBusy || start.isPending || stop.isPending}
             onClick={() => {
@@ -254,7 +254,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className={`gap-sm ${poolOn ? 'bg-content-primary hover:bg-content-primary' : ''}`}
+            className="gap-sm"
           >
             {poolOn ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
@@ -447,7 +447,10 @@ export function WarmingPage() {
             header={
               <>
                 <span className="flex size-icon items-center justify-center rounded-lg bg-success-tint">
-                  <Icon name="check" size={16} className="stroke-success" />
+                  {/* `deep`, а не базовый: базовый зелёный на своём тоне мерит 2.97:1, а
+                      1.4.11 просит 3:1 у графики, которая несёт смысл. `success-deep` даёт
+                      5.85:1. Гейт видит это сам — см. `contrast.test.ts`. */}
+                  <Icon name="check" size={16} className="stroke-success-deep" />
                 </span>
                 <span className="type-card-title">{t('warming.warmed.title')}</span>
                 <Badge tone="success" className="font-bold">
@@ -503,7 +506,7 @@ export function WarmingPage() {
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
                       <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-tiny font-bold text-success-deep">
-                        <Icon name="check" size={10} className="stroke-success" />
+                        <Icon name="check" size={10} className="stroke-success-deep" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
@@ -527,14 +530,12 @@ export function WarmingPage() {
                     </div>
                     <div className="mt-lg flex items-center gap-md">
                       <Button
-                        variant="primary"
+                        variant="neutral"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        // Чернильная заливка — решение места вызова: у `VARIANT` нет
-                        // залитого «нейтрального тёмного», и одного носителя для имени мало.
-                        className="flex-1 shrink gap-sm bg-content-primary hover:bg-content-primary"
+                        className="flex-1 shrink gap-sm"
                       >
                         {t('warming.warmed.toNeuro')}
                         <Icon name="arrow-right" size={14} />
