@@ -1,11 +1,24 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import { cn } from '@/shared/lib/cn';
 
 // Slide-in action layer: the surface translates left to reveal the pinned action
-// buttons (the design's lsnSnap/campSnap GSAP, done with CSS). Reveals on hover
-// AND when `open` is true — a gear button drives `open` so the actions are
-// reachable on touch/keyboard, not hover-only (finding #6).
+// buttons (the design's lsnSnap/campSnap GSAP, done with CSS). Reveals on hover, when
+// `open` is true — a gear button drives `open` so the actions are reachable on touch —
+// and when the KEYBOARD reaches an action.
+//
+// That third case was missing, and it was the sharp end: the actions are always
+// rendered and only ever hidden by being COVERED, so they were in the tab order the
+// whole time. Tab moved focus onto a button nobody could see, and the focus ring was
+// drawn underneath the surface. «Фокусируемое и невидимое» — хуже, чем недостижимое: у
+// первого пользователь не знает, где он.
+//
+// Раскрытие по фокусу сделано на состоянии, а не вариантом `group-focus-within`, и это
+// вынужденно: сама поверхность теперь тоже фокусируемая (настоящая кнопка выбора внутри),
+// поэтому `group-focus-within` открывал бы действия и при фокусе на карточке. CSS не
+// умеет спросить «фокус внутри вот ЭТОГО ребёнка» так, чтобы ответ применился к
+// соседнему; `onFocus`/`onBlur` на обёртке действий умеет, потому что в React они
+// всплывают.
 //
 // In shared/ui and not beside the first card that grew it: two screens already
 // revealed actions this way, with two different action widths (48px and 52px) and
@@ -34,6 +47,7 @@ export function SurfHover({
 }) {
   const actionsRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const [reached, setReached] = useState(false);
 
   // Layout effect: the width is wanted before the first paint, or the first hover would
   // travel a stale distance. Measured on the INNER wrapper, not on the action layer: the
@@ -76,7 +90,17 @@ export function SurfHover({
       {/* `bottom-[2px]`, not `inset-0`: the padding above is behind the card, and an
           action layer stretched into it would show a grey sliver under every row. */}
       <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-stretch justify-end rounded-lg bg-canvas">
-        <div ref={actionsRef} data-measured="actions" className="flex items-stretch">
+        <div
+          ref={actionsRef}
+          data-measured="actions"
+          className="flex items-stretch"
+          onFocus={() => {
+            setReached(true);
+          }}
+          onBlur={() => {
+            setReached(false);
+          }}
+        >
           {actions}
         </div>
       </div>
@@ -93,7 +117,7 @@ export function SurfHover({
         id={surfaceId}
         className={cn(
           'relative rounded-lg bg-surface-card transition-transform duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)]',
-          open && '-translate-x-[var(--shift)]',
+          (open || reached) && '-translate-x-[var(--shift)]',
         )}
         // `--shift` ставит эффект выше; до первого замера сдвига нет, и это правильный
         // порядок: раскрыть нечего, пока не известно, на сколько.

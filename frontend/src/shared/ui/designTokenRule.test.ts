@@ -124,6 +124,11 @@ if (rule) {
         code: 'const sp = "tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary";',
         errors: [{ message: /waiting ring assembled by hand/ }],
       },
+      // Направленная краска: `border-white` правило видело всегда, `border-t-white` — нет.
+      {
+        code: 'const dir = "border-t-white border-r-black";',
+        errors: [{ message: /Bare `white`\/`black`/ }],
+      },
       {
         code: 'const bp = "xl:flex-row";',
         errors: [{ message: /breakpoint scale is closed/ }],

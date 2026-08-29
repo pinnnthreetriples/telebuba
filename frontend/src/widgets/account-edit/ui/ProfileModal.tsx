@@ -1026,7 +1026,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">
-                  <Spinner tone="inverse" />
+                  <Spinner tone="onAction" />
                   {t('accounts.profile.saving')}
                 </span>
               ) : saved ? (

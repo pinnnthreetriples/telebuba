@@ -270,7 +270,7 @@ export function ChannelPostsPanel({
           <Button variant="primary" size="sm" onClick={doPublish} disabled={!canPublish}>
             {busy ? (
               <span className="inline-flex items-center gap-sm">
-                <Spinner tone="inverse" />
+                <Spinner tone="onAction" />
                 {t('accounts.channel.publishing')}
               </span>
             ) : (

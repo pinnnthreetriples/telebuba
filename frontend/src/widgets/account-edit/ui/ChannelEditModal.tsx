@@ -279,7 +279,7 @@ export function ChannelEditModal({
                 <Button variant="primary" onClick={save} disabled={!canSave}>
                   {update.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <Spinner tone="inverse" />
+                      <Spinner tone="onAction" />
                       {t('accounts.channel.saving')}
                     </span>
                   ) : (

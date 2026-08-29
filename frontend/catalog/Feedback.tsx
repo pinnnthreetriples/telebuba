@@ -19,7 +19,7 @@ const BADGE_TONES = ['neutral', 'info', 'success', 'warning', 'danger'] as const
 const BADGE_SIZES = ['md', 'sm', 'xs'] as const;
 const NOTICE_TONES = ['info', 'success', 'warning', 'danger'] as const;
 const SPINNER_SIZES = ['sm', 'md', 'lg'] as const;
-const SPINNER_TONES = ['default', 'inverse', 'danger'] as const;
+const SPINNER_TONES = ['default', 'onAction', 'danger'] as const;
 
 export function Feedback() {
   return (
@@ -82,7 +82,7 @@ export function Feedback() {
         <Row key={size} label={`Spinner · ${size}`}>
           {SPINNER_TONES.map((tone) => (
             <Cell key={tone} caption={tone}>
-              {tone === 'inverse' ? (
+              {tone === 'onAction' ? (
                 <span className="inline-flex items-center rounded-md bg-action-primary p-sm">
                   <Spinner size={size} tone={tone} />
                 </span>

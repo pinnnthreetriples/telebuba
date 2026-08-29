@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
+import { FOCUS_RING } from '@/shared/design-system';
 import { type FeedbackResult } from '@/shared/lib';
+import { cn } from '@/shared/lib/cn';
 import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
 
 // Tone is the token the status MEANS (running = success, held = amber, shelved =
@@ -134,18 +136,35 @@ export function CampaignsCard({
                 </>
               }
               surface={
+                // Выбор кампании — НАСТОЯЩАЯ кнопка, а шестерёнка её сосед, не потомок.
+                // Раньше здесь стоял `div role="button" tabIndex={0} onClick`, и это было
+                // сломано дважды: роль обещала кнопку, но Enter и Space не обрабатывались
+                // (у `div` их нет по умолчанию) — то есть с клавиатуры карточка
+                // фокусировалась и не выбиралась; и внутри этой «кнопки» лежала другая
+                // кнопка, чего ARIA не допускает, а скринридер объявляет как одну
+                // непонятную. Настоящему `<button>` Enter и Space достаются бесплатно.
+                //
+                // Кнопка накрывает всю карточку (`absolute inset-0`), поэтому область
+                // нажатия осталась прежней, а шестерёнка стоит ВЫШЕ по слою и остаётся
+                // отдельной целью. Так `stopPropagation` больше не нужен: события
+                // шестерёнки не проходят через кнопку, потому что она ей не родитель.
                 <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    onSelect(campaign.campaign_id);
-                  }}
                   // Background lives in both branches, never in the base: two `bg-*`
                   // utilities in one class list are resolved by stylesheet order, and
                   // `bg-surface-card` wins over the selected tint.
-                  className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+                  className={`relative rounded-lg border p-lg ${isSelected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
                 >
-                  <div className="flex justify-between gap-md">
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      onSelect(campaign.campaign_id);
+                    }}
+                    className={cn('absolute inset-0 cursor-pointer rounded-lg', FOCUS_RING)}
+                  >
+                    <span className="sr-only">{campaign.name}</span>
+                  </button>
+                  <div className="pointer-events-none flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
                       <div className="mb-tight type-card-title">{campaign.name}</div>
                       <div className="type-caption">
@@ -163,14 +182,16 @@ export function CampaignsCard({
                         <span className="size-dot rounded-full bg-current" />
                         {t(`neurocomment.campaign.status.${campaign.status}`)}
                       </span>
+                      {/* `pointer-events-auto` возвращает шестерёнке нажимаемость: слой
+                          выше её выключил, чтобы клик по тексту доставался кнопке. */}
                       <IconButton
                         size="sm"
                         tone="primary"
+                        className="pointer-events-auto relative"
                         title={t('neurocomment.campaign.actions')}
                         aria-label={t('neurocomment.campaign.actions')}
                         aria-expanded={openCampaignActions === campaign.campaign_id}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           onToggleActions(campaign.campaign_id);
                         }}
                       >

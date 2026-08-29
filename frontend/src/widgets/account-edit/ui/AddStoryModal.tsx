@@ -310,7 +310,7 @@ export function AddStoryModal({
           <span
             className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${noForward ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
           >
-            {noForward && <Icon name="check" size={14} className="stroke-white" />}
+            {noForward && <Icon name="check" size={14} className="stroke-on-action" />}
           </span>
           <span className="type-dialog-body text-content-secondary">
             {t('accounts.addStory.noForward')}

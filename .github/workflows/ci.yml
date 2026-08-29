@@ -418,10 +418,12 @@ jobs:
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps --only-shell chromium
 
-      # The design system's visual gate: 12 checks over the live catalog at two
-      # widths. It is what makes "a token moved and nothing else did" a provable
-      # claim rather than an assertion — the baselines live in
-      # frontend/e2e/__screenshots__/ and are reviewed like code.
+      # The design system's visual gate: one check per catalog section and per app
+      # screen, each at two widths. No count is written here on purpose — the specs
+      # are the count, and a number in a comment is the same hand-maintained duplicate
+      # the tokens themselves were built to remove. It is what makes "a token moved and
+      # nothing else did" a provable claim rather than an assertion — the baselines live
+      # in frontend/e2e/__screenshots__/ and are reviewed like code.
       - name: Design-system screenshots
         run: npm run visual
 

@@ -25,6 +25,7 @@
 //   border.strong  → line-strong      action.primaryHover   → action-hover
 //   border.subtle  → line-row         action.primaryPressed → action-pressed
 //   border.focus   → focus            action.onPrimary      → on-action
+//                                     action.onPrimaryTrack → on-action-track
 //
 //   feedback.info    → info           feedback.warning → warning
 //   feedback.success → success        feedback.danger  → danger
@@ -90,6 +91,14 @@ export const action = {
   primaryPressed: palette.blue700,
   // Чернила на залитом действии.
   onPrimary: palette.white,
+  // Приглушённая их версия НА нём же: дорожка кольца ожидания внутри залитой кнопки.
+  // Раньше она была `border-white/40` — белым с альфой, то есть краской, которую палитра
+  // не видит и измерить не может. Карвинг «альфа на белом законна» существует для washes
+  // над ФОТОГРАФИЕЙ, где плоского композита нет; здесь под краской всегда `blue600`,
+  // поэтому композит есть, и это он. `blue400` — ближайший рунг палитры к измеренному
+  // смешению (#66a3ff против #5ba3ff): разница в 11 единиц красного не различима, а
+  // альтернативой была третья запись значения, которое палитра уже хранит дважды.
+  onPrimaryTrack: palette.blue400,
 } as const;
 
 // Смысл, который сообщает интерфейс: `base` — текст и иконка, `strong` — самая тёмная
@@ -203,7 +212,11 @@ export const flatColors = {
   },
   // Чернила НА залитом действии. Своя ступень, а не `white`: перекрасить надпись кнопки,
   // не перекрасив карточку, — это то, чего раньше было нельзя.
-  'on-action': action.onPrimary,
+  'on-action': {
+    DEFAULT: action.onPrimary,
+    // Дорожка кольца ожидания на залитом действии: `border-on-action-track`.
+    track: action.onPrimaryTrack,
+  },
   // Чернила на тёмной поверхности, когда это ОДНА строка, а не поток лога: тост и
   // подсказка. Ярче `term-text` намеренно — тот — основные чернила журнала, который
   // сканируют, а это надпись, которую читают один раз.
