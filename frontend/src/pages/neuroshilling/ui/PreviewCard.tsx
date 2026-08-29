@@ -90,7 +90,7 @@ export function PreviewCard({
                   style={{ animationDelay: `${String(index * 0.12)}s` }}
                 >
                   <span
-                    className={`flex size-icon shrink-0 items-center justify-center rounded-full text-tiny font-bold text-on-action ${tone.bg}`}
+                    className={`flex size-icon shrink-0 items-center justify-center rounded-full text-tiny font-bold ${tone.on} ${tone.bg}`}
                   >
                     {(role?.name ?? '?').slice(0, 1).toUpperCase()}
                   </span>

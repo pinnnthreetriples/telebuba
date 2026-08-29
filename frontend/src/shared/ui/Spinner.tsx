@@ -41,6 +41,10 @@ const TONE = {
   danger: 'border-danger-line border-t-danger',
 } as const;
 
+// Экспортируется ради `Button`: он выбирает тон кольца по своей заливке, и связь между
+// двумя наборами держит компилятор, а не совпадение строк.
+export type SpinnerTone = keyof typeof TONE;
+
 /**
  * Крутящееся кольцо. `aria-hidden`, и это сохранение поведения, а не решение: все
  * семнадцать рукописных колец были пустыми `<span>` без роли, то есть для скринридера не
@@ -54,7 +58,7 @@ export function Spinner({
   className = '',
 }: {
   size?: keyof typeof SIZE;
-  tone?: keyof typeof TONE;
+  tone?: SpinnerTone;
   className?: string;
 }) {
   return (

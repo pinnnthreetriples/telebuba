@@ -168,7 +168,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
             onClick={onLogout}
             loading={logout.isPending}
           >
-            {logoutCheck === 'loading' ? <Spinner /> : t('accounts.edit.logout')}
+            {t('accounts.edit.logout')}
           </Button>
         </span>
       </div>
@@ -213,8 +213,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
           />
         </label>
       </div>
-      <Button size="block" onClick={onConfirmLogin} disabled={submitCode.isPending || !code}>
-        {submitCode.isPending ? <Spinner /> : t('accounts.edit.confirmLogin')}
+      <Button size="block" onClick={onConfirmLogin} disabled={!code} loading={submitCode.isPending}>
+        {t('accounts.edit.confirmLogin')}
       </Button>
       {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
       <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>

@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
+import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
 import { Card, FeedbackMark, Icon, IconButton } from '@/shared/ui';
 
@@ -37,16 +38,21 @@ const DAY_SEGMENTS = [...Array(42).keys()];
 const DAY_TICKS = [0, 4, 7, 11, 14];
 const WARMING_DAYS = 14;
 
-// Per-state warming-status pill tone: the token pair the state means, never a
-// per-state hex. Sleeping and flood-wait/quarantine share amber deliberately —
-// throttled and recovering on its own is not an error.
-const WARM_STATUS: Record<WarmingState, string> = {
-  active: 'bg-success-tint text-success-deep',
-  sleeping: 'bg-warning-tint text-warning-deep',
-  idle: 'bg-canvas text-content-muted',
-  flood_wait: 'bg-warning-tint text-warning-deep',
-  quarantine: 'bg-warning-tint text-warning-deep',
-  error: 'bg-danger-tint text-danger-deep',
+// Per-state warming-status pill tone. Sleeping and flood-wait/quarantine share amber
+// deliberately — throttled and recovering on its own is not an error.
+//
+// Тон назван ТОНОМ, а не парой классов, которую тон означает. Пары стояли здесь и
+// совпадали с `badgeTone()` во всех шести строках дословно, включая порядок — то есть это
+// был шестой экземпляр той же таблицы, и разошёлся бы он молча: плашка на других экранах
+// поехала бы за рецептом, а эта осталась бы прежней. Тип `BadgeTone` — общий набор из
+// `recipes/feedback.ts`; `neutral` тут носит `idle`, у которого смысла и нет.
+const WARM_STATUS: Record<WarmingState, BadgeTone> = {
+  active: 'success',
+  sleeping: 'warning',
+  idle: 'neutral',
+  flood_wait: 'warning',
+  quarantine: 'warning',
+  error: 'danger',
 };
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
@@ -224,7 +230,7 @@ function WarmingCard({
   const dayTicks =
     target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
   const connectorPct = hold ? 0 : (active / (STAGES.length - 1)) * 100;
-  const statusTone = WARM_STATUS[account.state];
+  const statusTone = badgeTone(WARM_STATUS[account.state]);
   // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
   const dailyActions = account.daily_actions ?? 0;
   const dailyCap = account.daily_cap && account.daily_cap > 0 ? account.daily_cap : null;
@@ -409,7 +415,7 @@ function WarmingCard({
                 <div className="flex size-glyph items-center justify-center">
                   {index < active ? (
                     <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
-                      <Icon name="check" size={10} className="stroke-white" />
+                      <Icon name="check" size={10} className="stroke-on-success" />
                     </span>
                   ) : index === active ? (
                     <span className="tb-livedot size-node rounded-full bg-action-primary" />
@@ -534,7 +540,7 @@ function WarmingCard({
           {/* complete */}
           <div className="mt-md flex items-center gap-md rounded-lg border border-success-line bg-success-tint px-md py-md">
             <span className="inline-flex size-chip shrink-0 items-center justify-center rounded-full bg-success">
-              <Icon name="check" size={14} className="stroke-white" />
+              <Icon name="check" size={14} className="stroke-on-success" />
             </span>
             <div className="min-w-0">
               <div className="type-item-title text-success-deep">
@@ -608,7 +614,7 @@ export function WarmingBoard({
               height="16"
               viewBox="0 0 24 24"
               fill="none"
-              className="stroke-white"
+              className="stroke-on-action"
               strokeWidth="2.2"
               strokeLinecap="round"
               strokeLinejoin="round"

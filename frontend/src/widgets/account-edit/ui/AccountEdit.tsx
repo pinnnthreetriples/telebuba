@@ -32,16 +32,20 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const tTone = trustTone(trust);
 
   return (
-    <div className="tb-fadeup max-w-page">
+    // Ритм колонки — один зазор, и ставит его колонка: пять детей несли `mb-lg` каждый,
+    // кроме последнего, и «кроме последнего» приходилось помнить.
+    <div className="tb-fadeup flex max-w-page flex-col gap-lg">
       <button
         type="button"
         onClick={onBack}
-        className="mb-lg inline-flex items-center gap-sm bg-transparent p-0 text-body font-medium text-content-muted hover:text-content-primary"
+        // `self-start`: в колонке ребёнок растягивается по умолчанию, а у кнопки «назад»
+        // область нажатия должна быть по надписи, а не по всей ширине страницы.
+        className="inline-flex self-start items-center gap-sm bg-transparent p-0 text-body font-medium text-content-muted hover:text-content-primary"
       >
         ← {t('accounts.edit.back')}
       </button>
 
-      <Card className="mb-lg flex flex-wrap items-center gap-lg px-xl py-xl">
+      <Card className="flex flex-wrap items-center gap-lg px-xl py-xl">
         <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-title font-semibold text-info-strong">
           {mono(account)}
         </div>
@@ -66,20 +70,19 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         </div>
       </Card>
 
-      <div className="mb-lg grid grid-cols-1 md:grid-cols-2 gap-lg">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <SessionSection account={account} />
         <ProxySection account={account} />
       </div>
 
-      <div className="mb-lg grid grid-cols-1 md:grid-cols-2 gap-lg">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <DeviceSection account={account} />
         <SignalsSection account={account} />
       </div>
 
       {/* The security cards sit together: the cloud password is the other half of
           "who can take this account" that the session card starts, and the actions
-          card is what taking it away looks like. No bottom margin — the last row
-          owns the page's bottom edge. */}
+          card is what taking it away looks like. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-lg">
         <TwoFactorSection account={account} />
         <ActionsSection account={account} onBack={onBack} />

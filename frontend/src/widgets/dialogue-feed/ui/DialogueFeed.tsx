@@ -166,7 +166,7 @@ export function DialogueFeed() {
   const live = isFeedLive(messages);
 
   return (
-    <Card className="mt-lg p-lg">
+    <Card className="p-lg">
       <div className="mb-lg flex items-center gap-md">
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}

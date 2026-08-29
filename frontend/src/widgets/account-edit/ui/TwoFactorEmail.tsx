@@ -246,7 +246,7 @@ export function TwoFactorEmail({
               onClick={onResend}
               loading={resendEmail.isPending}
             >
-              {resendEmail.isPending ? <Spinner /> : t('accounts.edit.twofaEmailResend')}
+              {t('accounts.edit.twofaEmailResend')}
             </Button>
             <button
               type="button"
@@ -284,9 +284,10 @@ export function TwoFactorEmail({
           <Button
             size="block"
             onClick={onAttach}
-            disabled={setEmail.isPending || !addressValid || !hasStored}
+            disabled={!addressValid || !hasStored}
+            loading={setEmail.isPending}
           >
-            {setEmail.isPending ? <Spinner /> : t('accounts.edit.twofaEmailAttach')}
+            {t('accounts.edit.twofaEmailAttach')}
           </Button>
         </>
       ) : null}

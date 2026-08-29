@@ -104,7 +104,7 @@ export function PipelineCard({
               <div className="flex size-glyph items-center justify-center">
                 {index < activeCell ? (
                   <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
-                    <Icon name="check" size={10} className="stroke-white" />
+                    <Icon name="check" size={10} className="stroke-on-success" />
                   </span>
                 ) : index === activeCell ? (
                   <span className="tb-livedot size-node rounded-full bg-action-primary" />

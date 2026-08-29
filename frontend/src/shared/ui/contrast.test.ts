@@ -232,6 +232,22 @@ function glyphOnly(body: string): boolean {
 }
 
 const BG = /(?:^|\s)(?:[\w-]+:)*bg-(\S+)/g;
+// `text` only, and `stroke`/`fill` deliberately not beside it — MEASURED, not assumed.
+// Adding them was tried: it surfaces ten pairings, and the scan is wrong about four of
+// them for two structural reasons it cannot fix cheaply.
+//
+//   • an element that IS a glyph is not recognised as one. `glyphOnly` asks what an
+//     element CONTAINS, which is right for a wrapper and wrong for `<Icon className=
+//     "stroke-on-success" />`: its body is empty, so it is held to the 4.5:1 text floor
+//     rather than the 3:1 a graphic gets.
+//   • a conditional CHILD is not a branch. `{on && <Icon className="stroke-on-action" />}`
+//     is an always-applied chunk as far as the walker is concerned, so its white ink is
+//     paired with both halves of the parent's `on ? bg-action-primary : bg-surface-card`
+//     — and reports white on white at 1.00:1, a combination nothing renders.
+//
+// Both are fixable and neither is this change. Until then the glyphs the `on-*` roles
+// paint are covered by the hand-written assertion at the bottom of this file, which is
+// what the term-surface pairing has always been: the shape a class scan cannot see.
 const INK = /(?:^|\s)(?:[\w-]+:)*text-([a-z]+(?:-[a-z]+)?)(?![\w/-])/g;
 const ROLE = /(?:^|\s)type-([a-z-]+)(?![\w-])/g;
 
@@ -377,4 +393,25 @@ test('every text-on-fill pairing the source paints clears its floor', () => {
 // twenty-four with no way to tell which of them were still real.
 test('term.text reads on the terminal surface it is written for', () => {
   expect(ratio('term-text', 'term')).toBeGreaterThanOrEqual(AA);
+});
+
+// The other shape the scan cannot see: ink painted with `stroke`/`fill`, and ink chosen
+// by an index (`roleTone(i).on`) rather than written as a class. Both are how the three
+// `on-*` roles are worn, so each is measured here against the fill it is actually worn
+// on — read off the sites, not off the tone's name.
+//
+// `on-success on success` is 3.37:1: the graphic floor, and it is a graphic — the five
+// wearers are all a check inside a filled circle. It does NOT clear the text floor, and
+// asserting that is the point: putting a WORD on `bg-success` is the mistake this line
+// exists to catch, and the tone already has `deep` for it.
+test('ink on a filled tone reads on the fill it is worn on', () => {
+  expect(ratio('on-success', 'success')).toBeGreaterThanOrEqual(NON_TEXT);
+  expect(ratio('on-success', 'success')).toBeLessThan(AA);
+  expect(ratio('on-success', 'success-deep')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-danger', 'danger')).toBeGreaterThanOrEqual(AA);
+  // Янтарный носится ТОЛЬКО на `deep`, и это не случайность: на базовом янтаре белый
+  // мерит 4.01:1, то есть под полом. Второе утверждение держит первое честным — оно
+  // ломается в тот день, когда кто-нибудь наденет `on-warning` на `bg-warning`.
+  expect(ratio('on-warning', 'warning-deep')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-warning', 'warning')).toBeLessThan(AA);
 });

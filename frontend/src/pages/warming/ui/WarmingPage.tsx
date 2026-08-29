@@ -588,7 +588,7 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <div>
+        <div className="flex flex-col gap-lg">
           <WarmingBoard
             warming={warming}
             onStop={(id) => {

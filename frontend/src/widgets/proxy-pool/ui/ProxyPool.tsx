@@ -79,7 +79,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   };
 
   return (
-    <Card className="mb-lg px-xl py-lg">
+    <Card className="px-xl py-lg">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div>
           <span className="type-card-title">{t('accounts.proxyPool.title')}</span>

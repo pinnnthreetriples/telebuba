@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { type NoticeTone, noticeTone } from '@/shared/design-system';
+import { type FeedbackTone, noticeTone } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The tinted block that explains something on the screen it explains: a failed
@@ -14,7 +14,8 @@ import { cn } from '@/shared/lib/cn';
 // action passes `role="alert"` itself.
 // Тон приходит из `recipes/feedback.ts` — того же набора, что у Badge. `neutral` здесь
 // намеренно недоступен: уведомление сообщает СМЫСЛ, и уведомление без смысла — это абзац,
-// для которого есть карточка. Тип `NoticeTone` этот запрет и выражает.
+// для которого есть карточка. Тип `FeedbackTone` этот запрет и выражает: `neutral` в него
+// не входит, и входить не может — это набор ТОНОВ СО СМЫСЛОМ, а плашка носит их плюс один.
 
 export function Notice({
   tone = 'info',
@@ -23,7 +24,7 @@ export function Notice({
   children,
   ...rest
 }: {
-  tone?: NoticeTone;
+  tone?: FeedbackTone;
   // The border is what separates a notice from the card behind it. It comes off
   // for the ones nested inside a panel that already has one.
   bordered?: boolean;

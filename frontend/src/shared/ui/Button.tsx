@@ -3,6 +3,8 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { buttonBase, type ControlShape, type ControlSize } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
+import { Spinner, type SpinnerTone } from './Spinner';
+
 // The app's text buttons, as the three shapes the design actually has and the four
 // fills it paints them with. Before this they were 98 hand-written class strings
 // across 72 distinct spellings, and the differences were rarely intentional: the
@@ -80,6 +82,16 @@ const VARIANT = {
     'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-action-hover',
 } as const;
 
+// Тон кольца ожидания — следствие заливки, а не второе решение вызывающего. `satisfies`, а
+// не аннотация: новая заливка без своего тона не компилируется.
+const SPINNER_TONE = {
+  primary: 'onAction',
+  secondary: 'default',
+  danger: 'danger',
+  ghost: 'default',
+  dashed: 'default',
+} satisfies Record<keyof typeof VARIANT, SpinnerTone>;
+
 export function Button({
   variant = 'secondary',
   size = 'md',
@@ -91,11 +103,14 @@ export function Button({
 }: {
   variant?: keyof typeof VARIANT;
   size?: keyof typeof SIZE;
-  // A request is in flight. The button reports it with `aria-busy` and stops taking
-  // clicks, and that is all: this app says "Сохраняю…" in the label while it waits,
-  // and a spinner next to that sentence would be the same fact told twice. Kept as
-  // its own prop rather than folded into `disabled` because a screen reader must
-  // hear the difference between "busy" and "off".
+  // Запрос в полёте — ОДНО состояние: кольцо перед содержимым, подпись на месте, клики не
+  // проходят, `aria-busy` объявлен. Отдельным пропом от `disabled`, потому что скринридер
+  // должен слышать разницу между «занято» и «выключено».
+  //
+  // Подпись — забота вызывающего: «Сохраняю…» вместо «Сохранить» это текст, а не
+  // состояние. Кольцо не подменяет её: доступное имя кнопки есть её содержимое, и кнопка,
+  // отдавшая подпись кольцу, на время запроса становится безымянной. Историю тринадцати
+  // рукописных сборок держит docs/design-system.md, гейт — `Button.test.tsx`.
   loading?: boolean;
   children?: ReactNode;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> & { className?: string }) {
@@ -107,6 +122,11 @@ export function Button({
       className={cn(
         buttonBase({ size: SIZE[size].size, shape: SIZE[size].shape }),
         'aria-busy:cursor-progress',
+        // Кольцу нужно больше воздуха, чем глифу: базовый зазор кнопки — `tight` (6px),
+        // и все тринадцать рукописных обёрток вокруг кольца ставили `gap-sm` (8px). Это
+        // решение, а не подгонка под прежнюю картинку, и оно живёт только на время
+        // ожидания — обычный зазор кнопки не меняется.
+        loading && 'gap-sm',
         SIZE[size].weight,
         SIZE[size].extra,
         VARIANT[variant],
@@ -114,6 +134,7 @@ export function Button({
       )}
       {...rest}
     >
+      {loading ? <Spinner tone={SPINNER_TONE[variant]} /> : null}
       {children}
     </button>
   );
