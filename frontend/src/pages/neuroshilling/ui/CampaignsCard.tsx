@@ -119,14 +119,9 @@ export function CampaignsCard({
           <Button variant="primary" size="sm" disabled={!createName.trim()} onClick={onCreate}>
             {t('neuroshilling.campaigns.confirm')}
           </Button>
-          <button
-            type="button"
-            aria-label={t('neuroshilling.campaigns.cancel')}
-            onClick={onCancelCreate}
-            className="shrink-0 rounded-full border border-line bg-surface-card px-md py-sm text-body text-content-muted"
-          >
+          <IconButton aria-label={t('neuroshilling.campaigns.cancel')} onClick={onCancelCreate}>
             ×
-          </button>
+          </IconButton>
         </div>
       ) : (
         <Button variant="dashed" size="block" className="mt-md" onClick={onStartCreate}>

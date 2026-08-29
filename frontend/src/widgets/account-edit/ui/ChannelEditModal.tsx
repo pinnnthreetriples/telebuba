@@ -15,7 +15,6 @@ import {
   Input,
   Modal,
   Notice,
-  Spinner,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -260,21 +259,14 @@ export function ChannelEditModal({
               )}
 
               <div className="flex items-center gap-sm">
-                <button
-                  type="button"
+                <Button
+                  size="sm"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-60"
+                  loading={setPhoto.isPending}
                 >
-                  {setPhoto.isPending ? (
-                    <span className="inline-flex items-center gap-sm">
-                      <Spinner />
-                      {t('accounts.channel.avatarUpload')}
-                    </span>
-                  ) : (
-                    t('accounts.channel.avatarUpload')
-                  )}
-                </button>
+                  {t('accounts.channel.avatarUpload')}
+                </Button>
                 <span className="flex-1" />
                 <Button
                   variant="primary"

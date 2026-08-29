@@ -26,34 +26,40 @@ test('is reachable by its accessible name and defaults to a non-submitting butto
   await expectNoAxeViolations(container);
 });
 
-test('size picks both the box and its shape, so `tile` is the only circle', () => {
+// Ступень задаёт КОРОБКУ, и только её. Форма раньше приходила из той же таблицы, с
+// объяснением на каждую ступень: `sm` — `rounded-sm`, `lg` — круг, `touch` — обратно
+// квадрат. Три объяснения на четыре ступени означали, что сменить размер иконочной кнопки
+// нельзя, не сменив её форму. Тест перебирает ВСЕ ступени, а не две: утверждение здесь —
+// «радиус один», и проверить его можно только на полном наборе.
+test('ступень задаёт коробку, а радиус у всех ступеней один', () => {
+  const boxes = { sm: 'size-chip', md: 'size-icon', lg: 'size-tile', touch: 'size-touch' } as const;
+
+  for (const [size, box] of Object.entries(boxes) as [keyof typeof boxes, string][]) {
+    const { unmount } = render(
+      <IconButton aria-label="a" size={size}>
+        <svg />
+      </IconButton>,
+    );
+    expect(screen.getByRole('button', { name: 'a' })).toHaveClass(box, 'rounded-md');
+    unmount();
+  }
+});
+
+// Круг — запрос, а не побочный эффект ступени.
+test('круг приходит только из shape', () => {
   const { rerender } = render(
-    <IconButton aria-label="a" size="sm">
-      <svg />
-    </IconButton>,
-  );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-chip', 'rounded-sm');
-
-  rerender(
-    <IconButton aria-label="a" size="md">
-      <svg />
-    </IconButton>,
-  );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-icon', 'rounded-md');
-
-  rerender(
     <IconButton aria-label="a" size="lg">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-tile', 'rounded-full');
+  expect(screen.getByRole('button', { name: 'a' })).not.toHaveClass('rounded-full');
 
   rerender(
-    <IconButton aria-label="a" size="touch">
+    <IconButton aria-label="a" size="lg" shape="circle">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('size-touch', 'rounded-md');
+  expect(screen.getByRole('button', { name: 'a' })).toHaveClass('rounded-full');
 });
 
 test('tone paints the hover, and neutral deliberately has none', () => {

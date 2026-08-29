@@ -8,7 +8,7 @@ import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { Card, FeedbackMark, Icon, IconButton } from '@/shared/ui';
+import { Button, Card, FeedbackMark, Icon, IconButton } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
@@ -320,16 +320,16 @@ function WarmingCard({
           {!complete ? (
             <>
               <FeedbackMark result={result} />
-              <button
-                type="button"
+              <Button
+                size="xs"
                 disabled={busy}
                 onClick={() => {
                   setStopOpen(true);
                 }}
-                className="rounded-full border border-line bg-surface-card px-md py-tight text-tiny font-medium text-content-muted disabled:opacity-50"
+                className="text-content-muted"
               >
                 {t('warming.actions.stopShort')}
-              </button>
+              </Button>
             </>
           ) : null}
         </div>
@@ -472,12 +472,12 @@ function WarmingCard({
             <div className="mt-md">
               {visibleLines.length > 0 ? (
                 <div className="mb-tight flex justify-end">
-                  <button
-                    type="button"
+                  <Button
+                    size="xs"
                     onClick={() => {
                       setClearedAt(Date.now());
                     }}
-                    className="inline-flex items-center gap-xs rounded-full border border-line px-sm py-hair text-tiny text-content-muted transition-colors hover:border-info-line hover:text-info-strong"
+                    className="bg-transparent text-content-muted hover:border-info-line hover:text-info-strong"
                   >
                     <svg
                       width="10"
@@ -492,7 +492,7 @@ function WarmingCard({
                       <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
                     </svg>
                     {t('warming.card.logClear')}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
               <div
@@ -561,13 +561,15 @@ function WarmingCard({
           </div>
           <div className="mt-md flex items-center gap-sm">
             <FeedbackMark result={result} />
-            <button
-              type="button"
+            <Button
+              variant="primary"
               disabled={busy}
               onClick={() => {
                 onPromote(account.account_id);
               }}
-              className="flex flex-1 items-center justify-center gap-sm rounded-full bg-success-deep px-lg py-md text-body font-semibold text-on-action transition-colors hover:bg-success-press disabled:opacity-50"
+              // Зелёная заливка — решение места вызова, как у пяти белых `danger`: у
+              // `VARIANT` нет залитого успеха, и одного носителя для имени мало.
+              className="flex-1 shrink gap-sm bg-success-deep hover:bg-success-press"
             >
               <svg
                 width="14"
@@ -583,7 +585,7 @@ function WarmingCard({
                 <path d="m12 5 7 7-7 7" />
               </svg>
               {t('warming.card.finish')}
-            </button>
+            </Button>
           </div>
         </>
       )}

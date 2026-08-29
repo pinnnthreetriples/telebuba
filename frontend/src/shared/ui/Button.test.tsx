@@ -4,13 +4,13 @@ import { expect, test, vi } from 'vitest';
 
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { Button } from './Button';
-import { elementBodies, tsxSources } from './sourceScan.test-helpers';
+import { elementBodies, lineAt, tsxSources, wornClasses } from './sourceScan.test-helpers';
 
 function classesOf(name: string): string {
   return screen.getByRole('button', { name }).className;
 }
 
-test('the shape comes from the size and the fill from the variant', async () => {
+test('the size sets height and padding, the variant the fill', async () => {
   const { container } = render(
     <>
       <Button>Отмена</Button>
@@ -43,7 +43,31 @@ test('the block rung spans its form and is not inline', () => {
   expect(classes).toContain('w-full');
   expect(classes).toContain('flex');
   expect(classes).not.toContain('inline-flex');
-  expect(classes).toContain('rounded-lg');
+});
+
+// Форма — не ступень размера, и это утверждение о ВСЕХ ступенях, поэтому они перебираются,
+// а не выбираются. Ступень решала форму: `md`/`sm` — пилюля, `xs` — `rounded-md`, `block` —
+// `rounded-lg`, — то есть «сделать кнопку меньше» означало «сделать её другой формы».
+// Утверждать это одной ступенью нельзя: следующая пришла бы со своим радиусом ровно так же.
+test('радиус у всех ступеней один, и ступень его не выбирает', () => {
+  render(
+    <>
+      <Button size="md">Первая</Button>
+      <Button size="sm">Вторая</Button>
+      <Button size="xs">Третья</Button>
+      <Button size="block">Четвёртая</Button>
+    </>,
+  );
+
+  for (const name of ['Первая', 'Вторая', 'Третья', 'Четвёртая']) {
+    const classes = classesOf(name).split(' ');
+    expect(classes).toContain('rounded-full');
+    // Прежние формы названы поимённо: неверная форма обычно приходит не «какой-то другой»,
+    // а одной из тех, что тут стояли.
+    expect(classes).not.toContain('rounded-lg');
+    expect(classes).not.toContain('rounded-md');
+    expect(classes).not.toContain('rounded-sm');
+  }
 });
 
 // `dashed` is a fill, so it has to compose with the rung rather than replace it —
@@ -205,6 +229,61 @@ test('тон кольца следует за заливкой кнопки', ()
 // `<Button>` собран из правильных ролей, он просто собран не там. Дефект от этого не
 // меньше: пока кольцо ставит вызывающий, тон выбирает он же, зазор набирает он же, и
 // «кольцо вместо подписи» остаётся возможным.
+// Гейт на пятое правило формы: обычная кнопка не собирается руками вне дизайн-системы.
+//
+// Признак выбран узкий и проверяемый — ПИЛЮЛЯ с горизонтальными полями. Пилюля с полями
+// это и есть коробка кнопки: круглые торцы и текст, отступивший от дуги. Ничем другим она
+// в приложении не бывает — круглые глифы (`size-chip rounded-full`) полей не носят, а
+// плитки, зоны сброса и триггеры списков носят `rounded-lg`.
+//
+// Что ловилось: 14 рукописных пилюль, и каждая заново решала высоту, поля, обводку фокуса,
+// прозрачность disabled и переход — те пять вещей, которые `buttonBase` и собрал. Две из
+// них были приглушёнными пунктирными добавителями, и их комментарии объясняли, почему они
+// НЕ `Button`; объяснение верное про заливку и неверное про коробку, поэтому заливка стала
+// `variant="dashedMuted"`, а коробка — общей.
+//
+// Проверяется `src` без `shared/ui`: внутри библиотеки пилюлю рисует ровно один файл, и это
+// `recipes/controls.ts`, за которым стоит `Button`.
+const PILL = /(?:^|\s)rounded-full(?![\w-])/;
+const PAD_X = /(?:^|\s)px-[\w[]/;
+
+// Проверка самой проверки: её обходили выносом строки в переменную, и это тот случай, где
+// «гейт зелёный» и «гейт не смотрит» выглядят одинаково. Фикстура, а не файл приложения —
+// утверждение о механизме, и оно должно ломаться, даже когда в приложении всё чисто.
+test('гейт видит класс, вынесенный в константу', () => {
+  const source = [
+    "const PILL = 'rounded-full border px-md';",
+    '<button type="button" className={PILL}>x</button>',
+  ].join('\n');
+  const worn = wornClasses(source, source.indexOf('<button'));
+
+  expect(worn).toContain('rounded-full');
+  expect(worn).toContain('px-md');
+});
+
+test('обычная кнопка не собирается руками вне дизайн-системы', () => {
+  const offenders: string[] = [];
+  let handWritten = 0;
+
+  for (const { path, source } of tsxSources()) {
+    if (path.startsWith('src/shared/ui/')) continue;
+    for (const hit of source.matchAll(/<button\b/g)) {
+      handWritten += 1;
+      const own = wornClasses(source, hit.index);
+      if (PILL.test(own) && PAD_X.test(own)) {
+        offenders.push(`${path}:${String(lineAt(source, hit.index))}`);
+      }
+    }
+  }
+
+  expect(offenders).toEqual([]);
+  // Рукописные `<button>` в приложении есть и останутся — это вкладки, радиокнопки,
+  // строки-мишени, зоны сброса и ссылки-кнопки. Утверждение не про их число, а про то, что
+  // ни одна из них не пилюля; если обход перестанет их находить, оно выполнится на пустом
+  // списке.
+  expect(handWritten).toBeGreaterThan(50);
+});
+
 test('ни один вызывающий не собирает кольцо внутри кнопки сам', () => {
   const offenders: string[] = [];
   let buttons = 0;
