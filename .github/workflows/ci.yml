@@ -386,7 +386,11 @@ jobs:
   # and a production build. Independent of the Python jobs.
   # ---------------------------------------------------------------------------
   frontend:
-    name: frontend (lint/boundaries/tsc/vitest/visual)
+    # Имя job'а — не подпись, а ИДЕНТИФИКАТОР: защита ветки требует контекст ровно с этим
+    # текстом. Переименование добавляло `/visual`, было честнее по смыслу и делало мерж
+    # невозможным — требуемый чек с прежним именем не отчитывался бы никогда. Визуальный
+    # гейт живёт в шагах ниже; название остаётся тем, на которое ссылается защита.
+    name: frontend (lint/boundaries/tsc/vitest)
     runs-on: ubuntu-latest
     # Observed 71-102s before the screenshot gate, which adds a Chromium download
     # (~90 MB, cached by setup-node's npm cache only for the package, not the
