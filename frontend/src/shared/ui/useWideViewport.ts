@@ -1,16 +1,17 @@
 import { type RefObject, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 
-// The width at which DataTable shows a table rather than cards. 880px is the table's
-// own minimum and the shell gives content viewport−48px (AppShell: mx-auto
-// max-w-shell px-lg/px-2xl), so 1024 is the narrowest viewport where a full-width
-// page table fits without horizontal scroll. Only a fallback since useWideContainer
-// below exists: a viewport query cannot see that the table's own box is narrower than
-// the viewport (a column, a modal).
-const WIDE_MQ = '(min-width: 1024px)';
+import { breakpoint } from '@/shared/design-system';
 
-// DataTable's own `min-w-table`: below this a table is only reachable by scrolling
-// sideways, which is exactly what the card layout replaces.
-const TABLE_MIN_WIDTH = 880;
+// Both numbers come from `breakpoint` in the token tree, which is also where Tailwind
+// reads its `screens`. They were written here as well until this change — 880 twice and
+// 1024 three times, counting Tailwind's own `lg` default that the app wears 27 times —
+// and a breakpoint that CSS and JavaScript each keep their own copy of is a layout that
+// can disagree with itself about which layout it is in.
+//
+// The viewport query is only the fallback: `useWideContainer` below is the exported
+// decision, because a viewport query cannot see that the table's own box is narrower than
+// the viewport (a column, a modal).
+const WIDE_MQ = `(min-width: ${String(breakpoint.wide)}px)`;
 
 function subscribe(onChange: () => void): () => void {
   const mql = window.matchMedia(WIDE_MQ);
@@ -64,5 +65,5 @@ export function useWideContainer(ref: RefObject<HTMLElement | null>): boolean {
       observer.disconnect();
     };
   }, [ref]);
-  return width > 0 ? width >= TABLE_MIN_WIDTH : viewportWide;
+  return width > 0 ? width >= breakpoint.table : viewportWide;
 }

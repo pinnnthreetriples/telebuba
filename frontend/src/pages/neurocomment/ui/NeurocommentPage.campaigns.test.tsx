@@ -29,13 +29,11 @@ test('selecting a campaign card marks it selected', async () => {
   await waitFor(() => {
     expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
   });
-  const card = screen
-    .getAllByText('Promo')
-    .map((node) => node.closest('[role="button"]'))
-    .find((node): node is HTMLElement => node !== null);
-  expect(card).toBeDefined();
-  await userEvent.click(card as HTMLElement);
-  expect((card as HTMLElement).className).toContain('border-primary');
+  // Выбор — настоящая кнопка с доступным именем кампании; карточка это её родитель.
+  const select = screen.getByRole('button', { name: 'Promo' });
+  await userEvent.click(select);
+  const card = select.parentElement as HTMLElement;
+  expect(card.className).toContain('border-action-primary');
   // sanity: status pill uses the active campaign-status key path
   within(card as HTMLElement).getByText('Активна');
 });
@@ -52,7 +50,7 @@ test('campaign edit-prompt saves and delete removes the campaign', async () => {
   // arbitrary first-readiness channel (`@news`). Both 'Promo's on the page wear the
   // caption role; the account subtitle is the one that does not recolour it.
   expect(
-    await screen.findByText('Promo', { selector: '.type-caption:not(.text-primary)' }),
+    await screen.findByText('Promo', { selector: '.type-caption:not(.text-action-primary)' }),
   ).toBeInTheDocument();
   await userEvent.click(await screen.findByText('Сохранить'));
   await waitFor(() => {

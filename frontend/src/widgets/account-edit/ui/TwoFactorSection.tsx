@@ -10,18 +10,18 @@ import {
 } from '@/entities/account';
 import type { AccountRead, AccountTwoFactorCreated } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, ConfirmModal, Notice, Textarea } from '@/shared/ui';
+import { Button, ConfirmModal, Notice, Spinner, Textarea } from '@/shared/ui';
 
 import { TwoFactorEmail } from './TwoFactorEmail';
 import { TwoFactorForm } from './TwoFactorForm';
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 
 // One live fact row inside the 2FA-on state.
 function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-md border-b border-line-row py-md">
       <span className="type-prose">{label}</span>
-      <span className="text-right type-label text-ink">{value}</span>
+      <span className="text-right type-label text-content-primary">{value}</span>
     </div>
   );
 }
@@ -172,11 +172,11 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
         }}
         right={
           twofa.isFetching ? (
-            <Spinner size={13} />
+            <Spinner />
           ) : (
             <span
               className={`shrink-0 rounded-full px-md py-xs text-tiny font-medium ${
-                hasPassword ? 'bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'
+                hasPassword ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'
               }`}
             >
               {/* No data and nothing in flight means nobody has asked Telegram yet
@@ -204,7 +204,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
         ) : null}
         {twofa.isPending ? (
           <div className="py-sm">
-            <Spinner size={16} />
+            <Spinner />
           </div>
         ) : created ? (
           <>
@@ -250,7 +250,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               rows={2}
               value={created.password}
               aria-label={t('accounts.edit.twofaNewPassword')}
-              className="mb-sm resize-none break-all font-mono text-ink"
+              className="mb-sm resize-none break-all font-mono text-content-primary"
             />
             {clipboard ? (
               <button
@@ -258,7 +258,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 onClick={() => {
                   copyPassword(created.password);
                 }}
-                className="mb-md w-full rounded-lg border border-line bg-white px-md py-md text-body font-medium text-ink-muted"
+                className="mb-md w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-medium text-content-muted"
               >
                 {copyState === 'done'
                   ? t('accounts.edit.twofaCopied')
@@ -302,7 +302,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               // sitting on disk that the card neither showed nor could clear —
               // every control that can do it lived in the `hasPassword` arm.
               <div className="mt-md">
-                <div className="border-b border-line-row py-md text-body font-medium text-ink-muted">
+                <div className="border-b border-line-row py-md text-body font-medium text-content-muted">
                   {t('accounts.edit.twofaStored')}
                 </div>
                 <div className="mt-md text-center">
@@ -364,7 +364,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 reachability: the row moved, it did not go. */}
             <div
               className={`border-b border-line-row py-md text-body font-medium ${
-                hasStored ? 'text-ink-muted' : 'text-danger'
+                hasStored ? 'text-content-muted' : 'text-danger'
               }`}
             >
               {hasStored ? t('accounts.edit.twofaStored') : t('accounts.edit.twofaNotStored')}

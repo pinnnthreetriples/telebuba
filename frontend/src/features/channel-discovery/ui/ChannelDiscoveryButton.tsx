@@ -6,8 +6,8 @@ import { ChannelDiscoveryModal } from './ChannelDiscoveryModal';
 // Same pill as the sibling "Проверить каналы" button in CampaignsCard, so the two
 // read as one control group.
 const PILL =
-  'shrink-0 rounded-full border border-line bg-white px-md py-xs text-tiny ' +
-  'font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary ' +
+  'shrink-0 rounded-full border border-line bg-surface-card px-md py-xs text-tiny ' +
+  'font-medium text-content-muted transition-colors hover:border-action-primary hover:text-action-primary ' +
   'disabled:opacity-50';
 
 type Props = {

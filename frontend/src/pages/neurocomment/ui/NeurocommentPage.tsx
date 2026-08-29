@@ -320,13 +320,21 @@ export function NeurocommentPage() {
   const idleCount = warmedAccounts.filter((a) => !linkedIds.has(a.account_id)).length;
 
   const stats: { label: string; value: number; color: string }[] = [
-    { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: 'text-ink' },
+    {
+      label: t('neurocomment.stat.campaigns'),
+      value: campaignList.length,
+      color: 'text-content-primary',
+    },
     {
       label: t('neurocomment.stat.channels'),
       value: runtime.data?.active_channels ?? boardChannels.length,
-      color: 'text-primary',
+      color: 'text-action-primary',
     },
-    { label: t('neurocomment.stat.accounts'), value: boardAccounts.length, color: 'text-ink' },
+    {
+      label: t('neurocomment.stat.accounts'),
+      value: boardAccounts.length,
+      color: 'text-content-primary',
+    },
     {
       label: t('neurocomment.stat.comments'),
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),

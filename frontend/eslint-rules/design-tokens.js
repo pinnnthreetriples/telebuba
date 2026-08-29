@@ -16,7 +16,10 @@
 //
 //   `bg-white` / `text-white` (213 sites) — white and black are the two colours a
 //   palette does not have to name. An alias would be a synonym rather than a role,
-//   and there is no second theme for it to point somewhere else in.
+//   and there is no second theme for it to point somewhere else in. They are rungs of
+//   `theme.colors` now rather than leftovers of Tailwind's palette underneath it, which
+//   is what makes them nameable at all: the palette REPLACES Tailwind's, so a colour the
+//   config does not carry does not compile.
 //
 //   an ALPHA modifier on white or black (13 sites) — `bg-white/85` under the nav bar's
 //   blur, `bg-white/70` over a photo grid mid-drag, `bg-black/55` over a story preview,
@@ -88,7 +91,7 @@
 //   `tracking-[…]` inside `shared/ui` (2 sites, DataTable's `TH` and `CARD_LABEL`) —
 //   the same `above` carve-out the type-role pattern makes, for the same reason:
 //   `shared/ui` is the layer allowed to compose primitives by hand. Both are
-//   `text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle`, which is
+//   `text-tiny font-medium uppercase tracking-[0.04em] text-content-subtle`, which is
 //   `type-eyebrow` exactly except for the weight — the role is 600 and these are 500.
 //   That is worth knowing and is NOT worth fixing here: moving them onto the role would
 //   change what a table header looks like in every table in the app, to make a role fit.
@@ -109,15 +112,34 @@
 // A test file is exempt too, and for the opposite reason: `cn.test.ts` and
 // `designTokenRule.test.ts` assert on the very spellings this bans, and a fixture is
 // data about the code rather than a decision inside it.
+import { colorRoots, scaleNames } from '../scripts/configScales.mjs';
+
+// The composition of every scale comes from `src/shared/design-system/tokens` — the same
+// objects `ds:dead`, the doc generator, `cn.ts` and Tailwind itself read. That is the
+// point: the gate that bans a value outside the scale and the gate that bans a scale rung
+// nobody wears can no longer disagree about what the scale IS.
+
 const NOT_A_CONSUMER = /(?:^|[\\/])src[\\/]shared[\\/]ui[\\/]|\.test\.tsx?$/;
+
+// The token modules themselves: the one place a raw value is the correct thing to write.
+const IS_THE_SYSTEM = /(?:^|[\\/])src[\\/]shared[\\/]design-system[\\/]tokens[\\/]/;
 
 // `hero` is left out on purpose. The config calls it "the one empty-state numeral" and
 // means it: one element in the whole app is 42px, WarmDaysModal's day count. A role
 // needs two wearers in two slices — a rung worn once is a literal with a name — so
 // there is no `type-*` for it to move onto, and flagging it would be asking for a
 // thirteenth role with nothing to defend it.
-const TYPE_RUNG = 'micro|tiny|body|lead|title|stat|display';
-const INK_RAMP = String.raw`text-ink(?:-(?:body|muted|subtle))?(?![\w-])`;
+//
+// The rest of the set is READ from the config rather than spelled here. It used to be
+// spelled, with the note that "a name that leaves this file is a rename the sweep has to
+// notice anyway" — which is true of a rename and false of an ADDITION, and an addition is
+// what actually happens: a ninth rung or a twelfth colour lands in the config, this list
+// does not grow, and the pattern below quietly stops covering it. A gate that goes green
+// by looking at less is the failure mode the design system's own gates exist to catch.
+const TYPE_RUNG = scaleNames('fontSize')
+  .filter((rung) => rung !== 'hero')
+  .join('|');
+const INK_RAMP = String.raw`text-content-(?:primary|secondary|muted|subtle)(?![\w-])`;
 
 // What this pattern deliberately does NOT reach, and why:
 //
@@ -157,9 +179,28 @@ const PAINTS_A_BOX = String.raw`(?:^|\s)(?:[\w-]+:)*(?:bg-|border(?![\w-])|borde
 const IS_A_CONTROL = String.raw`(?:^|\s)(?:hover|focus|focus-visible|focus-within|active|disabled|aria-[\w-]+|data-[\w-]+):|(?:^|\s)transition|(?:^|\s)cursor-`;
 const IS_A_GLYPH = String.raw`(?:^|\s)(?:leading-none|absolute|fixed)(?![\w-])`;
 
+// Tailwind's own palette, and the pattern it feeds changed job. While the app's colours
+// sat in `theme.extend`, `bg-blue-500` compiled and painted a blue nobody chose, and this
+// pattern was the only thing standing between the two palettes — inside `src`, outside a
+// test file. The palette is at `theme.colors` now, so the class emits NOTHING and the
+// element silently keeps what it inherited; the pattern stays for the reason
+// `RETIRED_LEADING` does, to name a class that does nothing rather than let it look right.
+//
+// A literal list rather than a read of the config, unlike `TOKEN` and `TYPE_RUNG`: these
+// are not this design system's names, and nothing in this repo renames them.
 const PALETTE =
   'slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
-const COLOUR = 'bg|text|border|ring|fill|stroke|from|to|via|divide|outline|decoration|caret|accent';
+// Направленные утилиты перечислены наравне с общими, и это не полнота ради полноты:
+// `border-white` правило видело, а `border-t-white` — нет, и кольцо ожидания красило дугу
+// именно им четыре раза. Направление — не другая краска.
+const COLOUR =
+  'bg|text|border|border-x|border-y|border-t|border-r|border-b|border-l|' +
+  'ring|ring-offset|fill|stroke|from|to|via|divide|divide-x|divide-y|' +
+  'outline|decoration|caret|accent|shadow|placeholder';
+// То же, за вычетом `stroke`/`fill`: см. паттерн голого `white`/`black` ниже.
+const BARE_INK = COLOUR.split('|')
+  .filter((prefix) => prefix !== 'stroke' && prefix !== 'fill')
+  .join('|');
 const SPACE = 'p|px|py|pt|pb|pl|pr|m|mx|my|mt|mb|ml|mr|gap|gap-x|gap-y|space-x|space-y';
 const DIMENSION = 'size|min-w|max-w|min-h|max-h|w|h';
 
@@ -173,7 +214,20 @@ const at = (body) => new RegExp(String.raw`(?:^|\s)(?:${body})`);
 // unknown `border-*` on an element that also carries `border` falls through to
 // preflight's own default, Tailwind's `gray-200`, three units from `line` and cool
 // where the app is warm. That one comes back looking right.
-const RETIRED = 'track|line-input|primary-wash|success-dot';
+const RETIRED =
+  'track|line-input|primary-wash|success-dot|' +
+  // The names the semantic pass retired. Listed for the reason the four above are: an
+  // unknown `bg-*` emits nothing and the element loses its fill, which a reviewer sees —
+  // but an unknown `border-*` on an element that also carries `border` falls through to
+  // preflight's own `gray-200`, three units from `line` and cool where the app is warm.
+  // That one comes back looking almost right.
+  //
+  // Each of these was one colour doing two jobs, which is why they went: `white` was a
+  // card's fill AND a filled button's label, `primary` was an action's fill AND a link's
+  // ink AND the dark blue that reads on a tint, `ink` was named after the material rather
+  // than the role.
+  'ink|ink-body|ink-muted|ink-subtle|' +
+  'primary|primary-press|primary-tint|primary-deep|primary-line|primary-hairline';
 
 // Tailwind's own line-height and letter-spacing names, which this config replaces
 // outright the way it replaced the type scale. They are listed rather than left to fail
@@ -186,11 +240,18 @@ const RETIRED_LEADING = '10|3|4|5|6|7|8|9|tight|snug|normal|relaxed|loose';
 const RETIRED_TRACKING = 'tighter|tight|normal|wide|wider|widest';
 
 // The palette's own names, as a class list spells them — the roots only, since a rung
-// (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. A
-// literal list rather than a read of the config, the same way `RETIRED` and `PALETTE`
-// are: this file has never imported the config, and a name that leaves it is a rename
-// the sweep has to notice anyway.
-const TOKEN = 'canvas|scrim|veil|surface|ink|line|primary|success|warning|danger|term';
+// (`primary-tint`, `ink-subtle`) is reached by the optional tail in the pattern. Read
+// from the config for the reason given at `TYPE_RUNG`.
+//
+// `white` and `black` come out: the pattern this feeds bans an alpha modifier on a named
+// colour, and alpha on those two is the documented exception — `border-black/5` on a
+// photograph, `bg-black/55` on a story tile. `transparent` and `current` come out because
+// an alpha on a keyword is not a colour the palette failed to name; it is nonsense that
+// emits nothing.
+const NOT_A_TINTABLE_COLOUR = new Set(['white', 'black', 'transparent', 'current']);
+const TOKEN = colorRoots()
+  .filter((name) => !NOT_A_TINTABLE_COLOUR.has(name))
+  .join('|');
 
 const PATTERNS = [
   {
@@ -199,9 +260,69 @@ const PATTERNS = [
       'That colour was collapsed into another one and no longer exists: `track` and `primary-wash` are `canvas` and `primary-tint`, `line-input` is `line`, `success-dot` is `success`. The unification ledger in docs/design-system.html carries the reason for each.',
   },
   {
+    // `bg-white` / `text-white` without an alpha: both were one class doing two jobs, and
+    // the split is the whole point of the semantic pass — a card's fill is
+    // `bg-surface-card`, a filled action's label is `text-on-action`, ink on the dark
+    // surface is `text-on-inverse`. WITH an alpha they stay legal: white at 85% under the
+    // nav's blur and white at 40% as a hairline on a photograph are the extreme of the
+    // range rather than a role, and there is no flat composite for them to be.
+    // Список приставок свой, а не `COLOUR`, и разница ровно в двух: `stroke` и `fill`.
+    //
+    // Свой прежний список знал `border-` и не знал `border-t-`, поэтому `border-t-white`
+    // проходил насквозь — им была набрана дуга кольца ожидания в четырёх местах. Это
+    // закрыто: направление не другая краска.
+    //
+    // А `stroke`/`fill` исключены с измеренной причиной, не по вкусу: `stroke-white`
+    // стоит в восьми местах, и это белая галочка на ЗАЛИТОМ контроле — тот же дефект,
+    // что был у кольца. Две из восьми на `bg-action-primary`, то есть `stroke-on-action`,
+    // и они исправлены. Остальные шесть — на `bg-success`, а роли «чернила на залитом
+    // тоне» в системе нет: `on-action` называет действие, и надеть его на успех значило
+    // бы соврать именем. Правильное имя фило-агностично (`on-fill`) и переименовывает
+    // роль в 14 местах — это отдельная правка, а не эта. Пока её нет, приставка
+    // исключена ЦЕЛИКОМ, а не заглушена шестью `eslint-disable`: правило, которое надо
+    // шесть раз подавить, чтобы оно прошло, — не правило.
+    test: at(String.raw`(?:${BARE_INK})-(?:white|black)(?![\w-/])`),
+    message:
+      'Bare `white`/`black` is a colour doing two jobs. A white surface is `bg-surface-card`; the label on a filled action is `text-on-action`; ink on the dark surface (a toast, a tooltip, a scrim over a photograph) is `text-on-inverse`; the muted ink ON a filled action (a waiting ring’s track) is `on-action-track`. An alpha form — `bg-white/85`, `border-black/5` — stays legal ONLY where what is behind it is a photograph or a scrolling page, so no flat composite exists for it to be: over a known flat fill the composite exists and has a name.',
+  },
+  {
+    // Индикатор фокуса краской ДЕЙСТВИЯ. `border.focus` был объявлен ступенью с самого
+    // начала и не доходил ни до одного класса: восемь контролов рисовали фокус через
+    // `outline-action-primary`, поэтому перекрасить кнопку означало перекрасить фокус.
+    // Значение у них одно и остаётся одним — разъединены имена, и это правило держит
+    // разъединение, потому что классы выглядят одинаково работающими.
+    test: at(
+      String.raw`focus(?:-visible|-within)?:(?:outline|border|shadow|ring)-action-(?:primary|hover|pressed)(?![\w-])`,
+    ),
+    message:
+      'A focus indicator painted with the ACTION colour ties the two together: recolouring the buttons would recolour the focus ring. They are one value and two decisions — use `outline-focus`, `border-focus` or `shadow-focus`.',
+  },
+  {
+    // Кольцо ожидания, собранное руками. Оно было собрано так семнадцать раз, и дорожка
+    // разошлась на два серых (`line` в семи местах, `line-strong` в пяти) — то есть
+    // повторение строки не осталось повторением. `tb-spin` САМ ПО СЕБЕ законен: им же
+    // крутится иконка обновления в ProfileModal, и это не кольцо. Ищется именно кольцо:
+    // анимация вместе с окрашенной верхней границей.
+    // Порядок классов в строке не гарантирован, поэтому совпадение с проверкой второй
+    // половины через опережение: `hit[0]` при этом остаётся осмысленным для сообщения.
+    test: /border-t-[a-z][\w-]*(?=[\s\S]*tb-spin)|tb-spin(?=[\s\S]*border-t-[a-z])/,
+    // Кроме самого компонента: он и есть то место, где кольцо собрано.
+    above: /[\\/]Spinner\.tsx$/,
+    message:
+      'A waiting ring assembled by hand. `Spinner` is the component: `size` is `sm`/`md`/`lg` and `tone` is `default`/`inverse`/`danger`. Seventeen copies of these classes drifted into two different track greys, and four call sites set the size in raw pixels 12–15px apart.',
+  },
+  {
+    // Брейкпоинт, которого нет. Шкала `screens` тоже закрыта — три ступени, которые
+    // приложение носит, — и `xl:`/`2xl:` теперь не выпускают НИ ОДНОГО правила: класс
+    // выглядит работающим и молчит. Ровно тот же дефект, что у палитры Tailwind рядом.
+    test: at(String.raw`(?:xl|2xl):[a-z]`),
+    message:
+      "The breakpoint scale is closed at three rungs — `sm` (640), `md` (768), `lg` (1024) — and `theme.screens` REPLACES Tailwind's, so `xl:`/`2xl:` emit no rule at all and the element silently keeps the layout it had. The numbers live in `breakpoint` in the token tree, which `useWideViewport.ts` reads too; add a rung there if the layout genuinely needs a fourth.",
+  },
+  {
     test: at(String.raw`(?:${COLOUR})-(?:${PALETTE})-\d{2,3}(?![\w-])`),
     message:
-      "Tailwind's own palette is not this app's. The config adds a named set beside it, so `bg-blue-500` would sit next to `bg-primary` and disagree with it by a shade nobody chose. Use the semantic colour.",
+      "Tailwind's own palette is not this app's, and the config no longer keeps it reachable: `theme.colors` REPLACES it, so this class emits no rule at all and the element silently keeps whatever colour it inherited. Use the semantic colour.",
   },
   {
     test: at(
@@ -284,7 +405,7 @@ const PATTERNS = [
         String.raw`|(?:^|\s)(?:[\w-]+:)*${INK_RAMP}[\s\S]*(?:^|\s)(?:[\w-]+:)*text-(?:${TYPE_RUNG})(?![\w-])`,
     ),
     message:
-      'A rung plus a grey is a role spelled out, and spelling it out is how one job came to have three spellings: the same small caption was written `ink-subtle` 53 times, `ink-muted` 13 times, and with no colour at all 9 times — three greys nobody chose between. Above `shared/ui` the page names the role instead: `type-page-title`, `type-dialog-title`, `type-dialog-body`, `type-card-title`, `type-item-title`, `type-eyebrow`, `type-label`, `type-value`, `type-prose`, `type-caption`, `type-meta`, `type-stat`. They are declared as `typeRole` in tailwind.config.ts, each with the one sentence it has to answer to. A role plus an override — `type-caption text-danger`, `type-meta font-bold` — is the intended way to say the same text in another colour or another weight.',
+      'A rung plus a grey is a role spelled out, and spelling it out is how one job came to have three spellings: the same small caption was written `content-subtle` 53 times, `content-muted` 13 times, and with no colour at all 9 times — three greys nobody chose between. Above `shared/ui` the page names the role instead: `type-page-title`, `type-dialog-title`, `type-dialog-body`, `type-card-title`, `type-item-title`, `type-eyebrow`, `type-label`, `type-value`, `type-prose`, `type-caption`, `type-meta`, `type-stat`. They are declared as `typeRole` in src/shared/design-system/tokens/typography.ts, each with the one sentence it has to answer to. A role plus an override — `type-caption text-danger`, `type-meta font-bold` — is the intended way to say the same text in another colour or another weight.',
   },
 ];
 
@@ -292,11 +413,18 @@ const PATTERNS = [
 const noRawValues = {
   meta: {
     type: 'problem',
-    docs: { description: 'Design values come from the Tailwind config, not from the call site.' },
+    docs: { description: 'Design values come from the design system, not from the call site.' },
     schema: [],
   },
   create(context) {
     const filename = context.filename ?? context.getFilename();
+    // The token modules are where a value is SUPPOSED to be written, so the whole rule is
+    // off inside them. Not a hole and not a suppression: this rule's proposition is "a
+    // value belongs to the design system, not to the call site", and these files are the
+    // design system. Exempting them is the same move as `NOT_A_CONSUMER` exempting
+    // `shared/ui` from the type-role pattern, one level down — and it is scoped to
+    // `tokens/`, not to `design-system/`, so a recipe next door still cannot write a hex.
+    if (IS_THE_SYSTEM.test(filename)) return {};
     const check = (node, text) => {
       if (typeof text !== 'string' || text.length === 0) return;
       for (const { test, message, above, unless } of PATTERNS) {

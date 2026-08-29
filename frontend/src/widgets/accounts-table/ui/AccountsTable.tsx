@@ -11,7 +11,7 @@ import {
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 import { cn, type FeedbackResult } from '@/shared/lib';
-import { Card, DataTable, type DataTableColumnMeta, Icon, StatusIcon } from '@/shared/ui';
+import { Card, DataTable, Icon, Spinner, StatusIcon, type DataTableColumnMeta } from '@/shared/ui';
 
 interface AccountsTableProps {
   data: AccountRead[];
@@ -27,7 +27,7 @@ interface AccountsTableProps {
 }
 
 const ACTION_BTN =
-  'flex size-icon items-center justify-center rounded-full border border-line bg-white disabled:opacity-50';
+  'flex size-icon items-center justify-center rounded-full border border-line bg-surface-card disabled:opacity-50';
 
 // The check button wears its own verdict (repo rule: every mutation ends in a
 // green check or a red cross), so the ✓/✗ lands where the click did. A busy row
@@ -35,16 +35,16 @@ const ACTION_BTN =
 // a second click inside the flash window would otherwise spin on the previous
 // verdict's fill — the old answer asserted over an unresolved check.
 const CHECK_BTN: Record<FeedbackResult | 'idle', string> = {
-  idle: 'text-ink-muted',
-  ok: 'border-success bg-success-deep text-white',
-  err: 'border-danger bg-danger text-white',
+  idle: 'text-content-muted',
+  ok: 'border-success bg-success-deep text-on-action',
+  err: 'border-danger bg-danger text-on-action',
 };
 
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
-  active: 'bg-primary-tint text-primary-deep',
+  active: 'bg-info-tint text-info-strong',
   spam: 'bg-warning-tint text-warning-deep',
-  code: 'bg-canvas text-ink-muted',
+  code: 'bg-canvas text-content-muted',
   banned: 'bg-danger-tint text-danger-deep',
 };
 
@@ -211,11 +211,11 @@ export function AccountsTable({
                 onCheck(account.account_id);
               }}
               // `cn`, not a template string, and this is the one button here that
-              // needs it: `ACTION_BTN` paints `bg-white` and a verdict paints over
+              // needs it: `ACTION_BTN` paints `bg-surface-card` and a verdict paints over
               // it, which is the same utility group at the same specificity — so
               // the winner is decided by the order the two rules sit in the
               // stylesheet, not by which was written last. Tailwind emits colours
-              // alphabetically, `.bg-white` lands after `.bg-success-deep` and
+              // alphabetically, `.bg-surface-card` lands after `.bg-success-deep` and
               // `.bg-danger`, and both verdicts lost their fill while keeping
               // `text-white`: a white glyph on a white circle, for every check this
               // table has ever run. tailwind-merge drops the loser instead.
@@ -226,7 +226,7 @@ export function AccountsTable({
               )}
             >
               {busy ? (
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line-strong border-t-primary" />
+                <Spinner />
               ) : checked ? (
                 // Named, not colour-only: the fill and the glyph say nothing to a
                 // screen reader, and `title` stays the constant action label.
@@ -250,7 +250,7 @@ export function AccountsTable({
                 event.stopPropagation();
                 (onProfile ?? onOpen)?.(account);
               }}
-              className={`${ACTION_BTN} text-ink-muted hover:border-primary-line hover:text-primary`}
+              className={`${ACTION_BTN} text-content-muted hover:border-info-line hover:text-action-primary`}
             >
               <Icon name="pencil" size={14} />
             </button>
@@ -262,7 +262,7 @@ export function AccountsTable({
                 event.stopPropagation();
                 onDelete(account.account_id);
               }}
-              className={`${ACTION_BTN} text-ink-subtle hover:border-danger-line hover:text-danger`}
+              className={`${ACTION_BTN} text-content-subtle hover:border-danger-line hover:text-danger`}
             >
               <Icon name="trash" size={14} />
             </button>

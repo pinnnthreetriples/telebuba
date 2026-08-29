@@ -18,6 +18,7 @@ export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedOption } from './SegmentedControl';
 export { Select } from './Select';
 export type { SelectOption } from './Select';
+export { Spinner } from './Spinner';
 export { StatusIcon } from './StatusIcon';
 export { SurfHover } from './SurfHover';
 export { Switch } from './Switch';

@@ -1,5 +1,8 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
+import { FOCUS_RING } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
+
 // The bordered white chip that carries an icon or a single glyph, in the four
 // sizes the design actually uses. Shape follows size and is not a separate knob:
 // the small ones are squares (a 22px circle reads as a dot beside 13px text),
@@ -21,20 +24,25 @@ const SIZE = {
 // has no hover state: it is the close/step glyph the design leaves inert, and
 // giving it one would make every modal header twitch on the way past.
 const TONE = {
-  neutral: 'text-ink-muted',
+  neutral: 'text-content-muted',
   primary:
-    'text-ink-subtle hover:border-primary-line hover:bg-primary-tint hover:text-primary-deep',
-  danger: 'text-ink-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
+    'text-content-subtle hover:border-info-line hover:bg-action-hover hover:text-info-strong',
+  danger:
+    'text-content-subtle hover:border-danger-line hover:bg-danger-tint hover:text-danger-deep',
 } as const;
 
-// The same outline ring `Button` wears. This component never set a focus style at
-// all, so it kept the browser's — which was legible, but differed per browser and per
-// platform, and was the only control in the library not drawing its own.
+// The same outline ring `Button` wears, and now literally the same string: `FOCUS_RING`
+// comes from the control recipe instead of being spelled out here. This component never
+// set a focus style at all, so it kept the browser's — which was legible, but differed per
+// browser and per platform, and was the only control in the library not drawing its own.
 //
-// `className` is appended, not merged: there is no tailwind-merge here (it would
-// pull shared/ui → shared/lib → the query barrel), so callers pass extras that do
-// not collide with the base — glyph size, a nudge margin, a breakpoint's display —
-// and reach for `size`/`tone` for anything the base already owns.
+// `className` is MERGED through `cn`, not appended. It used to be appended, under a note
+// saying tailwind-merge would pull `shared/ui → shared/lib → the query barrel` — and that
+// was true only of the barrel: `@/shared/lib/cn` is a leaf module, which `Card` and
+// `FormField` had already been importing directly. Appending is not a smaller version of
+// merging, it is a different outcome: two conflicting utilities both survive into the
+// class list and the winner is decided by the order Tailwind happens to emit them in, not
+// by the caller. A caller's override losing to the base is invisible until it matters.
 export function IconButton({
   size = 'md',
   tone = 'neutral',
@@ -55,7 +63,13 @@ export function IconButton({
     <button
       type="button"
       {...rest}
-      className={`inline-flex shrink-0 items-center justify-center border border-line bg-white transition-colors disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${SIZE[size]} ${TONE[tone]} ${className}`}
+      className={cn(
+        'inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition-colors disabled:opacity-50',
+        FOCUS_RING,
+        SIZE[size],
+        TONE[tone],
+        className,
+      )}
     >
       {children}
     </button>

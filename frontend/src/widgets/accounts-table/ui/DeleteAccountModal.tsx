@@ -14,11 +14,7 @@ export function DeleteAccountModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal
-      onClose={onClose}
-      className="w-confirm"
-      label={t('accounts.deleteModal.title', { phone })}
-    >
+    <Modal onClose={onClose} size="confirm" label={t('accounts.deleteModal.title', { phone })}>
       <div className="p-2xl">
         <div className="mb-sm type-dialog-title">{t('accounts.deleteModal.title', { phone })}</div>
         <div className="mb-2xl type-dialog-body">{t('accounts.deleteModal.body')}</div>

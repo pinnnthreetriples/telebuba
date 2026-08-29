@@ -29,6 +29,7 @@ import {
   Input,
   Modal,
   Notice,
+  Spinner,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -115,7 +116,7 @@ const REFRESH_LOOK = {
     path: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16',
     stroke: '2',
     labelKey: 'accounts.profile.refresh',
-    border: 'border-line text-ink hover:border-primary-line hover:text-primary',
+    border: 'border-line text-content-primary hover:border-info-line hover:text-action-primary',
   },
   ok: {
     path: 'M20 6 9 17l-5-5',
@@ -612,7 +613,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const tabBtn = (value: Tab): string =>
-    `shrink-0 whitespace-nowrap border-b-2 py-lg text-lead font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
+    `shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${tab === value ? 'border-action-primary text-content-primary' : 'border-transparent text-content-muted'}`;
 
   // The other half of the ARIA tabs pattern (the roles landed with the tablist):
   // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
@@ -639,7 +640,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     <>
       <Modal
         onClose={requestClose}
-        className="w-panel"
+        size="panel"
         // A fixed name, unlike the visible heading below it — the same choice as
         // ChannelEditModal. `fullName` flips once the live snapshot lands, and again
         // after a rename saves, and an ARIA name change while a dialog is open is
@@ -656,7 +657,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 the same reason as the media tiles in `_profileShared`. */}
             <div
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: two decorative stops, single-use by design
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-white"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-on-inverse"
               style={
                 avatarUri
                   ? {
@@ -686,7 +687,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 onClick={() => {
                   void onRefresh();
                 }}
-                className={`inline-flex items-center gap-sm rounded-full border bg-white px-md py-tight text-body font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
+                className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
               >
                 <span
                   className={`inline-flex ${
@@ -776,12 +777,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 role="status"
                 aria-live="polite"
                 aria-label={t('accounts.profile.syncing')}
-                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 [animation:ovfade_0.2s_ease]"
+                className="absolute inset-0 z-raised flex flex-col items-center justify-center gap-md bg-black/10 tb-ovfade"
               >
                 {/* `line-strong`, not the default line: this ring sits on the modal's own
                     `bg-black/10` scrim, which composites within a unit of `line` — the
                     unlit half disappeared into it and left a bare blue arc. */}
-                <span className="tb-spin inline-block size-tile rounded-full border-[3px] border-line-strong border-t-primary" />
+                <Spinner size="lg" />
                 <span className="type-label">
                   {photoProgress
                     ? t('accounts.profile.uploadingCount', photoProgress)
@@ -795,7 +796,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 <Button
                   size="xs"
                   variant="danger"
-                  className="bg-white"
+                  className="bg-surface-card"
                   disabled={refreshState === 'loading' || syncing}
                   onClick={() => {
                     void onRefresh();
@@ -819,7 +820,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.username')}>
                       <div className="relative flex items-center">
-                        <span className="absolute left-lg text-lead text-ink-subtle">@</span>
+                        <span className="absolute left-lg text-body text-content-subtle">@</span>
                         <Input
                           className="pl-page"
                           value={field.state.value}
@@ -1025,7 +1026,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             >
               {updateProfile.isPending ? (
                 <span className="inline-flex items-center gap-sm">
-                  <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                  <Spinner tone="onAction" />
                   {t('accounts.profile.saving')}
                 </span>
               ) : saved ? (

@@ -36,13 +36,13 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       <button
         type="button"
         onClick={onBack}
-        className="mb-lg inline-flex items-center gap-sm bg-transparent p-0 text-lead font-medium text-ink-muted hover:text-ink"
+        className="mb-lg inline-flex items-center gap-sm bg-transparent p-0 text-body font-medium text-content-muted hover:text-content-primary"
       >
         ← {t('accounts.edit.back')}
       </button>
 
       <Card className="mb-lg flex flex-wrap items-center gap-lg px-xl py-xl">
-        <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-primary-tint text-title font-semibold text-primary-deep">
+        <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-title font-semibold text-info-strong">
           {mono(account)}
         </div>
         <div className="min-w-col flex-1">

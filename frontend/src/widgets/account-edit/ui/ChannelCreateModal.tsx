@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, IconButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
+import { Button, IconButton, Input, Modal, Notice, Spinner, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -192,7 +192,7 @@ export function ChannelCreateModal({
       ? 'text-success-deep'
       : usernameHint?.tone === 'error'
         ? 'text-danger'
-        : 'text-ink-subtle';
+        : 'text-content-subtle';
 
   return (
     // Escape / backdrop-click route through Modal's onClose — locked while the
@@ -200,7 +200,7 @@ export function ChannelCreateModal({
     // both the list refresh and the editor hand-off).
     <Modal
       onClose={busy ? () => undefined : onClose}
-      className="w-form"
+      size="form"
       label={t('accounts.channel.createTitle')}
     >
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
@@ -266,7 +266,7 @@ export function ChannelCreateModal({
           <label className="mb-lg block">
             <span className={LABEL}>{t('accounts.channel.usernameLabel')}</span>
             <div className="relative flex items-center">
-              <span className="absolute left-lg text-lead text-ink-subtle">@</span>
+              <span className="absolute left-lg text-body text-content-subtle">@</span>
               <Input
                 className="pl-page"
                 value={username}
@@ -308,7 +308,7 @@ export function ChannelCreateModal({
               t('accounts.channel.edit')
             ) : busy ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                <Spinner tone="onAction" />
                 {t('accounts.channel.creating')}
               </span>
             ) : (

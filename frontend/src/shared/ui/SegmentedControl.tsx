@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
 
+import { FOCUS_RING, surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // One row of mutually exclusive options, exactly one of them filled. Fourteen sites
@@ -31,12 +32,12 @@ import { cn } from '@/shared/lib/cn';
 const WRAP = {
   // The inset tray: a sunken grey groove the options sit in, active one raised out of
   // it. Six wearers, all of them a full-width row inside a modal or a card section.
-  tray: 'flex gap-tight rounded-lg bg-canvas p-xs',
+  tray: `flex gap-tight p-xs ${surface('inset')}`,
   // The same idea drawn as a stadium and sized by its labels, for the trays that sit
   // inline at the end of a row rather than spanning it. Its active segment is filled
   // blue instead of raised white — `shadow-pill` is the token for exactly that, "the
   // sliding pill of a segmented tab strip".
-  pill: 'inline-flex rounded-full border border-line bg-white p-xs',
+  pill: 'inline-flex rounded-full border border-line bg-surface-card p-xs',
   // No tray at all: each option is its own outlined box, and the active one is tinted
   // rather than lifted. Five wearers.
   outline: 'flex gap-sm',
@@ -49,15 +50,16 @@ const SEG = {
 } as const;
 
 const ON = {
-  tray: 'bg-white text-ink shadow-seg',
-  pill: 'bg-primary text-white shadow-pill',
-  outline: 'border-primary bg-primary-tint text-primary-deep',
+  tray: 'bg-surface-card text-content-primary shadow-seg',
+  pill: 'bg-action-primary text-on-action shadow-pill',
+  outline: 'border-action-primary bg-info-tint text-info-strong',
 } as const;
 
 const OFF = {
-  tray: 'text-ink-muted',
-  pill: 'text-ink-muted',
-  outline: 'border-line bg-white text-ink-muted hover:border-line-strong hover:bg-surface',
+  tray: 'text-content-muted',
+  pill: 'text-content-muted',
+  outline:
+    'border-line bg-surface-card text-content-muted hover:border-line-strong hover:bg-surface',
 } as const;
 
 // `group relative` is for the one wearer whose option carries a HintBubble (the
@@ -76,8 +78,7 @@ const OFF = {
 // beside it so the browser's own ring was discarded too. `Button` and `IconButton` moved
 // to this outline; `shadow-focus` keeps its job on the fields, where it is a glow beside
 // a border that goes `primary` and carries the indication on its own.
-const BASE =
-  'group relative transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-60';
+const BASE = cn('group relative transition-colors duration-state disabled:opacity-60', FOCUS_RING);
 
 export type SegmentedOption<T extends string> = {
   value: T;

@@ -1,5 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
+import { fieldBase, surface } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
+
 import { Icon } from './Icon';
 
 export type SelectOption = { value: string; label: string; disabled?: boolean };
@@ -8,10 +11,20 @@ export type SelectOption = { value: string; label: string; disabled?: boolean };
 // painted by the OS — its own font, border and arrow — so next to a design-system
 // input in the same dialog it reads as a different application; the six sites that
 // needed this each grew their own panel instead, with their own literal shadow.
-const TRIGGER =
-  'flex w-full items-center justify-between gap-sm rounded-lg border bg-white px-lg py-md text-left text-lead text-ink outline-none hover:border-line-strong focus-visible:border-primary focus-visible:shadow-focus disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-ink-subtle';
+// Триггер — то же поле, что у Input: высота, поля, рунг, форма и фокус приходят из
+// `recipes/controls.ts`. До этого он стоял на `px-lg py-md` против `px-md py-md` у
+// Input — четыре пикселя, которых никто не выбирал, — и был на 5px выше кнопки рядом.
+//
+// Гашение своё: недоступный ВЫБОР остаётся читаемым (в нём написано выбранное значение),
+// поэтому он гасится заливкой и краской, а не прозрачностью, как кнопка.
+const TRIGGER = cn(
+  fieldBase({ size: 'md' }),
+  'flex items-center justify-between gap-sm text-left text-content-primary',
+  'border-line hover:border-line-strong focus-visible:border-focus focus-visible:shadow-focus',
+  'disabled:cursor-default disabled:border-line disabled:bg-surface disabled:text-content-subtle',
+);
 const OPTION =
-  'flex w-full items-center justify-between gap-sm rounded-sm border-none px-md py-sm text-left text-body hover:bg-primary-tint disabled:text-ink-subtle';
+  'flex w-full items-center justify-between gap-sm rounded-sm border-none px-md py-sm text-left text-body hover:bg-action-hover disabled:text-content-subtle';
 
 export function Select({
   value,
@@ -147,12 +160,12 @@ export function Select({
           if (open) setOpen(false);
           else openList();
         }}
-        className={`${TRIGGER} ${open ? 'border-primary' : 'border-line'}`}
+        className={`${TRIGGER} ${open ? 'border-action-primary' : 'border-line'}`}
       >
-        <span className={`min-w-0 truncate ${current ? '' : 'text-ink-subtle'}`}>
+        <span className={`min-w-0 truncate ${current ? '' : 'text-content-subtle'}`}>
           {current?.label ?? placeholder}
         </span>
-        <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
+        <span className={`tb-ddchev flex shrink-0 text-content-subtle ${open ? 'open' : ''}`}>
           <Icon name="chevron-down" size={16} />
         </span>
       </button>
@@ -165,10 +178,14 @@ export function Select({
         // of a Modal's focusable list froze its Tab trap. `inert` is the real thing
         // and, unlike `hidden`, keeps the open/close transition.
         inert={!open}
-        className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop rounded-lg border border-line bg-white p-xs shadow-pop ${open ? 'open' : ''}`}
+        className={cn(
+          'tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop p-xs',
+          surface('panel'),
+          open && 'open',
+        )}
       >
         {options.length === 0 ? (
-          <div className="px-md py-sm text-body text-ink-subtle">{emptyLabel}</div>
+          <div className="px-md py-sm text-body text-content-subtle">{emptyLabel}</div>
         ) : (
           options.map((option, index) => (
             <button
@@ -189,8 +206,8 @@ export function Select({
                 onChange(option.value);
                 setOpen(false);
               }}
-              className={`${OPTION} ${option.value === value ? 'font-medium text-primary-deep' : 'text-ink'} ${
-                open && index === active ? 'bg-primary-tint' : ''
+              className={`${OPTION} ${option.value === value ? 'font-medium text-info-strong' : 'text-content-primary'} ${
+                open && index === active ? 'bg-info-tint' : ''
               }`}
             >
               <span className="min-w-0 truncate">{option.label}</span>

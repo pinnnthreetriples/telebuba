@@ -382,15 +382,21 @@ jobs:
   # ---------------------------------------------------------------------------
   # frontend — the React SPA's own gate set (per the FSD ADR): Steiger boundary
   # lint + ESLint + Prettier + tsc --strict + the design-system doc check +
-  # Vitest (80% floor), then a production build. Independent of the Python jobs.
+  # the dead-token check + Vitest (80% floor), then the design-system screenshots
+  # and a production build. Independent of the Python jobs.
   # ---------------------------------------------------------------------------
   frontend:
+    # Имя job'а — не подпись, а ИДЕНТИФИКАТОР: защита ветки требует контекст ровно с этим
+    # текстом. Переименование добавляло `/visual`, было честнее по смыслу и делало мерж
+    # невозможным — требуемый чек с прежним именем не отчитывался бы никогда. Визуальный
+    # гейт живёт в шагах ниже; название остаётся тем, на которое ссылается защита.
     name: frontend (lint/boundaries/tsc/vitest)
     runs-on: ubuntu-latest
-    # Observed 71-102s — the second-slowest job here, and the one with the most
-    # steps that can wedge (npm ci, Steiger, tsc, vitest, the production build).
-    # Ten minutes is ~6x its worst run.
-    timeout-minutes: 10
+    # Observed 71-102s before the screenshot gate, which adds a Chromium download
+    # (~90 MB, cached by setup-node's npm cache only for the package, not the
+    # browser) plus a Vite dev server and 12 Playwright checks. Fifteen minutes
+    # keeps the same ~6x headroom over the worst observed run.
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: frontend
@@ -409,6 +415,53 @@ jobs:
 
       - name: Gates (boundaries + eslint + prettier + tsc + design-system doc + vitest)
         run: npm run gates
+
+      # Chromium only, and only the headless shell: the screenshots compare the
+      # catalog against ITSELF, so a second engine adds a second set of baselines
+      # and no answer to the question the gate asks.
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps --only-shell chromium
+
+      # The design system's visual gate: one check per catalog section and per app
+      # screen, each at two widths. No count is written here on purpose — the specs
+      # are the count, and a number in a comment is the same hand-maintained duplicate
+      # the tokens themselves were built to remove. It is what makes "a token moved and
+      # nothing else did" a provable claim rather than an assertion — the baselines live
+      # in frontend/e2e/__screenshots__/ and are reviewed like code.
+      - name: Design-system screenshots
+        run: npm run visual
+
+      # Baselines are scoped by PLATFORM (font rasterisation differs — the same button
+      # measures 126px on Windows and 125px here), so the Linux set can only be
+      # produced by a Linux run, and the run that fails is the one that has to hand it
+      # over. It did not, for two reasons, and both are fixed here.
+      #
+      # First: Playwright rewrites a baseline only when asked. On a plain failure it
+      # writes `<name>-actual.png` into the output dir and leaves the baseline alone —
+      # so the artifact carried the OLD baselines, byte for byte, and the documented
+      # procedure «take the generated ones from CI» could never have worked. Hence the
+      # forced rewrite below: it runs only after a failure, and it produces files that
+      # are committable as they are.
+      #
+      # Second: `actions/upload-artifact` silently drops paths whose component starts
+      # with a dot, and the diffs live in `e2e/.artifacts/`. Nothing said so — the
+      # upload reported success with that half missing. `include-hidden-files` is what
+      # keeps the diffs in.
+      - name: Regenerate the Linux baselines for the failure artifact
+        if: failure()
+        working-directory: frontend
+        run: npx playwright test --update-snapshots=all || true
+
+      - name: Upload screenshot diffs and generated baselines
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: design-system-screenshots
+          include-hidden-files: true
+          path: |
+            frontend/e2e/.artifacts/
+            frontend/e2e/__screenshots__/linux/
+          retention-days: 7
 
       - name: Build
         run: npm run build

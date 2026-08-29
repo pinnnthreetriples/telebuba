@@ -25,7 +25,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
+      <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );
@@ -46,7 +46,7 @@ export function MusicTab({
               key={track.file_id}
               className="flex items-center gap-lg rounded-lg border border-line px-lg py-md"
             >
-              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-primary text-white">
+              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M8 5v14l11-7z" />
                 </svg>
@@ -74,7 +74,7 @@ export function MusicTab({
           ))}
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
           {t('accounts.profile.noMusic')}
         </div>
       )}

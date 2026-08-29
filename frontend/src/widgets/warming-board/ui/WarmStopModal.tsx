@@ -17,7 +17,7 @@ export function WarmStopModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} className="w-form" label={t('warming.stopModal.title')}>
+    <Modal onClose={onClose} size="form" label={t('warming.stopModal.title')}>
       <div className="p-2xl">
         <div className="mb-sm type-dialog-title">{t('warming.stopModal.title')}</div>
         <div className="mb-2xl type-dialog-body">{t('warming.stopModal.body', { phone })}</div>
@@ -43,7 +43,7 @@ export function WarmStopModal({
               border, the ink and the states; the resting fill is the override. */}
           <Button
             variant="danger"
-            className="flex-1 bg-white hover:border-danger-line hover:bg-danger-tint"
+            className="flex-1 bg-surface-card hover:border-danger-line hover:bg-danger-tint"
             onClick={() => {
               onStop();
               onClose();

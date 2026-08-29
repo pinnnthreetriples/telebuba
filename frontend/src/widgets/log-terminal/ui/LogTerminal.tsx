@@ -55,7 +55,7 @@ function LogLine({
           onClick={() => {
             onPickAccount(accountId);
           }}
-          className="w-stamp shrink-0 truncate text-left text-term-text hover:text-white hover:underline"
+          className="w-stamp shrink-0 truncate text-left text-term-text hover:text-on-inverse hover:underline"
         >
           {account}
         </button>
@@ -121,7 +121,7 @@ export function LogTerminal({
               onClick={() => {
                 setOnlyAccount(null);
               }}
-              className="rounded-full bg-primary-tint px-sm py-hair text-tiny font-medium text-primary-deep hover:bg-danger-tint hover:text-danger-deep"
+              className="rounded-full bg-info-tint px-sm py-hair text-tiny font-medium text-info-strong hover:bg-danger-tint hover:text-danger-deep"
             >
               {t('logTerminal.filteredBy', {
                 name: accountName?.(onlyAccount) ?? onlyAccount,
@@ -143,9 +143,9 @@ export function LogTerminal({
       }
       header={
         <>
-          <span className="pl-pulse size-dot shrink-0 rounded-full bg-primary" />
+          <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
           <span className="type-card-title">{title}</span>
-          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-ink-muted">
+          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-content-muted">
             {shown.length}
           </span>
         </>

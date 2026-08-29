@@ -28,7 +28,7 @@ export function CaptchaSolverCard({
     <Card className="">
       <div className="flex items-center justify-between gap-md px-lg py-md">
         <div className="flex min-w-0 items-center gap-md">
-          <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+          <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
             <svg
               width="15"
               height="15"
@@ -50,7 +50,7 @@ export function CaptchaSolverCard({
                 <span
                   tabIndex={0}
                   aria-describedby={tipId}
-                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-white text-micro font-bold text-ink-subtle"
+                  className="inline-flex size-glyph cursor-help items-center justify-center rounded-full border border-line bg-surface-card text-tiny font-bold text-content-subtle"
                 >
                   ?
                 </span>
@@ -64,7 +64,7 @@ export function CaptchaSolverCard({
                 </span>
               </span>
             </div>
-            <div className="type-meta">{t('neurocomment.captcha.sub')}</div>
+            <div className="type-caption">{t('neurocomment.captcha.sub')}</div>
           </div>
         </div>
         <Switch

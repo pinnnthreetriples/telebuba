@@ -54,12 +54,12 @@ export function PipelineCard({
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
-    <div className="rounded-card border border-primary-hairline bg-primary-tint px-xl py-lg text-ink">
+    <div className="rounded-card border border-info-hairline bg-info-tint px-xl py-lg text-content-primary">
       <div className="mb-lg flex flex-wrap items-center justify-between gap-md">
         <div className="flex items-center gap-md">
           <span className="type-card-title">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
+            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -69,7 +69,7 @@ export function PipelineCard({
           size="sm"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`gap-sm ${running ? 'bg-ink hover:bg-ink' : ''}`}
+          className={`gap-sm ${running ? 'bg-content-primary hover:bg-content-primary' : ''}`}
         >
           {running ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}
@@ -86,7 +86,7 @@ export function PipelineCard({
           with nothing to fail. */}
       <div className="relative mb-md">
         <div
-          className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-primary-line"
+          className="absolute top-[8px] h-rail overflow-hidden rounded-[2px] bg-info-line"
           style={{ left: `${String(railInset)}%`, right: `${String(railInset)}%` }}
         >
           <div
@@ -94,7 +94,7 @@ export function PipelineCard({
             style={{ width: `${String(greenPct)}%` }}
           />
           <div
-            className="absolute left-0 top-0 h-full rounded-[2px] bg-primary transition-[width] duration-roll ease-out"
+            className="absolute left-0 top-0 h-full rounded-[2px] bg-action-primary transition-[width] duration-roll ease-out"
             style={{ width: `${String(bluePct)}%` }}
           />
         </div>
@@ -107,9 +107,9 @@ export function PipelineCard({
                     <Icon name="check" size={10} className="stroke-white" />
                   </span>
                 ) : index === activeCell ? (
-                  <span className="tb-livedot size-node rounded-full bg-primary" />
+                  <span className="tb-livedot size-node rounded-full bg-action-primary" />
                 ) : (
-                  <span className="size-node rounded-full border-[1.5px] border-primary-line bg-white" />
+                  <span className="size-node rounded-full border-[1.5px] border-info-line bg-surface-card" />
                 )}
               </div>
               {/* No `min-w-0`: the cells then refuse to shrink under the widest label,
@@ -122,8 +122,8 @@ export function PipelineCard({
                   index < activeCell
                     ? 'font-medium text-success-deep'
                     : index === activeCell
-                      ? 'font-semibold text-primary-deep'
-                      : 'text-ink-subtle'
+                      ? 'font-semibold text-info-strong'
+                      : 'text-content-subtle'
                 }`}
               >
                 {t(`neurocomment.stage.${stage}`)}
@@ -134,26 +134,26 @@ export function PipelineCard({
       </div>
       {/* Nothing to name while stopped (activeCell -1); the status banner says so. */}
       {activeCell >= 0 ? (
-        <div className="mb-md text-center type-caption font-semibold text-primary-deep md:hidden">
+        <div className="mb-md text-center type-caption font-semibold text-info-strong md:hidden">
           {t(`neurocomment.stage.${STAGES[activeCell]}`)}
         </div>
       ) : null}
 
-      <div className="mb-lg flex items-center gap-md rounded-lg border border-primary-line bg-primary-tint px-lg py-md">
-        <span className="pl-pulse size-dot shrink-0 rounded-full bg-primary" />
-        <span className="tb-pulse type-label text-primary-deep">
+      <div className="mb-lg flex items-center gap-md rounded-lg border border-info-line bg-info-tint px-lg py-md">
+        <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
+        <span className="tb-pulse type-label text-info-strong">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-primary-hairline bg-primary-hairline md:grid-cols-6">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-info-hairline bg-info-hairline md:grid-cols-6">
         {stats.map((stat) => (
           // Below `md` the tiles pair up, so an ODD count leaves a light-blue hole in the
           // final row from the gap-px/tint border trick — `odd:last:` spans that trailing
           // tile across both columns, and stays right as stats are added or removed.
-          <div key={stat.label} className="bg-white px-lg py-lg max-md:odd:last:col-span-2">
+          <div key={stat.label} className="bg-surface-card px-lg py-lg max-md:odd:last:col-span-2">
             <Odometer value={stat.value} tone={stat.color} />
             <div className="mt-hair type-caption">{stat.label}</div>
           </div>

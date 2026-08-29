@@ -13,9 +13,9 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, FeedbackMark, Icon, Input, SegmentedControl } from '@/shared/ui';
+import { Button, FeedbackMark, Icon, Input, SegmentedControl, Spinner } from '@/shared/ui';
 
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 import { LABEL, type CheckState } from './_styles';
 
 // Session-state dot tone keyed on the backend health (ok/warn/fail), so the card
@@ -23,7 +23,7 @@ import { LABEL, type CheckState } from './_styles';
 // three tiers read the same as every other health signal.
 const HEALTH_DOT: Record<ReturnType<typeof accountHealth>, string> = {
   ok: 'bg-success',
-  warn: 'bg-warning-strong',
+  warn: 'bg-warning-press',
   fail: 'bg-danger',
 };
 
@@ -164,11 +164,11 @@ export function SessionSection({ account }: { account: AccountRead }) {
           />
           <Button
             size="xs"
-            className="text-ink-muted"
+            className="text-content-muted"
             onClick={onLogout}
             loading={logout.isPending}
           >
-            {logoutCheck === 'loading' ? <Spinner size={12} /> : t('accounts.edit.logout')}
+            {logoutCheck === 'loading' ? <Spinner /> : t('accounts.edit.logout')}
           </Button>
         </span>
       </div>
@@ -178,9 +178,9 @@ export function SessionSection({ account }: { account: AccountRead }) {
           type="button"
           onClick={onRequestCode}
           disabled={requestCode.isPending}
-          className="rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-primary disabled:opacity-50"
+          className="rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-action-primary disabled:opacity-50"
         >
-          {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
+          {requestCode.isPending ? <Spinner /> : t('accounts.edit.sendCode')}
         </button>
       </div>
       <div className="mb-md grid grid-cols-1 md:grid-cols-2 gap-md">
@@ -214,7 +214,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         </label>
       </div>
       <Button size="block" onClick={onConfirmLogin} disabled={submitCode.isPending || !code}>
-        {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
+        {submitCode.isPending ? <Spinner /> : t('accounts.edit.confirmLogin')}
       </Button>
       {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
       <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>
@@ -235,7 +235,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         onClick={() => uploadInput.current?.click()}
         className="flex w-full items-center gap-md rounded-lg border border-dashed border-line bg-surface px-lg py-lg text-left"
       >
-        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
           <Icon name="upload-cloud" size={20} />
         </div>
         <div className="min-w-0">
@@ -254,10 +254,10 @@ export function SessionSection({ account }: { account: AccountRead }) {
         {uploads.map((file) => (
           <div
             key={file.id}
-            className="tb-fadeup rounded-lg border border-line bg-white px-md py-md"
+            className="tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md"
           >
             <div className="flex items-center gap-md">
-              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <div className="flex size-tile shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
                 {file.archive ? (
                   <Icon name="alert-square" size={16} />
                 ) : (
@@ -268,7 +268,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                 <div className="flex items-start justify-between gap-sm">
                   <div className="min-w-0">
                     <div className="truncate type-item-title">{file.name}</div>
-                    <div className="mt-px type-meta">
+                    <div className="mt-px type-caption">
                       {t(`accounts.edit.upload.${file.status}`)}
                     </div>
                   </div>
@@ -282,7 +282,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                         <Icon name="x-circle" size={18} />
                       </span>
                     ) : (
-                      <Spinner size={13} />
+                      <Spinner />
                     )}
                     <button
                       type="button"
@@ -290,7 +290,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                       onClick={() => {
                         setUploads((list) => list.filter((item) => item.id !== file.id));
                       }}
-                      className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
+                      className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
                     >
                       <Icon name="close" size={14} />
                     </button>

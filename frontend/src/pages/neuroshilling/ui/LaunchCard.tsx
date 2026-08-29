@@ -23,10 +23,10 @@ const MIN_ACCOUNTS = 2;
 
 // Tone is the token the status MEANS, matching the campaigns card row for row.
 const STATUS_TONE: Record<NonNullable<NeuroshillingRunStatus['status']>, string> = {
-  idle: 'text-ink-muted',
+  idle: 'text-content-muted',
   running: 'text-success-deep',
   stopping: 'text-warning-deep',
-  done: 'text-primary',
+  done: 'text-action-primary',
   failed: 'text-danger',
 };
 
@@ -95,7 +95,7 @@ function Tile({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-line bg-surface px-md py-md text-center">
       <div className="text-title font-bold tabular-nums">{value}</div>
-      <div className="mt-hair type-meta">{label}</div>
+      <div className="mt-hair type-caption">{label}</div>
     </div>
   );
 }
@@ -164,7 +164,7 @@ export function LaunchCard({
             // it reads as emphasis beside the title rather than as another status pill.
             // Two such markers in the app (the other is the warming page's "прогрет"), and
             // two call sites do not earn a token. Do not fold this into the pill family.
-            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-hair text-micro font-bold text-success-deep">
+            <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-hair text-tiny font-bold text-success-deep">
               <span className="tb-livedot size-dot rounded-full bg-success" />
               LIVE
             </span>
@@ -176,7 +176,7 @@ export function LaunchCard({
         // campaign to `draft` — and the consequence only shows here, at launch.
         // Repeating the badge is what stops that being a surprise 409.
         <span
-          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-ink-muted'}`}
+          className={`shrink-0 rounded-full px-md py-xs text-tiny font-semibold ${scenarioStatus === 'approved' ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
         >
           {t(`neuroshilling.launch.scenario.${scenarioStatus}`)}
         </span>
@@ -228,7 +228,7 @@ export function LaunchCard({
           className="mb-md h-meter w-full overflow-hidden rounded-full bg-canvas"
         >
           <div
-            className="h-full rounded-full bg-primary transition-[width] duration-reveal"
+            className="h-full rounded-full bg-action-primary transition-[width] duration-reveal"
             style={{ width: `${String(percent)}%` }}
           />
         </div>
@@ -238,7 +238,7 @@ export function LaunchCard({
           campaign row already, and what the operator cannot see from there is
           whether anything is acting on them right now. */}
       {run.listening === true ? (
-        <div className="mb-md flex flex-wrap items-center gap-sm rounded-lg bg-canvas px-md py-sm text-tiny tabular-nums text-ink-muted">
+        <div className="mb-md flex flex-wrap items-center gap-sm rounded-lg bg-canvas px-md py-sm text-tiny tabular-nums text-content-muted">
           <span className="font-medium">{t('neuroshilling.launch.listening')}</span>
           <span>{t('neuroshilling.launch.chatSeen', { n: run.chat_messages_seen ?? 0 })}</span>
           <span>{t('neuroshilling.launch.humanReplies', { n: run.human_replies_sent ?? 0 })}</span>
@@ -260,7 +260,7 @@ export function LaunchCard({
       {!live && blockers.length > 0 ? (
         // Every reason, not just the first: fixing one only to be refused by the
         // next is the loop this list exists to end.
-        <ul className="mb-md flex list-none flex-col gap-xs rounded-lg bg-canvas px-md py-sm text-tiny text-ink-muted">
+        <ul className="mb-md flex list-none flex-col gap-xs rounded-lg bg-canvas px-md py-sm text-tiny text-content-muted">
           {blockers.map((reason) => (
             <li key={reason}>· {reason}</li>
           ))}

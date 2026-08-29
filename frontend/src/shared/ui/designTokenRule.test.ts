@@ -20,10 +20,15 @@ if (rule) {
   ruleTester.run('no-raw-values', rule, {
     valid: [
       // The named set, which is the whole point.
-      'const a = "bg-primary text-white px-2xl py-md rounded-full text-lead";',
+      'const a = "bg-action-primary text-on-action px-2xl py-md rounded-full text-body";',
       'const b = "gap-md mb-lg border-line-row shadow-pop duration-state";',
       // The written exceptions.
-      { code: 'const c = "bg-white text-white";', name: 'white needs no name' },
+      {
+        // Роль названа в самом классе: белая поверхность и надпись на залитом действии
+        // больше не один `white`. Голый `white`/`black` теперь ошибка, и её случай — ниже.
+        code: 'const c = "bg-surface-card text-on-action";',
+        name: 'a white surface and ink on a filled action are two names now',
+      },
       { code: 'const d = "rounded-[2px] rounded-[3px]";', name: 'hairline radii' },
       { code: 'const e = "pb-[80px] mt-[96px] py-[50px]";', name: 'page breathing room' },
       {
@@ -40,7 +45,7 @@ if (rule) {
         name: 'an alpha on white or black is a wash over content the palette cannot know',
       },
       {
-        code: 'const g3 = "bg-primary-tint text-primary-deep bg-scrim bg-veil bg-surface";',
+        code: 'const g3 = "bg-info-tint text-info-strong bg-scrim bg-veil bg-surface";',
         name: 'the tokens the seven alpha sites turned out to be',
       },
       {
@@ -56,19 +61,19 @@ if (rule) {
         name: 'a role, and a role recoloured',
       },
       {
-        code: 'const t3 = "rounded-full border border-line bg-white px-md py-xs text-tiny text-ink-muted";',
+        code: 'const t3 = "rounded-full border border-line bg-surface-card px-md py-xs text-tiny text-content-muted";',
         name: 'a class list that paints a box is drawing a control',
       },
       {
-        code: 'const t3b = "px-lg py-empty text-center type-prose"; const t3c = "p-page type-prose text-ink";',
+        code: 'const t3b = "px-lg py-empty text-center type-prose"; const t3c = "p-page type-prose text-content-primary";',
         name: 'a padded gap holding a role, with and without a colour override',
       },
       {
-        code: 'const t4 = "text-body text-ink-muted hover:text-primary";',
+        code: 'const t4 = "text-body text-content-muted hover:text-action-primary";',
         name: 'a class list that reacts to the pointer is drawing a control',
       },
       {
-        code: 'const t5 = "text-lead leading-none text-ink-subtle"; const t6 = "absolute left-lg text-lead text-ink-subtle";',
+        code: 'const t5 = "text-body leading-none text-content-subtle"; const t6 = "absolute left-lg text-body text-content-subtle";',
         name: 'at `lead` the scale doubles as a glyph size',
       },
       {
@@ -82,7 +87,7 @@ if (rule) {
         name: 'the named rungs, which is the whole point',
       },
       {
-        code: 'const u2 = "text-lead leading-none text-white";',
+        code: 'const u2 = "text-body leading-none text-on-action";',
         name: 'a single glyph has no line-height, and `none` is the rung that says so',
       },
       {
@@ -90,9 +95,13 @@ if (rule) {
         name: "the odometer's line-height is measured against the text, like the box beside it",
       },
       {
-        code: 'const u4 = "text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle";',
+        code: 'const u4 = "text-tiny font-medium uppercase tracking-[0.04em] text-content-subtle";',
         filename: 'src/shared/ui/DataTable.tsx',
         name: '`shared/ui` composes a column label by hand, letter-spacing included',
+      },
+      {
+        code: 'const sp2 = "inline-flex tb-spin";',
+        name: '`tb-spin` alone is the refresh icon turning, which is not a ring',
       },
       {
         code: 'const w = "text-title font-bold tracking-[-0.01em]";',
@@ -110,9 +119,30 @@ if (rule) {
         code: 'const y = "hover:bg-primary-wash";',
         errors: [{ message: /collapsed into another one/ }],
       },
+      // Кольцо руками: анимация плюс окрашенная верхняя граница. Один `tb-spin` — нет.
+      {
+        code: 'const sp = "tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-action-primary";',
+        errors: [{ message: /waiting ring assembled by hand/ }],
+      },
+      // Направленная краска: `border-white` правило видело всегда, `border-t-white` — нет.
+      {
+        code: 'const dir = "border-t-white border-r-black";',
+        errors: [{ message: /Bare `white`\/`black`/ }],
+      },
+      {
+        code: 'const bp = "xl:flex-row";',
+        errors: [{ message: /breakpoint scale is closed/ }],
+      },
       {
         code: 'const a = "bg-blue-500";',
         errors: [{ message: /palette/ }],
+      },
+      // Фокус краской действия: класс работает, выглядит правильным и связывает два
+      // решения в одно. Единственный дефект из этой таблицы, который НИЧЕГО не портит на
+      // экране — до первой перекраски кнопок.
+      {
+        code: 'const f = "focus-visible:outline-action-primary";',
+        errors: [{ message: /focus indicator painted with the ACTION colour/ }],
       },
       {
         code: 'const b = "text-[#0066ff]";',
@@ -126,7 +156,7 @@ if (rule) {
       // and it is invisible to the contrast scan because that scan's ink pattern stops
       // at the `/`. Both spellings of the modifier, and a rung as well as a root.
       {
-        code: 'const q = "border-primary bg-primary/[0.06]";',
+        code: 'const q = "border-action-primary bg-action-primary/[0.06]";',
         errors: [{ message: /alpha modifier on a named colour/ }],
       },
       {
@@ -134,11 +164,11 @@ if (rule) {
         errors: [{ message: /alpha modifier on a named colour/ }],
       },
       {
-        code: 'const s = "font-mono text-primary/70";',
+        code: 'const s = "font-mono text-action-primary/70";',
         errors: [{ message: /alpha modifier on a named colour/ }],
       },
       {
-        code: 'const s2 = "hover:bg-primary-tint/50 text-ink-subtle/80";',
+        code: 'const s2 = "hover:bg-info-tint/50 text-content-subtle/80";',
         errors: [{ message: /alpha modifier on a named colour/ }],
       },
       // The style-object channel, which no class pattern could ever reach: the colour
@@ -195,15 +225,15 @@ if (rule) {
       // The role pattern: a rung and a grey in one class list, in either order, is the
       // spelling the twelve roles replaced.
       {
-        code: 'const k = "mt-px text-tiny text-ink-subtle";',
+        code: 'const k = "mt-px text-tiny text-content-subtle";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
-        code: 'const l = "text-ink-muted mb-md text-body";',
+        code: 'const l = "text-content-muted mb-md text-body";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
-        code: 'const m = "truncate text-lead font-semibold text-ink";',
+        code: 'const m = "truncate text-body font-semibold text-content-primary";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       // Padding used to buy the same exemption a fill does, on the grounds that a control
@@ -211,15 +241,15 @@ if (rule) {
       // every empty, loading and error state in the app, spelled across three rungs and
       // three greys. A gap with a sentence in it is not a control.
       {
-        code: 'const n = "px-lg py-empty text-center text-lead text-ink-subtle";',
+        code: 'const n = "px-lg py-empty text-center text-body text-content-subtle";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
-        code: 'const o = "py-[40px] text-center text-body text-ink-muted";',
+        code: 'const o = "py-[40px] text-center text-body text-content-muted";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       {
-        code: 'const p = "p-page text-lead text-ink";',
+        code: 'const p = "p-page text-body text-content-primary";',
         errors: [{ message: /A rung plus a grey/ }],
       },
       // The line-height axis. `[1.5]` is the interesting one: it was the single most
@@ -251,7 +281,7 @@ if (rule) {
         errors: [{ message: /Letter-spacing is not a scale/ }],
       },
       {
-        code: 'const x = "text-micro uppercase tracking-wide";',
+        code: 'const x = "text-tiny uppercase tracking-wide";',
         errors: [{ message: /letter-spacing scale is replaced/ }],
       },
     ],

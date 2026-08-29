@@ -41,7 +41,7 @@ export function CodeLoginStep({
     <>
       {!requestCode.isSuccess ? (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg border border-line bg-white px-lg py-lg text-body text-ink-subtle">
+          <div className="rounded-lg border border-line bg-surface-card px-lg py-lg text-body text-content-subtle">
             {phone}
           </div>
           <Button
@@ -77,7 +77,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setCode(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
+              className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
             />
           </label>
           <label className="block type-caption font-medium">
@@ -92,7 +92,7 @@ export function CodeLoginStep({
               onChange={(event) => {
                 setPassword(event.target.value);
               }}
-              className="mt-tight w-full rounded-lg border border-line bg-white px-md py-md text-lead font-normal text-ink outline-none focus:border-primary"
+              className="mt-tight w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-normal text-content-primary outline-none focus:border-focus"
             />
           </label>
           {submitCode.isError && (

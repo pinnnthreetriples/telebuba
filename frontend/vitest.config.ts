@@ -11,6 +11,11 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   test: {
+    // Явный список, а не умолчание: по умолчанию vitest берёт любой `*.spec.ts` в
+    // проекте и подобрал бы `e2e/catalog.spec.ts` — спеку Playwright, которая в
+    // happy-dom не запускается и падает импортом. Все юнит-тесты этого пакета лежат в
+    // `src` и называются `*.test.ts(x)`.
+    include: ['src/**/*.test.{ts,tsx}'],
     globals: true,
     environment: 'happy-dom',
     setupFiles: ['./vitest.setup.ts'],

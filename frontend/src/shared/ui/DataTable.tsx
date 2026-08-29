@@ -8,6 +8,8 @@ import {
 } from '@tanstack/react-table';
 import { Fragment, type HTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
 
+import { cn } from '@/shared/lib/cn';
+
 import { useWideContainer } from './useWideViewport';
 
 // A thin, headless-table wrapper over @tanstack/react-table: one consistent
@@ -39,24 +41,19 @@ interface DataTableProps<TData> {
   renderSubRow?: (row: Row<TData>) => ReactNode;
 }
 
-// text-left so headers sit directly above their left-aligned cells; a column that
-// wants a different alignment sets it via meta.className (text-right wins over this).
-const TH =
-  'px-lg py-md text-left text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle';
+// text-left so headers sit directly above their left-aligned cells; a column that wants a
+// different alignment sets it via meta.className, and `cn` is what makes that override
+// win. It used to win by accident: both classes reached the element and Tailwind happens
+// to emit `text-right` after `text-left`, so the column got its way through emit order
+// rather than through anyone deciding.
+const TH = 'px-lg py-md text-left type-table-header';
 const ROW = 'tb-row border-t border-line-row transition-colors';
 
 // Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
 // element-agnostic, so cards get the same hover tint for free.
 const CARD = 'tb-row overflow-hidden border-t border-line-row px-lg py-lg first:border-t-0';
-const CARD_LABEL = 'shrink-0 text-tiny font-medium uppercase tracking-[0.04em] text-ink-subtle';
-const CARD_VALUE = 'min-w-0 break-words text-right text-body text-ink-body';
-
-// Local, dependency-free class join (avoids a shared/ui → shared/lib → query
-// barrel cycle). No tailwind-merge dedupe is needed — callers pass disjoint
-// utilities via column meta / getRowProps.
-function join(...parts: (string | undefined)[]): string {
-  return parts.filter(Boolean).join(' ');
-}
+const CARD_LABEL = 'shrink-0 type-table-header';
+const CARD_VALUE = 'min-w-0 break-words text-right text-body text-content-secondary';
 
 // A sub-row that animates its own exit: it outlives `open` going false until
 // `.tb-subrow`'s grid-rows transition ends. Removing it in a single frame is what made
@@ -91,7 +88,7 @@ function SubRow({
   if (!mounted) return null;
   const inner = (
     <div
-      className={join('tb-subrow', open ? undefined : 'tb-closing', className)}
+      className={cn('tb-subrow', open ? undefined : 'tb-closing', className)}
       // `grid-template-rows` and NOT max-height, deliberately: CollapsibleCard's
       // onTransitionEnd filters on max-height, and a bubbled one from in here would pull
       // its whole body out of the a11y tree. The target check keeps a descendant's
@@ -154,7 +151,7 @@ export function DataTable<TData>({
               key={row.id}
               {...rowProps}
               role="listitem"
-              className={join(CARD, rowProps?.className)}
+              className={cn(CARD, rowProps?.className)}
             >
               {head.length > 0 ? (
                 <div className="flex items-center gap-md">
@@ -209,7 +206,7 @@ export function DataTable<TData>({
               {headerGroup.headers.map((header) => (
                 <th
                   key={header.id}
-                  className={join(
+                  className={cn(
                     TH,
                     (header.column.columnDef.meta as DataTableColumnMeta)?.className,
                   )}
@@ -225,11 +222,11 @@ export function DataTable<TData>({
             const rowProps = getRowProps?.(row);
             return (
               <Fragment key={row.id}>
-                <tr {...rowProps} className={join(ROW, rowProps?.className)}>
+                <tr {...rowProps} className={cn(ROW, rowProps?.className)}>
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={join(
+                      className={cn(
                         'px-lg py-md',
                         (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
                       )}

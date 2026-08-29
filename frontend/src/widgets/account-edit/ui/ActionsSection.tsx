@@ -10,9 +10,9 @@ import {
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { useClearedTimeouts } from '@/shared/lib';
-import { Button, ConfirmModal, FeedbackMark, Icon } from '@/shared/ui';
+import { Button, ConfirmModal, FeedbackMark, Icon, Spinner } from '@/shared/ui';
 
-import { Section, Spinner } from './_shared';
+import { Section } from './_shared';
 import { type CheckState } from './_styles';
 
 // Actions card: liveness check, reset-session, and delete-account (with a
@@ -91,7 +91,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             <div className="type-card-title">{t('accounts.edit.aliveTitle')}</div>
             {/* Verdict tone from the tokens the states MEAN — alive/dead/unknown. */}
             <div
-              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-ink-subtle'}`}
+              className={`mt-px text-tiny ${aliveCheck === 'ok' ? 'text-success-deep' : aliveCheck === 'err' ? 'text-danger' : 'text-content-subtle'}`}
             >
               {aliveCheck === 'ok'
                 ? t('accounts.edit.aliveOk')
@@ -112,10 +112,10 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             aria-label={t('accounts.edit.aliveBtnTitle')}
             className={`flex size-icon shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-enter ${
               aliveCheck === 'ok'
-                ? 'border-success bg-success-deep text-white'
+                ? 'border-success bg-success-deep text-on-action'
                 : aliveCheck === 'err'
-                  ? 'border-danger bg-danger text-white'
-                  : 'border-line bg-white text-ink-muted'
+                  ? 'border-danger bg-danger text-on-action'
+                  : 'border-line bg-surface-card text-content-muted'
             }`}
           >
             {aliveCheck === 'idle' && (
@@ -123,7 +123,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
                 <Icon name="refresh" size={18} />
               </span>
             )}
-            {aliveCheck === 'loading' && <Spinner size={15} />}
+            {aliveCheck === 'loading' && <Spinner />}
             {aliveCheck === 'ok' && (
               <span className="tb-blur inline-flex">
                 <Icon name="check" size={18} />
@@ -146,7 +146,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
               result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
             />
             <Button size="sm" onClick={onReset} loading={resetSession.isPending}>
-              {resetCheck === 'loading' ? <Spinner size={14} /> : t('accounts.edit.reset')}
+              {resetCheck === 'loading' ? <Spinner /> : t('accounts.edit.reset')}
             </Button>
           </span>
         </div>
@@ -160,7 +160,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
             onClick={() => {
               setConfirmDelete(true);
             }}
-            className="shrink-0 px-xs py-sm text-lead font-medium text-danger"
+            className="shrink-0 px-xs py-sm text-body font-medium text-danger"
           >
             {t('accounts.edit.deleteAccount')}
           </button>

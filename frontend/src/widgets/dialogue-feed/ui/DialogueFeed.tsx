@@ -64,19 +64,19 @@ function participant(
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
-      <div className="mb-xs flex items-center gap-tight type-meta">
-        <span className="font-medium text-ink-muted">
+      <div className="mb-xs flex items-center gap-tight type-caption">
+        <span className="font-medium text-content-muted">
           {participant(message.from_label, message.from_first_name, message.from_last_name)}
         </span>
         <Icon name="arrow-right" size={12} />
-        <span className="font-medium text-ink-muted">
+        <span className="font-medium text-content-muted">
           {participant(message.to_label, message.to_first_name, message.to_last_name)}
         </span>
-        <span className="ml-auto shrink-0 tabular-nums type-meta">
+        <span className="ml-auto shrink-0 tabular-nums type-caption">
           {formatLocalTime(message.created_at)}
         </span>
       </div>
-      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-md py-sm text-body text-ink-body">
+      <div className="inline-block max-w-full rounded-lg rounded-tl-[3px] bg-surface px-md py-sm text-body text-content-secondary">
         {message.text}
       </div>
     </div>
@@ -88,12 +88,12 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
 function TypingIndicator() {
   const { t } = useTranslation();
   return (
-    <div className="mt-hair flex items-center gap-sm type-meta">
+    <div className="mt-hair flex items-center gap-sm type-caption">
       <span className="flex items-center gap-xs">
         {[0, 1, 2].map((index) => (
           <span
             key={index}
-            className="tb-typing-dot size-tick rounded-full bg-primary"
+            className="tb-typing-dot size-tick rounded-full bg-action-primary"
             style={{ animationDelay: `${String(index * 0.16)}s` }}
           />
         ))}
@@ -171,7 +171,7 @@ export function DialogueFeed() {
         {/* Pulsing green only while the feed is genuinely fresh; otherwise the
             static muted dot the design already uses for an idle listener. */}
         <span
-          className={`size-dot shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
+          className={`size-dot shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
         />
         <span className="type-card-title">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (

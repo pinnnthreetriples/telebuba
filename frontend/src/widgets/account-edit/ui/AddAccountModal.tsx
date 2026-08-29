@@ -13,7 +13,7 @@ import {
   proxyPoolQueryOptions,
   proxyTypeLabel,
 } from '@/entities/proxy';
-import { Button, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, Icon, IconButton, Modal, Spinner } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ProxyForm } from './ProxyForm';
@@ -51,11 +51,11 @@ function ChoiceCard({
       type="button"
       onClick={onClick}
       // Background lives in both branches, never in the base: two `bg-*` utilities in
-      // one class list are resolved by stylesheet order, where `bg-white` comes last
+      // one class list are resolved by stylesheet order, where `bg-surface-card` comes last
       // and wins, so the picked method showed a blue border over a white row.
-      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-primary-line ${selected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-info-line ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
     >
-      <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-primary-tint">
+      <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-info-tint">
         {icon}
       </span>
       <span className="flex-1">
@@ -254,7 +254,7 @@ export function AddAccountModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-form" label={t('accounts.addWizard.title')}>
+    <Modal onClose={onClose} size="form" label={t('accounts.addWizard.title')}>
       <div className="px-2xl pb-xl pt-2xl">
         <div className="mb-lg flex items-start justify-between">
           <div>
@@ -283,11 +283,11 @@ export function AddAccountModal({
             <Fragment key={n}>
               {n > 1 && (
                 <span
-                  className={`h-rail flex-1 rounded-full ${step >= n ? 'bg-primary' : 'bg-line'}`}
+                  className={`h-rail flex-1 rounded-full ${step >= n ? 'bg-action-primary' : 'bg-line'}`}
                 />
               )}
               <span
-                className={`flex size-icon items-center justify-center rounded-full text-body font-semibold ${step >= n ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
+                className={`flex size-icon items-center justify-center rounded-full text-body font-semibold ${step >= n ? 'bg-action-primary text-on-action' : 'border border-line bg-surface-card text-content-muted'}`}
               >
                 {n}
               </span>
@@ -299,7 +299,7 @@ export function AddAccountModal({
           <>
             <div className="flex flex-col gap-md">
               <ChoiceCard
-                icon={<Icon name="file" size={18} className="stroke-primary" />}
+                icon={<Icon name="file" size={18} className="stroke-action-primary" />}
                 title={t('accounts.addWizard.sessionTitle')}
                 desc={t('accounts.addWizard.sessionDesc')}
                 selected={method === 'session'}
@@ -315,7 +315,7 @@ export function AddAccountModal({
                     viewBox="0 0 24 24"
                     fill="none"
                     strokeWidth="1.8"
-                    className="stroke-primary"
+                    className="stroke-action-primary"
                   >
                     <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />
                   </svg>
@@ -335,7 +335,7 @@ export function AddAccountModal({
                     viewBox="0 0 24 24"
                     fill="none"
                     strokeWidth="1.8"
-                    className="stroke-primary"
+                    className="stroke-action-primary"
                   >
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
@@ -349,7 +349,7 @@ export function AddAccountModal({
               />
 
               {method === 'phone' && (
-                <div className="tb-fadeup flex flex-col gap-md rounded-lg border border-line bg-white px-md py-lg">
+                <div className="tb-fadeup flex flex-col gap-md rounded-lg border border-line bg-surface-card px-md py-lg">
                   <label className="block type-caption font-medium">
                     {t('accounts.addWizard.phoneLabel')}
                   </label>
@@ -362,7 +362,7 @@ export function AddAccountModal({
                       clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
-                    className="rounded-lg border border-line bg-white px-md py-md text-lead outline-none focus:border-primary"
+                    className="rounded-lg border border-line bg-surface-card px-md py-md text-body outline-none focus:border-focus"
                   />
                   <Button
                     variant="primary"
@@ -397,9 +397,9 @@ export function AddAccountModal({
                   <button
                     type="button"
                     onClick={() => fileInput.current?.click()}
-                    className="flex items-center gap-md rounded-lg border border-dashed border-line bg-white px-lg py-lg text-left"
+                    className="flex items-center gap-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-lg text-left"
                   >
-                    <span className="flex size-touch shrink-0 items-center justify-center rounded-lg border border-line bg-white text-primary">
+                    <span className="flex size-touch shrink-0 items-center justify-center rounded-lg border border-line bg-surface-card text-action-primary">
                       <Icon name="upload-cloud" size={20} />
                     </span>
                     <span className="min-w-0 flex-1">
@@ -412,14 +412,14 @@ export function AddAccountModal({
                           : t('accounts.addWizard.dropDescSession')}
                       </span>
                     </span>
-                    <span className="shrink-0 rounded-full border border-line px-lg py-tight text-body font-medium text-ink">
+                    <span className="shrink-0 rounded-full border border-line px-lg py-tight text-body font-medium text-content-primary">
                       {t('accounts.addWizard.browse')}
                     </span>
                   </button>
                   {fileName && (
-                    <div className="tb-fadeup rounded-lg border border-line bg-white px-md py-md">
+                    <div className="tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md">
                       <div className="flex items-center gap-md">
-                        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-canvas text-ink-muted">
+                        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-canvas text-content-muted">
                           {method === 'tdata' ? (
                             <Icon name="alert-square" size={18} />
                           ) : (
@@ -430,7 +430,7 @@ export function AddAccountModal({
                           <div className="truncate type-item-title">{fileName}</div>
                           {/* Import verdict tone from the tokens the states MEAN. */}
                           <div
-                            className={`mt-px text-tiny ${importFailed ? 'text-danger' : createdAccountId ? 'text-success-deep' : 'text-ink-subtle'}`}
+                            className={`mt-px text-tiny ${importFailed ? 'text-danger' : createdAccountId ? 'text-success-deep' : 'text-content-subtle'}`}
                           >
                             {importFailed
                               ? t('accounts.addWizard.importError')
@@ -442,7 +442,7 @@ export function AddAccountModal({
                           </div>
                         </div>
                         {importing ? (
-                          <span className="tb-spin m-tight inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
+                          <Spinner className="m-tight" />
                         ) : importFailed ? (
                           <span className="m-xs inline-flex text-danger">
                             <Icon name="x-circle" size={18} />
@@ -489,7 +489,7 @@ export function AddAccountModal({
             </div>
             <div className="flex flex-col gap-md">
               <ChoiceCard
-                icon={<Icon name="plus" size={18} className="stroke-primary" />}
+                icon={<Icon name="plus" size={18} className="stroke-action-primary" />}
                 title={t('accounts.addWizard.proxyManual')}
                 desc={t('accounts.addWizard.proxyManualDesc')}
                 chevron
@@ -505,7 +505,7 @@ export function AddAccountModal({
                     viewBox="0 0 24 24"
                     fill="none"
                     strokeWidth="1.8"
-                    className="stroke-primary"
+                    className="stroke-action-primary"
                   >
                     <path d="M3 6h18M3 12h18M3 18h18" />
                   </svg>
@@ -526,7 +526,7 @@ export function AddAccountModal({
               >
                 {t('accounts.addWizard.back')}
               </Button>
-              <Button className="text-ink-muted" onClick={afterProxy}>
+              <Button className="text-content-muted" onClick={afterProxy}>
                 {t('accounts.addWizard.skip')}
               </Button>
             </div>
@@ -555,7 +555,7 @@ export function AddAccountModal({
           <>
             <div className="flex flex-col gap-sm">
               {freeProxies.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-line bg-white px-lg py-2xl text-center text-body text-ink-subtle">
+                <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
                   {t('accounts.addWizard.poolEmpty')}
                 </div>
               ) : (
@@ -570,7 +570,7 @@ export function AddAccountModal({
                     onClick={() => {
                       assignFromPool(proxy.id);
                     }}
-                    className="flex items-center gap-md rounded-lg border border-line bg-white px-lg py-md text-left transition-colors hover:border-primary-line disabled:opacity-60"
+                    className="flex items-center gap-md rounded-lg border border-line bg-surface-card px-lg py-md text-left transition-colors hover:border-info-line disabled:opacity-60"
                   >
                     {proxy.country_code ? (
                       <span

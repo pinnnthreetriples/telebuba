@@ -14,7 +14,7 @@ test('the surface is the card and the padding is the caller`s', () => {
   const card = screen.getByTestId('plain');
   expect(card.className).toContain('rounded-card');
   expect(card.className).toContain('border-line');
-  expect(card.className).toContain('bg-white');
+  expect(card.className).toContain('bg-surface-card');
   expect(card.className).toContain('p-lg');
   expect(card.className).not.toContain('px-xl');
 });
@@ -33,16 +33,11 @@ test('the title and subtitle slots render only when given', async () => {
   await expectNoAxeViolations(container);
 });
 
-// A plain surface has no bottom margin: the pages that stack cards without a flex
-// gap ask for one, and the twelve that were divs before this did not.
-test('the bottom margin is opt-in', () => {
-  const { rerender } = render(<Card data-testid="c">тело</Card>);
+// Карточка не носит внешнего отступа НИКОГДА — ни своего, ни по просьбе. Проп `mb` был
+// ровно такой просьбой: карточка ставила расстояние до того, что стоит под ней, ничего об
+// этом не зная, и настройки просили `lg` четыре раза и `xl` один. Утверждение осталось на
+// месте, но стало безусловным.
+test('карточка не носит внешнего отступа', () => {
+  render(<Card data-testid="c">тело</Card>);
   expect(screen.getByTestId('c').className).not.toContain('mb-');
-
-  rerender(
-    <Card data-testid="c" mb="mb-lg">
-      тело
-    </Card>,
-  );
-  expect(screen.getByTestId('c').className).toContain('mb-lg');
 });

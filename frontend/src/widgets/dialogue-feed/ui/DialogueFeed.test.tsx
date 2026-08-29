@@ -145,7 +145,7 @@ test('a feed idle for days shows a static muted dot and no typing indicator', as
 
   await screen.findByText('stale');
   expect(container.querySelector('.tb-livedot')).toBeNull();
-  expect(container.querySelector('.bg-ink-subtle')).not.toBeNull();
+  expect(container.querySelector('.bg-content-subtle')).not.toBeNull();
   expect(screen.queryByText('печатает…')).not.toBeInTheDocument();
 });
 
@@ -179,7 +179,7 @@ test('a feed that goes quiet while the page stays open stops claiming to be live
     });
 
     expect(container.querySelector('.tb-livedot')).toBeNull();
-    expect(container.querySelector('.bg-ink-subtle')).not.toBeNull();
+    expect(container.querySelector('.bg-content-subtle')).not.toBeNull();
     expect(screen.queryByText('печатает…')).not.toBeInTheDocument();
   } finally {
     vi.useRealTimers();

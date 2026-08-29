@@ -57,7 +57,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => labelOf.get(row.original.account_id) ?? row.original.account_id,
         meta: {
           className: 'w-col',
-          cellClassName: 'type-label text-ink',
+          cellClassName: 'type-label text-content-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -66,7 +66,7 @@ export function CommentHistoryModal({
         cell: ({ row }) => row.original.channel,
         meta: {
           className: 'w-col',
-          cellClassName: 'type-prose text-primary',
+          cellClassName: 'type-prose text-action-primary',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -77,7 +77,7 @@ export function CommentHistoryModal({
           if (!row.original.deleted_at) return text;
           return (
             <span className="inline-flex items-center gap-sm">
-              <span className="text-ink-subtle line-through">{text}</span>
+              <span className="text-content-subtle line-through">{text}</span>
               <Badge tone="danger">{t('neurocomment.feed.deleted')}</Badge>
             </span>
           );
@@ -89,7 +89,7 @@ export function CommentHistoryModal({
   );
 
   return (
-    <Modal onClose={onClose} className="w-table" label={t('neurocomment.history.title')}>
+    <Modal onClose={onClose} size="table" label={t('neurocomment.history.title')}>
       <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="type-dialog-title">{t('neurocomment.history.title')}</div>
       </div>

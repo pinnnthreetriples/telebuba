@@ -60,10 +60,10 @@ export function PhotoTab({
         );
         onUpload(images);
       }}
-      className={`relative rounded-lg border-[1.5px] border-dashed p-md transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
+      className={`relative rounded-lg border-[1.5px] border-dashed p-md transition-colors ${dragOver ? 'border-action-primary' : 'border-transparent'}`}
     >
       {dragOver && (
-        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-lead font-medium text-primary">
+        <div className="pointer-events-none absolute inset-0 z-raised flex items-center justify-center rounded-lg bg-white/70 text-body font-medium text-action-primary">
           {t('accounts.profile.dropPhotos')}
         </div>
       )}
@@ -81,12 +81,12 @@ export function PhotoTab({
               onClick={() => {
                 onRemove(photo);
               }}
-              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-lead leading-none text-white"
+              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-body leading-none text-on-inverse"
             >
               ×
             </button>
             {photo.is_main ? (
-              <span className="mt-tight block w-full py-hair text-tiny font-medium text-primary">
+              <span className="mt-tight block w-full py-hair text-tiny font-medium text-action-primary">
                 {t('accounts.profile.mainPhoto')}
               </span>
             ) : (
@@ -96,7 +96,7 @@ export function PhotoTab({
                 onClick={() => {
                   onMakeMain(photo);
                 }}
-                className="mt-tight block w-full py-hair text-left text-tiny font-medium text-primary hover:underline disabled:opacity-50"
+                className="mt-tight block w-full py-hair text-left text-tiny font-medium text-action-primary hover:underline disabled:opacity-50"
               >
                 {t('accounts.profile.makeMain')}
               </button>

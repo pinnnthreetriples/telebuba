@@ -15,6 +15,7 @@ import {
   Input,
   Modal,
   Notice,
+  Spinner,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -159,7 +160,7 @@ export function ChannelEditModal({
     <>
       <Modal
         onClose={requestClose}
-        className="w-panel"
+        size="panel"
         // A fixed name, unlike the visible heading below it: this dialog opens
         // while the detail is still loading, and an ARIA name that changes after
         // the announcement is never re-announced — so the operator would only ever
@@ -203,7 +204,7 @@ export function ChannelEditModal({
               <Button
                 size="xs"
                 variant="danger"
-                className="bg-white"
+                className="bg-surface-card"
                 onClick={() => {
                   void detail.refetch();
                 }}
@@ -263,11 +264,11 @@ export function ChannelEditModal({
                   type="button"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line bg-white px-lg py-sm text-lead font-medium disabled:opacity-60"
+                  className="rounded-full border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-60"
                 >
                   {setPhoto.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
+                      <Spinner />
                       {t('accounts.channel.avatarUpload')}
                     </span>
                   ) : (
@@ -278,7 +279,7 @@ export function ChannelEditModal({
                 <Button variant="primary" onClick={save} disabled={!canSave}>
                   {update.isPending ? (
                     <span className="inline-flex items-center gap-sm">
-                      <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                      <Spinner tone="onAction" />
                       {t('accounts.channel.saving')}
                     </span>
                   ) : (

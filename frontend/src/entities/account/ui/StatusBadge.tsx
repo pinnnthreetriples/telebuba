@@ -10,7 +10,7 @@ import { accountDesignStatus, type AccountStatus } from '../model/status';
 const STATUS_TONE: Record<ReturnType<typeof accountDesignStatus>, BadgeTone> = {
   active: 'success',
   spam: 'warning',
-  code: 'primary',
+  code: 'info',
   banned: 'danger',
 };
 

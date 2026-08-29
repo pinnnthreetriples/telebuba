@@ -1,6 +1,9 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
+import { surface } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
+
 // Everything a keyboard can land on inside the dialog (for the Tab trap).
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -37,15 +40,38 @@ let overflowBeforeLock = '';
 // `m-auto` on the card rather than `items-center` on the overlay: centring a flex item
 // with `align-items` makes the overflowing top unreachable once the container scrolls,
 // whereas auto margins centre it and still yield to the scroll.
+// Поверхность диалога приходит из `recipes/surfaces.ts` — того же набора, что у Card и у
+// выпадающей панели. Шторка её не берёт: она прилегает к краю экрана, поэтому у неё нет
+// ни радиуса, ни тени, и «поверхность диалога» описывала бы её неверно.
 const SHELL = {
   center: {
     overlay: 'justify-center overflow-y-auto overscroll-contain p-lg sm:p-xl',
-    card: 'm-auto rounded-card [animation:fadeup_0.25s_ease]',
+    card: `m-auto tb-arrive ${surface('dialog')}`,
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
-    card: 'h-full overflow-y-auto overscroll-contain tb-drawerin',
+    // Ширина шторки живёт ЗДЕСЬ, а не приходит от вызывающего. Она не одна из четырёх
+    // ступеней ниже — это доля экрана с потолком, — и шторка в приложении одна, поэтому
+    // её ширина принадлежит варианту, а не месту вызова. Пока она приходила классом,
+    // `className` нельзя было закрыть.
+    card: 'flex h-full w-[min(84vw,300px)] flex-col overflow-y-auto overscroll-contain bg-surface-card tb-drawerin',
   },
+} as const;
+
+// Четыре ширины диалога, и это ровно та шкала, ради которой она есть: 22 модалки тратили
+// 11 ширин. `confirm` — вопрос с двумя кнопками, `form` — диалог, который заполняют,
+// `panel` — со списком или табами, `table` — построенный вокруг таблицы.
+//
+// Ступенью, а не классом: `size="form"` был открытым концом. Через него приходила
+// не только ширина — четыре сайта унесли из скопированной строки чужой `z={75}` и
+// `w-[460px]`, — и он же позволял передать ЛЮБОЙ класс диалогу, включая тот, что спорит с
+// его собственной поверхностью. Шторка ширину теперь не передаёт (см. выше), поэтому
+// `className` у диалога больше нет вовсе.
+const SIZE = {
+  confirm: 'w-confirm',
+  form: 'w-form',
+  panel: 'w-panel',
+  table: 'w-table',
 } as const;
 
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
@@ -73,13 +99,14 @@ const SHELL = {
 export function Modal({
   onClose,
   children,
-  className = 'w-confirm',
+  size = 'confirm',
   variant = 'center',
   label,
 }: {
   onClose: () => void;
   children: ReactNode;
-  className?: string;
+  // Ширина диалога. Шторка её игнорирует: её ширина принадлежит варианту.
+  size?: keyof typeof SIZE;
   variant?: keyof typeof SHELL;
   // Accessible name for the dialog — REQUIRED, not optional: while it was
   // optional 20 of the 21 call sites left it out and a screen reader announced a
@@ -156,7 +183,7 @@ export function Modal({
     <div
       role="presentation"
       onClick={onClose}
-      className={`fixed inset-0 z-dialog flex bg-veil [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
+      className={cn('fixed inset-0 z-dialog flex bg-veil tb-ovfade', SHELL[variant].overlay)}
     >
       <div
         ref={dialogRef}
@@ -168,7 +195,11 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={`max-w-full bg-white outline-none ${SHELL[variant].card} ${className}`}
+        className={cn(
+          'max-w-full outline-none',
+          SHELL[variant].card,
+          variant === 'center' && SIZE[size],
+        )}
       >
         {children}
       </div>

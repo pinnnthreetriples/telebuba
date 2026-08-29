@@ -136,9 +136,9 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
   };
 
   return (
-    <Modal onClose={onClose} className="w-panel" label={t('warming.cfg.title')}>
+    <Modal onClose={onClose} size="panel" label={t('warming.cfg.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <Icon name="gear" size={18} />
         </span>
         <div>
@@ -199,7 +199,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietFrom')}
-                className="w-number rounded-lg border border-line bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
+                className="w-number rounded-lg border border-line bg-surface-card px-md py-sm text-center text-body font-semibold tabular-nums outline-none"
               />
               <span className="shrink-0 type-dialog-body">–</span>
               <input
@@ -210,7 +210,7 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
                 inputMode="numeric"
                 maxLength={5}
                 aria-label={t('warming.cfg.quietTo')}
-                className="w-number rounded-lg border border-line bg-white px-md py-sm text-center text-lead font-semibold tabular-nums outline-none"
+                className="w-number rounded-lg border border-line bg-surface-card px-md py-sm text-center text-body font-semibold tabular-nums outline-none"
               />
             </div>
             <div className="mt-md text-right type-caption">{t('warming.cfg.quietNote')}</div>

@@ -55,7 +55,7 @@ export function ListenerCard({
   return (
     <Card className="relative z-raised px-lg py-lg">
       <div className="mb-xs flex items-center gap-md">
-        <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-icon shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <Icon name="chart" size={16} />
         </span>
         <div className="min-w-0">
@@ -66,7 +66,6 @@ export function ListenerCard({
       {listenerId ? (
         <div className="mt-md">
           <SurfHover
-            shift={144}
             surfaceId="lsn-surf"
             open={listenerActionsOpen}
             actions={
@@ -85,7 +84,7 @@ export function ListenerCard({
                   type="button"
                   title={t('neurocomment.listener.edit')}
                   onClick={onEdit}
-                  className="flex w-action items-center justify-center border-none bg-transparent text-primary"
+                  className="flex w-action items-center justify-center border-none bg-transparent text-action-primary"
                 >
                   <Icon name="pencil" size={16} />
                 </button>
@@ -107,10 +106,10 @@ export function ListenerCard({
               >
                 <div className="flex min-w-0 items-center gap-sm">
                   <span
-                    className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
+                    className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
                   />
                   <span
-                    className={`type-item-title ${working ? 'tb-pulse text-success-deep' : 'text-ink-muted'}`}
+                    className={`type-item-title ${working ? 'tb-pulse text-success-deep' : 'text-content-muted'}`}
                   >
                     {statusLabel}
                   </span>
@@ -119,7 +118,7 @@ export function ListenerCard({
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-micro font-bold text-white ${working ? 'bg-success-deep' : 'bg-ink-muted'}`}
+                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-tiny font-bold text-on-action ${working ? 'bg-success-deep' : 'bg-content-muted'}`}
                   >
                     {activeCampaignCount}
                   </span>

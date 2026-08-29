@@ -110,7 +110,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
             type="button"
             onClick={suggest}
             disabled={topic === '' || topicTooLong || expand.isPending}
-            className="shrink-0 whitespace-nowrap rounded-lg border border-line bg-white px-lg py-md text-body font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            className="shrink-0 whitespace-nowrap rounded-lg border border-line bg-surface-card px-lg py-md text-body font-medium text-content-muted transition-colors hover:border-action-primary hover:text-action-primary disabled:opacity-50"
           >
             {expand.isPending
               ? t('neurocomment.modal.discovery.form.expanding')
@@ -223,7 +223,7 @@ export function DiscoveryForm({ form, submitting, onChange, onSubmit }: Props) {
           onClick={() => {
             onChange(EMPTY_FORM);
           }}
-          className="rounded-lg px-lg py-sm text-body text-ink-muted hover:text-primary"
+          className="rounded-lg px-lg py-sm text-body text-content-muted hover:text-action-primary"
         >
           {t('neurocomment.modal.discovery.form.reset')}
         </button>

@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
+import { buttonBase, type ControlShape, type ControlSize } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The app's text buttons, as the three shapes the design actually has and the four
@@ -9,55 +10,46 @@ import { cn } from '@/shared/lib/cn';
 // `disabled:opacity-60` in the next, hover was set on one button in sixty-six, and
 // `focus-visible` appeared three times in the whole app.
 //
-// `IconButton` stays its own component rather than a size here: it is square, it
-// carries no text, and its accessible name comes from `aria-label` — a button
-// whose label is mandatory is a different contract, not a variant.
-// The focus ring is an OUTLINE, not `shadow-focus`. It was the shadow, and the shadow
-// is `rgba(0,102,255,0.12)` — composited on this button's own white that is #e0edff,
-// **1.18:1**, against the 3:1 that WCAG 2.2 asks of a focus indicator. Worse, it came
-// with `outline-none`, so the browser ring it replaced was gone too: every one of the
-// app's remaining hand-written buttons, which style focus not at all, was easier to
-// follow by keyboard than the design system's own. `docs/design-system.html` states the
-// correct rule ("обводку не заменяют тенью") and the component had been contradicting it.
-// `shadow-focus` keeps its job on the FIELDS, where it is a glow beside a border that
-// goes `primary` — 4.83:1, carrying the indication on its own.
-const BASE =
-  'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap transition-colors duration-state focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:pointer-events-none disabled:opacity-50 aria-busy:cursor-progress';
-
-// `md` is the dialog footer and the page-level action; `sm` the action inside a
-// card, where `md` would set the card header's height; `xs` the one that sits in a
-// table row beside a value, and the only rung that is not a pill — at 22px tall a
-// full radius and a rectangle are the same shape anyway. `block` is the action that
-// spans its form, standing as the last row under the fields it commits.
+// `IconButton` остаётся своим компонентом, а не ступенью здесь: он квадратный, не несёт
+// текста, и его доступное имя приходит из `aria-label` — кнопка с обязательной подписью
+// это другой контракт, а не вариант.
 //
-// `block` is the one rung whose width is its own: the other three are as wide as
-// their label, and a caller that wants them wider says so. It is also the one rung
-// that is not `inline-flex`, because `w-full` on an inline-level box still sits on a
-// line and collects that line's leading underneath it — a few pixels of space under
-// six buttons that nobody chose, and exactly the kind of difference this component
-// exists to stop carrying. Its `rounded-lg` is the radius scale's own name for a
-// panel nested in a card, which is the shape a full-width row has; a pill here would
-// be a 200px stadium.
+// Высота, горизонтальные поля, рунг размера, форма, фокус, disabled и переход приходят из
+// `recipes/controls.ts` — того же рецепта, что у Input, Textarea и Select. Раньше каждый
+// набирал это сам, и высота СКЛАДЫВАЛАСЬ из padding и интерлиньяжа: `size="md"` значил
+// ~40px у кнопки и ~41px у поля, а смена рунга размера меняла высоту контрола. Теперь
+// высота фиксированная и общая — `Button size="sm"` и `Input size="sm"` ровно одинаковы.
 //
-// There is no rung between `sm` and `xs`, though seven buttons asked for one — a
-// pill at `px-lg py-sm text-tiny`, 32.5px tall against `sm`'s 34.75 and `xs`'s 30.75.
-// Two pixels is drift, not a decision, and every one of the seven sits inside a card,
-// which is the sentence `sm` already answers. They are on `sm` now. (Every height here
-// is a bordered fill measured in Chrome; nothing sets a line-height, so preflight's
-// `html { line-height: 1.5 }` is what each rung's text is spaced by. The 27/29/25 this
-// note used to quote came from spacing the text at 1.0, which is a rung the app has
-// nowhere — the GAPS it decided on survived the correction, the absolutes did not.)
+// Здесь осталось то, что действительно принадлежит кнопке: заливка (`VARIANT`) и вес
+// надписи. Чем кнопка залита — её собственное решение; какого она размера — общее.
 //
-// There is no fifth rung for the app's six pagination buttons either, and their case
-// is weaker still: `px-lg py-sm text-lead` at weight 400 stands 35.5px, three quarters
-// of a pixel over `sm`. The rest of the difference was never chosen — nothing else in
-// the app sets `lead` at 400 — so `sm` takes them, four pixels wider a side.
-const SIZE = {
-  md: 'rounded-full px-2xl py-md text-lead font-semibold',
-  sm: 'rounded-full px-xl py-sm text-body font-semibold',
-  xs: 'rounded-md px-md py-tight text-body font-medium',
-  block: 'flex w-full rounded-lg py-md text-lead font-medium',
-} as const;
+// `md` — подвал диалога и действие уровня страницы; `sm` — действие внутри карточки, где
+// `md` задал бы высоту шапки; `xs` — то, что стоит в строке таблицы рядом со значением, и
+// единственная ступень не-пилюля: на 28px полный радиус и прямоугольник — одна форма.
+// `block` — действие, которое растягивается на всю форму, стоя последней строкой под
+// полями, которые оно подтверждает.
+//
+// Промежуточной ступени между `sm` и `xs` нет, хотя семь кнопок её просили, и пятой для
+// шести кнопок пагинации тоже нет: и те и другие стоят внутри карточки, а это предложение,
+// на которое уже отвечает `sm`. С фиксированными высотами этот спор закрыт окончательно —
+// ступеней ровно столько, сколько высот, а высот четыре.
+//
+// Ступень рецепта + форма + вес. Имена ступеней не менялись: их набрано 200+ мест, и
+// переименование стоило бы 200 правок, не сказав ничего нового.
+//
+// `block` — единственная ступень, у которой ширина своя, и единственная не `inline-flex`:
+// `w-full` на строчном боксе всё равно стоит на строке и собирает под собой её
+// интерлиньяж. Её `rounded-lg` — имя радиуса для панели, вложенной в карточку, то есть
+// форма полноширинной строки; пилюля здесь была бы стадионом на 200px.
+const SIZE: Record<
+  'md' | 'sm' | 'xs' | 'block',
+  { size: ControlSize; shape: ControlShape; weight: string; extra?: string }
+> = {
+  md: { size: 'md', shape: 'pill', weight: 'font-semibold' },
+  sm: { size: 'sm', shape: 'pill', weight: 'font-semibold' },
+  xs: { size: 'xs', shape: 'inset', weight: 'font-medium' },
+  block: { size: 'md', shape: 'field', weight: 'font-medium', extra: 'flex w-full' },
+};
 
 // `primary` is the one committing action on a screen and `secondary` everything
 // beside it; `danger` is the committing action when that action destroys something
@@ -76,16 +68,16 @@ const SIZE = {
 // There is no white-filled `danger`, though five buttons wear one: the retry beside
 // the error sentence inside a `Notice tone="danger"`, where this variant's own
 // `bg-danger-tint` is the tint it is already standing on. The white is a real
-// decision, so those five say it as `className="bg-white"` instead of losing it — but
+// decision, so those five say it as `className="bg-surface-card"` instead of losing it — but
 // all five live in `widgets/account-edit`, and a fill is not given a name until two
 // independent slices ask for it.
 const VARIANT = {
-  primary: 'bg-primary text-white hover:bg-primary-press',
-  secondary: 'border border-line bg-white text-ink hover:border-line-strong',
+  primary: 'bg-action-primary text-on-action hover:bg-action-pressed',
+  secondary: 'border border-line bg-surface-card text-content-primary hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
-  ghost: 'text-ink-muted hover:bg-canvas hover:text-ink',
+  ghost: 'text-content-muted hover:bg-canvas hover:text-content-primary',
   dashed:
-    'border border-dashed border-primary-line bg-white text-primary-deep hover:border-primary hover:bg-primary-tint',
+    'border border-dashed border-info-line bg-surface-card text-info-strong hover:border-action-primary hover:bg-action-hover',
 } as const;
 
 export function Button({
@@ -112,7 +104,14 @@ export function Button({
       type="button"
       disabled={disabled || loading}
       aria-busy={loading || undefined}
-      className={cn(BASE, SIZE[size], VARIANT[variant], className)}
+      className={cn(
+        buttonBase({ size: SIZE[size].size, shape: SIZE[size].shape }),
+        'aria-busy:cursor-progress',
+        SIZE[size].weight,
+        SIZE[size].extra,
+        VARIANT[variant],
+        className,
+      )}
       {...rest}
     >
       {children}

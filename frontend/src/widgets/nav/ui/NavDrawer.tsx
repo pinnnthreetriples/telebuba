@@ -17,16 +17,11 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
   const { t } = useTranslation();
 
   return (
-    <Modal
-      onClose={onClose}
-      variant="drawer-left"
-      label={t('shell.menu')}
-      className="flex w-[min(84vw,300px)] flex-col"
-    >
+    <Modal onClose={onClose} variant="drawer-left" label={t('shell.menu')}>
       <div className="flex h-header shrink-0 items-center justify-between border-b border-line px-lg">
         <div className="flex items-center gap-md">
-          <div className="flex size-icon items-center justify-center rounded-lg bg-ink">
-            <div className="size-node rounded-full bg-primary" />
+          <div className="flex size-icon items-center justify-center rounded-lg bg-content-primary">
+            <div className="size-node rounded-full bg-action-primary" />
           </div>
           {/* The wordmark is not a type role: it is one mark rendered in two places (this
               bar and the drawer), not a kind of text the app has. Naming it would put a
@@ -39,7 +34,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           type="button"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-sm flex size-touch items-center justify-center rounded-full text-ink-muted"
+          className="-mr-sm flex size-touch items-center justify-center rounded-full text-content-muted"
         >
           <Icon name="close" size={18} />
         </button>
@@ -51,8 +46,8 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
             key={link.to}
             to={link.to}
             onClick={onClose}
-            className={`flex min-h-touch items-center rounded-lg px-md text-lead font-medium transition-colors ${
-              activeIdx === index ? 'bg-primary-tint text-primary-deep' : 'text-ink-muted'
+            className={`flex min-h-touch items-center rounded-lg px-md text-body font-medium transition-colors ${
+              activeIdx === index ? 'bg-info-tint text-info-strong' : 'text-content-muted'
             }`}
           >
             {t(`nav.${link.key}`)}

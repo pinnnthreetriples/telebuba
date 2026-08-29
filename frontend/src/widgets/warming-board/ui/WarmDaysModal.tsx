@@ -63,10 +63,10 @@ export function WarmDaysModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-confirm" label={t('warming.days.title')}>
+    <Modal onClose={onClose} size="confirm" label={t('warming.days.title')}>
       <div className="p-2xl">
         <div className="mb-xs flex items-start gap-md">
-          <div className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+          <div className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
             <svg
               width="17"
               height="17"
@@ -88,12 +88,12 @@ export function WarmDaysModal({
               aria-describedby={spamTipId}
               disabled={spam === 'loading'}
               onClick={runSpamCheck}
-              className={`inline-flex items-center gap-sm rounded-full border bg-white px-md py-tight text-body font-medium disabled:opacity-60 ${
+              className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium disabled:opacity-60 ${
                 spam === 'clean'
                   ? 'border-success text-success-deep'
                   : spam === 'limited'
                     ? 'border-danger text-danger'
-                    : 'border-line text-ink-muted'
+                    : 'border-line text-content-muted'
               }`}
             >
               <Icon name="shield-check" size={14} />
@@ -113,7 +113,7 @@ export function WarmDaysModal({
         <div className="mb-2xl type-dialog-body">{t('warming.days.subtitle', { phone })}</div>
 
         <div className="mb-xl text-center">
-          <div className="text-hero font-bold leading-none text-primary">{days}</div>
+          <div className="text-hero font-bold leading-none text-action-primary">{days}</div>
           <div className="mt-xs type-dialog-body">{t('warming.days.label', { count: days })}</div>
         </div>
 
@@ -138,7 +138,10 @@ export function WarmDaysModal({
           className="relative mx-md mb-tight h-compact cursor-grab touch-none select-none outline-none"
         >
           <div className="absolute inset-x-0 top-1/2 h-meter -translate-y-1/2 overflow-hidden rounded-full bg-canvas">
-            <div className="h-full rounded-full bg-primary" style={{ width: `${String(pct)}%` }} />
+            <div
+              className="h-full rounded-full bg-action-primary"
+              style={{ width: `${String(pct)}%` }}
+            />
           </div>
           <div className="pointer-events-none absolute inset-x-0 top-1/2 h-meter -translate-y-1/2">
             {TICKS.map((i) => (
@@ -150,7 +153,7 @@ export function WarmDaysModal({
             ))}
           </div>
           <div
-            className="absolute top-1/2 size-glyph -translate-x-1/2 -translate-y-1/2 rounded-full border-[2px] border-primary bg-white shadow-thumb"
+            className="absolute top-1/2 size-glyph -translate-x-1/2 -translate-y-1/2 rounded-full border-[2px] border-action-primary bg-surface-card shadow-thumb"
             style={{ left: `${String(pct)}%` }}
           />
         </div>
@@ -181,7 +184,7 @@ export function WarmDaysModal({
               type="button"
               aria-label={t('warming.persona.label')}
               aria-describedby={personaTipId}
-              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-micro font-bold text-ink-subtle"
+              className="inline-flex size-glyph items-center justify-center rounded-full border border-line text-tiny font-bold text-content-subtle"
             >
               ?
             </button>

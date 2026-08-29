@@ -18,7 +18,7 @@ import {
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
-const CHECKBOX = 'size-spinner shrink-0 accent-primary disabled:opacity-40';
+const CHECKBOX = 'size-spinner shrink-0 accent-action-primary disabled:opacity-40';
 
 const SOURCE_STATE = {
   ran: 'sourceRan',
@@ -115,7 +115,7 @@ function CommentsMark({ state }: { state: string }) {
   }
   if (state === 'comments_off') {
     return (
-      <span className="inline-flex text-ink-muted" role="img" title={label} aria-label={label}>
+      <span className="inline-flex text-content-muted" role="img" title={label} aria-label={label}>
         <StatusIcon kind="err" />
       </span>
     );
@@ -274,7 +274,7 @@ export function DiscoveryResults({
       cell: ({ row }) => (
         // Capped only where there is room for it: 240px plus the card's own padding
         // overflows the dialog box at a 320px viewport.
-        <span className="block truncate text-ink-muted md:max-w-name">
+        <span className="block truncate text-content-muted md:max-w-name">
           {row.original.title ?? ''}
         </span>
       ),

@@ -22,7 +22,7 @@ export function AccountsCard({
       header={<span className="type-card-title">{t('neuroshilling.accounts.title')}</span>}
     >
       <div className="mb-md flex items-center gap-sm">
-        <span className="rounded-full border border-line bg-canvas px-md py-xs text-tiny font-medium text-ink-body">
+        <span className="rounded-full border border-line bg-canvas px-md py-xs text-tiny font-medium text-content-secondary">
           {t('neuroshilling.accounts.selected', { count: accounts.length })}
         </span>
         {/* The hint carries two rules. The picker enforces the second one — a held
@@ -36,7 +36,11 @@ export function AccountsCard({
       {accounts.length > 0 ? (
         <div className="mb-md flex flex-wrap gap-sm">
           {accounts.map((account) => (
-            <Badge size="md" className="border border-line text-ink-body" key={account.account_id}>
+            <Badge
+              size="md"
+              className="border border-line text-content-secondary"
+              key={account.account_id}
+            >
               {account.title}
             </Badge>
           ))}

@@ -2,7 +2,9 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
+import { FOCUS_RING } from '@/shared/design-system';
 import { type FeedbackResult } from '@/shared/lib';
+import { cn } from '@/shared/lib/cn';
 import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
 
 // Tone is the token the status MEANS (running = success, held = amber, shelved =
@@ -10,7 +12,7 @@ import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } fr
 const STATUS_TONE = {
   active: 'text-success-deep',
   paused: 'text-warning-deep',
-  archived: 'text-ink-muted',
+  archived: 'text-content-muted',
 } as const;
 
 // Channel-chip tone driven by the live "Проверить каналы" verdict: banned = red
@@ -18,7 +20,7 @@ const STATUS_TONE = {
 const CHANNEL_CHIP = {
   banned: 'border-danger bg-danger-tint text-danger-deep',
   ok: 'border-success bg-success-tint text-success-deep',
-  default: 'border-line bg-canvas text-ink-body',
+  default: 'border-line bg-canvas text-content-secondary',
 } as const;
 
 // The campaigns card: per-campaign run/pause/edit/delete (SurfHover-revealed),
@@ -93,7 +95,6 @@ export function CampaignsCard({
           return (
             <SurfHover
               key={campaign.campaign_id}
-              shift={144}
               surfaceId={`camp-surf-${campaign.campaign_id}`}
               open={openCampaignActions === campaign.campaign_id}
               actions={
@@ -118,7 +119,7 @@ export function CampaignsCard({
                       // prompt modal's account list) on THIS campaign (finding #5).
                       onEditPrompt(campaign);
                     }}
-                    className="flex w-action items-center justify-center border-none bg-transparent text-primary"
+                    className="flex w-action items-center justify-center border-none bg-transparent text-action-primary"
                   >
                     <Icon name="pencil" size={18} />
                   </button>
@@ -135,18 +136,35 @@ export function CampaignsCard({
                 </>
               }
               surface={
+                // Выбор кампании — НАСТОЯЩАЯ кнопка, а шестерёнка её сосед, не потомок.
+                // Раньше здесь стоял `div role="button" tabIndex={0} onClick`, и это было
+                // сломано дважды: роль обещала кнопку, но Enter и Space не обрабатывались
+                // (у `div` их нет по умолчанию) — то есть с клавиатуры карточка
+                // фокусировалась и не выбиралась; и внутри этой «кнопки» лежала другая
+                // кнопка, чего ARIA не допускает, а скринридер объявляет как одну
+                // непонятную. Настоящему `<button>` Enter и Space достаются бесплатно.
+                //
+                // Кнопка накрывает всю карточку (`absolute inset-0`), поэтому область
+                // нажатия осталась прежней, а шестерёнка стоит ВЫШЕ по слою и остаётся
+                // отдельной целью. Так `stopPropagation` больше не нужен: события
+                // шестерёнки не проходят через кнопку, потому что она ей не родитель.
                 <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    onSelect(campaign.campaign_id);
-                  }}
                   // Background lives in both branches, never in the base: two `bg-*`
                   // utilities in one class list are resolved by stylesheet order, and
-                  // `bg-white` wins over the selected tint.
-                  className={`cursor-pointer rounded-lg border p-lg ${isSelected ? 'border-primary bg-primary-tint' : 'border-line bg-white'}`}
+                  // `bg-surface-card` wins over the selected tint.
+                  className={`relative rounded-lg border p-lg ${isSelected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
                 >
-                  <div className="flex justify-between gap-md">
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => {
+                      onSelect(campaign.campaign_id);
+                    }}
+                    className={cn('absolute inset-0 cursor-pointer rounded-lg', FOCUS_RING)}
+                  >
+                    <span className="sr-only">{campaign.name}</span>
+                  </button>
+                  <div className="pointer-events-none flex justify-between gap-md">
                     <div className="min-w-0 flex-1">
                       <div className="mb-tight type-card-title">{campaign.name}</div>
                       <div className="type-caption">
@@ -164,14 +182,16 @@ export function CampaignsCard({
                         <span className="size-dot rounded-full bg-current" />
                         {t(`neurocomment.campaign.status.${campaign.status}`)}
                       </span>
+                      {/* `pointer-events-auto` возвращает шестерёнке нажимаемость: слой
+                          выше её выключил, чтобы клик по тексту доставался кнопке. */}
                       <IconButton
                         size="sm"
                         tone="primary"
+                        className="pointer-events-auto relative"
                         title={t('neurocomment.campaign.actions')}
                         aria-label={t('neurocomment.campaign.actions')}
                         aria-expanded={openCampaignActions === campaign.campaign_id}
-                        onClick={(event) => {
-                          event.stopPropagation();
+                        onClick={() => {
                           onToggleActions(campaign.campaign_id);
                         }}
                       >
@@ -204,7 +224,7 @@ export function CampaignsCard({
           header={<span className="type-item-title">{t('neurocomment.channels.title')}</span>}
         >
           <div className="mb-md flex items-center justify-between gap-sm">
-            <span className="min-w-0 truncate type-caption font-medium text-primary">
+            <span className="min-w-0 truncate type-caption font-medium text-action-primary">
               {activeCampaign?.name ?? ''}
             </span>
             <div className="flex shrink-0 items-center gap-sm">
@@ -213,7 +233,7 @@ export function CampaignsCard({
                 type="button"
                 disabled={campaignId === null || checkingChannels}
                 onClick={onCheckChannels}
-                className="shrink-0 rounded-full border border-line bg-white px-md py-xs text-tiny font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+                className="shrink-0 rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-content-muted transition-colors hover:border-action-primary hover:text-action-primary disabled:opacity-50"
               >
                 {checkingChannels
                   ? t('neurocomment.channels.checking')
@@ -237,7 +257,7 @@ export function CampaignsCard({
                 {(channel.deleted_recent ?? 0) > 0 ? (
                   <span
                     title={t('neurocomment.channels.deletedHint')}
-                    className="rounded-full bg-danger-tint px-tight py-px text-micro font-medium text-danger-deep"
+                    className="rounded-full bg-danger-tint px-tight py-px text-tiny font-medium text-danger-deep"
                   >
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>
@@ -248,14 +268,14 @@ export function CampaignsCard({
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-lead leading-none text-ink-subtle"
+                  className="text-body leading-none text-content-subtle"
                 >
                   ×
                 </button>
               </span>
             ))}
             {addingChannel ? (
-              <span className="inline-flex items-center gap-tight rounded-full border border-primary bg-white py-xs pl-md pr-xs">
+              <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
                 <input
                   autoFocus
                   value={channelInput}
@@ -275,7 +295,7 @@ export function CampaignsCard({
                   aria-label={t('neurocomment.modal.add')}
                   disabled={!channelInput.trim()}
                   onClick={onAddChannel}
-                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
                 >
                   <Icon name="check" size={12} />
                 </button>
@@ -290,7 +310,7 @@ export function CampaignsCard({
                 // page's; if a third appears, that is the moment it earns a rung.
                 disabled={campaignId === null}
                 onClick={onStartAdd}
-                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-md py-tight text-body text-ink-muted hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary disabled:opacity-50"
               >
                 {t('neurocomment.channels.addPill')}
               </button>

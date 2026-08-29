@@ -8,7 +8,7 @@ import {
   setAllAccountsPrivacyMutation,
 } from '@/entities/account';
 import type { AccountPrivacyUpdateRequest, PrivacySettingsResult } from '@/shared/api';
-import { Button, ConfirmModal, Notice } from '@/shared/ui';
+import { Button, ConfirmModal, Notice, Spinner } from '@/shared/ui';
 
 import { envelopeMessage } from './_channelsShared';
 import { PrivacyLevelRow, type PrivacyLevel, type PrivacyShown } from './PrivacyLevelRow';
@@ -188,7 +188,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           aria-label={t('accounts.profile.privacy.loading')}
           className="flex justify-center py-2xl"
         >
-          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-primary" />
+          <Spinner size="md" />
         </div>
       )}
 
@@ -202,7 +202,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           <Button
             size="xs"
             variant="danger"
-            className="bg-white"
+            className="bg-surface-card"
             onClick={() => {
               void privacy.refetch();
             }}
@@ -219,7 +219,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
           // Prose on an amber surface, so `ink-body` rather than `ink-muted`: moving this
           // notice onto `warning-tint` left the muted grey at 4.26:1, just under the AA
           // floor it used to clear at 4.53:1 on the literal it replaced.
-          className="mb-lg rounded-lg border border-line bg-warning-tint px-md py-md text-body text-ink-body"
+          className="mb-lg rounded-lg border border-line bg-warning-tint px-md py-md text-body text-content-secondary"
         >
           {t('accounts.profile.privacy.writeReadError', { reason: writeReadError })}
         </div>
@@ -276,19 +276,19 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
         <div
           role="status"
           aria-live="polite"
-          className="mt-lg rounded-lg border border-line bg-white px-lg py-md text-body"
+          className="mt-lg rounded-lg border border-line bg-surface-card px-lg py-md text-body"
         >
           <div className="flex flex-wrap gap-x-lg gap-y-tight">
             <span>{t('accounts.profile.privacy.bulkOk', { n: bulk.ok })}</span>
             <span className={bulk.failed > 0 ? 'text-danger' : undefined}>
               {t('accounts.profile.privacy.bulkFailed', { n: bulk.failed })}
             </span>
-            <span className="text-ink-subtle">
+            <span className="text-content-subtle">
               {t('accounts.profile.privacy.bulkSkipped', { n: bulk.skipped })}
             </span>
           </div>
           {bulk.outcomes.some((outcome) => outcome.status !== 'ok') && (
-            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm text-tiny text-ink-subtle">
+            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm text-tiny text-content-subtle">
               {/* Both non-ok kinds are listed with their reason: a skipped
                   account carries the status that disqualified it, and "3
                   skipped" with no names is not actionable. */}

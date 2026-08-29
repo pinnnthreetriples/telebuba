@@ -47,6 +47,11 @@ frontend/dist/
 frontend/.vite/
 frontend/coverage/
 frontend/.cov-tmp/
+# Артефакты прогона Playwright — трассы и diff-картинки упавших снимков. Сами
+# эталоны (frontend/e2e/__screenshots__/) отслеживаются: они и есть гейт.
+frontend/e2e/.artifacts/
+frontend/playwright-report/
+frontend/test-results/
 
 # Tool caches
 .pytest_cache/

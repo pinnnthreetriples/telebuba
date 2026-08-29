@@ -26,13 +26,9 @@ export function CreateCampaignModal({
   };
 
   return (
-    <Modal
-      onClose={onClose}
-      className="w-panel"
-      label={t('neurocomment.modal.createCampaign.title')}
-    >
+    <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.createCampaign.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
           <Icon name="plus" size={18} />
         </span>
         <div>
@@ -80,7 +76,7 @@ export function CreateCampaignModal({
             {channels.map((channel, index) => (
               <Badge
                 size="md"
-                className="gap-sm border border-line text-ink-body"
+                className="gap-sm border border-line text-content-secondary"
                 key={`${channel}-${String(index)}`}
               >
                 {channel}
@@ -90,7 +86,7 @@ export function CreateCampaignModal({
                   onClick={() => {
                     setChannels((list) => list.filter((_, i) => i !== index));
                   }}
-                  className="cursor-pointer text-lead leading-none text-ink-subtle"
+                  className="cursor-pointer text-body leading-none text-content-subtle"
                 >
                   ×
                 </button>
@@ -117,7 +113,7 @@ export function CreateCampaignModal({
           <Button
             variant="ghost"
             size="sm"
-            className="rounded-lg bg-primary-tint text-primary-deep"
+            className="rounded-lg bg-info-tint text-info-strong"
             onClick={addChannel}
           >
             {t('neurocomment.modal.add')}

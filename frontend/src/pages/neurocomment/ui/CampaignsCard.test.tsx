@@ -84,29 +84,93 @@ const CAMPAIGN = {
   updated_at: '',
 };
 
+// Кнопка выбора накрывает карточку целиком (`absolute inset-0`), поэтому карточка — её
+// родитель. Раньше здесь искался `[role="button"]`: сама карточка носила эту роль, не
+// обрабатывая ни Enter, ни Space, и содержала внутри другую кнопку.
+function selectButton(): HTMLElement {
+  return screen.getByRole('button', { name: 'tabacum' });
+}
+
 function campaignCard(): HTMLElement {
-  return screen.getByText('tabacum').closest('[role="button"]')!;
+  return selectButton().parentElement!;
 }
 
 // Naming the two colours rather than counting `bg-*` utilities: jsdom has no
 // cascade, so the tint that actually wins is unobservable, but the defect was
-// `bg-white` sitting in the base list beside it — and a count also reddens on
+// `bg-surface-card` sitting in the base list beside it — and a count also reddens on
 // `bg-clip-padding` and friends, which carry no colour at all.
 test('the selected campaign card carries the tint and not the white it lost to', () => {
   renderCard({ campaignList: [CAMPAIGN], campaignId: 'c1' });
-  expect(campaignCard().className).toContain('bg-primary-tint');
-  expect(campaignCard().className).not.toContain('bg-white');
+  expect(campaignCard().className).toContain('bg-info-tint');
+  expect(campaignCard().className).not.toContain('bg-surface-card');
   // The row's actions sit UNDER this card, hidden only by being covered, so the
   // sliding surface has to bring its own opaque backdrop or pause/edit/delete show
   // through an unhovered card. The tint used to be 6% alpha, which is how that was
   // found; it is opaque now and the backstop is still what the assertion guards.
-  expect(document.getElementById('camp-surf-c1')?.className).toContain('bg-white');
+  expect(document.getElementById('camp-surf-c1')?.className).toContain('bg-surface-card');
 });
 
 test('an unselected campaign card still carries a background of its own', () => {
   // The other branch: with the colour only asserted on the selected card,
-  // deleting `bg-white` from this one goes unnoticed.
+  // deleting `bg-surface-card` from this one goes unnoticed.
   renderCard({ campaignList: [CAMPAIGN], campaignId: null });
-  expect(campaignCard().className).toContain('bg-white');
-  expect(campaignCard().className).not.toContain('bg-primary-tint');
+  expect(campaignCard().className).toContain('bg-surface-card');
+  expect(campaignCard().className).not.toContain('bg-info-tint');
+});
+
+// ── Клавиатура ─────────────────────────────────────────────────────────────────────
+//
+// Карточка была `div role="button" tabIndex={0}` с одним `onClick`. Такая пара
+// фокусируется и НЕ активируется: ни Enter, ни Space у `div` не превращаются в клик, их
+// пришлось бы обрабатывать руками, а роль тем временем обещала скринридеру кнопку.
+// Внутри лежала вторая кнопка — шестерёнка, — чего ARIA не допускает.
+//
+// Настоящему `<button>` всё это достаётся от платформы, и тест утверждает именно это: не
+// «есть обработчик», а «нажатие с клавиатуры выбирает».
+test('карточку кампании можно выбрать с клавиатуры, и шестерёнка — отдельная цель', async () => {
+  const onSelect = vi.fn();
+  const onToggleActions = vi.fn();
+  renderCard({ campaignList: [CAMPAIGN], campaignId: null, onSelect, onToggleActions });
+
+  const select = screen.getByRole('button', { name: 'tabacum' });
+  const gear = screen.getByRole('button', { name: 'Действия' });
+  const pause = screen.getByRole('button', { name: 'Поставить на паузу' });
+
+  // Шестерёнка не внутри кнопки выбора: вложенная кнопка — это то, что было.
+  expect(select.contains(gear)).toBe(false);
+
+  // Порядок обхода утверждается целиком, а не «карточка после N табов»: действия стоят
+  // перед поверхностью в DOM, потому что поверхность их закрашивает сверху, и первый Tab
+  // в строку попадает на них. Это и есть тот случай, из-за которого раскрытие по фокусу
+  // обязательно: без него Tab уводил фокус под непрозрачную карточку.
+  const surface = () => document.getElementById('camp-surf-c1');
+  const REVEALED = /(^|\s)-translate-x-\[var\(--shift\)\]/;
+
+  await userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
+  expect(pause).toHaveFocus();
+  expect(surface()?.className).toMatch(REVEALED);
+
+  await userEvent.tab();
+  await userEvent.tab();
+  await userEvent.tab();
+  expect(select).toHaveFocus();
+  // Фокус ушёл с действий — поверхность вернулась на место.
+  expect(surface()?.className).not.toMatch(REVEALED);
+  // Видимый фокус, а не браузерное умолчание, снятое `outline-none`: обводка рецепта.
+  expect(select.className).toContain('focus-visible:outline-focus');
+
+  await userEvent.keyboard('{Enter}');
+  expect(onSelect).toHaveBeenCalledWith('c1');
+
+  await userEvent.keyboard(' ');
+  expect(onSelect).toHaveBeenCalledTimes(2);
+
+  // Следующая остановка — шестерёнка, и она открывает действия, а не выбирает.
+  await userEvent.tab();
+  expect(gear).toHaveFocus();
+  await userEvent.keyboard('{Enter}');
+  expect(onToggleActions).toHaveBeenCalledWith('c1');
+  expect(onSelect).toHaveBeenCalledTimes(2);
 });

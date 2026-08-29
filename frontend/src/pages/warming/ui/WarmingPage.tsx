@@ -200,7 +200,7 @@ export function WarmingPage() {
       });
   };
 
-  if (isPending) return <p className="text-ink-muted">{t('warming.loading')}</p>;
+  if (isPending) return <p className="text-content-muted">{t('warming.loading')}</p>;
   if (isError) {
     return (
       <p role="alert" className="text-danger">
@@ -232,9 +232,13 @@ export function WarmingPage() {
             <Counter
               value={warming.length}
               label={t('warming.counter.warming')}
-              cls="text-primary"
+              cls="text-action-primary"
             />
-            <Counter value={idle.length} label={t('warming.counter.ready')} cls="text-ink" />
+            <Counter
+              value={idle.length}
+              label={t('warming.counter.ready')}
+              cls="text-content-primary"
+            />
             <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
           </div>
           <Button
@@ -250,7 +254,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className={`gap-sm ${poolOn ? 'bg-ink hover:bg-ink' : ''}`}
+            className={`gap-sm ${poolOn ? 'bg-content-primary hover:bg-content-primary' : ''}`}
           >
             {poolOn ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
@@ -269,7 +273,7 @@ export function WarmingPage() {
           <Card className="p-lg">
             <div className="mb-md flex items-center justify-between">
               <span className="type-card-title">{t('warming.ready.title')}</span>
-              <span className="rounded-full border border-line bg-white px-sm py-hair text-tiny text-ink-subtle">
+              <span className="rounded-full border border-line bg-surface-card px-sm py-hair text-tiny text-content-subtle">
                 {idle.length}
               </span>
             </div>
@@ -279,7 +283,7 @@ export function WarmingPage() {
               ) : (
                 idle.map((account) => {
                   const trust = account.trust_score;
-                  const tTone = trust != null ? trustTone(trust) : 'text-ink-subtle';
+                  const tTone = trust != null ? trustTone(trust) : 'text-content-subtle';
                   const cc = account.phone_country?.toLowerCase() ?? null;
                   const pc = account.proxy_country?.toLowerCase() ?? null;
                   const ptype = account.proxy_type;
@@ -304,12 +308,12 @@ export function WarmingPage() {
                   return (
                     <div
                       key={account.account_id}
-                      className="flex items-center gap-md rounded-lg border border-line bg-white px-md py-md"
+                      className="flex items-center gap-md rounded-lg border border-line bg-surface-card px-md py-md"
                     >
                       <AccountAvatar
                         account={account}
                         className="size-icon shrink-0 rounded-full"
-                        fallbackClassName="text-body font-semibold bg-primary-tint text-primary-deep"
+                        fallbackClassName="text-body font-semibold bg-info-tint text-info-strong"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">
@@ -345,7 +349,7 @@ export function WarmingPage() {
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-canvas text-ink-subtle'}`}
+                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-action-primary text-on-action' : 'cursor-not-allowed bg-canvas text-content-subtle'}`}
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
@@ -357,7 +361,7 @@ export function WarmingPage() {
           </Card>
 
           <CollapsibleCard
-            wrapperClassName="rounded-lg border border-line bg-white"
+            wrapperClassName="rounded-lg border border-line bg-surface-card"
             header={<span className="type-card-title">{t('warming.channels.title')}</span>}
             label={t('warming.channels.title')}
           >
@@ -366,7 +370,7 @@ export function WarmingPage() {
               {channels.map((channel) => (
                 <Badge
                   size="md"
-                  className="gap-sm border border-line text-ink-body"
+                  className="gap-sm border border-line text-content-secondary"
                   key={channel.channel}
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
@@ -377,14 +381,14 @@ export function WarmingPage() {
                     onClick={() => {
                       setChannelToRemove(channel.channel);
                     }}
-                    className="text-lead leading-none text-ink-subtle"
+                    className="text-body leading-none text-content-subtle"
                   >
                     ×
                   </button>
                 </Badge>
               ))}
               {addingChannel ? (
-                <span className="inline-flex items-center gap-tight rounded-full border border-primary bg-white py-xs pl-md pr-xs">
+                <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
                   <input
                     autoFocus
                     value={channelInput}
@@ -405,7 +409,7 @@ export function WarmingPage() {
                     aria-label={t('warming.channels.add')}
                     disabled={!channelInput.trim()}
                     onClick={addChannel}
-                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
                   >
                     <Icon name="check" size={12} />
                   </button>
@@ -414,7 +418,7 @@ export function WarmingPage() {
                     title={t('warming.channels.cancel')}
                     aria-label={t('warming.channels.cancel')}
                     onClick={cancelAddChannel}
-                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-lead leading-none text-ink-muted"
+                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-body leading-none text-content-muted"
                   >
                     ×
                   </button>
@@ -427,7 +431,7 @@ export function WarmingPage() {
                   onClick={() => {
                     setAddingChannel(true);
                   }}
-                  className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-white px-md py-tight text-body text-ink-muted hover:border-primary hover:text-primary"
+                  className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary"
                 >
                   {t('warming.channels.addPill')}
                 </button>
@@ -473,7 +477,7 @@ export function WarmingPage() {
                       <AccountAvatar
                         account={acc}
                         className="size-tile shrink-0 rounded-full ring-2 ring-success"
-                        fallbackClassName="text-tiny font-bold bg-primary-tint text-primary-deep"
+                        fallbackClassName="text-tiny font-bold bg-info-tint text-info-strong"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-tight">
@@ -500,15 +504,15 @@ export function WarmingPage() {
                       {/* The other accent marker (see LaunchCard's LIVE): `micro`/`bold`
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
-                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-micro font-bold text-success-deep">
+                      <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-tiny font-bold text-success-deep">
                         <Icon name="check" size={10} className="stroke-success" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
                     <div className="mt-lg flex items-center rounded-lg bg-surface px-lg py-md">
                       <div className="flex-1">
-                        <div className="type-meta">{t('warming.warmed.days')}</div>
-                        <div className="text-lead font-bold">
+                        <div className="type-caption">{t('warming.warmed.days')}</div>
+                        <div className="text-body font-bold">
                           {t('warming.warmed.daysValue', {
                             days: acc.warming_days,
                             target: acc.target_days,
@@ -517,8 +521,8 @@ export function WarmingPage() {
                       </div>
                       <span className="h-compact w-px bg-line" />
                       <div className="flex-1 pl-lg">
-                        <div className="type-meta">{t('warming.warmed.trust')}</div>
-                        <div className="text-lead font-bold text-success-deep">
+                        <div className="type-caption">{t('warming.warmed.trust')}</div>
+                        <div className="text-body font-bold text-success-deep">
                           {acc.trust_score ?? '—'}
                         </div>
                       </div>
@@ -530,7 +534,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex flex-1 items-center justify-center gap-sm rounded-full bg-ink px-lg py-md text-body font-semibold text-white disabled:opacity-50"
+                        className="flex flex-1 items-center justify-center gap-sm rounded-full bg-content-primary px-lg py-md text-body font-semibold text-on-action disabled:opacity-50"
                       >
                         {t('warming.warmed.toNeuro')}
                         <Icon name="arrow-right" size={14} />
@@ -544,7 +548,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
-                        className="flex size-thumbnail shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted disabled:opacity-50"
+                        className="flex size-thumbnail shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
                       >
                         <svg
                           width="15"
@@ -574,7 +578,7 @@ export function WarmingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <div key={index} className="flex items-start gap-md">
-                  <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-primary text-micro font-semibold text-white">
+                  <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-action-primary text-tiny font-semibold text-on-action">
                     {index + 1}
                   </span>
                   <span className="type-prose">{t(`warming.howto.steps.${String(index)}`)}</span>

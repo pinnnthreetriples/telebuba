@@ -95,10 +95,10 @@ export function ListenerEditModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-confirm" label={t('neurocomment.listener.title')}>
+    <Modal onClose={onClose} size="confirm" label={t('neurocomment.listener.title')}>
       <div className="p-2xl">
         <div className="mb-tight flex items-center gap-md">
-          <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary-deep">
+          <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
             <Icon name="chart" size={18} />
           </span>
           <div className="flex-1">
@@ -145,12 +145,10 @@ export function ListenerEditModal({
           >
             {saved ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="inline-flex [animation:swapin_0.3s_ease_both]">
+                <span className="inline-flex tb-swapin">
                   <Icon name="check" size={16} />
                 </span>
-                <span className="inline-block [animation:swapin_0.3s_ease_0.09s_both]">
-                  {t('neurocomment.modal.saved')}
-                </span>
+                <span className="inline-block tb-swapin-late">{t('neurocomment.modal.saved')}</span>
               </span>
             ) : (
               t('neurocomment.modal.save')

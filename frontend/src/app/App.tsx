@@ -17,7 +17,7 @@ export function App() {
   return (
     <Sentry.ErrorBoundary fallback={<p className="p-page">{i18n.t('shell.fatalError')}</p>}>
       <QueryClientProvider client={queryClient}>
-        <div className="min-h-screen bg-white">
+        <div className="min-h-screen bg-surface-card">
           <RouterProvider router={router} />
         </div>
         <Toaster />

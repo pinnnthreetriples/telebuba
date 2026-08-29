@@ -139,8 +139,8 @@ test('the one-time password is shown in full and at readable contrast', async ()
   // A textarea wraps its value; an <input> can only clip it.
   expect(field.tagName).toBe('TEXTAREA');
   expect(field).toHaveAttribute('readonly');
-  expect(field).toHaveClass('text-ink');
-  expect(field).not.toHaveClass('text-ink-subtle');
+  expect(field).toHaveClass('text-content-primary');
+  expect(field).not.toHaveClass('text-content-subtle');
 });
 
 test('with no clipboard at all the panel asks for a manual copy, not a dead button', async () => {

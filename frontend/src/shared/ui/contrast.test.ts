@@ -10,12 +10,19 @@ const AA = 4.5;
 const NON_TEXT = 3;
 
 type Ramp = Record<string, string> & { DEFAULT?: string };
-const colors = config.theme?.extend?.colors as Record<string, string | Ramp>;
+const colors = config.theme?.colors as Record<string, string | Ramp>;
 
-// The palette as a class list spells it: `ink`, `ink-subtle`, `primary-tint`. The
+// The palette as a class list spells it: `content-primary`, `content-subtle`, `info-tint`.
+// The
 // config nests the ramps, so DEFAULT loses its rung on the way out. Anything that is
-// not a flat hex (`scrim` is an rgba wash over a photograph) has no ratio to measure.
-const HEX: Record<string, string> = { white: '#ffffff' };
+// not a flat hex has no ratio to measure — `scrim` is an rgba wash over a photograph,
+// and `transparent`/`current` are keywords rather than colours.
+//
+// `white` used to be seeded here by hand, because the palette lived in `theme.extend`
+// and white was Tailwind's. Now that the palette REPLACES Tailwind's it carries its own
+// white, and this table reads it like every other rung — which is the point of the move:
+// a colour the app paints and a colour this gate measures can no longer be two sets.
+const HEX: Record<string, string> = {};
 for (const [name, value] of Object.entries(colors)) {
   if (typeof value === 'string') {
     if (value.startsWith('#')) HEX[name] = value;
@@ -67,7 +74,9 @@ function ratio(text: string, background: string): number {
 test('the rungs that failed are the ones the deep rungs replaced', () => {
   expect(ratio('success', 'success-tint')).toBeLessThan(AA);
   expect(ratio('warning', 'warning-tint')).toBeLessThan(AA);
-  expect(ratio('primary', 'primary-tint')).toBeLessThan(AA);
+  // Базовый синий на тоне «в работе»: 4.38:1. Носит его `action-primary`, потому что
+  // после переезда на роли у тона нет безрунговой ступени — она была синонимом заливки.
+  expect(ratio('action-primary', 'info-tint')).toBeLessThan(AA);
   expect(ratio('danger', 'danger-tint')).toBeLessThan(AA);
 });
 
@@ -85,8 +94,8 @@ test('the rungs that failed are the ones the deep rungs replaced', () => {
 // The scan this replaces read one LINE at a time and asked whether it held both
 // `bg-{tone}-tint` and that tone's failing text rung. Three things were invisible to it:
 //   - a fill on a container and the text INSIDE it, which is the ordinary way a tinted
-//     panel is written and how WarmingBoard's card painted `text-primary` on
-//     `bg-primary-tint` at 4.38:1 in three places;
+//     panel is written and how WarmingBoard's card painted `text-action-primary` on
+//     `bg-info-tint` at 4.38:1 in three places;
 //   - a state: `hover:bg-*` and the label it lands under are one class list but not one
 //     pairing a per-tone scan looks for;
 //   - every fill that is not a `tint` — `bg-*-line` is used as a fill twice.
@@ -209,7 +218,7 @@ function elementEnd(src: string, openEnd: number, name: string): number {
 }
 
 // `LayoutIcon` joined the list when AddStoryModal's collage tile stopped painting its
-// selected fill as `bg-primary/5` and started saying `bg-primary-tint`: the fill became
+// selected fill as `bg-action-primary/5` and started saying `bg-info-tint`: the fill became
 // measurable and the tile came up as `primary on primary-tint — 4.38:1`, held to the
 // text floor. Its entire content is one `aria-hidden` `<svg>` whose cells are
 // `fill-current`, which is a graphic under 1.4.11 and clears the 3:1 that asks of it.
@@ -347,8 +356,11 @@ test('the scan reads the tree it claims to', () => {
   expect(Object.keys(sources).length).toBeGreaterThan(100);
   expect(cssPainted.size).toBeGreaterThan(0);
   expect(pairings.size).toBeGreaterThan(40);
-  expect([...pairings.keys()]).toContain('ink-subtle on white');
-  expect([...pairings.keys()]).toContain('white on primary');
+  // Две пары-часовых, и вторая из них — то, чего до переезда на роли измерить было
+  // нельзя: `white on primary` описывало и надпись на кнопке, и белую карточку одним
+  // именем. Теперь «чернила НА залитом действии» — своя пара, и она под своим полом.
+  expect([...pairings.keys()]).toContain('content-subtle on surface-card');
+  expect([...pairings.keys()]).toContain('on-action on action-primary');
 });
 
 test('every text-on-fill pairing the source paints clears its floor', () => {

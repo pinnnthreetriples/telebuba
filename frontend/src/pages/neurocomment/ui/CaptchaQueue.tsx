@@ -29,12 +29,12 @@ export function CaptchaQueue({
         header: t('neurocomment.board.col.account'),
         cell: ({ row }) => (
           <div className="flex min-w-0 items-center gap-md">
-            <span className="tb-livedot size-dot shrink-0 rounded-full bg-warning-strong" />
+            <span className="tb-livedot size-dot shrink-0 rounded-full bg-warning-press" />
             <div className="min-w-0">
               <div className="truncate type-item-title">
                 {accountLabel(row.original.account_id)}
               </div>
-              <div className="type-meta">
+              <div className="type-caption">
                 {row.original.channel} ·{' '}
                 {formatLocalTime(row.original.decided_at, { seconds: true })}
               </div>

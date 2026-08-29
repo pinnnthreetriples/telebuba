@@ -1,13 +1,13 @@
-// Ищет ступени, которые tailwind.config.ts объявляет, а приложение не носит.
+// Ищет ступени, которые дизайн-система объявляет, а приложение не носит.
 //
 // `design-tokens/no-raw-values` держит закрытым один конец: в компонент нельзя
-// написать значение мимо шкалы. Другой конец до сих пор был открыт — в конфиг
+// написать значение мимо шкалы. Другой конец до сих пор был открыт — в токены
 // можно добавить ступень и не надеть её ни разу, и никто об этом не скажет.
-// `ds:doc:check` тоже не скажет: он сверяет документ с конфигом, то есть честно
+// `ds:doc:check` тоже не скажет: он сверяет документ с токенами, то есть честно
 // опишет мёртвую ступень в таблице.
 //
 // Ступень считается ношеной, если её носит хоть одна утилита в `src` — класс
-// вида `<приставка>-<имя>` — или если на неё ссылаются изнутри самого конфига:
+// вида `<приставка>-<имя>` — или если на неё ссылаются изнутри самой системы:
 // роль в `typeRole` называет рунг размера и краску, а `index.css` берёт значения
 // через `theme('шкала.путь')`. Обе эти формы — настоящее ношение, и обе не
 // выглядят как класс.
@@ -23,11 +23,11 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const ROOT = new URL('../', import.meta.url);
-const CONFIG_PATH = new URL('tailwind.config.ts', ROOT);
-const SRC_DIR = new URL('src/', ROOT);
+import { colorIds, roleRefs, scaleNames } from './configScales.mjs';
 
-// Шкала → приставки утилит, которые её тратят. Шкалы в конфиге ЗАМЕНЯЮТ шкалы
+const SRC_DIR = new URL('../src/', import.meta.url);
+
+// Шкала → приставки утилит, которые её тратят. Шкалы в теме ЗАМЕНЯЮТ шкалы
 // Tailwind, а не расширяют их, поэтому каждое семейство утилит читает ровно одну
 // шкалу и карта однозначна: `w-` берёт `width`, а не отступы.
 const PREFIXES = {
@@ -57,62 +57,18 @@ const PREFIXES = {
     'divide outline fill stroke from via to placeholder caret accent decoration shadow',
 };
 
-/* ── Разбор конфига ───────────────────────────────────────────────────────── */
+/* ── Состав шкал ──────────────────────────────────────────────────────────── */
 
-// Нужны только ИМЕНА ступеней, не значения, поэтому блок берётся по балансу
-// скобок, а имена — по отступу: первый уровень для плоской шкалы, второй для
-// вложенной краски.
-function block(src, key, indent) {
-  const at = src.search(new RegExp(`^ {${indent}}${key}: \\{$`, 'm'));
-  if (at < 0) throw new Error(`tailwind.config.ts: блок «${key}» не найден`);
-  const open = src.indexOf('{', at);
-  let depth = 0;
-  let i = open;
-  for (; i < src.length; i += 1) {
-    if (src[i] === '{') depth += 1;
-    else if (src[i] === '}' && (depth -= 1) === 0) break;
-  }
-  return src.slice(open, i);
-}
+// Состав приходит из `configScales.mjs` — того же модуля, который читает правило
+// `design-tokens/no-raw-values`. Держать его двумя копиями значило бы повторить ровно то
+// расхождение, которое эта проверка ищет в самих токенах.
 
-function names(body, indent) {
-  return [...body.matchAll(new RegExp(`^ {${indent}}'?([\\w$-]+)'?:`, 'gm'))].map((m) => m[1]);
-}
-
-// Краска вложена на рунг глубже: `primary.DEFAULT` носится как `bg-primary`,
-// `primary.tint` — как `bg-primary-tint`. Плоская краска — своим именем.
-function colorIds(src) {
-  const body = block(src, 'colors', 6);
-  const ids = [];
-  for (const name of names(body, 8)) {
-    const nested = new RegExp(`^ {8}'?${name}'?: \\{$`, 'm').test(body);
-    if (!nested) {
-      ids.push(name);
-      continue;
-    }
-    for (const rung of names(block(body, `'?${name}'?`, 8), 10)) {
-      ids.push(rung === 'DEFAULT' ? name : `${name}-${rung}`);
-    }
-  }
-  return ids;
-}
-
-function readScales(src) {
-  const scales = { colors: colorIds(src) };
+function readScales() {
+  const scales = { colors: colorIds() };
   for (const key of Object.keys(PREFIXES)) {
-    if (key !== 'colors') scales[key] = names(block(src, key, 4), 6);
+    if (key !== 'colors') scales[key] = scaleNames(key);
   }
   return scales;
-}
-
-// Роль тратит рунг размера и краску по имени, изнутри конфига. Без этого шага
-// рунг, который носят только роли, выглядел бы мёртвым.
-function roleRefs(src) {
-  const body = block(src, 'typeRole', 4);
-  return [
-    ...[...body.matchAll(/size: '([\w-]+)'/g)].map((m) => `fontSize.${m[1]}`),
-    ...[...body.matchAll(/ink: '([\w-]+)'/g)].map((m) => `colors.${m[1]}`),
-  ];
 }
 
 /* ── Чтение исходников ────────────────────────────────────────────────────── */
@@ -143,17 +99,16 @@ function worn(text, scale, name) {
 }
 
 function main() {
-  const src = readFileSync(CONFIG_PATH, 'utf8');
-  const scales = readScales(src);
+  const scales = readScales();
   const text = sources(SRC_DIR);
-  const refs = new Set([...roleRefs(src), ...themeRefs(text)]);
+  const refs = new Set([...roleRefs(), ...themeRefs(text)]);
 
   const dead = [];
   for (const [scale, list] of Object.entries(scales)) {
     for (const name of list) {
       // `DEFAULT` носится молча — `transition` и `ease` без имени, — и искать его
       // как класс нечего. `none` и `0` — не ступени, а отсутствие величины, ровно
-      // как говорит про `boxShadow.none` сам конфиг; носителя у отсутствия может не
+      // как говорят про `shadow.none` сами токены; носителя у отсутствия может не
       // быть никогда, и снятие такой ступени открыло бы шкалу обратно вместо того,
       // чтобы её сузить.
       if (name === 'DEFAULT' || name === 'none' || name === '0') continue;
@@ -163,13 +118,13 @@ function main() {
   }
 
   if (dead.length === 0) {
-    process.stdout.write('tailwind.config.ts: каждую ступень кто-то носит\n');
+    process.stdout.write('design-system/tokens: каждую ступень кто-то носит\n');
     return 0;
   }
   process.stderr.write(
     `Шкалы объявляют ступени, которых нет в src (${dead.length}):\n${dead.join('\n')}\n` +
       'Ступень без единого носителя — это не запас, а лишний выбор: снять её из ' +
-      'конфига или надеть.\n',
+      'src/shared/design-system/tokens или надеть.\n',
   );
   return 1;
 }

@@ -9,7 +9,16 @@ import {
   publishAccountChannelPostMutation,
 } from '@/entities/account';
 import type { ChannelPostView, PageChannelPostView } from '@/shared/api';
-import { Button, ConfirmModal, Icon, IconButton, Notice, Textarea, toastError } from '@/shared/ui';
+import {
+  Button,
+  ConfirmModal,
+  Icon,
+  IconButton,
+  Notice,
+  Spinner,
+  Textarea,
+  toastError,
+} from '@/shared/ui';
 
 import {
   channelErrorText,
@@ -191,7 +200,7 @@ export function ChannelPostsPanel({
       <div className="mb-md type-card-title">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}
-      <div className="rounded-lg border border-line bg-white p-md">
+      <div className="rounded-lg border border-line bg-surface-card p-md">
         <Textarea
           className="resize-none [font-family:inherit]"
           rows={3}
@@ -211,7 +220,7 @@ export function ChannelPostsPanel({
                 className="size-thumbnail rounded-md border border-black/5 object-cover"
               />
             ) : (
-              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-md bg-canvas text-ink-muted">
+              <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-md bg-canvas text-content-muted">
                 <Icon name="video" size={16} />
               </span>
             )}
@@ -223,7 +232,7 @@ export function ChannelPostsPanel({
                   setFile(null);
                 }}
                 aria-label={t('accounts.channel.removeFile')}
-                className="inline-flex size-chip items-center justify-center rounded-full text-ink-subtle"
+                className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
               >
                 ×
               </button>
@@ -261,7 +270,7 @@ export function ChannelPostsPanel({
           <Button variant="primary" size="sm" onClick={doPublish} disabled={!canPublish}>
             {busy ? (
               <span className="inline-flex items-center gap-sm">
-                <span className="tb-spin inline-block size-spinner rounded-full border-2 border-white/40 border-t-white" />
+                <Spinner tone="onAction" />
                 {t('accounts.channel.publishing')}
               </span>
             ) : (
@@ -285,7 +294,7 @@ export function ChannelPostsPanel({
           aria-label={t('accounts.channel.loading')}
           className="flex justify-center py-xl"
         >
-          <span className="tb-spin inline-block size-chip rounded-full border-2 border-line border-t-primary" />
+          <Spinner size="md" />
         </div>
       )}
       {posts.isError && (
@@ -294,7 +303,7 @@ export function ChannelPostsPanel({
           <Button
             size="xs"
             variant="danger"
-            className="bg-white"
+            className="bg-surface-card"
             onClick={() => {
               void posts.refetch();
             }}
@@ -304,7 +313,7 @@ export function ChannelPostsPanel({
         </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-md rounded-lg border border-dashed border-line bg-white px-lg py-xl text-center text-body text-ink-subtle">
+        <div className="mt-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-xl text-center text-body text-content-subtle">
           {t('accounts.channel.postsEmpty')}
         </div>
       )}
@@ -315,7 +324,7 @@ export function ChannelPostsPanel({
               <div className="flex items-center gap-sm type-caption">
                 <span>{formatDate(post.date_unix)}</span>
                 {mediaLabel(post.media_kind ?? 'none') && (
-                  <span className="rounded-sm bg-canvas px-tight py-px font-medium text-ink-muted">
+                  <span className="rounded-sm bg-canvas px-tight py-px font-medium text-content-muted">
                     {mediaLabel(post.media_kind ?? 'none')}
                   </span>
                 )}
@@ -331,7 +340,7 @@ export function ChannelPostsPanel({
                     editPost.reset();
                   }}
                   aria-label={t('accounts.channel.postEdit')}
-                  className="font-medium text-primary hover:underline"
+                  className="font-medium text-action-primary hover:underline"
                 >
                   {t('accounts.channel.postEdit')}
                 </button>
@@ -391,7 +400,7 @@ export function ChannelPostsPanel({
                 </div>
               ) : (
                 post.text !== '' && (
-                  <div className="mt-tight whitespace-pre-wrap text-lead">{post.text}</div>
+                  <div className="mt-tight whitespace-pre-wrap text-body">{post.text}</div>
                 )
               )}
             </div>
@@ -409,7 +418,7 @@ export function ChannelPostsPanel({
         >
           {loadingMore ? (
             <span className="inline-flex items-center gap-sm">
-              <span className="tb-spin inline-block size-spinner rounded-full border-2 border-line border-t-primary" />
+              <Spinner />
               {t('accounts.channel.loading')}
             </span>
           ) : (

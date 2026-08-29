@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { setAccountTwofaMutation } from '@/entities/account';
 import type { AccountTwoFactorCreated, AccountTwoFactorUpdateRequest } from '@/shared/api';
-import { Button, FormField, Icon, Input, SegmentedControl } from '@/shared/ui';
+import { Button, FormField, Icon, Input, SegmentedControl, Spinner } from '@/shared/ui';
 
 import {
   EMPTY_TWOFA_FORM,
@@ -13,7 +13,7 @@ import {
   twofaFormSchema,
   type TwofaFormValue,
 } from './twofaFormValue';
-import { Spinner } from './_shared';
+import {} from './_shared';
 
 // Only the fields the operator actually filled in are sent: a bare `{}` is the
 // documented "generate one for me", and the backend forbids unknown keys, so
@@ -127,7 +127,7 @@ export function TwoFactorForm({
                       setShowPass((value) => !value);
                     }}
                     aria-label={t('accounts.edit.twofaReveal')}
-                    className="absolute right-sm top-1/2 -translate-y-1/2 text-ink-subtle"
+                    className="absolute right-sm top-1/2 -translate-y-1/2 text-content-subtle"
                   >
                     {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
                   </button>
@@ -156,7 +156,7 @@ export function TwoFactorForm({
         }}
         disabled={setTwofa.isPending || !canSubmit}
       >
-        {setTwofa.isPending ? <Spinner size={14} /> : submitLabel}
+        {setTwofa.isPending ? <Spinner /> : submitLabel}
       </Button>
     </>
   );
