@@ -25,6 +25,13 @@ const SIZE = {
 // giving it one would make every modal header twitch on the way past.
 const TONE = {
   neutral: 'text-content-muted',
+  // ЗАЛИТЫЙ, а не окрашенный по наведению: единственная иконочная кнопка, которая сама
+  // является главным действием своего блока — генерация сценария. Остальные три тона
+  // говорят, что случится при нажатии, и рисуются только наведением; эта говорит, что
+  // нажать нужно именно её, и обязана быть видна до наведения. Краска взята у
+  // `Button variant="primary"` дословно, чтобы залитая иконка и залитая кнопка не
+  // разошлись.
+  action: 'bg-action-primary text-on-action hover:bg-action-pressed',
   primary:
     'text-content-subtle hover:border-info-line hover:bg-action-hover hover:text-info-strong',
   danger:

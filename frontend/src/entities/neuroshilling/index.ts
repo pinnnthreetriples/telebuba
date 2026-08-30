@@ -11,4 +11,3 @@ export {
   stopNeuroshillingCampaignMutation,
   updateNeuroshillingCampaignMutation,
 } from './api/neuroshilling.queries';
-export { NeuroshillingAccountsModal } from './ui/NeuroshillingAccountsModal';

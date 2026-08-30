@@ -5,7 +5,15 @@ import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import { ScenarioCard } from './ScenarioCard';
+import type { NeuroshillingBoardAccount } from '@/shared/api';
+
+// Ростер, из которого карточка роли выбирает исполнителя.
+const POOL: NeuroshillingBoardAccount[] = [
+  { account_id: 'a1', title: 'Алиса', assigned: true },
+  { account_id: 'a2', title: 'Борис', assigned: true },
+];
+
+import { ScenarioSection } from './ScenarioSection';
 import type { DraftStep, ScenarioDraft } from './scenarioDraft';
 
 function step(key: string, patch: Partial<DraftStep> = {}): DraftStep {
@@ -44,9 +52,9 @@ interface Options {
   dirty?: boolean;
   busy?: boolean;
   onGenerate?: () => void;
-  onSave?: () => void;
   onApprove?: () => void;
-  onPersonaCount?: (value: number) => void;
+  pool?: NeuroshillingBoardAccount[];
+  onAssignRole?: (roleId: string, accountId: string | null) => void;
 }
 
 // The card is controlled, so the harness owns the draft the way the page does —
@@ -54,18 +62,15 @@ interface Options {
 function Harness({ options }: { options: Options }) {
   const [draft, setDraft] = useState(options.draft ?? DRAFT);
   return (
-    <ScenarioCard
+    <ScenarioSection
       draft={draft}
       onDraft={setDraft}
       status={options.status ?? 'draft'}
       dirty={options.dirty ?? false}
-      personaCount={3}
-      stepCount={8}
-      onPersonaCount={options.onPersonaCount ?? (() => undefined)}
-      onStepCount={() => undefined}
       onGenerate={options.onGenerate ?? (() => undefined)}
-      onSave={options.onSave ?? (() => undefined)}
       onApprove={options.onApprove ?? (() => undefined)}
+      pool={options.pool ?? POOL}
+      onAssignRole={options.onAssignRole ?? (() => undefined)}
       busy={options.busy ?? false}
     />
   );
@@ -144,9 +149,9 @@ test('a step may only point at a step above it', async () => {
   renderCard();
   await userEvent.click(screen.getByText('+ Реплика'));
 
-  expect(optionLabels('Шаг 3 отвечает на')).toEqual(['Не ответ', '#1', '#2']);
+  expect(optionLabels('Шаг 3 отвечает на')).toEqual(['—', '#1', '#2']);
   // Step 1 has nothing above it at all.
-  expect(optionLabels('Шаг 1 отвечает на')).toEqual(['Не ответ']);
+  expect(optionLabels('Шаг 1 отвечает на')).toEqual(['—']);
 });
 
 test('removing a step renumbers every link that pointed past it', async () => {
@@ -167,10 +172,32 @@ test('removing a step renumbers every link that pointed past it', async () => {
   await userEvent.click(screen.getByLabelText('Удалить шаг 2'));
 
   // The link AT the removed step is dropped; the one past it slides down.
-  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('Не ответ');
+  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('—');
   expect(screen.getByLabelText('Шаг 3 отвечает на')).toHaveTextContent('#2');
   // The media slot is a one-based position into the same list.
+  await userEvent.click(screen.getByRole('button', { name: 'Вложение' }));
   expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('#2');
+});
+
+test('a step can change kind, and its link travels under the right name', async () => {
+  // `replyToPosition` читает только сообщение, `targetPosition` — только реакция, и
+  // позиция, оставшаяся под именем другого вида, отвергается сервером
+  // (`scenario_invalid`), а прогоном просто не читается.
+  renderCard({
+    draft: { ...DRAFT, steps: [step('s1'), step('s2', { replyToPosition: 1 })] },
+  });
+
+  // Обе реплики предлагают одно и то же — берётся кнопка ВТОРОГО шага.
+  await userEvent.click(screen.getAllByRole('button', { name: 'Сделать реакцией' })[1]!);
+
+  // Реакция без эмодзи — шаг, который прогон молча пропустит, поэтому оно проставлено.
+  expect(screen.getByRole('radiogroup', { name: 'Реакция шага 2' })).toBeInTheDocument();
+  expect(screen.getByLabelText('Шаг 2 реагирует на')).toHaveTextContent('#1');
+  expect(screen.queryByLabelText('Текст шага 2')).toBeNull();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Сделать репликой' }));
+  expect(screen.getByLabelText('Текст шага 2')).toBeInTheDocument();
+  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('#1');
 });
 
 test('removing a role unassigns the steps that spoke as it', async () => {
@@ -194,7 +221,32 @@ test('the delay pair cannot be inverted, in either direction', async () => {
   await userEvent.clear(screen.getByLabelText('Максимальная пауза перед шагом 1'));
   await userEvent.type(screen.getByLabelText('Максимальная пауза перед шагом 1'), '5');
   expect(screen.getByLabelText('Максимальная пауза перед шагом 1')).toHaveValue(5);
-  expect(screen.getByLabelText('Минимальная пауза перед шагом 1')).toHaveValue(0);
+  // Минимум едет ЗА максимумом до 5, а не до нуля: опустошённое поле больше не
+  // засчитывается за ноль, поэтому пара зажимается по набранному значению.
+  expect(screen.getByLabelText('Минимальная пауза перед шагом 1')).toHaveValue(5);
+});
+
+test('an emptied delay accepts the number typed next, instead of gluing it to a zero', async () => {
+  // `Number('')` — ноль, поэтому управляемое поле с зажимом на каждом нажатии переписывало
+  // стёртое значение нулём, и «60» → «180» давало «0180».
+  renderCard();
+  const min = screen.getByLabelText('Минимальная пауза перед шагом 1');
+  expect(min).toHaveValue(60);
+
+  await userEvent.clear(min);
+  expect(min).toHaveValue(null);
+
+  await userEvent.type(min, '180');
+  expect(min).toHaveValue(180);
+});
+
+test('a delay left empty comes back to its stored value rather than to zero', async () => {
+  renderCard();
+  const min = screen.getByLabelText('Минимальная пауза перед шагом 1');
+
+  await userEvent.clear(min);
+  await userEvent.tab();
+  expect(min).toHaveValue(60);
 });
 
 test('a delay is held inside the column bounds', async () => {
@@ -205,25 +257,13 @@ test('a delay is held inside the column bounds', async () => {
   expect(screen.getByLabelText('Максимальная пауза перед шагом 1')).toHaveValue(3600);
 });
 
-test('saving is offered only for a dirty form whose roles are all named', async () => {
-  const onSave = vi.fn();
-  renderCard({ dirty: true, onSave });
-  const save = screen.getByText('Использовать сценарий');
-  expect(save).toBeEnabled();
-
-  await userEvent.clear(screen.getByLabelText('Название роли 1'));
-  expect(save).toBeDisabled();
-  expect(screen.getByText('У каждой роли должно быть название')).toBeInTheDocument();
-
-  await userEvent.type(screen.getByLabelText('Название роли 1'), 'Скептик');
-  await userEvent.click(save);
-  expect(onSave).toHaveBeenCalledTimes(1);
-});
-
-test('a pristine form has nothing to save', () => {
+test('a nameless role blocks approval and says so', async () => {
+  // Сохранение уехало в подвал диалога настроек, но проверка имени осталась ЗДЕСЬ и
+  // держит ближайшую к себе кнопку: утверждать сценарий с безымянной ролью нельзя.
   renderCard();
-
-  expect(screen.getByText('Использовать сценарий')).toBeDisabled();
+  await userEvent.clear(screen.getByLabelText('Название роли 1'));
+  expect(screen.getByText('Превью сценария')).toBeDisabled();
+  expect(screen.getByText('У каждой роли должно быть название')).toBeInTheDocument();
 });
 
 test('approval waits for the edits to be saved', () => {
@@ -231,68 +271,41 @@ test('approval waits for the edits to be saved', () => {
 
   // Approving validates what is STORED, so approving over unsaved edits would
   // vouch for the previous text.
-  expect(screen.getByText('Утвердить')).toBeDisabled();
+  expect(screen.getByText('Превью сценария')).toBeDisabled();
 });
 
 test('approval fires once the form matches the server', async () => {
   const onApprove = vi.fn();
   renderCard({ onApprove });
 
-  await userEvent.click(screen.getByText('Утвердить'));
+  await userEvent.click(screen.getByText('Превью сценария'));
   expect(onApprove).toHaveBeenCalledTimes(1);
 });
 
 test('generation refuses an empty topic — the server would only refuse it later', () => {
   renderCard({ draft: { ...DRAFT, topic: '   ' } });
 
-  expect(screen.getByText('Сгенерировать через ИИ')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Сгенерировать через ИИ' })).toBeDisabled();
 });
 
 test('generation stands down while a request is in flight', () => {
   renderCard({ busy: true });
 
-  expect(screen.getByText('Сгенерировать через ИИ')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Сгенерировать через ИИ' })).toBeDisabled();
 });
 
 test('generation asks the page, which owns the overwrite confirmation', async () => {
   const onGenerate = vi.fn();
   renderCard({ onGenerate });
 
-  await userEvent.click(screen.getByText('Сгенерировать через ИИ'));
+  await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать через ИИ' }));
   expect(onGenerate).toHaveBeenCalledTimes(1);
-});
-
-test('the persona stepper reports the step it took', async () => {
-  const onPersonaCount = vi.fn();
-  renderCard({ onPersonaCount });
-
-  await userEvent.click(screen.getByLabelText('Ролей: на один больше'));
-  expect(onPersonaCount).toHaveBeenCalledWith(4);
-  await userEvent.click(screen.getByLabelText('Ролей: на один меньше'));
-  expect(onPersonaCount).toHaveBeenCalledWith(2);
-});
-
-test('the campaign fields of the brief are editable and switch together', async () => {
-  renderCard();
-
-  await userEvent.click(screen.getByRole('radio', { name: 'Оживление чата' }));
-  expect(screen.getByRole('radio', { name: 'Оживление чата' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
-
-  await userEvent.click(screen.getByRole('switch', { name: 'Читать чат перед репликой' }));
-  expect(screen.getByRole('switch', { name: 'Читать чат перед репликой' })).toHaveAttribute(
-    'aria-checked',
-    'true',
-  );
-
-  await userEvent.type(screen.getByLabelText('Тема'), '!');
-  expect(screen.getByLabelText('Тема')).toHaveValue('про сервис доставки!');
 });
 
 test('the media slot offers a message step by position', async () => {
   renderCard();
+  // Слот медиа раскрывается скрепкой.
+  await userEvent.click(screen.getByRole('button', { name: 'Вложение' }));
 
   await userEvent.type(screen.getByLabelText('Ссылка на сообщение с медиа'), 'https://t.me/c/1');
   await pick('Шаг с медиа', '#2');
@@ -306,6 +319,8 @@ test('the media slot skips a reaction step without renumbering the rest', async 
       steps: [step('s1'), step('s2', { kind: 'reaction', emoji: '🔥' }), step('s3')],
     },
   });
+  // Слот медиа раскрывается скрепкой.
+  await userEvent.click(screen.getByRole('button', { name: 'Вложение' }));
 
   await userEvent.type(screen.getByLabelText('Ссылка на сообщение с медиа'), 'https://t.me/c/1');
 
@@ -340,8 +355,8 @@ test('a reply link is chosen by position and kept', async () => {
   await pick('Шаг 2 отвечает на', '#1');
   expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('#1');
 
-  await pick('Шаг 2 отвечает на', 'Не ответ');
-  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('Не ответ');
+  await pick('Шаг 2 отвечает на', '—');
+  expect(screen.getByLabelText('Шаг 2 отвечает на')).toHaveTextContent('—');
 });
 
 test('a reaction points at its target through its own select', async () => {

@@ -12,6 +12,7 @@ import {
   emitLogFrame,
   FULL_CAMPAIGN,
   jsonResponse,
+  openSettings,
   renderPage,
   routeApi,
   SCENARIO,
@@ -23,13 +24,15 @@ test('the first campaign is selected by default and its roster is shown', async 
   routeApi();
   renderPage();
 
-  expect(await screen.findByText('Промо')).toBeInTheDocument();
+  expect(await screen.findAllByText('Промо')).not.toHaveLength(0);
+  await openSettings();
   await waitFor(() => {
-    expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Аккаунт роли 1')).toBeInTheDocument();
   });
-  // Only the rostered account reaches the card; the rest of the pool stays in the picker.
-  expect(screen.getByText('Алиса')).toBeInTheDocument();
-  expect(screen.queryByText('Борис')).not.toBeInTheDocument();
+  // Ростер читается там же, где набирается, — в карточке роли. Весь пул предлагается
+  // выбором, поэтому «Борис» здесь ЕСТЬ, просто не выбран.
+  expect(screen.getAllByText('Алиса')).not.toHaveLength(0);
+  expect(screen.getAllByText('Борис')).not.toHaveLength(0);
 });
 
 test('with no campaigns nothing scoped is fetched and the empty state stands alone', async () => {
@@ -47,7 +50,7 @@ test('with no campaigns nothing scoped is fetched and the empty state stands alo
 test('creating a campaign posts the name and selects what came back', async () => {
   routeApi();
   renderPage();
-  expect(await screen.findByText('Промо')).toBeInTheDocument();
+  expect(await screen.findAllByText('Промо')).not.toHaveLength(0);
 
   await userEvent.click(screen.getByText('+ Создать кампанию'));
   await userEvent.type(screen.getByLabelText('Название кампании'), '  Новая  ');
@@ -65,16 +68,14 @@ test('creating a campaign posts the name and selects what came back', async () =
   });
 });
 
-test('the picker saves the whole roster in one PUT that echoes every other field back', async () => {
+test('choosing an account for a role enrols it and echoes every other field back', async () => {
   routeApi([FULL_CAMPAIGN], SCENARIO, { ...BOARD, campaign: FULL_CAMPAIGN });
   renderPage();
-  await waitFor(() => {
-    expect(screen.getByText('Выбрать аккаунты')).toBeInTheDocument();
-  });
+  await openSettings();
+  const pick = await screen.findByLabelText('Аккаунт роли 1');
 
-  await userEvent.click(screen.getByText('Выбрать аккаунты'));
-  await userEvent.click(screen.getAllByRole('button', { name: 'Добавить в кампанию' })[0]!);
-  await userEvent.click(screen.getByText('Готово'));
+  await userEvent.click(pick);
+  await userEvent.click(screen.getByRole('option', { name: 'Борис' }));
 
   await waitFor(() => {
     expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(1);
@@ -84,19 +85,20 @@ test('the picker saves the whole roster in one PUT that echoes every other field
     unknown
   >;
   // Compared WHOLE, not field by field: a PUT is a whole-form replacement, so a
-  // field this body stops carrying is written back as its schema default (7 → 10,
-  // 45 → 60, the topic and the targets emptied) — and the key simply going missing
-  // is what an equality over the whole body catches.
+  // field this body stops carrying is written back as its schema default — and the
+  // key simply going missing is what an equality over the whole body catches.
   expect(body).toEqual({
     ...ECHOED,
+    // «Алиса» уже была в ростере и роли не держала — назначение её не трогает: из
+    // ростера выбывает только тот, у кого роль ЗАБРАЛИ.
     accounts: [
       { account_id: 'a1', role_id: null, is_reserve: false },
-      { account_id: 'a2', role_id: null, is_reserve: false },
+      { account_id: 'a2', role_id: 'r1', is_reserve: false },
     ],
   });
 });
 
-test('the picker is not offered while the board holding the roster is still in flight', async () => {
+test('the settings are not offered while the board holding the roster is still in flight', async () => {
   routeApi();
   const routed = vi.mocked(fetch).getMockImplementation()!;
   let landBoard!: () => void;
@@ -111,36 +113,21 @@ test('the picker is not offered while the board holding the roster is still in f
     return routed(input, init);
   });
   renderPage();
-  expect(await screen.findByText('Промо')).toBeInTheDocument();
+  expect(await screen.findAllByText('Промо')).not.toHaveLength(0);
 
   // The campaign list is up and a campaign is chosen, but the roster behind the
   // picker has not arrived. Opening it here would seed an empty draft over a
   // campaign that has accounts, and «Готово» would save that emptiness back.
-  expect(screen.queryByText('Выбрать аккаунты')).not.toBeInTheDocument();
+  //
+  // Гарантия та же, но теперь она структурная: ростер живёт в диалоге настроек, а диалог
+  // не открывается, пока доска не приехала. Карандаш нажимается — и не открывает ничего.
+  await openSettings();
+  expect(screen.queryByLabelText('Аккаунт роли 1')).not.toBeInTheDocument();
 
   landBoard();
 
-  expect(await screen.findByText('Выбрать аккаунты')).toBeInTheDocument();
-  expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
-});
-
-test('leaving the picker any way but «Готово» writes nothing', async () => {
-  routeApi();
-  renderPage();
-  await waitFor(() => {
-    expect(screen.getByText('Выбрать аккаунты')).toBeInTheDocument();
-  });
-  await userEvent.click(screen.getByText('Выбрать аккаунты'));
-  await userEvent.click(screen.getAllByRole('button', { name: 'Добавить в кампанию' })[0]!);
-
-  await userEvent.keyboard('{Escape}');
-
-  // A running campaign refuses this PUT outright, so a write on the way out hands
-  // the operator an error toast for opening the roster and closing it again.
-  await waitFor(() => {
-    expect(screen.queryByText('Готово')).not.toBeInTheDocument();
-  });
-  expect(callsTo('/api/v1/neuroshilling/campaigns/c1', 'PUT')).toHaveLength(0);
+  await openSettings();
+  expect(await screen.findByLabelText('Аккаунт роли 1')).toBeInTheDocument();
 });
 
 test('a selection the campaign list no longer carries falls back to the first campaign', async () => {
@@ -166,7 +153,9 @@ test('a selection the campaign list no longer carries falls back to the first ca
     return routed(input, init);
   });
   renderPage();
-  await userEvent.click(await screen.findByText('Вторая'));
+  // Выбирает кнопка во всю карточку сайдбара — имя ей даёт `aria-label`, потому что
+  // видимый текст лежит в слое, не принимающем нажатий.
+  await userEvent.click(await screen.findByRole('button', { name: 'Вторая' }));
   await waitFor(() => {
     expect(callsTo('/api/v1/neuroshilling/campaigns/c2/board', 'GET').length).toBeGreaterThan(0);
   });
@@ -198,7 +187,7 @@ test('a selection the campaign list no longer carries falls back to the first ca
 test('deleting a campaign confirms first, then DELETEs it', async () => {
   routeApi();
   renderPage();
-  expect(await screen.findByText('Промо')).toBeInTheDocument();
+  expect(await screen.findAllByText('Промо')).not.toHaveLength(0);
 
   await userEvent.click(screen.getByLabelText('Удалить кампанию'));
   expect(screen.getByText('Удалить кампанию «Промо»?')).toBeInTheDocument();

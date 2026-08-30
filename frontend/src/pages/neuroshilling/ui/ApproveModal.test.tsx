@@ -1,12 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
 import type { NeuroshillingRole, NeuroshillingStep } from '@/shared/api';
 
-import { PreviewCard } from './PreviewCard';
+import { ApproveModal } from './ApproveModal';
 
 const ROLES: NeuroshillingRole[] = [
   { role_id: 'r1', name: 'Скептик', description: '', created_at: 'now' },
@@ -45,14 +46,18 @@ const STEPS: NeuroshillingStep[] = [
   },
 ];
 
-function renderCard(props: Partial<Parameters<typeof PreviewCard>[0]> = {}) {
+function renderCard(props: Partial<Parameters<typeof ApproveModal>[0]> = {}) {
   return render(
-    <PreviewCard
+    <ApproveModal
       roles={ROLES}
       steps={STEPS}
       status="draft"
       dirty={false}
       onRegenerate={() => undefined}
+      onApprove={() => undefined}
+      onClose={() => undefined}
+      delays={null}
+      onDelay={() => undefined}
       busy={false}
       {...props}
     />,
@@ -121,8 +126,10 @@ test('a loose reaction says only that it reacted', () => {
 });
 
 test('playing restages the bubbles instead of running a timer per row', async () => {
-  const { container } = renderCard();
-  const bubbles = () => [...container.querySelectorAll<HTMLElement>('.tb-fadeup')];
+  renderCard();
+  // Диалог уходит в портал на body, поэтому `container` вызова рендера пуст: пузыри
+  // ищутся в документе.
+  const bubbles = () => [...document.body.querySelectorAll<HTMLElement>('.tb-fadeup')];
   const staggerOf = () => bubbles().map((node) => node.style.animationDelay);
   const before = bubbles();
   expect(staggerOf()).toEqual(['0s', '0.12s', '0.24s']);
@@ -140,6 +147,56 @@ test('playing restages the bubbles instead of running a timer per row', async ()
   expect(screen.getAllByText('а работает вообще?')).toHaveLength(2);
 });
 
+// Паузы держит состояние, как их держит страница: поле управляемое, и со статичным
+// пропом каждый следующий символ дописывался бы к откатившемуся значению.
+function PauseHarness({ onDelay }: { onDelay: (i: number, min: number, max: number) => void }) {
+  const [delays, setDelays] = useState([
+    { min: 60, max: 180 },
+    { min: 45, max: 120 },
+    { min: 10, max: 30 },
+  ]);
+  return (
+    <ApproveModal
+      roles={ROLES}
+      steps={STEPS}
+      status="draft"
+      dirty={false}
+      onRegenerate={() => undefined}
+      onApprove={() => undefined}
+      onClose={() => undefined}
+      delays={delays}
+      onDelay={(index, min, max) => {
+        setDelays((list) => list.map((item, at) => (at === index ? { min, max } : item)));
+        onDelay(index, min, max);
+      }}
+      busy={false}
+    />
+  );
+}
+
+test('the pause between messages is editable in place, and the pair cannot invert', async () => {
+  // Утверждают прочитанное, поэтому реплики приходят с сервера и правке не подлежат.
+  // Пауза — ручка, и крутят её ровно тогда, когда диалог перед глазами.
+  const onDelay = vi.fn();
+  render(<PauseHarness onDelay={onDelay} />);
+
+  const min = screen.getByLabelText('Минимальная пауза перед шагом 2');
+  expect(min).toHaveValue(45);
+
+  await userEvent.clear(min);
+  await userEvent.type(min, '300');
+  // Минимум перерос максимум — максимум едет за ним, иначе схема ответит 422.
+  expect(onDelay).toHaveBeenLastCalledWith(1, 300, 300);
+  expect(screen.getByLabelText('Максимальная пауза перед шагом 2')).toHaveValue(300);
+});
+
+test('without a draft that lines up step for step, the pause stays read-only', () => {
+  // Сопоставление идёт ПО ИНДЕКСУ: подписать чужой шаг хуже, чем не дать его тронуть.
+  renderCard({ delays: null });
+  expect(screen.queryByLabelText('Минимальная пауза перед шагом 2')).toBeNull();
+  expect(screen.getByText('30–90 с')).toBeInTheDocument();
+});
+
 test('regenerate asks the page and stands down while a request is in flight', async () => {
   const onRegenerate = vi.fn();
   const { rerender } = renderCard({ onRegenerate });
@@ -148,12 +205,16 @@ test('regenerate asks the page and stands down while a request is in flight', as
   expect(onRegenerate).toHaveBeenCalledTimes(1);
 
   rerender(
-    <PreviewCard
+    <ApproveModal
       roles={ROLES}
       steps={STEPS}
       status="draft"
       dirty={false}
       onRegenerate={onRegenerate}
+      onApprove={() => undefined}
+      onClose={() => undefined}
+      delays={null}
+      onDelay={() => undefined}
       busy
     />,
   );

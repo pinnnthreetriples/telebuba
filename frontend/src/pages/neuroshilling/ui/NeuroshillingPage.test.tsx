@@ -13,6 +13,8 @@ import {
   emitLogFrame,
   LAUNCHABLE_BOARD,
   LAUNCHABLE_SCENARIO,
+  openApprove,
+  openSettings,
   renderPage,
   routeApi,
   SCENARIO,
@@ -47,8 +49,9 @@ function holdPut(): () => void {
 test('a log-stream frame refetches this page s queries', async () => {
   routeApi();
   renderPage();
+  await openSettings();
   await waitFor(() => {
-    expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Аккаунт роли 1')).toBeInTheDocument();
   });
   const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
 
@@ -60,6 +63,7 @@ test('a log-stream frame refetches this page s queries', async () => {
 test('a log-stream frame leaves the scenario query alone', async () => {
   routeApi();
   renderPage();
+  await openSettings();
   expect(await screen.findByLabelText('Тема')).toBeInTheDocument();
   const scenarioBefore = callsTo(SCENARIO_PATH, 'GET').length;
   const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
@@ -75,6 +79,7 @@ test('a log-stream frame leaves the scenario query alone', async () => {
 test('what the operator is typing survives the refetch a log frame drives', async () => {
   routeApi();
   renderPage();
+  await openSettings();
   await userEvent.type(await screen.findByLabelText('Тема'), ' и доставку');
   const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
 
@@ -89,19 +94,18 @@ test('what the operator is typing survives the refetch a log frame drives', asyn
 test('an approved campaign warns on the editing card before the approval dies', async () => {
   routeApi([CAMPAIGN], { ...SCENARIO, scenario_status: 'approved' });
   renderPage();
+  await openSettings();
   await userEvent.type(await screen.findByLabelText('Тема'), '!');
 
   expect(screen.getByText('Сохранение снимет утверждение')).toBeInTheDocument();
-  expect(
-    screen.getByText('Есть несохранённые правки — в превью показан сохранённый сценарий.'),
-  ).toBeInTheDocument();
 });
 
 test('saving writes the brief first and the dialogue second', async () => {
   routeApi();
   renderPage();
+  await openSettings();
   await userEvent.type(await screen.findByLabelText('Тема'), '!');
-  await userEvent.click(screen.getByText('Использовать сценарий'));
+  await userEvent.click(screen.getByText('Сохранить настройки'));
 
   await waitFor(() => {
     expect(callsTo(SCENARIO_PATH, 'PUT')).toHaveLength(1);
@@ -140,9 +144,31 @@ test('saving writes the brief first and the dialogue second', async () => {
   ]);
 });
 
+test('«Отмена» in the settings really cancels: the edits do not survive into the next save', async () => {
+  // Раньше закрытие лишь прятало правки — они переживали его и уезжали на сервер со
+  // следующим «Сохранить настройки», то есть записывалось то, что бросили.
+  routeApi();
+  renderPage();
+  await openSettings();
+  await userEvent.type(await screen.findByLabelText('Тема'), '!');
+  expect(screen.getByText('Есть несохранённые правки')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByText('Отмена'));
+  await openSettings();
+
+  expect(screen.queryByText('Есть несохранённые правки')).toBeNull();
+  expect(await screen.findByLabelText('Тема')).toHaveValue('про сервис');
+
+  await userEvent.click(screen.getByText('Сохранить настройки'));
+  expect(callsTo(SCENARIO_PATH, 'PUT')).toHaveLength(0);
+  expect(callsTo(CAMPAIGN_PATH, 'PUT')).toHaveLength(0);
+});
+
 test('regenerating over an existing dialogue confirms before it overwrites', async () => {
   routeApi();
   renderPage();
+  await openSettings();
+  await openApprove();
   await waitFor(() => {
     expect(screen.getByText('Перегенерировать')).toBeInTheDocument();
   });
@@ -156,9 +182,12 @@ test('regenerating over an existing dialogue confirms before it overwrites', asy
   await waitFor(() => {
     expect(callsTo(GENERATE_PATH, 'POST')).toHaveLength(1);
   });
+  // Размер запроса берётся с экрана, а не из двух счётчиков рядом с кнопкой: в этом
+  // сценарии одна роль и один шаг, и оба поднимаются до двух — меньше двух персон
+  // диалога не составят.
   expect(await callsTo(GENERATE_PATH, 'POST')[0]!.json()).toEqual({
-    persona_count: 3,
-    step_count: 8,
+    persona_count: 2,
+    step_count: 2,
   });
   // The answer replaces the form — that IS what the button means.
   await waitFor(() => {
@@ -174,10 +203,20 @@ test('generating drops the media step the operator picked for the old dialogue',
   };
   routeApi([campaign], SCENARIO, { ...BOARD, campaign });
   renderPage();
+  await openSettings();
+  // Слот медиа живёт в своём диалоге под скрепкой: заполняют его редко, а строку под
+  // темой он занимал всегда. Закрывается перед следующим шагом — иначе «Превью
+  // сценария» осталось бы под ним.
+  const attachment = () => userEvent.click(screen.getByRole('button', { name: 'Вложение' }));
+  // «Отмена» есть и в подвале настроек, и в диалоге вложения; верхний — последний в DOM.
+  const closeAttachment = () => userEvent.click(screen.getAllByText('Отмена').at(-1)!);
+  await attachment();
   await waitFor(() => {
     expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('#1');
   });
+  await closeAttachment();
 
+  await openApprove();
   await userEvent.click(screen.getByText('Перегенерировать'));
   await userEvent.click(screen.getByText('Сгенерировать'));
 
@@ -186,6 +225,8 @@ test('generating drops the media step the operator picked for the old dialogue',
   // stale position stays on screen over a line nobody chose it for. Position 1 of
   // the generated dialogue is a message, so it is still an offered option: only the
   // adoption tells the two apart.
+  await closeAttachment();
+  await attachment();
   await waitFor(() => {
     expect(screen.getByLabelText('Шаг с медиа')).toHaveTextContent('Без медиа');
   });
@@ -201,11 +242,12 @@ test('a campaign with no dialogue generates without asking, and stores the topic
   // topic — fired in parallel, the ask can reach the server before the topic does.
   const release = holdPut();
   renderPage();
+  await openSettings();
   await waitFor(() => {
-    expect(screen.getByText('Сгенерировать через ИИ')).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Сгенерировать через ИИ' })).toBeEnabled();
   });
 
-  await userEvent.click(screen.getByText('Сгенерировать через ИИ'));
+  await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать через ИИ' }));
 
   await waitFor(() => {
     expect(callsTo(CAMPAIGN_PATH, 'PUT')).toHaveLength(1);
@@ -223,11 +265,15 @@ test('a campaign with no dialogue generates without asking, and stores the topic
 test('approving posts the approval on its own', async () => {
   routeApi();
   renderPage();
+  await openSettings();
+  await openApprove();
+  // Вторая «Утвердить» — та, что в подвале диалога: утверждают прочитанное.
+  const confirm = () => screen.getAllByText('Утвердить').at(-1)!;
   await waitFor(() => {
-    expect(screen.getByText('Утвердить')).toBeEnabled();
+    expect(confirm()).toBeEnabled();
   });
 
-  await userEvent.click(screen.getByText('Утвердить'));
+  await userEvent.click(confirm());
 
   await waitFor(() => {
     expect(callsTo(APPROVE_PATH, 'POST')).toHaveLength(1);
@@ -246,8 +292,9 @@ function routeLaunchable(over: Partial<NeuroshillingBoard> = {}): void {
 test('the setup card saves ITS slice over an echo of every other card s fields', async () => {
   routeLaunchable();
   renderPage();
-  const targets = await screen.findByLabelText('Целевые чаты');
-  await userEvent.type(targets, '\n@third');
+  await openSettings();
+  await userEvent.click(await screen.findByRole('button', { name: '+ Чат' }));
+  await userEvent.type(screen.getByLabelText('+ Чат'), '@third{Enter}');
   await userEvent.click(screen.getByText('Сохранить настройки'));
 
   await waitFor(() => {
@@ -294,8 +341,9 @@ test('the reserve badge counts rostered reserves that are still unspent', async 
     ],
   });
   renderPage();
+  await openSettings();
 
-  await userEvent.click(await screen.findByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Настроить' }));
   expect(screen.getByText('В резерве: 1')).toBeInTheDocument();
 });
 
@@ -304,7 +352,9 @@ test('a blocked campaign never reaches the start endpoint', async () => {
   routeApi([CAMPAIGN], SCENARIO, { ...LAUNCHABLE_BOARD, campaign: CAMPAIGN });
   renderPage();
 
-  expect(await screen.findByText(/Сценарий не утверждён/)).toBeInTheDocument();
+  // Twice on purpose, and in two jobs: the sidebar's checks banner lists every
+  // reason, the pipeline names the first one beside the button it greys out.
+  expect(await screen.findAllByText(/Сценарий не утверждён/)).toHaveLength(2);
   expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
   expect(callsTo(START_PATH, 'POST')).toHaveLength(0);
 });
@@ -368,7 +418,9 @@ test('clearing the log states the real count first and only then deletes', async
 test('what the operator typed into the setup card survives a log frame', async () => {
   routeLaunchable();
   renderPage();
-  await userEvent.type(await screen.findByLabelText('Целевые чаты'), '\n@third');
+  await openSettings();
+  await userEvent.click(await screen.findByRole('button', { name: '+ Чат' }));
+  await userEvent.type(screen.getByLabelText('+ Чат'), '@third{Enter}');
   const before = callsTo('/api/v1/neuroshilling/campaigns', 'GET').length;
 
   emitLogFrame();
@@ -376,5 +428,5 @@ test('what the operator typed into the setup card survives a log frame', async (
 
   // The board IS refetched and it carries the stored targets. Reseeding the form
   // from it is the bug the once-per-campaign seeding avoids.
-  expect(screen.getByLabelText('Целевые чаты')).toHaveValue('@chat\n@other\n@third');
+  expect(screen.getByText('@third')).toBeInTheDocument();
 });

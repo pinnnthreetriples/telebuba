@@ -91,6 +91,14 @@ export type SegmentedOption<T extends string> = {
   // rows of «Все»/«Контакты»/«Никто» put nine identically named buttons in one element
   // list, so each option's name has to carry the row it belongs to.
   ariaLabel?: string;
+  // ЭТА опция недоступна, пока остальные живы. Групповой `disabled` этого сказать не
+  // может, и до сих пор единственный носитель — обход целей нейрошиллинга, где
+  // «Параллельно» отказывает сервер (400 `run_mode_not_supported`), а «Последовательно»
+  // работает, — рисовал вместо контрола пару кнопок руками. Пара кнопок руками и есть
+  // то, ради чего этот компонент существует, поэтому запрет переехал в него.
+  //
+  // Причину говорит `title`: выключенная опция без причины — это тупик.
+  disabled?: boolean;
 };
 
 export function SegmentedControl<T extends string>({
@@ -163,7 +171,7 @@ export function SegmentedControl<T extends string>({
           aria-label={option.ariaLabel}
           title={option.title}
           tabIndex={index === stop ? 0 : -1}
-          disabled={disabled}
+          disabled={disabled || option.disabled === true}
           onClick={() => {
             onChange(option.value);
           }}

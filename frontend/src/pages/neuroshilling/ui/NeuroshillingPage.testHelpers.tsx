@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { expect, vi } from 'vitest';
 
@@ -193,6 +194,26 @@ export function routeApi(
     // adopts this answer, so a fixed echo would hide what a save carries back.
     return Promise.resolve(jsonResponse(board.campaign ?? CAMPAIGN));
   });
+}
+
+/** Открыть диалог настроек кампании — карандашом в её строке, как это делает оператор.
+ *
+ * Ростер, цели, роли и шаги живут ЗА этой кнопкой с тех пор, как редизайн увёл их с
+ * страницы в диалог. Хелпер, а не три строки в каждом тесте, потому что путь туда один и
+ * тот же, а сам он ничего не проверяет: тесты про карандаш стоят в `CampaignsCard`.
+ */
+export async function openSettings(): Promise<void> {
+  await userEvent.click((await screen.findAllByLabelText('Настройки кампании'))[0]!);
+}
+
+/** Открыть диалог утверждения — кнопкой «Утвердить» внутри уже открытых настроек.
+ *
+ * Их две с одинаковой подписью, и это не случайность: в редакторе она ОТКРЫВАЕТ чтение,
+ * в подвале диалога — утверждает прочитанное. Хелпер всегда берёт первую, редакторскую;
+ * вторая появляется только после него.
+ */
+export async function openApprove(): Promise<void> {
+  await userEvent.click(await screen.findByText('Превью сценария'));
 }
 
 export function callsTo(pathname: string, method: string): Request[] {

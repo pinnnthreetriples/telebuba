@@ -11,7 +11,7 @@ import type {
   NeuroshillingStep,
 } from '@/shared/api';
 
-import { LaunchCard } from './LaunchCard';
+import { PipelineCard } from './PipelineCard';
 
 const CAMPAIGN: NeuroshillingCampaign = {
   campaign_id: 'c1',
@@ -55,33 +55,31 @@ const POOL: NeuroshillingBoardAccount[] = [
   { account_id: 'a3', title: 'Виктор' },
 ];
 
-function renderCard(over: Partial<Parameters<typeof LaunchCard>[0]> = {}) {
+function renderCard(over: Partial<Parameters<typeof PipelineCard>[0]> = {}) {
   const onStart = vi.fn();
   const onStop = vi.fn();
-  const onClearLogs = vi.fn();
   render(
-    <LaunchCard
+    <PipelineCard
       campaign={CAMPAIGN}
       run={{ status: 'idle', sent: 0, total: 4 }}
       pool={POOL}
       targets={['@chat', '@other']}
       roles={ROLES}
       steps={STEPS}
-      logLines={[]}
       onStart={onStart}
       onStop={onStop}
-      onClearLogs={onClearLogs}
       busy={false}
       {...over}
     />,
   );
-  return { onStart, onStop, onClearLogs };
+  return { onStart, onStop };
 }
 
-test('a launchable campaign offers Start with no reasons listed', async () => {
+test('a launchable campaign offers Start and says so instead of listing reasons', async () => {
   const { onStart } = renderCard();
   const start = screen.getByRole('button', { name: 'Запустить' });
   expect(start).toBeEnabled();
+  expect(screen.getByText('Готово к запуску')).toBeInTheDocument();
   expect(screen.queryByText(/Сценарий не утверждён/)).toBeNull();
 
   await userEvent.click(start);
@@ -98,18 +96,27 @@ test('the substitution counter is shown at zero as well as after a replacement',
   expect(screen.getByText('Замен: 2')).toBeInTheDocument();
 });
 
-test('a draft scenario disables Start and names the reason on THIS card', () => {
-  // The approval dies three cards up, on any role or step edit; the consequence
-  // only surfaces here.
+test('the scenario node carries the approval, so the pipeline states it in place', () => {
+  renderCard();
+  expect(screen.getByText('утверждён')).toBeInTheDocument();
+
+  renderCard({ campaign: { ...CAMPAIGN, scenario_status: 'draft' } });
+  expect(screen.getByText('черновик')).toBeInTheDocument();
+});
+
+test('a draft scenario disables Start and names the reason', () => {
+  // The approval dies in the scenario editor, on any role or step edit; the
+  // consequence surfaces here, where the button is.
   renderCard({ campaign: { ...CAMPAIGN, scenario_status: 'draft' } });
   expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
   expect(screen.getByText(/Сценарий не утверждён/)).toBeInTheDocument();
-  expect(screen.getByText('Сценарий: черновик')).toBeInTheDocument();
 });
 
-test('an approved scenario is stated on the card too, not only three cards up', () => {
-  renderCard();
-  expect(screen.getByText('✓ Сценарий утверждён')).toBeInTheDocument();
+test('the summary counts the reasons rather than only naming one', () => {
+  // The full list lives in the sidebar's checks banner. What this line must not do
+  // is imply there is a single thing left to fix when there are two.
+  renderCard({ campaign: { ...CAMPAIGN, scenario_status: 'draft' }, targets: [] });
+  expect(screen.getByText(/Осталось 2 замечания/)).toBeInTheDocument();
 });
 
 test('no saved targets is a stated reason, not a silent refusal', () => {
@@ -130,50 +137,32 @@ test('too few playing accounts names the count, and reserve seats do not count',
   expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
 });
 
-test('a role nobody plays is named, so the operator knows which one to staff', () => {
-  renderCard({
-    pool: [
-      { account_id: 'a1', title: 'Алиса', assigned: true, role_id: 'r1' },
-      { account_id: 'a2', title: 'Борис', assigned: true, role_id: 'r1' },
-    ],
-  });
-  expect(screen.getByText(/Роль «Довольный» без аккаунта/)).toBeInTheDocument();
-});
-
-test('a step with no role at all is reported by its position', () => {
-  renderCard({ steps: [{ ...STEPS[0]!, role_id: null }, STEPS[1]!] });
-  expect(screen.getByText(/У шага #1 не выбрана роль/)).toBeInTheDocument();
-});
-
-test('an account held elsewhere is named together with who holds it', () => {
-  renderCard({
-    pool: [
-      { account_id: 'a1', title: 'Алиса', assigned: true, role_id: 'r1', busy_owner: 'warming' },
-      { account_id: 'a2', title: 'Борис', assigned: true, role_id: 'r2' },
-    ],
-  });
-  expect(screen.getByText(/Аккаунт «Алиса» занят: занят прогревом/)).toBeInTheDocument();
-});
-
 test('parallel run mode is refused with its reason rather than at the server', () => {
   renderCard({ campaign: { ...CAMPAIGN, run_mode: 'parallel' } });
   expect(screen.getByText(/Параллельный режим пока недоступен/)).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
 });
 
-test('every blocking reason is listed, not just the first', () => {
-  renderCard({ campaign: { ...CAMPAIGN, scenario_status: 'draft' }, targets: [] });
-  expect(screen.getByText(/Сценарий не утверждён/)).toBeInTheDocument();
-  expect(screen.getByText(/Нет сохранённых целей/)).toBeInTheDocument();
+test('the accounts node counts the roles somebody actually plays', () => {
+  renderCard();
+  expect(screen.getByText('2 из 2 ролей')).toBeInTheDocument();
+
+  renderCard({
+    pool: [
+      { account_id: 'a1', title: 'Алиса', assigned: true, role_id: 'r1' },
+      { account_id: 'a2', title: 'Борис', assigned: true, role_id: 'r1' },
+    ],
+  });
+  expect(screen.getByText('1 из 2 ролей')).toBeInTheDocument();
 });
 
-test('a running campaign swaps Start for Stop and shows the live pill', async () => {
+test('a running campaign swaps Start for Stop', async () => {
   const { onStop } = renderCard({
     campaign: { ...CAMPAIGN, status: 'running' },
     run: { status: 'running', sent: 1, total: 4 },
   });
   expect(screen.queryByRole('button', { name: 'Запустить' })).toBeNull();
-  expect(screen.getByText('LIVE')).toBeInTheDocument();
+  expect(screen.getByText('Работает')).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole('button', { name: 'Остановить' }));
   expect(onStop).toHaveBeenCalledTimes(1);
@@ -210,9 +199,11 @@ test('a revive run shows a counter instead of a bar', () => {
 
 test('the listening counters appear only while a run is really reading', () => {
   // The three switches are on the campaign row already; what the operator cannot
-  // see from there is whether anything is acting on them right now.
+  // see from there is whether anything is acting on them right now. Asserted on the
+  // counters rather than on the word: «Прослушка» is also a pipeline node, and that
+  // node is on the card whether anything is listening or not.
   renderCard({ run: { status: 'running', sent: 0, total: 4 } });
-  expect(screen.queryByText('Прослушка')).toBeNull();
+  expect(screen.queryByText('прочитано: 12')).toBeNull();
 
   renderCard({
     run: {
@@ -224,7 +215,6 @@ test('the listening counters appear only while a run is really reading', () => {
       human_replies_sent: 3,
     },
   });
-  expect(screen.getByText('Прослушка')).toBeInTheDocument();
   expect(screen.getByText('прочитано: 12')).toBeInTheDocument();
   expect(screen.getByText('ответов людям: 3')).toBeInTheDocument();
 });
@@ -236,7 +226,7 @@ test('the tiles count the roster, the targets, the roles and the message steps',
   // 5:00 — the midpoint of EVERY step's delay range, summed. The reaction is not
   // counted as a message but the engine still sleeps before it, so it belongs in
   // the duration even though it is absent from the "Реплик" tile.
-  expect(screen.getByText('Диалог').previousSibling).toHaveTextContent('5:00');
+  expect(screen.getByText('Диалог в цели').previousSibling).toHaveTextContent('5:00');
 });
 
 test('a failed run shows the exception class, which is all the server sends', () => {
@@ -247,27 +237,4 @@ test('a failed run shows the exception class, which is all the server sends', ()
 test('halted accounts are named rather than left as ids', () => {
   renderCard({ run: { status: 'running', sent: 1, total: 4, halted_accounts: ['a1'] } });
   expect(screen.getByText(/Telegram вывел из прогона: Алиса/)).toBeInTheDocument();
-});
-
-test('the log panel is the shared terminal, titled for this page, and asks before clearing', async () => {
-  const { onClearLogs } = renderCard({
-    logLines: [
-      {
-        id: 1,
-        created_at: '2026-07-11T10:00:00+00:00',
-        level: 'INFO',
-        status: 'success',
-        account_id: 'a1',
-        event: 'neuroshilling_message_sent',
-        extra: {},
-      },
-    ],
-  });
-  expect(screen.getByText('Лог кампании')).toBeInTheDocument();
-  // The account column is named from the pool, not left as an opaque id.
-  expect(screen.getByRole('button', { name: 'Алиса' })).toBeInTheDocument();
-
-  await userEvent.click(screen.getByRole('button', { name: 'Очистить лог' }));
-  // The card only ASKS: the count and the confirmation live on the page.
-  expect(onClearLogs).toHaveBeenCalledTimes(1);
 });

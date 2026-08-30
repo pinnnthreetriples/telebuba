@@ -55,7 +55,18 @@ export function clampInt(value: number, min: number, max: number): number {
  * can legitimately read 3 while the launch card still says there are none.
  */
 export function countTargets(raw: string): number {
-  return raw.split(/[\s,;]+/).filter(Boolean).length;
+  return splitTargets(raw).length;
+}
+
+/** The targets as a LIST, in the order they were typed.
+ *
+ * Один разбор на всё приложение: чипы показывают его элементы, счётчик — их число, а
+ * строка ввода режет вставленный блок им же, поэтому вставленный из таблицы столбец
+ * становится столькими чипами, сколько в нём чатов. Пока разбор жил внутри `countTargets`,
+ * посчитать и показать одно и то же можно было только двумя разными способами.
+ */
+export function splitTargets(raw: string): string[] {
+  return raw.split(/[\s,;]+/).filter(Boolean);
 }
 
 /** Server truth → editable draft. The ONLY place the two shapes meet. */
