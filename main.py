@@ -20,11 +20,15 @@ from typing import TYPE_CHECKING
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 if TYPE_CHECKING:
+    import os
     from collections.abc import AsyncIterator, Awaitable, Callable
+
+    from starlette.staticfiles import PathLike
+    from starlette.types import Scope
 
 from api import create_app
 from api.v1._uploads import cleanup_stale_uploads
@@ -177,6 +181,42 @@ def _safe_spa_file(path: str) -> Path | None:
     return candidate
 
 
+# The shell must be REVALIDATED, the hashed files may be kept forever.
+#
+# `index.html` is the only file whose name never changes, and it is the one that
+# names the current bundle. Served without `Cache-Control` it fell to the browser's
+# heuristic freshness — a fraction of the age since `Last-Modified` — so after a
+# deploy the browser could keep answering from its own copy, load the PREVIOUS
+# bundle by name, and show the old application against the new backend. No error,
+# no stale-looking screen: just the last release, indefinitely.
+#
+# Everything under `assets/` is the opposite case. Vite puts a content hash in each
+# name, so a changed file is a different URL and the old one is never asked for
+# again. `immutable` is the promise that matches that, and it is the reason the
+# hashing exists: without it every deploy re-downloads the whole bundle.
+_SHELL_CACHE = "no-cache"
+_ASSET_CACHE = "public, max-age=31536000, immutable"
+
+
+class _HashedAssets(StaticFiles):
+    """``StaticFiles`` that marks what it serves immutable.
+
+    A subclass because the mount owns these responses: the SPA catch-all below never
+    sees ``/assets/*``, so a header set there would be one nothing reads.
+    """
+
+    def file_response(
+        self,
+        full_path: PathLike,
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        response.headers["Cache-Control"] = _ASSET_CACHE
+        return response
+
+
 def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
     """Serve the React build: StaticFiles for assets + a catch-all for index.html.
 
@@ -188,7 +228,7 @@ def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
         return
     assets = _FRONTEND_DIST / "assets"
     if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+        app.mount("/assets", _HashedAssets(directory=assets), name="assets")
 
     @app.get("/{path:path}")
     async def _spa(path: str) -> FileResponse:
@@ -196,8 +236,11 @@ def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
             raise HTTPException(status_code=404, detail="not found")
         safe = _safe_spa_file(path)
         if safe is not None:
-            return FileResponse(safe)
-        return FileResponse(_FRONTEND_DIST / "index.html")
+            # Only what is NOT under `assets/` reaches here; the mount above owns
+            # the rest. So this is an unhashed name (`favicon.ico`, `robots.txt`),
+            # and keeping it forever would outlive its own replacement.
+            return FileResponse(safe, headers={"Cache-Control": _SHELL_CACHE})
+        return FileResponse(_FRONTEND_DIST / "index.html", headers={"Cache-Control": _SHELL_CACHE})
 
 
 app = create_app(lifespan=lifespan)
