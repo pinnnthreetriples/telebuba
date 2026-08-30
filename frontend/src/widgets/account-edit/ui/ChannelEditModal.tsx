@@ -198,7 +198,9 @@ export function ChannelEditModal({
           </div>
 
           {detail.isError && (
-            <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
+            // Без `mb-lg`: ветка `detail.isSuccess` в этом состоянии не отрисована, то
+            // есть под уведомлением не стоит ничего — отступ был краем диалога.
+            <Notice tone="danger" className="flex items-center justify-between gap-md">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <Button
                 size="xs"
@@ -253,12 +255,18 @@ export function ChannelEditModal({
               />
 
               {update.isError && (
-                <Notice tone="danger" className="mb-lg">
+                <Notice tone="danger">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
                 </Notice>
               )}
 
-              <div className="flex items-center gap-sm">
+              {/* `mt-lg` переехал сюда с уведомления над этой строкой: 16px тут стоят и
+                  когда уведомления нет — тогда они слипаются с `mb-lg` у `CheckRow` и
+                  дают те же 16px. Ритм этого диалога набран отступами у каждого блока, а
+                  не `gap` у тела; перевод тела на `gap` — отдельная правка (он снял бы
+                  `mb-lg` у двух `label` и у общего `CheckRow`, который носит и диалог
+                  создания), и картинку она сдвинет. */}
+              <div className="mt-lg flex items-center gap-sm">
                 <Button
                   size="sm"
                   onClick={() => photoInput.current?.click()}

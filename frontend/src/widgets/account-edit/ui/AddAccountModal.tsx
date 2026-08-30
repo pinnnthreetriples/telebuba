@@ -484,7 +484,7 @@ export function AddAccountModal({
         ) : proxyStep === 'choice' ? (
           <>
             <div className="mb-lg flex items-center gap-sm rounded-lg bg-success-tint px-md py-md">
-              <Icon name="check" size={16} className="stroke-success" />
+              <Icon name="check" size={16} className="stroke-success-deep" />
               <span className="type-label text-success-deep">{t('accounts.addWizard.added')}</span>
             </div>
             <div className="flex flex-col gap-md">

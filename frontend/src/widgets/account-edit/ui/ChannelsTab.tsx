@@ -41,8 +41,10 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
         </div>
       )}
 
+      {/* Без `mb-lg` у уведомления: на ошибке `isSuccess` ложно и список пуст, то есть под
+          ним не стоит ничего. */}
       {channels.isError && (
-        <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
+        <Notice tone="danger" className="flex items-center justify-between gap-md">
           <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
           <Button
             size="xs"

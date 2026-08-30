@@ -82,8 +82,20 @@ const SIZE: Record<
 // decision, so those five say it as `className="bg-surface-card"` instead of losing it — but
 // all five live in `widgets/account-edit`, and a fill is not given a name until two
 // independent slices ask for it.
+// `neutral` — залитый чернильный: «остановить» у конвейера и у пула прогрева, «в
+// нейроаккаунты» у выпущенного аккаунта. Он тут по тому же порогу, что `dashedMuted`:
+// три независимых слайса набирали его дословно одной строкой `bg-content-primary
+// hover:bg-content-primary` поверх `variant="primary"`, то есть перекрывали заливку и
+// ОСТАВЛЯЛИ себе краску надписи от действия. Прежний комментарий на месте вызова
+// объяснял отсутствие имени тем, что «одного носителя для имени мало» — носителей было
+// три, и объяснение просрочилось.
+//
+// `hover:bg-content-primary` — не опечатка: у чернильной кнопки наведения нет, и все три
+// места вызова просили именно этого. Без строки наведение унаследовалось бы от
+// перекрытой заливки.
 const VARIANT = {
   primary: 'bg-action-primary text-on-action hover:bg-action-pressed',
+  neutral: 'bg-content-primary text-on-neutral hover:bg-content-primary',
   secondary: 'border border-line bg-surface-card text-content-primary hover:border-line-strong',
   danger: 'border border-danger-line bg-danger-tint text-danger-deep hover:border-danger',
   ghost: 'text-content-muted hover:bg-canvas hover:text-content-primary',
@@ -97,6 +109,11 @@ const VARIANT = {
 // не аннотация: новая заливка без своего тона не компилируется.
 const SPINNER_TONE = {
   primary: 'onAction',
+  // `default`, а не `onAction`: ни один из трёх носителей `neutral` не передаёт `loading`,
+  // и запись здесь существует только потому, что карта полная. Синяя дуга на серой
+  // дорожке на чернильной заливке мерит 4.04:1 и читается; `onAction` вернул бы сюда ту
+  // самую роль «чернила на ДЕЙСТВИИ», от которой этот вариант и уводит.
+  neutral: 'default',
   secondary: 'default',
   danger: 'danger',
   ghost: 'default',

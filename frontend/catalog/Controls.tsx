@@ -21,6 +21,7 @@ import { Cell, Row, Section } from './Frame';
 
 const BUTTON_VARIANTS = [
   'primary',
+  'neutral',
   'secondary',
   'danger',
   'ghost',

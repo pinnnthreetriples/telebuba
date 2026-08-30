@@ -281,8 +281,11 @@ export function ChannelCreateModal({
           </label>
         )}
 
+        {/* Без `mb-lg` у уведомления, и картинка не меняется: под ним стоит подвал с
+            `mt-xl`, соседние вертикальные отступы в блочном потоке СЛИПАЮТСЯ, и
+            расстояние было max(16, 20) = 20px и до правки. Отступ ничего не ставил. */}
         {create.isError && (
-          <Notice tone="danger" className="mb-lg">
+          <Notice tone="danger">
             {channelErrorText(create.error, t, t('accounts.channel.error'))}
           </Notice>
         )}

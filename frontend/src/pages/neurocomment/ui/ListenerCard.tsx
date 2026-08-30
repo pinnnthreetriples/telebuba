@@ -116,9 +116,14 @@ export function ListenerCard({
                   {/* Off the status-pill rung on purpose: a counter, not a state label. The
                       18px square minimum is what keeps a single digit CIRCULAR, and the
                       canon's `3px 10px` would stretch it into a lozenge at one digit. */}
+                  {/* Краска надписи переехала в ветки вместе с заливкой: она была одна на
+                      обе — `text-on-action`, «чернила на ДЕЙСТВИИ», — притом что залит
+                      счётчик либо тоном, либо серым, и действием не бывает ни разу. Это не
+                      про контраст (белый на `content-muted` мерит 6.18:1), а про то, что
+                      одно имя держало два решения. */}
                   <span
                     title={t('neurocomment.listener.activeCampaigns')}
-                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-tiny font-bold text-on-action ${working ? 'bg-success-deep' : 'bg-content-muted'}`}
+                    className={`inline-flex h-badge min-w-badge shrink-0 items-center justify-center rounded-full px-tight text-tiny font-bold ${working ? 'bg-success-deep text-on-success' : 'bg-content-muted text-on-neutral'}`}
                   >
                     {activeCampaignCount}
                   </span>
