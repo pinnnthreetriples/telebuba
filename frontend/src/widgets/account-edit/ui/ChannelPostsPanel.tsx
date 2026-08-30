@@ -200,7 +200,10 @@ export function ChannelPostsPanel({
       <div className="mb-md type-card-title">{t('accounts.channel.postsTitle')}</div>
 
       {/* composer */}
-      <div className="rounded-lg border border-line bg-surface-card p-md">
+      {/* `gap-sm` вместо `mt-sm` у каждого ребёнка: все три несли одну и ту же ступень
+          (чип файла, уведомление, строка контролов), поэтому зазор воспроизводит картинку
+          побайтово, а уведомление перестаёт решать расстояние до соседа. */}
+      <div className="flex flex-col gap-sm rounded-lg border border-line bg-surface-card p-md">
         <Textarea
           className="resize-none [font-family:inherit]"
           rows={3}
@@ -212,7 +215,7 @@ export function ChannelPostsPanel({
           }}
         />
         {file && (
-          <div className="mt-sm flex items-center gap-md rounded-lg border border-line bg-surface px-md py-sm">
+          <div className="flex items-center gap-md rounded-lg border border-line bg-surface px-md py-sm">
             {preview ? (
               <img
                 src={preview}
@@ -240,11 +243,11 @@ export function ChannelPostsPanel({
           </div>
         )}
         {publish.isError && (
-          <Notice tone="danger" className="mt-sm py-sm">
+          <Notice tone="danger" className="py-sm">
             {channelErrorText(publish.error, t, t('accounts.channel.error'))}
           </Notice>
         )}
-        <div className="mt-sm flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-sm">
             <IconButton
               size="md"
@@ -267,15 +270,14 @@ export function ChannelPostsPanel({
               {t('accounts.channel.charCount', { n: text.length, max: textMax })}
             </span>
           </div>
-          <Button variant="primary" size="sm" onClick={doPublish} disabled={!canPublish}>
-            {busy ? (
-              <span className="inline-flex items-center gap-sm">
-                <Spinner tone="onAction" />
-                {t('accounts.channel.publishing')}
-              </span>
-            ) : (
-              t('accounts.channel.publish')
-            )}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={doPublish}
+            disabled={!canPublish}
+            loading={busy}
+          >
+            {busy ? t('accounts.channel.publishing') : t('accounts.channel.publish')}
           </Button>
         </div>
         <input
@@ -355,8 +357,10 @@ export function ChannelPostsPanel({
                   {t('accounts.channel.postDelete')}
                 </button>
               </div>
+              {/* Коробка правки: то же, что у композера — три ребёнка носили один `mt-sm`,
+                  и его заменил `gap-sm` у родителя. */}
               {editingId === post.post_id ? (
-                <div className="mt-sm">
+                <div className="mt-sm flex flex-col gap-sm">
                   <Textarea
                     className="resize-none [font-family:inherit]"
                     rows={3}
@@ -368,11 +372,11 @@ export function ChannelPostsPanel({
                     }}
                   />
                   {editPost.isError && (
-                    <Notice tone="danger" className="mt-sm py-sm">
+                    <Notice tone="danger" className="py-sm">
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </Notice>
                   )}
-                  <div className="mt-sm flex items-center justify-end gap-sm">
+                  <div className="flex items-center justify-end gap-sm">
                     {/* The same readout the composer carries: without it the box
                         just stops accepting input at the media-aware cap with
                         nothing on screen explaining why. */}
@@ -414,16 +418,9 @@ export function ChannelPostsPanel({
           onClick={() => {
             void loadMore();
           }}
-          disabled={loadingMore}
+          loading={loadingMore}
         >
-          {loadingMore ? (
-            <span className="inline-flex items-center gap-sm">
-              <Spinner />
-              {t('accounts.channel.loading')}
-            </span>
-          ) : (
-            t('accounts.channel.loadMore')
-          )}
+          {loadingMore ? t('accounts.channel.loading') : t('accounts.channel.loadMore')}
         </Button>
       )}
 

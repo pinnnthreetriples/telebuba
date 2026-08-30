@@ -242,7 +242,7 @@ export function WarmingPage() {
             <Counter value={errors} label={t('warming.counter.errors')} cls="text-danger" />
           </div>
           <Button
-            variant="primary"
+            variant={poolOn ? 'neutral' : 'primary'}
             size="sm"
             disabled={bulkBusy || start.isPending || stop.isPending}
             onClick={() => {
@@ -254,7 +254,7 @@ export function WarmingPage() {
                 setBulkBusy(false);
               });
             }}
-            className={`gap-sm ${poolOn ? 'bg-content-primary hover:bg-content-primary' : ''}`}
+            className="gap-sm"
           >
             {poolOn ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
             {poolOn ? t('warming.pool.stop') : t('warming.pool.start')}
@@ -424,17 +424,15 @@ export function WarmingPage() {
                   </button>
                 </span>
               ) : (
-                <button
-                  type="button"
-                  // The muted inline adder, not `Button variant="dashed"` — see the
-                  // note on its twin in neurocomment's CampaignsCard.
+                <Button
+                  variant="dashedMuted"
+                  size="xs"
                   onClick={() => {
                     setAddingChannel(true);
                   }}
-                  className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary"
                 >
                   {t('warming.channels.addPill')}
-                </button>
+                </Button>
               )}
             </div>
           </CollapsibleCard>
@@ -449,7 +447,10 @@ export function WarmingPage() {
             header={
               <>
                 <span className="flex size-icon items-center justify-center rounded-lg bg-success-tint">
-                  <Icon name="check" size={16} className="stroke-success" />
+                  {/* `deep`, а не базовый: базовый зелёный на своём тоне мерит 2.97:1, а
+                      1.4.11 просит 3:1 у графики, которая несёт смысл. `success-deep` даёт
+                      5.85:1. Гейт видит это сам — см. `contrast.test.ts`. */}
+                  <Icon name="check" size={16} className="stroke-success-deep" />
                 </span>
                 <span className="type-card-title">{t('warming.warmed.title')}</span>
                 <Badge tone="success" className="font-bold">
@@ -505,7 +506,7 @@ export function WarmingPage() {
                           with letter-spacing because it is emphasis on a finished account,
                           not a neutral state. Deliberately outside the status-pill family. */}
                       <span className="inline-flex items-center gap-tight rounded-full bg-success-tint px-md py-xs text-tiny font-bold text-success-deep">
-                        <Icon name="check" size={10} className="stroke-success" />
+                        <Icon name="check" size={10} className="stroke-success-deep" />
                         {t('warming.warmed.badge')}
                       </span>
                     </div>
@@ -528,17 +529,17 @@ export function WarmingPage() {
                       </div>
                     </div>
                     <div className="mt-lg flex items-center gap-md">
-                      <button
-                        type="button"
+                      <Button
+                        variant="neutral"
                         disabled={busyIds.has(acc.account_id)}
                         onClick={() => {
                           runGraduation(handoff, acc.account_id);
                         }}
-                        className="flex flex-1 items-center justify-center gap-sm rounded-full bg-content-primary px-lg py-md text-body font-semibold text-on-action disabled:opacity-50"
+                        className="flex-1 shrink gap-sm"
                       >
                         {t('warming.warmed.toNeuro')}
                         <Icon name="arrow-right" size={14} />
-                      </button>
+                      </Button>
                       <FeedbackMark result={accountFeedback.feedback[acc.account_id]} />
                       <button
                         type="button"
@@ -588,7 +589,7 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <div>
+        <div className="flex flex-col gap-lg">
           <WarmingBoard
             warming={warming}
             onStop={(id) => {

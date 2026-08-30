@@ -65,11 +65,11 @@ export function PipelineCard({
           </span>
         </div>
         <Button
-          variant="primary"
+          variant={running ? 'neutral' : 'primary'}
           size="sm"
           disabled={!running && !canStart}
           onClick={onToggle}
-          className={`gap-sm ${running ? 'bg-content-primary hover:bg-content-primary' : ''}`}
+          className="gap-sm"
         >
           {running ? <Icon name="pause" size={14} /> : <Icon name="play" size={14} />}
           {running ? t('neurocomment.runtime.stop') : t('neurocomment.runtime.start')}
@@ -104,7 +104,7 @@ export function PipelineCard({
               <div className="flex size-glyph items-center justify-center">
                 {index < activeCell ? (
                   <span className="tb-pop flex size-spinner items-center justify-center rounded-full bg-success">
-                    <Icon name="check" size={10} className="stroke-white" />
+                    <Icon name="check" size={10} className="stroke-on-success" />
                   </span>
                 ) : index === activeCell ? (
                   <span className="tb-livedot size-node rounded-full bg-action-primary" />

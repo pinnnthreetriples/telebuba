@@ -86,6 +86,9 @@ test.describe('экраны приложения', () => {
       await page.goto(screen.path);
       // Заголовок страницы — признак того, что защита маршрута пропустила и страница
       // отрисовалась, а не осталась на логине.
+      //
+      // Срок ожидания — общий, из `expect.timeout` в `playwright.config.ts`, и там же
+      // записано, почему он не пять секунд по умолчанию.
       await expect(page.getByRole('heading', { name: screen.ready })).toBeVisible();
       await page.evaluate(async () => {
         await document.fonts.ready;

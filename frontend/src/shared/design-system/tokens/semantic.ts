@@ -20,6 +20,7 @@
 //   background.card    → surface-card  content.muted     → content-muted
 //   background.scrim   → scrim        content.subtle    → content-subtle
 //   background.veil    → veil         content.onInverse → on-inverse
+//                                     content.onNeutral → on-neutral
 //
 //   border.default → line             action.primary        → action-primary
 //   border.strong  → line-strong      action.primaryHover   → action-hover
@@ -29,6 +30,7 @@
 //
 //   feedback.info    → info           feedback.warning → warning
 //   feedback.success → success        feedback.danger  → danger
+//   feedback.<тон>.on → on-success / on-warning / on-danger
 //   inverse.*        → term-*
 //
 // Таблица полная, и это утверждение, а не обещание: `tokens.test.ts` проверяет её в обе
@@ -41,7 +43,7 @@
 // работы разом: белый (поверхность и надпись на действии), синий (заливка действия,
 // краска ссылки и тёмный синий, читаемый на тоне) и `ink` — имя по материалу, а не по роли.
 
-import { palette } from './primitives';
+import { palette, wash } from './primitives';
 
 export const background = {
   // Земля, на которой стоит страница, и заливка всего, что заполняется НА карточке:
@@ -57,9 +59,9 @@ export const background = {
   // самый носимый класс приложения (143 сайта) обходил уровень назначения целиком.
   card: palette.white,
   // Завеса над ОДНОЙ фотографией: белый контроль поверх должен брать 4.5:1.
-  scrim: palette.scrim55,
+  scrim: wash.scrim,
   // Завеса над всей страницей: на ней ничего не пишут, она приглушает, а не контрастит.
-  veil: palette.veil40,
+  veil: wash.veil,
 } as const;
 
 export const content = {
@@ -73,6 +75,16 @@ export const content = {
   // ОДНА строка на тёмной поверхности: тост, подсказка. Ярче чернил журнала намеренно —
   // её читают один раз, а лог сканируют. Тоже шла напрямую из палитры.
   onInverse: palette.white,
+  // Чернила НА залитом НЕЙТРАЛЬНОМ: чернильная кнопка «остановить» и счётчик кампаний в
+  // покое. Заливка — `content-primary` (19.67:1) или `content-muted` (6.18:1), то есть
+  // не про контраст: четыре носителя носили тут `on-action`, «чернила на ДЕЙСТВИИ», и
+  // перекрасить кнопку, не перекрасив надпись на сером счётчике, было нельзя — ровно та
+  // связь, ради разрыва которой роли `on-*` и разделили.
+  //
+  // Не `onInverse`: та — одна строка на ТЁМНОЙ ПОВЕРХНОСТИ (тост, подсказка), у которой
+  // своя рампа `inverse.*` и свой вопрос «ярче или как лог». Тут поверхности нет, есть
+  // залитый контрол.
+  onNeutral: palette.white,
 } as const;
 
 export const border = {
@@ -103,7 +115,18 @@ export const action = {
 
 // Смысл, который сообщает интерфейс: `base` — текст и иконка, `strong` — самая тёмная
 // ступень для надписи НА тонированной подложке, `pressed` — нажатие залитой кнопки этого
-// тона, `tint` — сама подложка, `line` — её рамка.
+// тона, `tint` — сама подложка, `line` — её рамка, `on` — чернила НА залитой ступени.
+//
+// `on` — то, чего в системе не было, и это видно было по обходам: белую галочку на
+// `bg-success` носил голый `stroke-white` (пять мест), а надпись на зелёной и на красной
+// заливке — `text-on-action`, то есть «чернила на ДЕЙСТВИИ», надетые на исход. Перекрасить
+// действие, не перекрашивая галочку успеха, было нельзя; `stroke-white` вообще стоял вне
+// уровня назначения, и правило линтера пришлось для него ослабить целиком.
+//
+// Три имени, а не одно фило-агностичное (`on-fill`): у янтарного это решение отдельное и
+// шаткое. Белый на `warning` мерит 4.01:1 — под полом AA, — и держится только потому, что
+// носится он на `warning.deep` (6.11:1). Ступень, которой однажды придётся перестать быть
+// белой, обязана называться сама.
 //
 // Раньше тут стояло «у каждого тона одни и те же пять работ», и это было обещание
 // СИММЕТРИИ, за которое платили мёртвыми ступенями: `info.base`, `info.pressed` и
@@ -131,6 +154,7 @@ export const feedback = {
     pressed: palette.green800,
     tint: palette.green050,
     line: palette.green200,
+    on: palette.white,
   },
   warning: {
     base: palette.amber600,
@@ -140,12 +164,15 @@ export const feedback = {
     pressed: palette.amber500,
     tint: palette.amber050,
     line: palette.amber200,
+    // Единственная из трёх, чьё значение под вопросом: см. шапку группы.
+    on: palette.white,
   },
   danger: {
     base: palette.red500,
     strong: palette.red600,
     tint: palette.red050,
     line: palette.red200,
+    on: palette.white,
   },
 } as const;
 
@@ -217,10 +244,21 @@ export const flatColors = {
     // Дорожка кольца ожидания на залитом действии: `border-on-action-track`.
     track: action.onPrimaryTrack,
   },
+  // Чернила НА залитой ступени тона: галочка внутри зелёного кружка, надпись на зелёной
+  // или красной заливке, кружок роли в предпросмотре сценария. Три имени вместо одного
+  // потому, что у янтарного это решение шаткое (см. группу `feedback`).
+  'on-success': feedback.success.on,
+  'on-warning': feedback.warning.on,
+  'on-danger': feedback.danger.on,
   // Чернила на тёмной поверхности, когда это ОДНА строка, а не поток лога: тост и
   // подсказка. Ярче `term-text` намеренно — тот — основные чернила журнала, который
   // сканируют, а это надпись, которую читают один раз.
   'on-inverse': content.onInverse,
+  // Чернила НА залитом нейтральном: `bg-content-primary` у чернильной кнопки «остановить»
+  // и `bg-content-muted` у счётчика кампаний в покое. Четвёртая роль семейства `on-*`, и
+  // она закрывает последнюю дыру в нём: заливка бывает действием, тоном, тёмной
+  // поверхностью — и просто серой.
+  'on-neutral': content.onNeutral,
 
   line: {
     DEFAULT: border.default,

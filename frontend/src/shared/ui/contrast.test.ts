@@ -224,15 +224,72 @@ function elementEnd(src: string, openEnd: number, name: string): number {
 // `fill-current`, which is a graphic under 1.4.11 and clears the 3:1 that asks of it.
 // The list is components-whose-whole-render-is-an-svg, and it was short only because
 // nothing measurable had ever sat behind this one.
-const GLYPH = /<svg\b[\s\S]*?<\/svg>|<(?:Icon|Spinner|LayoutIcon)\b[^<>]*\/>/g;
+//
+// Один список на два вопроса — «что этот элемент СОДЕРЖИТ» и «чем этот элемент ЯВЛЯЕТСЯ», —
+// и собраны из него оба: набор имён и регулярка. Двумя литералами они разошлись бы на
+// первом же новом глифе, а расхождение тут тихое: элемент перестал бы считаться графикой
+// и молча поехал бы к полу 4.5:1.
+const GLYPH_TAGS = ['Icon', 'Spinner', 'LayoutIcon'] as const;
+// `svg` отдельно: у него есть содержимое и закрывающий тег, а остальные три
+// самозакрывающиеся.
+const GLYPH = new RegExp(`<svg\\b[\\s\\S]*?</svg>|<(?:${GLYPH_TAGS.join('|')})\\b[^<>]*/>`, 'g');
+const GLYPH_TAG = new Set<string>([...GLYPH_TAGS, 'svg']);
 
 /** An element whose whole content is an icon is a graphic, not text. */
 function glyphOnly(body: string): boolean {
   return body.includes('<') && body.replace(GLYPH, '').trim() === '';
 }
 
+/**
+ * Открытых `{` между двумя точками исходника: строки и комментарии не считаются.
+ *
+ * Отвечает на «этот элемент применяется ВСЕГДА в теле того, кто его окружает». Ноль —
+ * элемент написан в теле прямо; больше нуля — он внутри `{…}`, то есть внутри условия
+ * (`{on && <Icon …/>}`) или внутри дерева, переданного пропом.
+ */
+function braceDepth(src: string, from: number, to: number): number {
+  let depth = 0;
+  let quote = '';
+  for (let i = from; i < to; i += 1) {
+    const c = src[i] ?? '';
+    if (quote !== '') {
+      if (c === '\\') i += 1;
+      else if (c === quote || (c === '\n' && quote !== '`')) quote = '';
+    } else if (c === '/' && src[i + 1] === '/') i = src.indexOf('\n', i);
+    else if (c === '/' && src[i + 1] === '*') i = src.indexOf('*/', i) + 1;
+    else if (c === '"' || c === "'" || c === '`') quote = c;
+    else if (c === '{') depth += 1;
+    else if (c === '}') depth -= 1;
+    if (i < from) break;
+  }
+  return depth;
+}
+
 const BG = /(?:^|\s)(?:[\w-]+:)*bg-(\S+)/g;
-const INK = /(?:^|\s)(?:[\w-]+:)*text-([a-z]+(?:-[a-z]+)?)(?![\w/-])/g;
+// `stroke` и `fill` стоят рядом с `text`, и это правка: краска глифа — такое же решение о
+// контрасте, как краска надписи, а до сих пор гейт её не видел вовсе. Попытка добавить их
+// была и была откачена, потому что на десяти парах разбор ошибался в четырёх, и обе причины
+// были структурными. Обе теперь закрыты:
+//
+//   • элемент, который САМ является глифом, не опознавался глифом. `glyphOnly` спрашивает,
+//     что элемент СОДЕРЖИТ, — верно для обёртки и неверно для `<Icon className=
+//     "stroke-on-success" />`, у которого тело пусто: его держали у пола текста 4.5:1
+//     вместо 3:1, которые графике даёт 1.4.11. Теперь имя тега отвечает на тот же вопрос
+//     напрямую — см. `GLYPH_TAG`.
+//   • условный РЕБЁНОК не был ветвью. `{on && <Icon className="stroke-on-action" />}` для
+//     обхода был всегда применённым куском, поэтому его белая краска сходилась с ОБЕИМИ
+//     половинами родительского `on ? bg-action-primary : bg-surface-card` и давала белое на
+//     белом, 1.00:1 — сочетание, которого не рисует ничто.
+//
+// Второе закрыто через причину, а не через симптом. Симптом — равные значения краски, и
+// пропускать пару с равными hex было бы одной строкой; отказ измеренный: белым по белой
+// карточке — это САМАЯ дорогая ошибка контраста из возможных (ровно та, что жила на кнопке
+// проверки в таблице аккаунтов), и правило «равные значения не спрашиваем» перестало бы её
+// ловить. Вместо этого условный ребёнок стал не-всегдашним куском по той же семантике, по
+// которой ею уже были ветви шаблонного литерала: не-всегда не может встретиться с
+// не-всегда. Цена названа — пара «белое на синем» в таком месте больше не измеряется
+// обходом, и её держит рукописное утверждение в конце файла.
+const INK = /(?:^|\s)(?:[\w-]+:)*(?:text|stroke|fill)-([a-z]+(?:-[a-z]+)?)(?![\w/-])/g;
 const ROLE = /(?:^|\s)type-([a-z-]+)(?![\w-])/g;
 
 const matches = (re: RegExp, text: string): string[] =>
@@ -278,25 +335,41 @@ for (const sheet of Object.values(stylesheets)) {
 }
 const CSS_FILL = new RegExp(`(?:^|\\s)(?:${[...cssPainted].join('|')})(?![\\w-])`);
 
-const pairings = new Map<string, string[]>();
-const offenders: string[] = [];
-
-function record(ink: string, fill: string, where: string, glyph: boolean) {
-  if (ink === fill || !(ink in HEX) || !(fill in HEX)) return;
-  const key = `${ink} on ${fill}`;
-  pairings.set(key, [...(pairings.get(key) ?? []), where]);
-  const floor = glyph ? NON_TEXT : AA;
-  const measured = ratio(ink, fill);
-  if (measured < floor) {
-    offenders.push(`${where} ${key} — ${measured.toFixed(2)}:1, needs ${floor.toFixed(1)}`);
-  }
-}
-
 const lineAt = (src: string, index: number) => src.slice(0, index).split('\n').length;
 
-for (const [path, src] of Object.entries(sources)) {
-  if (path.includes('.test.')) continue;
-  const spans: { start: number; end: number; fills: string[] }[] = [];
+/**
+ * Пары «краска на подложке», которые рисует ОДИН исходник.
+ *
+ * Функция, а не цикл верхнего уровня, и это половина правки. Пока разбор был циклом,
+ * подсунуть ему подделку было нечем: проверялся результат разбора НА ПРИЛОЖЕНИИ, то есть
+ * утверждение «сегодня чисто», а не утверждение «разбор смотрит». Гейт, который нельзя
+ * проверить на фикстуре, отличается от сломанного гейта ровно тем, что в приложении
+ * сегодня чисто.
+ */
+function scan(path: string, src: string): { offenders: string[]; pairings: string[] } {
+  const offenders: string[] = [];
+  const pairings: string[] = [];
+
+  const record = (ink: string, fill: string, where: string, glyph: boolean) => {
+    if (ink === fill || !(ink in HEX) || !(fill in HEX)) return;
+    const key = `${ink} on ${fill}`;
+    pairings.push(key);
+    const floor = glyph ? NON_TEXT : AA;
+    const measured = ratio(ink, fill);
+    if (measured < floor) {
+      offenders.push(`${where} ${key} — ${measured.toFixed(2)}:1, needs ${floor.toFixed(1)}`);
+    }
+  };
+
+  // `open` — индекс своего `>`: с него считается, стоит ли ребёнок в теле прямо или
+  // внутри `{…}`. `always` — те заливки элемента, которые применяются безусловно.
+  const spans: {
+    start: number;
+    open: number;
+    end: number;
+    fills: string[];
+    always: string[];
+  }[] = [];
   const floating: { at: number; inks: string[]; glyph: boolean }[] = [];
   const inATag: [number, number][] = [];
   for (let i = src.indexOf('<'); i !== -1; i = src.indexOf('<', i + 1)) {
@@ -309,14 +382,17 @@ for (const [path, src] of Object.entries(sources)) {
     const own = nested === -1 ? raw : raw.slice(0, nested + 1);
     inATag.push([i, i + own.length]);
     const end = elementEnd(src, tag.end, tag.name);
-    const glyph = glyphOnly(
-      src.slice(tag.end + 1, Math.max(tag.end + 1, end - tag.name.length - 3)),
-    );
+    // Два вопроса, один ответ: элемент ЯВЛЯЕТСЯ глифом (`<Icon …/>`, `<svg>`) или
+    // СОДЕРЖИТ один глиф и ничего больше (обёртка вокруг иконки). И то и другое —
+    // графика под 1.4.11, и пол у неё 3:1.
+    const glyph =
+      GLYPH_TAG.has(tag.name) ||
+      glyphOnly(src.slice(tag.end + 1, Math.max(tag.end + 1, end - tag.name.length - 3)));
     const cs = chunks(own);
     const fills = [...new Set(cs.flatMap((c) => fillsOf(c.text)))];
     if (cs.some((c) => CSS_FILL.test(c.text))) fills.push('css');
-    if (fills.length > 0) spans.push({ start: i, end, fills });
     const always = [...new Set(cs.filter((c) => c.always).flatMap((c) => fillsOf(c.text)))];
+    if (fills.length > 0) spans.push({ start: i, open: tag.end, end, fills, always });
     const orphaned: string[] = [];
     for (const chunk of cs) {
       const inks = inksOf(chunk.text);
@@ -336,8 +412,14 @@ for (const [path, src] of Object.entries(sources)) {
     const enclosing = spans.filter((s) => s.start < at && at < s.end);
     if (enclosing.length === 0) continue;
     const nearest = enclosing.reduce((a, b) => (b.start > a.start ? b : a));
+    // Та же семантика «всегда», что у кусков шаблонного литерала, только осью выше:
+    // ребёнок внутри `{…}` в теле предка применяется НЕ всегда, поэтому встретиться он
+    // может только с заливкой, которая применяется всегда. Иначе `{on && <Icon
+    // className="stroke-on-action"/>}` сходится с обеими половинами родительского
+    // тернарника и приносит белое на белом — пару, которой не рисует ничто.
+    const reach = braceDepth(src, nearest.open + 1, at) === 0 ? nearest.fills : nearest.always;
     const where = `${path}:${lineAt(src, at)}`;
-    for (const fill of nearest.fills) for (const ink of inks) record(ink, fill, where, glyph);
+    for (const fill of reach) for (const ink of inks) record(ink, fill, where, glyph);
   }
   // The class lists that never reach a tag: the tone maps and hoisted constants, which
   // is where thirty-five status pills sat on the failing rung after the first sweep.
@@ -347,7 +429,14 @@ for (const [path, src] of Object.entries(sources)) {
     const where = `${path}:${lineAt(src, chunk.at)}`;
     for (const fill of fillsOf(chunk.text)) for (const ink of inks) record(ink, fill, where, false);
   }
+  return { offenders, pairings };
 }
+
+const scanned = Object.entries(sources)
+  .filter(([path]) => !path.includes('.test.'))
+  .map(([path, src]) => scan(path, src));
+const offenders = scanned.flatMap((one) => one.offenders);
+const pairings = new Set(scanned.flatMap((one) => one.pairings));
 
 // A source-reading assertion can lie in exactly one way: by reading nothing. A glob that
 // resolved to nothing, or a walker that stopped finding tags, would leave both of these
@@ -359,14 +448,78 @@ test('the scan reads the tree it claims to', () => {
   // Две пары-часовых, и вторая из них — то, чего до переезда на роли измерить было
   // нельзя: `white on primary` описывало и надпись на кнопке, и белую карточку одним
   // именем. Теперь «чернила НА залитом действии» — своя пара, и она под своим полом.
-  expect([...pairings.keys()]).toContain('content-subtle on surface-card');
-  expect([...pairings.keys()]).toContain('on-action on action-primary');
+  expect([...pairings]).toContain('content-subtle on surface-card');
+  expect([...pairings]).toContain('on-action on action-primary');
+  // И третья: краска ГЛИФА, которой этот обход до правки не видел вовсе.
+  expect([...pairings]).toContain('on-success on success');
 });
 
 test('every text-on-fill pairing the source paints clears its floor', () => {
   // Joined rather than compared as an array: a failure has to name the file, the line
   // and the measurement, and a diff of two arrays truncates at two entries.
   expect(offenders.join('\n')).toBe('');
+});
+
+// ── Разбор на подделках ─────────────────────────────────────────────────────────────
+//
+// Смысл отрицательного случая тут один: он ломается, когда обход ПЕРЕСТАЁТ смотреть.
+// Утверждение «в приложении чисто» пустой обход выполняет молча, поэтому каждая фикстура
+// ниже названа своей причиной, а не «случаем 1».
+const FIXTURES: { name: string; source: string; offends: boolean; because: string }[] = [
+  {
+    name: 'краска на самом глифе внутри тонированной подложки',
+    source: `<span className="bg-success-tint">
+      <Icon name="check" size={16} className="stroke-success" />
+    </span>`,
+    offends: true,
+    because: 'базовый зелёный на своём тоне — 2.97:1 против 3:1, которые просит графика',
+  },
+  {
+    name: 'то же на голом svg',
+    source: `<span className="bg-success-tint">
+      <svg className="fill-success" />
+    </span>`,
+    offends: true,
+    because: '`fill-` читается наравне с `stroke-`, и `svg` — такой же глиф',
+  },
+  {
+    name: 'СЛОВО, а не глиф, на залитом тоне',
+    source: `<span className="bg-success"><span className="text-on-success">жив</span></span>`,
+    offends: true,
+    because: 'белый на базовом зелёном — 3.37:1, а слово держат у 4.5:1',
+  },
+  {
+    name: 'глиф, который берёт 3:1 и не берёт 4.5:1',
+    source: `<span className="bg-success">
+      <Icon name="check" size={10} className="stroke-on-success" />
+    </span>`,
+    offends: false,
+    because: 'те же 3.37:1, но это графика: пол 3:1, и она его берёт',
+  },
+  {
+    name: 'условный ребёнок под условной заливкой',
+    source: `<span className={\`flex \${on ? 'bg-action-primary' : 'bg-surface-card'}\`}>
+      {on && <Icon name="check" size={14} className="stroke-on-action" />}
+    </span>`,
+    offends: false,
+    because: 'не-всегда не встречается с не-всегда: белое на белом тут не рисуется',
+  },
+];
+
+test('разбор ловит краску глифа и не выдумывает того, чего не рисуют', () => {
+  const verdicts = FIXTURES.map((fixture) => {
+    const found = scan('fixture.tsx', fixture.source);
+    return `${fixture.name}: ${found.offenders.length > 0 ? 'нарушение' : 'чисто'}`;
+  });
+  expect(verdicts).toEqual(FIXTURES.map((f) => `${f.name}: ${f.offends ? 'нарушение' : 'чисто'}`));
+  // Измерение, а не только вердикт: «нарушение» на верном поле и на неверном выглядит
+  // одинаково, а полов тут два, и вся правка про то, какой из них берётся.
+  expect(scan('fixture.tsx', FIXTURES[0]?.source ?? '').offenders.join()).toContain(
+    '2.97:1, needs 3.0',
+  );
+  expect(scan('fixture.tsx', FIXTURES[2]?.source ?? '').offenders.join()).toContain(
+    '3.37:1, needs 4.5',
+  );
 });
 
 // The one kind of pairing the scan above cannot see: a fill painted in one component
@@ -377,4 +530,25 @@ test('every text-on-fill pairing the source paints clears its floor', () => {
 // twenty-four with no way to tell which of them were still real.
 test('term.text reads on the terminal surface it is written for', () => {
   expect(ratio('term-text', 'term')).toBeGreaterThanOrEqual(AA);
+});
+
+// The other shape the scan cannot see: ink painted with `stroke`/`fill`, and ink chosen
+// by an index (`roleTone(i).on`) rather than written as a class. Both are how the three
+// `on-*` roles are worn, so each is measured here against the fill it is actually worn
+// on — read off the sites, not off the tone's name.
+//
+// `on-success on success` is 3.37:1: the graphic floor, and it is a graphic — the five
+// wearers are all a check inside a filled circle. It does NOT clear the text floor, and
+// asserting that is the point: putting a WORD on `bg-success` is the mistake this line
+// exists to catch, and the tone already has `deep` for it.
+test('ink on a filled tone reads on the fill it is worn on', () => {
+  expect(ratio('on-success', 'success')).toBeGreaterThanOrEqual(NON_TEXT);
+  expect(ratio('on-success', 'success')).toBeLessThan(AA);
+  expect(ratio('on-success', 'success-deep')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-danger', 'danger')).toBeGreaterThanOrEqual(AA);
+  // Янтарный носится ТОЛЬКО на `deep`, и это не случайность: на базовом янтаре белый
+  // мерит 4.01:1, то есть под полом. Второе утверждение держит первое честным — оно
+  // ломается в тот день, когда кто-нибудь наденет `on-warning` на `bg-warning`.
+  expect(ratio('on-warning', 'warning-deep')).toBeGreaterThanOrEqual(AA);
+  expect(ratio('on-warning', 'warning')).toBeLessThan(AA);
 });

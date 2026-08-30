@@ -21,7 +21,6 @@ import {
   Input,
   SegmentedControl,
   Select,
-  Spinner,
   type SelectOption,
 } from '@/shared/ui';
 
@@ -228,7 +227,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
             onClick={onUnassign}
             loading={unassignProxy.isPending}
           >
-            {unassignProxy.isPending ? <Spinner /> : t('accounts.edit.proxyDetach')}
+            {t('accounts.edit.proxyDetach')}
           </Button>
         ) : null}
       </div>
@@ -345,10 +344,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
           className="items-center gap-sm"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
+          loading={proxyCheck === 'loading'}
         >
-          {proxyCheck === 'loading' ? (
-            <Spinner />
-          ) : (
+          {proxyCheck !== 'loading' && (
             <svg
               width="14"
               height="14"

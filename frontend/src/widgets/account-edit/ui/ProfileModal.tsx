@@ -759,11 +759,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* content */}
+          {/* `gap-lg` вместо `mb-lg` на уведомлении об ошибке загрузки: расстояние до
+              панели вкладки ставит панель, а не уведомление. В потоке тут не больше двух
+              детей — уведомление и одна вкладка (оверлей `absolute`, во flex он вне
+              потока и зазора не занимает), — поэтому зазор виден ровно там, где раньше
+              стоял отступ, и той же ступенью. */}
           <div
             role="tabpanel"
             id="profile-tabpanel"
             aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex-1 overflow-y-auto p-xl"
+            className="tb-scroll relative flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
           >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a
@@ -791,7 +796,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
+              <Notice tone="danger" className="flex items-center justify-between gap-md">
                 <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <Button
                   size="xs"
@@ -1021,14 +1026,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               onClick={() => {
                 void form.handleSubmit();
               }}
-              disabled={updateProfile.isPending || !canSave || !isDirty}
+              disabled={!canSave || !isDirty}
+              loading={updateProfile.isPending}
               className={saved ? 'bg-success-deep hover:bg-success-deep' : ''}
             >
               {updateProfile.isPending ? (
-                <span className="inline-flex items-center gap-sm">
-                  <Spinner tone="onAction" />
-                  {t('accounts.profile.saving')}
-                </span>
+                t('accounts.profile.saving')
               ) : saved ? (
                 <span className="inline-flex items-center gap-sm">
                   <span className="tb-swapin inline-flex">

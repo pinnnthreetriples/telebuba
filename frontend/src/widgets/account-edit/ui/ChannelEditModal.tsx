@@ -15,7 +15,6 @@ import {
   Input,
   Modal,
   Notice,
-  Spinner,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -199,7 +198,9 @@ export function ChannelEditModal({
           </div>
 
           {detail.isError && (
-            <Notice tone="danger" className="mb-lg flex items-center justify-between gap-md">
+            // Без `mb-lg`: ветка `detail.isSuccess` в этом состоянии не отрисована, то
+            // есть под уведомлением не стоит ничего — отступ был краем диалога.
+            <Notice tone="danger" className="flex items-center justify-between gap-md">
               <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
               <Button
                 size="xs"
@@ -254,37 +255,34 @@ export function ChannelEditModal({
               />
 
               {update.isError && (
-                <Notice tone="danger" className="mb-lg">
+                <Notice tone="danger">
                   {channelErrorText(update.error, t, t('accounts.channel.error'))}
                 </Notice>
               )}
 
-              <div className="flex items-center gap-sm">
-                <button
-                  type="button"
+              {/* `mt-lg` переехал сюда с уведомления над этой строкой: 16px тут стоят и
+                  когда уведомления нет — тогда они слипаются с `mb-lg` у `CheckRow` и
+                  дают те же 16px. Ритм этого диалога набран отступами у каждого блока, а
+                  не `gap` у тела; перевод тела на `gap` — отдельная правка (он снял бы
+                  `mb-lg` у двух `label` и у общего `CheckRow`, который носит и диалог
+                  создания), и картинку она сдвинет. */}
+              <div className="mt-lg flex items-center gap-sm">
+                <Button
+                  size="sm"
                   onClick={() => photoInput.current?.click()}
                   disabled={busy}
-                  className="rounded-full border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-60"
+                  loading={setPhoto.isPending}
                 >
-                  {setPhoto.isPending ? (
-                    <span className="inline-flex items-center gap-sm">
-                      <Spinner />
-                      {t('accounts.channel.avatarUpload')}
-                    </span>
-                  ) : (
-                    t('accounts.channel.avatarUpload')
-                  )}
-                </button>
+                  {t('accounts.channel.avatarUpload')}
+                </Button>
                 <span className="flex-1" />
-                <Button variant="primary" onClick={save} disabled={!canSave}>
-                  {update.isPending ? (
-                    <span className="inline-flex items-center gap-sm">
-                      <Spinner tone="onAction" />
-                      {t('accounts.channel.saving')}
-                    </span>
-                  ) : (
-                    t('accounts.channel.save')
-                  )}
+                <Button
+                  variant="primary"
+                  onClick={save}
+                  disabled={!canSave}
+                  loading={update.isPending}
+                >
+                  {update.isPending ? t('accounts.channel.saving') : t('accounts.channel.save')}
                 </Button>
               </div>
               <input

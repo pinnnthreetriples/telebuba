@@ -188,20 +188,19 @@ export function CampaignSetupSection({
             </button>
           </span>
         ) : (
-          // Не `Button variant="dashed"`, и намеренно — по той же причине, что у
-          // соседа: это приглушённый строчный добавитель, стоящий в ряду чипов и
-          // нарисованный `line-strong` и `ink-muted`, тогда как блочный добавитель под
-          // списком синий. Общая у них только пунктирная рамка.
-          <button
-            type="button"
+          // `dashedMuted`, а не `dashed`: приглушённый СТРОЧНЫЙ добавитель в ряду чипов,
+          // тогда как блочный добавитель под списком синий. Рисовался руками, пока такой
+          // ступени у кнопки не было; теперь она есть, и второй её экземпляр не нужен.
+          <Button
+            variant="dashedMuted"
+            size="xs"
             disabled={live}
             onClick={() => {
               setAdding(true);
             }}
-            className="inline-flex items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-md py-tight text-body text-content-muted hover:border-action-primary hover:text-action-primary disabled:opacity-50"
           >
             {t('neuroshilling.setup.targets.add')}
-          </button>
+          </Button>
         )}
       </div>
 

@@ -249,23 +249,18 @@ export function AccountLimitsModal({
       </div>
 
       <div className="flex justify-between gap-md border-t border-line-row px-2xl pb-xl pt-lg">
-        <button
-          type="button"
+        <Button
           onClick={() => {
             setDraft(Object.fromEntries(KEYS.map((key) => [key, ''])));
           }}
-          className="rounded-full border border-line-strong bg-surface-card px-xl py-md text-body font-medium text-content-muted"
+          className="border-line-strong text-content-muted"
         >
           {t('neurocomment.modal.limits.resetAll')}
-        </button>
+        </Button>
         <div className="flex gap-sm">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-line-strong bg-surface-card px-xl py-md text-body font-medium text-content-muted"
-          >
+          <Button onClick={onClose} className="border-line-strong text-content-muted">
             {t('neurocomment.modal.cancel')}
-          </button>
+          </Button>
           <Button
             variant="primary"
             onClick={() => {

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Badge, Button, FormField, Icon, Input, SegmentedControl, Spinner } from '@/shared/ui';
+import { Badge, Button, FormField, Icon, Input, SegmentedControl } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 
@@ -162,10 +162,14 @@ export function ProxyForm({
         </form.Field>
       </div>
       <div className="flex flex-wrap items-center gap-md">
-        <Button size="sm" className="items-center gap-sm" onClick={runDetect} disabled={!canProbe}>
-          {detect === 'loading' ? (
-            <Spinner />
-          ) : (
+        <Button
+          size="sm"
+          className="items-center gap-sm"
+          onClick={runDetect}
+          disabled={!canProbe}
+          loading={detect === 'loading'}
+        >
+          {detect !== 'loading' && (
             <svg
               width="14"
               height="14"

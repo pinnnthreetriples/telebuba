@@ -62,12 +62,22 @@ const FIELD_PAD = {
   lg: 'px-lg',
 } as const;
 
+// Форма — по РОДУ контрола, а не по его ступени размера, и это правка, а не описание.
+//
+// Раньше `Button` выбирал форму по ступени: `md`/`sm` — пилюля, `xs` — `inset`, `block` —
+// `field`. То есть размер решал форму, и «сделать кнопку меньше» означало «сделать кнопку
+// другой формы». Объяснения у обоих исключений были, и оба не выдержали проверки счётом:
+// «на 28px полный радиус и прямоугольник — одна форма» неверно (14px против 8px радиуса
+// видно рядом), а «пилюля на 200px была бы стадионом» — это про вкус, и 83 пилюли из 104
+// кнопок приложения с ним не согласны.
+//
+// Теперь у кнопки одна форма на все ступени. Ступень отвечает за высоту и поля — и только.
 const SHAPE = {
-  // Кнопка.
+  // Кнопка — любая, любого размера.
   pill: 'rounded-full',
-  // Поле, триггер выпадающего списка, кнопка во всю ширину блока.
+  // Поле и триггер выпадающего списка.
   field: 'rounded-lg',
-  // Контрол внутри другой коробки.
+  // Поле внутри другой коробки.
   inset: 'rounded-md',
 } as const;
 
@@ -99,24 +109,24 @@ const INVALID = 'border-danger';
 const CONTROL_TRANSITION = 'transition-colors duration-state';
 
 export type ControlSize = keyof typeof CONTROL_HEIGHT;
-export type ControlShape = keyof typeof SHAPE;
+// `ControlShape` тут был и ушёл вместе с параметром `shape` у `buttonBase`: тип, который
+// называет выбор, которого больше нет, — это приглашение вернуть выбор.
 
-/** Кнопка: фиксированная высота, рунг, форма, обводка фокуса и переход. */
-export function buttonBase({
-  size,
-  shape,
-  className,
-}: {
-  size: ControlSize;
-  shape: ControlShape;
-  className?: string;
-}): string {
+/**
+ * Кнопка: фиксированная высота, поля, рунг, ПИЛЮЛЯ, обводка фокуса и переход.
+ *
+ * Форма не параметр. Она им была — `shape: ControlShape`, — и единственный вызывающий
+ * передавал её из таблицы размеров, то есть параметр существовал ровно для того, чтобы
+ * размер мог менять форму. Убрать его — и подменить форму кнопки становится нельзя ни из
+ * компонента, ни из места вызова.
+ */
+export function buttonBase({ size, className }: { size: ControlSize; className?: string }): string {
   return cn(
     'inline-flex shrink-0 items-center justify-center gap-tight whitespace-nowrap',
     CONTROL_HEIGHT[size],
     BUTTON_PAD[size],
     CONTROL_TEXT[size],
-    SHAPE[shape],
+    SHAPE.pill,
     FOCUS_RING,
     DISABLED,
     CONTROL_TRANSITION,

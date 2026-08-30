@@ -168,20 +168,20 @@ export function SessionSection({ account }: { account: AccountRead }) {
             onClick={onLogout}
             loading={logout.isPending}
           >
-            {logoutCheck === 'loading' ? <Spinner /> : t('accounts.edit.logout')}
+            {t('accounts.edit.logout')}
           </Button>
         </span>
       </div>
       <div className="mb-md mt-lg flex items-center justify-between gap-sm">
         <span className="type-eyebrow">{t('accounts.edit.loginByCode')}</span>
-        <button
-          type="button"
+        <Button
+          size="xs"
           onClick={onRequestCode}
-          disabled={requestCode.isPending}
-          className="rounded-full border border-line bg-surface-card px-md py-xs text-tiny font-medium text-action-primary disabled:opacity-50"
+          loading={requestCode.isPending}
+          className="text-action-primary"
         >
-          {requestCode.isPending ? <Spinner /> : t('accounts.edit.sendCode')}
-        </button>
+          {t('accounts.edit.sendCode')}
+        </Button>
       </div>
       <div className="mb-md grid grid-cols-1 md:grid-cols-2 gap-md">
         <label>
@@ -213,8 +213,8 @@ export function SessionSection({ account }: { account: AccountRead }) {
           />
         </label>
       </div>
-      <Button size="block" onClick={onConfirmLogin} disabled={submitCode.isPending || !code}>
-        {submitCode.isPending ? <Spinner /> : t('accounts.edit.confirmLogin')}
+      <Button size="block" onClick={onConfirmLogin} disabled={!code} loading={submitCode.isPending}>
+        {t('accounts.edit.confirmLogin')}
       </Button>
       {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}
       <div className="mb-md mt-xl type-eyebrow">{t('accounts.edit.import')}</div>

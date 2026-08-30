@@ -19,7 +19,15 @@ import {
 
 import { Cell, Row, Section } from './Frame';
 
-const BUTTON_VARIANTS = ['primary', 'secondary', 'danger', 'ghost', 'dashed'] as const;
+const BUTTON_VARIANTS = [
+  'primary',
+  'neutral',
+  'secondary',
+  'danger',
+  'ghost',
+  'dashed',
+  'dashedMuted',
+] as const;
 const BUTTON_SIZES = ['md', 'sm', 'xs', 'block'] as const;
 const ICON_SIZES = ['sm', 'md', 'lg', 'touch'] as const;
 const ICON_TONES = ['neutral', 'primary', 'danger'] as const;
@@ -79,9 +87,20 @@ export function Controls() {
         <Cell caption="active = hover" probe="press">
           <Button variant="primary">Нажатие</Button>
         </Cell>
-        <Cell caption="loading">
+        {/* Три тона кольца, а не один: тон следует за заливкой, и «синяя дуга на синем»
+            — тот дефект, из-за которого тон вообще перестали передавать вручную. Видно
+            это только рядом. */}
+        <Cell caption="loading · primary">
           <Button variant="primary" loading>
             Сохраняю…
+          </Button>
+        </Cell>
+        <Cell caption="loading · secondary">
+          <Button loading>Проверяю…</Button>
+        </Cell>
+        <Cell caption="loading · danger">
+          <Button variant="danger" loading>
+            Удаляю…
           </Button>
         </Cell>
         <Cell caption="disabled">
@@ -94,6 +113,19 @@ export function Controls() {
             Недоступно
           </Button>
         </Cell>
+      </Row>
+
+      {/* Форма — ось, а не ступень, поэтому круг показан на КАЖДОМ размере: строка
+          доказывает, что он composes с любым, а не заменяет один из них. Раньше круг был
+          побочным эффектом ступени `lg`, и увидеть это на снимке было нельзя. */}
+      <Row label="IconButton · форма" hint="квадрат по умолчанию, круг — по запросу">
+        {ICON_SIZES.map((size) => (
+          <Cell key={size} caption={`${size} · circle`}>
+            <IconButton size={size} shape="circle" aria-label="Изменить">
+              <Icon name="pencil" size={14} />
+            </IconButton>
+          </Cell>
+        ))}
       </Row>
 
       {ICON_TONES.map((tone) => (

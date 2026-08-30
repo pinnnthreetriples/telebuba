@@ -182,15 +182,17 @@ export function PipelineCard({
       {/* Одна строка вместо списка причин: макет просит сводку, а не перечисление, и
           перечисление уже есть — в сводке замечаний сайдбара, которая для этого и
           заведена. Здесь называется ПЕРВАЯ причина и их число. */}
-      {blockers.length > 0 ? (
-        <Notice tone="info" className="mb-lg">
-          {t('neuroshilling.pipeline.remaining', { first: blockers[0], count: blockers.length })}
-        </Notice>
-      ) : (
-        <Notice tone="success" className="mb-lg">
-          {t('neuroshilling.pipeline.ready')}
-        </Notice>
-      )}
+      {/* Отступ несёт обёртка, а не само уведомление: расстоянием до соседа
+          распоряжается родитель — уведомление о том, что стоит под ним, не знает. */}
+      <div className="mb-lg">
+        {blockers.length > 0 ? (
+          <Notice tone="info">
+            {t('neuroshilling.pipeline.remaining', { first: blockers[0], count: blockers.length })}
+          </Notice>
+        ) : (
+          <Notice tone="success">{t('neuroshilling.pipeline.ready')}</Notice>
+        )}
+      </div>
 
       <div className="mb-lg grid grid-cols-3 divide-line overflow-hidden rounded-lg border border-line sm:grid-cols-5 sm:divide-x">
         <Stat label={t('neuroshilling.launch.tile.accounts')} value={String(roster.length)} />
@@ -243,16 +245,21 @@ export function PipelineCard({
         </div>
       ) : null}
 
-      {status === 'failed' && run.last_error_type ? (
-        <Notice tone="danger" bordered={false} className="mt-md">
-          {t('neuroshilling.launch.failed', { type: run.last_error_type })}
-        </Notice>
-      ) : null}
-
-      {halted.length > 0 ? (
-        <Notice tone="warning" bordered={false} className="mt-md">
-          {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
-        </Notice>
+      {/* Оба уведомления об исходе — в одной колонке с `gap`: расстояние между ними и
+          до того, что выше, принадлежит ей, а не им. */}
+      {status === 'failed' || halted.length > 0 ? (
+        <div className="mt-md flex flex-col gap-md">
+          {status === 'failed' && run.last_error_type ? (
+            <Notice tone="danger" bordered={false}>
+              {t('neuroshilling.launch.failed', { type: run.last_error_type })}
+            </Notice>
+          ) : null}
+          {halted.length > 0 ? (
+            <Notice tone="warning" bordered={false}>
+              {t('neuroshilling.launch.halted', { names: halted.map(titleOf).join(', ') })}
+            </Notice>
+          ) : null}
+        </div>
       ) : null}
     </Card>
   );

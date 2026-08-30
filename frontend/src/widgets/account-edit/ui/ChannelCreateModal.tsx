@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, IconButton, Input, Modal, Notice, Spinner, Textarea } from '@/shared/ui';
+import { Button, IconButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -281,8 +281,11 @@ export function ChannelCreateModal({
           </label>
         )}
 
+        {/* Без `mb-lg` у уведомления, и картинка не меняется: под ним стоит подвал с
+            `mt-xl`, соседние вертикальные отступы в блочном потоке СЛИПАЮТСЯ, и
+            расстояние было max(16, 20) = 20px и до правки. Отступ ничего не ставил. */}
         {create.isError && (
-          <Notice tone="danger" className="mb-lg">
+          <Notice tone="danger">
             {channelErrorText(create.error, t, t('accounts.channel.error'))}
           </Notice>
         )}
@@ -303,17 +306,13 @@ export function ChannelCreateModal({
                   }
             }
             disabled={createdId === null && !canSubmit}
+            loading={createdId === null && busy}
           >
-            {createdId !== null ? (
-              t('accounts.channel.edit')
-            ) : busy ? (
-              <span className="inline-flex items-center gap-sm">
-                <Spinner tone="onAction" />
-                {t('accounts.channel.creating')}
-              </span>
-            ) : (
-              t('accounts.channel.createBtn')
-            )}
+            {createdId !== null
+              ? t('accounts.channel.edit')
+              : busy
+                ? t('accounts.channel.creating')
+                : t('accounts.channel.createBtn')}
           </Button>
         </div>
       </div>
