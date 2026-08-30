@@ -5,11 +5,19 @@ import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import type { NeuroshillingCampaign } from '@/shared/api';
+import type { NeuroshillingCampaign, NeuroshillingScenario } from '@/shared/api';
 
-import { CampaignSetupCard } from './CampaignSetupCard';
+import { CampaignSetupSection } from './CampaignSetupSection';
+import { draftOf } from './scenarioDraft';
 import type { SetupDraft } from './setupDraft';
 import { setupDraftOf } from './setupDraft';
+
+const SCENARIO: NeuroshillingScenario = {
+  campaign_id: 'c1',
+  scenario_status: 'draft',
+  roles: [],
+  steps: [],
+};
 
 const CAMPAIGN: NeuroshillingCampaign = {
   campaign_id: 'c1',
@@ -24,7 +32,7 @@ const CAMPAIGN: NeuroshillingCampaign = {
   updated_at: 'now',
 };
 
-// The page owns the draft, so the harness does too: a mock alone would leave the
+// The page owns both drafts, so the harness does too: a mock alone would leave the
 // inputs controlled by a value that never moves, and a second keystroke would be
 // typed against the first one's stale render.
 function Harness({
@@ -34,37 +42,41 @@ function Harness({
 }: {
   initial: SetupDraft;
   onDraft: (draft: SetupDraft) => void;
-} & Omit<Parameters<typeof CampaignSetupCard>[0], 'draft' | 'onDraft'>) {
+} & Omit<
+  Parameters<typeof CampaignSetupSection>[0],
+  'draft' | 'onDraft' | 'scenario' | 'onScenario'
+>) {
   const [draft, setDraft] = useState(initial);
+  // Секция читает и черновик сценария — режим кампании, «разные голоса» и «читать чат»
+  // живут там, потому что уезжают вторым PUT.
+  const [scenario, setScenario] = useState(() => draftOf(CAMPAIGN, SCENARIO));
   return (
-    <CampaignSetupCard
+    <CampaignSetupSection
       {...rest}
       draft={draft}
       onDraft={(next) => {
         setDraft(next);
         onDraft(next);
       }}
+      scenario={scenario}
+      onScenario={setScenario}
     />
   );
 }
 
-function renderCard(over: Partial<Parameters<typeof CampaignSetupCard>[0]> = {}) {
+function renderCard(over: Partial<Parameters<typeof CampaignSetupSection>[0]> = {}) {
   const onDraft = vi.fn();
-  const onSave = vi.fn();
   const { draft, ...props } = over;
   render(
     <Harness
       initial={draft ?? setupDraftOf(CAMPAIGN)}
       onDraft={onDraft}
-      dirty={false}
       reserveCount={0}
       live={false}
-      onSave={onSave}
-      busy={false}
       {...props}
     />,
   );
-  return { onDraft, onSave };
+  return { onDraft };
 }
 
 test('the pause field says seconds, and min and max, not the mockup s minutes', () => {
@@ -87,35 +99,47 @@ test('raising the minimum past the maximum drags the maximum with it', async () 
   expect(last.pauseMaxSeconds).toBe(90);
 });
 
-test('the parallel option is disabled and says why, instead of collecting a 409', () => {
+test('the parallel option is disabled on its own, with the reason on it', () => {
+  // Групповой `disabled` этого сказать не может: «Последовательно» остаётся живым.
   renderCard();
-  const options = screen.getAllByRole('radio', { name: /Последовательно|Параллельно/ });
-  expect(options).toHaveLength(2);
-  expect(screen.getByRole('radio', { name: /Параллельно/ })).toBeDisabled();
-  expect(screen.getByText(/Пока недоступно/)).toBeInTheDocument();
+  const parallel = screen.getByRole('radio', { name: 'Параллельно' });
+  expect(parallel).toBeDisabled();
+  expect(parallel.getAttribute('title')).toMatch(/Пока недоступно/);
+  expect(screen.getByRole('radio', { name: 'Последовательно' })).toBeEnabled();
 });
 
-test('the targets badge counts what is typed, and the field is monospaced', () => {
-  renderCard();
-  expect(screen.getByText('Целей: 2')).toBeInTheDocument();
-  expect(screen.getByLabelText('Целевые чаты')).toHaveValue('@chat\n@other');
+test('targets are chips that can be removed one at a time', async () => {
+  const { onDraft } = renderCard();
+  expect(screen.getByText('2 цели')).toBeInTheDocument();
+  expect(screen.getByText('@chat')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Убрать @chat' }));
+  expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).targetsRaw).toBe('@other');
 });
 
-test('advanced settings hide behind a collapse whose badge counts real changes', async () => {
+test('a pasted block becomes one chip per chat, so bulk entry survives the textarea', async () => {
+  // Поля-простыни больше нет, но вставка списком осталась: строка ввода режется тем же
+  // разделителем, что и сохранённое значение.
+  const { onDraft } = renderCard();
+  await userEvent.click(screen.getByRole('button', { name: '+ Чат' }));
+  await userEvent.type(screen.getByLabelText('+ Чат'), '@one, @two @three{Enter}');
+
+  const raw = (onDraft.mock.calls.at(-1)?.[0] as SetupDraft).targetsRaw;
+  expect(raw.split(String.fromCharCode(10))).toEqual(['@chat', '@other', '@one', '@two', '@three']);
+});
+
+test('the limits row summarises what is inside instead of opening a panel in place', async () => {
   renderCard({ draft: { ...setupDraftOf(CAMPAIGN), messagesPerHour: 4, reserveEnabled: true } });
-  // Closed: nothing inside is reachable.
   expect(screen.queryByLabelText('Сообщений в час')).toBeNull();
-  // Five: the two set here, plus the three listening settings this campaign
-  // already carries away from their defaults.
-  expect(screen.getByText('5')).toBeInTheDocument();
+  expect(screen.getByText(/4 в час · 3 в чат за сутки · резерв вкл/)).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
   expect(screen.getByLabelText('Сообщений в час')).toHaveValue(4);
 });
 
 test('an emptied total travels as null, never as a zero the wire refuses', async () => {
   const { onDraft } = renderCard({ draft: { ...setupDraftOf(CAMPAIGN), totalPerAccount: 5 } });
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
 
   const total = screen.getByLabelText('Всего на аккаунт');
   expect(total).toHaveValue(5);
@@ -129,7 +153,7 @@ test('an emptied total travels as null, never as a zero the wire refuses', async
 
 test('the two quota boxes clamp to the wire bounds instead of posting a 422', async () => {
   const { onDraft } = renderCard();
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
 
   const perHour = screen.getByLabelText('Сообщений в час');
   await userEvent.clear(perHour);
@@ -146,7 +170,7 @@ test('the reserve badge counts the pool as it stands, not as the roster was arra
   // A promoted account has its reserve flag cleared server-side, so the number the
   // page passes in is what is left — and zero is the state worth seeing.
   renderCard({ reserveCount: 2 });
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
 
   expect(screen.getByText('В резерве: 2')).toBeInTheDocument();
 });
@@ -156,14 +180,14 @@ test('the reserve switch and the sequential option write to the draft', async ()
   await userEvent.click(screen.getByRole('radio', { name: /Последовательно/ }));
   expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).runMode).toBe('sequential');
 
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
   await userEvent.click(screen.getByRole('switch', { name: 'Резервные аккаунты' }));
   expect((onDraft.mock.calls.at(-1)?.[0] as SetupDraft).reserveEnabled).toBe(true);
 });
 
 test('the listening controls write to the draft and show what is stored', async () => {
   const { onDraft } = renderCard();
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
 
   expect(screen.getByText('Прослушка чата')).toBeInTheDocument();
   const humans = screen.getByRole('switch', { name: 'Отвечать реальным людям' });
@@ -186,7 +210,7 @@ test('the listening controls write to the draft and show what is stored', async 
 
 test('the listening window clamps to the wire bound', async () => {
   const { onDraft } = renderCard();
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
 
   const window = screen.getByLabelText('Слушать чат, мин');
   await userEvent.clear(window);
@@ -200,7 +224,7 @@ test('the warning appears only when BOTH switches are on', async () => {
   // showing the warning for either one alone would name a risk that is not there.
   const draft = { ...setupDraftOf(CAMPAIGN), autoresponder: 'off' as const };
   renderCard({ draft });
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
   expect(screen.queryByText(/Текст из чата пишут посторонние/)).toBeNull();
 
   await userEvent.click(screen.getByRole('radio', { name: 'Нейродиалог' }));
@@ -209,32 +233,21 @@ test('the warning appears only when BOTH switches are on', async () => {
 
 test('the segmented choices announce themselves as radio groups', async () => {
   renderCard();
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+  await userEvent.click(screen.getByRole('button', { name: 'Настроить' }));
   expect(screen.getByRole('radiogroup', { name: 'Режим запуска' })).toBeInTheDocument();
   expect(screen.getByRole('radiogroup', { name: 'Автоответчик' })).toBeInTheDocument();
   expect(screen.getByRole('radiogroup', { name: 'Активность ответов' })).toBeInTheDocument();
 });
 
-test('save is explicit: it waits for a change and fires once', async () => {
-  const { onSave } = renderCard({ dirty: true });
-  await userEvent.click(screen.getByText('Сохранить настройки'));
-  expect(onSave).toHaveBeenCalledTimes(1);
-});
-
-test('a clean form cannot be saved', () => {
-  renderCard();
-  expect(screen.getByText('Сохранить настройки')).toBeDisabled();
-});
-
-test('a running campaign locks the whole card and says so', async () => {
-  renderCard({ live: true, dirty: true });
-  expect(screen.getByText(/Кампания запущена/)).toBeInTheDocument();
-  expect(screen.getByLabelText('Целевые чаты')).toBeDisabled();
-  expect(screen.getByRole('radio', { name: /Последовательно/ })).toBeDisabled();
-  // The listening block rides the same PUT, so it locks with everything else.
-  await userEvent.click(screen.getByRole('button', { name: /Расширенные настройки/ }));
+test('a running campaign locks every control, not just the save it no longer owns', async () => {
+  // Сервер отказывает всему PUT с `campaign_running`, поэтому замок висит на КАЖДОМ
+  // поле: видно, что именно нельзя тронуть, а не одна серая кнопка в подвале.
+  renderCard({ live: true });
+  expect(screen.getByRole('button', { name: '+ Чат' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Последовательно' })).toBeDisabled();
+  expect(screen.getByLabelText('Минимальная пауза между целями, сек')).toBeDisabled();
+  expect(screen.getByRole('switch', { name: 'Разные голоса у ролей' })).toBeDisabled();
+  // Прослушка едет тем же PUT, значит запирается вместе со всем остальным.
   expect(screen.getByRole('switch', { name: 'Отвечать реальным людям' })).toBeDisabled();
   expect(screen.getByLabelText('Слушать чат, мин')).toBeDisabled();
-  // The server answers 409 `campaign_running` to the whole PUT.
-  expect(screen.getByText('Сохранить настройки')).toBeDisabled();
 });

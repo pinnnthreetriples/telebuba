@@ -20,7 +20,10 @@ const CAMPAIGN: NeuroshillingCampaign = {
 function renderCard(props: Partial<Parameters<typeof CampaignsCard>[0]> = {}) {
   const handlers = {
     onSelect: vi.fn(),
+    onSettings: vi.fn(),
     onDelete: vi.fn(),
+    onToggleStatus: vi.fn(),
+    onToggleActions: vi.fn(),
     onStartCreate: vi.fn(),
     onCancelCreate: vi.fn(),
     onCreateName: vi.fn(),
@@ -30,6 +33,7 @@ function renderCard(props: Partial<Parameters<typeof CampaignsCard>[0]> = {}) {
     <CampaignsCard
       campaignList={[CAMPAIGN]}
       campaignId="c1"
+      openActions={null}
       creating={false}
       createName=""
       {...handlers}
@@ -43,11 +47,13 @@ test('a row selects on click and its delete button does not select', async () =>
   const handlers = renderCard();
   expect(screen.getByText('Не запущена')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByText('Промо'));
+  // Выбор — кнопка во всю карточку, и имя ей даёт `aria-label`: видимое имя лежит в
+  // слое с `pointer-events-none` и нажатий не принимает.
+  await userEvent.click(screen.getByRole('button', { name: 'Промо' }));
   expect(handlers.onSelect).toHaveBeenCalledWith('c1');
 
-  // The delete button sits inside the row surface: without stopPropagation it
-  // would select the campaign on the way to opening the confirm.
+  // Удаление живёт в слое действий — СОСЕДЕ поверхности, а не её потомке, поэтому
+  // событию неоткуда всплыть к выбору и `stopPropagation` больше не нужен.
   await userEvent.click(screen.getByLabelText('Удалить кампанию'));
   expect(handlers.onDelete).toHaveBeenCalledWith(CAMPAIGN);
   expect(handlers.onSelect).toHaveBeenCalledTimes(1);
@@ -58,10 +64,10 @@ test('the selected row is the only one carrying the selected border', () => {
     campaignList: [CAMPAIGN, { ...CAMPAIGN, campaign_id: 'c2', name: 'Вторая', status: 'running' }],
   });
 
-  const selected = screen.getByText('Промо').closest('[role="button"]');
-  const other = screen.getByText('Вторая').closest('[role="button"]');
-  expect(selected?.className).toContain('border-action-primary');
-  expect(other?.className).not.toContain('border-action-primary');
+  // Рамку несёт сама поверхность — родитель кнопки выбора.
+  const surfaceOf = (name: string) => screen.getByRole('button', { name }).parentElement;
+  expect(surfaceOf('Промо')?.className).toContain('border-action-primary');
+  expect(surfaceOf('Вторая')?.className).not.toContain('border-action-primary');
   expect(screen.getByText('Работает')).toBeInTheDocument();
 });
 

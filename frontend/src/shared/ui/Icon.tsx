@@ -1,4 +1,5 @@
 import {
+  ArrowLeftRight,
   ArrowRight,
   AudioLines,
   Check,
@@ -10,6 +11,7 @@ import {
   Eye,
   EyeOff,
   FileIcon,
+  Paperclip,
   Pause,
   PencilLine,
   Play,
@@ -17,6 +19,7 @@ import {
   RotateCw,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trash,
   TriangleAlert,
   Video,
@@ -51,6 +54,7 @@ const GLYPH = {
   'alert-square': AlertSquare,
   'alert-triangle': TriangleAlert,
   'arrow-right': ArrowRight,
+  'arrow-swap': ArrowLeftRight,
   chart: AudioLines,
   check: Check,
   'check-circle': CircleCheck,
@@ -61,6 +65,7 @@ const GLYPH = {
   'eye-off': EyeOff,
   file: FileIcon,
   gear: Settings,
+  paperclip: Paperclip,
   pause: Pause,
   // `pencil`, not `pencil-line`, would drop the baseline stroke the app's edit glyph
   // has always carried.
@@ -69,6 +74,7 @@ const GLYPH = {
   plus: Plus,
   refresh: RotateCw,
   'shield-check': ShieldCheck,
+  sparkles: Sparkles,
   trash: Trash,
   'upload-cloud': CloudUpload,
   video: Video,

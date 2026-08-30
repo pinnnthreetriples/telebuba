@@ -1560,7 +1560,11 @@
         "stopping": "Stopping",
         "done": "Done",
         "failed": "Failed"
-      }
+      },
+      "settings": "Campaign settings",
+      "run": "Start the campaign",
+      "pause": "Stop the campaign",
+      "actions": "Campaign actions"
     },
     "accounts": {
       "title": "Accounts",
@@ -1595,7 +1599,7 @@
         "personas": "Roles",
         "steps": "Steps",
         "run": "Generate with AI",
-        "hint": "One generation asks for at most 12 steps, because the answer has to arrive in a single reply. A hand-written dialogue may be longer."
+        "hint": "Generation writes all of it at once: the role names, how each of them speaks, and the text of every message — from the topic above. Whatever is already there gets replaced. One run writes at most 12 steps, because the answer has to fit whole; the dialogue can be extended by hand."
       },
       "unique": {
         "label": "Unique wording per account",
@@ -1610,7 +1614,9 @@
         "placeholder": "https://t.me/channel/123",
         "hint": "A link to the message whose photo or video one step of the dialogue carries. Leave it empty for a text-only dialogue.",
         "step": "Step carrying the media",
-        "stepNone": "No media step"
+        "stepNone": "No media step",
+        "toggle": "Attachment",
+        "attach": "Attach"
       },
       "roles": {
         "title": "Roles",
@@ -1622,11 +1628,14 @@
         "description": "Persona of role {{position}}",
         "descriptionPlaceholder": "How this persona talks",
         "remove": "Remove role {{position}}",
-        "nameRequired": "Every role needs a name"
+        "nameRequired": "Every role needs a name",
+        "accountNone": "No account",
+        "account": "Account for role {{position}}",
+        "accountBusy": "{{title}} — {{owner}}"
       },
       "steps": {
         "title": "Dialogue",
-        "hint": "The order of the list is the order of the dialogue. A reply or a reaction can only point at a step above it, because that message has to be in the chat already.",
+        "hint": "The list order is the dialogue order. A reply or a reaction may only point at a step above it: that message has to be in the chat already. A reaction cannot be pointed at — it is not a message in the chat, so it stays disabled in the list.",
         "none": "No steps yet",
         "position": "#{{position}}",
         "role": "Role of step {{position}}",
@@ -1636,9 +1645,9 @@
         "textPlaceholder": "What this role says",
         "emoji": "Reaction of step {{position}}",
         "replyTo": "Step {{position}} replies to",
-        "replyNone": "Not a reply",
+        "replyNone": "—",
         "target": "Step {{position}} reacts to",
-        "targetNone": "No target",
+        "targetNone": "—",
         "delay": "Pause",
         "delayMin": "Shortest pause before step {{position}}",
         "delayMax": "Longest pause before step {{position}}",
@@ -1646,14 +1655,19 @@
         "add": {
           "message": "+ Message",
           "reaction": "+ Reaction"
+        },
+        "switchTo": {
+          "reaction": "Turn into a reaction",
+          "message": "Turn into a message"
         }
       },
       "save": "Use this scenario",
       "approve": "Approve",
-      "approveHint": "Save the scenario before approving it."
+      "approveHint": "Save the scenario before approving it.",
+      "openApprove": "Preview the scenario"
     },
     "preview": {
-      "title": "Scenario preview",
+      "title": "Approve the scenario",
       "status": {
         "draft": "Draft",
         "approved": "✓ Approved"
@@ -1667,7 +1681,11 @@
       "reactionLoose": "reacted",
       "total": "≈ {{time}} in all",
       "play": "Play",
-      "regenerate": "Regenerate"
+      "regenerate": "Regenerate",
+      "countMessages_one": "{{count}} message",
+      "countMessages_other": "{{count}} messages",
+      "countReactions_one": "{{count}} reaction",
+      "countReactions_other": "{{count}} reactions"
     },
     "setup": {
       "title": "Campaign setup",
@@ -1677,7 +1695,12 @@
         "label": "Target chats",
         "hint": "One chat per line: @name, a t.me link, or a t.me/+HASH invite. The accounts join each of them and play the dialogue once.",
         "placeholder": "@chat\nhttps://t.me/another_chat",
-        "count": "Targets: {{n}}"
+        "count": "Targets: {{n}}",
+        "eyebrow": "Targets",
+        "add": "+ Chat",
+        "addPlaceholder": "@chat or link",
+        "remove": "Remove {{name}}",
+        "confirm": "Add the chat"
       },
       "runMode": {
         "label": "Run mode",
@@ -1696,10 +1719,12 @@
         "min": "min",
         "max": "max",
         "minLabel": "Minimum pause between targets, seconds",
-        "maxLabel": "Maximum pause between targets, seconds"
+        "maxLabel": "Maximum pause between targets, seconds",
+        "unit": "s"
       },
       "advanced": {
-        "title": "Advanced settings"
+        "title": "Advanced settings",
+        "done": "Apply"
       },
       "perHour": {
         "label": "Messages per hour",
@@ -1722,12 +1747,15 @@
       "autoresponder": {
         "label": "Autoresponder",
         "off": "Off",
-        "neurodialog": "Neurodialogue"
+        "neurodialog": "Neurodialogue",
+        "hintOff": "After the dialogue the accounts neither read the chat nor reply. Turn on «Neurodialogue» — a free account keeps the conversation going."
       },
       "replyToHumans": {
         "label": "Reply to real people",
         "hint": "The one place where a stranger's text influences what the accounts publish. Both settings are required: «Autoresponder: Neurodialog» and this switch.",
-        "warning": "Replies to real people are on. Chat text is written by strangers; the campaign brief never reaches the model call, and every answer is parsed for links, mentions, phone numbers and wallet addresses. An answer that echoes the message is dropped."
+        "warning": "Replies to real people are on. Chat text is written by strangers; the campaign brief never reaches the model call, and every answer is parsed for links, mentions, phone numbers and wallet addresses. An answer that echoes the message is dropped.",
+        "caption": "Without this the autoresponder publishes nothing",
+        "idle": "The autoresponder only reads the chat and spends AI requests — nothing is published."
       },
       "replyActivity": {
         "label": "Reply activity",
@@ -1737,12 +1765,48 @@
       },
       "listen": {
         "label": "Listen to chat, min",
-        "hint": "How many minutes the accounts keep reading the chat after the dialogue has played out. Counted per target, and the targets are walked one at a time."
+        "hint": "How many minutes the accounts keep reading the chat after the dialogue has played out. Counted per target, and the targets are walked one at a time.",
+        "row": "Listen to the chat",
+        "unit": "min"
       },
       "save": "Save settings",
       "listening": {
         "title": "Chat listening",
-        "hint": "Accounts read the target chat by polling it every half minute — one account per chat, no subscription. On its own this only fills the chat counters below; what is read becomes the context for replies once the autoresponder is answering too. Switched off, not a single extra request is made."
+        "hint": "Accounts read the target chat by polling it every half minute — one account per chat, no subscription. On its own this only fills the chat counters below; what is read becomes the context for replies once the autoresponder is answering too. Switched off, not a single extra request is made.",
+        "caption": "after the dialogue in every target"
+      },
+      "launch": {
+        "eyebrow": "Run",
+        "caption": "how the scenario plays"
+      },
+      "mode": {
+        "campaign": {
+          "body": "Play the scenario through the targets once"
+        },
+        "revive": {
+          "body": "Loop until stopped: dialogue → listening → pause"
+        }
+      },
+      "traversal": {
+        "label": "Target order"
+      },
+      "uniqueMessages": {
+        "label": "Distinct voices per role",
+        "caption": "Generation only — the approved text is what reaches the chats"
+      },
+      "readChat": {
+        "label": "Read the target chat",
+        "caption": "What is read feeds the reply context"
+      },
+      "limits": {
+        "label": "Limits and reserve",
+        "caption": "Flood-ban protection for the accounts",
+        "summary": "{{hour}}/hour · {{chat}} per chat per day · reserve {{reserve}}",
+        "reserve": {
+          "on": "on",
+          "off": "off"
+        },
+        "configure": "Configure"
       }
     },
     "launch": {
@@ -1756,7 +1820,7 @@
         "targets": "Targets",
         "roles": "Roles",
         "messages": "Messages",
-        "dialogue": "Dialogue"
+        "dialogue": "Dialogue per target"
       },
       "progress": "{{sent}} of {{total}} messages",
       "progressLabel": "Run progress: messages delivered",
@@ -1824,6 +1888,75 @@
         "confirm": "Clear",
         "cancel": "Cancel"
       }
+    },
+    "targetsCount_one": "{{count}} target",
+    "targetsCount_other": "{{count}} targets",
+    "checks": {
+      "title_one": "{{count}} check",
+      "title_other": "{{count}} checks",
+      "subtitle": "Review before launching"
+    },
+    "pipeline": {
+      "title": "Pipeline",
+      "ready": "Ready to launch",
+      "remaining_one": "{{count}} check left: {{first}}",
+      "remaining_other": "{{count}} checks left: {{first}}",
+      "node": {
+        "scenario": "Scenario",
+        "accounts": "Accounts",
+        "targets": "Targets",
+        "intro": "Entry",
+        "dialogue": "Dialogue",
+        "listen": "Listening"
+      },
+      "sub": {
+        "scenario": {
+          "approved": "approved",
+          "draft": "draft"
+        },
+        "accounts_one": "{{staffed}} of {{count}} role",
+        "accounts_other": "{{staffed}} of {{count}} roles",
+        "intro": "pause {{min}}–{{max}} s",
+        "dialogue_one": "{{count}} message",
+        "dialogue_other": "{{count}} messages",
+        "listen": "{{count}} min per target"
+      }
+    },
+    "board": {
+      "title": "Work board",
+      "running": "Running: {{count}}",
+      "column": {
+        "campaign": "Campaign",
+        "volume": "Target chats",
+        "progress": "Progress",
+        "status": "Status"
+      }
+    },
+    "settings": {
+      "title": "Settings — {{name}}",
+      "subtitle": "Accounts, targets, roles and scenario",
+      "save": "Save settings",
+      "cancel": "Cancel"
+    },
+    "details": {
+      "column": {
+        "account": "Account",
+        "role": "Role",
+        "target": "Chat",
+        "line": "First message",
+        "state": "State"
+      },
+      "state": {
+        "halted": "Halted by Telegram",
+        "busy": "Held by another campaign",
+        "unstaffed": "No role",
+        "live": "Running",
+        "idle": "Waiting"
+      },
+      "noRole": "No role",
+      "none": "Nothing to show yet: it needs accounts with roles and at least one target.",
+      "close": "Close",
+      "settings": "Configure the campaign"
     }
   },
   "warming": {
