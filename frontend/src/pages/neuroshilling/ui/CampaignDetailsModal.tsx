@@ -63,9 +63,12 @@ export function CampaignDetailsModal({
 }) {
   const { t } = useTranslation();
   const live = campaign.status === 'running' || campaign.status === 'stopping';
-  const halted = new Set(run.halted_accounts ?? []);
 
   const rows = useMemo<WorkRow[]>(() => {
+    // Множество строится ВНУТРИ мемоизации: снаружи оно пересоздавалось на каждом
+    // рендере и, стоя в зависимостях, отменяло её собой — таблица пересобиралась
+    // всегда, а `useMemo` только делал вид.
+    const halted = new Set(run.halted_accounts ?? []);
     const roster = pool.filter((account) => account.assigned && account.is_reserve !== true);
     const nameOf = new Map(roles.map((role) => [role.role_id, role.name]));
     return roster.flatMap((account) =>
@@ -94,7 +97,7 @@ export function CampaignDetailsModal({
         };
       }),
     );
-  }, [pool, targets, roles, steps, halted, live, t]);
+  }, [pool, targets, roles, steps, run.halted_accounts, live, t]);
 
   const columns = useMemo<ColumnDef<WorkRow>[]>(
     () => [
