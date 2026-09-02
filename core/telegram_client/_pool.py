@@ -75,7 +75,11 @@ __all__ = [
 
 
 class TelegramClientPoolError(RuntimeError):
-    """Raised when the pool fails to (re)connect a client after one retry."""
+    """Raised when the pool fails to (re)connect a client.
+
+    Transport failures (``OSError``) raise after Telethon's own connect ladder;
+    other faults get one fresh attempt first.
+    """
 
     def __init__(self, account_id: str, cause: Exception) -> None:
         super().__init__(f"telegram pool connect failed for {account_id}: {cause}")
@@ -168,10 +172,10 @@ async def get_client(account_id: str) -> TelegramClient:
     Fast path: cached client whose ``is_connected()`` is True is returned
     directly without acquiring the per-account lock. Slow path: under the
     per-account lock we re-check, then build + connect a new client; on
-    cached-but-disconnected we disconnect-and-rebuild once. A second
-    consecutive connect failure raises :class:`TelegramClientPoolError`
-    so the caller's existing error path (see ``execute(...)``) classifies
-    it like any other Telethon failure.
+    cached-but-disconnected we disconnect-and-rebuild once. A transport
+    failure (``OSError``) or a second consecutive connect failure raises
+    :class:`TelegramClientPoolError` so the caller's existing error path (see
+    ``execute(...)``) classifies it like any other Telethon failure.
     """
     if _SHUTTING_DOWN:
         msg = "telegram pool is shutting down"
@@ -195,29 +199,7 @@ async def get_client(account_id: str) -> TelegramClient:
             await _safe_disconnect(cached)
             _CLIENTS.pop(account_id, None)
 
-        try:
-            client = await _build_and_connect(account_id)
-        except Exception as exc:  # second-attempt classifier sits below
-            # One retry: fresh attempt, in case the first failed on a stale
-            # session handle that build_and_connect's disconnect cleared up.
-            logger.exception("pool connect failed for %s, retrying once", account_id)
-            await log_event(
-                "WARNING",
-                "telegram_pool_connect_retry",
-                account_id=account_id,
-                extra={"first_error": type(exc).__name__},
-            )
-            try:
-                client = await _build_and_connect(account_id)
-            except Exception as second_exc:
-                logger.exception("pool connect retry failed for %s", account_id)
-                await log_event(
-                    "ERROR",
-                    "telegram_pool_connect_failed",
-                    account_id=account_id,
-                    extra={"error_type": type(second_exc).__name__},
-                )
-                raise TelegramClientPoolError(account_id, second_exc) from second_exc
+        client = await _connect_with_retry(account_id)
 
         # Covers both build attempts: connecting awaits, so a removal may have
         # marked the account while we held the lock. Throw the fresh client away
@@ -229,6 +211,40 @@ async def get_client(account_id: str) -> TelegramClient:
         _CLIENTS[account_id] = client
     await _fire_rebuild_hooks(account_id, client)
     return client
+
+
+async def _connect_with_retry(account_id: str) -> TelegramClient:
+    """Build + connect under the caller's lock; one retry for non-transport faults."""
+    try:
+        return await _build_and_connect(account_id)
+    except Exception as exc:  # second-attempt classifier sits below
+        if isinstance(exc, OSError):
+            # Transport failure: Telethon's connect() already ran its own retry ladder.
+            raise await _connect_failed(account_id, exc) from exc
+        # One retry for non-transport faults (busy ``.session`` handle, RuntimeError).
+        logger.exception("pool connect failed for %s, retrying once", account_id)
+        await log_event(
+            "WARNING",
+            "telegram_pool_connect_retry",
+            account_id=account_id,
+            extra={"first_error": type(exc).__name__},
+        )
+        try:
+            return await _build_and_connect(account_id)
+        except Exception as second_exc:
+            raise await _connect_failed(account_id, second_exc) from second_exc
+
+
+async def _connect_failed(account_id: str, exc: Exception) -> TelegramClientPoolError:
+    """Log the final connect failure and build the error the borrower raises."""
+    logger.exception("pool connect failed for %s", account_id)
+    await log_event(
+        "ERROR",
+        "telegram_pool_connect_failed",
+        account_id=account_id,
+        extra={"error_type": type(exc).__name__},
+    )
+    return TelegramClientPoolError(account_id, exc)
 
 
 async def _fire_rebuild_hooks(account_id: str, client: TelegramClient) -> None:

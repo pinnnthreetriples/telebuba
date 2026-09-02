@@ -5,6 +5,7 @@ import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
+import { formatLocalTime } from '@/shared/lib';
 
 import { ProxyPool } from './ProxyPool';
 
@@ -29,6 +30,7 @@ interface ProxyOverrides {
   ipinfo_country_code?: string | null;
   maxmind_country_code?: string | null;
   last_error?: string | null;
+  last_checked_at?: string | null;
 }
 
 function proxy(over: ProxyOverrides = {}) {
@@ -68,16 +70,25 @@ test('renders pool cards with usage', async () => {
 test('warns clearly when a proxy check failed (flag gone, no silent card)', async () => {
   vi.mocked(fetch).mockResolvedValue(
     jsonResponse({
-      proxies: [proxy({ status: 'failed', country_code: null, last_error: 'connect timeout' })],
+      proxies: [
+        proxy({
+          status: 'failed',
+          country_code: null,
+          last_error: 'connect timeout',
+          last_checked_at: '2026-09-02T10:05:00Z',
+        }),
+      ],
     }),
   );
   renderWithClient(<ProxyPool onAdd={vi.fn()} />);
   await waitFor(() => {
     expect(screen.getByText('nl.example:1080')).toBeInTheDocument();
   });
-  // The dead proxy is called out in words, and the raw reason is on hover.
+  // The dead proxy is called out in words; hover shows when it was checked and why it failed.
   expect(screen.getByText('Не работает')).toBeInTheDocument();
-  expect(screen.getByTitle('connect timeout')).toBeInTheDocument();
+  expect(
+    screen.getByTitle(`Проверен в ${formatLocalTime('2026-09-02T10:05:00Z')} · connect timeout`),
+  ).toBeInTheDocument();
 });
 
 test('shows a provider conflict instead of a misleading flag', async () => {

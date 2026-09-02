@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from services import warming
 from tests.services.warming._support import (
     _account,
@@ -22,6 +24,22 @@ def test_evaluate_readiness_collects_all_blockers() -> None:
     assert any("session" in reason for reason in readiness.reasons)
     assert "no proxy" in readiness.reasons
     assert "no channels" in readiness.reasons
+
+
+@pytest.mark.parametrize("status", ["network_error", "flood_wait"])
+def test_evaluate_readiness_ignores_temporary_session_status(status: str) -> None:
+    account = _account(status=status, proxy_host="1.2.3.4", proxy_status="tcp_working")
+    readiness = warming.evaluate_readiness(account, 3)
+    assert readiness.ready is True
+    assert readiness.reasons == []
+
+
+@pytest.mark.parametrize("status", ["unauthorized", "new"])
+def test_evaluate_readiness_blocks_new_and_permanent_session_status(status: str) -> None:
+    account = _account(status=status, proxy_host="1.2.3.4", proxy_status="tcp_working")
+    readiness = warming.evaluate_readiness(account, 3)
+    assert readiness.ready is False
+    assert readiness.reasons == [f"session {status}"]
 
 
 def test_evaluate_readiness_flags_failed_proxy() -> None:

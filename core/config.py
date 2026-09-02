@@ -58,11 +58,11 @@ class TelegramSettings(BaseSettings):
     # (``users._call``) awaits the response future with no timeout of its own, so a
     # pooled client whose socket went half-open still answers ``is_connected()``
     # True, gets borrowed on the fast path, and then never replies — the spinner
-    # lived forever. 75 s sits just above one full connect ladder
-    # (``timeout_seconds`` by ``connection_retries`` plus the retry delays, ~66 s),
-    # so every classified connect/proxy error still wins the race; only the pool's
-    # second, identical connect attempt is cut short, and that retry only ever pays
-    # off after a FAST first failure, which leaves the whole budget for it.
+    # lived forever. 75 s sits just above one full connect ladder — Telethon's
+    # ``retry_range(connection_retries)`` makes ``connection_retries + 1`` = 4
+    # attempts of ``timeout_seconds`` plus the retry delays, ~88 s. The pool no
+    # longer repeats the ladder on a transport failure, so a black-holing proxy
+    # costs one ladder and this deadline ends the probe right after it.
     session_check_timeout_seconds: float = Field(default=75.0, gt=0)
     # Telethon auto-sleeps and retries on a flood wait whose duration is at or
     # below this threshold; longer waits raise so we can handle them ourselves.
