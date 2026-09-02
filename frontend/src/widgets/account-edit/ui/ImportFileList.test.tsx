@@ -16,17 +16,17 @@ const FILES: BulkFile[] = [
 
 test('renders the summary and one verdict per row', () => {
   render(<ImportFileList files={FILES} onRetry={vi.fn()} />);
-  expect(screen.getByText('Добавлено 2 из 4')).toBeInTheDocument();
+  expect(screen.getByText('Импортировано 2 из 4')).toBeInTheDocument();
   expect(screen.getByText('a.session')).toBeInTheDocument();
   expect(screen.getByText('Аккаунт импортирован')).toBeInTheDocument();
   expect(screen.getByText('Импортируем…')).toBeInTheDocument();
   expect(screen.getByText('Не удалось импортировать')).toBeInTheDocument();
-  expect(screen.getByText('Аккаунтов: 3')).toBeInTheDocument();
+  expect(screen.getByText('Импортировано 3 аккаунта')).toBeInTheDocument();
 });
 
 test('a single file has no summary line', () => {
   render(<ImportFileList files={FILES.slice(0, 1)} onRetry={vi.fn()} />);
-  expect(screen.queryByText(/Добавлено/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Импортировано/)).not.toBeInTheDocument();
 });
 
 test('retry appears only on the failed row and reports its index', async () => {

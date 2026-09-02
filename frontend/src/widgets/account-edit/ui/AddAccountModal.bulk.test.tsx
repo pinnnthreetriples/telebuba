@@ -87,14 +87,14 @@ test('three session files → three imports, Next waits for the batch, step 2 co
   expect(screen.getByText('a.session')).toBeInTheDocument();
   expect(screen.getByText('c.session')).toBeInTheDocument();
   await waitFor(() => {
-    expect(screen.getByText('Добавлено 3 из 3')).toBeInTheDocument();
+    expect(screen.getByText('Импортировано 3 из 3')).toBeInTheDocument();
   });
   expect(await requests('/accounts/import-session')).toHaveLength(3);
   expect(onImported).toHaveBeenCalledTimes(3);
 
   await userEvent.click(screen.getByText('Далее'));
   expect(
-    screen.getByText('Добавлено аккаунтов: 3. Назначьте прокси для работы.'),
+    screen.getByText('Добавлено 3 аккаунта. Назначьте прокси для работы.'),
   ).toBeInTheDocument();
 });
 
@@ -116,7 +116,7 @@ test('one failed file keeps the others; Next unlocks on the survivors and retry 
   pickSessions('a.session', 'b.session');
 
   await waitFor(() => {
-    expect(screen.getByText('Добавлено 1 из 2')).toBeInTheDocument();
+    expect(screen.getByText('Импортировано 1 из 2')).toBeInTheDocument();
   });
   expect(screen.getByText('Не удалось импортировать')).toBeInTheDocument();
   // Nothing in flight and one account exists — the operator may go on without b.
@@ -125,7 +125,7 @@ test('one failed file keeps the others; Next unlocks on the survivors and retry 
   failB = false;
   await userEvent.click(screen.getByText('Повторить'));
   await waitFor(() => {
-    expect(screen.getByText('Добавлено 2 из 2')).toBeInTheDocument();
+    expect(screen.getByText('Импортировано 2 из 2')).toBeInTheDocument();
   });
   expect(await requests('/accounts/import-session')).toHaveLength(3);
 });
@@ -150,7 +150,7 @@ test('Next stays locked while any file of the batch is still importing', async (
   pickSessions('a.session', 'b.session');
 
   await waitFor(() => {
-    expect(screen.getByText('Добавлено 1 из 2')).toBeInTheDocument();
+    expect(screen.getByText('Импортировано 1 из 2')).toBeInTheDocument();
   });
   // Half a batch on step 2 would assign proxies to half the accounts.
   expect(screen.getByText('Далее')).toBeDisabled();
@@ -209,4 +209,97 @@ test('pool step distributes the batch and closes on Done', async () => {
   expect(onClose).not.toHaveBeenCalled();
   await userEvent.click(screen.getByText('Готово'));
   expect(onClose).toHaveBeenCalled();
+});
+
+async function reachManualForm(): Promise<void> {
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSessions('a.session', 'b.session');
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Добавить прокси'));
+  await userEvent.type(screen.getByLabelText('Хост'), '1.2.3.4');
+  await userEvent.type(screen.getByLabelText('Порт'), '1080');
+  await waitFor(() => {
+    expect(screen.getByText('Готово')).toBeEnabled();
+  });
+}
+
+test('manual proxy: a refused create closes the wizard without assigning anything', async () => {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies' && request.method === 'POST') {
+      return jsonResponse({ error: { code: 'bad_request', message: 'nope' } }, 400);
+    }
+    if (pathname === '/api/v1/accounts/import-session') {
+      const file = (await request.formData()).get('file') as File;
+      return jsonResponse(account(file.name.replace('.session', '')));
+    }
+    return jsonResponse({});
+  });
+  const onClose = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
+  await reachManualForm();
+  await userEvent.click(screen.getByText('Готово'));
+  // Same outcome as the pre-bulk wizard (onSettled: afterProxy) — and no
+  // unhandled rejection escaping `void createAndAssign()`.
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+  expect(await requests('/assign')).toHaveLength(0);
+});
+
+test('manual proxy: one refused assign does not stop the others or the close', async () => {
+  vi.mocked(fetch).mockImplementation(async (input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies') return jsonResponse(POOL_PROXY);
+    if (pathname.endsWith('/assign')) {
+      const body = (await request.json()) as { account_id: string };
+      return body.account_id === 'a'
+        ? jsonResponse({ error: { code: 'conflict', message: 'full' } }, 409)
+        : jsonResponse(POOL_PROXY);
+    }
+    if (pathname === '/api/v1/accounts/import-session') {
+      const file = (await request.formData()).get('file') as File;
+      return jsonResponse(account(file.name.replace('.session', '')));
+    }
+    return jsonResponse({});
+  });
+  const onClose = vi.fn();
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+  await reachManualForm();
+  await userEvent.click(screen.getByText('Готово'));
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+  const bodies = await Promise.all(
+    (await requests('/assign')).map(async (request) => request.clone().json()),
+  );
+  expect(bodies.map((body: { account_id: string }) => body.account_id).sort()).toEqual(['a', 'b']);
+  // Two imports + one after the assign loop.
+  expect(onImported).toHaveBeenCalledTimes(3);
+});
+
+test('one tdata.zip holding two accounts counts both on step 2', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-tdata') {
+      return Promise.resolve(jsonResponse({ accounts: [account('one'), account('two')] }));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+  await userEvent.click(screen.getByText('Архив tdata.zip'));
+  fireEvent.change(document.body.querySelector('input[type="file"]') as HTMLInputElement, {
+    target: { files: [new File(['x'], 'acc.zip', { type: 'application/zip' })] },
+  });
+  expect(await screen.findByText('Импортировано 2 аккаунта')).toBeInTheDocument();
+  await userEvent.click(screen.getByText('Далее'));
+  expect(
+    screen.getByText('Добавлено 2 аккаунта. Назначьте прокси для работы.'),
+  ).toBeInTheDocument();
 });
