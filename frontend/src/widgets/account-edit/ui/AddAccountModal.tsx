@@ -1,30 +1,24 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Fragment, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  importAccountSessionMutation,
-  importAccountTdataMutation,
-  startPhoneLoginMutation,
-} from '@/entities/account';
-import {
-  assignProxyMutation,
-  createProxyMutation,
-  proxyPoolQueryOptions,
-  proxyTypeLabel,
-} from '@/entities/proxy';
-import { Button, Icon, IconButton, Modal, Spinner } from '@/shared/ui';
+import { startPhoneLoginMutation } from '@/entities/account';
+import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
+import { Button, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
+import { ImportFileList } from './ImportFileList';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
+import { ProxyPoolStep } from './ProxyPoolStep';
+import { useBulkImport } from './useBulkImport';
 
-// The design's add-account wizard. STEP 1 provisions an account: .session /
-// tdata.zip import via the real import endpoints, or a bare phone number
-// (start-login). STEP 2 assigns a proxy to the just-created account. For the
-// phone method a STEP 3 then requests + confirms the Telegram login code — run
-// after the proxy is assigned so the first Telegram connection uses it. The
-// created account's id threads across all steps.
+// The design's add-account wizard. STEP 1 provisions accounts: MANY .session /
+// tdata.zip files at once, each imported by its own request (useBulkImport), or
+// a bare phone number (start-login). STEP 2 assigns proxies to the just-created
+// accounts. For the phone method a STEP 3 then requests + confirms the Telegram
+// login code — run after the proxy is assigned so the first Telegram connection
+// uses it. The created account ids thread across all steps.
 type Method = 'session' | 'tdata' | 'phone' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
 
@@ -78,12 +72,12 @@ export function AddAccountModal({
   const fileInput = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [method, setMethod] = useState<Method>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [proxyValid, setProxyValid] = useState(false);
-  // The id of the account created in step 1, so later steps can act on it.
+  // The id of the account the PHONE method created in step 1; file methods keep
+  // theirs in the bulk import. `accountIds` below is what later steps act on.
   const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
   // The committed method, readable from a mutate-level callback that resolves
   // after the operator has moved on: those closures are never cancelled, so an
@@ -93,16 +87,13 @@ export function AddAccountModal({
   // account. `selectMethod` owns both this and the state.
   const methodRef = useRef<Method>(null);
 
-  const importTdata = useMutation(importAccountTdataMutation());
-  const importSession = useMutation(importAccountSessionMutation());
+  const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported);
   const startLogin = useMutation(startPhoneLoginMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
-  const pool = useQuery(proxyPoolQueryOptions());
-  const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
 
-  const importing = importTdata.isPending || importSession.isPending;
-  const importFailed = importTdata.isError || importSession.isError;
+  const accountIds =
+    method === 'phone' ? (createdAccountId ? [createdAccountId] : []) : bulk.accountIds;
 
   // Clear a FINISHED start-login only. `reset()` detaches the observer from the
   // mutation ("there is no way to get it back" — mutationObserver.ts), so
@@ -127,7 +118,7 @@ export function AddAccountModal({
   const selectMethod = (next: Method) => {
     methodRef.current = next;
     if (method === next) return;
-    setFileName(null);
+    bulk.reset();
     setCreatedAccountId(null);
     clearFinishedStartLogin();
     setMethod(next);
@@ -161,78 +152,27 @@ export function AddAccountModal({
     }
   };
 
+  // Every picked file becomes its own import request; the hook ignores results
+  // that land after a method switch (bulk.reset()) while still refetching the
+  // table for them, since the account exists server-side either way.
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setFileName(file.name);
-    setCreatedAccountId(null);
-    const forMethod = method;
-    const adopt = (accountId: string | null) => {
-      if (methodRef.current !== forMethod) return;
-      setCreatedAccountId(accountId);
-    };
-    if (method === 'tdata') {
-      importSession.reset();
-      importTdata.mutate(
-        { body: { file } },
-        {
-          onSuccess: (result) => {
-            adopt(result.accounts?.[0]?.account_id ?? null);
-          },
-          onSettled: onImported,
-        },
-      );
-    } else {
-      importTdata.reset();
-      importSession.mutate(
-        { body: { file } },
-        {
-          onSuccess: (account) => {
-            adopt(account.account_id);
-          },
-          onSettled: onImported,
-        },
-      );
-    }
+    if (event.target.files) bulk.add(event.target.files);
     event.target.value = '';
   };
 
-  // Step 2: assign a pool proxy to the just-imported account, then advance.
-  //
-  // `afterProxy` must be the assign's OWN callback, not a synchronous call
-  // beside it — the same defect this branch has now fixed three times over. Run
-  // synchronously it advanced on a refusal exactly as on a success, handing the
-  // operator a proxyless account with nothing on screen to say so; and for the
-  // file methods `afterProxy` is `onClose()`, which unmounted the modal while
-  // the assign was still in flight and DETACHED the observer, so
-  // `onSettled: onImported` was dropped too and the accounts table never heard
-  // about the assignment either.
-  //
-  // Both callbacks below do fire: the only thing that unmounts this modal in
-  // this flow is `afterProxy` itself, so the observer is still attached when the
-  // mutation settles — the unmount is now the callback's effect, not a race
-  // against it. `onSuccess`, not `onSettled`, because a failed assign must stay
-  // on this step; `onImported` stays on `onSettled` because a partial failure
-  // can still have changed the account.
-  const assignFromPool = (proxyId: string) => {
-    if (!createdAccountId) {
-      afterProxy();
-      return;
-    }
-    assignProxy.mutate(
-      { path: { proxy_id: proxyId }, body: { account_id: createdAccountId } },
-      { onSuccess: afterProxy, onSettled: onImported },
-    );
-  };
-
-  // Step 2 manual: create the entered proxy (idempotent), assign it, then close.
-  const createAndAssign = () => {
-    if (!createdAccountId) {
+  // Step 2 manual: create the entered proxy (idempotent), assign it to every
+  // created account, then close. Sequential `mutateAsync` — one useMutation
+  // observer is a single callback slot, and the pool has a capacity the server
+  // enforces per assign. The close waits for the batch to settle so the observer
+  // is still attached when `onImported` runs; a refused assign does not block
+  // the close (the operator assigns the rest from the Proxies page).
+  const createAndAssign = async () => {
+    if (accountIds.length === 0) {
       onClose();
       return;
     }
-    createProxy.mutate(
-      {
+    try {
+      const created = await createProxy.mutateAsync({
         body: {
           proxy_type: proxyValue.proxy_type,
           host: proxyValue.host.trim(),
@@ -240,17 +180,23 @@ export function AddAccountModal({
           username: proxyValue.username.trim() || null,
           password: proxyValue.password || null,
         },
-      },
-      {
-        onSuccess: (created) => {
-          assignProxy.mutate(
-            { path: { proxy_id: created.id }, body: { account_id: createdAccountId } },
-            { onSettled: onImported },
-          );
-        },
-        onSettled: afterProxy,
-      },
-    );
+      });
+      for (const accountId of accountIds) {
+        try {
+          await assignProxy.mutateAsync({
+            path: { proxy_id: created.id },
+            body: { account_id: accountId },
+          });
+        } catch {
+          // Reported by the Proxies page; the remaining accounts still get theirs.
+        }
+      }
+      onImported();
+    } catch {
+      // Create refused: close like the pre-bulk wizard did; the Proxies page reports it.
+    } finally {
+      afterProxy();
+    }
   };
 
   return (
@@ -391,6 +337,7 @@ export function AddAccountModal({
                     ref={fileInput}
                     type="file"
                     accept={method === 'tdata' ? '.zip' : '.session'}
+                    multiple
                     className="hidden"
                     onChange={onFile}
                   />
@@ -416,53 +363,18 @@ export function AddAccountModal({
                       {t('accounts.addWizard.browse')}
                     </span>
                   </button>
-                  {fileName && (
-                    <div className="tb-fadeup rounded-lg border border-line bg-surface-card px-md py-md">
-                      <div className="flex items-center gap-md">
-                        <div className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-canvas text-content-muted">
-                          {method === 'tdata' ? (
-                            <Icon name="alert-square" size={18} />
-                          ) : (
-                            <Icon name="file" size={18} />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate type-item-title">{fileName}</div>
-                          {/* Import verdict tone from the tokens the states MEAN. */}
-                          <div
-                            className={`mt-px text-tiny ${importFailed ? 'text-danger' : createdAccountId ? 'text-success-deep' : 'text-content-subtle'}`}
-                          >
-                            {importFailed
-                              ? t('accounts.addWizard.importError')
-                              : importing
-                                ? t('accounts.addWizard.importing')
-                                : createdAccountId
-                                  ? t('accounts.addWizard.imported')
-                                  : t('accounts.addWizard.fileReady')}
-                          </div>
-                        </div>
-                        {importing ? (
-                          <Spinner className="m-tight" />
-                        ) : importFailed ? (
-                          <span className="m-xs inline-flex text-danger">
-                            <Icon name="x-circle" size={18} />
-                          </span>
-                        ) : createdAccountId ? (
-                          <span className="tb-pop m-xs inline-flex text-success-deep">
-                            <Icon name="check-circle" size={18} />
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  )}
+                  <ImportFileList files={bulk.files} onRetry={bulk.retry} />
                 </>
               )}
             </div>
             <div className="mt-xl flex justify-end gap-sm">
               <Button onClick={onClose}>{t('accounts.addWizard.cancel')}</Button>
+              {/* Locked until at least one account exists and no import is still
+                  in flight: step 2 must see the whole batch, not its first half. */}
               <Button
                 variant="primary"
-                disabled={!createdAccountId}
+                disabled={accountIds.length === 0}
+                loading={bulk.importing}
                 onClick={() => {
                   setStep(2);
                   setProxyStep('choice');
@@ -485,7 +397,11 @@ export function AddAccountModal({
           <>
             <div className="mb-lg flex items-center gap-sm rounded-lg bg-success-tint px-md py-md">
               <Icon name="check" size={16} className="stroke-success-deep" />
-              <span className="type-label text-success-deep">{t('accounts.addWizard.added')}</span>
+              <span className="type-label text-success-deep">
+                {accountIds.length > 1
+                  ? t('accounts.addWizard.addedMany', { count: accountIds.length })
+                  : t('accounts.addWizard.added')}
+              </span>
             </div>
             <div className="flex flex-col gap-md">
               <ChoiceCard
@@ -546,74 +462,26 @@ export function AddAccountModal({
               >
                 {t('accounts.addWizard.back')}
               </Button>
-              <Button variant="primary" onClick={createAndAssign} disabled={!proxyValid}>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  void createAndAssign();
+                }}
+                disabled={!proxyValid || createProxy.isPending || assignProxy.isPending}
+              >
                 {t('accounts.addWizard.done')}
               </Button>
             </div>
           </>
         ) : (
-          <>
-            <div className="flex flex-col gap-sm">
-              {freeProxies.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
-                  {t('accounts.addWizard.poolEmpty')}
-                </div>
-              ) : (
-                freeProxies.map((proxy) => (
-                  <button
-                    key={proxy.id}
-                    type="button"
-                    // The step no longer closes on click, so without this a
-                    // second press would fire a second assign on the SAME
-                    // observer — whose callback slot the first one then loses.
-                    disabled={assignProxy.isPending}
-                    onClick={() => {
-                      assignFromPool(proxy.id);
-                    }}
-                    className="flex items-center gap-md rounded-lg border border-line bg-surface-card px-lg py-md text-left transition-colors hover:border-info-line disabled:opacity-60"
-                  >
-                    {proxy.country_code ? (
-                      <span
-                        className={`fi fi-${proxy.country_code.toLowerCase()} block h-flag w-flag shrink-0 rounded-[3px] shadow-ring`}
-                      />
-                    ) : null}
-                    <span className="flex-1">
-                      <span className="block type-card-title">
-                        {(proxy.country_code ?? '—').toUpperCase()} ·{' '}
-                        {proxyTypeLabel(proxy.proxy_type)}
-                      </span>
-                      <span className="block font-mono type-caption">
-                        {proxy.host}:{proxy.port}
-                      </span>
-                    </span>
-                    <span className="type-label text-success-deep">
-                      {t('accounts.addWizard.poolFree', { count: proxy.free })}
-                    </span>
-                  </button>
-                ))
-              )}
-              {/* The wizard stays on this step when the assign is refused, so the
-                  refusal has to be visible — otherwise the only signal is a
-                  screen that did not change. */}
-              {assignProxy.isError && (
-                <div role="alert" className="type-caption text-danger">
-                  {t('accounts.addWizard.proxyAssignError')}
-                </div>
-              )}
-            </div>
-            <div className="mt-xl flex justify-between gap-sm">
-              <Button
-                onClick={() => {
-                  setProxyStep('choice');
-                }}
-              >
-                {t('accounts.addWizard.back')}
-              </Button>
-              <Button variant="primary" onClick={afterProxy}>
-                {t('accounts.addWizard.done')}
-              </Button>
-            </div>
-          </>
+          <ProxyPoolStep
+            accountIds={accountIds}
+            onBack={() => {
+              setProxyStep('choice');
+            }}
+            onDone={afterProxy}
+            onImported={onImported}
+          />
         )}
       </div>
     </Modal>
