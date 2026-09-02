@@ -431,17 +431,33 @@ export function NeurocommentPage() {
     clearListener.mutate({}, { onSettled: invalidateNeuro });
   };
 
+  const cancelAddChannel = () => {
+    setAddingChannel(false);
+    setChannelInput('');
+  };
+
   const addChannel = () => {
     const value = channelInput.trim();
     if (!value || campaignId === null) return;
-    afterSettle(
-      linkChannel.mutateAsync({ path: { campaign_id: campaignId }, body: { channel: value } }),
-      (ok) => {
-        setChannelInput('');
-        setAddingChannel(false);
-        channelFeedback.mark(value, ok);
-      },
-    );
+    void linkChannel
+      .mutateAsync({ path: { campaign_id: campaignId }, body: { channel: value } })
+      .then(
+        (outcome) => {
+          // A 200 `already_assigned` is a refusal: no chip will show the channel, so say
+          // why and keep the typed value in the open input.
+          if (outcome.status === 'already_assigned') {
+            toastError(t('neurocomment.channels.alreadyAssigned', { channel: value }));
+          } else {
+            channelFeedback.mark(value, true);
+            cancelAddChannel();
+          }
+        },
+        () => {
+          channelFeedback.mark(value, false);
+          cancelAddChannel();
+        },
+      )
+      .finally(invalidateNeuro);
   };
 
   const confirmRemoveChannel = () => {
@@ -508,7 +524,7 @@ export function NeurocommentPage() {
         <div className="flex flex-col gap-lg lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
-            canStart={Boolean(listenerId)}
+            canStart={Boolean(listenerId) && !showWarmingBlock}
             stats={stats}
             events={logLines}
             onToggle={toggleRuntime}
@@ -620,10 +636,7 @@ export function NeurocommentPage() {
             onStartAdd={() => {
               setAddingChannel(true);
             }}
-            onCancelAdd={() => {
-              setAddingChannel(false);
-              setChannelInput('');
-            }}
+            onCancelAdd={cancelAddChannel}
             channelInput={channelInput}
             onChannelInput={setChannelInput}
             onAddChannel={addChannel}
@@ -758,8 +771,12 @@ export function NeurocommentPage() {
                         body: { channel },
                       })
                       .then(
-                        () => {
-                          channelFeedback.mark(channel, true);
+                        (outcome) => {
+                          if (outcome.status === 'already_assigned') {
+                            toastError(t('neurocomment.channels.alreadyAssigned', { channel }));
+                          } else {
+                            channelFeedback.mark(channel, true);
+                          }
                         },
                         () => {
                           channelFeedback.mark(channel, false);

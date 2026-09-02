@@ -2,9 +2,9 @@
 
 For each (account, channel) we resolve the channel's linked discussion group,
 join it, and persist readiness, so the hot path (a brand-new post) never pays
-the join cost. Captcha is *detect-and-skip only* here — solving entry captchas
-is deferred to spike #120; the comment engine (#118) lazily marks captcha when
-a comment is actually forbidden.
+the join cost. Entry captchas are solved right after the join by
+``challenge.solve_if_present`` (when the solver is enabled); the comment engine
+(#118) lazily marks captcha when a comment is actually forbidden.
 
 Outcome states (``OnboardingState``):
 - ``ready``          — joined and (MVP) assumed comment-able.

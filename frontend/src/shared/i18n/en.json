@@ -1244,6 +1244,7 @@
       "deletedHint": "Comments deleted in this channel in the last 24h — what sends it into back-off",
       "checkFailed": "Couldn't check channels",
       "placeholder": "t.me/channel or @channel",
+      "alreadyAssigned": "{{channel}} not added — the channel is already taken by another campaign",
       "remove": "Remove channel",
       "removeTitle": "Remove channel {{channel}} from the campaign?",
       "removeBody": "Campaign accounts will stop commenting in this channel.",

@@ -4,8 +4,8 @@ Called from onboarding right after a successful discussion-group join. Detects a
 guardian-bot inline-button challenge, reuses a cached decision or asks Gemini
 (server-side ``responseSchema``), humanizes the delay, then clicks / sends the
 answer. The audit row is written ``pending``; the engine resolves it to
-``solved`` / ``failed`` on the pair's first comment attempt. Image challenges and
-any Gemini timeout / parse-fail short-circuit to ``give_up`` (vision deferred).
+``solved`` / ``failed`` on the pair's first comment attempt. Image challenges are asked
+with the photo attached (vision); any LLM timeout / parse-fail short-circuits to ``give_up``.
 
 All Telegram + Gemini + randomness go through ``_seams``; the DB through the repo.
 """
