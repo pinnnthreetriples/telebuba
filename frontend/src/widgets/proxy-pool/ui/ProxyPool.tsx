@@ -12,6 +12,7 @@ import {
   proxyTypeLabel,
 } from '@/entities/proxy';
 import type { ProxyRead } from '@/shared/api';
+import { formatLocalTime } from '@/shared/lib';
 
 import { ProxyDeleteModal } from './ProxyDeleteModal';
 
@@ -215,7 +216,17 @@ function ProxyCard({
             <span className="text-content-subtle">·</span>
             <span
               className={`inline-flex items-center gap-xs font-medium ${statusTone}`}
-              title={proxy.last_error ?? undefined}
+              title={
+                [
+                  proxy.last_checked_at &&
+                    t('accounts.proxyPool.checkedAt', {
+                      time: formatLocalTime(proxy.last_checked_at),
+                    }),
+                  proxy.last_error,
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || undefined
+              }
             >
               {/* `bg-current` — the dot can never disagree with its label. */}
               <span className="size-dot shrink-0 rounded-full bg-current" />
