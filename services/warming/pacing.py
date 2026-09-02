@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from core.config import settings
 from core.db import fetch_account
 from core.phone_geo import timezone_for_phone
+from schemas.accounts import health_for_status
 from schemas.warming import (
     WarmingReadiness,
     is_warming,
@@ -127,9 +128,11 @@ def evaluate_readiness(
 
     Uses the persisted account/proxy snapshot (no live network) so the board can
     show a badge cheaply and ``start_warming`` can refuse broken accounts.
+
+    Only ``new`` and permanent statuses block; transient ones are the loop's business.
     """
     reasons: list[str] = []
-    if account.status != "alive":
+    if account.status == "new" or health_for_status(account.status) == "fail":
         reasons.append(f"session {account.status}")
     if not account.proxy_host:
         reasons.append("no proxy")

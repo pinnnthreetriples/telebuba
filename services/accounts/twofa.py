@@ -27,6 +27,7 @@ import asyncio
 import secrets
 from typing import TYPE_CHECKING, cast
 
+from core.config import settings
 from core.db import fetch_account_twofa_password, set_account_twofa_password
 from core.logging import log_event
 from core.telegram_client import (
@@ -118,9 +119,13 @@ async def _live_status(account_id: str) -> tuple[TwoFactorStatusResult | None, s
     per refused read would fire on every poll of an unreachable account.
     """
     try:
-        result = await execute_read(account_id, GetTwoFactorStatus())
+        # Same deadline as the session probe (see ``core.telegram_client._session``).
+        async with asyncio.timeout(settings.telegram.session_check_timeout_seconds):
+            result = await execute_read(account_id, GetTwoFactorStatus())
     except TelegramReadError as exc:
         return None, exc.reason
+    except TimeoutError:
+        return None, "unavailable: TimeoutError"
     except TelegramAccountNotFoundError as exc:
         raise AccountNotFoundError(account_id) from exc
     return cast("TwoFactorStatusResult", result), None
