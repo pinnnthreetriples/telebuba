@@ -25,13 +25,20 @@ export function ProxyPoolStep({
 }) {
   const { t } = useTranslation();
   const [remaining, setRemaining] = useState(accountIds);
-  // Slots taken in this step, so the list reflects them before the pool refetches.
-  const [taken, setTaken] = useState<Record<string, number>>({});
+  // Slots taken in this step, so the list reflects them before the pool
+  // refetches. Stamped with the pool snapshot they were subtracted from: the
+  // refetch after a batch (`onImported` invalidates the pool) already carries
+  // them, and subtracting twice hid a proxy that still had a free slot.
+  const [taken, setTaken] = useState<{ at: number; slots: Record<string, number> }>({
+    at: 0,
+    slots: {},
+  });
   const [failed, setFailed] = useState(false);
   const assignProxy = useMutation(assignProxyMutation());
   const pool = useQuery(proxyPoolQueryOptions());
+  const slots = taken.at === pool.dataUpdatedAt ? taken.slots : {};
   const freeProxies = (pool.data?.proxies ?? [])
-    .map((proxy) => ({ ...proxy, free: proxy.free - (taken[proxy.id] ?? 0) }))
+    .map((proxy) => ({ ...proxy, free: proxy.free - (slots[proxy.id] ?? 0) }))
     .filter((proxy) => proxy.free > 0);
   const done = accountIds.length - remaining.length;
 
@@ -47,7 +54,13 @@ export function ProxyPoolStep({
           });
           left = left.filter((id) => id !== accountId);
           setRemaining(left);
-          setTaken((prev) => ({ ...prev, [proxy.id]: (prev[proxy.id] ?? 0) + 1 }));
+          setTaken((prev) => {
+            const base = prev.at === pool.dataUpdatedAt ? prev.slots : {};
+            return {
+              at: pool.dataUpdatedAt,
+              slots: { ...base, [proxy.id]: (base[proxy.id] ?? 0) + 1 },
+            };
+          });
         } catch {
           refused = true;
         }
@@ -63,10 +76,25 @@ export function ProxyPoolStep({
   return (
     <>
       {accountIds.length > 1 && (
-        <div className="mb-lg flex items-center justify-between type-caption">
-          <span>{t('accounts.addWizard.poolAssigned', { done, total: accountIds.length })}</span>
-          {done > 0 && remaining.length > 0 && (
-            <span>{t('accounts.addWizard.poolRemaining', { count: remaining.length })}</span>
+        <div className="mb-lg flex items-center justify-between gap-md type-caption">
+          <span className="flex flex-wrap gap-sm">
+            <span>{t('accounts.addWizard.poolAssigned', { done, total: accountIds.length })}</span>
+            {remaining.length > 0 && (
+              <span>{t('accounts.addWizard.poolRemaining', { count: remaining.length })}</span>
+            )}
+          </span>
+          {/* The batch action sits beside the tally, not under a long pool list. */}
+          {freeProxies.length > 0 && remaining.length > 0 && (
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={assignProxy.isPending}
+              onClick={() => {
+                void assignTo(freeProxies);
+              }}
+            >
+              {t('accounts.addWizard.poolDistribute')}
+            </Button>
           )}
         </div>
       )}
@@ -105,22 +133,13 @@ export function ProxyPoolStep({
             </button>
           ))
         )}
-        {accountIds.length > 1 && freeProxies.length > 0 && remaining.length > 0 && (
-          <Button
-            variant="primary"
-            size="sm"
-            className="self-start"
-            disabled={assignProxy.isPending}
-            onClick={() => {
-              void assignTo(freeProxies);
-            }}
-          >
-            {t('accounts.addWizard.poolDistribute')}
-          </Button>
-        )}
         {failed && (
           <div role="alert" className="type-caption text-danger">
-            {t('accounts.addWizard.proxyAssignError')}
+            {t(
+              accountIds.length > 1
+                ? 'accounts.addWizard.proxyAssignPartial'
+                : 'accounts.addWizard.proxyAssignError',
+            )}
           </div>
         )}
       </div>

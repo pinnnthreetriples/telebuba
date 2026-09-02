@@ -171,3 +171,33 @@ test('reset clears the list; a file settling afterwards is not adopted but still
     expect(calls('/accounts/import-session')).toHaveLength(2);
   });
 });
+
+test('unmount mid-batch lets in-flight files finish but never starts the queued ones', async () => {
+  const pending: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        pending.push(resolve);
+      }),
+  );
+  const { result, unmount, onSettledOne } = setup('session');
+  act(() => {
+    result.current.add([file('a.session'), file('b.session'), file('c.session')]);
+  });
+  await waitFor(() => {
+    expect(pending).toHaveLength(2);
+  });
+
+  unmount();
+  pending[0]?.(jsonResponse(account('a')));
+  pending[1]?.(jsonResponse(account('b')));
+  // The two accounts exist server-side, so the table still refetches for them…
+  await waitFor(() => {
+    expect(onSettledOne).toHaveBeenCalledTimes(2);
+  });
+  // …but Cancel must not keep POSTing credentials behind a closed wizard.
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(pending).toHaveLength(2);
+});

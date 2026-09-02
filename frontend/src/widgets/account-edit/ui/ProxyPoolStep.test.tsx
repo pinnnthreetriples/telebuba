@@ -147,7 +147,7 @@ test('a refused assign shows the alert and keeps that account without a proxy', 
     />,
   );
   await userEvent.click(await screen.findByText('nl-1.proxyhub.net:1080'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось назначить прокси');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не все аккаунты получили прокси');
   expect(screen.getByText('Назначено: 2 из 3')).toBeInTheDocument();
   expect(screen.getByText('Без прокси: 1')).toBeInTheDocument();
   expect(onDone).not.toHaveBeenCalled();

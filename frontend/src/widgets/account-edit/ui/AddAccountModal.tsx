@@ -192,6 +192,8 @@ export function AddAccountModal({
         }
       }
       onImported();
+    } catch {
+      // Create refused: close like the pre-bulk wizard did; the Proxies page reports it.
     } finally {
       afterProxy();
     }
@@ -371,7 +373,8 @@ export function AddAccountModal({
                   in flight: step 2 must see the whole batch, not its first half. */}
               <Button
                 variant="primary"
-                disabled={accountIds.length === 0 || bulk.importing}
+                disabled={accountIds.length === 0}
+                loading={bulk.importing}
                 onClick={() => {
                   setStep(2);
                   setProxyStep('choice');

@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { importAccountSessionMutation, importAccountTdataMutation } from '@/entities/account';
 
@@ -23,6 +23,17 @@ export function useBulkImport(method: Method, onSettledOne: () => void) {
   const generation = useRef(0);
   const importSession = useMutation(importAccountSessionMutation());
   const importTdata = useMutation(importAccountTdataMutation());
+
+  // Cancel/× mid-batch: files already in flight finish (the account exists
+  // server-side either way), but the queued ones must not keep POSTing
+  // credentials behind a closed wizard.
+  useEffect(
+    () => () => {
+      generation.current += 1;
+      queue.current = [];
+    },
+    [],
+  );
 
   const patch = (index: number, gen: number, next: Partial<BulkFile>) => {
     if (gen !== generation.current) return;
