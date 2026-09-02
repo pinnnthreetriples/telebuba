@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
+import { getToasts } from '@/shared/ui/toast';
 
 import {
   BOARD,
@@ -190,6 +191,36 @@ test('the add-channel pill reveals an input and adds the channel', async () => {
       .mock.calls.some(([input]) => (input as Request).url.includes('/channels'));
     expect(linked).toBe(true);
   });
+});
+
+test('a channel another campaign holds stays in the input with a refusal toast', async () => {
+  // The link POST answers 200 with `already_assigned`: the channel was NOT linked and
+  // no chip will render it, so the input must not vanish silently.
+  routeApi();
+  const route = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    const request = input as Request;
+    if (request.method === 'POST' && request.url.endsWith('/channels')) {
+      return Promise.resolve(jsonResponse({ status: 'already_assigned', channel: '@promo' }));
+    }
+    return route(input, init);
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+
+  await userEvent.click(screen.getByText('+ Канал'));
+  const input = screen.getByPlaceholderText(/Введите|@|канал/i);
+  await userEvent.type(input, '@promo');
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+  await waitFor(() => {
+    expect(getToasts().map((toast) => toast.message)).toContain(
+      '@promo не добавлен — канал уже занят другой кампанией',
+    );
+  });
+  expect(input).toBeInTheDocument();
+  expect(input).toHaveValue('@promo');
 });
 
 test('the deleted tile sums the account cards, never the channel rows', async () => {

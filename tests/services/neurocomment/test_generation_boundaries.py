@@ -12,6 +12,7 @@ from core.config import settings
 from schemas.gemini import GeminiResult
 from schemas.neurocomment import NeurocommentCampaign
 from schemas.telegram_actions import NewPostEvent
+from schemas.telegram_actions_comments import PostCommentRecord
 from schemas.warming import WarmingSettingsSecret
 from services.neurocomment import _generate, _generation_candidates, _seams
 
@@ -183,3 +184,36 @@ async def test_semantic_rejection_releases_exact_text_claim(
     assert outcome.reason == "duplicate"
     assert outcome.error is None
     release.assert_awaited_once_with("beta alpha")
+
+
+@pytest.mark.asyncio
+async def test_reply_echoing_the_quoted_comment_is_a_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An answer that parrots the comment it replies to is refused; the next round is not."""
+    monkeypatch.setattr(settings.neurocomment, "max_retries", 1)
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.5)
+    monkeypatch.setattr(
+        _generation_candidates, "recent_channel_comments", AsyncMock(return_value=[])
+    )
+    monkeypatch.setattr(
+        _generation_candidates, "load_warming_settings", AsyncMock(return_value=_secret())
+    )
+    monkeypatch.setattr(_generation_candidates, "touch_comment_claim", AsyncMock(return_value=True))
+    journal = AsyncMock()
+    monkeypatch.setattr(_generate, "_log_regeneration", journal)
+    generate = AsyncMock(
+        side_effect=[
+            GeminiResult(status="ok", text="gamma beta alpha"),
+            GeminiResult(status="ok", text="a fresh take entirely"),
+        ]
+    )
+    monkeypatch.setattr(_seams, "generate_text", generate)
+    target = PostCommentRecord(message_id=7, text="alpha beta gamma")
+
+    outcome = await _generate._generate_acceptable(_campaign(), _event(), "account", target=target)
+
+    assert outcome.text == "a fresh take entirely"
+    assert outcome.reason is None
+    assert generate.await_count == 2
+    journal.assert_awaited_with("account", _event(), 1, "duplicate", None)

@@ -47,6 +47,9 @@ async def generate_acceptable(
     nc = settings.neurocomment
     channel = event.channel
     recent = await recent_channel_comments(campaign.campaign_id, channel)
+    if target is not None and nc.semantic_dedup_threshold > 0:
+        # Reply mode: an answer that echoes the quoted comment is a ``duplicate`` of thread text.
+        recent = [*recent, target.text]
     secret = await load_warming_settings()
     use_deepseek = _deepseek_generates(image_b64)
     generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text

@@ -374,9 +374,9 @@ async def _commit_delivered(
 async def _resolve_unavailable_claim(event: NewPostEvent, result: ActionResult) -> None:
     """Settle the claim of a gateway outage, on what that outage can actually prove.
 
-    Nothing was sent (the pool never connected) → release. The DELETE is what makes "not
-    charged" true of the quota too, not just of the status, and it hands the post back so
-    another account — or this one, later — can still comment on it.
+    Nothing was sent (the pool never connected) → release, so "not charged" is true of the
+    quota too, not just of the status. The post is NOT handed back, though: the inbox drops
+    any known ``(channel, post_id)`` whatever its state — a requeue is a deferred follow-up.
 
     The send went out and only the answer was lost (``UNCONFIRMED_ERROR_TYPE``) → the
     comment may be LIVE under the post, and releasing then re-opened the very window
