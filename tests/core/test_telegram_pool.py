@@ -78,13 +78,14 @@ def _install_fake_factory(
     monkeypatch: pytest.MonkeyPatch,
     *,
     connect_failures: int = 0,
+    failure_type: type[Exception] = RuntimeError,
 ) -> list[_FakeClient]:
     """Replace the pool's profile-prep + client-build seams with synchronous fakes.
 
     Returns the running list of ``_FakeClient`` instances created so the test
     can assert on connect/disconnect counts and identity. ``connect_failures``
-    makes the first N ``connect()`` calls raise — used to exercise the
-    second-attempt retry path inside ``get_client``.
+    makes the first N ``connect()`` calls raise ``failure_type`` — used to
+    exercise the second-attempt retry path inside ``get_client``.
     """
     built: list[_FakeClient] = []
 
@@ -101,7 +102,7 @@ def _install_fake_factory(
             if failures_remaining["n"] > 0:
                 failures_remaining["n"] -= 1
                 msg = "synthetic connect failure"
-                raise RuntimeError(msg)
+                raise failure_type(msg)
             await original_connect()
 
         client.connect = failing_connect  # ty: ignore[invalid-assignment]
@@ -254,6 +255,32 @@ async def test_get_client_recovers_after_single_transient_failure(
     client = await get_client("acc-flaky")
 
     assert client.is_connected(), "second attempt must succeed and return a live client"
+
+
+@pytest.mark.asyncio
+async def test_get_client_does_not_retry_a_transport_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transport failure escalates at once — Telethon already ran its own ladder.
+
+    ``connect()`` retries ``connection_retries`` times internally (~88 s on a
+    black-holing proxy); repeating it from the pool doubled that wait while every
+    borrower for the account queued on the connect lock.
+    """
+    built = _install_fake_factory(monkeypatch, connect_failures=1, failure_type=ConnectionError)
+    events: list[str] = []
+
+    async def record_event(_level: str, event: str, **_kwargs: object) -> None:
+        events.append(event)
+
+    monkeypatch.setattr("core.telegram_client._pool.log_event", record_event)
+
+    with pytest.raises(TelegramClientPoolError) as exc_info:
+        await get_client("acc-dead-proxy")
+
+    assert isinstance(exc_info.value.cause, ConnectionError)
+    assert len(built) == 1, "no second client may be built for a transport failure"
+    assert events == ["telegram_pool_connect_failed"], "no retry event, failure still logged"
 
 
 @pytest.mark.asyncio
