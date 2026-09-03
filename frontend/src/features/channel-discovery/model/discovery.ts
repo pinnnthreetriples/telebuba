@@ -228,6 +228,22 @@ export function resolveSelection(
     .slice(0, MAX_ADOPT);
 }
 
+/** Sort order for the listed rows: adoptable candidates first, then by subscribers
+ * descending, unknown counts last. `Array.prototype.sort` is stable in every engine
+ * this app ships to, and returning 0 on every remaining tie relies on exactly that —
+ * so within one group (adoptable/not, same subscriber count or both unknown) rows
+ * keep the order the board sent them in. */
+export function compareCandidates(a: DiscoveryCandidate, b: DiscoveryCandidate): number {
+  const aSelectable = isSelectable(a);
+  const bSelectable = isSelectable(b);
+  if (aSelectable !== bSelectable) return aSelectable ? -1 : 1;
+  const aSubs = a.subscribers ?? null;
+  const bSubs = b.subscribers ?? null;
+  if (aSubs === null) return bSubs === null ? 0 : 1;
+  if (bSubs === null) return -1;
+  return bSubs - aSubs;
+}
+
 export function formatSubscribers(count: number | null | undefined, locale: string): string {
   if (count === null || count === undefined) return '—';
   return new Intl.NumberFormat(locale, { notation: 'compact', maximumFractionDigits: 1 }).format(

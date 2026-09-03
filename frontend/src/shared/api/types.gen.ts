@@ -1621,6 +1621,7 @@ export type DiscoveryProgress = {
   filtered?: {
     [key: string]: number;
   };
+  work?: DiscoveryWork | null;
 };
 
 /**
@@ -1771,6 +1772,71 @@ export type DiscoverySourceReport = {
    * Truncated
    */
   truncated?: boolean;
+};
+
+/**
+ * DiscoveryStream
+ *
+ * One account's stream, as the progress bar shows it.
+ */
+export type DiscoveryStream = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Premium
+   */
+  premium?: boolean | null;
+  /**
+   * State
+   */
+  state?:
+    'idle' | 'waiting' | 'reading' | 'done' | 'capped' | 'flooded' | 'cooling' | 'dead' | 'offline';
+  /**
+   * Reads
+   */
+  reads?: number;
+  /**
+   * Error
+   */
+  error?: string | null;
+};
+
+/**
+ * DiscoveryWork
+ *
+ * Progress of the stage that is running (or just ran).
+ */
+export type DiscoveryWork = {
+  /**
+   * Stage
+   */
+  stage: 'searching' | 'qualifying';
+  /**
+   * Done
+   */
+  done?: number;
+  /**
+   * Planned
+   */
+  planned?: number;
+  /**
+   * Eta Seconds
+   */
+  eta_seconds?: number | null;
+  /**
+   * Started At
+   */
+  started_at: string;
+  /**
+   * Streams
+   */
+  streams?: Array<DiscoveryStream>;
 };
 
 /**

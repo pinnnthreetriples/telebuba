@@ -15,8 +15,13 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# The search request and its bounds live in a sibling module (file-size cap); imported
-# back so ``from schemas.neurocomment_discovery import DiscoverySearchRequest`` still works.
+# The live-progress model is a sibling module (file-size cap); imported back so
+# ``from schemas.neurocomment_discovery import DiscoveryWork`` still works, and used
+# directly below as ``DiscoveryProgress.work``'s type.
+from schemas.neurocomment_discovery_progress import DiscoveryWork  # noqa: TC001
+
+# The search request and its bounds live in a sibling module too; imported back so
+# ``from schemas.neurocomment_discovery import DiscoverySearchRequest`` still works.
 from schemas.neurocomment_discovery_request import (  # noqa: F401
     CHANNEL_HANDLE_MAX_LENGTH,
     KEYWORD_MAX_LENGTH,
@@ -284,6 +289,10 @@ class DiscoveryProgress(BaseModel):
     # Channels the last run rejected, per filter name (``seen``, ``language``, ``access``…).
     # Ephemeral like ``sources``: a rejected row is deleted, never stored hidden.
     filtered: dict[str, int] = Field(default_factory=dict)
+    # Live per-stream progress while a stage runs (or just ran); ``None`` once the board
+    # is read back after a restart, since ``WorkTracker`` is in-memory like the rest of
+    # this module's state.
+    work: DiscoveryWork | None = None
 
 
 class DiscoveryBoard(BaseModel):

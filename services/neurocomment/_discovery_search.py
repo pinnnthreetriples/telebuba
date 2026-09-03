@@ -36,6 +36,7 @@ if TYPE_CHECKING:
     )
     from services.neurocomment._discovery_pool import AccountPool
     from services.neurocomment._discovery_providers import RawCandidate, SourceOutcome
+    from services.neurocomment._discovery_state import WorkTracker
 
 
 class _Merged(NamedTuple):
@@ -283,13 +284,14 @@ async def run_search(
     campaign_id: str,
     pool: AccountPool,
     request: DiscoverySearchRequest,
+    work: WorkTracker,
 ) -> DiscoverySearchStageResult:
     """Collect candidates from every enabled source and persist the merged set.
 
     A source that fails is recorded, never raised: the other source's results still have
     value to the operator.
     """
-    native = await native_pass(pool, request)
+    native = await native_pass(pool, request, work)
     outcomes = native.outcomes
 
     seen: set[str] = set()

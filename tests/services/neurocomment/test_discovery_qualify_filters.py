@@ -26,6 +26,7 @@ from tests.services.neurocomment.discovery_support import (
     new_campaign,
     pool_of,
     search_request,
+    work_for,
 )
 
 if TYPE_CHECKING:
@@ -68,7 +69,9 @@ async def test_a_language_mismatch_deletes_the_row_and_is_counted(
     )
     campaign_id = await _seed(("cryptoru", "BTC"))
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request(language="en"))
+    reason = await run_qualification(
+        campaign_id, pool_of(), search_request(language="en"), work_for(pool_of())
+    )
 
     assert reason is None
     assert await _remaining(campaign_id) == []
@@ -93,7 +96,9 @@ async def test_the_comments_filter_drops_the_wrong_verdict(
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(linked=reply))
     campaign_id = await _seed(("alpha", "Alpha"))
 
-    await run_qualification(campaign_id, pool_of(), search_request(comments=comments))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(comments=comments), work_for(pool_of())
+    )
 
     assert (await _remaining(campaign_id) == ["alpha"]) is kept
 
@@ -108,7 +113,9 @@ async def test_a_cache_hit_still_honours_the_comments_filter(
     campaign_id = await _seed(("cached", "Cached"))
     await upsert_linked_group("cached", None, comments_enabled=False)
 
-    await run_qualification(campaign_id, pool_of(), search_request(comments="on"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(comments="on"), work_for(pool_of())
+    )
 
     assert reader.calls == []
     assert await _remaining(campaign_id) == []
@@ -129,7 +136,9 @@ async def test_an_unknown_kind_is_not_a_channel_for_the_comments_filter(
     )
     await upsert_linked_group("odd", None, comments_enabled=False)
 
-    await run_qualification(campaign_id, pool_of(), search_request(comments="on"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(comments="on"), work_for(pool_of())
+    )
 
     assert reader.calls == []
     assert await _remaining(campaign_id) == ["odd"]
@@ -155,7 +164,9 @@ async def test_a_cache_row_that_carries_about_and_the_join_gate_settles_every_fi
     await upsert_linked_group("gated", -1, comments_enabled=True, about="", join_request=True)
     await upsert_linked_group("fit", -1, comments_enabled=True, about="", join_request=False)
 
-    await run_qualification(campaign_id, pool_of(), search_request(language="en", access="open"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(language="en", access="open"), work_for(pool_of())
+    )
 
     assert reader.calls == []
     assert await _remaining(campaign_id) == ["fit"]
@@ -178,7 +189,9 @@ async def test_a_cache_settled_row_shows_its_facts_on_the_board(
         "btcdaily", -1, comments_enabled=True, about="Crypto news", join_request=False
     )
 
-    await run_qualification(campaign_id, pool_of(), search_request(category="crypto"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(category="crypto"), work_for(pool_of())
+    )
 
     assert reader.calls == []
     board = await load_discovery(campaign_id)
@@ -201,7 +214,9 @@ async def test_a_legacy_cache_row_without_the_needed_fact_is_probed(
     await upsert_linked_group("cached", -100, comments_enabled=True)
     await upsert_linked_group("plain", -100, comments_enabled=True)
 
-    await run_qualification(campaign_id, pool_of(), search_request(language="en"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(language="en"), work_for(pool_of())
+    )
 
     # Both rows lack the about text, both are probed; the reply refreshes the cache.
     assert len(reader.actions_of("get_linked_discussion_group")) == 2
@@ -216,7 +231,7 @@ async def test_a_private_row_is_never_probed_and_reads_as_subscription(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed(("id:123456", "Private"))
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     assert reader.calls == []
@@ -248,8 +263,12 @@ async def test_a_private_row_goes_through_the_filters_on_its_title_alone(
         ],
     )
 
-    await run_qualification(by_language, pool_of(), search_request(language="en"))
-    await run_qualification(by_comments, pool_of(), search_request(comments="on"))
+    await run_qualification(
+        by_language, pool_of(), search_request(language="en"), work_for(pool_of())
+    )
+    await run_qualification(
+        by_comments, pool_of(), search_request(comments="on"), work_for(pool_of())
+    )
 
     assert await _remaining(by_language) == ["id:2"]
     assert _discovery_state.run_report(by_language).filtered == {"language": 1}
@@ -275,7 +294,9 @@ async def test_a_group_is_kept_whatever_the_comments_filter_says(
         ],
     )
 
-    await run_qualification(campaign_id, pool_of(), search_request(kind="all", comments="on"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(kind="all", comments="on"), work_for(pool_of())
+    )
 
     assert await _remaining(campaign_id) == ["chat"]
     assert _discovery_state.run_report(campaign_id).filtered == {}
@@ -298,7 +319,9 @@ async def test_rejected_rows_are_deleted_in_batches(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(linked=_reply(about="Новости")))
     campaign_id = await _seed(*((f"c{index}", "BTC") for index in range(7)))
 
-    await run_qualification(campaign_id, pool_of(), search_request(language="en"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(language="en"), work_for(pool_of())
+    )
 
     assert await _remaining(campaign_id) == []
     assert [len(batch) for batch in deletes] == [5, 2]
@@ -313,7 +336,9 @@ async def test_a_target_join_gate_reads_as_join_request_and_the_access_filter_ap
     )
     campaign_id = await _seed(("gated", "Gated"))
 
-    await run_qualification(campaign_id, pool_of(), search_request(access="open"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(access="open"), work_for(pool_of())
+    )
 
     assert await _remaining(campaign_id) == []
     assert _discovery_state.run_report(campaign_id).filtered == {"access": 1}
@@ -327,7 +352,9 @@ async def test_category_match_is_measured_and_a_miss_deletes_the_row(
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(linked=_reply(about="Cats and dogs")))
     campaign_id = await _seed(("btcdaily", "Bitcoin daily"), ("pets", "Pets"))
 
-    await run_qualification(campaign_id, pool_of(), search_request(category="crypto"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(category="crypto"), work_for(pool_of())
+    )
 
     assert await _remaining(campaign_id) == ["btcdaily"]
     verdicts = _discovery_state.verdicts(campaign_id)
@@ -344,7 +371,9 @@ async def test_the_verdict_carries_is_group_and_no_filter_touches_an_unknown_fac
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(linked=_reply(is_group=True)))
     campaign_id = await _seed(("chat", "12345"))
 
-    await run_qualification(campaign_id, pool_of(), search_request(kind="all", language="ru"))
+    await run_qualification(
+        campaign_id, pool_of(), search_request(kind="all", language="ru"), work_for(pool_of())
+    )
 
     # Digits only: no language could be read, so the language filter lets it through.
     assert await _remaining(campaign_id) == ["chat"]

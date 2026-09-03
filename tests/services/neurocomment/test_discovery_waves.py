@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
+from core.repositories.neurocomment import list_discovery_candidates
 from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import GetSimilarChannels, SearchChannels, SearchGlobalPosts
 from schemas.telegram_actions_discovery import (
@@ -20,16 +21,9 @@ from schemas.telegram_actions_discovery import (
     TelegramChannelMatch,
     TelegramChannelMatches,
 )
-from services.neurocomment import _seams
+from services.neurocomment import _discovery_waves, _seams
 from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment._discovery_search import run_search
-from services.neurocomment._discovery_wave_support import Budget
-from services.neurocomment._discovery_waves import (
-    _global_pass,
-    _keyword_pass,
-    _seed_pass,
-    _similar_wave,
-)
 from services.neurocomment._state import in_cooldown, set_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
@@ -41,16 +35,16 @@ from tests.services.neurocomment.discovery_support import (
     posts_page,
     read_error,
     search_request,
+    work_for,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import Callable
 
     from pydantic import BaseModel
 
     from schemas.neurocomment_discovery import DiscoverySearchStageResult, DiscoverySourceReport
     from schemas.telegram_actions import TelegramReadAction
-    from services.neurocomment._discovery_wave_support import Wave
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
@@ -69,6 +63,11 @@ def _report_of(stage: DiscoverySearchStageResult, source: str) -> DiscoverySourc
 
 def _keywords(count: int) -> list[str]:
     return [f"word{index:02d}" for index in range(count)]
+
+
+def _premium_pool_of(*account_ids: str) -> AccountPool:
+    """A pool whose accounts are all Premium — the post wave refuses to run without one."""
+    return AccountPool(SearchAccount(aid, premium=True) for aid in account_ids or (LISTENER_ID,))
 
 
 def _search_failing_on(fragment: str) -> Callable[[TelegramReadAction], BaseModel]:
@@ -123,6 +122,7 @@ async def test_a_cooldown_somebody_else_recorded_stops_the_next_read(
         campaign_id,
         pool_of(),
         search_request(keywords=_keywords(6), seed_channel="@durov"),
+        work_for(pool_of()),
     )
 
     # Two keyword reads, then nothing: not the four remaining keywords, not the seed, not
@@ -156,6 +156,7 @@ async def test_a_channel_scoped_cooldown_does_not_stop_the_run(
         campaign_id,
         pool_of(),
         search_request(keywords=["crypto"], seed_channel="@durov"),
+        work_for(pool_of()),
     )
 
     assert reader.similar_actions() != []
@@ -178,7 +179,9 @@ async def test_a_premium_wait_stops_the_run_like_any_other_rate_limit(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(4)))
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(keywords=_keywords(4)), work_for(pool_of())
+    )
 
     assert len(reader.calls) == 1
     assert stage.flooded is True
@@ -195,7 +198,9 @@ async def test_a_rate_limit_with_no_duration_takes_the_configured_cooldown(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(4)))
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(keywords=_keywords(4)), work_for(pool_of())
+    )
 
     assert len(reader.calls) == 1
     assert stage.flooded is True
@@ -216,7 +221,9 @@ async def test_consecutive_failures_end_the_run_instead_of_draining_the_budget(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(10)))
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(keywords=_keywords(10)), work_for(pool_of())
+    )
 
     assert len(reader.calls) == 3
     # Not a flood: no cooldown is written and the run keeps its own error, not a wait.
@@ -240,6 +247,7 @@ async def test_the_failure_counter_spans_the_waves(monkeypatch: pytest.MonkeyPat
         campaign_id,
         pool_of(),
         search_request(keywords=_keywords(2), seed_channel="@durov"),
+        work_for(pool_of()),
     )
 
     # Two keywords and the operator's seed — the third failure in a row — then nothing.
@@ -257,7 +265,9 @@ async def test_an_answer_resets_the_failure_counter(monkeypatch: pytest.MonkeyPa
     campaign_id = await new_campaign()
 
     # Every second keyword refuses, so two failures never land in a row.
-    await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(6)))
+    await run_search(
+        campaign_id, pool_of(), search_request(keywords=_keywords(6)), work_for(pool_of())
+    )
 
     assert len(reader.search_actions()) == 6
 
@@ -276,8 +286,11 @@ async def test_the_post_wave_yields_its_reads_to_the_recommendation_wave(
     reader = ReadRecorder(search=_RICH_SWEEP, posts=_PAGED_POSTS)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = _premium_pool_of()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(3)))
+    stage = await run_search(
+        campaign_id, pool, search_request(keywords=_keywords(3)), work_for(pool)
+    )
 
     # 3 sweep + 2 post pages + the 5 seeds held back for the wave = the whole budget.
     assert len(reader.search_actions()) == 3
@@ -302,11 +315,13 @@ async def test_a_full_keyword_list_runs_untruncated_at_default_settings(
     reader = ReadRecorder(search=_RICH_SWEEP, posts=_PAGED_POSTS)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = _premium_pool_of()
 
     stage = await run_search(
         campaign_id,
-        pool_of(),
+        pool,
         search_request(keywords=_keywords(10), seed_channel="@durov"),
+        work_for(pool),
     )
 
     # 10 sweep + 1 seed + one post page per keyword + 5 recommendation seeds = 26, inside
@@ -327,9 +342,10 @@ async def test_the_post_wave_caps_its_own_total_past_ten_keywords(
     reader = ReadRecorder(search=matches(), posts=_PAGED_POSTS)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = _premium_pool_of()
 
     stage = await run_search(
-        campaign_id, pool_of(), search_request(keywords=_keywords(10), category="crypto")
+        campaign_id, pool, search_request(keywords=_keywords(10), category="crypto"), work_for(pool)
     )
 
     assert len(reader.search_actions()) == 18
@@ -340,21 +356,28 @@ async def test_the_post_wave_caps_its_own_total_past_ten_keywords(
 
 
 @pytest.mark.asyncio
-async def test_the_budget_scales_with_the_pool_and_the_reads_alternate(
+async def test_the_budget_scales_with_the_pool_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The ceiling bounds what ONE session emits; two accounts may spend twice as much."""
+    """The ceiling bounds what ONE session emits; two accounts may spend twice as much.
+
+    ``kind="groups"`` keeps the recommendation hold out of this: it is about the shared
+    budget scaling with the pool, not the hold. Which account reads which keyword is a
+    scheduling detail now, not a contract — only the per-account ceiling (so each of the
+    two accounts contributes its own share) and the total are.
+    """
     monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 2)
     reader = ReadRecorder(search=matches())
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = pool_of("acc-a", "acc-b")
 
     stage = await run_search(
-        campaign_id, pool_of("acc-a", "acc-b"), search_request(keywords=_keywords(6))
+        campaign_id, pool, search_request(keywords=_keywords(6), kind="groups"), work_for(pool)
     )
 
     assert len(reader.search_actions()) == 4
-    assert reader.accounts == ["acc-a", "acc-b", "acc-a", "acc-b"]
+    assert sorted(reader.accounts) == ["acc-a", "acc-a", "acc-b", "acc-b"]
     assert _report_of(stage, "telegram_search").truncated is True
 
 
@@ -362,7 +385,13 @@ async def test_the_budget_scales_with_the_pool_and_the_reads_alternate(
 async def test_a_flooded_account_leaves_and_the_run_finishes_on_the_rest(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One parked session is not a parked run any more — but it IS parked."""
+    """One parked session is not a parked run any more — but it IS parked.
+
+    The flooded read itself now earns one retry on whichever account picks the job up
+    next: with only one other account in the pool, that retry lands on ``acc-b`` and
+    succeeds, so the source reports itself ``ran`` with no error of its own — the flood
+    is visible only as ``acc-a``'s own cooldown.
+    """
 
     async def _flood_a(account_id: str, _action: object) -> object:
         if account_id == "acc-a":
@@ -372,16 +401,16 @@ async def test_a_flooded_account_leaves_and_the_run_finishes_on_the_rest(
 
     monkeypatch.setattr(_seams, "execute_read", _flood_a)
     campaign_id = await new_campaign()
+    pool = pool_of("acc-a", "acc-b")
 
     stage = await run_search(
-        campaign_id, pool_of("acc-a", "acc-b"), search_request(keywords=_keywords(3))
+        campaign_id, pool, search_request(keywords=_keywords(3)), work_for(pool)
     )
 
-    # The first read floods ``acc-a`` out; the remaining keywords go to ``acc-b`` and the
-    # run completes — stored, not failed, though the flooded read still names its reason.
     assert stage.flooded is False
     assert stage.replaced is True
-    assert stage.error == "FloodWait(60s)"
+    assert stage.error is None
+    assert _report_of(stage, "telegram_search").state == "ran"
     assert in_cooldown("acc-a", datetime.now(UTC)) is True
     assert in_cooldown("acc-b", datetime.now(UTC)) is False
 
@@ -399,6 +428,7 @@ async def test_the_recommendation_wave_never_re_reads_the_operators_seed(
         campaign_id,
         pool_of(),
         search_request(keywords=["crypto"], seed_channel="@biggest"),
+        work_for(pool_of()),
     )
 
     # The operator's seed, then the sweep's next-best hit — never the same peer twice.
@@ -420,9 +450,14 @@ async def test_a_survivor_stops_at_its_own_ceiling_when_the_other_account_cooled
     monkeypatch.setattr(_seams, "execute_read", reader)
     await set_cooldown("acc-a", datetime.now(UTC) + timedelta(hours=1))
     campaign_id = await new_campaign()
+    pool = pool_of("acc-a", "acc-b")
 
     stage = await run_search(
-        campaign_id, pool_of("acc-a", "acc-b"), search_request(keywords=_keywords(6))
+        campaign_id,
+        pool,
+        # groups keeps the recommendation hold out of it: only the ceiling matters here.
+        search_request(keywords=_keywords(6), kind="groups"),
+        work_for(pool),
     )
 
     assert reader.accounts == ["acc-b", "acc-b"]
@@ -440,38 +475,14 @@ async def test_one_account_alone_never_exceeds_its_ceiling(
     campaign_id = await new_campaign()
 
     await run_search(
-        campaign_id, pool_of(), search_request(keywords=_keywords(6), seed_channel="@durov")
+        campaign_id,
+        pool_of(),
+        # groups keeps the recommendation hold out of it: only the ceiling matters here.
+        search_request(keywords=_keywords(6), kind="groups"),
+        work_for(pool_of()),
     )
 
     assert len(reader.calls) == 3
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "wave",
-    [
-        lambda pool, budget: _keyword_pass(pool, ["word"], budget, "all"),
-        lambda pool, budget: _global_pass(pool, ["word"], budget, "all"),
-        lambda pool, budget: _seed_pass(pool, search_request(seed_channel="@durov"), budget),
-        lambda pool, budget: _similar_wave(pool, ["durov"], budget, "all"),
-    ],
-    ids=["keyword", "posts", "seed", "recommended"],
-)
-async def test_an_acquire_the_pool_refuses_charges_no_read(
-    monkeypatch: pytest.MonkeyPatch,
-    wave: Callable[[AccountPool, Budget], Coroutine[None, None, Wave]],
-) -> None:
-    """The budget was claimed before the pool was asked, so every wave burnt a phantom read."""
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 1)
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder())
-    pool = pool_of()
-    pool.acquire()  # the one wave read the ceiling allows
-    budget = Budget(5)
-
-    result = await wave(pool, budget)
-
-    assert budget.left == 5
-    assert (result.stopped, result.outcomes[-1].truncated) == (False, True)
 
 
 @pytest.mark.asyncio
@@ -480,8 +491,9 @@ async def test_premium_takes_the_recommendation_and_post_reads_while_the_sweep_r
 ) -> None:
     """Recommendations are ~10x richer on Premium and searchGlobal floods a plain account.
 
-    Sorting the rotation premium-first delivered none of that: round-robin reached the
-    plain account one read later, whatever the wave.
+    Both accounts may take a keyword read (it is not Premium-preferring), so which one
+    picks up which keyword is a scheduling detail now, not a contract; only the premium
+    reads' exclusivity is.
     """
     reader = ReadRecorder(search=_RICH_SWEEP)
     monkeypatch.setattr(_seams, "execute_read", reader)
@@ -489,7 +501,10 @@ async def test_premium_takes_the_recommendation_and_post_reads_while_the_sweep_r
     campaign_id = await new_campaign()
 
     await run_search(
-        campaign_id, pool, search_request(keywords=_keywords(2), seed_channel="@durov")
+        campaign_id,
+        pool,
+        search_request(keywords=_keywords(2), seed_channel="@durov"),
+        work_for(pool),
     )
 
     by_action = list(zip(reader.calls, reader.accounts, strict=True))
@@ -499,7 +514,7 @@ async def test_premium_takes_the_recommendation_and_post_reads_while_the_sweep_r
         for action, account in by_action
         if isinstance(action, GetSimilarChannels | SearchGlobalPosts)
     }
-    assert sweep == ["plain", "paid"]
+    assert len(sweep) == 2
     assert premium_only == {"paid"}
 
 
@@ -514,9 +529,10 @@ async def test_a_groups_search_skips_both_recommendation_waves(
     reader = ReadRecorder(search=groups)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = _premium_pool_of()
 
     stage = await run_search(
-        campaign_id, pool_of(), search_request(kind="groups", seed_channel="@durov")
+        campaign_id, pool, search_request(kind="groups", seed_channel="@durov"), work_for(pool)
     )
 
     assert reader.similar_actions() == []
@@ -543,8 +559,9 @@ async def test_a_skipped_wave_does_not_mask_a_later_failure(
     reader = ReadRecorder(search=groups, posts=read_error("RPC: TimeoutError"))
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = _premium_pool_of()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(kind="groups"))
+    stage = await run_search(campaign_id, pool, search_request(kind="groups"), work_for(pool))
 
     assert _report_of(stage, "telegram_posts").state == "failed"
     assert stage.error == "RPC: TimeoutError"
@@ -566,6 +583,67 @@ async def test_recommendation_seeds_come_from_channel_hits_only(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    await run_search(campaign_id, pool_of(), search_request(kind="all"))
+    await run_search(campaign_id, pool_of(), search_request(kind="all"), work_for(pool_of()))
 
     assert [(action.seed, action.kind) for action in reader.similar_actions()] == [("chan", "all")]
+
+
+@pytest.mark.asyncio
+async def test_a_pool_with_no_premium_account_skips_the_post_wave_entirely(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """SearchGlobal answers a non-premium account with FLOOD_PREMIUM_WAIT — not worth asking."""
+    reader = ReadRecorder(search=matches(("alpha", "A", None)), posts=_PAGED_POSTS)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(campaign_id, pool_of(), search_request(), work_for(pool_of()))
+
+    assert reader.posts_actions() == []
+    posts = _report_of(stage, "telegram_posts")
+    assert (posts.state, posts.reason, posts.truncated) == ("skipped", "premium_required", False)
+
+
+@pytest.mark.asyncio
+async def test_the_post_search_pages_on_the_cursor_up_to_its_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The search never says "done" — only the page bound ends a keyword's paging.
+
+    ``limit`` counts messages, not channels, so a short page is not an end-of-results
+    signal either; the cursor is followed until the budget runs out.
+    """
+    monkeypatch.setattr(_discovery_waves, "_GLOBAL_MAX_PAGES", 2)
+    first = posts_page(("first", "1", None), cursor=GlobalPostsCursor(offset_rate=7, peer="first"))
+    second = posts_page(
+        ("second", "2", None), cursor=GlobalPostsCursor(offset_rate=9, peer="second")
+    )
+    reader = ReadRecorder(posts=lambda action: first if action.cursor is None else second)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+    pool = _premium_pool_of()
+
+    await run_search(campaign_id, pool, search_request(), work_for(pool))
+
+    cursors = [action.cursor for action in reader.posts_actions()]
+    # First page starts fresh; the second carries page one's cursor back verbatim.
+    assert cursors == [None, GlobalPostsCursor(offset_rate=7, peer="first")]
+    stored = {row.channel for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert stored == {"first", "second"}
+
+
+@pytest.mark.asyncio
+async def test_paging_stops_on_a_page_that_adds_no_new_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeat posts from the same channels are the only end signal Telegram gives us."""
+    monkeypatch.setattr(_discovery_waves, "_GLOBAL_MAX_PAGES", 5)
+    repeat = posts_page(("same", "S", None), cursor=GlobalPostsCursor(offset_rate=1, peer="same"))
+    reader = ReadRecorder(posts=repeat)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+    pool = _premium_pool_of()
+
+    await run_search(campaign_id, pool, search_request(), work_for(pool))
+
+    assert len(reader.posts_actions()) == 2

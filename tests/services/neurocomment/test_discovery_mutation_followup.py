@@ -8,9 +8,11 @@ import pytest
 
 from core.repositories.neurocomment import replace_discovery_candidates
 from schemas.neurocomment_discovery import DiscoveryCandidateRow, DiscoverySearchStageResult
-from services.neurocomment import _discovery_run
+from services.neurocomment import _discovery_run, _discovery_state
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment.discovery import load_discovery
 from tests.services.neurocomment.discovery_support import (
+    LISTENER_ID,
     drain_discovery,
     new_campaign,
     search_request,
@@ -39,10 +41,16 @@ async def test_board_preserves_candidate_details_during_qualification(
         _campaign_id: str,
         _pool: object,
         _request: object,
+        _work: object,
     ) -> DiscoverySearchStageResult:
         return DiscoverySearchStageResult(found=1, replaced=True)
 
-    async def _qualify(campaign_id: str, _pool: object, _request: object) -> None:
+    async def _qualify(
+        campaign_id: str,
+        _pool: object,
+        _request: object,
+        _work: object,
+    ) -> None:
         qualification_calls.append(campaign_id)
         qualification_started.set()
         await release_qualification.wait()
@@ -90,3 +98,38 @@ async def test_board_preserves_candidate_details_during_qualification(
     assert finished is not None
     assert finished.progress.phase == "done"
     assert finished.progress.running is False
+
+
+@pytest.mark.asyncio
+async def test_starting_a_new_run_does_not_show_the_previous_runs_stale_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reset at start is synchronous, not left to ``start_work`` several awaits later.
+
+    ``start_work`` only replaces ``_WORK[campaign_id]`` once the spawned task reaches
+    its first stage — a board poll between ``start_discovery`` returning and that point
+    would otherwise pair the NEW phase with the PREVIOUS run's live streams.
+    """
+    hold = asyncio.Event()
+
+    async def _blocked_run(_campaign_id: str, _pool: object, _request: object) -> None:
+        await hold.wait()
+
+    monkeypatch.setattr("services.neurocomment.discovery.run", _blocked_run)
+    await seed_listener()
+    campaign_id = await new_campaign()
+    # A stale tracker, exactly as a previous run's ``qualifying`` stage would leave one.
+    _discovery_state.start_work(
+        campaign_id, "qualifying", AccountPool([SearchAccount(LISTENER_ID)])
+    )
+
+    outcome = await start_run(campaign_id, search_request())
+
+    assert outcome.status == "started"
+    board = await load_discovery(campaign_id)
+    assert board is not None
+    work = board.progress.work
+    assert work is None or (work.stage == "searching" and work.done == 0)
+
+    hold.set()
+    await drain_discovery(campaign_id)

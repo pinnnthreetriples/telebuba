@@ -113,6 +113,10 @@ class SourceOutcome:
     # left it a read short, so the board can separate "this is all there was" from
     # "we stopped asking".
     truncated: bool = False
+    # The client pool could not connect the account at all — no reply of any kind, not
+    # even a rate limit. Distinct from a flood: the account is not merely paced, it is
+    # not usable this run, and a retry on a DIFFERENT account is worth attempting once.
+    unreachable: bool = False
 
     @property
     def answered(self) -> bool:
@@ -146,6 +150,7 @@ def _failed(source: DiscoverySource, exc: TelegramReadError) -> SourceOutcome:
         state="failed",
         error=exc.reason,
         flood_seconds=flood_cooldown(exc),
+        unreachable=exc.kind == "unavailable",
     )
 
 

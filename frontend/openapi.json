@@ -13742,6 +13742,16 @@
             },
             "type": "object",
             "title": "Filtered"
+          },
+          "work": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoveryWork"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -14001,6 +14011,122 @@
         ],
         "title": "DiscoverySourceReport",
         "description": "What one source contributed to the last run, as the board shows it.\n\nWithout this nothing told the operator that a source had not answered: the board\ncarried one ``last_error`` and a source that was skipped carried none at all."
+      },
+      "DiscoveryStream": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "premium": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "waiting",
+              "reading",
+              "done",
+              "capped",
+              "flooded",
+              "cooling",
+              "dead",
+              "offline"
+            ],
+            "title": "State",
+            "default": "idle"
+          },
+          "reads": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Reads",
+            "default": 0
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "name"
+        ],
+        "title": "DiscoveryStream",
+        "description": "One account's stream, as the progress bar shows it."
+      },
+      "DiscoveryWork": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "searching",
+              "qualifying"
+            ],
+            "title": "Stage"
+          },
+          "done": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Done",
+            "default": 0
+          },
+          "planned": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Planned",
+            "default": 0
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Seconds"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "streams": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryStream"
+            },
+            "type": "array",
+            "title": "Streams"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage",
+          "started_at"
+        ],
+        "title": "DiscoveryWork",
+        "description": "Progress of the stage that is running (or just ran)."
       },
       "ErrorDetail": {
         "properties": {

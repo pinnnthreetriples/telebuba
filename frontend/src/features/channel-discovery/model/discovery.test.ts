@@ -7,6 +7,7 @@ import {
   boundsInverted,
   buildSearchRequest,
   canSubmit,
+  compareCandidates,
   splitKeywords,
   EMPTY_FORM,
   formatSubscribers,
@@ -374,5 +375,31 @@ describe('formatSubscribers', () => {
     expect(formatSubscribers(12345, 'en')).toBe('12.3K');
     expect(formatSubscribers(900, 'en')).toBe('900');
     expect(formatSubscribers(1_500_000, 'en')).toBe('1.5M');
+  });
+});
+
+describe('compareCandidates', () => {
+  it('puts adoptable candidates ahead of ineligible ones regardless of subscribers', () => {
+    const blocked = candidate({ channel: 'group', kind: 'group', subscribers: 1_000_000 });
+    const open = candidate({ channel: 'small', subscribers: 10 });
+    expect([blocked, open].sort(compareCandidates)).toEqual([open, blocked]);
+  });
+
+  it('orders by subscribers descending within the same eligibility group', () => {
+    const small = candidate({ channel: 'small', subscribers: 10 });
+    const big = candidate({ channel: 'big', subscribers: 1000 });
+    expect([small, big].sort(compareCandidates)).toEqual([big, small]);
+  });
+
+  it('sorts an unknown subscriber count last within its group', () => {
+    const unknown = candidate({ channel: 'unknown', subscribers: null });
+    const known = candidate({ channel: 'known', subscribers: 1 });
+    expect([unknown, known].sort(compareCandidates)).toEqual([known, unknown]);
+  });
+
+  it('leaves ties in their original order', () => {
+    const first = candidate({ channel: 'first', subscribers: 10 });
+    const second = candidate({ channel: 'second', subscribers: 10 });
+    expect([first, second].sort(compareCandidates)).toEqual([first, second]);
   });
 });

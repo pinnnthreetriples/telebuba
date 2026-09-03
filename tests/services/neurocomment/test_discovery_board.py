@@ -23,6 +23,7 @@ from schemas.neurocomment_discovery import (
     DiscoverySourceReport,
 )
 from services.neurocomment import _discovery_state, _runtime
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment.discovery import adopt_candidates, load_discovery
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
@@ -672,3 +673,24 @@ async def test_cancellation_mid_batch_does_not_reconcile(
         await adopt_candidates(campaign_id, ["first", "second", "third"])
 
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_board_carries_live_work_while_running_and_none_before_a_search() -> None:
+    """``progress.work`` is the live streams bar; absent until a search has started one."""
+    campaign_id = await _campaign()
+
+    idle = await load_discovery(campaign_id)
+    assert idle is not None
+    assert idle.progress.work is None
+
+    pool = AccountPool([SearchAccount("acc-a", name="A"), SearchAccount("acc-b", name="B")])
+    _discovery_state.start_work(campaign_id, "searching", pool)
+
+    running = await load_discovery(campaign_id)
+    assert running is not None
+    work = running.progress.work
+    assert work is not None
+    assert work.stage == "searching"
+    assert {stream.account_id for stream in work.streams} == {"acc-a", "acc-b"}
+    assert {stream.name for stream in work.streams} == {"A", "B"}

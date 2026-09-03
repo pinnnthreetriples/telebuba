@@ -325,7 +325,11 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               onClick={submitAdopt}
             >
               {adopted === null ? (
-                t('neurocomment.modal.discovery.add', { count: picks.length })
+                picks.length === 0 ? (
+                  t('neurocomment.modal.discovery.addEmpty')
+                ) : (
+                  t('neurocomment.modal.discovery.add', { count: picks.length })
+                )
               ) : adopted.linked === 0 ? (
                 <>
                   <StatusIcon kind="err" />

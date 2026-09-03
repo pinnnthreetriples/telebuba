@@ -322,6 +322,8 @@ export type {
   DiscoverySearchOutcome,
   DiscoverySearchRequest,
   DiscoverySourceReport,
+  DiscoveryStream,
+  DiscoveryWork,
   EditAccountChannelPostData,
   EditAccountChannelPostError,
   EditAccountChannelPostErrors,

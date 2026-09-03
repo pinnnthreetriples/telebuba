@@ -19,14 +19,18 @@ are applied to it: a row they refuse is deleted, and the run report counts the d
 cache keeps the two facts those filters read (about, the join gate — migration #61), so a
 fresh row settles them through the SAME derivation as a probe; a row that never learnt a
 fact the active filters need is probed.
+
+The pass itself is a no-RPC sweep (``_settled_without_probe``) followed by one
+``services.neurocomment._discovery_streams.Job`` per row that still needs a real probe —
+paced per account stream, concurrent across the pool, exactly like the search stage.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NamedTuple
 
-from core.config import settings
 from core.repositories.neurocomment import (
     delete_discovery_candidates,
     list_linked_groups,
@@ -38,21 +42,23 @@ from core.telegram_client import TelegramReadError
 from schemas.neurocomment_discovery import DiscoveryChannelVerdict
 from schemas.telegram_actions import GetLinkedDiscussionGroup, LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_state, _seams
-from services.neurocomment._discovery_categories import matches
-from services.neurocomment._discovery_filters import (
-    access_of,
-    admit_at_qualification,
-    detect_language,
-    is_private_ref,
-)
 from services.neurocomment._discovery_providers import COOLING_REASON, flood_cooldown
-from services.neurocomment._discovery_wave_support import pace
-from services.neurocomment._signals import signal_discovery_progress
+from services.neurocomment._discovery_qualify_facts import (
+    _admit,
+    _facts,
+    _settle,
+    _settled_without_probe,
+    is_fresh,
+)
+from services.neurocomment._discovery_streams import Job, JobResult, Streams
 
 if TYPE_CHECKING:
-    from schemas.neurocomment import LinkedDiscussionGroup
     from schemas.neurocomment_discovery import DiscoveryCandidateRow, DiscoverySearchRequest
     from services.neurocomment._discovery_pool import AccountPool
+    from services.neurocomment._discovery_qualify_facts import _Facts
+    from services.neurocomment._discovery_state import WorkTracker
+
+__all__ = ["is_fresh", "run_qualification"]
 
 # Emit an SSE nudge every N probes rather than per probe: the stream is debounced
 # on the client anyway, and this keeps a 100-candidate run from publishing 100 frames.
@@ -79,135 +85,100 @@ class _Probe(NamedTuple):
 
     reason: str | None
     flood_seconds: int | None = None
+    # The client pool could not connect the account at all — no rate limit, no reply.
+    unreachable: bool = False
 
 
-class _Facts(NamedTuple):
-    """The three derived facts the filters and the verdict share, whatever answered."""
+@dataclass(slots=True)
+class _ProbeCounters:
+    """The error-rate rule's shared state across every concurrent probe."""
 
-    access: str | None
-    language: str | None
-    category_match: bool | None
+    probed: int = 0
+    total_errors: int = 0
 
 
-def is_fresh(checked_at: str, now: datetime) -> bool:
-    """Is this cached verdict still trustworthy? A zero TTL falls out as never.
+@dataclass(slots=True)
+class _ProbeState:
+    """Mutable state every probe closure shares, bundled to keep the factory's arity down.
 
-    Module-public: the adopt guard in ``discovery`` must apply the SAME window as this
-    probe loop, and reaching across a module boundary for a private name to do it said
-    the opposite.
+    ``last_reason`` is keyed by account, not a single shared slot: a slot overwritten by
+    whichever failing probe finishes last could hand back a reason that belongs to an
+    account whose failure never actually emptied the pool. ``Streams.stopped_by`` says
+    which account's drop produced the stop; this is how its own reason is recovered.
     """
-    try:
-        stamped = datetime.fromisoformat(checked_at)
-    except ValueError:
-        # Text column: a legacy or hand-edited row must re-probe, not raise.
-        return False
-    if stamped.tzinfo is None:
-        stamped = stamped.replace(tzinfo=UTC)
-    ttl_hours = settings.neurocomment.discovery_linked_group_ttl_hours
-    return stamped + timedelta(hours=ttl_hours) > now
+
+    rejected: list[str]
+    counters: _ProbeCounters
+    last_reason: dict[str, str]
 
 
-def _facts(
-    row: DiscoveryCandidateRow,
-    request: DiscoverySearchRequest,
-    *,
-    about: str | None,
-    join_request: bool | None,
-) -> _Facts:
-    """Access, language and category match — derived ONCE, for the verdict and the filters.
+async def _flush(campaign_id: str, rejected: list[str]) -> None:
+    """Delete the rows an operator filter refused, once, however many closures ask.
 
-    The row's ``channel`` is a ref, not always a handle: a private ``id:`` row has no
-    username, which is exactly what makes its access ``subscription``.
+    Snapshot-then-clear with no ``await`` in between: two probe jobs finishing at once
+    may both see the threshold crossed, but only the first actually has rows to send.
     """
-    username = None if is_private_ref(row.channel) else row.channel
-    category = request.category
-    return _Facts(
-        access=access_of(username, join_request),
-        language=detect_language(f"{row.title} {about or ''}"),
-        category_match=None if category == "any" else matches(row.title, about, category),
-    )
+    if not rejected:
+        return
+    batch, rejected[:] = list(rejected), []
+    await delete_discovery_candidates(campaign_id, batch)
 
 
-def _is_group(kind: str) -> bool | None:
-    """The row's stored kind as the verdict's tri-state: a legacy or blank kind is unknown.
-
-    Not ``kind == "group"``: that read every unrecognised string as a confident "channel",
-    and the comments filter then deleted the row on a fact nobody had measured.
-    """
-    return True if kind == "group" else False if kind == "channel" else None
-
-
-def _cache_answers(group: LinkedDiscussionGroup, request: DiscoverySearchRequest) -> bool:
-    """Does this fresh cache row carry every fact the active filters need?
-
-    A pre-#61 row has ``NULL`` where the about text and the join gate should be — facts
-    never learnt, not facts known to be blank — so a filter that reads them re-probes.
-    """
-    if (request.language != "any" or request.category != "any") and group.about is None:
-        return False
-    return not (request.access in {"open", "join_request"} and group.join_request is None)
-
-
-async def _settled_without_probe(
+def _probe_job(
     campaign_id: str,
     row: DiscoveryCandidateRow,
-    fresh: dict[str, LinkedDiscussionGroup],
     request: DiscoverySearchRequest,
-    rejected: list[str],
-) -> bool:
-    """Qualify the row from what is already known, if that is enough. No RPC either way."""
-    if is_private_ref(row.channel):
-        # Nothing can probe it, so the filters read the title alone and access is
-        # ``subscription``. ``comments=False`` is an explicit rule, not a measurement: a
-        # channel nobody can probe or comment in can never satisfy "has comments", so
-        # ``comments=on`` refuses it rather than admitting on unknown.
-        about, join_request, comments = None, None, False
-    else:
-        group = fresh.get(row.channel)
-        if group is None or not _cache_answers(group, request):
-            return False
-        # Cache hit: no RPC, and deliberately no sleep — this is what makes a re-search
-        # over familiar keywords finish in milliseconds. Every filter still applies.
-        about, join_request, comments = group.about, group.join_request, group.comments_enabled
-    facts = _facts(row, request, about=about, join_request=join_request)
-    # Recorded on the cache path too: the board lifts access, language and the category
-    # match off the verdict, so a row settled without a probe showed all three as unknown
-    # — the very facts the filters had just read. The rights flags stay ``None``: nothing
-    # measured them this run. ``is_group`` is the row's own kind.
-    _discovery_state.record_verdict(
-        campaign_id,
-        row.channel,
-        DiscoveryChannelVerdict(is_group=_is_group(row.kind), **facts._asdict()),
-    )
-    reason = _admit(row, facts, comments_enabled=comments, request=request)
-    await _settle(campaign_id, row.channel, reason, rejected)
-    return True
+    state: _ProbeState,
+) -> Job:
+    """One row's probe, uncharged: the candidate limit bounds this pass, not the wave ceiling."""
 
+    async def run(account_id: str, attempt: int) -> JobResult:
+        probe = await _probe_one(campaign_id, account_id, row, request, state.rejected)
+        retry = probe.flood_seconds is not None or probe.unreachable
+        if retry and attempt == 0:
+            # A rate limit or a dead client says nothing about this row — worth one
+            # try on whichever account picks the job up next, before counting it. Still
+            # recorded against THIS account: the pool can empty right here, with no
+            # account left to run that retry at all.
+            if probe.reason is not None:
+                state.last_reason[account_id] = probe.reason
+            return JobResult(
+                flood_seconds=probe.flood_seconds,
+                error=probe.reason,
+                retry=True,
+                unreachable=probe.unreachable,
+            )
+        state.counters.probed += 1
+        failed = probe.reason is not None
+        abort = None
+        if failed:
+            state.last_reason[account_id] = probe.reason
+            state.counters.total_errors += 1
+            probed, errors = state.counters.probed, state.counters.total_errors
+            if probed >= _ERROR_RATE_MIN_PROBES and errors * 2 >= probed:
+                # A session failing as often as it answers has stopped saying anything
+                # new — see :data:`_ERROR_RATE_MIN_PROBES`.
+                abort = probe.reason
+        if len(state.rejected) >= _PROGRESS_EVERY:
+            await _flush(campaign_id, state.rejected)
+        return JobResult(
+            flood_seconds=probe.flood_seconds,
+            failed=failed,
+            abort=abort,
+            error=probe.reason,
+            unreachable=probe.unreachable,
+        )
 
-def _admit(
-    row: DiscoveryCandidateRow,
-    facts: _Facts,
-    *,
-    comments_enabled: bool | None,
-    request: DiscoverySearchRequest,
-) -> str | None:
-    # A group's comments verdict is structurally False (comments ARE its messages), so it
-    # is handed over as unknown: the filter must not delete every group a ``kind=all``
-    # search found the moment the operator asks for comments on. Only a row KNOWN to be
-    # a channel hands the verdict over — an unknown kind is not a channel by default.
-    return admit_at_qualification(
-        comments_enabled=comments_enabled if _is_group(row.kind) is False else None,
-        access=facts.access,
-        language=facts.language,
-        category_match=facts.category_match,
-        request=request,
-    )
+    # ``source`` only matters to a wave's own ``truncated()`` report, which this
+    # uncharged pass never calls — any of the four literals is a safe placeholder.
+    return Job(source="telegram_search", run=run, order=0, charge=False)
 
 
 async def run_qualification(
     campaign_id: str,
     pool: AccountPool,
     request: DiscoverySearchRequest,
+    work: WorkTracker,
 ) -> str | None:
     """Probe every unqualified candidate, paced. Returns a failure reason or ``None``.
 
@@ -224,68 +195,37 @@ async def run_qualification(
     now = datetime.now(UTC)
     cached = await list_linked_groups([row.channel for row in pending.rows])
     fresh = {g.channel: g for g in cached.groups if is_fresh(g.checked_at, now)}
-    return await _probe_pending(campaign_id, pool, request, pending.rows, fresh)
 
-
-async def _probe_pending(
-    campaign_id: str,
-    pool: AccountPool,
-    request: DiscoverySearchRequest,
-    rows: list[DiscoveryCandidateRow],
-    fresh: dict[str, LinkedDiscussionGroup],
-) -> str | None:
-    # Rows the filters refused, deleted in batches: at the progress tick and at the end,
-    # whichever way the pass ends.
+    # First pass, sequential and RPC-free: whatever the cache (or an unprobeable
+    # private ref) already settles needs no stream at all.
     rejected: list[str] = []
-    total_errors = 0
-    probed = 0
+    to_probe = [
+        row
+        for row in pending.rows
+        if not await _settled_without_probe(campaign_id, row, fresh, request, rejected)
+    ]
+    await _flush(campaign_id, rejected)
+
+    work.extra = 0
+    state = _ProbeState(rejected=rejected, counters=_ProbeCounters(), last_reason={})
+    jobs = [_probe_job(campaign_id, row, request, state) for row in to_probe]
+    streams = Streams(pool, work, signal_every=_PROGRESS_EVERY)
     try:
-        for index, row in enumerate(rows):
-            if not await _settled_without_probe(campaign_id, row, fresh, request, rejected):
-                if probed:
-                    await pace()
-                # AFTER the pace sleep, because that sleep is one to two seconds long and
-                # a limit landing inside it would otherwise still buy one probe. Uncharged:
-                # the per-account wave ceiling is not this pass's bound, the candidate
-                # limit is.
-                account_id = pool.acquire(charge=False)
-                if account_id is None:
-                    return COOLING_REASON
-                probed += 1
-                probe = await _probe_one(campaign_id, account_id, row, request, rejected)
-                failed = probe.reason is not None
-                if await pool.report(account_id, flood_seconds=probe.flood_seconds, failed=failed):
-                    return probe.reason
-                if failed:
-                    total_errors += 1
-                    if probed >= _ERROR_RATE_MIN_PROBES and total_errors * 2 >= probed:
-                        # A session failing as often as it answers has stopped saying
-                        # anything new — see :data:`_ERROR_RATE_MIN_PROBES`.
-                        return probe.reason
-
-            if (index + 1) % _PROGRESS_EVERY == 0:
-                await delete_discovery_candidates(campaign_id, rejected)
-                rejected.clear()
-                signal_discovery_progress()
-        return None
+        stop = await streams.run(jobs)
     finally:
-        await delete_discovery_candidates(campaign_id, rejected)
+        await _flush(campaign_id, rejected)
 
-
-async def _settle(
-    campaign_id: str,
-    channel: str,
-    reason: str | None,
-    rejected: list[str],
-    *,
-    subscribers: int | None = None,
-) -> None:
-    """Keep the row as qualified, or queue it for deletion when an operator filter refused it."""
-    if reason is None:
-        await mark_discovery_qualified(campaign_id, channel, subscribers=subscribers)
-        return
-    rejected.append(channel)
-    _discovery_state.bump_filtered(campaign_id, reason)
+    if stop is None:
+        return None
+    if stop == "cooling":
+        return COOLING_REASON
+    if streams.stopped_by is not None:
+        # The account whose drop produced the stop, not whichever probe merely
+        # finished last — see ``_ProbeState.last_reason``.
+        return state.last_reason.get(streams.stopped_by, stop)
+    # No one account's drop caused this: the abort rule tripped, and ``stop`` is
+    # already that rule's own reason text.
+    return stop
 
 
 def _verdict_of(
@@ -338,6 +278,10 @@ async def _probe_one(
             # full re-search clears. The pool records the cooldown, which also keeps the
             # retry off this account until the window closes.
             return _Probe(exc.reason, flood_seconds=seconds)
+        if exc.kind == "unavailable":
+            # The client pool never reached Telegram, so this says nothing about the
+            # channel either — same treatment as a rate limit, minus the cooldown.
+            return _Probe(exc.reason, unreachable=True)
         await mark_discovery_qualified(campaign_id, row.channel, error=exc.reason)
         return _Probe(exc.reason)
 

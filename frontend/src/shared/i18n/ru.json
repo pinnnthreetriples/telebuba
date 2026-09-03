@@ -1562,7 +1562,6 @@
         },
         "results": {
           "back": "← Изменить параметры",
-          "count": "Найдено каналов: {{count}}",
           "countStale": "Каналов от прошлого поиска: {{count}}",
           "countCapped": "Найдено каналов: {{count}} — это предел за один поиск, остальные отброшены",
           "filtered": "Отфильтровано: {{count}}",
@@ -1579,20 +1578,33 @@
           "privateChannel": "закрытый канал",
           "notAdoptable": "нельзя добавить в кампанию",
           "colChannel": "Канал",
-          "colTitle": "Название",
           "colSubscribers": "Подписчики",
-          "colTraits": "Тип",
-          "colSource": "Источник",
           "colComments": "Комментарии",
-          "colState": "Статус",
+          "filterEligible": "Подходящие · {{count}}",
+          "filterAll": "Все · {{count}}",
+          "filterLabel": "Список каналов",
+          "sourcesFailed": "Часть источников не ответила",
+          "sourcesPrefix": "Источники:",
+          "detailsToggle": "подробнее",
+          "detailsFooterToggle": "детали",
+          "badgeOn": "есть",
+          "badgeOff": "нет",
+          "badgeUnchecked": "не проверено",
+          "badgePending": "проверяем…",
+          "caveat": {
+            "slowMode": "пауза между комментариями",
+            "joinToSend": "нужно вступить в чат",
+            "joinRequest": "вступление по заявке",
+            "scam": "Telegram пометил как скам",
+            "restricted": "ограничен Telegram",
+            "cantWrite": "писать нельзя"
+          },
           "kind": {
-            "channel": "канал",
             "group": "группа"
           },
           "access": {
-            "open": "открытый",
             "join_request": "по заявке",
-            "subscription": "подписка"
+            "subscription": "закрытый"
           },
           "language": {
             "ru": "ru",
@@ -1601,7 +1613,7 @@
             "other": "другой"
           },
           "inCampaign": "уже в кампании",
-          "takenElsewhere": "занят другой кампанией",
+          "takenElsewhere": "в другой кампании",
           "sourceRan": "{{source}}: {{kept}} из {{hits}}",
           "sourceFailed": "{{source}}: ошибка",
           "sourceSkipped": "{{source}}: не запрашивался",
@@ -1611,27 +1623,33 @@
             "read_budget": "кончился лимит чтений за один поиск",
             "kind_unsupported": "рекомендации возвращают только каналы",
             "account_cooling": "аккаунт поиска пережидает лимит Telegram",
-            "unexpected_result": "Telegram вернул неожиданный ответ"
+            "unexpected_result": "Telegram вернул неожиданный ответ",
+            "premium_required": "нужен Premium-аккаунт"
           },
           "sourceExclusive": "(только здесь: {{exclusive}})",
           "sourceTruncated": "(оборван)"
         },
-        "comments": {
-          "pending": "проверяется",
-          "comments_on": "Комментарии включены",
-          "comments_off": "Комментарии выключены",
-          "unknown": "не удалось проверить",
-          "notChecked": "не проверено"
-        },
-        "verdict": {
-          "unknown": "пригодность не проверена",
-          "cantWrite": "в чате обсуждения запрещено писать",
-          "joinRequired": "чтобы комментировать, нужно вступить в чат обсуждения",
-          "joinRequest": "вступить в чат можно только по заявке — её одобряет админ",
-          "slowMode": "в чате обсуждения включён медленный режим",
-          "scam": "Telegram помечает канал как скам",
-          "fake": "Telegram помечает канал как фейк",
-          "restricted": "Telegram ограничил канал"
+        "progress": {
+          "stageSearching": "Этап 1 из 2 · Поиск в Telegram",
+          "stageQualifying": "Этап 2 из 2 · Проверка комментариев",
+          "countSearching": "{{done}} из {{planned}} запросов",
+          "countQualifying": "{{done}} из {{planned}} каналов",
+          "etaSeconds": "≈ {{value}} с",
+          "etaMinutes": "≈ {{value}} мин",
+          "premium": "Premium",
+          "state": {
+            "idle": "ждёт",
+            "waiting": "пауза",
+            "reading": "читает",
+            "done": "готово",
+            "capped": "лимит запросов исчерпан",
+            "flooded": "упёрся в лимит Telegram",
+            "cooling": "пережидает лимит",
+            "dead": "сессия не отвечает",
+            "offline": "нет связи"
+          },
+          "someOut": "Выбыли: {{list}} — поиск продолжается на остальных",
+          "allOut": "Все аккаунты выбыли"
         },
         "source": {
           "telegram_search": "поиск Telegram",
@@ -1648,7 +1666,10 @@
           "account": "Аккаунт: {{name}}"
         },
         "startFailed": "Не удалось запустить поиск. Проверьте параметры и повторите.",
-        "add": "Добавить выбранные ({{count}})",
+        "addEmpty": "Добавить каналы",
+        "add_one": "Добавить {{count}} канал",
+        "add_few": "Добавить {{count}} канала",
+        "add_many": "Добавить {{count}} каналов",
         "added": "Добавлено: {{count}}",
         "addedNone": "Ничего не добавлено",
         "addedRefused": "Не добавлено: {{count}} — эти каналы уже заняты",

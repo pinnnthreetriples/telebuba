@@ -1,5 +1,4 @@
-import { type ColumnDef } from '@tanstack/react-table';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type {
@@ -10,19 +9,22 @@ import type {
 } from '@/shared/api';
 import {
   Badge,
-  DataTable,
-  StatusIcon,
-  type DataTableColumnMeta,
+  Button,
+  Icon,
+  SegmentedControl,
   useWideContainer,
+  type BadgeTone,
 } from '@/shared/ui';
+import { cn } from '@/shared/lib/cn';
 
 import {
+  compareCandidates,
   formatSubscribers,
   isPrivateRef,
   isSelectable,
   selectableChannels,
 } from '../model/discovery';
-import { TraitsCell } from './TraitsCell';
+import { SearchProgress } from './SearchProgress';
 
 const CHECKBOX = 'size-spinner shrink-0 accent-action-primary disabled:opacity-40';
 
@@ -37,7 +39,11 @@ const SOURCE_STATE = {
 // so a new one degrades to the old behaviour rather than to nothing.
 const reasonKey = (reason: string) => `neurocomment.modal.discovery.results.reason.${reason}`;
 
-/** One line per source: what it returned, and what survived into the table.
+// Only the whole-view filter, so unexported is fine — react-refresh only minds a
+// value export from a component file, and this never leaves the module.
+type ResultsFilter = 'eligible' | 'all';
+
+/** One line per source: what it returned, and what survived into the list.
  *
  * The operator could watch a run reach "done" and never learn that one of its sources
  * had contributed nothing — because the board carried a single error string and a
@@ -46,9 +52,6 @@ const reasonKey = (reason: string) => `neurocomment.modal.discovery.results.reas
 function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
   const { t } = useTranslation();
   if (sources.length === 0) return null;
-  // Its own line, not a cell of the toolbar row: four waves each carrying counts, a
-  // uniqueness note and a reason do not fit beside the found-count without collapsing
-  // into an ellipsis.
   return (
     <p className="type-caption">
       {sources
@@ -85,108 +88,226 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
   );
 }
 
-// A gate the campaign cannot pass at all, versus one it can pay its way through.
-const BLOCKING = new Set(['cantWrite', 'scam', 'fake', 'restricted']);
-
-/** The gates the backend explicitly answered — and only those.
- *
- * Every field is tri-state (the contract the backend's LinkedDiscussionGroupResult
- * states), so a mark appears on an explicit signal only. An unanswered field produces no
- * mark — and `VerdictCell` below says so in words, because no mark alone is exactly what
- * a channel cleared on every gate looks like.
- */
-function verdictMarks(verdict: DiscoveryChannelVerdict) {
-  const marks: { key: string }[] = [];
-  if (verdict.can_send_messages === false) marks.push({ key: 'cantWrite' });
-  if (verdict.join_to_send === true) marks.push({ key: 'joinRequired' });
-  if (verdict.join_request === true) marks.push({ key: 'joinRequest' });
-  // The DISCUSSION GROUP's flag — where the comments are actually written. It carries no
-  // interval (that would cost a second getFullChannel), so the mark shows none. The
-  // broadcast channel's own slowmode_seconds is not carried at all: Telegram documents
-  // it for supergroups, so on a channel it is never set and the mark never appeared.
-  if (verdict.group_slowmode_enabled === true) marks.push({ key: 'slowMode' });
-  if (verdict.scam === true) marks.push({ key: 'scam' });
-  if (verdict.fake === true) marks.push({ key: 'fake' });
-  if (verdict.restricted === true) marks.push({ key: 'restricted' });
-  return marks;
-}
-
-function CommentsMark({ state }: { state: string }) {
+/** The run's own qualification progress ("N/M"), isolated in its own component so a
+ * future progress strip can replace it without touching the layout around it. */
+function QualifyingCaption({
+  phase,
+  qualified,
+  total,
+  running,
+}: {
+  phase: string;
+  qualified: number;
+  total: number;
+  running: boolean;
+}) {
   const { t } = useTranslation();
-  const label = t(`neurocomment.modal.discovery.comments.${state}`);
-  if (state === 'comments_on') {
-    return (
-      <span className="inline-flex text-success-deep" role="img" title={label} aria-label={label}>
-        <StatusIcon kind="ok" />
-      </span>
-    );
-  }
-  if (state === 'comments_off') {
-    return (
-      <span className="inline-flex text-content-muted" role="img" title={label} aria-label={label}>
-        <StatusIcon kind="err" />
-      </span>
-    );
-  }
-  // pending: a pulsing dot reads as "still working", which is what the qualification
-  // pass is doing while the operator watches. 'unknown' and 'notChecked' are final,
-  // so they stay still.
+  // Also the only trace of how far an aborted run got ("40/300"), so it has to outlive
+  // the qualifying phase.
+  if (phase !== 'qualifying' && qualified >= total) return null;
   return (
-    <span className="inline-flex items-center gap-tight type-caption">
-      <span
-        className={`size-dot rounded-full bg-line-strong ${
-          state === 'pending' ? 'animate-pulse' : ''
-        }`}
-      />
-      {label}
+    <span role="status" className={cn('type-caption', running && 'tb-pulse')}>
+      {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
     </span>
   );
 }
 
-function VerdictCell({ candidate, settled }: { candidate: DiscoveryCandidate; settled: boolean }) {
+/** Why a row cannot be adopted, in the words the comments cell shows instead of a
+ * badge — or `null` when the badge itself already tells the truth (a comments-off
+ * row's red "нет" already says why it is not selectable).
+ *
+ * `in_campaign`/`taken_by_other_campaign` are deliberately NOT handled here: the
+ * subtitle already names them (see the `deviations` list in `Row`), and the row still
+ * carries a real qualification worth showing — repeating the same reason word in the
+ * comments cell too just says the same sentence twice. */
+function nonSelectReasonKey(candidate: DiscoveryCandidate): string | null {
+  // A group carries no comments verdict at all, and a private (`id:`) row loses its
+  // access badge after a restart — the adopt endpoint refuses both regardless of
+  // whatever qualification they show, so the badge would be answering a question
+  // that is not why the row is dead.
+  if (candidate.kind === 'group' || isPrivateRef(candidate.channel)) return 'notAdoptable';
+  return null;
+}
+
+/** The comments badge's tone and text key, plus whether it should pulse. */
+function commentBadgeKey(
+  candidate: DiscoveryCandidate,
+  running: boolean,
+): { tone: BadgeTone; key: string; pulse: boolean } {
+  if (candidate.qualification === 'comments_on')
+    return { tone: 'success', key: 'badgeOn', pulse: false };
+  if (candidate.qualification === 'comments_off') {
+    return { tone: 'danger', key: 'badgeOff', pulse: false };
+  }
+  if (candidate.qualification === 'pending' && running) {
+    return { tone: 'neutral', key: 'badgePending', pulse: true };
+  }
+  // Pending-but-settled (never probed, run over) and 'unknown' (probed, unanswerable)
+  // read as the same thing in this compact view: the operator's next move for both is
+  // "re-run to find out".
+  return { tone: 'neutral', key: 'badgeUnchecked', pulse: false };
+}
+
+/** The caveat keys a verdict's explicit (non-null) gates spell out, plain-Russian words
+ * rather than the gate names themselves. Every field is tri-state, so `null` — Telegram
+ * never answered — stays silent rather than guessing either way. */
+function caveatKeys(verdict: DiscoveryChannelVerdict | null | undefined): string[] {
+  if (verdict == null) return [];
+  const keys: string[] = [];
+  if (verdict.group_slowmode_enabled === true) keys.push('slowMode');
+  if (verdict.join_to_send === true) keys.push('joinToSend');
+  if (verdict.join_request === true) keys.push('joinRequest');
+  // Same caveat text for both: the operator's next move is the same either way, and a
+  // channel Telegram flags as both would otherwise repeat itself.
+  if (verdict.scam === true || verdict.fake === true) keys.push('scam');
+  if (verdict.restricted === true) keys.push('restricted');
+  if (verdict.can_send_messages === false) keys.push('cantWrite');
+  return keys;
+}
+
+/** The comments cell: the real reason a dead row is dead, or the badge plus its
+ * caveats when the row's own qualification is worth showing. */
+function CommentsCell({ candidate, running }: { candidate: DiscoveryCandidate; running: boolean }) {
   const { t } = useTranslation();
-  // 'pending' means never probed, which the backend keeps distinct from 'unknown'
-  // (probed, unanswerable). Once the run has stopped nothing will probe it, so it has
-  // to read as "not checked yet" — a re-run resolves those, unlike 'unknown'.
-  const raw = candidate.qualification ?? 'pending';
-  const state = settled && raw === 'pending' ? 'notChecked' : raw;
-  const verdict = candidate.verdict;
-  // Suppressed where the comments mark has already settled the row: "not checked" would
-  // be the same sentence twice, and a definitive comments_off excludes it anyway.
-  const settledByComments =
-    state === 'pending' || state === 'notChecked' || state === 'comments_off';
-  // No verdict at all (never probed in this process, or lost to a restart — the backend
-  // does not persist it), OR one whose write gate Telegram never answered: a linked group
-  // that came back without its rights renders zero marks, which is precisely what a
-  // channel measured and cleared on every gate renders too.
-  const unanswered = !settledByComments && (verdict == null || verdict.can_send_messages == null);
+  const reason = nonSelectReasonKey(candidate);
+  if (reason != null) {
+    return (
+      <span className="type-caption">{t(`neurocomment.modal.discovery.results.${reason}`)}</span>
+    );
+  }
+  const badge = commentBadgeKey(candidate, running);
+  const caveats = caveatKeys(candidate.verdict).map((key) =>
+    t(`neurocomment.modal.discovery.results.caveat.${key}`),
+  );
   return (
     <div className="flex flex-col items-start gap-xs">
-      <CommentsMark state={state} />
-      {unanswered ? (
-        <span className="type-caption">{t('neurocomment.modal.discovery.verdict.unknown')}</span>
+      <Badge tone={badge.tone} className={badge.pulse ? 'tb-pulse' : undefined}>
+        {t(`neurocomment.modal.discovery.results.${badge.key}`)}
+      </Badge>
+      {caveats.length > 0 ? (
+        <span className="type-caption text-warning-deep">{caveats.join(' · ')}</span>
       ) : null}
-      {(verdict == null ? [] : verdictMarks(verdict)).map((mark) => (
-        <span
-          key={mark.key}
-          className={`text-tiny ${BLOCKING.has(mark.key) ? 'text-danger' : 'text-warning-deep'}`}
-        >
-          {t(`neurocomment.modal.discovery.verdict.${mark.key}`)}
-        </span>
-      ))}
     </div>
   );
 }
 
-/** Which sentence the row count is allowed to be.
- *
- * "Channels found: N" claims the rows are this run's find and that N is all there was.
- * Neither survives a run that stored nothing (a rate limit left the PREVIOUS search's
- * rows on screen) or one the candidate cap cut short.
- */
-function foundCountKey(progress: DiscoveryBoard['progress'] | undefined) {
-  if (progress?.stale_candidates === true) return 'countStale';
-  return progress?.capped === true ? 'countCapped' : 'count';
+/** One candidate: a checkbox, a title/subtitle cell, subscribers and the comments
+ * cell — stacked on a narrow container instead of the wide layout's single row. */
+function Row({
+  candidate,
+  wide,
+  selected,
+  onToggle,
+  running,
+}: {
+  candidate: DiscoveryCandidate;
+  wide: boolean;
+  selected: boolean;
+  onToggle: (channel: string) => void;
+  running: boolean;
+}) {
+  const { t, i18n } = useTranslation();
+  const selectable = isSelectable(candidate);
+  const privateRow = isPrivateRef(candidate.channel);
+  const displayName = privateRow
+    ? t('neurocomment.modal.discovery.results.privateChannel')
+    : candidate.channel;
+  const titleText =
+    candidate.title != null && candidate.title !== '' ? candidate.title : displayName;
+
+  // The handle stays its own leaf node rather than joining the flat string below: it is
+  // the one piece of this row a dozen other suites already query for by exact text
+  // (`screen.getByText('@good')`), and folding it into the joined caption would break
+  // every one of them for a purely visual change.
+  const handle = privateRow ? displayName : `@${candidate.channel}`;
+  const deviations: string[] = [];
+  if (candidate.language) {
+    deviations.push(
+      t(`neurocomment.modal.discovery.results.language.${candidate.language}`, {
+        defaultValue: candidate.language,
+      }),
+    );
+  }
+  // Only the deviations from the norm — a channel with open access is never named as
+  // one, so "канал"/"открытый" never appear here.
+  if (candidate.kind === 'group')
+    deviations.push(t('neurocomment.modal.discovery.results.kind.group'));
+  if (candidate.access === 'join_request') {
+    deviations.push(t('neurocomment.modal.discovery.results.access.join_request'));
+  }
+  if (candidate.access === 'subscription') {
+    deviations.push(t('neurocomment.modal.discovery.results.access.subscription'));
+  }
+  if (candidate.in_campaign === true)
+    deviations.push(t('neurocomment.modal.discovery.results.inCampaign'));
+  if (candidate.taken_by_other_campaign === true) {
+    deviations.push(t('neurocomment.modal.discovery.results.takenElsewhere'));
+  }
+  if (candidate.uncounted === true)
+    deviations.push(t('neurocomment.modal.discovery.results.uncounted'));
+
+  const checkbox = (
+    <input
+      type="checkbox"
+      checked={selected}
+      disabled={!selectable}
+      onChange={() => {
+        onToggle(candidate.channel);
+      }}
+      aria-label={t('neurocomment.modal.discovery.results.select', { channel: displayName })}
+      // Says why the box is dead where the row's own text may not: the adopt endpoint
+      // itself refuses a group and a private channel ('not_adoptable').
+      title={
+        privateRow || candidate.kind === 'group'
+          ? t('neurocomment.modal.discovery.results.notAdoptable')
+          : undefined
+      }
+      className={CHECKBOX}
+    />
+  );
+
+  const subscribersText = formatSubscribers(candidate.subscribers, i18n.language || 'ru');
+  const subscribersCell = (
+    <span className="w-number shrink-0 text-right tabular-nums">{subscribersText}</span>
+  );
+  const commentsCell = <CommentsCell candidate={candidate} running={running} />;
+
+  return (
+    <div
+      className={cn(
+        'flex flex-col gap-xs border-t border-line-row py-sm',
+        !selectable && 'text-content-subtle',
+      )}
+    >
+      <div className="flex items-center gap-md">
+        <div className="flex w-action shrink-0 items-center justify-center">{checkbox}</div>
+        <div className="min-w-0 flex-1">
+          <div className={cn('truncate type-label', !selectable && 'text-content-subtle')}>
+            {titleText}
+          </div>
+          <div className="truncate type-caption">
+            <span>{handle}</span>
+            {deviations.length > 0 ? ` · ${deviations.join(' · ')}` : null}
+          </div>
+        </div>
+        {wide ? (
+          <>
+            {subscribersCell}
+            <div className="w-menu shrink-0">{commentsCell}</div>
+          </>
+        ) : null}
+      </div>
+      {wide ? null : (
+        <div className="flex items-center gap-md">
+          {subscribersCell}
+          {/* min-w-0: a flex item's default min-width is its content's, and a long
+              caveat line (e.g. three joined with " · ") would otherwise refuse to
+              shrink and push the row past the viewport instead of wrapping. */}
+          <div className="min-w-0 flex-1">{commentsCell}</div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Props = {
@@ -206,18 +327,25 @@ export function DiscoveryResults({
   onToggle,
   onToggleAll,
 }: Props) {
-  const { t, i18n } = useTranslation();
-  // Must be the container query DataTable itself uses, not the viewport one: this table
+  const { t } = useTranslation();
+  // Must be the container query DataTable itself uses, not the viewport one: this list
   // lives in a 926px modal whose padding leaves it 890px, 10px over the 880px table/card
-  // floor — so on a narrower viewport the table renders as cards while a viewport query
-  // would still say "table", and the select-all below would go missing.
+  // floor — so on a narrower viewport the list renders stacked while a viewport query
+  // would still say "wide", and the select-all below would go missing.
   const results = useRef<HTMLDivElement>(null);
   const wide = useWideContainer(results);
+  const [filter, setFilter] = useState<ResultsFilter>('eligible');
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   const candidates = board?.candidates ?? [];
+  // The eligible set is the SAME regardless of which view is showing: "Подходящие"
+  // only hides ineligible rows, it never adds eligible ones, so select-all's target
+  // is exactly this list in both views.
   const eligible = selectableChannels(candidates);
   const checkedCount = eligible.filter((channel) => selected.has(channel)).length;
   const allChecked = eligible.length > 0 && checkedCount === eligible.length;
   const someChecked = checkedCount > 0 && !allChecked;
+
   const phase = board?.progress.phase ?? 'idle';
   const failed = phase === 'failed';
   // The predicate that stops the poll, not the phase: a frame with running:false is
@@ -225,171 +353,58 @@ export function DiscoveryResults({
   // phase but still serves the stored rows as 'idle', and those must not pulse on.
   const running = board?.progress.running === true;
   const settled = !running;
+  // The live per-account progress a new-enough backend serves while a stage runs —
+  // absent on an old backend, or before the first frame of a run lands. Both
+  // `SearchProgress` call sites fall back to their plain-text predecessor when it
+  // is missing, rather than rendering nothing.
+  const work = board?.progress.work ?? null;
+  const qualifyingStrip = running && phase === 'qualifying' && work != null;
   const qualified = board?.progress.qualified ?? 0;
   const total = board?.progress.total ?? 0;
-  const countKey = foundCountKey(board?.progress);
+  const commentsOn = board?.progress.comments_on ?? 0;
   // Rows the operator's own filters cut, summed over the reasons: without it a narrow
   // filter and an empty Telegram both read as "found 3".
   const filtered = Object.values(board?.progress.filtered ?? {}).reduce((sum, n) => sum + n, 0);
-  // A private row carries the backend's `id:123` ref, not a username — "@id:123" is not
-  // a handle anyone can open, so it is named for what it is.
-  const name = (candidate: DiscoveryCandidate) =>
-    isPrivateRef(candidate.channel)
-      ? t('neurocomment.modal.discovery.results.privateChannel')
-      : candidate.channel;
+  const sources = board?.progress.sources ?? [];
+  const lastError = board?.progress.last_error ?? null;
+  const sourcesFailed = sources.some((report) => report.state === 'failed');
+  const hasProblem = sourcesFailed || lastError != null;
+  const problemText =
+    lastError != null
+      ? t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {
+          reason: t(reasonKey(lastError), { defaultValue: lastError }),
+        })
+      : t('neurocomment.modal.discovery.results.sourcesFailed');
 
-  const columns: ColumnDef<DiscoveryCandidate>[] = [
-    {
-      id: 'select',
-      header: () => (
-        <input
-          type="checkbox"
-          checked={allChecked}
-          disabled={eligible.length === 0}
-          ref={(element) => {
-            if (element) element.indeterminate = someChecked;
-          }}
-          onChange={() => {
-            onToggleAll(eligible, !allChecked);
-          }}
-          aria-label={t('neurocomment.modal.discovery.results.selectAll')}
-          className={CHECKBOX}
-        />
-      ),
-      cell: ({ row }) => (
-        <input
-          type="checkbox"
-          checked={selected.has(row.original.channel)}
-          disabled={!isSelectable(row.original)}
-          onChange={() => {
-            onToggle(row.original.channel);
-          }}
-          aria-label={t('neurocomment.modal.discovery.results.select', {
-            channel: name(row.original),
-          })}
-          // Says why the box is dead where the traits cell may not: the adopt endpoint
-          // itself refuses a group and a private channel ('not_adoptable').
-          title={
-            isPrivateRef(row.original.channel) || row.original.kind === 'group'
-              ? t('neurocomment.modal.discovery.results.notAdoptable')
-              : undefined
-          }
-          className={CHECKBOX}
-        />
-      ),
-      // cardSlot 'control' is load-bearing here, not cosmetic: this column's header
-      // is the select-all checkbox, so as a card *label* it would render one
-      // select-all per card, each toggling the whole result set.
-      meta: {
-        className: 'w-action',
-        cellClassName: 'w-action',
-        cardSlot: 'control',
-      } satisfies DataTableColumnMeta,
-    },
-    {
-      id: 'channel',
-      header: () => t('neurocomment.modal.discovery.results.colChannel'),
-      cell: ({ row }) => (
-        <span className="font-medium">
-          {isPrivateRef(row.original.channel) ? name(row.original) : `@${row.original.channel}`}
-        </span>
-      ),
-      meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
-    },
-    {
-      id: 'title',
-      header: () => t('neurocomment.modal.discovery.results.colTitle'),
-      cell: ({ row }) => (
-        // Capped only where there is room for it: 240px plus the card's own padding
-        // overflows the dialog box at a 320px viewport.
-        <span className="block truncate text-content-muted md:max-w-name">
-          {row.original.title ?? ''}
-        </span>
-      ),
-    },
-    {
-      id: 'subscribers',
-      header: () => t('neurocomment.modal.discovery.results.colSubscribers'),
-      cell: ({ row }) => (
-        <div className="flex flex-col items-end">
-          <span className="tb-time">
-            {formatSubscribers(row.original.subscribers, i18n.language || 'ru')}
-          </span>
-          {/* The subscriber bounds can only be applied to a hit Telegram returned a
-              count for, and the comment check backfills the real number afterwards — so
-              without this the operator reads a number that plainly breaks their own
-              filter, or an em dash that looks like a row which passed it. */}
-          {row.original.uncounted === true ? (
-            <span className="type-caption">
-              {t('neurocomment.modal.discovery.results.uncounted')}
-            </span>
-          ) : null}
-        </div>
-      ),
-      meta: { className: 'text-right', cellClassName: 'text-right' } satisfies DataTableColumnMeta,
-    },
-    {
-      id: 'traits',
-      header: () => t('neurocomment.modal.discovery.results.colTraits'),
-      cell: ({ row }) => <TraitsCell candidate={row.original} />,
-    },
-    {
-      id: 'source',
-      header: () => t('neurocomment.modal.discovery.results.colSource'),
-      cell: ({ row }) => {
-        // The whole path, not just `source`: that field names only the winner of the
-        // dedup, and a channel two independent waves both reached is a far stronger
-        // signal than one a single keyword turned up.
-        const found = row.original.sources ?? [];
-        const sources = found.length > 0 ? found : [row.original.source];
-        return (
-          <span className="type-caption">
-            {sources
-              // The stored label outlives the build that wrote it, so an unmapped code
-              // renders as itself instead of as a raw i18n key.
-              .map((source) =>
-                t(`neurocomment.modal.discovery.source.${source}`, { defaultValue: source }),
-              )
-              .join(' + ')}
-          </span>
-        );
-      },
-    },
-    {
-      id: 'comments',
-      header: () => t('neurocomment.modal.discovery.results.colComments'),
-      cell: ({ row }) => <VerdictCell candidate={row.original} settled={settled} />,
-    },
-    {
-      id: 'state',
-      header: () => t('neurocomment.modal.discovery.results.colState'),
-      cell: ({ row }) => {
-        if (row.original.in_campaign === true) {
-          return <Badge>{t('neurocomment.modal.discovery.results.inCampaign')}</Badge>;
-        }
-        if (row.original.taken_by_other_campaign === true) {
-          return <Badge>{t('neurocomment.modal.discovery.results.takenElsewhere')}</Badge>;
-        }
-        return null;
-      },
-      // 'control' rather than a labelled row: the cell is null for most rows, which
-      // as a labelled row would leave an empty "state" stub in every card.
-      meta: { cardSlot: 'control' } satisfies DataTableColumnMeta,
-    },
-  ];
+  // A run that stored nothing (a rate limit left the PREVIOUS search's rows on screen)
+  // or one the candidate cap cut short: the count in the "Все" segment is not simply
+  // "found", so that has to be said somewhere. `candidates.length` — the "Все" side —
+  // is what the note is about either way.
+  const staleOrCappedCaption =
+    board?.progress.stale_candidates === true
+      ? t('neurocomment.modal.discovery.results.countStale', { count: candidates.length })
+      : board?.progress.capped === true
+        ? t('neurocomment.modal.discovery.results.countCapped', { count: candidates.length })
+        : null;
+
+  const displayed = (filter === 'all' ? candidates : candidates.filter(isSelectable))
+    .slice()
+    .sort(compareCandidates);
 
   // Candidates are replaced only after the whole search stage, so any rows still on
   // screen while it runs belong to the PREVIOUS run — never show them as results.
   // role=status on every transient state: a search runs 30s+, so a screen-reader
-  // operator has to be told when it finishes or fails without polling the table.
+  // operator has to be told when it finishes or fails without polling the list.
   //
   // A closure rather than early returns, so the measured wrapper at the bottom is in
   // EVERY branch: the container hook measures once per ref, on its first commit, and the
   // first commit here is almost always «Ищем каналы…». A ref that only existed once rows
-  // arrived was never measured, the toolbar fell back to the viewport query while
-  // DataTable measured its own 890px box — and a ~960px viewport got two select-alls.
+  // arrived was never measured, and a ~960px viewport got two select-alls.
   const body = () => {
     if (loading) {
+      // An old backend (or the first frame before the run's own state exists) has
+      // no `work` yet — the plain-text line it always showed stays the fallback.
+      if (work != null) return <SearchProgress work={work} phase="searching" />;
       return (
         <p role="status" className="py-page text-center type-prose">
           {t('neurocomment.modal.discovery.results.searching')}
@@ -398,7 +413,7 @@ export function DiscoveryResults({
     }
 
     // Only with nothing to fall back on: a failed refetch leaves status 'error' with the
-    // cached frame intact, and blanking the table would take N rows and every tick the
+    // cached frame intact, and blanking the list would take N rows and every tick the
     // operator has made with it.
     if (errored && candidates.length === 0) {
       return (
@@ -412,12 +427,7 @@ export function DiscoveryResults({
       return (
         <p role="status" className="py-page text-center text-body text-danger">
           {t('neurocomment.modal.discovery.results.failed', {
-            reason:
-              board?.progress.last_error == null
-                ? ''
-                : t(reasonKey(board.progress.last_error), {
-                    defaultValue: board.progress.last_error,
-                  }),
+            reason: lastError == null ? '' : t(reasonKey(lastError), { defaultValue: lastError }),
           })}
         </p>
       );
@@ -431,76 +441,162 @@ export function DiscoveryResults({
       );
     }
 
+    const selectAll = (
+      <input
+        type="checkbox"
+        checked={allChecked}
+        disabled={eligible.length === 0}
+        ref={(element) => {
+          if (element) element.indeterminate = someChecked;
+        }}
+        onChange={() => {
+          onToggleAll(eligible, !allChecked);
+        }}
+        aria-label={t('neurocomment.modal.discovery.results.selectAll')}
+        className={CHECKBOX}
+      />
+    );
+
     return (
       <div className="flex flex-col gap-md">
-        <div className="flex items-center justify-between gap-sm type-caption">
-          {/* The card layout has no column headers, and select-all lives in one — so on
-            a phone the operator could otherwise only tap candidates one at a time.
-            Branch on the same JS query DataTable uses, not `lg:hidden`: two
-            select-alls in the DOM would both answer every query by accessible name. */}
-          {wide ? null : (
-            <label className="flex items-center gap-sm">
-              <input
-                type="checkbox"
-                checked={allChecked}
-                disabled={eligible.length === 0}
-                ref={(element) => {
-                  if (element) element.indeterminate = someChecked;
-                }}
-                onChange={() => {
-                  onToggleAll(eligible, !allChecked);
-                }}
-                aria-label={t('neurocomment.modal.discovery.results.selectAll')}
-                className={CHECKBOX}
-              />
-              {t('neurocomment.modal.discovery.results.selectAll')}
-            </label>
-          )}
-          <span>
-            {t(`neurocomment.modal.discovery.results.${countKey}`, { count: candidates.length })}
-          </span>
-          {filtered > 0 ? (
-            <span>{t('neurocomment.modal.discovery.results.filtered', { count: filtered })}</span>
-          ) : null}
-          {/* The run's yield, once nothing else will change it. During the pass the
-            qualification counter beside this says more. */}
-          {settled && qualified > 0 ? (
-            <span>
-              {t('neurocomment.modal.discovery.results.commentsOn', {
-                count: board?.progress.comments_on ?? 0,
-              })}
-            </span>
-          ) : null}
-          {/* Also the only trace of how far an aborted run got ("40/300"), so it has to
-            outlive the qualifying phase. */}
-          {phase === 'qualifying' || qualified < total ? (
-            <span role="status" className={running ? 'tb-pulse' : undefined}>
-              {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
-            </span>
-          ) : null}
-          {board?.progress.last_error != null ? (
-            <span role="status" className="text-danger">
-              {/* An aborted run keeps whatever it collected, so the reason has to ride
-                along with the rows instead of replacing them — and through the
-                qualifying phase too, the longest one a run has. */}
-              {t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {
-                reason: t(reasonKey(board.progress.last_error), {
-                  defaultValue: board.progress.last_error,
+        {qualifyingStrip && work != null ? <SearchProgress work={work} phase="qualifying" /> : null}
+        <div className="flex flex-wrap items-center gap-sm">
+          <SegmentedControl
+            value={filter}
+            onChange={setFilter}
+            variant="pill"
+            ariaLabel={t('neurocomment.modal.discovery.results.filterLabel')}
+            options={[
+              {
+                value: 'eligible',
+                label: t('neurocomment.modal.discovery.results.filterEligible', {
+                  count: eligible.length,
                 }),
-              })}
+              },
+              {
+                value: 'all',
+                label: t('neurocomment.modal.discovery.results.filterAll', {
+                  count: candidates.length,
+                }),
+              },
+            ]}
+          />
+          {filtered > 0 ? (
+            <span className="type-caption">
+              {t('neurocomment.modal.discovery.results.filtered', { count: filtered })}
             </span>
           ) : null}
+          {/* The run's yield beyond what the segmented control already says, once
+              nothing else will change it — suppressed when it would just repeat N. */}
+          {settled && qualified > 0 && commentsOn !== eligible.length ? (
+            <span className="type-caption">
+              {t('neurocomment.modal.discovery.results.commentsOn', { count: commentsOn })}
+            </span>
+          ) : null}
+          {/* The strip's own header line already carries "N из M каналов", so the
+              two would otherwise repeat the same count side by side. */}
+          {qualifyingStrip ? null : (
+            <QualifyingCaption
+              phase={phase}
+              qualified={qualified}
+              total={total}
+              running={running}
+            />
+          )}
+          {hasProblem ? (
+            <div className="ml-auto flex items-center gap-sm">
+              <span
+                role="status"
+                className="flex items-center gap-xs type-caption text-warning-deep"
+              >
+                <Icon name="alert-triangle" size={14} className="shrink-0" />
+                {problemText}
+              </span>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => {
+                  setDetailsOpen((open) => !open);
+                }}
+              >
+                {t('neurocomment.modal.discovery.results.detailsToggle')}
+              </Button>
+            </div>
+          ) : null}
         </div>
-        <SourceStrip sources={board?.progress.sources ?? []} />
-        <div className="tb-scroll overflow-x-auto">
-          <DataTable
-            data={candidates}
-            columns={columns}
-            getRowProps={(row) => ({
-              className: isSelectable(row.original) ? undefined : 'opacity-60',
-            })}
-          />
+
+        {staleOrCappedCaption != null ? (
+          <span className="type-caption">{staleOrCappedCaption}</span>
+        ) : null}
+
+        {/* The source report only: `problemText` above already said the run's own
+            failed/degraded reason once, so repeating it here would say the same
+            sentence twice for the price of one click. */}
+        {detailsOpen ? (
+          <div className="flex flex-col gap-xs">
+            <SourceStrip sources={sources} />
+          </div>
+        ) : null}
+
+        {wide ? (
+          <div className="flex items-center gap-md type-caption">
+            <div className="flex w-action shrink-0 items-center justify-center">{selectAll}</div>
+            <span className="flex-1">{t('neurocomment.modal.discovery.results.colChannel')}</span>
+            <span className="w-number shrink-0 text-right">
+              {t('neurocomment.modal.discovery.results.colSubscribers')}
+            </span>
+            <span className="w-menu shrink-0">
+              {t('neurocomment.modal.discovery.results.colComments')}
+            </span>
+          </div>
+        ) : (
+          // The stacked layout has no column headers, and select-all lives in one — so
+          // on a phone the operator could otherwise only tap candidates one at a time.
+          <label className="flex items-center gap-sm type-caption">
+            {selectAll}
+            {t('neurocomment.modal.discovery.results.selectAll')}
+          </label>
+        )}
+
+        <div>
+          {displayed.map((candidate) => (
+            <Row
+              key={candidate.channel}
+              candidate={candidate}
+              wide={wide}
+              selected={selected.has(candidate.channel)}
+              onToggle={onToggle}
+              running={running}
+            />
+          ))}
         </div>
+
+        {sources.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-sm border-t border-line-row pt-sm type-caption">
+            <span>
+              {t('neurocomment.modal.discovery.results.sourcesPrefix')}{' '}
+              {sources
+                .map((report) =>
+                  [
+                    t(`neurocomment.modal.discovery.source.${report.source}`, {
+                      defaultValue: report.source,
+                    }),
+                    report.kept ?? 0,
+                  ].join(' '),
+                )
+                .join(' · ')}
+            </span>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                setDetailsOpen((open) => !open);
+              }}
+            >
+              {t('neurocomment.modal.discovery.results.detailsFooterToggle')}
+            </Button>
+          </div>
+        ) : null}
       </div>
     );
   };

@@ -482,6 +482,9 @@ async def test_every_picked_account_reads_and_all_are_claimed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The run rotates over the operator's picks, and each one is held while it runs."""
+    # A ceiling of one forces the first account to cap out after its own keyword,
+    # handing the second one to whichever account is still eligible.
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 1)
     reader = ReadRecorder(search=matches())
     monkeypatch.setattr(_seams, "execute_read", reader)
     await seed_account("acc-b")
@@ -489,7 +492,10 @@ async def test_every_picked_account_reads_and_all_are_claimed(
     campaign_id = await new_campaign()
 
     started = await start_run(
-        campaign_id, search_request(keywords=["alpha", "bravo"], account_ids=["acc-b", "acc-a"])
+        campaign_id,
+        # groups keeps the recommendation hold out of it: a ceiling this tight would
+        # otherwise leave the shared budget exhausted before a single read runs.
+        search_request(keywords=["alpha", "bravo"], account_ids=["acc-b", "acc-a"], kind="groups"),
     )
 
     assert started.status == "started"
