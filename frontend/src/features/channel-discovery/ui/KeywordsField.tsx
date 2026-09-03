@@ -13,7 +13,6 @@ import {
   splitKeywords,
   type DiscoveryFormState,
 } from '../model/discovery';
-import { Eyebrow } from './FormRow';
 
 const P = 'neurocomment.modal.discovery.form';
 
@@ -27,7 +26,8 @@ type Props = {
   onChange: (form: DiscoveryFormState) => void;
 };
 
-// Блок «Запрос»: поле ключевых слов и подбор слов моделью. / The query block.
+// Левая колонка «Запроса»: поле ключевых слов и подбор слов моделью; заголовок блока
+// рисует DiscoveryForm. / The query row's left column; DiscoveryForm owns the eyebrow.
 export function KeywordsField({ form, onChange }: Props) {
   const { t } = useTranslation();
   const id = useId();
@@ -63,20 +63,21 @@ export function KeywordsField({ form, onChange }: Props) {
   };
 
   return (
-    <section>
-      <Eyebrow
-        title={t(`${P}.sections.query`)}
-        caption={t(`${P}.keywordsHint`, {
-          min: KEYWORD_MIN_LENGTH,
-          max: MAX_KEYWORDS,
-          parsed: parsed.length,
-        })}
-      />
+    <section className="min-w-0">
       {/* Not a wrapping <label>: the suggest button's own text would join the input's
-          accessible name. */}
-      <label htmlFor={id} className="mb-tight block type-label">
-        {t(`${P}.keywords`)}
-      </label>
+          accessible name. The same label + caption line as the account picker beside it. */}
+      <div className="mb-tight flex flex-wrap items-baseline gap-sm">
+        <label htmlFor={id} className="type-label">
+          {t(`${P}.keywords`)}
+        </label>
+        <span className="type-caption">
+          {t(`${P}.keywordsHint`, {
+            min: KEYWORD_MIN_LENGTH,
+            max: MAX_KEYWORDS,
+            parsed: parsed.length,
+          })}
+        </span>
+      </div>
       <div className="flex items-start gap-sm">
         <Input
           id={id}

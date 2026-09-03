@@ -1317,6 +1317,10 @@ export type DiscoveryAccountOption = {
    */
   name: string;
   /**
+   * Username
+   */
+  username?: string | null;
+  /**
    * Premium
    */
   premium?: boolean | null;

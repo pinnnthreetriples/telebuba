@@ -12,7 +12,7 @@ import { MAX_SEARCH_ACCOUNTS } from '../model/filters';
 import { AccountPicker } from './AccountPicker';
 
 const ACCOUNTS: DiscoveryAccountOption[] = [
-  { account_id: 'acc-p', name: 'Prem', premium: true, busy_reason: null },
+  { account_id: 'acc-p', name: 'Prem', username: 'prem_tg', premium: true, busy_reason: null },
   { account_id: 'acc-n', name: 'Plain', premium: false, busy_reason: null },
   { account_id: 'acc-b', name: 'Busy', premium: false, busy_reason: 'account_cooling' },
 ];
@@ -58,6 +58,14 @@ describe('AccountPicker', () => {
     expect(busy).toHaveTextContent('пережидает лимит');
     expect(screen.getByRole('option', { name: /Prem/ })).toHaveTextContent('Premium');
     expect(screen.getByRole('option', { name: /Plain/ })).not.toHaveTextContent('Premium');
+  });
+
+  it('shows the Telegram handle beside the name, and nothing when there is none', async () => {
+    render(<Harness />);
+    await userEvent.click(trigger());
+
+    expect(screen.getByRole('option', { name: /Prem/ })).toHaveTextContent('@prem_tg');
+    expect(screen.getByRole('option', { name: /Plain/ })).not.toHaveTextContent('@');
   });
 
   it('shows the picked names in the trigger and counts them in the caption', () => {

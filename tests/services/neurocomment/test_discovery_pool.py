@@ -219,16 +219,26 @@ async def test_list_orders_premium_first_and_names_every_busy_reason() -> None:
         ("held", "account_busy"),
     ]
     assert listed.items[0].premium is True
-    assert listed.items[2].name == "Fresh"
+    # The import label ("Fresh") is not the name: it is a file name, not a person.
+    assert listed.items[2].name == "fresh"
 
 
 @pytest.mark.asyncio
-async def test_list_names_an_unlabelled_account_by_its_id() -> None:
-    """The other boards' rule: label, else the id — never the Telegram username."""
-    await create_account(AccountCreate(account_id="acc-1", session_name="s"))
+async def test_list_names_accounts_like_the_accounts_table() -> None:
+    """Telegram first + last name, else phone, else id; the username rides separately."""
+    await create_account(AccountCreate(account_id="acc-1", session_name="s", label="1_telethon"))
+    await create_account(AccountCreate(account_id="acc-2", session_name="s2", phone="+7900"))
+    await create_account(AccountCreate(account_id="acc-3", session_name="s3"))
     with _get_engine().begin() as connection:
-        connection.exec_driver_sql("UPDATE accounts SET username = 'tg_name'")
+        connection.exec_driver_sql(
+            "UPDATE accounts SET first_name = 'Leon', last_name = 'Morales', username = 'leo'"
+            " WHERE account_id = 'acc-1'"
+        )
 
     listed = await list_search_accounts()
 
-    assert [item.name for item in listed.items] == ["acc-1"]
+    assert [(item.name, item.username) for item in listed.items] == [
+        ("+7900", None),
+        ("acc-3", None),
+        ("Leon Morales", "leo"),
+    ]

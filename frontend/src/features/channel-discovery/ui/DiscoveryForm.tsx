@@ -1,9 +1,14 @@
+import { useTranslation } from 'react-i18next';
+
 import type { DiscoveryAccountOption } from '@/shared/api';
 
 import { canSubmit, type DiscoveryFormState } from '../model/discovery';
 import { AccountPicker } from './AccountPicker';
 import { DiscoveryFilters } from './DiscoveryFilters';
+import { Eyebrow } from './FormRow';
 import { KeywordsField } from './KeywordsField';
+
+const P = 'neurocomment.modal.discovery.form';
 
 type Props = {
   form: DiscoveryFormState;
@@ -20,7 +25,8 @@ type Props = {
   onSubmit: () => void;
 };
 
-// Композиция трёх блоков; кнопки — в подвале модалки. / Composition only.
+// Композиция: «Запрос» — ключевые слова и аккаунты в одной строке, ниже фильтры; кнопки —
+// в подвале модалки. / Composition only: the query row, then the filters.
 export function DiscoveryForm({
   form,
   formId,
@@ -32,6 +38,7 @@ export function DiscoveryForm({
   onChange,
   onSubmit,
 }: Props) {
+  const { t } = useTranslation();
   return (
     <form
       id={formId}
@@ -41,17 +48,24 @@ export function DiscoveryForm({
         if (canSubmit(form, accountIds) && !submitting) onSubmit();
       }}
     >
-      <KeywordsField form={form} onChange={onChange} />
+      <section>
+        <Eyebrow title={t(`${P}.sections.query`)} />
+        {/* The same two columns as the filters below, so the picker sits under the
+            right-hand filter column and the keywords under the left. */}
+        <div className="grid gap-xl sm:grid-cols-2 sm:gap-2xl">
+          <KeywordsField form={form} onChange={onChange} />
+          <AccountPicker
+            accounts={accounts}
+            selected={accountIds}
+            loading={accountsLoading}
+            errored={accountsErrored}
+            onChange={(ids) => {
+              onChange({ ...form, accountIds: ids });
+            }}
+          />
+        </div>
+      </section>
       <DiscoveryFilters form={form} onChange={onChange} />
-      <AccountPicker
-        accounts={accounts}
-        selected={accountIds}
-        loading={accountsLoading}
-        errored={accountsErrored}
-        onChange={(ids) => {
-          onChange({ ...form, accountIds: ids });
-        }}
-      />
     </form>
   );
 }
