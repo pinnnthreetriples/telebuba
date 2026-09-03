@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { DiscoveryCandidate } from '@/shared/api';
 
 import {
+  boundInvalid,
   boundsInverted,
   buildSearchRequest,
   canSubmit,
   splitKeywords,
   EMPTY_FORM,
   formatSubscribers,
+  isPrivateRef,
   isSelectable,
   KEYWORD_MAX_LENGTH,
   MAX_ADOPT,
@@ -110,12 +112,12 @@ describe('buildSearchRequest', () => {
     expect(request).toEqual({ keywords: ['crypto'], ...DEFAULTS });
   });
 
-  it('carries the seed and coerces subscriber bounds to integers', () => {
+  it('carries the seed and the subscriber bounds as integers', () => {
     const request = buildSearchRequest(
       form({
         keywords: 'crypto',
         minSubscribers: '500',
-        maxSubscribers: '90000.7',
+        maxSubscribers: ' 90000 ',
         seedChannel: '  @durov ',
       }),
       ACCOUNTS,
@@ -148,6 +150,22 @@ describe('buildSearchRequest', () => {
     );
     expect(request.members_min).toBeUndefined();
     expect(request.members_max).toBeUndefined();
+  });
+
+  it('takes whole numbers only — no exponent, no decimals', () => {
+    // `Number('1e3')` is 1000 and `Number('90.7')` floors to 90: both would have sent a
+    // bound the operator never typed.
+    for (const raw of ['1e3', '90.7', '+5', '0x10']) {
+      const request = buildSearchRequest(
+        form({ keywords: 'crypto', minSubscribers: raw, maxSubscribers: raw }),
+        ACCOUNTS,
+      );
+      expect(request.members_min, raw).toBeUndefined();
+      expect(request.members_max, raw).toBeUndefined();
+      expect(boundInvalid(raw), raw).toBe(true);
+    }
+    expect(boundInvalid('')).toBe(false);
+    expect(boundInvalid(' 12 ')).toBe(false);
   });
 
   it('carries the picked filters, the limit and the accounts', () => {
@@ -253,6 +271,20 @@ describe('canSubmit', () => {
   it('accepts a single bound', () => {
     expect(boundsInverted(form({ keywords: 'crypto', minSubscribers: '900' }))).toBe(false);
     expect(boundsInverted(form({ keywords: 'crypto', maxSubscribers: '100' }))).toBe(false);
+  });
+
+  it('rejects a typed bound that is not a whole number rather than searching without it', () => {
+    expect(canSubmit(form({ keywords: 'crypto', minSubscribers: '1e3' }), ACCOUNTS)).toBe(false);
+    expect(canSubmit(form({ keywords: 'crypto', maxSubscribers: 'abc' }), ACCOUNTS)).toBe(false);
+    expect(canSubmit(form({ keywords: 'crypto', maxSubscribers: '10' }), ACCOUNTS)).toBe(true);
+  });
+});
+
+describe('isPrivateRef', () => {
+  it('recognises the backend PRIVATE_PREFIX and nothing that merely starts with id', () => {
+    expect(isPrivateRef('id:123456')).toBe(true);
+    expect(isPrivateRef('identity')).toBe(false);
+    expect(isPrivateRef('durov')).toBe(false);
   });
 });
 

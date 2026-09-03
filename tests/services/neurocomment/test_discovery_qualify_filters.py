@@ -20,6 +20,7 @@ from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions import LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_qualify import run_qualification
+from services.neurocomment.discovery import load_discovery
 from tests.services.neurocomment.discovery_support import (
     ReadRecorder,
     new_campaign,
@@ -138,6 +139,34 @@ async def test_a_cache_row_that_carries_about_and_the_join_gate_settles_every_fi
     assert reader.calls == []
     assert await _remaining(campaign_id) == ["fit"]
     assert _discovery_state.run_report(campaign_id).filtered == {"language": 1, "access": 1}
+
+
+@pytest.mark.asyncio
+async def test_a_cache_settled_row_shows_its_facts_on_the_board(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The board lifts access, language and the category match off the verdict.
+
+    A row the cache settled derived all three and filtered on them, but recorded no
+    verdict — so the cheap path showed every one of them as unknown.
+    """
+    reader = ReadRecorder()
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _seed(("btcdaily", "Bitcoin daily"))
+    await upsert_linked_group(
+        "btcdaily", -1, comments_enabled=True, about="Crypto news", join_request=False
+    )
+
+    await run_qualification(campaign_id, pool_of(), search_request(category="crypto"))
+
+    assert reader.calls == []
+    board = await load_discovery(campaign_id)
+    assert board is not None
+    row = board.candidates[0]
+    assert (row.access, row.language, row.category_match) == ("open", "en", True)
+    # Nothing probed the writing rights this run, so they stay unknown — not fine.
+    assert row.verdict is not None
+    assert (row.verdict.can_send_messages, row.verdict.is_group) == (None, False)
 
 
 @pytest.mark.asyncio

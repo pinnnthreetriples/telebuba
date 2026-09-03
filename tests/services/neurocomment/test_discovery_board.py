@@ -209,6 +209,32 @@ async def test_the_board_says_when_the_rows_are_not_the_last_run_s() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rows_are_stale_while_a_run_is_searching_and_after_a_restart() -> None:
+    """A report nobody filled has stored nothing.
+
+    ``stored`` defaulted to True, so between the start (which publishes an empty report)
+    and the search stage's write — and for the life of the process after a restart — the
+    board credited the previous search's rows as this run's find.
+    """
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("from_last_run")])
+
+    restarted = await load_discovery(campaign_id)
+    _discovery_state.set_phase(campaign_id, "searching")
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
+    searching = await load_discovery(campaign_id)
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport(stored=True))
+    stored = await load_discovery(campaign_id)
+
+    assert restarted is not None
+    assert searching is not None
+    assert stored is not None
+    assert restarted.progress.stale_candidates is True
+    assert searching.progress.stale_candidates is True
+    assert stored.progress.stale_candidates is False
+
+
+@pytest.mark.asyncio
 async def test_a_candidate_with_no_run_state_falls_back_to_its_stored_source() -> None:
     """Multi-source provenance is not persisted, so a restart loses that only."""
     campaign_id = await _campaign()

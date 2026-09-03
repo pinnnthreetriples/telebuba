@@ -117,6 +117,17 @@ async def test_linked_group_cache_upsert_and_fetch() -> None:
 
 
 @pytest.mark.asyncio
+async def test_an_upsert_without_the_probe_facts_keeps_the_cached_ones() -> None:
+    """Onboarding refreshes comments only; nulling the two facts made discovery re-probe forever."""
+    await upsert_linked_group("@chan", 1, comments_enabled=True, about="News", join_request=False)
+
+    refreshed = await upsert_linked_group("@chan", 1, comments_enabled=False)
+
+    assert refreshed.comments_enabled is False
+    assert (refreshed.about, refreshed.join_request) == ("News", False)
+
+
+@pytest.mark.asyncio
 async def test_readiness_upsert_and_fetch() -> None:
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     assert await fetch_readiness("acc-1", "@chan") is None

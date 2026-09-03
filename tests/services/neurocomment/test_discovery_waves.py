@@ -301,13 +301,34 @@ async def test_a_full_keyword_list_runs_untruncated_at_default_settings(
         search_request(keywords=_keywords(10), seed_channel="@durov"),
     )
 
-    # 10 sweep + 1 seed + one post page per keyword + 5 recommendation seeds = 26, four
-    # reads inside the shipped ceiling. The post wave caps its own total, so a long
-    # keyword list buys one page each instead of two.
+    # 10 sweep + 1 seed + one post page per keyword + 5 recommendation seeds = 26, inside
+    # the shipped ceiling. The post wave caps its own total, so a long keyword list buys
+    # one page each instead of two.
     assert len(reader.calls) == 26
     assert len(reader.posts_actions()) == 10
     assert len(reader.similar_actions()) == 6
     assert [report.truncated for report in stage.report.sources] == [False, False, False, False]
+
+
+@pytest.mark.asyncio
+async def test_the_post_wave_caps_its_own_total_past_ten_keywords(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A category bundle on a full keyword list is 18 words; one page each was 18 reads."""
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 100)
+    reader = ReadRecorder(search=matches(), posts=_PAGED_POSTS)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(keywords=_keywords(10), category="crypto")
+    )
+
+    assert len(reader.search_actions()) == 18
+    assert len(reader.posts_actions()) == 10
+    # The wave's own shape, not the budget: the board must not send the operator to a
+    # setting that did not stop it.
+    assert _report_of(stage, "telegram_posts").truncated is False
 
 
 @pytest.mark.asyncio

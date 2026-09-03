@@ -64,7 +64,9 @@ if TYPE_CHECKING:
 # Pages per keyword is the wave total split evenly, never below one: at two pages each a
 # full keyword list wanted 20 reads, which is more than the sweep, the operator's seed and
 # the recommendation wave put together — an enormous share for the weakest source. Its
-# reach is narrower than "global post search" sounds, so it is the wave that yields.
+# reach is narrower than "global post search" sounds, so it is the wave that yields. The
+# total is enforced as such, too: a category bundle on a full keyword list is 18 words,
+# and one page each was still 18 reads.
 _GLOBAL_MAX_PAGES = 2
 _GLOBAL_MAX_READS = 10
 _SIMILAR_FROM_TOP = 5
@@ -125,22 +127,29 @@ async def _global_pass(
     """Page the post index per keyword: channels whose posts match, not their titles.
 
     Bounded four ways, because the search never says "done": the pages this wave may
-    spend per keyword, the run's read budget minus whatever it holds back for the
-    recommendation wave, and a page that added no channel this keyword had not already
-    produced. ``next_cursor`` is absent only when a page held no message at all, and
-    ``limit`` counts messages rather than channels, so a short page is no end-of-results
-    signal either. Premium first: ``searchGlobal`` answers a non-premium account with
-    FLOOD_PREMIUM_WAIT.
+    spend per keyword and in total, the run's read budget minus whatever it holds back
+    for the recommendation wave, and a page that added no channel this keyword had not
+    already produced. ``next_cursor`` is absent only when a page held no message at all,
+    and ``limit`` counts messages rather than channels, so a short page is no
+    end-of-results signal either. Premium first: ``searchGlobal`` answers a non-premium
+    account with FLOOD_PREMIUM_WAIT.
     """
     outcomes: list[SourceOutcome] = []
     pages = min(_GLOBAL_MAX_PAGES, max(1, _GLOBAL_MAX_READS // max(1, len(keywords))))
+    spent = 0
     for keyword in keywords:
+        if spent >= _GLOBAL_MAX_READS:
+            # The wave's own shape, not the run's budget, so no reason and no
+            # ``truncated``: that flag sends the operator to raise a setting which is not
+            # what stopped this.
+            break
         seen: set[str] = set()
         cursor: GlobalPostsCursor | None = None
         for _page in range(pages):
             if not budget.take():
                 outcomes.append(skipped("telegram_posts", READ_BUDGET, truncated=True))
                 return Wave(outcomes)
+            spent += 1
             await pace()
             account_id = pool.acquire(prefer_premium=True)
             if account_id is None:

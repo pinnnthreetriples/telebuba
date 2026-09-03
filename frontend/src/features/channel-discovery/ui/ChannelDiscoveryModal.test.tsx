@@ -84,6 +84,27 @@ describe('ChannelDiscoveryModal', () => {
     expect(screen.getByText(/Поиск для этой кампании уже идёт/)).toBeInTheDocument();
   });
 
+  it('drops the already-running note once the operator goes back to the form', async () => {
+    // The note describes the board the operator just left; pinned under the form it
+    // reads as a refusal of the parameters they are about to submit.
+    route({
+      startStatus: 'already_running',
+      board: boardPayload([candidate({ channel: 'good' })], { phase: 'qualifying', running: true }),
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText(/Поиск для этой кампании уже идёт/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText(/Поиск для этой кампании уже идёт/)).not.toBeInTheDocument();
+    });
+  });
+
   it('reports a rejected start inside the modal', async () => {
     // The global toast fires outside the dialog with a raw error code; the form alone
     // just re-enables its button, which reads as "nothing happened".

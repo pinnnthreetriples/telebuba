@@ -122,9 +122,9 @@ def record_verdict(campaign_id: str, channel: str, verdict: DiscoveryChannelVerd
 def clear_verdicts(campaign_id: str) -> None:
     """Drop the previous run's verdicts. Called when a new run starts.
 
-    They are per-run: a channel this run qualifies straight from the linked-group cache
-    spends no probe and records nothing, so a verdict left behind would be shown as if
-    this run had measured it — and the map would never shrink.
+    They are per-run: a channel a previous run probed and this one did not find would
+    otherwise keep a verdict nothing in this run stands behind — and the map would never
+    shrink.
     """
     _VERDICTS.pop(campaign_id, None)
 

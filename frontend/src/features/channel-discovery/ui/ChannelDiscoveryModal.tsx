@@ -297,6 +297,9 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                 // The only way back to the form, so it owns dropping the picks: the
                 // next run's rows have nothing to do with the ones ticked here.
                 setSelected(new Set());
+                // And the outcome: `already_running` describes the board just left, and
+                // would otherwise stay pinned under the form as if it refused this one.
+                startSearch.reset();
                 // The list was not polled during the run; the form must not reopen on it.
                 void queryClient.invalidateQueries({ queryKey: accountsOptions.queryKey });
               }}

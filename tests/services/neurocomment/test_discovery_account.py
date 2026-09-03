@@ -17,8 +17,9 @@ from core.config import settings
 from core.db import create_account, upsert_warming_state
 from core.repositories.neurocomment import get_listener_running, set_listener_running
 from schemas.accounts import AccountCreate
+from schemas.neurocomment_discovery import DiscoverySearchStageResult
 from schemas.warming import StartWarmingRequest, WarmingStateWrite
-from services.neurocomment import _discovery_state, _seams, _state
+from services.neurocomment import _discovery_run, _discovery_state, _seams, _state
 from services.warming import _runtime
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
@@ -430,6 +431,50 @@ async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
 
     assert await get_listener_running() is True
     assert refused.status == "account_busy"
+
+
+@pytest.mark.asyncio
+async def test_another_campaign_s_start_in_the_gap_is_named_as_the_busy_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The third holder the claim re-asks about: a run another campaign started in the gap.
+
+    ``try_reserve`` still refused it, but as ``already_running`` naming no account —
+    which points the operator at THIS campaign, which has no run at all.
+    """
+    from services.neurocomment import discovery as discovery_service  # noqa: PLC0415
+
+    async def _hang(*_args: object, **_kwargs: object) -> DiscoverySearchStageResult:
+        await asyncio.Event().wait()
+        return DiscoverySearchStageResult()
+
+    resolved = asyncio.Event()
+    other_committed = asyncio.Event()
+    real_check = discovery_service.check_search_accounts
+    stalled: list[str] = []
+
+    async def _stall_the_first(campaign_id: str, account_ids: list[str]) -> object:
+        accounts = await real_check(campaign_id, account_ids)
+        if not stalled:
+            stalled.append(campaign_id)
+            resolved.set()
+            await other_committed.wait()
+        return accounts
+
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
+    monkeypatch.setattr(discovery_service, "check_search_accounts", _stall_the_first)
+    await seed_listener()
+    loser = await new_campaign()
+    winner = await new_campaign()
+
+    pending = asyncio.create_task(start_run(loser, search_request()))
+    await resolved.wait()
+    started = await start_run(winner, search_request())
+    other_committed.set()
+    refused = await pending
+
+    assert started.status == "started"
+    assert (refused.status, refused.refused_account_id) == ("account_busy", LISTENER_ID)
 
 
 @pytest.mark.asyncio

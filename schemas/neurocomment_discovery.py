@@ -153,7 +153,10 @@ class DiscoveryRunReport(BaseModel):
     origins: dict[str, DiscoveryCandidateOrigin] = Field(default_factory=dict)
     # Did this run's findings actually reach the table? A rate limit leaves the previous
     # run's rows in place, and the strip must not then credit rows that exist nowhere.
-    stored: bool = True
+    # ``False`` by default: a report nobody filled — the one a start publishes while the
+    # search is still running, or the one a board read after a restart falls back to —
+    # has stored nothing, so the rows on screen are the previous search's.
+    stored: bool = False
     # Did the request's ``limit`` cut the merged set? "Channels found: 100" is a floor
     # when it did, and reads as everything Telegram has when it did not say so.
     capped: bool = False
@@ -269,8 +272,8 @@ class DiscoveryProgress(BaseModel):
     # searched, or whose run predates this process.
     sources: list[DiscoverySourceReport] = Field(default_factory=list)
     # The candidates below are NOT the last run's: it stored nothing (a rate limit cut
-    # it short), so they are the previous search's and must not be counted as this
-    # run's find.
+    # it short), has not stored yet (still searching) or predates this process, so they
+    # are the previous search's and must not be counted as this run's find.
     stale_candidates: bool = False
     # ``total`` is a ceiling, not a total: the merge had more rows than the request's
     # ``limit`` and dropped the tail.

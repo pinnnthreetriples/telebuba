@@ -187,6 +187,16 @@ describe('AccountPicker', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
+  it('keeps a cached list through a failed refetch and says it is stale', () => {
+    // TanStack keeps `data` when a refetch fails, and the modal still submits with those
+    // accounts — so hiding the picker behind the danger notice would let «Найти» post a
+    // list the operator can no longer see or change.
+    render(<Harness errored />);
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Список аккаунтов не обновился');
+    expect(screen.queryByText(/Не удалось загрузить аккаунты/)).not.toBeInTheDocument();
+  });
+
   it('warns when no account is eligible', () => {
     render(<Harness accounts={[ACCOUNTS[2]!]} initial={[]} />);
     expect(screen.getByText(/Нет свободных аккаунтов/)).toBeInTheDocument();

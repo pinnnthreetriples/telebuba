@@ -305,6 +305,30 @@ describe('DiscoveryResults', () => {
     }
   });
 
+  it('measures its own box even when the first frame was the searching state', () => {
+    // The container query is read once per ref, on its first commit — and the first
+    // commit of a real run is «Ищем каналы…». A box that only existed once rows arrived
+    // was never measured: the toolbar fell back to the viewport (narrow) while DataTable
+    // measured the wide box, and a ~960px viewport got two select-alls.
+    const viewport = (width: number) => {
+      (
+        window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
+      ).happyDOM.setViewport({ width });
+    };
+    viewport(375);
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(900);
+    try {
+      const { rerender } = render(<Harness data={undefined} loading />);
+      rerender(<Harness data={board([candidate({ channel: 'good' })])} />);
+
+      expect(screen.getByRole('table')).toBeInTheDocument();
+      expect(screen.getAllByRole('checkbox', { name: 'Выбрать все подходящие' })).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      viewport(1024);
+    }
+  });
+
   it('shows qualification progress while the pass runs', () => {
     render(
       <Harness

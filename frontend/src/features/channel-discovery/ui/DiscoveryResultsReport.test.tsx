@@ -57,6 +57,33 @@ function Harness({ data }: { data: DiscoveryBoard | undefined }) {
 }
 
 describe('DiscoveryResults reporting', () => {
+  it('names a private row for what it is instead of printing its id ref as a handle', () => {
+    // "@id:123" is the backend's PRIVATE_PREFIX ref dressed as a username nobody can open.
+    render(
+      <Harness
+        data={board([
+          candidate({ channel: 'id:123', kind: 'channel' }),
+          candidate({ channel: 'grp', kind: 'group' }),
+          candidate({ channel: 'good' }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('закрытый канал')).toBeInTheDocument();
+    expect(screen.queryByText(/@id:123/)).not.toBeInTheDocument();
+    // The dead box says why, for the two rows the adopt endpoint itself refuses.
+    const hidden = screen.getByRole('checkbox', { name: 'Выбрать канал закрытый канал' });
+    expect(hidden).toBeDisabled();
+    expect(hidden).toHaveAttribute('title', 'нельзя добавить в кампанию');
+    expect(screen.getByRole('checkbox', { name: 'Выбрать канал grp' })).toHaveAttribute(
+      'title',
+      'нельзя добавить в кампанию',
+    );
+    expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toHaveAttribute(
+      'title',
+    );
+  });
+
   it('says so when the reply carried a group but not its write rights', () => {
     // ChannelForbidden/ChatEmpty answer none of the group gates, so the row rendered as
     // a channel measured and cleared on all of them.

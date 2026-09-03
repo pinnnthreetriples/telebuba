@@ -208,6 +208,42 @@ async def test_seen_is_recorded_after_qualification_over_the_rows_the_board_show
 
 
 @pytest.mark.asyncio
+async def test_a_pass_that_stopped_early_marks_only_the_rows_it_settled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pending rows are the NEXT run's to qualify; marked seen, they were hidden for good.
+
+    The pass stops when the pool empties, leaving the tail ``qualified_at IS NULL`` so a
+    re-run resumes it — but that re-run's ``hide_seen`` dropped exactly those rows.
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 1)
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            search=matches(("alpha", "A", None), ("beta", "B", None), ("gamma", "G", None)),
+            linked=read_error("RPC: ChannelPrivateError", only="beta"),
+        ),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    # ``alpha`` answered, ``beta`` failed and emptied the one-account pool, ``gamma`` was
+    # never reached: judged rows are seen, the pending one is not.
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+    assert await list_seen(["alpha", "beta", "gamma"]) == {"alpha", "beta"}
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["gamma"]
+    assert _discovery_state.phase_of(campaign_id) == "done"
+
+
+@pytest.mark.asyncio
 async def test_a_refused_start_spends_nothing() -> None:
     """The claim comes after account resolution, so a refusal never has one to give back."""
     campaign_id = await new_campaign()

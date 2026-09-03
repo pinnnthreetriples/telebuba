@@ -74,12 +74,18 @@ def _upsert_linked_group(
         "about": about,
         "join_request": join_request,
     }
+    refreshed = dict(fields)
+    if about is None and join_request is None:
+        # A caller that learnt neither fact (onboarding refreshes comments only) must not
+        # erase the ones a probe cached: nulled, they read as "never learnt" and forced
+        # discovery to re-probe the channel on every run.
+        del refreshed["about"], refreshed["join_request"]
     statement = (
         sqlite_insert(_neurocomment_linked_groups)
         .values(channel=channel, **fields)
         .on_conflict_do_update(
             index_elements=[_neurocomment_linked_groups.c.channel],
-            set_=fields,
+            set_=refreshed,
         )
     )
     with _get_engine().begin() as connection:
@@ -102,7 +108,8 @@ async def upsert_linked_group(
     """Cache (or refresh) a channel's linked discussion-group resolution.
 
     ``about``/``join_request`` are the probe-time facts discovery's filters read; a caller
-    that did not learn them leaves ``None``, which discovery reads as "must probe".
+    that did not learn them leaves both ``None``, which keeps whatever the cache holds
+    (``None`` on a fresh row, which discovery reads as "must probe").
     """
     return await asyncio.to_thread(
         _upsert_linked_group,

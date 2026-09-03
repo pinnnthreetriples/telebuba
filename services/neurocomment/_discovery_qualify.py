@@ -153,10 +153,6 @@ async def _settled_without_probe(
         # channel nobody can probe or comment in can never satisfy "has comments", so
         # ``comments=on`` refuses it rather than admitting on unknown.
         about, join_request, comments = None, None, False
-        facts = _facts(row, request, about=about, join_request=join_request)
-        _discovery_state.record_verdict(
-            campaign_id, row.channel, DiscoveryChannelVerdict(**facts._asdict())
-        )
     else:
         group = fresh.get(row.channel)
         if group is None or not _cache_answers(group, request):
@@ -164,7 +160,16 @@ async def _settled_without_probe(
         # Cache hit: no RPC, and deliberately no sleep — this is what makes a re-search
         # over familiar keywords finish in milliseconds. Every filter still applies.
         about, join_request, comments = group.about, group.join_request, group.comments_enabled
-        facts = _facts(row, request, about=about, join_request=join_request)
+    facts = _facts(row, request, about=about, join_request=join_request)
+    # Recorded on the cache path too: the board lifts access, language and the category
+    # match off the verdict, so a row settled without a probe showed all three as unknown
+    # — the very facts the filters had just read. The rights flags stay ``None``: nothing
+    # measured them this run. ``is_group`` is the row's own kind.
+    _discovery_state.record_verdict(
+        campaign_id,
+        row.channel,
+        DiscoveryChannelVerdict(is_group=row.kind == "group", **facts._asdict()),
+    )
     reason = _admit(row, facts, comments_enabled=comments, request=request)
     await _settle(campaign_id, row.channel, reason, rejected)
     return True

@@ -52,9 +52,12 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
             # Shown once is shown: ``hide_seen`` on the next search drops these. Marked
             # AFTER qualification, over the rows the board actually shows — a row a
             # probe-time filter deleted was never shown, and marking the search stage's
-            # whole set hid such channels from every later search for good.
-            shown = (await list_discovery_candidates(campaign_id)).rows
-            await mark_seen((row.channel for row in shown), datetime.now(UTC))
+            # whole set hid such channels from every later search for good. Settled rows
+            # only: a pass the pool's emptying stopped early leaves the rest pending, and
+            # marking those hid them from the very re-run that would have resumed them.
+            rows = (await list_discovery_candidates(campaign_id)).rows
+            settled = (row.channel for row in rows if row.qualified_at is not None)
+            await mark_seen(settled, datetime.now(UTC))
             if qualify_error is not None:
                 _discovery_state.set_last_error(campaign_id, qualify_error)
                 _discovery_state.set_phase(campaign_id, "failed")

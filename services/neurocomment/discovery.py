@@ -83,7 +83,7 @@ async def start_discovery(
     # strand a claim. The claim covers the accounts too, not just the campaign.
     #
     # Under warming's own per-account lifecycle lock for every picked account, re-asking
-    # BOTH owners inside it, for the reason ``start_neurocomment`` takes the same lock:
+    # every holder inside it, for the reason ``start_neurocomment`` takes the same lock:
     # ``check_search_accounts`` answered several awaits ago, and ``start_warming`` and the
     # listener start both read this claim under that lock before they commit. Without it
     # their checks and this one all pass in the gap and the account ends up carrying two
@@ -94,7 +94,7 @@ async def start_discovery(
     async with contextlib.AsyncExitStack() as locks:
         for account_id in account_ids:
             await locks.enter_async_context(account_lock(account_id))
-        taken = await taken_account(account_ids)
+        taken = await taken_account(campaign_id, account_ids)
         if taken is not None:
             return DiscoverySearchOutcome(status="account_busy", refused_account_id=taken)
         refusal = _discovery_state.try_reserve(campaign_id, frozenset(account_ids))
@@ -104,14 +104,13 @@ async def start_discovery(
         _discovery_state.set_phase(campaign_id, "searching")
         _discovery_state.set_last_error(campaign_id, None)
         # Per-run state, so it is cleared where the rest of it is. A verdict describes the
-        # channel a PREVIOUS run probed, and the linked-group cache lets this run qualify
-        # a channel without probing it at all — so a kept verdict would be shown beside a
-        # row nothing measured this time, and the map would grow for the life of the
-        # process.
+        # channel a PREVIOUS run saw — a channel this run does not find again would keep
+        # it, and the map would grow for the life of the process.
         _discovery_state.clear_verdicts(campaign_id)
         # The source strip is per-run for the same reason, and the run's exception path
         # never sets one: without this, a run that crashed published the PREVIOUS run's
-        # strip beside its own failure.
+        # strip beside its own failure. The empty report has stored nothing, so until the
+        # search stage writes, the board reports the rows it shows as the previous run's.
         _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
         _discovery_state.spawn(campaign_id, run(campaign_id, AccountPool(accounts), request))
     await log_event(
@@ -208,9 +207,11 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
             comments_on=comments_on,
             last_error=_discovery_state.last_error(campaign_id),
             sources=report.sources,
-            # The rows below outlived the last run: it stored nothing, so they are the
-            # previous search's and the board must not present them as this one's find.
-            stale_candidates=not report.stored,
+            # The rows below outlived the last run — it stored nothing, has not stored
+            # yet (still searching), or predates this process — so they are the previous
+            # search's and the board must not present them as this one's find. No rows,
+            # nothing to be stale.
+            stale_candidates=bool(rows) and not report.stored,
             capped=report.capped,
             filtered=report.filtered,
         ),

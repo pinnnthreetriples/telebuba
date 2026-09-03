@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HelpHint, Input, SegmentedControl, Select } from '@/shared/ui';
 
-import { boundsInverted, type DiscoveryFormState } from '../model/discovery';
+import { boundInvalid, boundsInverted, type DiscoveryFormState } from '../model/discovery';
 import {
   ACCESS,
   CATEGORIES,
@@ -64,10 +64,19 @@ type Props = {
 export function DiscoveryFilters({ form, onChange }: Props) {
   const { t } = useTranslation();
   const limitId = useId();
+  const limitMessageId = useId();
+  const membersMessageId = useId();
   const seedId = useId();
   const groups = form.kind === 'groups';
   const badLimit = parseLimit(form.limit) === undefined;
   const inverted = boundsInverted(form);
+  const badMin = boundInvalid(form.minSubscribers);
+  const badMax = boundInvalid(form.maxSubscribers);
+  // One line under the pair. The two faults exclude each other: inverted needs both
+  // bounds to parse.
+  const membersMessage =
+    badMin || badMax ? t(`${P}.membersInvalid`) : inverted ? t(`${P}.boundsInverted`) : undefined;
+  const membersDescribedBy = membersMessage === undefined ? undefined : membersMessageId;
 
   const set: Setter = (key, value) => {
     onChange({ ...form, [key]: value });
@@ -140,17 +149,20 @@ export function DiscoveryFilters({ form, onChange }: Props) {
 
           {/* What the bounds actually do: Telegram returns a subscriber count for only
               some hits, and the rest enter the list unfiltered. The error line wraps onto
-              its own row via `basis-full`. */}
+              its own row via `basis-full`.
+              `text` + `inputMode`, not `type="number"`: a number field reports '' while
+              it holds "1e3" or "-5", so the garbage silently became "no bound". */}
           <Row label={t(`${P}.subscribers`)} hint={t(`${P}.membersHint`)}>
             <div className="flex items-center gap-sm">
               <Input
                 size="xs"
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 className="w-number tabular-nums"
                 aria-label={t(`${P}.minSubscribers`)}
+                aria-describedby={membersDescribedBy}
                 placeholder="0"
-                invalid={inverted}
+                invalid={inverted || badMin}
                 value={form.minSubscribers}
                 onChange={(event) => {
                   set('minSubscribers', event.target.value);
@@ -159,12 +171,13 @@ export function DiscoveryFilters({ form, onChange }: Props) {
               <span className="type-caption">—</span>
               <Input
                 size="xs"
-                type="number"
-                min={0}
+                type="text"
+                inputMode="numeric"
                 className="w-number tabular-nums"
                 aria-label={t(`${P}.maxSubscribers`)}
+                aria-describedby={membersDescribedBy}
                 placeholder="∞"
-                invalid={inverted}
+                invalid={inverted || badMax}
                 value={form.maxSubscribers}
                 onChange={(event) => {
                   set('maxSubscribers', event.target.value);
@@ -173,9 +186,15 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             </div>
             {/* The API refuses members_min > members_max, and canSubmit blocks it — without
                 this the Search button would just go dead naming no field. */}
-            {inverted ? (
-              <p className="basis-full type-caption text-danger">{t(`${P}.boundsInverted`)}</p>
-            ) : null}
+            {membersMessage === undefined ? null : (
+              <p
+                id={membersMessageId}
+                role="status"
+                className="basis-full type-caption text-danger"
+              >
+                {membersMessage}
+              </p>
+            )}
           </Row>
 
           <Row label={t(`${P}.hideSeen.label`)} hint={t(`${P}.hideSeen.hint`)}>
@@ -198,19 +217,19 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             <Input
               id={limitId}
               size="xs"
-              type="number"
-              min={LIMIT_MIN}
-              max={LIMIT_MAX}
+              type="text"
+              inputMode="numeric"
               className="w-number tabular-nums"
               placeholder={String(LIMIT_DEFAULT)}
               invalid={badLimit}
+              aria-describedby={badLimit ? limitMessageId : undefined}
               value={form.limit}
               onChange={(event) => {
                 set('limit', event.target.value);
               }}
             />
             {badLimit ? (
-              <p className="basis-full type-caption text-danger">
+              <p id={limitMessageId} role="status" className="basis-full type-caption text-danger">
                 {t(`${P}.limit.invalid`, { min: LIMIT_MIN, max: LIMIT_MAX })}
               </p>
             ) : null}

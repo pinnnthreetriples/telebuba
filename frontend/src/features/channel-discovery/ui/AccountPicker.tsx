@@ -91,7 +91,10 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
         title={t(`${P}.label`)}
         caption={loading ? t(`${P}.loading`) : t(`${P}.selected`, { count: selected.length })}
       />
-      {errored ? (
+      {/* Only with nothing to fall back on: a failed refetch leaves status 'error' with
+          the cached list intact, and the modal still submits with it — the same guard as
+          DiscoveryResults. */}
+      {errored && accounts.length === 0 ? (
         <Notice tone="danger">{t(`${P}.loadFailed`)}</Notice>
       ) : empty ? (
         <Notice tone="warning">{t(`${P}.empty`)}</Notice>
@@ -167,6 +170,11 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
           <p className="mt-tight type-caption">
             {full ? t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS }) : t(`${P}.premiumHint`)}
           </p>
+          {errored ? (
+            <p role="status" className="mt-tight type-caption text-warning-deep">
+              {t(`${P}.stale`)}
+            </p>
+          ) : null}
         </>
       )}
     </section>

@@ -242,20 +242,26 @@ async def list_search_accounts() -> DiscoveryAccountList:
     return DiscoveryAccountList(items=items)
 
 
-async def taken_account(account_ids: list[str]) -> str | None:
+async def taken_account(campaign_id: str, account_ids: list[str]) -> str | None:
     """The first of these another runtime holds, or ``None``. The re-read under the claim lock.
 
-    Both halves of ``check_search_accounts``'s ``account_busy`` verdict, asked again:
-    that verdict is several awaits old by the time the claim is made, and either runtime
-    can commit in the gap. Read ONCE inside the locks, not per account, but deliberately
-    NOT reused inside ``_blocker`` — there the listener check runs before the health
-    checks and the warming check after, so a warming account that is also flood-waiting
-    is reported as cooling rather than busy. Folding the two would silently reorder that.
+    Every holder behind ``check_search_accounts``'s ``account_busy`` verdict — warming,
+    the running listener, another campaign's run — asked again: that verdict is several
+    awaits old by the time the claim is made, and any of them can commit in the gap.
+    Without the third, a run another campaign started in that gap was caught by the claim
+    itself, as ``already_running`` naming no account — which points the operator at THIS
+    campaign, which has no run. Read ONCE inside the locks, not per account, but
+    deliberately NOT reused inside ``_blocker`` — there the listener check runs before the
+    health checks and the warming check after, so a warming account that is also
+    flood-waiting is reported as cooling rather than busy. Folding the two would silently
+    reorder that.
     """
     fleet = await _fleet()
     for account_id in account_ids:
-        if account_id in fleet.warming or (
-            fleet.listener_running and fleet.listener_id == account_id
+        if (
+            account_id in fleet.warming
+            or (fleet.listener_running and fleet.listener_id == account_id)
+            or _discovery_state.account_busy(account_id, other_than=campaign_id)
         ):
             return account_id
     return None

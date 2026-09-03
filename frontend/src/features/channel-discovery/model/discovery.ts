@@ -119,12 +119,16 @@ export function mergeKeywords(raw: string, suggested: string[]): string {
   return [raw.trim().replace(/[,\s]+$/u, ''), ...added].filter(Boolean).join(', ');
 }
 
+// Digits only: the inputs are `type="text"` (a `number` field reports '' for garbage, so
+// "1e3" and "-5" silently became "no bound"), and `Number()` would take both.
 function positiveInt(raw: string): number | undefined {
   const trimmed = raw.trim();
-  if (trimmed === '') return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
-  return Math.floor(parsed);
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
+}
+
+/** A typed bound that is not a whole number. '' means "no bound" and is fine. */
+export function boundInvalid(raw: string): boolean {
+  return raw.trim() !== '' && positiveInt(raw) === undefined;
 }
 
 /** Turn the form into a wire request, omitting empty filters rather than sending nulls.
@@ -177,6 +181,8 @@ export function canSubmit(form: DiscoveryFormState, accountIds: string[]): boole
   const searchable = parseKeywords(form.keywords).length > 0 || form.category !== 'any';
   return (
     searchable &&
+    !boundInvalid(form.minSubscribers) &&
+    !boundInvalid(form.maxSubscribers) &&
     !boundsInverted(form) &&
     parseLimit(form.limit) !== undefined &&
     accountIds.length > 0 &&
@@ -196,8 +202,13 @@ export function isSelectable(candidate: DiscoveryCandidate): boolean {
   if (candidate.in_campaign === true) return false;
   if (candidate.taken_by_other_campaign === true) return false;
   if (candidate.kind === 'group' || candidate.access === 'subscription') return false;
-  if (candidate.channel.startsWith('id:')) return false;
+  if (isPrivateRef(candidate.channel)) return false;
   return candidate.qualification !== 'comments_off';
+}
+
+/** A private (no-username) row: the backend's PRIVATE_PREFIX ref, not a handle. */
+export function isPrivateRef(channel: string): boolean {
+  return channel.startsWith('id:');
 }
 
 export function selectableChannels(candidates: DiscoveryCandidate[]): string[] {

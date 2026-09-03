@@ -182,25 +182,26 @@ async def test_an_unanswerable_probe_records_no_verdict_at_all(
 
 
 @pytest.mark.asyncio
-async def test_a_cache_hit_spends_no_rpc_and_so_carries_no_verdict(
+async def test_a_cache_hit_spends_no_rpc_and_carries_no_rights_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The fitness signals have no column, so a cached channel has none to report.
+    """The writing rights have no column, so a cached channel reports them as unknown.
 
     Deliberate: the cheap re-search is worth more than a full verdict, and the board
-    still knows from the cache whether comments are on.
+    still knows from the cache whether comments are on. The three derived facts ARE
+    recorded — the filters read them off the same cache row.
     """
-    monkeypatch.setattr(
-        _seams,
-        "execute_read",
-        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
-    )
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+    monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("known")
-    await upsert_linked_group("known", -100, comments_enabled=True)
+    await upsert_linked_group("known", -100, comments_enabled=True, about="", join_request=False)
 
     await run_qualification(campaign_id, pool_of(), search_request())
 
-    assert _discovery_state.verdicts(campaign_id) == {}
+    assert reader.calls == []
+    verdict = _discovery_state.verdicts(campaign_id)["known"]
+    assert (verdict.can_send_messages, verdict.join_to_send, verdict.scam) == (None, None, None)
+    assert verdict.access == "open"
 
 
 @pytest.mark.asyncio
