@@ -142,6 +142,45 @@ describe('DiscoveryResults reporting', () => {
     expect(screen.queryByText(/оборван/)).not.toBeInTheDocument();
   });
 
+  it('badges what kind of place a row is, how it is entered and its language', () => {
+    render(
+      <Harness
+        data={board([candidate({ kind: 'group', access: 'join_request', language: 'uk' })])}
+      />,
+    );
+
+    expect(screen.getByText('группа')).toBeInTheDocument();
+    expect(screen.getByText('по заявке')).toBeInTheDocument();
+    expect(screen.getByText('uk')).toBeInTheDocument();
+  });
+
+  it('shows no trait badge on a row stored before the fields existed', () => {
+    // A guessed "channel" would be a claim; an empty cell is not.
+    render(<Harness data={board([candidate()])} />);
+
+    expect(screen.queryByText('канал')).not.toBeInTheDocument();
+    expect(screen.queryByText('открытый')).not.toBeInTheDocument();
+  });
+
+  it('renders a trait code it has no translation for as itself', () => {
+    render(<Harness data={board([candidate({ kind: 'forum', access: 'invite_only' })])} />);
+
+    expect(screen.getByText('forum')).toBeInTheDocument();
+    expect(screen.getByText('invite_only')).toBeInTheDocument();
+  });
+
+  it('sums the rows the filters cut, and says nothing when they cut none', () => {
+    // A narrow filter and an empty Telegram must not both read as "found 1".
+    const { unmount } = render(
+      <Harness data={board([candidate()], { filtered: { language: 3, access: 2 } })} />,
+    );
+    expect(screen.getByText('Отфильтровано: 5')).toBeInTheDocument();
+    unmount();
+
+    render(<Harness data={board([candidate()], { filtered: {} })} />);
+    expect(screen.queryByText(/Отфильтровано/)).not.toBeInTheDocument();
+  });
+
   it('renders a source label it has no translation for', () => {
     // The candidate table outlives the build that wrote it, so a migrated row names a
     // source this one does not have — as a label, never as a raw i18n key.

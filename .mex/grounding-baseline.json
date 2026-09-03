@@ -1,6 +1,6 @@
 [
   {
-    "body_hash": "787013e66aef633e3c92bfef29a84b59743c289142b47f614c41d7ef32d1013f",
+    "body_hash": "b98646139a025ad0b6848eb75c74be3d7305c992fe488a3ff37a1ea17c1a7819",
     "node_id": "function:ba8f355bd012e2daedeea6b4da65becb",
     "scaffold_file": ".mex/context/runtime-discovery.md"
   },
@@ -75,7 +75,7 @@
     "scaffold_file": ".mex/patterns/add-discovery-source.md"
   },
   {
-    "body_hash": "c35e9b119f865b327921959062b49726fbd554d14a53228858b7173526c9ed23",
+    "body_hash": "2aa704440dd7ae50c1d8868e98bfaf5509e5841b23e8553628454c51a7031bbb",
     "node_id": "function:330ee165c2e8ae67482c0bffa6a1ca52",
     "scaffold_file": ".mex/patterns/add-discovery-source.md"
   },

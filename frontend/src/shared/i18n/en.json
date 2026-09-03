@@ -1449,13 +1449,104 @@
           },
           "reset": "Reset",
           "submit": "Search",
-          "searching": "Starting…"
+          "searching": "Starting…",
+          "sections": {
+            "query": "Query",
+            "filters": "Filters"
+          },
+          "kind": {
+            "label": "Type",
+            "all": "All",
+            "channels": "Channels",
+            "groups": "Groups"
+          },
+          "category": {
+            "label": "Category",
+            "any": "Any",
+            "it_programming": "IT & programming",
+            "beauty_health": "Beauty & health",
+            "crypto": "Crypto",
+            "trading": "Trading",
+            "news": "News",
+            "business": "Business",
+            "marketing": "Marketing",
+            "education": "Education",
+            "entertainment": "Entertainment",
+            "games": "Games",
+            "sport": "Sport",
+            "travel": "Travel",
+            "food": "Food",
+            "cars": "Cars",
+            "real_estate": "Real estate",
+            "finance": "Finance",
+            "psychology": "Psychology",
+            "humor": "Humor",
+            "music": "Music",
+            "movies": "Movies",
+            "fashion": "Fashion",
+            "politics": "Politics",
+            "science": "Science",
+            "parenting": "Parenting",
+            "jobs": "Jobs"
+          },
+          "language": {
+            "label": "Language",
+            "any": "Any",
+            "ru": "Russian",
+            "en": "English",
+            "uk": "Ukrainian",
+            "other": "Other"
+          },
+          "comments": {
+            "label": "Comments",
+            "any": "Any",
+            "on": "On",
+            "off": "Off",
+            "groupsHint": "Groups have no comments verdict"
+          },
+          "access": {
+            "label": "Access",
+            "any": "Any",
+            "open": "Open",
+            "join_request": "By request",
+            "subscription": "Subscription",
+            "groupsHint": "Subscription channels come only from channel recommendations"
+          },
+          "subscribers": "Subscribers",
+          "hideSeen": {
+            "label": "Previously shown",
+            "hide": "Hide",
+            "show": "Show",
+            "hint": "Channels any earlier search already returned"
+          },
+          "limit": {
+            "label": "Result limit",
+            "hint": "{{min}}–{{max}}, default {{default}}",
+            "invalid": "A whole number from {{min}} to {{max}}"
+          },
+          "accounts": {
+            "label": "Accounts for parsing",
+            "selected_one": "{{count}} selected",
+            "selected_other": "{{count}} selected",
+            "trigger": "Choose accounts",
+            "premium": "Premium",
+            "premiumHint": "Premium accounts hit FLOOD_PREMIUM_WAIT less often and get more recommendations — they are preselected",
+            "loading": "Loading accounts…",
+            "loadFailed": "Couldn't load the accounts. Search is unavailable until the list loads.",
+            "empty": "No free accounts: all are warming, listening or cooling down.",
+            "busy": {
+              "account_busy": "busy",
+              "account_cooling": "cooling down",
+              "no_session": "no session"
+            }
+          }
         },
         "results": {
           "back": "← Change parameters",
           "count": "Channels found: {{count}}",
           "countStale": "Channels from the previous search: {{count}}",
           "countCapped": "Channels found: {{count}} — the ceiling for one search, the rest were dropped",
+          "filtered": "Filtered out: {{count}}",
           "commentsOn": "with comments: {{count}}",
           "uncounted": "admitted without a count",
           "qualifying": "Checking comments: {{done}}/{{total}}",
@@ -1469,9 +1560,25 @@
           "colChannel": "Channel",
           "colTitle": "Title",
           "colSubscribers": "Subscribers",
+          "colTraits": "Type",
           "colSource": "Source",
           "colComments": "Comments",
           "colState": "State",
+          "kind": {
+            "channel": "channel",
+            "group": "group"
+          },
+          "access": {
+            "open": "open",
+            "join_request": "by request",
+            "subscription": "subscription"
+          },
+          "language": {
+            "ru": "ru",
+            "en": "en",
+            "uk": "uk",
+            "other": "other"
+          },
           "inCampaign": "already in campaign",
           "takenElsewhere": "taken by another campaign",
           "sourceRan": "{{source}}: {{kept}} of {{hits}}",
@@ -1515,7 +1622,8 @@
           "no_account": "No account available for searching: assign a listener or a campaign account.",
           "account_busy": "The search account is busy: stop the listener or warming, then retry.",
           "account_cooling": "The search account is waiting out a Telegram limit. Try again later.",
-          "daily_limit_reached": "The daily search allowance is spent."
+          "daily_limit_reached": "The daily search allowance is spent.",
+          "account": "Account: {{name}}"
         },
         "startFailed": "Couldn't start the search. Check the parameters and try again.",
         "add": "Add selected ({{count}})",
@@ -1523,6 +1631,7 @@
         "addedNone": "Nothing added",
         "addedRefused": "Not added: {{count}} — those channels are already taken",
         "addedCommentsOff": "Not added: {{count}} — comments are disabled in those channels",
+        "addedNotAdoptable": "Not added: {{count}} — a group or a private channel",
         "addedFailed": "Could not add: {{count}} — try again",
         "addFailed": "Couldn't add the channels. Some may have been added — check the list and try again."
       }

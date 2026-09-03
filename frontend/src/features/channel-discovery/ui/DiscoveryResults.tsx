@@ -17,6 +17,7 @@ import {
 } from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
+import { TraitsCell } from './TraitsCell';
 
 const CHECKBOX = 'size-spinner shrink-0 accent-action-primary disabled:opacity-40';
 
@@ -220,6 +221,9 @@ export function DiscoveryResults({
   const qualified = board?.progress.qualified ?? 0;
   const total = board?.progress.total ?? 0;
   const countKey = foundCountKey(board?.progress);
+  // Rows the operator's own filters cut, summed over the reasons: without it a narrow
+  // filter and an empty Telegram both read as "found 3".
+  const filtered = Object.values(board?.progress.filtered ?? {}).reduce((sum, n) => sum + n, 0);
 
   const columns: ColumnDef<DiscoveryCandidate>[] = [
     {
@@ -299,6 +303,11 @@ export function DiscoveryResults({
         </div>
       ),
       meta: { className: 'text-right', cellClassName: 'text-right' } satisfies DataTableColumnMeta,
+    },
+    {
+      id: 'traits',
+      header: () => t('neurocomment.modal.discovery.results.colTraits'),
+      cell: ({ row }) => <TraitsCell candidate={row.original} />,
     },
     {
       id: 'source',
@@ -419,6 +428,9 @@ export function DiscoveryResults({
         <span>
           {t(`neurocomment.modal.discovery.results.${countKey}`, { count: candidates.length })}
         </span>
+        {filtered > 0 ? (
+          <span>{t('neurocomment.modal.discovery.results.filtered', { count: filtered })}</span>
+        ) : null}
         {/* The run's yield, once nothing else will change it. During the pass the
             qualification counter beside this says more. */}
         {settled && qualified > 0 ? (

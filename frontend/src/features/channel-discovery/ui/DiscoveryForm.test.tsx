@@ -1,14 +1,24 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import '@/shared/i18n';
 
+import type { DiscoveryAccountOption } from '@/shared/api';
+
 import { EMPTY_FORM, type DiscoveryFormState } from '../model/discovery';
+import { effectiveAccountIds } from '../model/filters';
 import { DiscoveryForm } from './DiscoveryForm';
 
+const ACCOUNTS: DiscoveryAccountOption[] = [
+  { account_id: 'acc-p', name: 'Prem', premium: true, busy_reason: null },
+  { account_id: 'acc-n', name: 'Plain', premium: false, busy_reason: null },
+];
+
+// The submit button lives in the modal footer and reaches the form by `form={id}`;
+// the harness stands one in for it so the submit specs still have something to press.
 function Harness({
   onSubmit = vi.fn(),
   initial = EMPTY_FORM,
@@ -17,7 +27,25 @@ function Harness({
   initial?: DiscoveryFormState;
 }) {
   const [form, setForm] = useState(initial);
-  return <DiscoveryForm form={form} submitting={false} onChange={setForm} onSubmit={onSubmit} />;
+  const id = useId();
+  return (
+    <>
+      <DiscoveryForm
+        form={form}
+        formId={id}
+        accounts={ACCOUNTS}
+        accountsLoading={false}
+        accountsErrored={false}
+        accountIds={effectiveAccountIds(form.accountIds, ACCOUNTS)}
+        submitting={false}
+        onChange={setForm}
+        onSubmit={onSubmit}
+      />
+      <button type="submit" form={id}>
+        Найти
+      </button>
+    </>
+  );
 }
 
 // The keyword suggester is a TanStack mutation, so even the specs that never touch it
@@ -33,6 +61,7 @@ function renderForm(props: Parameters<typeof Harness>[0] = {}) {
 
 const submitButton = () => screen.getByRole('button', { name: 'Найти' });
 const suggestButton = () => screen.getByRole('button', { name: 'Подобрать слова' });
+const keywordsField = () => screen.getByPlaceholderText('крипта, трейдинг, новости');
 
 type Suggestion = { keywords?: string[]; error?: string | null };
 
@@ -62,30 +91,33 @@ function routeSuggest(reply: Suggestion | 'hang' | 'fail') {
   return calls;
 }
 
-const keywordsField = () => screen.getByPlaceholderText('крипта, трейдинг, новости');
-
 describe('DiscoveryForm', () => {
-  it('disables submit until a long-enough keyword is typed', async () => {
-    renderForm();
-    expect(submitButton()).toBeDisabled();
+  it('refuses to submit until a long-enough keyword is typed', async () => {
+    const onSubmit = vi.fn();
+    renderForm({ onSubmit });
+    const field = screen.getByRole('textbox', { name: 'Ключевые слова' });
 
-    await userEvent.type(screen.getByRole('textbox', { name: /Ключевые слова|крипта/i }), 'abc');
-    expect(submitButton()).toBeDisabled();
+    await userEvent.type(field, 'abc');
+    await userEvent.click(submitButton());
+    expect(onSubmit).not.toHaveBeenCalled();
 
-    await userEvent.type(screen.getByRole('textbox', { name: /Ключевые слова|крипта/i }), 'd');
-    expect(submitButton()).toBeEnabled();
+    await userEvent.type(field, 'd');
+    await userEvent.click(submitButton());
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
   it('reports how many keywords were parsed', async () => {
     renderForm();
-    const input = screen.getByPlaceholderText('крипта, трейдинг, новости');
 
-    await userEvent.type(input, 'crypto, trading, ab');
+    await userEvent.type(keywordsField(), 'crypto, trading, ab');
 
     // 'ab' is below the minimum, so only two are counted.
     expect(screen.getByText(/Распознано: 2/)).toBeInTheDocument();
   });
 
+  // Enter in a field fires a click at the form's default button — which in the browser
+  // is the footer button, its form owner set by `form=`. user-event only looks for
+  // DESCENDANT submit buttons, so the Enter half is driven as the submit event itself.
   it('submits on the button and on Enter', async () => {
     const onSubmit = vi.fn();
     renderForm({ onSubmit, initial: { ...EMPTY_FORM, keywords: 'crypto' } });
@@ -93,15 +125,15 @@ describe('DiscoveryForm', () => {
     await userEvent.click(submitButton());
     expect(onSubmit).toHaveBeenCalledTimes(1);
 
-    await userEvent.type(screen.getByPlaceholderText('крипта, трейдинг, новости'), '{Enter}');
+    fireEvent.submit(keywordsField().closest('form')!);
     expect(onSubmit).toHaveBeenCalledTimes(2);
   });
 
-  it('does not submit an empty form on Enter', async () => {
+  it('does not submit an empty form on Enter', () => {
     const onSubmit = vi.fn();
     renderForm({ onSubmit });
 
-    await userEvent.type(screen.getByPlaceholderText('крипта, трейдинг, новости'), '{Enter}');
+    fireEvent.submit(keywordsField().closest('form')!);
 
     expect(onSubmit).not.toHaveBeenCalled();
   });
@@ -115,18 +147,21 @@ describe('DiscoveryForm', () => {
   it('names the tokens it dropped', async () => {
     renderForm();
 
-    await userEvent.type(screen.getByPlaceholderText('крипта, трейдинг, новости'), 'crypto ab');
+    await userEvent.type(keywordsField(), 'crypto ab');
 
     expect(screen.getByText(/Пропущено: ab/)).toBeInTheDocument();
   });
 
-  it('explains subscriber bounds the wrong way round instead of going dead', () => {
+  it('explains subscriber bounds the wrong way round instead of going dead', async () => {
+    const onSubmit = vi.fn();
     renderForm({
+      onSubmit,
       initial: { ...EMPTY_FORM, keywords: 'crypto', minSubscribers: '900', maxSubscribers: '100' },
     });
 
     expect(screen.getByText(/«Подписчиков от» больше/)).toBeInTheDocument();
-    expect(submitButton()).toBeDisabled();
+    await userEvent.click(submitButton());
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('says what the subscriber bounds actually do', () => {
@@ -137,13 +172,22 @@ describe('DiscoveryForm', () => {
     expect(screen.getByText(/Границы применяются только к находкам/)).toBeInTheDocument();
   });
 
-  it('resets every field', async () => {
-    renderForm({ initial: { ...EMPTY_FORM, keywords: 'crypto', minSubscribers: '500' } });
+  it('refuses to submit without an eligible account', async () => {
+    const onSubmit = vi.fn();
+    renderForm({ onSubmit, initial: { ...EMPTY_FORM, keywords: 'crypto', accountIds: [] } });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Сбросить' }));
+    await userEvent.click(submitButton());
 
-    expect(screen.getByPlaceholderText('крипта, трейдинг, новости')).toHaveValue('');
-    expect(submitButton()).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('writes a picked account into the form', async () => {
+    renderForm({ initial: { ...EMPTY_FORM, keywords: 'crypto' } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Prem' }));
+    await userEvent.click(screen.getByRole('option', { name: 'Plain' }));
+
+    expect(screen.getByText('выбрано 2')).toBeInTheDocument();
   });
 });
 
@@ -204,7 +248,7 @@ describe('DiscoveryForm keyword suggester', () => {
     await userEvent.click(suggestButton());
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Подобрать слова' })).toBeEnabled();
+      expect(suggestButton()).toBeEnabled();
     });
     expect(keywordsField()).toHaveValue(typed);
   });
@@ -270,7 +314,7 @@ describe('DiscoveryForm keyword suggester', () => {
     });
   });
 
-  it('refuses a topic past the endpoint length limit instead of truncating it', async () => {
+  it('refuses a topic past the endpoint length limit instead of truncating it', () => {
     const calls = routeSuggest({ keywords: ['trading'] });
     renderForm({ initial: { ...EMPTY_FORM, keywords: 'ю'.repeat(65) } });
 

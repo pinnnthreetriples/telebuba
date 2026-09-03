@@ -2,6 +2,17 @@
 // react-refresh/only-export-components forbids non-component exports from .tsx.
 import type { DiscoveryCandidate, DiscoverySearchRequest } from '@/shared/api';
 
+import {
+  LIMIT_DEFAULT,
+  limitInvalid,
+  parseLimit,
+  type DiscoveryAccess,
+  type DiscoveryCategory,
+  type DiscoveryComments,
+  type DiscoveryKind,
+  type DiscoveryLanguage,
+} from './filters';
+
 // Telegram rejects global searches shorter than this; the backend validates it too,
 // but the form should not let the operator submit a request it will refuse.
 export const KEYWORD_MIN_LENGTH = 4;
@@ -16,6 +27,16 @@ export type DiscoveryFormState = {
   seedChannel: string;
   minSubscribers: string;
   maxSubscribers: string;
+  kind: DiscoveryKind;
+  category: DiscoveryCategory;
+  language: DiscoveryLanguage;
+  comments: DiscoveryComments;
+  access: DiscoveryAccess;
+  hideSeen: boolean;
+  // '' = the server default (LIMIT_DEFAULT).
+  limit: string;
+  // null = the picker was never touched → `defaultAccountIds()` decides.
+  accountIds: string[] | null;
 };
 
 export const EMPTY_FORM: DiscoveryFormState = {
@@ -23,6 +44,14 @@ export const EMPTY_FORM: DiscoveryFormState = {
   seedChannel: '',
   minSubscribers: '',
   maxSubscribers: '',
+  kind: 'channels',
+  category: 'any',
+  language: 'any',
+  comments: 'any',
+  access: 'any',
+  hideSeen: true,
+  limit: '',
+  accountIds: null,
 };
 
 /** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap.
@@ -97,10 +126,29 @@ function positiveInt(raw: string): number | undefined {
   return Math.floor(parsed);
 }
 
-/** Turn the form into a wire request, omitting empty filters rather than sending nulls. */
-export function buildSearchRequest(form: DiscoveryFormState): DiscoverySearchRequest {
+/** Turn the form into a wire request, omitting empty filters rather than sending nulls.
+ *
+ * `accountIds` is the resolved pick (`effectiveAccountIds`), not the form's own field:
+ * the form stores null for "untouched" and the default depends on the account list.
+ * The filters always travel, defaults included — the server's defaults may drift.
+ */
+export function buildSearchRequest(
+  form: DiscoveryFormState,
+  accountIds: string[],
+): DiscoverySearchRequest {
+  const groups = form.kind === 'groups';
   const request: DiscoverySearchRequest = {
     keywords: parseKeywords(form.keywords),
+    kind: form.kind,
+    category: form.category,
+    language: form.language,
+    // Mirror of the server rule (groups have no comments verdict and never come by
+    // subscription): a pick left over from 'channels' must not 422 the whole request.
+    comments: groups ? 'any' : form.comments,
+    access: groups && form.access === 'subscription' ? 'any' : form.access,
+    hide_seen: form.hideSeen,
+    limit: parseLimit(form.limit) ?? LIMIT_DEFAULT,
+    account_ids: accountIds,
   };
   // The placeholder invites a t.me link and the API caps this field at 32 chars, so a
   // pasted URL either 422s or resolves to nothing — strip the prefix instead.
@@ -121,20 +169,25 @@ export function boundsInverted(form: DiscoveryFormState): boolean {
 }
 
 /**
- * Can the form be submitted? The API requires at least one keyword even when a seed
- * channel is given, so surface that here instead of letting the request 422.
+ * Can the form be submitted? The API needs something to search on — keywords or a
+ * category (its word bundle) — and at least one account, so surface that here instead
+ * of letting the request 422. A seed channel alone is still not enough.
  */
-export function canSubmit(form: DiscoveryFormState): boolean {
-  return parseKeywords(form.keywords).length > 0 && !boundsInverted(form);
+export function canSubmit(form: DiscoveryFormState, accountIds: string[]): boolean {
+  const searchable = parseKeywords(form.keywords).length > 0 || form.category !== 'any';
+  return searchable && !boundsInverted(form) && !limitInvalid(form.limit) && accountIds.length > 0;
 }
 
 /**
  * Is this row eligible to adopt? Comments must not be known-off, and the channel
  * must be free — the one-active-campaign-per-channel guard would refuse the rest.
+ * A group or a subscription-gated channel is not a place the campaign can comment
+ * in at all, and the adopt endpoint answers 'not_adoptable' for both.
  */
 export function isSelectable(candidate: DiscoveryCandidate): boolean {
   if (candidate.in_campaign === true) return false;
   if (candidate.taken_by_other_campaign === true) return false;
+  if (candidate.kind === 'group' || candidate.access === 'subscription') return false;
   return candidate.qualification !== 'comments_off';
 }
 
