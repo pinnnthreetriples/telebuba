@@ -277,12 +277,12 @@ async def run_search(
     # not displace a reviewed set. It is reported under its own reason, because "we hit a
     # flood" and "the account was already serving one" send the operator to different
     # places.
-    # An empty merge that ``hide_seen`` alone emptied does not replace either: every hit
+    # An empty merge that ``hide_seen`` ALONE emptied does not replace either: every hit
     # was a channel the operator already looked at, and wiping the previous set to show
     # them nothing threw away the only rows that were still an answer. The board says
     # those rows are the previous search's (``stored=False``), as after a flood.
     swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
-    all_seen = not merged.rows and merged.filtered.get("seen", 0) > 0
+    all_seen = not merged.rows and {name for name, n in merged.filtered.items() if n} == {"seen"}
     replaced = (
         native.stop not in {"flooded", "cooling"}
         and any(outcome.answered for outcome in outcomes)

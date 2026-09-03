@@ -220,3 +220,34 @@ async def test_a_category_alone_searches_its_bundle(monkeypatch: pytest.MonkeyPa
     await run_search(campaign_id, pool_of(), search_request(keywords=[], category="news"))
 
     assert [action.query for action in reader.search_actions()] == list(BUNDLES["news"])
+
+
+@pytest.mark.asyncio
+async def test_an_empty_merge_is_all_seen_only_when_seen_was_the_sole_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One hit already seen plus one the access filter refused is an honest empty answer.
+
+    Keeping the previous rows is for the case where NOTHING new could have been shown;
+    when another filter also emptied the merge, the old rows are not that answer.
+    """
+    hits = TelegramChannelMatches(
+        items=[
+            TelegramChannelMatch(username="alpha", title="A"),
+            TelegramChannelMatch(channel_id=777, title="Private"),
+        ],
+    )
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=hits))
+    await mark_seen(["alpha"], datetime.now(UTC))
+    campaign_id = await new_campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [DiscoveryCandidateRow(channel="alpha", title="A", source="telegram_search")],
+    )
+
+    stage = await run_search(campaign_id, pool_of(), search_request(access="open"))
+
+    assert stage.all_seen is False
+    assert stage.replaced is True
+    assert stage.report.filtered == {"seen": 1, "access": 1}
+    assert await _stored(campaign_id) == []
