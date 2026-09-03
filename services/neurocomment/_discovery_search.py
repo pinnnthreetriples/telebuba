@@ -241,6 +241,44 @@ def _merge(
     )
 
 
+def _replaces(
+    outcomes: list[SourceOutcome], merged: _Merged, stop: str | None
+) -> tuple[bool, bool]:
+    """Whether this run's rows displace the stored set, and whether ``seen`` alone emptied it.
+
+    The write is delete-then-insert, so an empty merge nobody answered for would destroy
+    the previous run's already-qualified candidates over one transient failure. An empty
+    merge also needs the KEYWORD SWEEP to have answered: the wider waves are consulted on
+    every run, and letting one of them answer "nothing" for a sweep that merely timed out
+    hands that wipe to a narrower index. Rows found by any source still replace — those
+    ARE this run's findings, and serving the previous set beside them would present
+    another keyword set's channels as this one's.
+
+    A flood never replaces either: the run stopped mid-wave, so these rows are a fraction
+    of what the keywords would have found, the coordinator skips qualification for them and
+    reports the run failed, and the account is now on cooldown. Handing that partial set to
+    the delete-then-insert traded a reviewed, qualified candidate list for a dozen
+    unqualified handles the operator could not even re-search for. A limit found at a
+    wave boundary is treated exactly like one this run caused — reported under its own
+    reason, because "we hit a flood" and "the account was already serving one" send the
+    operator to different places.
+
+    An empty merge that ``hide_seen`` ALONE emptied does not replace: every hit was a
+    channel the operator already looked at, and wiping the previous set to show them
+    nothing threw away the only rows that were still an answer. The board says those rows
+    are the previous search's (``stored=False``), as after a flood.
+    """
+    swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
+    all_seen = not merged.rows and {name for name, n in merged.filtered.items() if n} == {"seen"}
+    replaced = (
+        stop not in {"flooded", "cooling"}
+        and any(outcome.answered for outcome in outcomes)
+        and (bool(merged.rows) or swept)
+        and not all_seen
+    )
+    return replaced, all_seen
+
+
 async def run_search(
     campaign_id: str,
     pool: AccountPool,
@@ -260,35 +298,7 @@ async def run_search(
         refs = {_handle_of(hit) for outcome in outcomes for hit in outcome.candidates}
         seen = await list_seen(ref for ref in refs if ref is not None)
     merged = _merge(outcomes, request, seen)
-    # The write is delete-then-insert, so an empty merge nobody answered for would destroy
-    # the previous run's already-qualified candidates over one transient failure. An empty
-    # merge now also needs the KEYWORD SWEEP to have answered: the wider waves are
-    # consulted on every run, and letting one of them answer "nothing" for a sweep that
-    # merely timed out hands that wipe to a narrower index. Rows found by any source still
-    # replace — those ARE this run's findings, and serving the previous set beside them
-    # would present another keyword set's channels as this one's.
-    # A FloodWait never replaces either: the run stopped mid-wave, so these rows are a
-    # fraction of what the keywords would have found, the coordinator skips qualification
-    # for them and reports the run failed, and the account is now on cooldown. Handing
-    # that partial set to the delete-then-insert traded a reviewed, qualified candidate
-    # list for a dozen unqualified handles the operator could not even re-search for.
-    # A limit found at a wave boundary is treated exactly like one this run caused: the
-    # run stopped early either way, so its findings are a fraction of the sweep and must
-    # not displace a reviewed set. It is reported under its own reason, because "we hit a
-    # flood" and "the account was already serving one" send the operator to different
-    # places.
-    # An empty merge that ``hide_seen`` ALONE emptied does not replace either: every hit
-    # was a channel the operator already looked at, and wiping the previous set to show
-    # them nothing threw away the only rows that were still an answer. The board says
-    # those rows are the previous search's (``stored=False``), as after a flood.
-    swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
-    all_seen = not merged.rows and {name for name, n in merged.filtered.items() if n} == {"seen"}
-    replaced = (
-        native.stop not in {"flooded", "cooling"}
-        and any(outcome.answered for outcome in outcomes)
-        and (bool(merged.rows) or swept)
-        and not all_seen
-    )
+    replaced, all_seen = _replaces(outcomes, merged, native.stop)
     if replaced:
         await replace_discovery_candidates(campaign_id, merged.rows)
     # The whole report is built AFTER that decision. Per-source states and reach describe
