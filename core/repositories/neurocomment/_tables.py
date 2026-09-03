@@ -190,6 +190,9 @@ _neurocomment_discovery_candidates = Table(
     Column("qualified_at", String, nullable=True),
     Column("qualify_error", String, nullable=True),
     Column("created_at", String, nullable=False),
+    # ``channel`` or ``group`` (migration #60): groups get no comment verdict and cannot
+    # be adopted, but the operator may search for them.
+    Column("kind", String, nullable=False, server_default="channel"),
 )
 _neurocomment_readiness = Table(
     "neurocomment_readiness",

@@ -42,7 +42,7 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
 )
 from core.telegram_client._pool import removing_client
-from core.telegram_client._util import optional_str
+from core.telegram_client._util import optional_bool, optional_str
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeChallenge, PhoneCodeRequest, PhoneCodeSubmit
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -297,4 +297,5 @@ def _alive_result(profile: TelegramClientProfile, me: object) -> TelegramSession
         username=optional_str(getattr(me, "username", None)),
         first_name=optional_str(getattr(me, "first_name", None)),
         last_name=optional_str(getattr(me, "last_name", None)),
+        premium=optional_bool(getattr(me, "premium", None)),
     )

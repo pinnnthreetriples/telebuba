@@ -87,7 +87,7 @@ async def new_campaign() -> str:
 
 
 def search_request(**overrides: object) -> DiscoverySearchRequest:
-    payload: dict[str, object] = {"keywords": ["crypto"]}
+    payload: dict[str, object] = {"keywords": ["crypto"], "account_ids": [LISTENER_ID]}
     payload.update(overrides)
     return DiscoverySearchRequest.model_validate(payload)
 

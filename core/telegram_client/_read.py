@@ -293,6 +293,7 @@ async def _dispatch_get_linked_group(
     # The RIGHTS object answers "may anyone write", not the group's presence: a linked
     # ``ChannelForbidden``/``ChatEmpty`` carries none, and its absence is not a "no ban".
     rights = getattr(group, "default_banned_rights", None)
+    about = getattr(full_chat, "about", None)
     return LinkedDiscussionGroupResult(
         linked_chat_id=linked_id,
         comments_enabled=linked_id is not None,
@@ -305,6 +306,9 @@ async def _dispatch_get_linked_group(
         scam=_flag(broadcast, "scam"),
         fake=_flag(broadcast, "fake"),
         restricted=_flag(broadcast, "restricted"),
+        about=(about.strip() or None) if isinstance(about, str) else None,
+        is_group=_flag(broadcast, "megagroup"),
+        target_join_request=_flag(broadcast, "join_request"),
     )
 
 

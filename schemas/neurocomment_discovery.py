@@ -15,6 +15,17 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# The search request and its bounds live in a sibling module (file-size cap); imported
+# back so ``from schemas.neurocomment_discovery import DiscoverySearchRequest`` still works.
+from schemas.neurocomment_discovery_request import (  # noqa: F401
+    CHANNEL_HANDLE_MAX_LENGTH,
+    KEYWORD_MAX_LENGTH,
+    KEYWORD_MIN_LENGTH,
+    MAX_KEYWORDS,
+    DiscoverySearchRequest,
+    Keyword,
+)
+
 # Where a candidate came from. Adding a source is one literal here plus one
 # adapter in services (see .mex/patterns/add-discovery-source.md).
 #   telegram_search      — contacts.search per keyword (names and titles).
@@ -65,83 +76,22 @@ DiscoveryStartStatus = Literal[
 # two spellings of one code is two translations that drift apart.
 DISCOVERY_BUSY_CODE = "account_running_discovery"
 
-# Telegram rejects global searches under 4 characters outright.
-KEYWORD_MIN_LENGTH = 4
-KEYWORD_MAX_LENGTH = 64
-MAX_KEYWORDS = 10
 # Upper bound on one adopt click. Onboarding's own rolling join cap (20/account/day)
 # and 30-120s join jitter absorb the burst; this just bounds the request body.
 # The ceiling of ``discovery_max_candidates``, so select-all can never silently drop a
 # tail.
 MAX_ADOPT_CHANNELS = 500
-CHANNEL_HANDLE_MAX_LENGTH = 32
 
 AdoptHandle = Annotated[str, Field(min_length=1, max_length=CHANNEL_HANDLE_MAX_LENGTH)]
-# Bounded per item like ``AdoptHandle``: the validator below measures the *stripped*
-# form, so without this a single 10 MB keyword passed validation and rode into a
-# Telegram RPC.
-Keyword = Annotated[str, Field(min_length=1, max_length=KEYWORD_MAX_LENGTH)]
-
-
-class DiscoverySearchRequest(BaseModel):
-    """Operator-supplied search parameters.
-
-    ``members_min``/``members_max`` are applied client-side to the hits whose subscriber
-    count Telegram happens to return.
-
-    ``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped
-    before, so a direct caller posting one keyword ten times spent ten identical Telegram
-    RPCs against the flood budget.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    keywords: list[Keyword] = Field(min_length=1, max_length=MAX_KEYWORDS)
-    seed_channel: str | None = Field(
-        default=None,
-        min_length=1,
-        max_length=CHANNEL_HANDLE_MAX_LENGTH,
-    )
-    members_min: int | None = Field(default=None, ge=0)
-    members_max: int | None = Field(default=None, ge=0)
-
-    @model_validator(mode="after")
-    def _check_bounds(self) -> DiscoverySearchRequest:
-        deduped: list[str] = []
-        seen: set[str] = set()
-        for keyword in self.keywords:
-            stripped = keyword.strip()
-            if not (KEYWORD_MIN_LENGTH <= len(stripped) <= KEYWORD_MAX_LENGTH):
-                msg = (
-                    f"each keyword must be {KEYWORD_MIN_LENGTH}-{KEYWORD_MAX_LENGTH} "
-                    "characters (Telegram rejects shorter global searches)"
-                )
-                raise ValueError(msg)
-            if stripped.casefold() in seen:
-                continue
-            seen.add(stripped.casefold())
-            deduped.append(stripped)
-        self.keywords = deduped
-        if self.seed_channel is not None and not self.seed_channel.strip():
-            # A blank seed is truthy, so it survived into a pace sleep and a peer
-            # resolution and yielded nothing. The rest of the normalization is the
-            # service's (``core.channel_tokens`` is off limits to ``schemas/``).
-            msg = "seed_channel must not be blank"
-            raise ValueError(msg)
-        if (
-            self.members_min is not None
-            and self.members_max is not None
-            and self.members_min > self.members_max
-        ):
-            msg = "members_min must not exceed members_max"
-            raise ValueError(msg)
-        return self
 
 
 class DiscoverySearchOutcome(BaseModel):
     """Why a start attempt did or did not spawn a run."""
 
     status: DiscoveryStartStatus
+    # Which of the operator's picked accounts caused a refusal (busy, cooling), so the
+    # SPA can point at the row rather than at the whole picker.
+    refused_account_id: str | None = None
 
 
 class DiscoverySourceReport(BaseModel):
@@ -207,6 +157,9 @@ class DiscoveryRunReport(BaseModel):
     # Did ``discovery_max_candidates`` cut the merged set? "Channels found: 100" is a
     # floor when it did, and reads as everything Telegram has when it did not say so.
     capped: bool = False
+    # Rows dropped per operator filter (``kind``, ``access``, ``seen``, ``comments``,
+    # ``language``, ``category``). Ephemeral like ``origins``: a restart forgets it.
+    filtered: dict[str, int] = Field(default_factory=dict)
 
 
 class DiscoverySearchStageResult(BaseModel):
@@ -257,6 +210,12 @@ class DiscoveryChannelVerdict(BaseModel):
     scam: bool | None = None
     fake: bool | None = None
     restricted: bool | None = None
+    # How one gets in: ``open`` / ``join_request`` / ``subscription`` (no public handle).
+    access: str | None = None
+    # Detected from title + about (``ru`` / ``en`` / ``uk`` / ``other``).
+    language: str | None = None
+    # Supergroup rather than broadcast channel — no comment verdict applies.
+    is_group: bool | None = None
 
 
 class DiscoveryCandidate(BaseModel):
@@ -268,6 +227,12 @@ class DiscoveryCandidate(BaseModel):
     # A plain string, like the stored row it comes from: see
     # :class:`DiscoveryCandidateRow`. The UI falls back to the raw code as its label.
     source: str = Field(min_length=1)
+    # Plain strings like ``source``: rows from older builds must render, never 500.
+    kind: str = "channel"
+    access: str | None = None
+    language: str | None = None
+    # Did title + about match the requested category's bundle? ``None`` = not asked.
+    category_match: bool | None = None
     # Every source that returned this channel, not just the one whose spelling won.
     # Plain strings for the same reason as ``source``: with no run state to read, this
     # falls back to the stored label.
@@ -346,7 +311,14 @@ class DiscoveryAdoptRequest(BaseModel):
 # ``ChannelLinkOutcome`` is deliberately left alone — the single-channel link route
 # cannot produce either, and widening its literal would advertise statuses it never
 # returns.
-DiscoveryAdoptStatus = Literal["linked", "already_assigned", "comments_off", "failed"]
+DiscoveryAdoptStatus = Literal[
+    "linked",
+    "already_assigned",
+    "comments_off",
+    "failed",
+    # A group or a subscription-only channel: nothing a campaign could comment in.
+    "not_adoptable",
+]
 
 
 class DiscoveryAdoptOutcome(BaseModel):
@@ -378,6 +350,8 @@ class DiscoveryCandidateRow(BaseModel):
     title: str = ""
     subscribers: int | None = None
     source: str = Field(min_length=1)
+    # ``channel`` or ``group``; plain string for the same reason as ``source``.
+    kind: str = "channel"
     qualified_at: str | None = None
     qualify_error: str | None = None
 

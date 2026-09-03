@@ -2,14 +2,14 @@
 
 Telegram's own channel search, reachable from an ordinary user account:
 
-* ``SearchChannels`` → ``contacts.search`` restricted to broadcasts. Matches
+* ``SearchChannels`` → ``contacts.search``, restricted to broadcasts by ``kind``. Matches
   usernames *and* titles, but the server caps the result count itself and there
   is no offset parameter — breadth comes from varying the query, not paging.
 * ``GetSimilarChannels`` → ``channels.getChannelRecommendations``. Given a seed
   channel it returns thematically similar public channels; with no seed it
   recommends against the account's own subscriptions. Cheap and not
   flood-prone, which makes it the preferred way to widen a keyword sweep.
-* ``SearchGlobalPosts`` → ``messages.searchGlobal`` restricted to broadcasts. A
+* ``SearchGlobalPosts`` → ``messages.searchGlobal``, restricted by ``kind`` too. A
   different index from the two above: it matches what a channel POSTS, not what
   it is called, so it finds channels whose title never carries the keyword. It
   is the only one of the three that pages, via an opaque cursor.
@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Telegram rejects global searches shorter than this ("QUERY_TOO_SHORT"), so the
 # gateway short-circuits instead of spending an RPC on a guaranteed error.
@@ -30,13 +30,17 @@ CHANNEL_SEARCH_MIN_QUERY_LENGTH = 4
 # Handles are at most 32 characters; discovery clamps normalization to this.
 CHANNEL_HANDLE_MAX_LENGTH = 32
 
+# Which peer kinds a search keeps: broadcast channels, supergroups, or both.
+DiscoveryKind = Literal["all", "channels", "groups"]
+
 
 class SearchChannels(BaseModel):
-    """Read-only: public broadcast channels matching a keyword."""
+    """Read-only: public channels and/or groups matching a keyword."""
 
     action_type: Literal["search_channels"] = "search_channels"
     query: str = Field(min_length=1, max_length=64)
     limit: int = Field(default=20, ge=1, le=50)
+    kind: DiscoveryKind = "channels"
 
 
 class GetSimilarChannels(BaseModel):
@@ -73,19 +77,31 @@ class SearchGlobalPosts(BaseModel):
     query: str = Field(min_length=1, max_length=64)
     limit: int = Field(default=50, ge=1, le=100)
     cursor: GlobalPostsCursor | None = None
+    kind: DiscoveryKind = "channels"
 
 
 class TelegramChannelMatch(BaseModel):
-    """Gateway output: one public channel found by search or recommendation.
+    """Gateway output: one channel or group found by search or recommendation.
 
     ``participants_count`` is usually absent on search results — Telegram only
     fills it reliably in ``channels.getFullChannel``, so discovery backfills it
-    later during the comments-enabled probe.
+    later during the comments-enabled probe. A match without a public handle
+    (recommendations may return private channels) is addressed by ``channel_id``.
     """
 
-    username: str = Field(min_length=1)
+    username: str | None = None
+    channel_id: int | None = None
     title: str = ""
     participants_count: int | None = None
+    kind: Literal["channel", "group"] = "channel"
+    join_request: bool | None = None
+
+    @model_validator(mode="after")
+    def _addressable(self) -> TelegramChannelMatch:
+        if not self.username and self.channel_id is None:
+            msg = "a match needs a username or a channel_id"
+            raise ValueError(msg)
+        return self
 
 
 class TelegramChannelMatches(BaseModel):

@@ -96,7 +96,9 @@ class _PooledClient:
         return True
 
     async def get_me(self) -> object:
-        return SimpleNamespace(id=7, phone="79990000000", username="u", first_name="F")
+        return SimpleNamespace(
+            id=7, phone="79990000000", username="u", first_name="F", premium=True
+        )
 
     async def __call__(self, _request: object) -> object:
         # The freeze probe degrades to "not frozen" on any failure.
@@ -134,6 +136,29 @@ async def test_check_borrows_the_pooled_client(monkeypatch: pytest.MonkeyPatch) 
     assert borrowed == ["acc-1"]
     assert result.status == "alive"
     assert result.user_id == 7
+    assert result.premium is True
+
+
+@pytest.mark.asyncio
+async def test_a_user_without_the_premium_flag_stays_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No ``premium`` attribute is no verdict — ``None``, never a coerced ``False``."""
+    _with_credentials(monkeypatch)
+
+    class _NoFlagClient(_PooledClient):
+        async def get_me(self) -> object:
+            return SimpleNamespace(id=7)
+
+    async def fake_get_client(_account_id: str) -> object:
+        return _NoFlagClient()
+
+    monkeypatch.setattr("core.telegram_client._session.get_client", fake_get_client)
+
+    result = await check_telegram_session(TelegramSessionCheckRequest(account_id="acc-1"))
+
+    assert result.status == "alive"
+    assert result.premium is None
 
 
 @pytest.mark.asyncio

@@ -54,6 +54,14 @@ def _add_account_twofa_password(connection: Connection) -> None:
         connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN twofa_password VARCHAR")
 
 
+def _add_account_premium(connection: Connection) -> None:
+    # Same table + column guards as ``_add_account_twofa_password`` (partial databases).
+    if not _sqlite_table_exists(connection, "accounts"):
+        return
+    if "premium" not in _sqlite_columns(connection, "accounts"):
+        connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN premium BOOLEAN")
+
+
 def _add_account_proxy_geo(connection: Connection) -> None:
     # ``account_proxies`` was retired by the proxy-pool migration (#18); on a
     # fresh DB the table no longer exists, so this legacy ALTER is a no-op.

@@ -48,6 +48,12 @@ class LinkedDiscussionGroupResult(BaseModel):
     scam: bool | None = None
     fake: bool | None = None
     restricted: bool | None = None
+    # The target's own description, for the operator's eye; ``None`` when blank.
+    about: str | None = None
+    # The TARGET is a supergroup (comments are its own messages, no linked chat).
+    is_group: bool | None = None
+    # The target's own approval-to-join gate, as opposed to the linked group's.
+    target_join_request: bool | None = None
 
 
 class CheckMessagesAliveResult(BaseModel):

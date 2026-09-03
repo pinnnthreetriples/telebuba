@@ -27,7 +27,7 @@ pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
 
 def _request(**overrides: object) -> DiscoverySearchRequest:
-    payload: dict[str, object] = {"keywords": ["crypto"]}
+    payload: dict[str, object] = {"keywords": ["crypto"], "account_ids": ["acc-listener"]}
     payload.update(overrides)
     return DiscoverySearchRequest.model_validate(payload)
 

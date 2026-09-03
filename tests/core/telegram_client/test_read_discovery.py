@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from types import SimpleNamespace
+from typing import Literal
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 from telethon import errors
 from telethon.tl.functions.channels import GetChannelRecommendationsRequest
 from telethon.tl.functions.contacts import SearchRequest
@@ -22,7 +24,9 @@ from schemas.telegram_actions import (
     SearchGlobalPosts,
 )
 from schemas.telegram_actions_discovery import (
+    DiscoveryKind,
     GlobalPostsCursor,
+    TelegramChannelMatch,
     TelegramChannelMatches,
     TelegramGlobalPostMatches,
 )
@@ -42,8 +46,16 @@ def _channel(
         username=username,
         title=title,
         broadcast=broadcast,
+        megagroup=False,
         participants_count=participants_count,
+        join_request=None,
     )
+
+
+def _group(username: str | None, *, channel_id: int = 0) -> SimpleNamespace:
+    group = _channel(username, title="G", broadcast=False, channel_id=channel_id)
+    group.megagroup = True
+    return group
 
 
 class _FakeClient:
@@ -115,6 +127,68 @@ async def test_search_channels_skips_unlinkable_entries(monkeypatch: pytest.Monk
 
     assert isinstance(result, TelegramChannelMatches)
     assert [item.username for item in result.items] == ["keeper"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "expected", "broadcasts"),
+    [("channels", ["chan"], True), ("groups", ["grp"], None), ("all", ["chan", "grp"], None)],
+)
+async def test_search_channels_kind_filters_and_picks_the_server_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    kind: DiscoveryKind,
+    expected: list[str],
+    broadcasts: Literal[True] | None,
+) -> None:
+    """Only the channels kind has a server-side flag; the others filter the mixed vector."""
+    client = _FakeClient([_channel("chan"), _group("grp")])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchChannels(query="topic", kind=kind))
+
+    assert isinstance(result, TelegramChannelMatches)
+    assert [item.username for item in result.items] == expected
+    request = client.requests[0]
+    assert isinstance(request, SearchRequest)
+    assert request.broadcasts is broadcasts
+
+
+@pytest.mark.asyncio
+async def test_search_channels_classifies_groups_and_reads_the_join_gate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gated = _channel("gated")
+    gated.join_request = True
+    client = _FakeClient([gated, _group("grp")])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchChannels(query="topic", kind="all"))
+
+    assert isinstance(result, TelegramChannelMatches)
+    assert [(item.kind, item.join_request) for item in result.items] == [
+        ("channel", True),
+        ("group", None),  # unset TL flag is not a verdict
+    ]
+
+
+@pytest.mark.asyncio
+async def test_search_channels_never_keeps_a_username_less_group(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient([_group(None, channel_id=42)])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchChannels(query="topic", kind="groups"))
+
+    assert isinstance(result, TelegramChannelMatches)
+    assert result.items == []
+
+
+def test_a_match_needs_a_handle_or_an_id() -> None:
+    with pytest.raises(ValidationError):
+        TelegramChannelMatch(title="nameless")
+    assert TelegramChannelMatch(channel_id=42).username is None
+    assert TelegramChannelMatch(username="handle").channel_id is None
 
 
 @pytest.mark.asyncio
@@ -203,6 +277,34 @@ async def test_global_post_search_returns_the_posting_channels(
     assert isinstance(request.offset_peer, InputPeerEmpty)
     assert (request.offset_rate, request.offset_id) == (0, 0)
     assert result.next_cursor == GlobalPostsCursor(offset_rate=777, peer="cooking", offset_id=12)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "expected", "flags"),
+    [
+        ("channels", ["chan"], (True, None)),
+        ("groups", ["grp"], (None, True)),
+        ("all", ["chan", "grp"], (None, None)),
+    ],
+)
+async def test_global_post_search_kind_filters_and_picks_the_server_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    kind: DiscoveryKind,
+    expected: list[str],
+    flags: tuple[bool | None, bool | None],
+) -> None:
+    """The message index has a flag per kind, so the limit is not spent on the other."""
+    client = _FakeClient([_channel("chan", channel_id=1), _group("grp", channel_id=2)], [])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", SearchGlobalPosts(query="topic", kind=kind))
+
+    assert isinstance(result, TelegramGlobalPostMatches)
+    assert [item.username for item in result.items] == expected
+    request = client.requests[0]
+    assert isinstance(request, SearchGlobalRequest)
+    assert (request.broadcasts_only, request.groups_only) == flags
 
 
 @pytest.mark.asyncio
@@ -310,6 +412,29 @@ async def test_similar_channels_without_a_seed_sends_none(
     request = client.requests[0]
     assert isinstance(request, GetChannelRecommendationsRequest)
     assert request.channel is None
+
+
+@pytest.mark.asyncio
+async def test_similar_channels_keep_private_channels_and_groups_by_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recommendations are the one source that returns private channels — keep them."""
+    client = _FakeClient(
+        [
+            _channel(None, title="Private", channel_id=42),
+            _group("grp", channel_id=7),
+            _channel("discussion_group", broadcast=False),  # neither kind: dropped
+        ],
+    )
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", GetSimilarChannels())
+
+    assert isinstance(result, TelegramChannelMatches)
+    assert [(item.username, item.channel_id, item.kind) for item in result.items] == [
+        (None, 42, "channel"),
+        ("grp", 7, "group"),
+    ]
 
 
 @pytest.mark.asyncio
@@ -439,3 +564,51 @@ async def test_linked_group_read_tolerates_a_missing_count(
     assert isinstance(result, LinkedDiscussionGroupResult)
     assert result.comments_enabled is False
     assert result.participants_count is None
+    assert (result.about, result.is_group, result.target_join_request) == (None, None, None)
+
+
+@pytest.mark.asyncio
+async def test_linked_group_read_describes_the_target_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``about``, the megagroup flag and the join gate come off the TARGET, not its group.
+
+    A supergroup target has no linked chat; ``comments_enabled`` keeps its current
+    meaning ("has a linked group") and the caller reads ``is_group`` beside it.
+    """
+    target = SimpleNamespace(id=111, megagroup=True, join_request=True)
+
+    class GroupTargetClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return SimpleNamespace(
+                full_chat=SimpleNamespace(id=111, linked_chat_id=None, about="  Rules.  "),
+                chats=[target],
+            )
+
+    _patch_client(monkeypatch, GroupTargetClient())
+
+    result = await execute_read("acc-1", GetLinkedDiscussionGroup(channel="@chat"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.comments_enabled is False
+    assert (result.about, result.is_group, result.target_join_request) == ("Rules.", True, True)
+
+
+@pytest.mark.asyncio
+async def test_linked_group_read_blank_about_is_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    class BlankAboutClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return SimpleNamespace(full_chat=SimpleNamespace(linked_chat_id=None, about="   "))
+
+    _patch_client(monkeypatch, BlankAboutClient())
+
+    result = await execute_read("acc-1", GetLinkedDiscussionGroup(channel="@news"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.about is None

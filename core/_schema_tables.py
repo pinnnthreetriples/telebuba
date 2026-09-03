@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     Column,
     Float,
     ForeignKey,
@@ -54,6 +55,8 @@ _accounts = Table(
     # in no SELECT the account read model uses, the same arrangement
     # ``proxies.password`` has (``_row_to_proxy`` maps it to ``has_password``).
     Column("twofa_password", String, nullable=True),
+    # Telegram Premium as ``get_me`` last reported it; NULL until a check answered.
+    Column("premium", Boolean, nullable=True),
     # Small (~160px) profile photo captured on the session check, served by the
     # cacheable /avatar endpoint. ``avatar_etag`` (content hash) is what the list
     # query selects and the SPA puts in the <img> URL as ?v= — the BLOB stays out
@@ -224,4 +227,14 @@ _users = Table(
     Column("token_version", Integer, nullable=False, server_default="0"),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+)
+_neurocomment_discovery_seen = Table(
+    # Every channel any discovery run has ever returned, fleet-wide (migration #60).
+    # Backs the search request's ``hide_seen``. Here rather than in the neurocomment
+    # table module, which sits at the file-size cap.
+    "neurocomment_discovery_seen",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("first_seen_at", String, nullable=False),
+    Column("last_seen_at", String, nullable=False),
 )

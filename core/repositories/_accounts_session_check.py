@@ -43,6 +43,7 @@ def _update_account_from_session_check(result: TelegramSessionCheckResult) -> Ac
                 "username": result.username,
                 "first_name": result.first_name,
                 "last_name": result.last_name,
+                "premium": result.premium,
             },
         )
         # Only overwrite the avatar when the check actually returned bytes — a
