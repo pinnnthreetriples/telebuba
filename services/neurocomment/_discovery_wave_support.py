@@ -1,5 +1,7 @@
 """Discovery stage 1 — what every wave shares: the budget, the wave result, the pacing.
 
+The pacing gap is per STREAM now: ``services.neurocomment._discovery_streams.Streams``
+calls ``pace()`` between two reads of the same account, never between two accounts.
 Split from ``_discovery_waves`` (file-size cap). Nothing here talks to Telegram.
 """
 
@@ -13,7 +15,6 @@ from services.neurocomment._discovery_providers import SourceOutcome
 
 if TYPE_CHECKING:
     from schemas.neurocomment_discovery import DiscoverySource
-    from services.neurocomment._discovery_pool import AccountPool
 
 # Short locale-neutral reason for a wave the run's read budget stopped. Deliberately not
 # a run-level error — see ``_discovery_search._merge``.
@@ -54,19 +55,6 @@ class Wave(NamedTuple):
         return self.stop is not None
 
 
-def stopped(outcomes: list[SourceOutcome], pool: AccountPool, source: DiscoverySource) -> Wave:
-    """A wave the pool would not hand an account to.
-
-    Every account gone is a stop, and at this point only ``cooling`` can have emptied it
-    — a flood or a dead session is reported by ``report`` and ends the wave before the
-    next acquire. Accounts still in the pool means each has spent its own wave ceiling:
-    truncation, reported like the shared budget's, and the run goes on to qualify.
-    """
-    if pool.empty:
-        return Wave(outcomes, stop="cooling")
-    return Wave([*outcomes, skipped(source, READ_BUDGET, truncated=True)])
-
-
 class Budget:
     """Telegram reads the run has left, shared by every wave.
 
@@ -84,18 +72,29 @@ class Budget:
         self.left = total
         self.held = 0
 
-    @property
-    def exhausted(self) -> bool:
-        """Is the run out? Checked BEFORE the pace sleep and the acquire, consumed after.
+    def exhausted_for(self, *, held: bool) -> bool:
+        """Is the run out for a job with this ``held`` flag?
 
-        Claiming the read up front charged one for every acquire the pool then refused —
-        a phantom read per wave whenever every account sat at its ceiling.
+        Checked BEFORE the pace sleep and the account check, consumed after — claiming
+        the read up front charged one for every check a stream then found refused, a
+        phantom read whenever every account sat at its ceiling. A ``held`` job draws
+        only from the fenced-off share (``left``); a normal job must also leave that
+        share untouched for the wave it is reserved for.
         """
+        if held:
+            return self.left <= 0
         return self.left - self.held <= 0
 
-    def take(self) -> None:
+    @property
+    def exhausted(self) -> bool:
+        """Kept for callers with no held reads of their own: ``exhausted_for(held=False)``."""
+        return self.exhausted_for(held=False)
+
+    def take(self, *, held: bool = False) -> None:
         """Consume the read an account was just handed out for."""
         self.left -= 1
+        if held:
+            self.held -= 1
 
 
 def skipped(

@@ -103,6 +103,11 @@ async def start_discovery(
 
         _discovery_state.set_phase(campaign_id, "searching")
         _discovery_state.set_last_error(campaign_id, None)
+        # Synchronous, with the rest of this reset: ``start_work`` only replaces the
+        # tracker once the spawned task reaches its first stage, several awaits later —
+        # without this a board poll in between paired the NEW phase with the PREVIOUS
+        # run's live streams.
+        _discovery_state.clear_work(campaign_id)
         # Per-run state, so it is cleared where the rest of it is. A verdict describes the
         # channel a PREVIOUS run saw — a channel this run does not find again would keep
         # it, and the map would grow for the life of the process.
@@ -214,6 +219,7 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
             stale_candidates=bool(rows) and not report.stored,
             capped=report.capped,
             filtered=report.filtered,
+            work=_discovery_state.work(campaign_id),
         ),
         candidates=candidates,
     )

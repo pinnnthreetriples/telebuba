@@ -1,18 +1,20 @@
 """The accounts one discovery run reads with, and which accounts may be picked at all.
 
 One paced stream per account is the invariant the whole design rests on. A run that
-reads with several accounts keeps it by ROTATING over them (``AccountPool``) rather
-than by firing them in parallel; the gate that used to pick the listener automatically
-(``check_search_accounts`` / ``list_search_accounts``) now answers per explicit pick,
-because the operator chooses the accounts.
+reads with several accounts keeps it by running one concurrent stream PER account
+(``services.neurocomment._discovery_streams.Streams``) rather than rotating a single
+paced reader over them; this pool answers each stream's own eligibility checks
+(``check``, ``premium_left``) instead of handing out a shared next-account turn. The
+gate that used to pick the listener automatically (``check_search_accounts`` /
+``list_search_accounts``) now answers per explicit pick, because the operator chooses
+the accounts.
 """
 
 from __future__ import annotations
 
-from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple
 
 from core.config import settings
 from core.db import list_accounts, list_warming_states
@@ -39,16 +41,25 @@ class SearchAccount:
 
     account_id: str
     premium: bool | None = None
+    name: str = ""
 
 
 class AccountPool:
-    """Round-robin over a run's accounts, dropping each one the moment it turns unsafe.
+    """The accounts one discovery run reads with, dropping each one the moment it turns unsafe.
 
-    An account leaves the rotation for good when a read floods it (its cooldown is
-    recorded, as before), when someone else parked it (``account_cooling``), or when it
+    No rotation: each account is its own concurrent stream
+    (``services.neurocomment._discovery_streams.Streams``), so this pool only answers
+    per-stream questions — which accounts are still here (``accounts``, ``has``), is a
+    Premium one still usable (``premium_left``), and may THIS account take THIS read
+    right now (``check``).
+
+    An account leaves the pool for good when a read floods it (its cooldown is
+    recorded, as before), when someone else parked it (``account_cooling``), when it
     failed ``discovery_max_consecutive_errors`` reads in a row — the dead-session rule
-    the single-account run applied, now per account. The run stops when the pool is
-    empty.
+    the single-account run applied, now per account — or when the client pool could
+    not connect it at all (``unreachable``): that one drops on the spot, no three
+    strikes, because a session that never answers is not a session degrading. The run
+    stops when the pool is empty.
 
     Wave reads are also CAPPED per account at ``discovery_max_reads_per_run``: the
     run's shared budget is that ceiling times the starting size, and without this cap a
@@ -59,46 +70,59 @@ class AccountPool:
     """
 
     def __init__(self, accounts: Iterable[SearchAccount]) -> None:
-        listed = list(accounts)
-        self._ids: deque[str] = deque(account.account_id for account in listed)
-        self._premium = {account.account_id for account in listed if account.premium}
+        self._accounts: dict[str, SearchAccount] = {
+            account.account_id: account for account in accounts
+        }
         # The starting size, which is what the run's read budget is scaled by.
-        self.size = len(self._ids)
+        self.size = len(self._accounts)
         self._faults: dict[str, int] = {}
         self._reads: dict[str, int] = {}
 
     @property
     def empty(self) -> bool:
-        return not self._ids
+        return not self._accounts
 
-    def acquire(self, *, prefer_premium: bool = False, charge: bool = True) -> str | None:
-        """The next account to read with, or ``None`` when none may read right now.
+    def accounts(self) -> list[SearchAccount]:
+        """Every account still in the pool, in the order the run was started with."""
+        return list(self._accounts.values())
 
-        Re-read before EVERY read, not once per wave: a run is minutes long, and the
-        comment engine can park any of its accounts at any point in it. ``None`` with
-        the pool still non-empty means every account has spent its wave ceiling.
+    def has(self, account_id: str) -> bool:
+        return account_id in self._accounts
 
-        ``prefer_premium`` hands out the first Premium account still in rotation (the
-        recommendation reads are ~10x richer there, and ``searchGlobal`` answers a
-        non-premium account with FLOOD_PREMIUM_WAIT), falling back to the rotation.
+    def premium_left(self) -> bool:
+        """Is a Premium account still usable for a read that prefers one?
+
+        Read live off the per-account read count, not off pool membership: an account
+        at its wave ceiling is still ``has()`` (probes may still use it) but can take no
+        more charged reads, so a stream waiting on ``prefer_premium`` must fall back to
+        a plain account the moment the last Premium one caps out — not only once it is
+        flooded or dropped.
         """
-        order = list(self._ids)
-        if prefer_premium:
-            order.sort(key=lambda account_id: account_id not in self._premium)
-        for account_id in order:
-            if account_cooling(account_id):
-                self._drop(account_id)
-                continue
-            reads = self._reads.get(account_id, 0)
-            if charge and reads >= settings.neurocomment.discovery_max_reads_per_run:
-                continue
-            if charge:
-                self._reads[account_id] = reads + 1
-            # Round-robin: the one just handed out goes to the back.
-            self._ids.remove(account_id)
-            self._ids.append(account_id)
-            return account_id
-        return None
+        ceiling = settings.neurocomment.discovery_max_reads_per_run
+        return any(
+            account.premium and self._reads.get(account.account_id, 0) < ceiling
+            for account in self._accounts.values()
+        )
+
+    def check(self, account_id: str, *, charge: bool) -> Literal["ok", "cooling", "capped"]:
+        """May this account take the read it was just picked for, right now?
+
+        Called AFTER the stream's own pace sleep, like the old ``acquire`` was: a run
+        is minutes long, and the comment engine (or the run's own later reads) can park
+        the account at any point in it. ``cooling`` drops the account for good.
+        ``capped`` leaves it in the pool (qualification probes are bounded elsewhere)
+        but refuses this charged read. ``charge=False`` (a probe) never caps and never
+        spends the ceiling.
+        """
+        if account_cooling(account_id):
+            self._drop(account_id)
+            return "cooling"
+        reads = self._reads.get(account_id, 0)
+        if charge and reads >= settings.neurocomment.discovery_max_reads_per_run:
+            return "capped"
+        if charge:
+            self._reads[account_id] = reads + 1
+        return "ok"
 
     async def report(
         self,
@@ -106,14 +130,22 @@ class AccountPool:
         *,
         flood_seconds: int | None = None,
         failed: bool = False,
+        unreachable: bool = False,
     ) -> str | None:
         """Record one read's outcome on its account.
+
+        ``unreachable`` drops the account on the spot: the client pool never even
+        reached Telegram, so there is nothing to count towards the consecutive-error
+        threshold — a session that will not connect at all does not deserve two more
+        tries to prove it, the way an ordinary failed read does.
 
         Returns the reason the pool is now empty (``flooded`` / ``aborted``), or ``None``
         while at least one account is left to read with.
         """
         stop = None
-        if await record_flood(account_id, flood_seconds):
+        if unreachable:
+            stop = "aborted"
+        elif await record_flood(account_id, flood_seconds):
             stop = "flooded"
         elif failed:
             faults = self._faults.get(account_id, 0) + 1
@@ -127,8 +159,7 @@ class AccountPool:
         return stop if self.empty else None
 
     def _drop(self, account_id: str) -> None:
-        if account_id in self._ids:
-            self._ids.remove(account_id)
+        self._accounts.pop(account_id, None)
 
 
 class _Fleet(NamedTuple):
@@ -219,7 +250,13 @@ async def check_search_accounts(
                 status=_START_STATUS[blocker],
                 refused_account_id=account_id,
             )
-        accounts.append(SearchAccount(account_id=account_id, premium=account.premium))
+        accounts.append(
+            SearchAccount(
+                account_id=account_id,
+                premium=account.premium,
+                name=_display_name(account),
+            )
+        )
     return accounts
 
 

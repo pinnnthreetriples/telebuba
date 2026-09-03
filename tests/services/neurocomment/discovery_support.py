@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+import asyncio
+from typing import TYPE_CHECKING, Literal, cast
 
 import pytest
 
@@ -44,6 +45,7 @@ if TYPE_CHECKING:
 
     from core.telegram_client._read import ReadErrorKind
     from schemas.telegram_actions import TelegramReadAction
+    from services.neurocomment._discovery_state import WorkTracker
 
 _Scripted = "BaseModel | Callable[[TelegramReadAction], BaseModel]"
 
@@ -76,7 +78,10 @@ def isolate_discovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterat
 
 
 async def _no_sleep(_seconds: float) -> None:
-    return None
+    # A real yield, not a no-op: several discovery tests drive concurrent streams, and
+    # a pace() that never actually suspends let whichever account's stream started
+    # first drain the whole queue before its peer ever got a look-in.
+    await asyncio.sleep(0)
 
 
 async def seed_listener(account_id: str = LISTENER_ID) -> str:
@@ -104,6 +109,18 @@ async def seed_account(account_id: str, *, premium: bool | None = None) -> str:
 def pool_of(*account_ids: str) -> AccountPool:
     """A run's account rotation; the listener alone when no id is given."""
     return AccountPool(SearchAccount(account_id) for account_id in account_ids or (LISTENER_ID,))
+
+
+def work_for(
+    pool: AccountPool, stage: Literal["searching", "qualifying"] = "searching"
+) -> WorkTracker:
+    """A ``WorkTracker`` for a pool, the way ``_discovery_run`` builds one for a stage.
+
+    ``native_pass``/``run_search``/``run_qualification`` all take one now (the live
+    progress the scheduler writes into); tests calling them directly need something to
+    pass.
+    """
+    return _discovery_state.start_work("test", stage, pool)
 
 
 async def new_campaign() -> str:

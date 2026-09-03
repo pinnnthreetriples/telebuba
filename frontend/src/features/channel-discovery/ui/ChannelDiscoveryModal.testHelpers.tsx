@@ -3,7 +3,13 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, vi } from 'vitest';
 
-import type { DiscoveryAccountOption, DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
+import type {
+  DiscoveryAccountOption,
+  DiscoveryBoard,
+  DiscoveryCandidate,
+  DiscoveryStream,
+  DiscoveryWork,
+} from '@/shared/api';
 
 import { ChannelDiscoveryModal } from './ChannelDiscoveryModal';
 
@@ -45,6 +51,25 @@ export function boardPayload(
       ...progress,
     },
     candidates,
+  };
+}
+
+// One reading stream, for a spec that only needs `board.progress.work` present —
+// `boardPayload`'s progress override takes it as-is, e.g. `boardPayload([], { work:
+// discoveryWork({ stage: 'qualifying' }) })`.
+export function discoveryStream(overrides: Partial<DiscoveryStream> = {}): DiscoveryStream {
+  return { account_id: 'acc-p', name: 'Prem', state: 'reading', ...overrides };
+}
+
+export function discoveryWork(overrides: Partial<DiscoveryWork> = {}): DiscoveryWork {
+  return {
+    stage: 'searching',
+    done: 12,
+    planned: 34,
+    eta_seconds: 40,
+    started_at: '2026-01-01T00:00:00Z',
+    streams: [discoveryStream()],
+    ...overrides,
   };
 }
 

@@ -144,7 +144,7 @@ describe('ChannelDiscoveryModal', () => {
     source?.emit({ event: 'neurocomment_discovery_progress' });
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Комментарии включены')).toBeInTheDocument();
+      expect(screen.getByText('есть')).toBeInTheDocument();
     });
     const boardCalls = calls.filter(
       (call) => call.path.endsWith('/discovery') && call.method === 'GET',
@@ -190,12 +190,12 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
 
-    expect(screen.getByRole('button', { name: /Добавить выбранные \(0\)/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Добавить каналы' })).toBeDisabled();
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    expect(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Добавить 1 канал' })).toBeEnabled();
 
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     await waitFor(() => {
       const adopt = calls.find((call) => call.path.endsWith('/discovery/adopt'));
@@ -228,7 +228,7 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
-    expect(screen.getByRole('button', { name: /Добавить выбранные \(0\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Добавить каналы' })).toBeInTheDocument();
   });
 
   it('drops the adopt notes and the adopt failure once the operator goes back to the form', async () => {
@@ -244,7 +244,7 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
     await waitFor(() => {
       expect(screen.getByText(/Не добавлено: 1/)).toBeInTheDocument();
     });
@@ -263,7 +263,7 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
     await waitFor(() => {
       expect(screen.getByText(/Не удалось добавить каналы/)).toBeInTheDocument();
     });
@@ -308,7 +308,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать все подходящие' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(2\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 2 канала' }));
 
     await waitFor(() => {
       expect(screen.getByText(/Не удалось добавить: 1/)).toBeInTheDocument();
@@ -329,7 +329,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать все подходящие' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(2\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 2 канала' }));
 
     await waitFor(() => {
       expect(screen.getByText(/Не добавлено: 1/)).toBeInTheDocument();
@@ -357,7 +357,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать все подходящие' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(2\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 2 канала' }));
 
     await waitFor(() => {
       expect(screen.getByText(/отключены комментарии/)).toBeInTheDocument();
@@ -381,12 +381,12 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     await waitFor(() => {
       expect(screen.getByText(/Не удалось добавить каналы/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Добавить 1 канал' })).toBeEnabled();
     await new Promise((resolve) => {
       setTimeout(resolve, 1000);
     });
@@ -419,7 +419,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /Ничего не добавлено/ })).toBeInTheDocument();
@@ -443,7 +443,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     await waitFor(() => {
       expect(screen.getByText(/Не удалось добавить: 1/)).toBeInTheDocument();
@@ -466,7 +466,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     // The copy promises "try again", so the button has to stay usable: a failed link
     // is not a settled outcome the way a taken channel is.
@@ -488,7 +488,7 @@ describe('ChannelDiscoveryModal', () => {
     });
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     const done = await screen.findByRole('button', { name: /Добавлено/ });
     expect(done).toBeDisabled();
@@ -573,7 +573,7 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
     await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
-    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить 1 канал' }));
 
     unmount();
     releaseAdopt(jsonResponse({ outcomes: [{ status: 'linked', channel: 'good' }] }));

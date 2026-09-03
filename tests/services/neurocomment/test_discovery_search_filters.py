@@ -20,13 +20,16 @@ from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions_discovery import TelegramChannelMatch, TelegramChannelMatches
 from services.neurocomment import _seams
 from services.neurocomment._discovery_categories import BUNDLES
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment._discovery_search import run_search
 from tests.services.neurocomment.discovery_support import (
+    LISTENER_ID,
     ReadRecorder,
     matches,
     new_campaign,
     pool_of,
     search_request,
+    work_for,
 )
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
@@ -49,6 +52,11 @@ async def _stored(campaign_id: str) -> list[str]:
     return [row.channel for row in (await list_discovery_candidates(campaign_id)).rows]
 
 
+def _premium_pool_of(*account_ids: str) -> AccountPool:
+    """A pool whose accounts are all Premium — the post wave refuses to run without one."""
+    return AccountPool(SearchAccount(aid, premium=True) for aid in account_ids or (LISTENER_ID,))
+
+
 @pytest.mark.asyncio
 async def test_hide_seen_drops_what_an_earlier_run_showed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
@@ -59,7 +67,7 @@ async def test_hide_seen_drops_what_an_earlier_run_showed(monkeypatch: pytest.Mo
     await mark_seen(["alpha"], datetime.now(UTC))
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request())
+    stage = await run_search(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert await _stored(campaign_id) == ["beta"]
     assert stage.report.filtered == {"seen": 1}
@@ -75,7 +83,9 @@ async def test_hide_seen_off_keeps_the_familiar_rows(monkeypatch: pytest.MonkeyP
     await mark_seen(["alpha"], datetime.now(UTC))
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(hide_seen=False))
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(hide_seen=False), work_for(pool_of())
+    )
 
     assert await _stored(campaign_id) == ["alpha", "beta"]
     assert stage.report.filtered == {}
@@ -88,7 +98,7 @@ async def test_hide_seen_folds_case(monkeypatch: pytest.MonkeyPatch) -> None:
     await mark_seen(["alpha"], datetime.now(UTC))
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request())
+    stage = await run_search(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert stage.report.filtered == {"seen": 1}
 
@@ -110,7 +120,7 @@ async def test_a_rerun_that_finds_only_seen_channels_keeps_the_previous_rows(
         [DiscoveryCandidateRow(channel="alpha", title="A", source="telegram_search")],
     )
 
-    stage = await run_search(campaign_id, pool_of(), search_request())
+    stage = await run_search(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert stage.replaced is False
     assert stage.report.stored is False
@@ -126,7 +136,9 @@ async def test_kind_is_the_gateways_to_apply_and_each_row_keeps_its_own(
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=_MIXED))
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(kind="all"))
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(kind="all"), work_for(pool_of())
+    )
 
     assert stage.report.filtered == {}
     # Each stored row remembers which it is, so the board and adopt can tell them apart.
@@ -141,8 +153,11 @@ async def test_the_requested_kind_reaches_every_sources_action(
     reader = ReadRecorder(search=_MIXED)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
+    pool = _premium_pool_of()
 
-    await run_search(campaign_id, pool_of(), search_request(kind="channels", seed_channel="@durov"))
+    await run_search(
+        campaign_id, pool, search_request(kind="channels", seed_channel="@durov"), work_for(pool)
+    )
 
     assert {action.kind for action in reader.search_actions()} == {"channels"}
     assert {action.kind for action in reader.posts_actions()} == {"channels"}
@@ -155,7 +170,7 @@ async def test_the_operators_limit_caps_the_stored_set(monkeypatch: pytest.Monke
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=hits))
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(limit=2))
+    stage = await run_search(campaign_id, pool_of(), search_request(limit=2), work_for(pool_of()))
 
     assert len(await _stored(campaign_id)) == 2
     assert stage.report.capped is True
@@ -169,7 +184,9 @@ async def test_a_private_recommendation_is_stored_under_its_id(
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(similar=_PRIVATE))
     campaign_id = await new_campaign()
 
-    await run_search(campaign_id, pool_of(), search_request(seed_channel="@durov"))
+    await run_search(
+        campaign_id, pool_of(), search_request(seed_channel="@durov"), work_for(pool_of())
+    )
 
     assert set(await _stored(campaign_id)) == {"pub", "id:123456"}
 
@@ -189,7 +206,10 @@ async def test_access_decides_at_search_time_where_it_can(
     campaign_id = await new_campaign()
 
     stage = await run_search(
-        campaign_id, pool_of(), search_request(seed_channel="@durov", access=access)
+        campaign_id,
+        pool_of(),
+        search_request(seed_channel="@durov", access=access),
+        work_for(pool_of()),
     )
 
     assert await _stored(campaign_id) == kept
@@ -205,7 +225,12 @@ async def test_a_category_extends_the_sweep_with_its_bundle(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    await run_search(campaign_id, pool_of(), search_request(keywords=["Crypto"], category="crypto"))
+    await run_search(
+        campaign_id,
+        pool_of(),
+        search_request(keywords=["Crypto"], category="crypto"),
+        work_for(pool_of()),
+    )
 
     queries = [action.query for action in reader.search_actions()]
     assert queries == ["Crypto", *(word for word in BUNDLES["crypto"] if word != "crypto")]
@@ -217,7 +242,9 @@ async def test_a_category_alone_searches_its_bundle(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    await run_search(campaign_id, pool_of(), search_request(keywords=[], category="news"))
+    await run_search(
+        campaign_id, pool_of(), search_request(keywords=[], category="news"), work_for(pool_of())
+    )
 
     assert [action.query for action in reader.search_actions()] == list(BUNDLES["news"])
 
@@ -245,7 +272,9 @@ async def test_an_empty_merge_is_all_seen_only_when_seen_was_the_sole_filter(
         [DiscoveryCandidateRow(channel="alpha", title="A", source="telegram_search")],
     )
 
-    stage = await run_search(campaign_id, pool_of(), search_request(access="open"))
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(access="open"), work_for(pool_of())
+    )
 
     assert stage.all_seen is False
     assert stage.replaced is True

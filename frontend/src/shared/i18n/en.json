@@ -1556,7 +1556,6 @@
         },
         "results": {
           "back": "← Change parameters",
-          "count": "Channels found: {{count}}",
           "countStale": "Channels from the previous search: {{count}}",
           "countCapped": "Channels found: {{count}} — the ceiling for one search, the rest were dropped",
           "filtered": "Filtered out: {{count}}",
@@ -1573,20 +1572,33 @@
           "privateChannel": "private channel",
           "notAdoptable": "cannot be adopted",
           "colChannel": "Channel",
-          "colTitle": "Title",
           "colSubscribers": "Subscribers",
-          "colTraits": "Type",
-          "colSource": "Source",
           "colComments": "Comments",
-          "colState": "State",
+          "filterEligible": "Eligible · {{count}}",
+          "filterAll": "All · {{count}}",
+          "filterLabel": "Channel list",
+          "sourcesFailed": "Some sources did not respond",
+          "sourcesPrefix": "Sources:",
+          "detailsToggle": "details",
+          "detailsFooterToggle": "details",
+          "badgeOn": "yes",
+          "badgeOff": "no",
+          "badgeUnchecked": "not checked",
+          "badgePending": "checking…",
+          "caveat": {
+            "slowMode": "pause between comments",
+            "joinToSend": "must join the chat",
+            "joinRequest": "joining needs approval",
+            "scam": "Telegram flagged it as a scam",
+            "restricted": "Telegram restricted it",
+            "cantWrite": "can't write"
+          },
           "kind": {
-            "channel": "channel",
             "group": "group"
           },
           "access": {
-            "open": "open",
             "join_request": "by request",
-            "subscription": "subscription"
+            "subscription": "closed"
           },
           "language": {
             "ru": "ru",
@@ -1595,7 +1607,7 @@
             "other": "other"
           },
           "inCampaign": "already in campaign",
-          "takenElsewhere": "taken by another campaign",
+          "takenElsewhere": "in another campaign",
           "sourceRan": "{{source}}: {{kept}} of {{hits}}",
           "sourceFailed": "{{source}}: failed",
           "sourceSkipped": "{{source}}: not queried",
@@ -1605,27 +1617,33 @@
             "read_budget": "the read budget for one search ran out",
             "kind_unsupported": "recommendations return channels only",
             "account_cooling": "the search account is waiting out a Telegram limit",
-            "unexpected_result": "Telegram returned an unexpected reply"
+            "unexpected_result": "Telegram returned an unexpected reply",
+            "premium_required": "needs a Premium account"
           },
           "sourceExclusive": "({{exclusive}} found only here)",
           "sourceTruncated": "(stopped early)"
         },
-        "comments": {
-          "pending": "checking",
-          "comments_on": "Comments enabled",
-          "comments_off": "Comments disabled",
-          "unknown": "could not check",
-          "notChecked": "not checked"
-        },
-        "verdict": {
-          "unknown": "fitness not checked",
-          "cantWrite": "writing is banned in the discussion group",
-          "joinRequired": "you must join the discussion group before commenting",
-          "joinRequest": "joining the group needs an admin's approval",
-          "slowMode": "slow mode is on in the discussion group",
-          "scam": "Telegram marks this channel as a scam",
-          "fake": "Telegram marks this channel as fake",
-          "restricted": "Telegram restricts this channel"
+        "progress": {
+          "stageSearching": "Stage 1 of 2 · Searching Telegram",
+          "stageQualifying": "Stage 2 of 2 · Checking comments",
+          "countSearching": "{{done}} of {{planned}} reads",
+          "countQualifying": "{{done}} of {{planned}} channels",
+          "etaSeconds": "≈ {{value}}s",
+          "etaMinutes": "≈ {{value}} min",
+          "premium": "Premium",
+          "state": {
+            "idle": "idle",
+            "waiting": "waiting",
+            "reading": "reading",
+            "done": "done",
+            "capped": "read limit reached",
+            "flooded": "hit a Telegram limit",
+            "cooling": "waiting out a limit",
+            "dead": "session not responding",
+            "offline": "unreachable"
+          },
+          "someOut": "Dropped: {{list}} — the search continues on the rest",
+          "allOut": "All accounts dropped"
         },
         "source": {
           "telegram_search": "Telegram search",
@@ -1642,7 +1660,9 @@
           "account": "Account: {{name}}"
         },
         "startFailed": "Couldn't start the search. Check the parameters and try again.",
-        "add": "Add selected ({{count}})",
+        "addEmpty": "Add channels",
+        "add_one": "Add {{count}} channel",
+        "add_other": "Add {{count}} channels",
         "added": "Added: {{count}}",
         "addedNone": "Nothing added",
         "addedRefused": "Not added: {{count}} — those channels are already taken",

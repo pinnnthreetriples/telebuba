@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -14,10 +15,12 @@ from core.repositories.neurocomment import (
     replace_discovery_candidates,
     upsert_linked_group,
 )
+from core.telegram_client import TelegramReadError
 from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions import LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_state, _seams
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment._discovery_qualify import run_qualification
 from services.neurocomment._state import set_cooldown
 from tests.services.neurocomment.discovery_support import (
@@ -27,6 +30,7 @@ from tests.services.neurocomment.discovery_support import (
     pool_of,
     read_error,
     search_request,
+    work_for,
 )
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
@@ -75,7 +79,7 @@ async def test_probe_records_the_verdict_and_refreshes_the_shared_cache(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("alpha")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     rows = (await list_discovery_candidates(campaign_id)).rows
@@ -116,7 +120,7 @@ async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
     )
     campaign_id = await _seed("gated")
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     verdict = _discovery_state.verdicts(campaign_id)["gated"]
     # ``comments_enabled`` is deliberately absent: it duplicated the candidate's own
@@ -155,7 +159,7 @@ async def test_a_signal_the_reply_omits_stays_unknown_rather_than_a_no(
     )
     campaign_id = await _seed("quiet")
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     verdict = _discovery_state.verdicts(campaign_id)["quiet"]
     assert verdict.can_send_messages is None
@@ -176,7 +180,7 @@ async def test_an_unanswerable_probe_records_no_verdict_at_all(
     )
     campaign_id = await _seed("broken")
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert _discovery_state.verdicts(campaign_id) == {}
 
@@ -196,7 +200,7 @@ async def test_a_cache_hit_spends_no_rpc_and_carries_no_rights_verdict(
     campaign_id = await _seed("known")
     await upsert_linked_group("known", -100, comments_enabled=True, about="", join_request=False)
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reader.calls == []
     verdict = _discovery_state.verdicts(campaign_id)["known"]
@@ -215,7 +219,7 @@ async def test_comments_off_is_recorded_as_a_successful_probe(
     )
     campaign_id = await _seed("nocomments")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     rows = (await list_discovery_candidates(campaign_id)).rows
@@ -241,7 +245,7 @@ async def test_fresh_cache_hit_costs_zero_rpcs_and_zero_sleep(
     campaign_id = await _seed("known")
     await upsert_linked_group("known", -100, comments_enabled=True)
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     assert reader.calls == []
@@ -260,7 +264,7 @@ async def test_stale_cache_entry_is_reprobed(monkeypatch: pytest.MonkeyPatch) ->
     await upsert_linked_group("stale", None, comments_enabled=False)
     await _backdate("stale", datetime.now(UTC) - timedelta(days=30))
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert len(reader.calls) == 1
     cached = await fetch_linked_group("stale")
@@ -283,7 +287,7 @@ async def test_the_ttl_is_read_in_hours(monkeypatch: pytest.MonkeyPatch) -> None
     await upsert_linked_group("edge", None, comments_enabled=False)
     await _backdate("edge", datetime.now(UTC) - timedelta(hours=25))
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert len(reader.calls) == 1
 
@@ -299,7 +303,7 @@ async def test_an_unparseable_cache_stamp_is_treated_as_stale(
     await upsert_linked_group("garbled", -100, comments_enabled=True)
     await _backdate("garbled", "not-a-timestamp")
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert len(reader.calls) == 1
 
@@ -311,7 +315,7 @@ async def test_progress_is_signalled_during_a_long_pass(
     """Without a nudge the modal sits frozen on "qualifying" for minutes."""
     frames: list[int] = []
     monkeypatch.setattr(
-        "services.neurocomment._discovery_qualify.signal_discovery_progress",
+        "services.neurocomment._discovery_streams.signal_discovery_progress",
         lambda: frames.append(1),
     )
     monkeypatch.setattr(
@@ -321,10 +325,11 @@ async def test_progress_is_signalled_during_a_long_pass(
     )
     campaign_id = await _seed(*[f"chan_{index:02d}" for index in range(11)])
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
-    # _PROGRESS_EVERY is 5, so an 11-candidate pass nudges at 5 and 10.
-    assert len(frames) == 2
+    # _PROGRESS_EVERY is 5, so an 11-candidate pass nudges at 5 and 10, plus the
+    # scheduler's own final frame once every stream has run out of work.
+    assert len(frames) == 3
 
 
 @pytest.mark.asyncio
@@ -335,7 +340,7 @@ async def test_zero_ttl_disables_the_cache_entirely(monkeypatch: pytest.MonkeyPa
     campaign_id = await _seed("known")
     await upsert_linked_group("known", -100, comments_enabled=True)
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert len(reader.calls) == 1
 
@@ -358,7 +363,7 @@ async def test_pacing_sleeps_between_real_rpcs_only(monkeypatch: pytest.MonkeyPa
     campaign_id = await _seed("aaa", "bbb", "cached")
     await upsert_linked_group("cached", -100, comments_enabled=True)
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     # Two real probes -> one gap; the cache hit contributes nothing.
     assert slept == [1.25]
@@ -373,7 +378,7 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("aaa", "bbb", "ccc")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason == "FloodWait(300s)"
     assert len(reader.calls) == 1
@@ -410,7 +415,7 @@ async def test_a_cooldown_recorded_mid_pass_stops_the_probes(
     monkeypatch.setattr(_seams, "execute_read", _probe)
     campaign_id = await _seed("aaa", "bbb", "ccc", "ddd")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason == "account_cooling"
     assert probes == 2
@@ -441,7 +446,7 @@ async def test_a_cooldown_landing_during_the_pace_sleep_costs_no_probe(
     monkeypatch.setattr(_seams, "sleep", _flood_while_pacing)
     campaign_id = await _seed("aaa", "bbb", "ccc")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason == "account_cooling"
     # Only the first probe, which spends no pace sleep. The second never fires.
@@ -458,7 +463,7 @@ async def test_a_channel_scoped_cooldown_does_not_stop_the_pass(
     await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1), channel="@chat")
     campaign_id = await _seed("aaa", "bbb")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     assert len(reader.calls) == 2
@@ -475,7 +480,7 @@ async def test_a_single_error_marks_one_candidate_and_the_loop_continues(
     )
     campaign_id = await _seed("aaa", "broken", "zzz")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
@@ -492,7 +497,7 @@ async def test_consecutive_errors_abort_the_pass(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 2)
     campaign_id = await _seed("aaa", "bbb", "ccc", "ddd", "eee")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason == "RPC: AuthKeyUnregisteredError"
     assert len(reader.calls) == 2
@@ -509,7 +514,7 @@ async def test_a_success_resets_the_consecutive_error_counter(
     # and the counter never reaches two failures in a row.
     campaign_id = await _seed("aa_bad", "bb_good", "cc_bad", "dd_good")
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     assert len(reader.calls) == 4
@@ -526,7 +531,7 @@ async def test_a_pass_that_fails_every_other_probe_aborts_once_the_rate_is_measu
     channels = [f"c{index:02d}_{'bad' if index % 2 else 'good'}" for index in range(30)]
     campaign_id = await _seed(*channels)
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason == "RPC: TimeoutError"
     # _ERROR_RATE_MIN_PROBES is 20, and the 20th probe is this pattern's 10th failure.
@@ -552,7 +557,7 @@ async def test_a_healthy_sweep_with_a_minority_of_dead_handles_runs_to_the_end(
     channels = [f"c{index:03d}_{'dead' if index % 8 == 7 else 'live'}" for index in range(100)]
     campaign_id = await _seed(*channels)
 
-    reason = await run_qualification(campaign_id, pool_of(), search_request())
+    reason = await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     assert reason is None
     assert len(reader.calls) == 100
@@ -567,7 +572,9 @@ async def test_nothing_pending_is_a_cheap_no_op(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
 
-    reason = await run_qualification(campaign.campaign_id, pool_of(), search_request())
+    reason = await run_qualification(
+        campaign.campaign_id, pool_of(), search_request(), work_for(pool_of())
+    )
 
     assert reason is None
     assert reader.calls == []
@@ -585,7 +592,118 @@ async def test_qualification_resumes_only_unprobed_rows(
 
     await mark_discovery_qualified(campaign_id, "aaa")
 
-    await run_qualification(campaign_id, pool_of(), search_request())
+    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
 
     probed = [getattr(call, "channel", None) for call in reader.calls]
     assert probed == ["bbb"]
+
+
+@pytest.mark.asyncio
+async def test_an_unavailable_probe_drops_the_account_and_retries_on_the_next_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The client pool never reached Telegram — no stamp, no three strikes, one retry."""
+    calls: list[str] = []
+
+    async def reader(account_id: str, _action: object) -> object:
+        calls.append(account_id)
+        if account_id == "acc-a":
+            reason = "unavailable: TelegramClientPoolError"
+            raise TelegramReadError(reason, kind="unavailable")
+        return _verdict(enabled=True)
+
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _seed("alpha")
+    pool = AccountPool([SearchAccount("acc-a"), SearchAccount("acc-b")])
+
+    reason = await run_qualification(campaign_id, pool, search_request(), work_for(pool))
+
+    assert reason is None
+    # Dropped after one read, never given a second try on itself.
+    assert calls.count("acc-a") == 1
+    assert pool.has("acc-a") is False
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    assert rows[0].qualified_at is not None
+    assert rows[0].qualify_error is None
+
+
+@pytest.mark.asyncio
+async def test_the_error_rate_rule_still_aborts_under_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two accounts sharing the failure load trip the same rule as one would alone."""
+    # High enough that neither account's own consecutive-fault count (the dead-session
+    # rule) trips before the pass-wide error RATE this test means to exercise does.
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 100)
+    total_errors = 0
+
+    async def reader(_account_id: str, _action: object) -> object:
+        nonlocal total_errors
+        await asyncio.sleep(0)  # a real yield, so both streams genuinely overlap
+        total_errors += 1
+        reason = "RPC: TimeoutError"
+        raise TelegramReadError(reason)
+
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    channels = [f"c{index:03d}" for index in range(30)]
+    campaign_id = await _seed(*channels)
+    pool = AccountPool([SearchAccount("acc-a"), SearchAccount("acc-b")])
+
+    reason = await run_qualification(campaign_id, pool, search_request(), work_for(pool))
+
+    assert reason == "RPC: TimeoutError"
+    # _ERROR_RATE_MIN_PROBES is 20 and every probe fails, so the rule trips the moment
+    # the 20th one settles — split across two accounts instead of run by one. The other
+    # account's own probe can already be in flight when that happens (nothing cancels
+    # it retroactively), so one extra read past the threshold is a legitimate outcome.
+    assert total_errors in (20, 21)
+
+
+@pytest.mark.asyncio
+async def test_the_stop_reports_the_reason_of_the_account_that_emptied_the_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A's flood empties the pool; B's own, different, concurrent failure must not steal it.
+
+    ``_ProbeState.last_reason`` used to be one shared slot, overwritten by whichever
+    failing probe finished last — which could easily be B, whose own failure never
+    actually emptied the pool. B's report is forced to settle first here, so if the
+    returned reason were ever B's this would catch it deterministically.
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 1)
+    b_settled = asyncio.Event()
+    orig_report = AccountPool.report
+
+    async def patched_report(
+        self: AccountPool,
+        account_id: str,
+        *,
+        flood_seconds: int | None = None,
+        failed: bool = False,
+        unreachable: bool = False,
+    ) -> str | None:
+        stop = await orig_report(
+            self, account_id, flood_seconds=flood_seconds, failed=failed, unreachable=unreachable
+        )
+        if failed and flood_seconds is None and not unreachable:
+            b_settled.set()
+        return stop
+
+    monkeypatch.setattr(AccountPool, "report", patched_report)
+
+    async def reader(_account_id: str, action: object) -> object:
+        channel = getattr(action, "channel", "")
+        if channel == "flooded":
+            await b_settled.wait()
+            reason = "FloodWait(300s)"
+            raise TelegramReadError(reason, kind="flood_wait", seconds=300)
+        reason = "RPC: BError"
+        raise TelegramReadError(reason)
+
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _seed("flooded", "other")
+    pool = AccountPool([SearchAccount("acc-a"), SearchAccount("acc-b")])
+
+    reason = await run_qualification(campaign_id, pool, search_request(), work_for(pool))
+
+    assert reason == "FloodWait(300s)"

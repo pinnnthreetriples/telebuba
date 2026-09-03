@@ -24,7 +24,9 @@ if TYPE_CHECKING:
 
 async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchRequest) -> None:
     try:
-        stage = await run_search(campaign_id, pool, request)
+        work = _discovery_state.start_work(campaign_id, "searching", pool)
+        stage = await run_search(campaign_id, pool, request, work)
+        _discovery_state.finish_work(campaign_id)
         _discovery_state.set_last_error(campaign_id, stage.error)
         # Published whether or not the rows were stored: a run that stored nothing is
         # exactly when the operator needs to see which source refused. The search stage
@@ -53,7 +55,9 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
             _discovery_state.set_phase(campaign_id, "qualifying")
             signal_discovery_progress()
 
-            qualify_error = await run_qualification(campaign_id, pool, request)
+            qualify_work = _discovery_state.start_work(campaign_id, "qualifying", pool)
+            qualify_error = await run_qualification(campaign_id, pool, request, qualify_work)
+            _discovery_state.finish_work(campaign_id)
             # Shown once is shown: ``hide_seen`` on the next search drops these. Marked
             # AFTER qualification, over the rows the board actually shows — a row a
             # probe-time filter deleted was never shown, and marking the search stage's
@@ -99,4 +103,7 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
             extra={"campaign_id": campaign_id, "reason": type(exc).__name__},
         )
     finally:
+        # A crash can land mid-stage, before that stage's own ``finish_work`` runs — a
+        # live ETA must never outlive the run that was computing it.
+        _discovery_state.finish_work(campaign_id)
         signal_discovery_progress()

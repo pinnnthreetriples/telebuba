@@ -32,35 +32,37 @@ def _pool(*accounts: tuple[str, bool | None]) -> AccountPool:
     return AccountPool(SearchAccount(account_id, premium) for account_id, premium in accounts)
 
 
-def _next(pool: AccountPool, count: int, **how: bool) -> list[str | None]:
-    return [pool.acquire(**how) for _ in range(count)]
-
-
 async def _park(account_id: str) -> None:
     await _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(hours=1))
 
 
-def test_the_rotation_is_round_robin_in_pick_order() -> None:
-    pool = _pool(("plain", None), ("paid", True), ("free", False))
+def test_accounts_lists_every_account_still_in_the_pool_in_starting_order() -> None:
+    pool = _pool(("a", None), ("b", True), ("c", False))
 
+    assert [account.account_id for account in pool.accounts()] == ["a", "b", "c"]
     assert pool.size == 3
-    assert _next(pool, 4) == ["plain", "paid", "free", "plain"]
+    assert pool.has("a") is True
+    assert pool.has("ghost") is False
 
 
-def test_prefer_premium_hands_out_a_premium_account_and_falls_back_to_the_rotation() -> None:
-    """The reads Telegram answers better on Premium ask for one; the rest rotate.
+def test_premium_left_is_true_only_while_a_premium_account_still_has_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A capped Premium account no longer counts, even though it stays ``has()``.
 
-    A premium-first SORT of the rotation meant nothing: round-robin reached the plain
-    accounts one read later regardless, so the recommendation reads landed on whichever
-    account was next.
+    Read live off the read count, not off pool membership: a stream waiting on
+    ``prefer_premium`` must fall back to a plain account the moment the last Premium
+    one caps out, not only once it floods or dies.
     """
-    pool = _pool(("plain", None), ("paid", True), ("free", False))
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 1)
+    pool = _pool(("plain", None), ("paid", True))
 
-    assert _next(pool, 3, prefer_premium=True) == ["paid", "paid", "paid"]
-    # The plain reads carry on from where the rotation stands.
-    assert _next(pool, 2) == ["plain", "free"]
-    # No Premium account at all: the preference is a no-op, not a stop.
-    assert _next(_pool(("a", None), ("b", False)), 2, prefer_premium=True) == ["a", "b"]
+    assert pool.premium_left() is True
+    assert pool.check("paid", charge=True) == "ok"
+    assert pool.premium_left() is False
+    assert pool.has("paid") is True
+    # No Premium account at all: never "left" in the first place.
+    assert _pool(("a", None), ("b", False)).premium_left() is False
 
 
 @pytest.mark.asyncio
@@ -69,7 +71,9 @@ async def test_a_cooling_account_is_skipped_and_dropped() -> None:
     pool = _pool(("a", None), ("b", None))
     await _park("a")
 
-    assert _next(pool, 2) == ["b", "b"]
+    assert pool.check("a", charge=True) == "cooling"
+    assert pool.has("a") is False
+    assert pool.has("b") is True
     assert pool.empty is False
 
 
@@ -80,7 +84,8 @@ async def test_a_flooded_account_leaves_and_the_pool_carries_on() -> None:
     assert await pool.report("a", flood_seconds=60) is None
     # The cooldown is recorded, exactly as the single-account run did.
     assert _state.in_cooldown("a", datetime.now(UTC)) is True
-    assert _next(pool, 2) == ["b", "b"]
+    assert pool.has("a") is False
+    assert [account.account_id for account in pool.accounts()] == ["b"]
 
 
 @pytest.mark.asyncio
@@ -89,7 +94,7 @@ async def test_the_last_account_leaving_ends_the_pool_with_its_reason() -> None:
 
     assert await pool.report("only", flood_seconds=60) == "flooded"
     assert pool.empty is True
-    assert pool.acquire() is None
+    assert pool.has("only") is False
 
 
 @pytest.mark.asyncio
@@ -103,10 +108,11 @@ async def test_consecutive_failures_drop_an_account_and_an_answer_resets_them(
     assert await pool.report("a", failed=True) is None
     assert await pool.report("a", failed=False) is None
     assert await pool.report("a", failed=True) is None
-    assert _next(pool, 1) == ["a"]
+    assert pool.has("a") is True
     # The second failure in a row drops it; the pool is not empty, so no stop reason.
     assert await pool.report("a", failed=True) is None
-    assert _next(pool, 2) == ["b", "b"]
+    assert pool.has("a") is False
+    assert pool.has("b") is True
     # No flood was involved, so nothing was written against the account.
     assert _state.in_cooldown("a", datetime.now(UTC)) is False
     # The pool's last account failing the same way IS the stop, named.
@@ -115,7 +121,7 @@ async def test_consecutive_failures_drop_an_account_and_an_answer_resets_them(
 
 
 def test_each_account_has_its_own_wave_read_ceiling(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Charged reads stop at the ceiling per account; the pool itself stays.
+    """Charged reads cap at the ceiling per account; the pool itself stays.
 
     The shared budget is ``ceiling x pool size``, so after two drops one survivor could
     absorb all three shares — three times the traffic the ceiling exists to bound.
@@ -123,12 +129,16 @@ def test_each_account_has_its_own_wave_read_ceiling(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 2)
     pool = _pool(("a", None), ("b", None))
 
-    assert _next(pool, 5) == ["a", "b", "a", "b", None]
-    # Truncation, not a stop: both accounts are still here for the qualification probes,
+    assert pool.check("a", charge=True) == "ok"
+    assert pool.check("a", charge=True) == "ok"
+    assert pool.check("a", charge=True) == "capped"
+    # Truncation, not a stop: the account is still here for the qualification probes,
     # which are bounded by the candidate limit rather than by this ceiling.
+    assert pool.has("a") is True
     assert pool.empty is False
-    assert _next(pool, 3, charge=False) == ["a", "b", "a"]
-    assert pool.acquire() is None
+    # Probes (``charge=False``) are bounded elsewhere and never cap.
+    assert pool.check("a", charge=False) == "ok"
+    assert pool.check("a", charge=False) == "ok"
 
 
 @pytest.mark.asyncio
@@ -185,17 +195,19 @@ async def test_check_names_an_account_another_campaigns_run_is_reading_with() ->
         status="account_busy", refused_account_id="acc-held"
     )
     # The holder's own re-start is not an account collision: the claim reports it.
-    assert await check_search_accounts("other", ["acc-held"]) == [SearchAccount("acc-held")]
+    assert await check_search_accounts("other", ["acc-held"]) == [
+        SearchAccount("acc-held", name="acc-held")
+    ]
 
 
 @pytest.mark.asyncio
-async def test_check_returns_every_pick_with_its_premium_flag() -> None:
+async def test_check_returns_every_pick_with_its_premium_flag_and_name() -> None:
     await seed_account("acc-paid", premium=True)
     await seed_account("acc-plain")
 
     assert await check_search_accounts("mine", ["acc-paid", "acc-plain"]) == [
-        SearchAccount("acc-paid", premium=True),
-        SearchAccount("acc-plain", premium=None),
+        SearchAccount("acc-paid", premium=True, name="acc-paid"),
+        SearchAccount("acc-plain", premium=None, name="acc-plain"),
     ]
 
 

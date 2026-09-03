@@ -14,12 +14,14 @@ from core.db import create_campaign
 from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoverySearchRequest, DiscoverySourceReport
 from services.neurocomment import _seams
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment._discovery_search import run_search
 from tests.services.neurocomment.discovery_support import (
     ReadRecorder,
     flood_error,
     matches,
     pool_of,
+    work_for,
 )
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
@@ -40,6 +42,11 @@ def _report_of(sources: list[DiscoverySourceReport], source: str) -> DiscoverySo
     reports = [report for report in sources if report.source == source]
     assert len(reports) == 1
     return reports[0]
+
+
+def _premium_pool_of() -> AccountPool:
+    """A pool whose account is Premium — the post wave refuses to run without one."""
+    return AccountPool([SearchAccount("acc-listener", premium=True)])
 
 
 @pytest.mark.asyncio
@@ -63,6 +70,7 @@ async def test_hits_counts_the_channels_a_source_reached_not_its_result_rows(
         campaign_id,
         pool_of(),
         _request(keywords=["crypto", "trading", "markets"]),
+        work_for(pool_of()),
     )
 
     search = _report_of(stage.report.sources, "telegram_search")
@@ -84,8 +92,9 @@ async def test_a_run_that_stored_nothing_credits_no_kept_rows(
         ReadRecorder(search=matches(("alpha", "A", 100)), posts=flood_error(600)),
     )
     campaign_id = await _new_campaign()
+    pool = _premium_pool_of()
 
-    stage = await run_search(campaign_id, pool_of(), _request())
+    stage = await run_search(campaign_id, pool, _request(), work_for(pool))
 
     assert stage.replaced is False
     search = _report_of(stage.report.sources, "telegram_search")
@@ -107,7 +116,7 @@ async def test_the_candidate_cap_is_reported_as_the_ceiling_it_is(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request(limit=2))
+    stage = await run_search(campaign_id, pool_of(), _request(limit=2), work_for(pool_of()))
 
     assert (stage.found, stage.report.capped) == (2, True)
 
@@ -123,7 +132,7 @@ async def test_a_set_that_fits_under_the_cap_is_not_reported_capped(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request(limit=2))
+    stage = await run_search(campaign_id, pool_of(), _request(limit=2), work_for(pool_of()))
 
     assert (stage.found, stage.report.capped) == (2, False)
 
@@ -144,7 +153,9 @@ async def test_a_row_the_bounds_never_applied_to_says_so(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request(members_min=10_000))
+    stage = await run_search(
+        campaign_id, pool_of(), _request(members_min=10_000), work_for(pool_of())
+    )
 
     assert stage.report.origins["nocount"].uncounted is True
     # The bound genuinely applied to this one, so it claims nothing.
@@ -159,6 +170,6 @@ async def test_an_unfiltered_run_flags_nothing(monkeypatch: pytest.MonkeyPatch) 
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request())
+    stage = await run_search(campaign_id, pool_of(), _request(), work_for(pool_of()))
 
     assert stage.report.origins["nocount"].uncounted is False
