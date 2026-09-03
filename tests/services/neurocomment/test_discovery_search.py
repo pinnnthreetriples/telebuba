@@ -29,6 +29,7 @@ from tests.services.neurocomment.discovery_support import (
     ReadRecorder,
     flood_error,
     matches,
+    pool_of,
     posts_page,
     read_error,
 )
@@ -37,7 +38,7 @@ pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
 
 def _request(**overrides: object) -> DiscoverySearchRequest:
-    payload: dict[str, object] = {"keywords": ["crypto"]}
+    payload: dict[str, object] = {"keywords": ["crypto"], "account_ids": [LISTENER_ID]}
     payload.update(overrides)
     return DiscoverySearchRequest.model_validate(payload)
 
@@ -59,7 +60,7 @@ async def test_native_search_runs_once_per_keyword(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(keywords=["crypto", "trading"]))
+    stage = await run_search(campaign_id, pool_of(), _request(keywords=["crypto", "trading"]))
 
     assert stage.error is None
     assert stage.found == 1  # both keywords returned the same channel -> deduped
@@ -76,7 +77,7 @@ async def test_duplicate_keywords_are_searched_once(monkeypatch: pytest.MonkeyPa
 
     await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         _request(keywords=[" Crypto ", "crypto", "CRYPTO"]),
     )
 
@@ -94,7 +95,7 @@ async def test_seed_channel_adds_a_similar_channels_pass(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="@durov"))
 
     assert stage.found == 2
     # Normalized before it reaches the gateway, the same way every other channel is.
@@ -111,12 +112,13 @@ async def test_an_unusable_seed_is_reported_instead_of_probed(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="t.me/c/12345/1"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="t.me/c/12345/1"))
 
     # The unusable seed itself was never sent; the wave's own seeds are the sweep's hits.
     assert [action.seed for action in reader.similar_actions()] == ["alpha"]
+    # The reason rides the source's own row; a skip is not the run's error.
     assert _report_of(stage, "telegram_similar").state == "skipped"
-    assert stage.error == "seed_unusable"
+    assert stage.error is None
 
 
 @pytest.mark.asyncio
@@ -135,7 +137,7 @@ async def test_the_seed_pass_and_the_wave_report_separately(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="t.me/c/12345/1"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="t.me/c/12345/1"))
 
     seed_pass = _report_of(stage, "telegram_similar")
     assert (seed_pass.state, seed_pass.reason) == ("skipped", "seed_unusable")
@@ -157,7 +159,7 @@ async def test_the_wave_asks_recommendations_for_the_sweeps_own_hits(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request())
 
     assert [action.seed for action in reader.similar_actions()] == ["alpha"]
     rows = {row.channel: row.source for row in (await list_discovery_candidates(campaign_id)).rows}
@@ -178,7 +180,7 @@ async def test_the_wave_seeds_the_biggest_hits_first_and_stops_at_its_bound(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
+    await run_search(campaign_id, pool_of(), _request())
 
     assert [action.seed for action in reader.similar_actions()] == ["biggest", "middle"]
 
@@ -195,7 +197,7 @@ async def test_a_flood_wait_stops_the_recommendation_wave(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request())
 
     assert len(reader.similar_actions()) == 1
     assert stage.flooded is True
@@ -214,7 +216,7 @@ async def test_the_keyword_search_wins_a_cross_source_tie(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="@durov"))
 
     rows = (await list_discovery_candidates(campaign_id)).rows
     assert [row.channel for row in rows] == ["CryptoNews"]
@@ -252,7 +254,7 @@ async def test_a_source_reports_what_it_alone_contributed(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="@durov"))
 
     similar = _report_of(stage, "telegram_similar")
     assert similar.kept == 2
@@ -269,7 +271,6 @@ async def test_lower_priority_rows_survive_a_sweep_that_fills_the_cap(
     The similar pass sits last, so with 10 keyword rows against a cap of 4 it contributed
     exactly zero and the seed influenced nothing at all.
     """
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 4)
     monkeypatch.setattr(
         _seams,
         "execute_read",
@@ -280,7 +281,7 @@ async def test_lower_priority_rows_survive_a_sweep_that_fills_the_cap(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="@durov", limit=4))
 
     stored = {row.channel for row in (await list_discovery_candidates(campaign_id)).rows}
     assert len(stored) == 4
@@ -299,7 +300,7 @@ async def test_native_read_failure_does_not_abort_the_run(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="seed"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="seed"))
 
     assert stage.found == 1
     assert stage.error == "RPC: ChannelPrivateError"
@@ -318,7 +319,7 @@ async def test_an_unexpected_gateway_shape_is_not_an_answer(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request())
 
     assert stage.replaced is False
     assert stage.error == "unexpected_result"
@@ -342,7 +343,7 @@ async def test_an_empty_wave_cannot_overrule_a_failed_keyword_sweep(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request())
 
     assert stage.replaced is False
     assert stage.error == "RPC: Timeout"
@@ -367,7 +368,7 @@ async def test_rows_from_a_wave_replace_even_when_the_sweep_failed(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request())
 
     assert stage.replaced is True
     assert [row.channel for row in (await list_discovery_candidates(campaign_id)).rows] == [
@@ -384,7 +385,7 @@ async def test_a_flood_wait_stops_the_keyword_sweep(monkeypatch: pytest.MonkeyPa
 
     stage = await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         _request(keywords=["alpha", "bravo", "charlie"], seed_channel="@durov"),
     )
 
@@ -413,7 +414,7 @@ async def test_a_flood_wait_puts_the_account_on_cooldown(
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=flood_error(600)))
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
+    await run_search(campaign_id, pool_of(), _request())
 
     assert in_cooldown(LISTENER_ID, datetime.now(UTC)) is True
 
@@ -430,7 +431,7 @@ async def test_member_bounds_are_inclusive(monkeypatch: pytest.MonkeyPatch) -> N
 
     await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         _request(members_min=1_000, members_max=100_000),
     )
 
@@ -450,7 +451,7 @@ async def test_member_bounds_filter_hits_with_a_known_count(
 
     await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         _request(members_min=1_000, members_max=100_000),
     )
 
@@ -467,7 +468,7 @@ async def test_unknown_member_count_is_kept_not_dropped(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request(members_min=1_000))
+    await run_search(campaign_id, pool_of(), _request(members_min=1_000))
 
     rows = (await list_discovery_candidates(campaign_id)).rows
     assert [row.channel for row in rows] == ["nocount"]
@@ -491,7 +492,7 @@ async def test_a_count_from_one_source_filters_the_same_channel_from_another(
 
     await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         _request(seed_channel="@durov", members_min=10_000),
     )
 
@@ -509,7 +510,7 @@ async def test_a_pooled_count_is_stored_on_the_surviving_row(
     )
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    await run_search(campaign_id, pool_of(), _request(seed_channel="@durov"))
 
     rows = (await list_discovery_candidates(campaign_id)).rows
     # The keyword search still wins the spelling and the source label; only the count
@@ -520,14 +521,13 @@ async def test_a_pooled_count_is_stored_on_the_surviving_row(
 
 @pytest.mark.asyncio
 async def test_candidate_cap_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 2)
     reader = ReadRecorder(
         search=matches(("one", "1", None), ("two", "2", None), ("three", "3", None)),
     )
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request(limit=2))
 
     assert stage.found == 2
 
@@ -542,7 +542,7 @@ async def test_unnormalizable_handles_are_dropped(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
+    await run_search(campaign_id, pool_of(), _request())
 
     rows = (await list_discovery_candidates(campaign_id)).rows
     assert [row.channel for row in rows] == ["ok1"]
@@ -562,7 +562,7 @@ async def test_every_read_after_the_first_is_paced(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request(keywords=["alpha", "beta", "gamma"]))
+    await run_search(campaign_id, pool_of(), _request(keywords=["alpha", "beta", "gamma"]))
 
     # Three keywords → two gaps (the first read is not preceded by a pause), then one
     # global page per keyword, each paced. The sweep found nothing, so no wave seeds.
@@ -581,7 +581,7 @@ async def test_the_post_search_contributes_its_own_source(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, pool_of(), _request())
 
     assert [action.query for action in reader.posts_actions()] == ["crypto"]
     rows = {row.channel: row.source for row in (await list_discovery_candidates(campaign_id)).rows}
@@ -611,7 +611,7 @@ async def test_the_post_search_pages_on_the_cursor_up_to_its_budget(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
+    await run_search(campaign_id, pool_of(), _request())
 
     cursors = [action.cursor for action in reader.posts_actions()]
     # First page starts fresh; the second carries page one's cursor back verbatim.
@@ -631,7 +631,7 @@ async def test_paging_stops_on_a_page_that_adds_no_new_channel(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
+    await run_search(campaign_id, pool_of(), _request())
 
     assert len(reader.posts_actions()) == 2
 
@@ -652,7 +652,7 @@ async def test_the_run_read_budget_truncates_the_wider_waves(
 
     stage = await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         _request(keywords=["alpha", "bravo", "charlie"]),
     )
 

@@ -73,7 +73,7 @@ async def _guarded_account(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _claim_discovery(account_id: str, campaign_id: str = _CAMPAIGN) -> None:
     """Put a discovery run's in-memory claim on ``account_id``, as a real start does."""
-    assert _discovery_state.try_reserve(campaign_id, account_id) is None
+    assert _discovery_state.try_reserve(campaign_id, frozenset({account_id})) is None
 
 
 async def _stop_task() -> None:

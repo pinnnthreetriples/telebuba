@@ -24,7 +24,9 @@ from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
     flood_error,
+    pool_of,
     read_error,
+    search_request,
 )
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
@@ -73,7 +75,7 @@ async def test_probe_records_the_verdict_and_refreshes_the_shared_cache(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("alpha")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     rows = (await list_discovery_candidates(campaign_id)).rows
@@ -114,7 +116,7 @@ async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
     )
     campaign_id = await _seed("gated")
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     verdict = _discovery_state.verdicts(campaign_id)["gated"]
     # ``comments_enabled`` is deliberately absent: it duplicated the candidate's own
@@ -127,6 +129,13 @@ async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
         "scam": True,
         "fake": False,
         "restricted": True,
+        # Derived from the same reply: the reply said nothing about the TARGET's join
+        # gate (``join_request`` above is the linked group's), so access is unknown — not
+        # "open" — the title reads as English, and no category was asked for.
+        "access": None,
+        "language": "en",
+        "is_group": None,
+        "category_match": None,
     }
 
 
@@ -146,7 +155,7 @@ async def test_a_signal_the_reply_omits_stays_unknown_rather_than_a_no(
     )
     campaign_id = await _seed("quiet")
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     verdict = _discovery_state.verdicts(campaign_id)["quiet"]
     assert verdict.can_send_messages is None
@@ -167,31 +176,32 @@ async def test_an_unanswerable_probe_records_no_verdict_at_all(
     )
     campaign_id = await _seed("broken")
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     assert _discovery_state.verdicts(campaign_id) == {}
 
 
 @pytest.mark.asyncio
-async def test_a_cache_hit_spends_no_rpc_and_so_carries_no_verdict(
+async def test_a_cache_hit_spends_no_rpc_and_carries_no_rights_verdict(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The fitness signals have no column, so a cached channel has none to report.
+    """The writing rights have no column, so a cached channel reports them as unknown.
 
     Deliberate: the cheap re-search is worth more than a full verdict, and the board
-    still knows from the cache whether comments are on.
+    still knows from the cache whether comments are on. The three derived facts ARE
+    recorded — the filters read them off the same cache row.
     """
-    monkeypatch.setattr(
-        _seams,
-        "execute_read",
-        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
-    )
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+    monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("known")
-    await upsert_linked_group("known", -100, comments_enabled=True)
+    await upsert_linked_group("known", -100, comments_enabled=True, about="", join_request=False)
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
-    assert _discovery_state.verdicts(campaign_id) == {}
+    assert reader.calls == []
+    verdict = _discovery_state.verdicts(campaign_id)["known"]
+    assert (verdict.can_send_messages, verdict.join_to_send, verdict.scam) == (None, None, None)
+    assert verdict.access == "open"
 
 
 @pytest.mark.asyncio
@@ -205,7 +215,7 @@ async def test_comments_off_is_recorded_as_a_successful_probe(
     )
     campaign_id = await _seed("nocomments")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     rows = (await list_discovery_candidates(campaign_id)).rows
@@ -231,7 +241,7 @@ async def test_fresh_cache_hit_costs_zero_rpcs_and_zero_sleep(
     campaign_id = await _seed("known")
     await upsert_linked_group("known", -100, comments_enabled=True)
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     assert reader.calls == []
@@ -250,7 +260,7 @@ async def test_stale_cache_entry_is_reprobed(monkeypatch: pytest.MonkeyPatch) ->
     await upsert_linked_group("stale", None, comments_enabled=False)
     await _backdate("stale", datetime.now(UTC) - timedelta(days=30))
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     assert len(reader.calls) == 1
     cached = await fetch_linked_group("stale")
@@ -273,7 +283,7 @@ async def test_the_ttl_is_read_in_hours(monkeypatch: pytest.MonkeyPatch) -> None
     await upsert_linked_group("edge", None, comments_enabled=False)
     await _backdate("edge", datetime.now(UTC) - timedelta(hours=25))
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     assert len(reader.calls) == 1
 
@@ -289,7 +299,7 @@ async def test_an_unparseable_cache_stamp_is_treated_as_stale(
     await upsert_linked_group("garbled", -100, comments_enabled=True)
     await _backdate("garbled", "not-a-timestamp")
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     assert len(reader.calls) == 1
 
@@ -311,7 +321,7 @@ async def test_progress_is_signalled_during_a_long_pass(
     )
     campaign_id = await _seed(*[f"chan_{index:02d}" for index in range(11)])
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     # _PROGRESS_EVERY is 5, so an 11-candidate pass nudges at 5 and 10.
     assert len(frames) == 2
@@ -325,7 +335,7 @@ async def test_zero_ttl_disables_the_cache_entirely(monkeypatch: pytest.MonkeyPa
     campaign_id = await _seed("known")
     await upsert_linked_group("known", -100, comments_enabled=True)
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     assert len(reader.calls) == 1
 
@@ -348,7 +358,7 @@ async def test_pacing_sleeps_between_real_rpcs_only(monkeypatch: pytest.MonkeyPa
     campaign_id = await _seed("aaa", "bbb", "cached")
     await upsert_linked_group("cached", -100, comments_enabled=True)
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     # Two real probes -> one gap; the cache hit contributes nothing.
     assert slept == [1.25]
@@ -363,7 +373,7 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _seed("aaa", "bbb", "ccc")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason == "FloodWait(300s)"
     assert len(reader.calls) == 1
@@ -400,7 +410,7 @@ async def test_a_cooldown_recorded_mid_pass_stops_the_probes(
     monkeypatch.setattr(_seams, "execute_read", _probe)
     campaign_id = await _seed("aaa", "bbb", "ccc", "ddd")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason == "account_cooling"
     assert probes == 2
@@ -431,7 +441,7 @@ async def test_a_cooldown_landing_during_the_pace_sleep_costs_no_probe(
     monkeypatch.setattr(_seams, "sleep", _flood_while_pacing)
     campaign_id = await _seed("aaa", "bbb", "ccc")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason == "account_cooling"
     # Only the first probe, which spends no pace sleep. The second never fires.
@@ -448,7 +458,7 @@ async def test_a_channel_scoped_cooldown_does_not_stop_the_pass(
     await set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1), channel="@chat")
     campaign_id = await _seed("aaa", "bbb")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     assert len(reader.calls) == 2
@@ -465,7 +475,7 @@ async def test_a_single_error_marks_one_candidate_and_the_loop_continues(
     )
     campaign_id = await _seed("aaa", "broken", "zzz")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
@@ -482,7 +492,7 @@ async def test_consecutive_errors_abort_the_pass(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 2)
     campaign_id = await _seed("aaa", "bbb", "ccc", "ddd", "eee")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason == "RPC: AuthKeyUnregisteredError"
     assert len(reader.calls) == 2
@@ -499,7 +509,7 @@ async def test_a_success_resets_the_consecutive_error_counter(
     # and the counter never reaches two failures in a row.
     campaign_id = await _seed("aa_bad", "bb_good", "cc_bad", "dd_good")
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     assert len(reader.calls) == 4
@@ -516,7 +526,7 @@ async def test_a_pass_that_fails_every_other_probe_aborts_once_the_rate_is_measu
     channels = [f"c{index:02d}_{'bad' if index % 2 else 'good'}" for index in range(30)]
     campaign_id = await _seed(*channels)
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason == "RPC: TimeoutError"
     # _ERROR_RATE_MIN_PROBES is 20, and the 20th probe is this pattern's 10th failure.
@@ -542,7 +552,7 @@ async def test_a_healthy_sweep_with_a_minority_of_dead_handles_runs_to_the_end(
     channels = [f"c{index:03d}_{'dead' if index % 8 == 7 else 'live'}" for index in range(100)]
     campaign_id = await _seed(*channels)
 
-    reason = await run_qualification(campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign_id, pool_of(), search_request())
 
     assert reason is None
     assert len(reader.calls) == 100
@@ -557,7 +567,7 @@ async def test_nothing_pending_is_a_cheap_no_op(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
 
-    reason = await run_qualification(campaign.campaign_id, LISTENER_ID)
+    reason = await run_qualification(campaign.campaign_id, pool_of(), search_request())
 
     assert reason is None
     assert reader.calls == []
@@ -575,7 +585,7 @@ async def test_qualification_resumes_only_unprobed_rows(
 
     await mark_discovery_qualified(campaign_id, "aaa")
 
-    await run_qualification(campaign_id, LISTENER_ID)
+    await run_qualification(campaign_id, pool_of(), search_request())
 
     probed = [getattr(call, "channel", None) for call in reader.calls]
     assert probed == ["bbb"]

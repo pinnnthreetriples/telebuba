@@ -160,7 +160,28 @@ async def test_submit_phone_code_signs_in(tmp_path: Path, monkeypatch) -> None:
     assert result.status == "alive"
     assert result.user_id == 555
     assert result.username == "logged_in"
+    assert result.premium is None  # FakeUser carries no ``premium`` attribute
     assert client.disconnected is True
+
+
+@pytest.mark.asyncio
+async def test_submit_phone_code_captures_premium(tmp_path: Path, monkeypatch) -> None:
+    configure_database(tmp_path / "telebuba.db")
+
+    class PremiumUser(FakeUser):
+        premium = True
+
+    class PremiumClient(FakeAuthClient):
+        async def get_me(self) -> FakeUser:
+            return PremiumUser()
+
+    _patch_client(monkeypatch, tmp_path, PremiumClient())
+
+    result = await submit_phone_code(
+        PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
+    )
+
+    assert result.premium is True
 
 
 @pytest.mark.asyncio

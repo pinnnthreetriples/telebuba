@@ -129,12 +129,14 @@ async def test_update_account_from_alive_session_check(tmp_path: Path) -> None:
             username="username",
             first_name="First",
             last_name="Last",
+            premium=True,
         ),
     )
 
     assert updated.status == "alive"
     assert updated.user_id == 123
     assert updated.username == "username"
+    assert updated.premium is True  # read back from the row, not echoed from the input
     assert updated.last_checked_at is not None
 
 

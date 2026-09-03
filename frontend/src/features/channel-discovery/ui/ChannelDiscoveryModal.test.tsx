@@ -6,145 +6,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import '@/shared/i18n';
 
 import { campaignsQueryOptions, neurocommentBoardQueryOptions } from '@/entities/campaign';
-import type { DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
 
 import { ChannelDiscoveryModal } from './ChannelDiscoveryModal';
-
-type MockEventSourceCtor = {
-  last: () => { emit: (payload: unknown) => void } | undefined;
-};
-
-function candidate(overrides: Partial<DiscoveryCandidate> = {}): DiscoveryCandidate {
-  return {
-    channel: 'alpha',
-    title: 'Alpha',
-    source: 'telegram_search',
-    qualification: 'comments_on',
-    ...overrides,
-  };
-}
-
-function boardPayload(
-  candidates: DiscoveryCandidate[],
-  progress: Partial<DiscoveryBoard['progress']> = {},
-): DiscoveryBoard {
-  return {
-    campaign_id: 'c1',
-    progress: {
-      phase: 'done',
-      running: false,
-      total: candidates.length,
-      qualified: candidates.length,
-      comments_on: candidates.length,
-      last_error: null,
-      ...progress,
-    },
-    candidates,
-  };
-}
-
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-type Routes = {
-  board?: DiscoveryBoard;
-  boards?: DiscoveryBoard[];
-  startStatus?: string;
-  startFails?: boolean;
-  // One status per requested channel, defaulting to all-linked. The server reports
-  // per-channel outcomes, so a spec has to be able to mix them.
-  adoptStatuses?: string[];
-  adoptFails?: boolean;
-  boardFailures?: number;
-  // Mutable so a spec can stall the board mid-test; a stalled fetch proves a row on
-  // screen came from the cache rather than the server.
-  hang?: { board: boolean };
-};
-
-function route(routes: Routes = {}) {
-  const calls: { path: string; method: string; body: unknown }[] = [];
-  const boards = routes.boards ?? (routes.board ? [routes.board] : [boardPayload([])]);
-  let boardIndex = 0;
-  let boardFailures = routes.boardFailures ?? 0;
-
-  vi.mocked(fetch).mockImplementation(async (input) => {
-    const request = input as Request;
-    const url = new URL(request.url);
-    let body: unknown = null;
-    if (request.method === 'POST') {
-      body = JSON.parse(await request.clone().text());
-    }
-    calls.push({ path: url.pathname, method: request.method, body });
-
-    if (url.pathname === '/api/v1/warming/settings') {
-      return jsonResponse({
-        inter_account_chat: false,
-        reactions_enabled: true,
-        gemini_model: 'gemini-2.5-flash',
-        updated_at: 'now',
-      });
-    }
-    if (url.pathname.endsWith('/discovery/search')) {
-      if (routes.startFails === true) {
-        // What an inverted subscriber range actually returns.
-        return new Response(
-          JSON.stringify({ error: { code: 'validation_error', message: 'members_min' } }),
-          { status: 422, headers: { 'Content-Type': 'application/json' } },
-        );
-      }
-      return jsonResponse({ status: routes.startStatus ?? 'started' });
-    }
-    if (url.pathname.endsWith('/discovery/adopt')) {
-      if (routes.adoptFails === true) {
-        return new Response(JSON.stringify({ error: { code: 'internal', message: 'boom' } }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      const requested = (body as { channels?: string[] } | null)?.channels ?? [];
-      return jsonResponse({
-        outcomes: requested.map((channel, index) => ({
-          status: routes.adoptStatuses?.[index] ?? 'linked',
-          channel,
-        })),
-      });
-    }
-    if (url.pathname.endsWith('/discovery')) {
-      if (routes.hang?.board === true) return new Promise<Response>(() => undefined);
-      if (boardFailures > 0) {
-        boardFailures -= 1;
-        return new Response(JSON.stringify({ error: { code: 'internal', message: 'boom' } }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      const payload = boards[Math.min(boardIndex, boards.length - 1)];
-      boardIndex += 1;
-      return jsonResponse(payload);
-    }
-    return jsonResponse({});
-  });
-
-  return calls;
-}
-
-function renderModal(onClose = vi.fn()) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <ChannelDiscoveryModal campaignId="c1" campaignName="Promo" onClose={onClose} />
-    </QueryClientProvider>,
-  );
-}
-
-async function startSearch() {
-  await userEvent.type(screen.getByPlaceholderText('крипта, трейдинг, новости'), 'crypto');
-  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
-}
+import {
+  ACCOUNTS,
+  boardPayload,
+  candidate,
+  jsonResponse,
+  type MockEventSourceCtor,
+  renderModal,
+  route,
+  startSearch,
+} from './ChannelDiscoveryModal.testHelpers';
 
 beforeEach(() => {
   vi.useRealTimers();
@@ -165,8 +38,15 @@ describe('ChannelDiscoveryModal', () => {
     await waitFor(() => {
       expect(screen.getByText('@alpha')).toBeInTheDocument();
     });
+    // The untouched form posts its defaults: every eligible account, premium first.
     const search = calls.find((call) => call.path.endsWith('/discovery/search'));
-    expect(search?.body).toMatchObject({ keywords: ['crypto'] });
+    expect(search?.body).toMatchObject({
+      keywords: ['crypto'],
+      account_ids: ['acc-p', 'acc-n'],
+      kind: 'channels',
+      hide_seen: true,
+      limit: 200,
+    });
   });
 
   it('stays on the form and explains a refusal', async () => {
@@ -179,6 +59,9 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('Суточный лимит поисков исчерпан.')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    // Announced like its siblings: the button just re-enables, so without it a
+    // screen-reader operator hears nothing happen.
+    expect(screen.getByText('Суточный лимит поисков исчерпан.')).toHaveAttribute('role', 'status');
   });
 
   it('opens the live board when a search is already running', async () => {
@@ -202,6 +85,27 @@ describe('ChannelDiscoveryModal', () => {
     });
     // Still says whose run it is: these rows are not the parameters just submitted.
     expect(screen.getByText(/Поиск для этой кампании уже идёт/)).toBeInTheDocument();
+  });
+
+  it('drops the already-running note once the operator goes back to the form', async () => {
+    // The note describes the board the operator just left; pinned under the form it
+    // reads as a refusal of the parameters they are about to submit.
+    route({
+      startStatus: 'already_running',
+      board: boardPayload([candidate({ channel: 'good' })], { phase: 'qualifying', running: true }),
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText(/Поиск для этой кампании уже идёт/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText(/Поиск для этой кампании уже идёт/)).not.toBeInTheDocument();
+    });
   });
 
   it('reports a rejected start inside the modal', async () => {
@@ -325,6 +229,48 @@ describe('ChannelDiscoveryModal', () => {
     });
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: /Добавить выбранные \(0\)/ })).toBeInTheDocument();
+  });
+
+  it('drops the adopt notes and the adopt failure once the operator goes back to the form', async () => {
+    // Both describe picks from the board just left; pinned under the form they read as
+    // something wrong with the parameters about to be submitted.
+    route({
+      board: boardPayload([candidate({ channel: 'good' })]),
+      adoptStatuses: ['already_assigned'],
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await waitFor(() => {
+      expect(screen.getByText(/Не добавлено: 1/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    expect(screen.queryByText(/Не добавлено/)).not.toBeInTheDocument();
+  });
+
+  it('drops a failed adopt once the operator goes back to the form', async () => {
+    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptFails: true });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось добавить каналы/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    expect(screen.queryByText(/Не удалось добавить каналы/)).not.toBeInTheDocument();
   });
 
   it('drops the finished run rows as soon as the next search starts', async () => {
@@ -587,6 +533,9 @@ describe('ChannelDiscoveryModal', () => {
             updated_at: 'now',
           }),
         );
+      }
+      if (url.pathname.endsWith('/discovery/accounts')) {
+        return Promise.resolve(jsonResponse({ items: ACCOUNTS }));
       }
       if (url.pathname.endsWith('/discovery/search')) {
         return Promise.resolve(jsonResponse({ status: 'started' }));

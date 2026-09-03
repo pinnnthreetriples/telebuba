@@ -16,7 +16,7 @@ from core.telegram_client._pool import (
     TelegramClientUnavailableError,
     get_client,
 )
-from core.telegram_client._util import optional_str
+from core.telegram_client._util import optional_bool, optional_str
 from schemas.telegram_session import TelegramSessionCheckResult
 
 if TYPE_CHECKING:
@@ -246,6 +246,7 @@ def _alive_session_check_result(
         first_name=optional_str(getattr(me, "first_name", None)),
         last_name=optional_str(getattr(me, "last_name", None)),
         avatar_thumb=avatar_thumb,
+        premium=optional_bool(getattr(me, "premium", None)),
     )
 
 

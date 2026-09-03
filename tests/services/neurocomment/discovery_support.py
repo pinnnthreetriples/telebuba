@@ -7,7 +7,13 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from core.config import settings
-from core.db import configure_database, create_account, create_campaign, set_listener_account_id
+from core.db import (
+    _get_engine,
+    configure_database,
+    create_account,
+    create_campaign,
+    set_listener_account_id,
+)
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate
@@ -27,6 +33,7 @@ from schemas.telegram_actions_discovery import (
 )
 from services import warming
 from services.neurocomment import _discovery_state, _seams, _state
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment.discovery import start_discovery
 
 if TYPE_CHECKING:
@@ -73,12 +80,30 @@ async def _no_sleep(_seconds: float) -> None:
 
 
 async def seed_listener(account_id: str = LISTENER_ID) -> str:
-    """Create an account and pin it as the fleet listener (discovery's read account)."""
-    await create_account(
-        AccountCreate(account_id=account_id, label="listener", session_name=account_id)
-    )
+    """Create an account and pin it as the fleet listener (the default search pick)."""
+    await seed_account(account_id)
     await set_listener_account_id(account_id)
     return account_id
+
+
+async def seed_account(account_id: str, *, premium: bool | None = None) -> str:
+    """A signed-in account the operator may pick; ``premium`` as the session check left it."""
+    await create_account(
+        AccountCreate(account_id=account_id, label=account_id, session_name=account_id)
+    )
+    if premium is not None:
+        # Only a live session check writes the column, so the test sets it directly.
+        with _get_engine().begin() as connection:
+            connection.exec_driver_sql(
+                "UPDATE accounts SET premium = ? WHERE account_id = ?",
+                (premium, account_id),
+            )
+    return account_id
+
+
+def pool_of(*account_ids: str) -> AccountPool:
+    """A run's account rotation; the listener alone when no id is given."""
+    return AccountPool(SearchAccount(account_id) for account_id in account_ids or (LISTENER_ID,))
 
 
 async def new_campaign() -> str:
@@ -87,7 +112,7 @@ async def new_campaign() -> str:
 
 
 def search_request(**overrides: object) -> DiscoverySearchRequest:
-    payload: dict[str, object] = {"keywords": ["crypto"]}
+    payload: dict[str, object] = {"keywords": ["crypto"], "account_ids": [LISTENER_ID]}
     payload.update(overrides)
     return DiscoverySearchRequest.model_validate(payload)
 
@@ -157,9 +182,12 @@ class ReadRecorder:
             ),
         }
         self.calls: list[TelegramReadAction] = []
+        # Which account made each read, in call order — the pool's rotation, observed.
+        self.accounts: list[str] = []
 
-    async def __call__(self, _account_id: str, action: TelegramReadAction) -> BaseModel:
+    async def __call__(self, account_id: str, action: TelegramReadAction) -> BaseModel:
         self.calls.append(action)
+        self.accounts.append(account_id)
         scripted = self._by_type[action.action_type]
         if callable(scripted):
             factory = cast("Callable[[TelegramReadAction], BaseModel]", scripted)

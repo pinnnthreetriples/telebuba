@@ -49,3 +49,38 @@ def _add_neurocomment_discovery_candidates(connection: Connection) -> None:
         "CREATE INDEX IF NOT EXISTS ix_nc_discovery_campaign_qualified "
         "ON neurocomment_discovery_candidates(campaign_id, qualified_at)",
     )
+
+
+def _add_discovery_kind_and_seen(connection: Connection) -> None:
+    # #60: candidates learn whether they are a channel or a group, and the fleet-wide
+    # "already shown" table backs the request's ``hide_seen``.
+    # Skipped on a hand-built legacy DB without the table — a no-op, not an error.
+    if _sqlite_table_exists(connection, "neurocomment_discovery_candidates") and (
+        "kind" not in _sqlite_columns(connection, "neurocomment_discovery_candidates")
+    ):
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_discovery_candidates "
+            "ADD COLUMN kind VARCHAR NOT NULL DEFAULT 'channel'",
+        )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_discovery_seen ("
+        "  channel VARCHAR PRIMARY KEY,"
+        "  first_seen_at VARCHAR NOT NULL,"
+        "  last_seen_at VARCHAR NOT NULL"
+        ")",
+    )
+
+
+def _add_linked_group_about(connection: Connection) -> None:
+    # #61: the linked-group cache keeps the about text and the channel's own join gate,
+    # so a fresh row answers the language, category and access filters without a probe.
+    # Nullable on purpose: a pre-#61 row never learnt them, and NULL is what makes
+    # discovery re-probe it rather than filter on a blank.
+    if not _sqlite_table_exists(connection, "neurocomment_linked_groups"):
+        return
+    columns = _sqlite_columns(connection, "neurocomment_linked_groups")
+    for name, sql_type in (("about", "VARCHAR"), ("join_request", "BOOLEAN")):
+        if name not in columns:
+            connection.exec_driver_sql(
+                f"ALTER TABLE neurocomment_linked_groups ADD COLUMN {name} {sql_type}",
+            )

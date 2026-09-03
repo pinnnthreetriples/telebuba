@@ -6,6 +6,7 @@ import pytest
 
 from core.db import create_campaign, delete_campaign
 from core.repositories.neurocomment import (
+    delete_discovery_candidates,
     list_discovery_candidates,
     list_pending_discovery_candidates,
     mark_discovery_qualified,
@@ -15,12 +16,19 @@ from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoveryCandidateRow
 
 
-def _row(channel: str, *, subscribers: int | None = None, title: str = "") -> DiscoveryCandidateRow:
+def _row(
+    channel: str,
+    *,
+    subscribers: int | None = None,
+    title: str = "",
+    kind: str = "channel",
+) -> DiscoveryCandidateRow:
     return DiscoveryCandidateRow(
         channel=channel,
         title=title,
         subscribers=subscribers,
         source="telegram_search",
+        kind=kind,
     )
 
 
@@ -38,8 +46,36 @@ async def test_replace_inserts_and_lists_ordered_by_channel() -> None:
     assert alpha.title == "Alpha"
     assert alpha.subscribers == 500
     assert alpha.source == "telegram_search"
+    assert alpha.kind == "channel"
     assert alpha.qualified_at is None
     assert alpha.qualify_error is None
+
+
+@pytest.mark.asyncio
+async def test_kind_round_trips() -> None:
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await replace_discovery_candidates(
+        campaign.campaign_id,
+        [_row("chat", kind="group"), _row("news")],
+    )
+
+    rows = (await list_discovery_candidates(campaign.campaign_id)).rows
+    assert {row.channel: row.kind for row in rows} == {"chat": "group", "news": "channel"}
+
+
+@pytest.mark.asyncio
+async def test_delete_drops_only_the_named_rows_of_that_campaign() -> None:
+    first = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    second = await create_campaign(CampaignCreate(name="B", prompt="p"))
+    await replace_discovery_candidates(first.campaign_id, [_row("a"), _row("b"), _row("c")])
+    await replace_discovery_candidates(second.campaign_id, [_row("a")])
+
+    await delete_discovery_candidates(first.campaign_id, ["a", "c", "ghost"])
+    await delete_discovery_candidates(first.campaign_id, [])
+
+    kept = (await list_discovery_candidates(first.campaign_id)).rows
+    assert [row.channel for row in kept] == ["b"]
+    assert len((await list_discovery_candidates(second.campaign_id)).rows) == 1
 
 
 @pytest.mark.asyncio

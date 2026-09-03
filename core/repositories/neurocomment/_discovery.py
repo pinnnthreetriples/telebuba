@@ -20,6 +20,8 @@ from core.repositories.neurocomment._tables import _neurocomment_discovery_candi
 from schemas.neurocomment_discovery import DiscoveryCandidateRow, DiscoveryCandidateRows
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from sqlalchemy import RowMapping
 
 _TABLE = _neurocomment_discovery_candidates
@@ -33,6 +35,7 @@ def _row_to_candidate(row: RowMapping) -> DiscoveryCandidateRow:
         # Verbatim: the column outlives the code that wrote it, and a row naming a source
         # this build no longer has must reach the board as a label, not as a 500.
         source=str(row["source"]),
+        kind=str(row["kind"]),
         qualified_at=None if row["qualified_at"] is None else str(row["qualified_at"]),
         qualify_error=None if row["qualify_error"] is None else str(row["qualify_error"]),
     )
@@ -55,6 +58,7 @@ def _replace_discovery_candidates(campaign_id: str, rows: list[DiscoveryCandidat
                     "title": row.title,
                     "subscribers": row.subscribers,
                     "source": row.source,
+                    "kind": row.kind,
                     "qualified_at": row.qualified_at,
                     "qualify_error": row.qualify_error,
                     "created_at": now,
@@ -70,6 +74,23 @@ async def replace_discovery_candidates(
 ) -> None:
     """Swap a campaign's candidate set for the results of a fresh search."""
     await asyncio.to_thread(_replace_discovery_candidates, campaign_id, rows)
+
+
+def _delete_discovery_candidates(campaign_id: str, channels: list[str]) -> None:
+    if not channels:
+        return
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_TABLE).where(
+                _TABLE.c.campaign_id == campaign_id,
+                _TABLE.c.channel.in_(channels),
+            ),
+        )
+
+
+async def delete_discovery_candidates(campaign_id: str, channels: Iterable[str]) -> None:
+    """Drop the named rows only — a qualification filter's rejects, not the whole set."""
+    await asyncio.to_thread(_delete_discovery_candidates, campaign_id, list(channels))
 
 
 def _list_discovery_candidates(campaign_id: str) -> DiscoveryCandidateRows:

@@ -16,6 +16,7 @@ export {
   linkCampaignChannelMutation,
   listCampaignChallengesOptions as campaignChallengesQueryOptions,
   listCampaignsOptions as campaignsQueryOptions,
+  listDiscoveryAccountsOptions as discoveryAccountsQueryOptions,
   listNeurocommentCommentsOptions as neurocommentCommentsQueryOptions,
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,

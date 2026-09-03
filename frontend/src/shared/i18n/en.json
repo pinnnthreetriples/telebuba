@@ -1443,9 +1443,11 @@
           "maxSubscribers": "Subscribers up to",
           "membersHint": "The bounds only apply to hits Telegram returned a subscriber count for. The rest are listed unfiltered — their count arrives with the comment check and may land outside the bounds.",
           "boundsInverted": "\"Subscribers from\" is above \"Subscribers up to\" — the search would match nothing.",
+          "membersInvalid": "A whole number, 0 or more",
           "seedChannel": "Similar to channel",
           "seedChannelHint": "Telegram suggests channels similar to this one based on overlapping audiences. It is the cheapest way to widen the sweep.",
           "seedChannelPlaceholder": "@channel",
+          "seedInvalid": "A channel handle, up to 32 characters, no post links",
           "expand": "Suggest keywords",
           "expanding": "Suggesting…",
           "expandTooLong": "The topic is longer than {{max}} characters — shorten it, the suggester accepts no more.",
@@ -1457,13 +1459,107 @@
           },
           "reset": "Reset",
           "submit": "Search",
-          "searching": "Starting…"
+          "searching": "Starting…",
+          "sections": {
+            "query": "Query",
+            "filters": "Filters"
+          },
+          "kind": {
+            "label": "Type",
+            "all": "All",
+            "channels": "Channels",
+            "groups": "Groups"
+          },
+          "category": {
+            "label": "Category",
+            "any": "Any",
+            "it_programming": "IT & programming",
+            "beauty_health": "Beauty & health",
+            "crypto": "Crypto",
+            "trading": "Trading",
+            "news": "News",
+            "business": "Business",
+            "marketing": "Marketing",
+            "education": "Education",
+            "entertainment": "Entertainment",
+            "games": "Games",
+            "sport": "Sport",
+            "travel": "Travel",
+            "food": "Food",
+            "cars": "Cars",
+            "real_estate": "Real estate",
+            "finance": "Finance",
+            "psychology": "Psychology",
+            "humor": "Humor",
+            "music": "Music",
+            "movies": "Movies",
+            "fashion": "Fashion",
+            "politics": "Politics",
+            "science": "Science",
+            "parenting": "Parenting",
+            "jobs": "Jobs"
+          },
+          "language": {
+            "label": "Language",
+            "any": "Any",
+            "ru": "Russian",
+            "en": "English",
+            "uk": "Ukrainian",
+            "other": "Other"
+          },
+          "comments": {
+            "label": "Comments",
+            "any": "Any",
+            "on": "On",
+            "off": "Off",
+            "groupsHint": "Groups have no comments verdict",
+            "allHint": "Groups are not filtered by comments"
+          },
+          "access": {
+            "label": "Access",
+            "any": "Any",
+            "open": "Open",
+            "join_request": "By request",
+            "subscription": "Subscription",
+            "groupsHint": "Subscription channels come only from channel recommendations"
+          },
+          "subscribers": "Subscribers",
+          "hideSeen": {
+            "label": "Previously shown",
+            "hide": "Hide",
+            "show": "Show",
+            "hint": "Channels any earlier search already returned"
+          },
+          "limit": {
+            "label": "Result limit",
+            "hint": "{{min}}–{{max}}, default {{default}}",
+            "invalid": "A whole number from {{min}} to {{max}}"
+          },
+          "accounts": {
+            "label": "Accounts for parsing",
+            "selected_one": "{{count}} selected",
+            "selected_other": "{{count}} selected",
+            "trigger": "Choose accounts",
+            "premium": "Premium",
+            "premiumHint": "Premium accounts hit FLOOD_PREMIUM_WAIT less often and get more recommendations — they are preselected",
+            "loading": "Loading accounts…",
+            "loadFailed": "Couldn't load the accounts. Search is unavailable until the list loads.",
+            "stale": "The account list could not be refreshed",
+            "empty": "No free accounts: all are warming, listening or cooling down.",
+            "max": "at most {{max}} accounts",
+            "busy": {
+              "account_busy": "busy",
+              "account_cooling": "cooling down",
+              "no_session": "no session"
+            }
+          }
         },
         "results": {
           "back": "← Change parameters",
           "count": "Channels found: {{count}}",
           "countStale": "Channels from the previous search: {{count}}",
           "countCapped": "Channels found: {{count}} — the ceiling for one search, the rest were dropped",
+          "filtered": "Filtered out: {{count}}",
           "commentsOn": "with comments: {{count}}",
           "uncounted": "admitted without a count",
           "qualifying": "Checking comments: {{done}}/{{total}}",
@@ -1474,12 +1570,30 @@
           "error": "Couldn't load the search results. Retrying…",
           "selectAll": "Select all eligible",
           "select": "Select channel {{channel}}",
+          "privateChannel": "private channel",
+          "notAdoptable": "cannot be adopted",
           "colChannel": "Channel",
           "colTitle": "Title",
           "colSubscribers": "Subscribers",
+          "colTraits": "Type",
           "colSource": "Source",
           "colComments": "Comments",
           "colState": "State",
+          "kind": {
+            "channel": "channel",
+            "group": "group"
+          },
+          "access": {
+            "open": "open",
+            "join_request": "by request",
+            "subscription": "subscription"
+          },
+          "language": {
+            "ru": "ru",
+            "en": "en",
+            "uk": "uk",
+            "other": "other"
+          },
           "inCampaign": "already in campaign",
           "takenElsewhere": "taken by another campaign",
           "sourceRan": "{{source}}: {{kept}} of {{hits}}",
@@ -1489,6 +1603,7 @@
             "seed_unusable": "the seed channel is not a usable handle",
             "channel_not_found": "Telegram could not find that channel",
             "read_budget": "the read budget for one search ran out",
+            "kind_unsupported": "recommendations return channels only",
             "account_cooling": "the search account is waiting out a Telegram limit",
             "unexpected_result": "Telegram returned an unexpected reply"
           },
@@ -1523,7 +1638,8 @@
           "no_account": "No account available for searching: assign a listener or a campaign account.",
           "account_busy": "The search account is busy: stop the listener or warming, then retry.",
           "account_cooling": "The search account is waiting out a Telegram limit. Try again later.",
-          "daily_limit_reached": "The daily search allowance is spent."
+          "daily_limit_reached": "The daily search allowance is spent.",
+          "account": "Account: {{name}}"
         },
         "startFailed": "Couldn't start the search. Check the parameters and try again.",
         "add": "Add selected ({{count}})",
@@ -1531,6 +1647,7 @@
         "addedNone": "Nothing added",
         "addedRefused": "Not added: {{count}} — those channels are already taken",
         "addedCommentsOff": "Not added: {{count}} — comments are disabled in those channels",
+        "addedNotAdoptable": "Not added: {{count}} — a group or a private channel",
         "addedFailed": "Could not add: {{count}} — try again",
         "addFailed": "Couldn't add the channels. Some may have been added — check the list and try again."
       }

@@ -43,6 +43,11 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
 
+def _body(**fields: object) -> dict[str, object]:
+    """A search body with the now-required account pick filled in."""
+    return {"account_ids": ["acc-listener"], **fields}
+
+
 def _board() -> DiscoveryBoard:
     return DiscoveryBoard(
         campaign_id="c1",
@@ -102,11 +107,11 @@ async def test_start_discovery_returns_202_and_the_outcome(
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": ["crypto", "trading"]},
+            json=_body(keywords=["crypto", "trading"]),
         )
 
     assert resp.status_code == 202
-    assert resp.json() == {"status": "started"}
+    assert resp.json() == {"status": "started", "refused_account_id": None}
     assert seen[0].keywords == ["crypto", "trading"]
 
 
@@ -127,7 +132,7 @@ async def test_refusals_ride_the_outcome_not_an_error(
 
     monkeypatch.setattr("services.neurocomment.start_discovery", _fake)
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/search", json={"keywords": ["crypto"]})
+        resp = await client.post(f"{_BASE}/search", json=_body(keywords=["crypto"]))
 
     assert resp.status_code == 202
     assert resp.json()["status"] == status
@@ -137,15 +142,16 @@ async def test_refusals_ride_the_outcome_not_an_error(
 async def test_short_keyword_is_rejected(app: FastAPI) -> None:
     """Telegram rejects global searches under 4 characters."""
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/search", json={"keywords": ["abc"]})
+        resp = await client.post(f"{_BASE}/search", json=_body(keywords=["abc"]))
 
     assert resp.status_code == 422
 
 
 @pytest.mark.asyncio
 async def test_empty_keywords_is_rejected(app: FastAPI) -> None:
+    """No keywords and no category: nothing to search on."""
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/search", json={"keywords": []})
+        resp = await client.post(f"{_BASE}/search", json=_body(keywords=[]))
 
     assert resp.status_code == 422
 
@@ -155,7 +161,7 @@ async def test_too_many_keywords_is_rejected(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": [f"keyword{index}" for index in range(11)]},
+            json=_body(keywords=[f"keyword{index}" for index in range(11)]),
         )
 
     assert resp.status_code == 422
@@ -170,7 +176,7 @@ async def test_an_oversized_keyword_is_rejected(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": ["a" * (KEYWORD_MAX_LENGTH + 1)]},
+            json=_body(keywords=["a" * (KEYWORD_MAX_LENGTH + 1)]),
         )
 
     assert resp.status_code == 422
@@ -192,7 +198,7 @@ async def test_duplicate_keywords_collapse_to_one(
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": [" Crypto ", "crypto", "CRYPTO", "trading"]},
+            json=_body(keywords=[" Crypto ", "crypto", "CRYPTO", "trading"]),
         )
 
     assert resp.status_code == 202
@@ -201,15 +207,15 @@ async def test_duplicate_keywords_collapse_to_one(
 
 @pytest.mark.asyncio
 async def test_a_retired_catalogue_field_is_refused(app: FastAPI) -> None:
-    """Nothing filters by locale or reads a catalogue any more.
+    """Nothing reads a catalogue any more.
 
     ``extra="forbid"`` is what makes an old client's request fail loudly instead of
-    running unfiltered and reporting success. One field is the whole test: ``language``,
-    ``country``, ``use_telemetr`` and ``catalogue_only`` all reach the same rejection,
-    so a case each proved the same thing four times.
+    running unfiltered and reporting success. One field is the whole test: ``country``,
+    ``use_telemetr`` and ``catalogue_only`` all reach the same rejection, so a case each
+    proved the same thing three times.
     """
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/search", json={"keywords": ["crypto"], "language": "tr"})
+        resp = await client.post(f"{_BASE}/search", json=_body(keywords=["crypto"], country="tr"))
 
     assert resp.status_code == 422
 
@@ -220,7 +226,7 @@ async def test_a_blank_seed_channel_is_rejected(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": ["crypto"], "seed_channel": " "},
+            json=_body(keywords=["crypto"], seed_channel=" "),
         )
 
     assert resp.status_code == 422
@@ -231,7 +237,7 @@ async def test_inverted_member_bounds_are_rejected(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": ["crypto"], "members_min": 500, "members_max": 100},
+            json=_body(keywords=["crypto"], members_min=500, members_max=100),
         )
 
     assert resp.status_code == 422
@@ -242,7 +248,7 @@ async def test_unknown_field_is_rejected(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post(
             f"{_BASE}/search",
-            json={"keywords": ["crypto"], "surprise": 1},
+            json=_body(keywords=["crypto"], surprise=1),
         )
 
     assert resp.status_code == 422
@@ -408,7 +414,7 @@ async def test_search_404s_for_an_unknown_campaign(
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/neurocomment/campaigns/ghost/discovery/search",
-            json={"keywords": ["crypto"]},
+            json=_body(keywords=["crypto"]),
         )
 
     assert resp.status_code == 404
@@ -481,7 +487,7 @@ async def test_discovery_routes_require_authentication() -> None:
     """The sibling router inherits the parent router's auth dependency."""
     unauthenticated = create_app()
     async with _client(unauthenticated) as client:
-        search = await client.post(f"{_BASE}/search", json={"keywords": ["crypto"]})
+        search = await client.post(f"{_BASE}/search", json=_body(keywords=["crypto"]))
         board = await client.get(_BASE)
         adopt = await client.post(f"{_BASE}/adopt", json={"channels": ["alpha"]})
         keywords = await client.post(_KEYWORDS, json={"topic": "драки"})

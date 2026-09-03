@@ -209,6 +209,32 @@ async def test_the_board_says_when_the_rows_are_not_the_last_run_s() -> None:
 
 
 @pytest.mark.asyncio
+async def test_rows_are_stale_while_a_run_is_searching_and_after_a_restart() -> None:
+    """A report nobody filled has stored nothing.
+
+    ``stored`` defaulted to True, so between the start (which publishes an empty report)
+    and the search stage's write — and for the life of the process after a restart — the
+    board credited the previous search's rows as this run's find.
+    """
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("from_last_run")])
+
+    restarted = await load_discovery(campaign_id)
+    _discovery_state.set_phase(campaign_id, "searching")
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
+    searching = await load_discovery(campaign_id)
+    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport(stored=True))
+    stored = await load_discovery(campaign_id)
+
+    assert restarted is not None
+    assert searching is not None
+    assert stored is not None
+    assert restarted.progress.stale_candidates is True
+    assert searching.progress.stale_candidates is True
+    assert stored.progress.stale_candidates is False
+
+
+@pytest.mark.asyncio
 async def test_a_candidate_with_no_run_state_falls_back_to_its_stored_source() -> None:
     """Multi-source provenance is not persisted, so a restart loses that only."""
     campaign_id = await _campaign()
@@ -261,6 +287,68 @@ async def test_the_board_carries_the_fitness_verdict_of_the_run_in_flight() -> N
     assert verdict.group_slowmode_enabled is True
     # Not measured by this run, and it must not read as a "no".
     assert verdict.can_send_messages is None
+
+
+@pytest.mark.asyncio
+async def test_the_board_lifts_kind_and_the_probe_derived_facts_onto_the_row() -> None:
+    """``kind`` is stored; access, language and the category match live on the verdict."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [
+            DiscoveryCandidateRow(
+                channel="chat", title="Chat", source="telegram_search", kind="group"
+            ),
+            _row("plain"),
+        ],
+    )
+    _discovery_state.record_verdict(
+        campaign_id,
+        "chat",
+        DiscoveryChannelVerdict(access="join_request", language="ru", category_match=True),
+    )
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    chat, plain = board.candidates
+    assert (chat.kind, chat.access, chat.language, chat.category_match) == (
+        "group",
+        "join_request",
+        "ru",
+        True,
+    )
+    # No verdict: the facts are unknown, and the row's own kind still shows.
+    assert (plain.kind, plain.access, plain.language, plain.category_match) == (
+        "channel",
+        None,
+        None,
+        None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_adopt_refuses_groups_and_private_rows_without_a_write() -> None:
+    """Nothing a campaign could comment in, so no link is even attempted."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [
+            DiscoveryCandidateRow(
+                channel="chat", title="Chat", source="telegram_search", kind="group"
+            ),
+            _row("plain"),
+        ],
+    )
+
+    result = await adopt_candidates(campaign_id, ["chat", "id:123456", "plain"])
+
+    assert result is not None
+    assert [(o.channel, o.status) for o in result.outcomes] == [
+        ("chat", "not_adoptable"),
+        ("id:123456", "not_adoptable"),
+        ("plain", "linked"),
+    ]
 
 
 @pytest.mark.asyncio

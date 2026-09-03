@@ -20,6 +20,8 @@ _ALLOWED_TABLES = frozenset(
         "warming_account_state",
         "warming_settings",
         "neurocomment_campaigns",
+        "neurocomment_discovery_candidates",
+        "neurocomment_linked_groups",
         "neurocomment_readiness",
         "neurocomment_runtime",
         "proxies",
@@ -52,6 +54,14 @@ def _add_account_twofa_password(connection: Connection) -> None:
         return
     if "twofa_password" not in _sqlite_columns(connection, "accounts"):
         connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN twofa_password VARCHAR")
+
+
+def _add_account_premium(connection: Connection) -> None:
+    # Same table + column guards as ``_add_account_twofa_password`` (partial databases).
+    if not _sqlite_table_exists(connection, "accounts"):
+        return
+    if "premium" not in _sqlite_columns(connection, "accounts"):
+        connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN premium BOOLEAN")
 
 
 def _add_account_proxy_geo(connection: Connection) -> None:

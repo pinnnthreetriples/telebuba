@@ -10,11 +10,11 @@ candidates with its partial findings.
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.channel_tokens import dedup_key, normalize_channel
-from core.config import settings
-from core.repositories.neurocomment import replace_discovery_candidates
+from core.repositories.neurocomment import list_seen, replace_discovery_candidates
 from schemas.neurocomment_discovery import (
     CHANNEL_HANDLE_MAX_LENGTH,
     DiscoveryCandidateOrigin,
@@ -23,8 +23,10 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchStageResult,
     DiscoverySourceReport,
 )
+from services.neurocomment._discovery_filters import admit_at_search
 from services.neurocomment._discovery_providers import COOLING_REASON
-from services.neurocomment._discovery_waves import READ_BUDGET, SOURCE_PRIORITY, native_pass
+from services.neurocomment._discovery_wave_support import SOURCE_PRIORITY
+from services.neurocomment._discovery_waves import native_pass
 
 if TYPE_CHECKING:
     from schemas.neurocomment_discovery import (
@@ -32,6 +34,7 @@ if TYPE_CHECKING:
         DiscoverySource,
         DiscoverySourceState,
     )
+    from services.neurocomment._discovery_pool import AccountPool
     from services.neurocomment._discovery_providers import RawCandidate, SourceOutcome
 
 
@@ -44,7 +47,9 @@ class _Merged(NamedTuple):
     # Distinct usable channels each source returned — the honest denominator of the
     # board's "kept of hits", see ``DiscoverySourceReport.hits``.
     reach: dict[DiscoverySource, set[str]]
-    # Did ``discovery_max_candidates`` drop a tail this merge had?
+    # Distinct channels each operator filter refused, by filter name.
+    filtered: dict[str, int]
+    # Did the candidate cap drop a tail this merge had?
     capped: bool = False
 
 
@@ -64,10 +69,29 @@ def _within_member_bounds(subscribers: int | None, request: DiscoverySearchReque
     return not (request.members_max is not None and subscribers > request.members_max)
 
 
+def _handle_of(candidate: RawCandidate) -> str | None:
+    """The stored form of one hit — canonical handle, or ``id:<n>`` when it has none.
+
+    ``None`` for an unusable hit: invite-only links have no public handle to search or
+    comment under.
+    """
+    if candidate.username is None:
+        return candidate.ref
+    handle = normalize_channel(candidate.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
+    if handle is None or handle.startswith("+"):
+        return None
+    return handle
+
+
 def _normalized(
     ranked: list[tuple[int, RawCandidate]],
-) -> list[tuple[str, str, int, RawCandidate]]:
-    """Ranked hits paired with their dedup key, canonical handle and outcome, unusable dropped.
+    request: DiscoverySearchRequest,
+    seen: set[str],
+) -> tuple[list[tuple[str, str, int, RawCandidate]], dict[str, int]]:
+    """Ranked hits paired with their dedup key, stored handle and outcome, plus the drops.
+
+    Unusable hits vanish; hits an operator filter refuses are counted per filter and per
+    DISTINCT channel, so three sources returning the same group read as one drop.
 
     The outcome index rides along because the interleave below shares the cap between
     outcomes, not between sources: one counter per source made rank a position in the
@@ -75,13 +99,18 @@ def _normalized(
     the sweep was paid for and thrown away.
     """
     entries: list[tuple[str, str, int, RawCandidate]] = []
+    rejected: dict[str, str] = {}
     for group, candidate in ranked:
-        handle = normalize_channel(candidate.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
-        if handle is None or handle.startswith("+"):
-            # Invite-only links have no public handle to search or comment under.
+        handle = _handle_of(candidate)
+        if handle is None:
             continue
-        entries.append((dedup_key(handle), handle, group, candidate))
-    return entries
+        key = dedup_key(handle)
+        reason = admit_at_search(access=candidate.access, ref=key, request=request, seen=seen)
+        if reason is not None:
+            rejected.setdefault(key, reason)
+            continue
+        entries.append((key, handle, group, candidate))
+    return entries, dict(Counter(rejected.values()))
 
 
 def _source_reports(
@@ -122,14 +151,22 @@ def _source_reports(
     return reports
 
 
-def _merge(outcomes: list[SourceOutcome], request: DiscoverySearchRequest) -> _Merged:
-    """Normalize, dedup, interleave and cap the union of every source's hits."""
+def _merge(
+    outcomes: list[SourceOutcome],
+    request: DiscoverySearchRequest,
+    seen: set[str],
+) -> _Merged:
+    """Normalize, filter, dedup, interleave and cap the union of every source's hits.
+
+    ``seen`` is the already-shown set the caller read for ``hide_seen`` (empty when the
+    operator did not ask), so this stays a pure function of its arguments.
+    """
     ranked: list[tuple[int, RawCandidate]] = []
     for group, outcome in enumerate(outcomes):
         ranked.extend((group, candidate) for candidate in outcome.candidates)
     # Stable sort by source priority so the dedup below keeps the preferred spelling.
     ranked.sort(key=lambda pair: SOURCE_PRIORITY.get(pair[1].source, 99))
-    entries = _normalized(ranked)
+    entries, filtered = _normalized(ranked, request, seen)
 
     # Pool the subscriber counts before deduping: a hit that carries no count can
     # outrank one that does, and would otherwise shadow the very count that decides
@@ -164,6 +201,7 @@ def _merge(outcomes: list[SourceOutcome], request: DiscoverySearchRequest) -> _M
                 title=candidate.title,
                 subscribers=subscribers,
                 source=candidate.source,
+                kind=candidate.kind,
             )
             origins[key] = DiscoveryCandidateOrigin(uncounted=bounded and subscribers is None)
             winner[key] = SOURCE_PRIORITY.get(candidate.source, 99)
@@ -181,31 +219,69 @@ def _merge(outcomes: list[SourceOutcome], request: DiscoverySearchRequest) -> _M
     # drops every row it found. Per OUTCOME, not per source, so the cap is shared across
     # keywords as well as sources.
     ordered = sorted(accepted, key=lambda key: (rank[key], winner[key]))
-    cap = settings.neurocomment.discovery_max_candidates
+    # The operator's own ceiling is the only one.
+    cap = request.limit
     selected = ordered[:cap]
     kept_origins = {accepted[key].channel: origins[key] for key in selected}
 
-    # First error wins: the board shows one short reason, not a concatenation. The
-    # per-source report carries the rest. The read budget is NOT one of them: at default
-    # settings a full keyword list exhausts it on every run, so painting a complete answer
-    # as a degraded one made the normal case look broken. It is truncation — the source's
-    # own row still names the budget and flags itself ``truncated``.
-    error = next(
-        (out.error for out in outcomes if out.error and out.error != READ_BUDGET),
-        None,
-    )
+    # First FAILURE wins: the board shows one short reason, not a concatenation. The
+    # per-source report carries the rest. A skip is not one of them, whatever its reason:
+    # the read budget runs out on every full keyword list, and a groups search skips both
+    # recommendation waves by design — painting a complete answer as a degraded one made
+    # the normal case look broken, and the skip's reason then masked a real failure that
+    # came later. The source's own row still names it.
+    error = next((out.error for out in outcomes if out.state == "failed"), None)
     return _Merged(
         rows=[accepted[key] for key in selected],
         error=error,
         origins=kept_origins,
         reach=reach,
         capped=len(ordered) > cap,
+        filtered=filtered,
     )
+
+
+def _replaces(
+    outcomes: list[SourceOutcome], merged: _Merged, stop: str | None
+) -> tuple[bool, bool]:
+    """Whether this run's rows displace the stored set, and whether ``seen`` alone emptied it.
+
+    The write is delete-then-insert, so an empty merge nobody answered for would destroy
+    the previous run's already-qualified candidates over one transient failure. An empty
+    merge also needs the KEYWORD SWEEP to have answered: the wider waves are consulted on
+    every run, and letting one of them answer "nothing" for a sweep that merely timed out
+    hands that wipe to a narrower index. Rows found by any source still replace — those
+    ARE this run's findings, and serving the previous set beside them would present
+    another keyword set's channels as this one's.
+
+    A flood never replaces either: the run stopped mid-wave, so these rows are a fraction
+    of what the keywords would have found, the coordinator skips qualification for them and
+    reports the run failed, and the account is now on cooldown. Handing that partial set to
+    the delete-then-insert traded a reviewed, qualified candidate list for a dozen
+    unqualified handles the operator could not even re-search for. A limit found at a
+    wave boundary is treated exactly like one this run caused — reported under its own
+    reason, because "we hit a flood" and "the account was already serving one" send the
+    operator to different places.
+
+    An empty merge that ``hide_seen`` ALONE emptied does not replace: every hit was a
+    channel the operator already looked at, and wiping the previous set to show them
+    nothing threw away the only rows that were still an answer. The board says those rows
+    are the previous search's (``stored=False``), as after a flood.
+    """
+    swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
+    all_seen = not merged.rows and {name for name, n in merged.filtered.items() if n} == {"seen"}
+    replaced = (
+        stop not in {"flooded", "cooling"}
+        and any(outcome.answered for outcome in outcomes)
+        and (bool(merged.rows) or swept)
+        and not all_seen
+    )
+    return replaced, all_seen
 
 
 async def run_search(
     campaign_id: str,
-    account_id: str,
+    pool: AccountPool,
     request: DiscoverySearchRequest,
 ) -> DiscoverySearchStageResult:
     """Collect candidates from every enabled source and persist the merged set.
@@ -213,34 +289,16 @@ async def run_search(
     A source that fails is recorded, never raised: the other source's results still have
     value to the operator.
     """
-    native = await native_pass(account_id, request)
+    native = await native_pass(pool, request)
     outcomes = native.outcomes
 
-    merged = _merge(outcomes, request)
-    # The write is delete-then-insert, so an empty merge nobody answered for would destroy
-    # the previous run's already-qualified candidates over one transient failure. An empty
-    # merge now also needs the KEYWORD SWEEP to have answered: the wider waves are
-    # consulted on every run, and letting one of them answer "nothing" for a sweep that
-    # merely timed out hands that wipe to a narrower index. Rows found by any source still
-    # replace — those ARE this run's findings, and serving the previous set beside them
-    # would present another keyword set's channels as this one's.
-    # A FloodWait never replaces either: the run stopped mid-wave, so these rows are a
-    # fraction of what the keywords would have found, the coordinator skips qualification
-    # for them and reports the run failed, and the account is now on cooldown. Handing
-    # that partial set to the delete-then-insert traded a reviewed, qualified candidate
-    # list for a dozen unqualified handles the operator could not even re-search for.
-    # A limit found at a wave boundary is treated exactly like one this run caused: the
-    # run stopped early either way, so its findings are a fraction of the sweep and must
-    # not displace a reviewed set. It is reported under its own reason, because "we hit a
-    # flood" and "the account was already serving one" send the operator to different
-    # places.
-    swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
-    replaced = (
-        not native.flooded
-        and not native.cooled
-        and any(outcome.answered for outcome in outcomes)
-        and (bool(merged.rows) or swept)
-    )
+    seen: set[str] = set()
+    if request.hide_seen:
+        # One bulk read, answered as dedup keys, so the merge can stay pure.
+        refs = {_handle_of(hit) for outcome in outcomes for hit in outcome.candidates}
+        seen = await list_seen(ref for ref in refs if ref is not None)
+    merged = _merge(outcomes, request, seen)
+    replaced, all_seen = _replaces(outcomes, merged, native.stop)
     if replaced:
         await replace_discovery_candidates(campaign_id, merged.rows)
     # The whole report is built AFTER that decision. Per-source states and reach describe
@@ -256,13 +314,15 @@ async def run_search(
         # The stop wins over a source's own reason: a keyword that failed while the
         # account was being parked by something else explains nothing the operator can
         # act on, and the cooldown does.
-        error=COOLING_REASON if native.cooled else merged.error,
+        error=COOLING_REASON if native.stop == "cooling" else merged.error,
         replaced=replaced,
-        flooded=native.flooded or native.cooled,
+        all_seen=all_seen,
+        flooded=native.stop in {"flooded", "cooling"},
         report=DiscoveryRunReport(
             sources=_source_reports(outcomes, merged.reach, origins),
             origins=origins,
             stored=replaced,
             capped=replaced and merged.capped,
+            filtered=merged.filtered,
         ),
     )

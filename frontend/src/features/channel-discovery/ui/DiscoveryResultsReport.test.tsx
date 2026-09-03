@@ -57,6 +57,33 @@ function Harness({ data }: { data: DiscoveryBoard | undefined }) {
 }
 
 describe('DiscoveryResults reporting', () => {
+  it('names a private row for what it is instead of printing its id ref as a handle', () => {
+    // "@id:123" is the backend's PRIVATE_PREFIX ref dressed as a username nobody can open.
+    render(
+      <Harness
+        data={board([
+          candidate({ channel: 'id:123', kind: 'channel' }),
+          candidate({ channel: 'grp', kind: 'group' }),
+          candidate({ channel: 'good' }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('закрытый канал')).toBeInTheDocument();
+    expect(screen.queryByText(/@id:123/)).not.toBeInTheDocument();
+    // The dead box says why, for the two rows the adopt endpoint itself refuses.
+    const hidden = screen.getByRole('checkbox', { name: 'Выбрать канал закрытый канал' });
+    expect(hidden).toBeDisabled();
+    expect(hidden).toHaveAttribute('title', 'нельзя добавить в кампанию');
+    expect(screen.getByRole('checkbox', { name: 'Выбрать канал grp' })).toHaveAttribute(
+      'title',
+      'нельзя добавить в кампанию',
+    );
+    expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toHaveAttribute(
+      'title',
+    );
+  });
+
   it('says so when the reply carried a group but not its write rights', () => {
     // ChannelForbidden/ChatEmpty answer none of the group gates, so the row rendered as
     // a channel measured and cleared on all of them.
@@ -97,6 +124,30 @@ describe('DiscoveryResults reporting', () => {
     expect(screen.getByText(/Каналов от прошлого поиска: 1/)).toBeInTheDocument();
     expect(screen.queryByText(/Найдено каналов/)).not.toBeInTheDocument();
     expect(screen.getByText(/поиск Telegram: 0 из 4/)).toBeInTheDocument();
+  });
+
+  it('does not print an exclusive count the source never measured', () => {
+    // An absent `exclusive` is not a zero: "(only here: 0)" beside "2 of 4" would claim
+    // both kept rows were duplicates of another source.
+    const { unmount } = render(
+      <Harness
+        data={board([candidate()], {
+          sources: [{ source: 'telegram_search', state: 'ran', hits: 4, kept: 2 }],
+        })}
+      />,
+    );
+    expect(screen.getByText(/поиск Telegram: 2 из 4/)).toBeInTheDocument();
+    expect(screen.queryByText(/только здесь/)).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [{ source: 'telegram_search', state: 'ran', hits: 4, kept: 2, exclusive: 1 }],
+        })}
+      />,
+    );
+    expect(screen.getByText(/только здесь: 1/)).toBeInTheDocument();
   });
 
   it('reports the candidate cap as a ceiling, not a total', () => {
@@ -140,6 +191,45 @@ describe('DiscoveryResults reporting', () => {
 
     expect(screen.getByText(/не запрашивался — кончился лимит чтений/)).toBeInTheDocument();
     expect(screen.queryByText(/оборван/)).not.toBeInTheDocument();
+  });
+
+  it('badges what kind of place a row is, how it is entered and its language', () => {
+    render(
+      <Harness
+        data={board([candidate({ kind: 'group', access: 'join_request', language: 'uk' })])}
+      />,
+    );
+
+    expect(screen.getByText('группа')).toBeInTheDocument();
+    expect(screen.getByText('по заявке')).toBeInTheDocument();
+    expect(screen.getByText('uk')).toBeInTheDocument();
+  });
+
+  it('shows no trait badge on a row stored before the fields existed', () => {
+    // A guessed "channel" would be a claim; an empty cell is not.
+    render(<Harness data={board([candidate()])} />);
+
+    expect(screen.queryByText('канал')).not.toBeInTheDocument();
+    expect(screen.queryByText('открытый')).not.toBeInTheDocument();
+  });
+
+  it('renders a trait code it has no translation for as itself', () => {
+    render(<Harness data={board([candidate({ kind: 'forum', access: 'invite_only' })])} />);
+
+    expect(screen.getByText('forum')).toBeInTheDocument();
+    expect(screen.getByText('invite_only')).toBeInTheDocument();
+  });
+
+  it('sums the rows the filters cut, and says nothing when they cut none', () => {
+    // A narrow filter and an empty Telegram must not both read as "found 1".
+    const { unmount } = render(
+      <Harness data={board([candidate()], { filtered: { language: 3, access: 2 } })} />,
+    );
+    expect(screen.getByText('Отфильтровано: 5')).toBeInTheDocument();
+    unmount();
+
+    render(<Harness data={board([candidate()], { filtered: {} })} />);
+    expect(screen.queryByText(/Отфильтровано/)).not.toBeInTheDocument();
   });
 
   it('renders a source label it has no translation for', () => {

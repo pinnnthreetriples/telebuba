@@ -64,18 +64,30 @@ def _upsert_linked_group(
     linked_chat_id: int | None,
     *,
     comments_enabled: bool,
+    about: str | None,
+    join_request: bool | None,
 ) -> LinkedDiscussionGroup:
     fields = {
         "linked_chat_id": linked_chat_id,
         "comments_enabled": int(comments_enabled),
         "checked_at": _now_iso(),
+        "about": about,
+        "join_request": join_request,
     }
+    refreshed = dict(fields)
+    for fact in ("about", "join_request"):
+        if fields[fact] is None:
+            # Per fact: a caller that did not learn it (onboarding refreshes comments
+            # only; a probe whose reply omitted the join gate) must not erase what an
+            # earlier probe cached — nulled, it reads as "never learnt" and forced
+            # discovery to re-probe the channel on every run.
+            del refreshed[fact]
     statement = (
         sqlite_insert(_neurocomment_linked_groups)
         .values(channel=channel, **fields)
         .on_conflict_do_update(
             index_elements=[_neurocomment_linked_groups.c.channel],
-            set_=fields,
+            set_=refreshed,
         )
     )
     with _get_engine().begin() as connection:
@@ -92,13 +104,22 @@ async def upsert_linked_group(
     linked_chat_id: int | None,
     *,
     comments_enabled: bool,
+    about: str | None = None,
+    join_request: bool | None = None,
 ) -> LinkedDiscussionGroup:
-    """Cache (or refresh) a channel's linked discussion-group resolution."""
+    """Cache (or refresh) a channel's linked discussion-group resolution.
+
+    ``about``/``join_request`` are the probe-time facts discovery's filters read; each one
+    a caller did not learn is left ``None``, which keeps whatever the cache holds for it
+    (``None`` on a fresh row, which discovery reads as "must probe").
+    """
     return await asyncio.to_thread(
         _upsert_linked_group,
         channel,
         linked_chat_id,
         comments_enabled=comments_enabled,
+        about=about,
+        join_request=join_request,
     )
 
 

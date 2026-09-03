@@ -34,6 +34,11 @@ def optional_str(value: object) -> str | None:
     return str(value)
 
 
+def optional_bool(value: object) -> bool | None:
+    """A real Telethon flag, or ``None`` — an unset flag or a mock is no verdict."""
+    return value if isinstance(value, bool) else None
+
+
 def sent_message_id(message: object) -> int | None:
     """Id of a message we just sent, ``None`` when the reply carried none.
 

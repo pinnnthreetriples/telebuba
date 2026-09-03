@@ -42,10 +42,10 @@ _TASKS: dict[str, asyncio.Task[None]] = {}
 # resolve its account BEFORE claiming, so that everything from ``try_reserve`` to
 # ``spawn`` is await-free; that is what makes the claim atomic.
 _RESERVED: dict[str, datetime] = {}
-# The account each in-flight run is reading with. Per-campaign single-flight alone
-# does not deliver the one-paced-stream invariant, because every campaign resolves to
-# the same fleet listener: N campaigns would mean N streams on one account.
-_RUN_ACCOUNTS: dict[str, str] = {}
+# The accounts each in-flight run is reading with. Per-campaign single-flight alone
+# does not deliver the one-paced-stream invariant, because two campaigns can pick the
+# same accounts: N campaigns would mean N streams on one account.
+_RUN_ACCOUNTS: dict[str, frozenset[str]] = {}
 _PHASES: dict[str, DiscoveryPhase] = {}
 _LAST_ERRORS: dict[str, str] = {}
 # Per-source outcome plus per-row provenance of the last run. Not persisted, for the same
@@ -100,6 +100,12 @@ def set_run_report(campaign_id: str, report: DiscoveryRunReport) -> None:
     _REPORTS[campaign_id] = report
 
 
+def bump_filtered(campaign_id: str, reason: str) -> None:
+    """Count one row the qualification pass dropped under an operator filter."""
+    filtered = _REPORTS.setdefault(campaign_id, DiscoveryRunReport()).filtered
+    filtered[reason] = filtered.get(reason, 0) + 1
+
+
 def verdicts(campaign_id: str) -> dict[str, DiscoveryChannelVerdict]:
     """Fitness verdicts this process's qualification passes recorded, keyed by channel.
 
@@ -116,9 +122,9 @@ def record_verdict(campaign_id: str, channel: str, verdict: DiscoveryChannelVerd
 def clear_verdicts(campaign_id: str) -> None:
     """Drop the previous run's verdicts. Called when a new run starts.
 
-    They are per-run: a channel this run qualifies straight from the linked-group cache
-    spends no probe and records nothing, so a verdict left behind would be shown as if
-    this run had measured it — and the map would never shrink.
+    They are per-run: a channel a previous run probed and this one did not find would
+    otherwise keep a verdict nothing in this run stands behind — and the map would never
+    shrink.
     """
     _VERDICTS.pop(campaign_id, None)
 
@@ -136,33 +142,38 @@ def at_daily_search_cap(now: datetime | None = None) -> bool:
     return len(_SEARCH_TIMES) >= settings.neurocomment.discovery_max_searches_per_day
 
 
-def account_busy(account_id: str) -> bool:
-    """Is some in-flight run already reading with this account?"""
+def account_busy(account_id: str, *, other_than: str | None = None) -> bool:
+    """Is some in-flight run — of a campaign other than ``other_than`` — reading with this account?
+
+    The exclusion keeps a campaign's OWN run reading as ``already_running``, not as an
+    account another campaign took.
+    """
     return any(
-        held == account_id and is_running(campaign) for campaign, held in _RUN_ACCOUNTS.items()
+        account_id in held and campaign != other_than and is_running(campaign)
+        for campaign, held in _RUN_ACCOUNTS.items()
     )
 
 
 def try_reserve(
     campaign_id: str,
-    account_id: str,
+    account_ids: frozenset[str],
     now: datetime | None = None,
 ) -> DiscoveryStartStatus | None:
-    """Claim the run slot for this campaign AND this account, plus one search.
+    """Claim the run slot for this campaign AND these accounts, plus one search.
 
     Returns the refusal status, or ``None`` when the claim succeeded. Contains no
-    await by design — the caller must already have resolved ``account_id``, so the
+    await by design — the caller must already have checked ``account_ids``, so the
     whole claim-to-spawn sequence is synchronous and cannot be straddled by a second
     start. It also means no path between the claim and ``spawn`` can fail, so there is
     nothing to refund and no release to forget.
     """
-    if is_running(campaign_id) or account_busy(account_id):
+    if is_running(campaign_id) or any(account_busy(account_id) for account_id in account_ids):
         return "already_running"
     moment = now or datetime.now(UTC)
     if at_daily_search_cap(moment):
         return "daily_limit_reached"
     _RESERVED[campaign_id] = moment
-    _RUN_ACCOUNTS[campaign_id] = account_id
+    _RUN_ACCOUNTS[campaign_id] = account_ids
     _SEARCH_TIMES.append(moment)
     return None
 

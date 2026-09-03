@@ -181,6 +181,9 @@ import type {
   ListChannelChallengesData,
   ListChannelChallengesErrors,
   ListChannelChallengesResponses,
+  ListDiscoveryAccountsData,
+  ListDiscoveryAccountsErrors,
+  ListDiscoveryAccountsResponses,
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
@@ -1555,6 +1558,20 @@ export const adoptCampaignDiscovery = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * List Discovery Accounts
+ *
+ * Every account the search form may pick, busy ones marked with why. Fleet-wide.
+ */
+export const listDiscoveryAccounts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListDiscoveryAccountsData, ThrowOnError>,
+): RequestResult<ListDiscoveryAccountsResponses, ListDiscoveryAccountsErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    ListDiscoveryAccountsResponses,
+    ListDiscoveryAccountsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/discovery/accounts', ...options });
 
 /**
  * Expand Discovery Keywords

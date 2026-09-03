@@ -16,6 +16,8 @@ import pytest
 from core.config import settings
 from core.repositories.neurocomment import (
     list_discovery_candidates,
+    list_seen,
+    mark_seen,
     replace_discovery_candidates,
 )
 from core.telegram_client import TelegramReadError
@@ -26,10 +28,12 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchStageResult,
     DiscoverySourceReport,
 )
-from services.neurocomment import _discovery_state, _seams
+from schemas.telegram_actions import LinkedDiscussionGroupResult
+from services.neurocomment import _discovery_run, _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
 from services.neurocomment.discovery import start_discovery
 from tests.services.neurocomment.discovery_support import (
+    LISTENER_ID,
     ReadRecorder,
     drain_discovery,
     matches,
@@ -84,7 +88,7 @@ def _hit_then_flood() -> Callable[[TelegramReadAction], BaseModel]:
 async def test_two_concurrent_starts_produce_exactly_one_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Resolving the account awaits, so the slot must be claimed before that.
+    """Checking the account awaits, so the slot must be claimed after that, atomically.
 
     Otherwise both starts pass the is-running check, the loser overwrites the winner
     in the task table and becomes untrackable: two paced RPC streams on one account,
@@ -110,20 +114,20 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
 
     gate = asyncio.Event()
     both_arrived = asyncio.Event()
-    entered: list[str] = []
-    resolve = discovery_module.resolve_search_account
+    entered: list[list[str]] = []
+    check = discovery_module.check_search_accounts
 
-    async def _gated(target: str) -> object:
+    async def _gated(campaign_id: str, account_ids: list[str]) -> object:
         # Park BOTH starts inside the window on purpose. Left to the event loop, the
         # two coroutines happen to serialize and the test passes even with no claim at
         # all — which is exactly how the first version of this test proved nothing.
-        entered.append(target)
+        entered.append(account_ids)
         if len(entered) == _CONCURRENT_STARTS:
             both_arrived.set()
         await gate.wait()
-        return await resolve(target)
+        return await check(campaign_id, account_ids)
 
-    monkeypatch.setattr(discovery_module, "resolve_search_account", _gated)
+    monkeypatch.setattr(discovery_module, "check_search_accounts", _gated)
     both = asyncio.gather(
         start_discovery(campaign_id, search_request()),
         start_discovery(campaign_id, search_request()),
@@ -149,9 +153,9 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
 ) -> None:
     """Per-campaign single-flight alone does not deliver the one-paced-stream rule.
 
-    Every campaign resolves to the same fleet listener, so N campaigns would otherwise
-    mean N simultaneous RPC streams on one account — the burst the pacing exists to
-    avoid, and the allowance bounds total searches, not concurrency.
+    Two campaigns can pick the same account, so N campaigns would otherwise mean N
+    simultaneous RPC streams on one account — the burst the pacing exists to avoid, and
+    the allowance bounds total searches, not concurrency.
     """
     running = asyncio.Event()
 
@@ -160,7 +164,7 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
         await asyncio.Event().wait()
         return DiscoverySearchStageResult()
 
-    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
     await seed_listener()
     first_campaign = await new_campaign()
     second_campaign = await new_campaign()
@@ -172,7 +176,116 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
     assert first is not None
     assert second is not None
     assert first.status == "started"
-    assert second.status == "already_running"
+    # Named as the account collision it is: THIS campaign has no run of its own, so
+    # ``already_running`` pointed the operator at the wrong thing.
+    assert (second.status, second.refused_account_id) == ("account_busy", LISTENER_ID)
+
+
+@pytest.mark.asyncio
+async def test_seen_is_recorded_after_qualification_over_the_rows_the_board_shows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row a probe-time filter deleted was never shown, so it must not become "seen".
+
+    Marked at the search stage, every channel the language filter rejected was hidden
+    from every later ``hide_seen`` search for good — including one with that language.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            search=matches(("alpha", "Новости", None), ("beta", "Crypto news", None)),
+            linked=LinkedDiscussionGroupResult(linked_chat_id=-1, comments_enabled=True),
+        ),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request(language="en"))
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["beta"]
+    assert await list_seen(["alpha", "beta"]) == {"beta"}
+
+
+@pytest.mark.asyncio
+async def test_a_pass_that_stopped_early_marks_only_the_rows_it_settled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pending rows are the NEXT run's to qualify; marked seen, they were hidden for good.
+
+    The pass stops when the pool empties, leaving the tail ``qualified_at IS NULL`` so a
+    re-run resumes it — but that re-run's ``hide_seen`` dropped exactly those rows.
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 1)
+    found = matches(("alpha", "A", None), ("beta", "B", None), ("gamma", "G", None))
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=found, linked=read_error("RPC: ChannelPrivateError", only="beta")),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    # ``alpha`` answered, ``beta`` failed and emptied the one-account pool, ``gamma`` was
+    # never reached: the judged row is seen; the failed and the pending ones are not.
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+    assert await list_seen(["alpha", "beta", "gamma"]) == {"alpha"}
+
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=found))
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["beta", "gamma"]
+    assert _discovery_state.phase_of(campaign_id) == "done"
+
+
+@pytest.mark.asyncio
+async def test_a_row_the_probe_could_not_judge_is_not_marked_seen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed probe judged nothing: one dead read must not retire a channel fleet-wide."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            search=matches(("alpha", "A", None), ("beta", "B", None)),
+            linked=read_error("RPC: ChannelPrivateError", only="beta"),
+        ),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert _discovery_state.phase_of(campaign_id) == "done"
+    assert await list_seen(["alpha", "beta"]) == {"alpha"}
+
+
+@pytest.mark.asyncio
+async def test_an_all_seen_rerun_completes_without_qualifying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing new to show is a finished run, not a failed one with no reason."""
+    reader = ReadRecorder(search=matches(("alpha", "A", None)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await seed_listener()
+    campaign_id = await new_campaign()
+    await _seed_candidates(campaign_id, "alpha")
+    await mark_seen(["alpha"], datetime.now(UTC))
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert _discovery_state.phase_of(campaign_id) == "done"
+    assert _discovery_state.last_error(campaign_id) is None
+    assert _discovery_state.run_report(campaign_id).filtered == {"seen": 1}
+    assert await _channels_of(campaign_id) == ["alpha"]
+    assert reader.actions_of("get_linked_discussion_group") == []
 
 
 @pytest.mark.asyncio
@@ -422,7 +535,7 @@ async def test_deleting_a_campaign_cancels_its_run(monkeypatch: pytest.MonkeyPat
         await asyncio.Event().wait()
         return DiscoverySearchStageResult()
 
-    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
     await seed_listener()
     campaign_id = await new_campaign()
 
@@ -442,7 +555,7 @@ async def test_the_rolling_window_lets_the_allowance_recover(
     monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 2)
     now = datetime.now(UTC)
     for index in range(2):
-        assert _discovery_state.try_reserve(f"c{index}", f"acc-{index}", now) is None
+        assert _discovery_state.try_reserve(f"c{index}", frozenset({f"acc-{index}"}), now) is None
 
     assert _discovery_state.at_daily_search_cap(now) is True
     assert _discovery_state.at_daily_search_cap(now + timedelta(hours=25)) is False
@@ -458,7 +571,7 @@ async def test_an_unexpected_error_fails_the_run_without_escaping(
         raise RuntimeError
 
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    monkeypatch.setattr(discovery_module, "run_search", _boom)
+    monkeypatch.setattr(_discovery_run, "run_search", _boom)
     await seed_listener()
     campaign_id = await new_campaign()
     _discovery_state.set_run_report(
@@ -488,7 +601,7 @@ async def test_shutdown_cancels_an_in_flight_run(monkeypatch: pytest.MonkeyPatch
         await asyncio.Event().wait()
         return DiscoverySearchStageResult()
 
-    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
     await seed_listener()
     campaign_id = await new_campaign()
 

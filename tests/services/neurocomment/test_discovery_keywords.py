@@ -151,7 +151,8 @@ def test_the_parsed_keywords_are_accepted_by_the_search_request_itself() -> None
     Re-running the real validator, not a copy of it, so the two cannot drift apart —
     the parser exists to satisfy exactly this model.
     """
-    assert DiscoverySearchRequest(keywords=parse_keywords(_MESSY_ANSWER)).keywords == _CLEAN
+    request = DiscoverySearchRequest(keywords=parse_keywords(_MESSY_ANSWER), account_ids=["a"])
+    assert request.keywords == _CLEAN
 
 
 @pytest.mark.asyncio

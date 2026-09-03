@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-07
+last_updated: 2026-09-03
 grounds_to:
   - node: "function:fd7aebfa2186e8d7f0da28e661677d85"
     fingerprint: "mh:64:7b226d696e68617368223a5b383939303735392c31383533333432322c32313532313238312c34323536373333372c35383136393639312c33323232333039302c32323736393730352c34383430333936312c31363439363332322c31353935333038372c31373931303839362c34313733343030362c31313935343539322c3132323137353830362c32363435373333382c32373732313037342c333638333330372c383339303930342c33373437353736332c323134373331302c38333733313733312c32363739393939392c383334323334362c393832393038372c31353639383132392c35363137333037352c31373332303832392c3130333333353830352c31393936363639362c353034313033372c33313736313835342c32343031323030332c343431393134332c35363434373436342c353936373833322c3131383139353636382c38323438323231322c31303836393338392c35363936323936392c353731383634332c333739373038362c37363735343934312c3832363536312c31303236373233342c31393233333333312c393232333838372c333731323733372c34363739363633322c34323634313737312c39323931333838322c33303336353434372c32373634333836382c32393634363835322c31373531313233392c31363730373933312c31393438363037312c38373031383533352c313639363231362c34373337333035332c31303831393534332c323035363330362c32343834353935362c323935333732322c31313732363932355d2c226e65696768626f7273223a5b2266756e6374696f6e3a6261386633353562643031326532646165646565613662346461363562656362225d2c22746f6b656e436f756e74223a3236307d"
@@ -22,7 +22,7 @@ edges:
 4. Route the provider through the neurocomment seam.
 5. Take every read from the run's shared read budget, pace each one, stop the wave on FloodWait, and report `truncated` when the budget cut it short. A paged source must bound its own page count: Telegram sends no "done" flag and its `limit` counts messages, not channels.
 6. Merge by interleaving per OUTCOME (not per source) before the global cap. Source priority decides dedup spelling only; it must not starve a lower-priority source, and an automatic wave must not outrank a read the operator explicitly asked for.
-7. State which filters the source actually honors. A request field must never be accepted and then silently ignored by every active source.
+7. State which filters the source actually honors. A request field must never be accepted and then silently ignored by every active source. Search-time and qualification-time admission both live in `services/neurocomment/_discovery_filters.py`; a new source feeds its matches through `admit_at_search` rather than filtering on its own.
 8. Preserve the existing candidate set when no relevant source answered, and whenever a FloodWait cut the run short. An empty result may replace it only when the keyword sweep is one of the sources that answered.
 9. Test the gateway contract, source outcomes, budget/pacing bounds, filter coverage, dedup/interleaving and failure semantics.
 

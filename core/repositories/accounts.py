@@ -66,6 +66,7 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         username=_optional_str(mapping.get("username")),
         first_name=_optional_str(mapping.get("first_name")),
         last_name=_optional_str(mapping.get("last_name")),
+        premium=cast("bool | None", mapping.get("premium")),
         avatar_etag=_optional_str(mapping.get("avatar_etag")),
         bio=_optional_str(mapping.get("bio")),
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
@@ -99,6 +100,7 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.username,
         _accounts.c.first_name,
         _accounts.c.last_name,
+        _accounts.c.premium,
         # Only the etag joins the read model — the avatar BLOB never rides a list
         # query; it is served on demand by the /avatar endpoint.
         _accounts.c.avatar_etag,

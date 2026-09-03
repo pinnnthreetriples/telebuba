@@ -92,11 +92,13 @@ from core.repositories.neurocomment._deletions import (
     mark_comments_deleted,
 )
 from core.repositories.neurocomment._discovery import (
+    delete_discovery_candidates,
     list_discovery_candidates,
     list_pending_discovery_candidates,
     mark_discovery_qualified,
     replace_discovery_candidates,
 )
+from core.repositories.neurocomment._discovery_seen import list_seen, mark_seen
 from core.repositories.neurocomment._inbox import (
     checkpoint_backfill,
     claim_pending_posts,
@@ -191,6 +193,7 @@ __all__ = [
     "create_campaign",
     "deactivate_channel",
     "delete_campaign",
+    "delete_discovery_candidates",
     "delete_readiness",
     "enqueue_post",
     "enqueue_post_bounded",
@@ -229,6 +232,7 @@ __all__ = [
     "list_posted_comments_for_channel_since",
     "list_posted_comments_page",
     "list_posted_comments_since",
+    "list_seen",
     "list_silent_watch_channels",
     "list_waiting_comments",
     "load_account_limit_override",
@@ -246,6 +250,7 @@ __all__ = [
     "mark_pair_banned",
     "mark_rejoin_gave_up",
     "mark_reply_stage",
+    "mark_seen",
     "mark_watch_channel_join_lost",
     "next_pending_attempt_unix",
     "park_comment",

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   adoptCampaignDiscoveryMutation,
   campaignDiscoveryQueryOptions,
   campaignsQueryOptions,
+  discoveryAccountsQueryOptions,
   neurocommentBoardQueryOptions,
   startCampaignDiscoveryMutation,
 } from '@/entities/campaign';
@@ -14,17 +15,34 @@ import { Button, Modal, StatusIcon } from '@/shared/ui';
 
 import {
   buildSearchRequest,
+  canSubmit,
   EMPTY_FORM,
   resolveSelection,
   type DiscoveryFormState,
 } from '../model/discovery';
+import { effectiveAccountIds } from '../model/filters';
 import { DiscoveryForm } from './DiscoveryForm';
 import { DiscoveryResults } from './DiscoveryResults';
 
 // The operator is watching this run, so it polls far faster than the page's 30s
 // fallback net — and it stops itself once the run settles.
 const SEARCH_POLL_MS = 3000;
+// Accounts go busy (warming, listener, cooling) behind the operator's back and nothing
+// else refreshes this list: refetchOnWindowFocus is off globally and the SSE handler
+// below invalidates only the board. Polled while the form is on screen, not during a run.
+const ACCOUNTS_POLL_MS = 15_000;
 const CLOSE_DELAY_MS = 700;
+
+// The adopt outcomes that get their own paragraph, in display order: "taken by another
+// campaign", "comments are off there" and "a group / subscription-gated channel the row's
+// traits did not yet show" are final and for different reasons (the third is not the
+// operator's fault); "the link itself failed" is worth retrying, hence the danger tone.
+const NOTES = [
+  ['refused', 'addedRefused', 'text-warning-deep'],
+  ['commentsOff', 'addedCommentsOff', 'text-warning-deep'],
+  ['notAdoptable', 'addedNotAdoptable', 'text-warning-deep'],
+  ['failed', 'addedFailed', 'text-danger'],
+] as const;
 
 type Props = {
   campaignId: string;
@@ -35,6 +53,7 @@ type Props = {
 export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const formId = useId();
   const [form, setForm] = useState<DiscoveryFormState>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -42,6 +61,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
     linked: number;
     refused: number;
     commentsOff: number;
+    notAdoptable: number;
     failed: number;
   } | null>(null);
 
@@ -60,6 +80,17 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         : false,
   });
 
+  // Derived, not synced in an effect: an untouched picker (null) resolves to the
+  // default against whatever list is CURRENT, so an account that went busy between
+  // load and click drops out of the request by itself.
+  const accountsOptions = discoveryAccountsQueryOptions();
+  const accounts = useQuery({
+    ...accountsOptions,
+    refetchInterval: submitted ? false : ACCOUNTS_POLL_MS,
+  });
+  const accountList = accounts.data?.items ?? [];
+  const accountIds = effectiveAccountIds(form.accountIds, accountList);
+
   // The shared SSE stream fires for the whole app; only this one query is ours.
   useLogEventStream((entry) => {
     if (!entry.event.startsWith('neurocomment_discovery')) return;
@@ -73,11 +104,17 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const running = board.data?.progress.running ?? false;
   const startStatus = startSearch.data?.status;
   const refused = startStatus !== undefined && startStatus !== 'started';
+  // Which account the refusal is about — by name, since the id means nothing on screen.
+  const refusedId = startSearch.data?.refused_account_id;
+  const refusedName =
+    refusedId == null
+      ? null
+      : (accountList.find((account) => account.account_id === refusedId)?.name ?? refusedId);
 
   const runSearch = () => {
     setAdopted(null);
     startSearch.mutate(
-      { path: { campaign_id: campaignId }, body: buildSearchRequest(form) },
+      { path: { campaign_id: campaignId }, body: buildSearchRequest(form, accountIds) },
       {
         onSuccess: (outcome) => {
           // already_running is the one refusal with something to show: the run the
@@ -141,6 +178,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           linked,
           refused: count('already_assigned'),
           commentsOff: count('comments_off'),
+          notAdoptable: count('not_adoptable'),
           failed: count('failed'),
         });
         void queryClient.invalidateQueries({
@@ -172,15 +210,18 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Width only, no max-h/overflow-y: per Modal's contract a tall card scrolls via the
   // OVERLAY, because overflow-y on the card computes overflow-x to auto and clips the
   // HelpHint tooltips — including the only place the seed channel is documented.
+  // Оболочка — как у CampaignSettingsModal: шапка, тело, подвал с кнопками.
   return (
     <Modal onClose={onClose} size="table" label={t('neurocomment.modal.discovery.title')}>
-      <div className="p-xl">
+      <div className="border-b border-line-row px-2xl pb-lg pt-xl">
         <h2 className="type-dialog-title">{t('neurocomment.modal.discovery.title')}</h2>
-        <p className="mt-xs type-prose">
+        <p className="mt-hair type-caption">
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
         </p>
+      </div>
 
-        <div ref={contentRef} tabIndex={-1} className="mt-lg outline-none">
+      <div className="flex flex-col gap-2xl px-2xl py-xl">
+        <div ref={contentRef} tabIndex={-1} className="outline-none">
           {submitted ? (
             <DiscoveryResults
               board={board.data}
@@ -193,6 +234,11 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           ) : (
             <DiscoveryForm
               form={form}
+              formId={formId}
+              accounts={accountList}
+              accountsLoading={accounts.isPending}
+              accountsErrored={accounts.isError}
+              accountIds={accountIds}
               submitting={startSearch.isPending}
               onChange={setForm}
               onSubmit={runSearch}
@@ -200,101 +246,126 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           )}
         </div>
 
-        {refused ? (
-          <p className="mt-md type-prose text-danger">
-            {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
-          </p>
-        ) : null}
+        <div className="flex flex-col gap-sm empty:hidden">
+          {refused ? (
+            <p role="status" className="type-prose text-danger">
+              {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
+              {refusedName === null
+                ? null
+                : ` — ${t('neurocomment.modal.discovery.refused.account', { name: refusedName })}`}
+            </p>
+          ) : null}
 
-        {/* The request never landed, so there is no status to translate — the global
-            toast fires outside the modal with a raw error code, and the form alone
-            would just re-enable its button. */}
-        {startSearch.isError ? (
-          <p role="status" className="mt-md type-prose text-danger">
-            {t('neurocomment.modal.discovery.startFailed')}
-          </p>
-        ) : null}
+          {/* The request never landed, so there is no status to translate — the global
+              toast fires outside the modal with a raw error code, and the form alone
+              would just re-enable its button. */}
+          {startSearch.isError ? (
+            <p role="status" className="type-prose text-danger">
+              {t('neurocomment.modal.discovery.startFailed')}
+            </p>
+          ) : null}
 
-        {adopted !== null && adopted.refused > 0 ? (
-          <p role="status" className="mt-md type-prose text-warning-deep">
-            {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
-          </p>
-        ) : null}
+          {adopted === null
+            ? null
+            : NOTES.map(([field, key, tone]) =>
+                adopted[field] > 0 ? (
+                  <p key={key} role="status" className={`type-prose ${tone}`}>
+                    {t(`neurocomment.modal.discovery.${key}`, { count: adopted[field] })}
+                  </p>
+                ) : null,
+              )}
 
-        {/* Its own line, not folded into "already taken": the operator's next move is
-            to drop the channel, not to look for the campaign holding it. */}
-        {adopted !== null && adopted.commentsOff > 0 ? (
-          <p role="status" className="mt-md type-prose text-warning-deep">
-            {t('neurocomment.modal.discovery.addedCommentsOff', { count: adopted.commentsOff })}
-          </p>
-        ) : null}
+          {/* The request itself never landed, so nothing can be read from the outcomes —
+              silence would read as "nothing happened". */}
+          {adopt.isError ? (
+            <p role="status" className="type-prose text-danger">
+              {t('neurocomment.modal.discovery.addFailed')}
+            </p>
+          ) : null}
+        </div>
+      </div>
 
-        {adopted !== null && adopted.failed > 0 ? (
-          <p role="status" className="mt-md type-prose text-danger">
-            {t('neurocomment.modal.discovery.addedFailed', { count: adopted.failed })}
-          </p>
-        ) : null}
-
-        {/* The request itself never landed, so nothing can be read from the outcomes —
-            silence would read as "nothing happened". */}
-        {adopt.isError ? (
-          <p role="status" className="mt-md type-prose text-danger">
-            {t('neurocomment.modal.discovery.addFailed')}
-          </p>
-        ) : null}
-
+      <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
         {submitted ? (
-          <div className="mt-lg flex items-center justify-between gap-sm border-t border-line pt-lg">
-            <button
-              type="button"
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mr-auto"
               onClick={() => {
                 setSubmitted(false);
                 // The only way back to the form, so it owns dropping the picks: the
                 // next run's rows have nothing to do with the ones ticked here.
                 setSelected(new Set());
+                // And the outcome: `already_running` describes the board just left, and
+                // would otherwise stay pinned under the form as if it refused this one.
+                startSearch.reset();
+                // Same for the adopt: its notes and its failure describe picks from the
+                // board just left, not the form.
+                setAdopted(null);
+                adopt.reset();
+                // The list was not polled during the run; the form must not reopen on it.
+                void queryClient.invalidateQueries({ queryKey: accountsOptions.queryKey });
               }}
-              className="text-body text-content-muted hover:text-action-primary"
             >
               {t('neurocomment.modal.discovery.results.back')}
-            </button>
-            <div className="flex items-center gap-md">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg px-lg py-sm text-body text-content-muted hover:text-action-primary"
-              >
-                {t('neurocomment.modal.close')}
-              </button>
-              <Button
-                variant="primary"
-                size="sm"
-                // The outcome stays set through the close delay, so a fast second click
-                // cannot re-post channels that are already settled. Failed links are the
-                // one outcome worth retrying, so they keep the button live.
-                disabled={
-                  picks.length === 0 ||
-                  adopt.isPending ||
-                  (adopted !== null && adopted.failed === 0)
-                }
-                onClick={submitAdopt}
-              >
-                {adopted === null ? (
-                  t('neurocomment.modal.discovery.add', { count: picks.length })
-                ) : adopted.linked === 0 ? (
-                  <>
-                    <StatusIcon kind="err" />
-                    {t('neurocomment.modal.discovery.addedNone')}
-                  </>
-                ) : (
-                  <>
-                    <StatusIcon kind="ok" />
-                    {t('neurocomment.modal.discovery.added', { count: adopted.linked })}
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        ) : null}
+            </Button>
+            <Button size="sm" onClick={onClose}>
+              {t('neurocomment.modal.close')}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              // The outcome stays set through the close delay, so a fast second click
+              // cannot re-post channels that are already settled. Failed links are the
+              // one outcome worth retrying, so they keep the button live.
+              disabled={
+                picks.length === 0 || adopt.isPending || (adopted !== null && adopted.failed === 0)
+              }
+              onClick={submitAdopt}
+            >
+              {adopted === null ? (
+                t('neurocomment.modal.discovery.add', { count: picks.length })
+              ) : adopted.linked === 0 ? (
+                <>
+                  <StatusIcon kind="err" />
+                  {t('neurocomment.modal.discovery.addedNone')}
+                </>
+              ) : (
+                <>
+                  <StatusIcon kind="ok" />
+                  {t('neurocomment.modal.discovery.added', { count: adopted.linked })}
+                </>
+              )}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setForm(EMPTY_FORM);
+              }}
+            >
+              {t('neurocomment.modal.discovery.form.reset')}
+            </Button>
+            {/* Outside the <form>, reached by `form={formId}`; Enter inside the form
+                still submits through the form's own handler. */}
+            <Button
+              type="submit"
+              form={formId}
+              variant="primary"
+              size="sm"
+              disabled={!canSubmit(form, accountIds) || startSearch.isPending}
+              loading={startSearch.isPending}
+            >
+              {startSearch.isPending
+                ? t('neurocomment.modal.discovery.form.searching')
+                : t('neurocomment.modal.discovery.form.submit')}
+            </Button>
+          </>
+        )}
       </div>
     </Modal>
   );

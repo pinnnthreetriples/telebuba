@@ -39,7 +39,9 @@ _CHANNEL = "@quiet"
 _NOW = datetime(2026, 8, 11, 12, 0, tzinfo=UTC)
 # Far enough past the shipped 7 days that every link in these tests is a suspect on age
 # alone; the cutoff arithmetic itself is asserted by the "not yet silent" case.
-_LATER = _NOW + timedelta(days=30)
+# Relative to the REAL clock: ``_make_campaign`` stamps links with ``datetime.now``, so a
+# fixed instant here silently stops being "later" once the calendar catches up with it.
+_LATER = datetime.now(UTC) + timedelta(days=30)
 _LONG_DEAD = "2026-01-01T00:00:00+00:00"
 
 
@@ -123,7 +125,7 @@ async def test_a_channel_telegram_confirms_is_dead_is_dropped(
     )
     # How long it was quiet, in the one ``extra`` field the log table renders beside the
     # label. A bare date would leave the operator doing the arithmetic that decided it.
-    assert dropped.extra["reason"] == "252d"
+    assert dropped.extra["reason"] == f"{(_LATER - datetime.fromisoformat(_LONG_DEAD)).days}d"
     assert dropped.extra["last_post_at"] == _LONG_DEAD
 
 

@@ -312,10 +312,8 @@ class NeurocommentSettings(BaseSettings):
     warmed_min_days: int = Field(default=14, ge=1)
     # Rows shown in the engine panel's collapsible neurocomment-activity log.
     log_limit: int = Field(default=50, ge=1, le=200)
-    # Channel-discovery knobs (the "Найти каналы" search) follow.
-    # Hard cap on candidates kept per campaign. The UI shows one unpaginated list
-    # and every candidate costs up to one getFullChannel probe, so this bounds both.
-    discovery_max_candidates: int = Field(default=100, ge=1, le=500)
+    # Channel-discovery knobs (the "Найти каналы" search) follow. The candidate cap is
+    # the request's own ``limit`` (1..500), not a setting.
     # Rolling-24h ceiling on operator-initiated searches (in-memory: a search is a
     # human button press, and contacts.Search is a cheap read).
     discovery_max_searches_per_day: int = Field(default=20, ge=1)
@@ -336,18 +334,20 @@ class NeurocommentSettings(BaseSettings):
     # Spent cheapest-first; a wave cut short says so in its source report rather than
     # quietly returning less.
     # The default is above what a run can actually want, so truncation means the operator
-    # lowered this — not that the settings shipped too small. The maximum is at the
-    # maximum keyword list: 10 sweep + 1 seed + 10 post pages + 5 recommendation seeds =
-    # 26 (the post wave caps its own total, see ``_discovery_waves``). At 24 the post
-    # pages ate every read the sweep and the seed left, so BOTH the post wave and the
-    # recommendation wave reported themselves truncated on an ordinary run and the
-    # recommendation wave — the one source that reaches channels this account is nowhere
-    # near — made no read at all, while the board still invited another search.
+    # lowered this — not that the settings shipped too small. The maximum is a full
+    # keyword list with a category on top: 10 typed words + 8 bundle words in the sweep +
+    # 1 seed + 10 post pages (the post wave caps its own total, see ``_discovery_waves``)
+    # + 5 recommendation seeds = 34. At 24 the post pages ate every read the sweep and
+    # the seed left, so BOTH the post wave and the recommendation wave reported
+    # themselves truncated on an ordinary run and the recommendation wave — the one
+    # source that reaches channels this account is nowhere near — made no read at all,
+    # while the board still invited another search; at 30 the same happened the moment a
+    # category was chosen.
     # The shape of the individual waves under it (pages per keyword, recommendation
     # seeds) is NOT a knob: this ceiling already bounds the account's traffic, and the
     # only thing the per-wave numbers could do that it cannot was switch a source off —
     # which left the operator's board a source short instead of tuning anything.
-    discovery_max_reads_per_run: int = Field(default=30, ge=1, le=200)
+    discovery_max_reads_per_run: int = Field(default=40, ge=1, le=200)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:

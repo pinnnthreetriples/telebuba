@@ -120,6 +120,57 @@ test('a disabled group takes neither clicks nor arrows', async () => {
   expect(onChange).not.toHaveBeenCalled();
 });
 
+// One option off while the rest are live (the discovery access picker: «Подписка» is
+// refused for groups). Select skips such rows; this control used to land on them and
+// commit them.
+const HOLED: SegmentedOption<'pool' | 'manual' | 'off'>[] = [
+  { value: 'pool', label: 'Из пула' },
+  { value: 'manual', label: 'Вручную', disabled: true },
+  { value: 'off', label: 'Без прокси' },
+];
+
+// The harness is uncontrolled (`value` never moves), so each direction is checked from
+// its own fixed stop.
+test('ArrowRight skips a disabled option and never commits it', async () => {
+  const { onChange } = renderControl({ options: HOLED });
+  await userEvent.tab();
+  await userEvent.keyboard('{ArrowRight}');
+  expect(onChange).toHaveBeenLastCalledWith('off');
+  expect(onChange).not.toHaveBeenCalledWith('manual');
+  expect(screen.getByRole('radio', { name: 'Без прокси' })).toHaveFocus();
+});
+
+test('ArrowLeft skips a disabled option and never commits it', async () => {
+  const { onChange } = renderControl({ options: HOLED, value: 'off' });
+  await userEvent.tab();
+  await userEvent.keyboard('{ArrowLeft}');
+  expect(onChange).toHaveBeenLastCalledWith('pool');
+  expect(onChange).not.toHaveBeenCalledWith('manual');
+  expect(screen.getByRole('radio', { name: 'Из пула' })).toHaveFocus();
+});
+
+test('Home and End land on the first and last LIVE option', async () => {
+  const { onChange } = renderControl({
+    options: [
+      { value: 'manual', label: 'Вручную', disabled: true },
+      { value: 'pool', label: 'Из пула' },
+      { value: 'off', label: 'Без прокси', disabled: true },
+    ],
+  });
+  await userEvent.tab();
+  await userEvent.keyboard('{End}');
+  expect(onChange).toHaveBeenLastCalledWith('pool');
+  await userEvent.keyboard('{Home}');
+  expect(onChange).toHaveBeenLastCalledWith('pool');
+  expect(onChange).not.toHaveBeenCalledWith('manual');
+  expect(onChange).not.toHaveBeenCalledWith('off');
+});
+
+test('the tab stop never sits on a disabled option, even a checked one', () => {
+  const { radios } = renderControl({ options: HOLED, value: 'manual' });
+  expect(radios.map((r) => r.tabIndex)).toEqual([0, -1, -1]);
+});
+
 /* ── the three fills ─────────────────────────────────────────────────────── */
 
 test.each([

@@ -8,10 +8,9 @@ import pytest
 
 from core.repositories.neurocomment import replace_discovery_candidates
 from schemas.neurocomment_discovery import DiscoveryCandidateRow, DiscoverySearchStageResult
-from services.neurocomment import discovery as discovery_module
+from services.neurocomment import _discovery_run
 from services.neurocomment.discovery import load_discovery
 from tests.services.neurocomment.discovery_support import (
-    LISTENER_ID,
     drain_discovery,
     new_campaign,
     search_request,
@@ -34,22 +33,22 @@ async def test_board_preserves_candidate_details_during_qualification(
     """
     qualification_started = asyncio.Event()
     release_qualification = asyncio.Event()
-    qualification_calls: list[tuple[str, str]] = []
+    qualification_calls: list[str] = []
 
     async def _search(
         _campaign_id: str,
-        _account_id: str,
+        _pool: object,
         _request: object,
     ) -> DiscoverySearchStageResult:
         return DiscoverySearchStageResult(found=1, replaced=True)
 
-    async def _qualify(campaign_id: str, account_id: str) -> None:
-        qualification_calls.append((campaign_id, account_id))
+    async def _qualify(campaign_id: str, _pool: object, _request: object) -> None:
+        qualification_calls.append(campaign_id)
         qualification_started.set()
         await release_qualification.wait()
 
-    monkeypatch.setattr(discovery_module, "run_search", _search)
-    monkeypatch.setattr(discovery_module, "run_qualification", _qualify)
+    monkeypatch.setattr(_discovery_run, "run_search", _search)
+    monkeypatch.setattr(_discovery_run, "run_qualification", _qualify)
     await seed_listener()
     campaign_id = await new_campaign()
     await replace_discovery_candidates(
@@ -76,7 +75,7 @@ async def test_board_preserves_candidate_details_during_qualification(
         assert board.progress.phase == "qualifying"
         assert board.progress.running is True
         assert board.progress.total == 1
-        assert qualification_calls == [(campaign_id, LISTENER_ID)]
+        assert qualification_calls == [campaign_id]
         assert len(board.candidates) == 1
         candidate = board.candidates[0]
         assert candidate.channel == "signal_room"

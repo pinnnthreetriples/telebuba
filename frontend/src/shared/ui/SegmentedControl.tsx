@@ -116,10 +116,10 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
   options: readonly SegmentedOption<T>[];
   variant?: keyof typeof WRAP;
-  // The whole group at once. Deliberately not per-option: a segmented control whose
-  // options can be individually switched off is a list with holes in it, and the one
-  // site in the app that wants that (the run-mode picker, whose second option the
-  // server refuses) draws two description cards rather than a tray.
+  // The whole tray at once — the wearer's form is read-only, or the field does not apply
+  // (the comments filter under kind 'groups'). A single option going dead is not this
+  // flag's job: that lives on the option (`SegmentedOption.disabled`), which the roving
+  // tab stop skips, and it needs a `title` saying why.
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;
@@ -130,8 +130,23 @@ export function SegmentedControl<T extends string>({
   // privacy rows report an 'unknown' level Telegram holds and this app does not model,
   // and that must press no option — so the group falls back to its first option rather
   // than becoming unreachable by keyboard.
+  // A disabled option is skipped, never landed on — the tab stop included: a checked
+  // option that went disabled underneath (the run-mode picker's refused second option)
+  // would otherwise be the one place the keyboard could enter the group.
+  const live = (index: number) => options[index]?.disabled !== true;
+  // The next live option `delta` away from `from`, wrapping at both ends like Select's.
+  // -1 when every option is disabled.
+  const step = (from: number, delta: 1 | -1): number => {
+    const count = options.length;
+    let next = from;
+    for (let i = 0; i < count; i += 1) {
+      next = (next + delta + count) % count;
+      if (live(next)) return next;
+    }
+    return -1;
+  };
   const checked = options.findIndex((option) => option.value === value);
-  const stop = checked === -1 ? 0 : checked;
+  const stop = checked !== -1 && live(checked) ? checked : Math.max(step(-1, 1), 0);
 
   return (
     <div
@@ -147,12 +162,13 @@ export function SegmentedControl<T extends string>({
       // reaches for Down on a two-option switch means the next one.
       onKeyDown={(event) => {
         const { key } = event;
-        const last = options.length - 1;
         let next: number;
-        if (key === 'ArrowRight' || key === 'ArrowDown') next = stop === last ? 0 : stop + 1;
-        else if (key === 'ArrowLeft' || key === 'ArrowUp') next = stop === 0 ? last : stop - 1;
-        else if (key === 'Home') next = 0;
-        else if (key === 'End') next = last;
+        if (key === 'ArrowRight' || key === 'ArrowDown') next = step(stop, 1);
+        else if (key === 'ArrowLeft' || key === 'ArrowUp') next = step(stop, -1);
+        // Home/End: the first/last LIVE option — one step forward from before the
+        // start, one step back from the start.
+        else if (key === 'Home') next = step(-1, 1);
+        else if (key === 'End') next = step(0, -1);
         else return;
         const chosen = options[next];
         if (!chosen) return;

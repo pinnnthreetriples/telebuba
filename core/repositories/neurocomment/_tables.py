@@ -160,6 +160,9 @@ _neurocomment_linked_groups = Table(
     Column("linked_chat_id", BigInteger, nullable=True),
     Column("comments_enabled", Integer, nullable=False),
     Column("checked_at", String, nullable=False),
+    # #61: what discovery's filters read; NULL = never learnt (pre-#61), "" = blank about.
+    Column("about", String, nullable=True),
+    Column("join_request", Boolean, nullable=True),
 )
 _neurocomment_discovery_candidates = Table(
     # Per-campaign scratch set from the "Найти каналы" search (migration #38).
@@ -190,6 +193,9 @@ _neurocomment_discovery_candidates = Table(
     Column("qualified_at", String, nullable=True),
     Column("qualify_error", String, nullable=True),
     Column("created_at", String, nullable=False),
+    # ``channel`` or ``group`` (migration #60): groups get no comment verdict and cannot
+    # be adopted, but the operator may search for them.
+    Column("kind", String, nullable=False, server_default="channel"),
 )
 _neurocomment_readiness = Table(
     "neurocomment_readiness",

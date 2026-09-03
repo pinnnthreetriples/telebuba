@@ -2,6 +2,20 @@
 // react-refresh/only-export-components forbids non-component exports from .tsx.
 import type { DiscoveryCandidate, DiscoverySearchRequest } from '@/shared/api';
 
+import {
+  LIMIT_DEFAULT,
+  MAX_SEARCH_ACCOUNTS,
+  normalizeForKind,
+  parseLimit,
+  seedInvalid,
+  stripSeed,
+  type DiscoveryAccess,
+  type DiscoveryCategory,
+  type DiscoveryComments,
+  type DiscoveryKind,
+  type DiscoveryLanguage,
+} from './filters';
+
 // Telegram rejects global searches shorter than this; the backend validates it too,
 // but the form should not let the operator submit a request it will refuse.
 export const KEYWORD_MIN_LENGTH = 4;
@@ -16,6 +30,16 @@ export type DiscoveryFormState = {
   seedChannel: string;
   minSubscribers: string;
   maxSubscribers: string;
+  kind: DiscoveryKind;
+  category: DiscoveryCategory;
+  language: DiscoveryLanguage;
+  comments: DiscoveryComments;
+  access: DiscoveryAccess;
+  hideSeen: boolean;
+  // '' = the server default (LIMIT_DEFAULT).
+  limit: string;
+  // null = the picker was never touched → `effectiveAccountIds()` picks the default.
+  accountIds: string[] | null;
 };
 
 export const EMPTY_FORM: DiscoveryFormState = {
@@ -23,6 +47,14 @@ export const EMPTY_FORM: DiscoveryFormState = {
   seedChannel: '',
   minSubscribers: '',
   maxSubscribers: '',
+  kind: 'channels',
+  category: 'any',
+  language: 'any',
+  comments: 'any',
+  access: 'any',
+  hideSeen: true,
+  limit: '',
+  accountIds: null,
 };
 
 /** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap.
@@ -89,22 +121,44 @@ export function mergeKeywords(raw: string, suggested: string[]): string {
   return [raw.trim().replace(/[,\s]+$/u, ''), ...added].filter(Boolean).join(', ');
 }
 
+// Digits only: the inputs are `type="text"` (a `number` field reports '' for garbage, so
+// "1e3" and "-5" silently became "no bound"), and `Number()` would take both.
 function positiveInt(raw: string): number | undefined {
   const trimmed = raw.trim();
-  if (trimmed === '') return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
-  return Math.floor(parsed);
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : undefined;
 }
 
-/** Turn the form into a wire request, omitting empty filters rather than sending nulls. */
-export function buildSearchRequest(form: DiscoveryFormState): DiscoverySearchRequest {
+/** A typed bound that is not a whole number. '' means "no bound" and is fine. */
+export function boundInvalid(raw: string): boolean {
+  return raw.trim() !== '' && positiveInt(raw) === undefined;
+}
+
+/** Turn the form into a wire request, omitting empty filters rather than sending nulls.
+ *
+ * `accountIds` is the resolved pick (`effectiveAccountIds`), not the form's own field:
+ * the form stores null for "untouched" and the default depends on the account list.
+ * The filters always travel, defaults included — the server's defaults may drift.
+ */
+export function buildSearchRequest(
+  form: DiscoveryFormState,
+  accountIds: string[],
+): DiscoverySearchRequest {
+  // A pick left over from 'channels' must not 422 the whole request.
+  const normal = normalizeForKind(form);
   const request: DiscoverySearchRequest = {
     keywords: parseKeywords(form.keywords),
+    kind: form.kind,
+    category: form.category,
+    language: form.language,
+    comments: normal.comments,
+    access: normal.access,
+    hide_seen: form.hideSeen,
+    limit: parseLimit(form.limit) ?? LIMIT_DEFAULT,
+    account_ids: accountIds,
   };
   // The placeholder invites a t.me link and the API caps this field at 32 chars, so a
   // pasted URL either 422s or resolves to nothing — strip the prefix instead.
-  const seed = form.seedChannel.trim().replace(/^(?:https?:\/\/)?(?:t\.me\/)?@*/i, '');
+  const seed = stripSeed(form.seedChannel);
   if (seed !== '') request.seed_channel = seed;
   const min = positiveInt(form.minSubscribers);
   const max = positiveInt(form.maxSubscribers);
@@ -121,21 +175,43 @@ export function boundsInverted(form: DiscoveryFormState): boolean {
 }
 
 /**
- * Can the form be submitted? The API requires at least one keyword even when a seed
- * channel is given, so surface that here instead of letting the request 422.
+ * Can the form be submitted? The API needs something to search on — keywords or a
+ * category (its word bundle) — and 1..MAX_SEARCH_ACCOUNTS accounts, so surface that
+ * here instead of letting the request 422. A seed channel alone is still not enough.
  */
-export function canSubmit(form: DiscoveryFormState): boolean {
-  return parseKeywords(form.keywords).length > 0 && !boundsInverted(form);
+export function canSubmit(form: DiscoveryFormState, accountIds: string[]): boolean {
+  const searchable = parseKeywords(form.keywords).length > 0 || form.category !== 'any';
+  return (
+    searchable &&
+    !boundInvalid(form.minSubscribers) &&
+    !boundInvalid(form.maxSubscribers) &&
+    !boundsInverted(form) &&
+    !seedInvalid(form.seedChannel) &&
+    parseLimit(form.limit) !== undefined &&
+    accountIds.length > 0 &&
+    accountIds.length <= MAX_SEARCH_ACCOUNTS
+  );
 }
 
 /**
  * Is this row eligible to adopt? Comments must not be known-off, and the channel
  * must be free — the one-active-campaign-per-channel guard would refuse the rest.
+ * A group or a subscription-gated channel is not a place the campaign can comment
+ * in at all, and the adopt endpoint answers 'not_adoptable' for both. A private row
+ * (`id:` — no username) loses its access badge once the in-memory verdict is gone after
+ * a restart, so it is refused by its name rather than trusted on a missing flag.
  */
 export function isSelectable(candidate: DiscoveryCandidate): boolean {
   if (candidate.in_campaign === true) return false;
   if (candidate.taken_by_other_campaign === true) return false;
+  if (candidate.kind === 'group' || candidate.access === 'subscription') return false;
+  if (isPrivateRef(candidate.channel)) return false;
   return candidate.qualification !== 'comments_off';
+}
+
+/** A private (no-username) row: the backend's PRIVATE_PREFIX ref, not a handle. */
+export function isPrivateRef(channel: string): boolean {
+  return channel.startsWith('id:');
 }
 
 export function selectableChannels(candidates: DiscoveryCandidate[]): string[] {

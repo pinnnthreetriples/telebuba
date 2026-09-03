@@ -26,6 +26,7 @@ from schemas.neurocomment_discovery_keywords import (
     DiscoveryKeywordRequest,
     DiscoveryKeywordResult,
 )
+from schemas.neurocomment_discovery_request import DiscoveryAccountList
 from services import neurocomment as nc_service
 
 # No tags: mounted onto the neurocomment router (already tagged "neurocomment").
@@ -81,6 +82,16 @@ async def adopt_discovery(
     if result is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
     return result
+
+
+@discovery_router.get(
+    "/discovery/accounts",
+    response_model=DiscoveryAccountList,
+    operation_id="listDiscoveryAccounts",
+)
+async def list_discovery_accounts() -> DiscoveryAccountList:
+    """Every account the search form may pick, busy ones marked with why. Fleet-wide."""
+    return await nc_service.list_search_accounts()
 
 
 @discovery_router.post(

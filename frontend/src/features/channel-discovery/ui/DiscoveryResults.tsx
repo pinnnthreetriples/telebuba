@@ -16,7 +16,13 @@ import {
   useWideContainer,
 } from '@/shared/ui';
 
-import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
+import {
+  formatSubscribers,
+  isPrivateRef,
+  isSelectable,
+  selectableChannels,
+} from '../model/discovery';
+import { TraitsCell } from './TraitsCell';
 
 const CHECKBOX = 'size-spinner shrink-0 accent-action-primary disabled:opacity-40';
 
@@ -49,15 +55,17 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
           const kept = report.kept ?? 0;
-          const exclusive = report.exclusive ?? 0;
+          const { exclusive } = report;
           let line = t(`neurocomment.modal.discovery.results.${SOURCE_STATE[report.state]}`, {
             source: name,
             kept,
             hits: report.hits ?? 0,
           });
           // "50 of 60" hid the case where all 50 were duplicates of another source and
-          // every row this one found alone was cut by the cap.
-          if (exclusive !== kept) {
+          // every row this one found alone was cut by the cap. Only on a MEASURED count:
+          // an absent field is not a zero, and "(only here: 0)" beside "50 of 60" would
+          // claim every one of the 50 was a duplicate.
+          if (typeof exclusive === 'number' && exclusive !== kept) {
             line += ` ${t('neurocomment.modal.discovery.results.sourceExclusive', { exclusive })}`;
           }
           // The run's read budget stopped this wave, so its counts are a floor rather
@@ -220,6 +228,15 @@ export function DiscoveryResults({
   const qualified = board?.progress.qualified ?? 0;
   const total = board?.progress.total ?? 0;
   const countKey = foundCountKey(board?.progress);
+  // Rows the operator's own filters cut, summed over the reasons: without it a narrow
+  // filter and an empty Telegram both read as "found 3".
+  const filtered = Object.values(board?.progress.filtered ?? {}).reduce((sum, n) => sum + n, 0);
+  // A private row carries the backend's `id:123` ref, not a username — "@id:123" is not
+  // a handle anyone can open, so it is named for what it is.
+  const name = (candidate: DiscoveryCandidate) =>
+    isPrivateRef(candidate.channel)
+      ? t('neurocomment.modal.discovery.results.privateChannel')
+      : candidate.channel;
 
   const columns: ColumnDef<DiscoveryCandidate>[] = [
     {
@@ -248,8 +265,15 @@ export function DiscoveryResults({
             onToggle(row.original.channel);
           }}
           aria-label={t('neurocomment.modal.discovery.results.select', {
-            channel: row.original.channel,
+            channel: name(row.original),
           })}
+          // Says why the box is dead where the traits cell may not: the adopt endpoint
+          // itself refuses a group and a private channel ('not_adoptable').
+          title={
+            isPrivateRef(row.original.channel) || row.original.kind === 'group'
+              ? t('neurocomment.modal.discovery.results.notAdoptable')
+              : undefined
+          }
           className={CHECKBOX}
         />
       ),
@@ -265,7 +289,11 @@ export function DiscoveryResults({
     {
       id: 'channel',
       header: () => t('neurocomment.modal.discovery.results.colChannel'),
-      cell: ({ row }) => <span className="font-medium">@{row.original.channel}</span>,
+      cell: ({ row }) => (
+        <span className="font-medium">
+          {isPrivateRef(row.original.channel) ? name(row.original) : `@${row.original.channel}`}
+        </span>
+      ),
       meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
     },
     {
@@ -299,6 +327,11 @@ export function DiscoveryResults({
         </div>
       ),
       meta: { className: 'text-right', cellClassName: 'text-right' } satisfies DataTableColumnMeta,
+    },
+    {
+      id: 'traits',
+      header: () => t('neurocomment.modal.discovery.results.colTraits'),
+      cell: ({ row }) => <TraitsCell candidate={row.original} />,
     },
     {
       id: 'source',
@@ -349,115 +382,128 @@ export function DiscoveryResults({
   // screen while it runs belong to the PREVIOUS run — never show them as results.
   // role=status on every transient state: a search runs 30s+, so a screen-reader
   // operator has to be told when it finishes or fails without polling the table.
-  if (loading) {
-    return (
-      <p role="status" className="py-page text-center type-prose">
-        {t('neurocomment.modal.discovery.results.searching')}
-      </p>
-    );
-  }
+  //
+  // A closure rather than early returns, so the measured wrapper at the bottom is in
+  // EVERY branch: the container hook measures once per ref, on its first commit, and the
+  // first commit here is almost always «Ищем каналы…». A ref that only existed once rows
+  // arrived was never measured, the toolbar fell back to the viewport query while
+  // DataTable measured its own 890px box — and a ~960px viewport got two select-alls.
+  const body = () => {
+    if (loading) {
+      return (
+        <p role="status" className="py-page text-center type-prose">
+          {t('neurocomment.modal.discovery.results.searching')}
+        </p>
+      );
+    }
 
-  // Only with nothing to fall back on: a failed refetch leaves status 'error' with the
-  // cached frame intact, and blanking the table would take N rows and every tick the
-  // operator has made with it.
-  if (errored && candidates.length === 0) {
-    return (
-      <p role="status" className="py-page text-center text-body text-danger">
-        {t('neurocomment.modal.discovery.results.error')}
-      </p>
-    );
-  }
+    // Only with nothing to fall back on: a failed refetch leaves status 'error' with the
+    // cached frame intact, and blanking the table would take N rows and every tick the
+    // operator has made with it.
+    if (errored && candidates.length === 0) {
+      return (
+        <p role="status" className="py-page text-center text-body text-danger">
+          {t('neurocomment.modal.discovery.results.error')}
+        </p>
+      );
+    }
 
-  if (failed && candidates.length === 0) {
-    return (
-      <p role="status" className="py-page text-center text-body text-danger">
-        {t('neurocomment.modal.discovery.results.failed', {
-          reason:
-            board?.progress.last_error == null
-              ? ''
-              : t(reasonKey(board.progress.last_error), {
-                  defaultValue: board.progress.last_error,
-                }),
-        })}
-      </p>
-    );
-  }
+    if (failed && candidates.length === 0) {
+      return (
+        <p role="status" className="py-page text-center text-body text-danger">
+          {t('neurocomment.modal.discovery.results.failed', {
+            reason:
+              board?.progress.last_error == null
+                ? ''
+                : t(reasonKey(board.progress.last_error), {
+                    defaultValue: board.progress.last_error,
+                  }),
+          })}
+        </p>
+      );
+    }
 
-  if (candidates.length === 0) {
-    return (
-      <p className="py-page text-center type-prose">
-        {t('neurocomment.modal.discovery.results.empty')}
-      </p>
-    );
-  }
+    if (candidates.length === 0) {
+      return (
+        <p className="py-page text-center type-prose">
+          {t('neurocomment.modal.discovery.results.empty')}
+        </p>
+      );
+    }
 
-  return (
-    <div className="flex flex-col gap-md">
-      <div className="flex items-center justify-between gap-sm type-caption">
-        {/* The card layout has no column headers, and select-all lives in one — so on
+    return (
+      <div className="flex flex-col gap-md">
+        <div className="flex items-center justify-between gap-sm type-caption">
+          {/* The card layout has no column headers, and select-all lives in one — so on
             a phone the operator could otherwise only tap candidates one at a time.
             Branch on the same JS query DataTable uses, not `lg:hidden`: two
             select-alls in the DOM would both answer every query by accessible name. */}
-        {wide ? null : (
-          <label className="flex items-center gap-sm">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              disabled={eligible.length === 0}
-              ref={(element) => {
-                if (element) element.indeterminate = someChecked;
-              }}
-              onChange={() => {
-                onToggleAll(eligible, !allChecked);
-              }}
-              aria-label={t('neurocomment.modal.discovery.results.selectAll')}
-              className={CHECKBOX}
-            />
-            {t('neurocomment.modal.discovery.results.selectAll')}
-          </label>
-        )}
-        <span>
-          {t(`neurocomment.modal.discovery.results.${countKey}`, { count: candidates.length })}
-        </span>
-        {/* The run's yield, once nothing else will change it. During the pass the
-            qualification counter beside this says more. */}
-        {settled && qualified > 0 ? (
+          {wide ? null : (
+            <label className="flex items-center gap-sm">
+              <input
+                type="checkbox"
+                checked={allChecked}
+                disabled={eligible.length === 0}
+                ref={(element) => {
+                  if (element) element.indeterminate = someChecked;
+                }}
+                onChange={() => {
+                  onToggleAll(eligible, !allChecked);
+                }}
+                aria-label={t('neurocomment.modal.discovery.results.selectAll')}
+                className={CHECKBOX}
+              />
+              {t('neurocomment.modal.discovery.results.selectAll')}
+            </label>
+          )}
           <span>
-            {t('neurocomment.modal.discovery.results.commentsOn', {
-              count: board?.progress.comments_on ?? 0,
-            })}
+            {t(`neurocomment.modal.discovery.results.${countKey}`, { count: candidates.length })}
           </span>
-        ) : null}
-        {/* Also the only trace of how far an aborted run got ("40/300"), so it has to
+          {filtered > 0 ? (
+            <span>{t('neurocomment.modal.discovery.results.filtered', { count: filtered })}</span>
+          ) : null}
+          {/* The run's yield, once nothing else will change it. During the pass the
+            qualification counter beside this says more. */}
+          {settled && qualified > 0 ? (
+            <span>
+              {t('neurocomment.modal.discovery.results.commentsOn', {
+                count: board?.progress.comments_on ?? 0,
+              })}
+            </span>
+          ) : null}
+          {/* Also the only trace of how far an aborted run got ("40/300"), so it has to
             outlive the qualifying phase. */}
-        {phase === 'qualifying' || qualified < total ? (
-          <span role="status" className={running ? 'tb-pulse' : undefined}>
-            {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
-          </span>
-        ) : null}
-        {board?.progress.last_error != null ? (
-          <span role="status" className="text-danger">
-            {/* An aborted run keeps whatever it collected, so the reason has to ride
+          {phase === 'qualifying' || qualified < total ? (
+            <span role="status" className={running ? 'tb-pulse' : undefined}>
+              {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
+            </span>
+          ) : null}
+          {board?.progress.last_error != null ? (
+            <span role="status" className="text-danger">
+              {/* An aborted run keeps whatever it collected, so the reason has to ride
                 along with the rows instead of replacing them — and through the
                 qualifying phase too, the longest one a run has. */}
-            {t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {
-              reason: t(reasonKey(board.progress.last_error), {
-                defaultValue: board.progress.last_error,
-              }),
+              {t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {
+                reason: t(reasonKey(board.progress.last_error), {
+                  defaultValue: board.progress.last_error,
+                }),
+              })}
+            </span>
+          ) : null}
+        </div>
+        <SourceStrip sources={board?.progress.sources ?? []} />
+        <div className="tb-scroll overflow-x-auto">
+          <DataTable
+            data={candidates}
+            columns={columns}
+            getRowProps={(row) => ({
+              className: isSelectable(row.original) ? undefined : 'opacity-60',
             })}
-          </span>
-        ) : null}
+          />
+        </div>
       </div>
-      <SourceStrip sources={board?.progress.sources ?? []} />
-      <div ref={results} className="tb-scroll overflow-x-auto">
-        <DataTable
-          data={candidates}
-          columns={columns}
-          getRowProps={(row) => ({
-            className: isSelectable(row.original) ? undefined : 'opacity-60',
-          })}
-        />
-      </div>
-    </div>
-  );
+    );
+  };
+
+  return <div ref={results}>{body()}</div>;
 }

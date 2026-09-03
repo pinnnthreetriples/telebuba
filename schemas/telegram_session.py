@@ -35,6 +35,8 @@ class TelegramSessionCheckResult(BaseModel):
     # Small profile photo downloaded during the check (best-effort; None when the
     # account has no avatar or the download was refused). Persisted verbatim.
     avatar_thumb: bytes | None = None
+    # Point-in-time Telegram Premium flag from ``get_me``; None when unknown.
+    premium: bool | None = None
     error_type: str | None = None
     error_message: str | None = None
     flood_wait_seconds: int | None = Field(default=None, ge=0)
