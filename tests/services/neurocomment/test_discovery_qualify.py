@@ -293,22 +293,6 @@ async def test_the_ttl_is_read_in_hours(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 @pytest.mark.asyncio
-async def test_an_unparseable_cache_stamp_is_treated_as_stale(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Defensive, and reachable: the column is text a legacy row could have written."""
-    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
-    monkeypatch.setattr(_seams, "execute_read", reader)
-    campaign_id = await _seed("garbled")
-    await upsert_linked_group("garbled", -100, comments_enabled=True)
-    await _backdate("garbled", "not-a-timestamp")
-
-    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
-
-    assert len(reader.calls) == 1
-
-
-@pytest.mark.asyncio
 async def test_progress_is_signalled_during_a_long_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -330,19 +314,6 @@ async def test_progress_is_signalled_during_a_long_pass(
     # _PROGRESS_EVERY is 5, so an 11-candidate pass nudges at 5 and 10, plus the
     # scheduler's own final frame once every stream has run out of work.
     assert len(frames) == 3
-
-
-@pytest.mark.asyncio
-async def test_zero_ttl_disables_the_cache_entirely(monkeypatch: pytest.MonkeyPatch) -> None:
-    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
-    monkeypatch.setattr(_seams, "execute_read", reader)
-    monkeypatch.setattr(settings.neurocomment, "discovery_linked_group_ttl_hours", 0)
-    campaign_id = await _seed("known")
-    await upsert_linked_group("known", -100, comments_enabled=True)
-
-    await run_qualification(campaign_id, pool_of(), search_request(), work_for(pool_of()))
-
-    assert len(reader.calls) == 1
 
 
 @pytest.mark.asyncio

@@ -56,6 +56,11 @@ _NO_SUCH_CAMPAIGN = "start_discovery refused: the campaign does not exist"
 @pytest.fixture
 def isolate_discovery(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
+    # Build the schema NOW, on this thread: the engine is created lazily on first use,
+    # and with concurrent streams the first use can be two ``asyncio.to_thread`` writes at
+    # once (two accounts flooding together) — one thread's ``create_all`` racing the
+    # other's INSERT into a table that does not exist yet.
+    _get_engine()
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
     reset_logging_for_tests()
