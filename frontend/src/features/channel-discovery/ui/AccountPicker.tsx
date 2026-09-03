@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryAccountOption } from '@/shared/api';
-import { FOCUS_RING } from '@/shared/design-system';
+import { FOCUS_RING, surface } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 import { Badge, Icon, Notice } from '@/shared/ui';
 
@@ -19,9 +19,10 @@ type Props = {
   errored: boolean;
 };
 
-// Мультивыбор аккаунтов для поиска, набран как список каналов в NeuroAccountsModal:
-// список раскрывается в потоке, `inert` снимает табстопы, пока он закрыт.
-// / The account multi-select; the list expands in flow, `inert` while closed.
+// Мультивыбор аккаунтов для поиска: список раскрывается ПОВЕРХ формы, как у shared/ui
+// Select, а не в потоке — в потоке он растягивал модалку на каждое открытие; `inert`
+// снимает табстопы, пока он закрыт. / The account multi-select; the list overlays the
+// form like Select's (in flow it resized the dialog), `inert` while closed.
 export function AccountPicker({ accounts, selected, onChange, loading, errored }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -104,90 +105,95 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
         <Notice tone="warning">{t(`${P}.empty`)}</Notice>
       ) : (
         <>
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-haspopup="listbox"
-            aria-expanded={open}
-            aria-controls={listId}
-            disabled={loading}
-            onClick={() => {
-              setOpen((current) => !current);
-            }}
-            // The ring, as on Button: the trigger and the options below are real tab stops
-            // that focus moves between (Escape hands it back here), and none of them showed
-            // where it sat.
-            className={cn(
-              'flex w-full items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-left type-prose',
-              FOCUS_RING,
-            )}
-          >
-            <span className="min-w-0 truncate">
-              {names.length > 0 ? names.join(', ') : t(`${P}.trigger`)}
-            </span>
-            <span className={cn('tb-ddchev flex shrink-0 text-content-subtle', open && 'open')}>
-              <Icon name="chevron-down" size={16} />
-            </span>
-          </button>
-          {/* Box styling open-only on purpose: under border-box a collapsed max-height:0
-              still reserves its border and padding. See NeuroAccountsModal. */}
-          <div
-            ref={listRef}
-            id={listId}
-            role="listbox"
-            aria-multiselectable
-            aria-label={t(`${P}.label`)}
-            inert={!open}
-            className={cn(
-              'tb-dd',
-              open && 'open mt-sm rounded-lg border border-line bg-surface-card p-xs shadow-pop',
-            )}
-          >
-            {accounts.map((account) => {
-              const busy = account.busy_reason != null;
-              const busyText = busy ? t(`${P}.busy.${account.busy_reason}`) : undefined;
-              const picked = selected.includes(account.account_id);
-              const capped = full && !picked;
-              return (
-                <button
-                  key={account.account_id}
-                  type="button"
-                  role="option"
-                  aria-selected={picked}
-                  disabled={busy || capped}
-                  // A dead row says why — a capped one too, since the caption sits below
-                  // the list and the row is what the pointer is on.
-                  title={
-                    busyText ?? (capped ? t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS }) : undefined)
-                  }
-                  onClick={() => {
-                    toggle(account.account_id);
-                  }}
-                  className={cn(
-                    'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-prose hover:bg-action-hover disabled:opacity-50',
-                    FOCUS_RING,
-                  )}
-                >
-                  <span className="flex min-w-0 items-center gap-sm">
-                    <span className="truncate">{account.name}</span>
-                    {/* The handle tells two "Alisa"s apart, as the accounts table does. */}
-                    {account.username != null ? (
-                      <span className="truncate type-caption">@{account.username}</span>
+          {/* The anchor for the absolute list: the trigger's own box, not the section,
+              so the list does not start under the hint paragraphs. */}
+          <div className="relative">
+            <button
+              ref={triggerRef}
+              type="button"
+              aria-haspopup="listbox"
+              aria-expanded={open}
+              aria-controls={listId}
+              disabled={loading}
+              onClick={() => {
+                setOpen((current) => !current);
+              }}
+              // The ring, as on Button: the trigger and the options below are real tab stops
+              // that focus moves between (Escape hands it back here), and none of them showed
+              // where it sat.
+              className={cn(
+                'flex w-full items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-left type-prose',
+                FOCUS_RING,
+              )}
+            >
+              <span className="min-w-0 truncate">
+                {names.length > 0 ? names.join(', ') : t(`${P}.trigger`)}
+              </span>
+              <span className={cn('tb-ddchev flex shrink-0 text-content-subtle', open && 'open')}>
+                <Icon name="chevron-down" size={16} />
+              </span>
+            </button>
+            {/* Select's popover classes verbatim; the Modal card has no overflow clipping
+              (its contract), so the list may hang past the card's bottom edge. */}
+            <div
+              ref={listRef}
+              id={listId}
+              role="listbox"
+              aria-multiselectable
+              aria-label={t(`${P}.label`)}
+              inert={!open}
+              className={cn(
+                'tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-pop p-xs',
+                surface('panel'),
+                open && 'open',
+              )}
+            >
+              {accounts.map((account) => {
+                const busy = account.busy_reason != null;
+                const busyText = busy ? t(`${P}.busy.${account.busy_reason}`) : undefined;
+                const picked = selected.includes(account.account_id);
+                const capped = full && !picked;
+                return (
+                  <button
+                    key={account.account_id}
+                    type="button"
+                    role="option"
+                    aria-selected={picked}
+                    disabled={busy || capped}
+                    // A dead row says why — a capped one too, since the caption sits below
+                    // the list and the row is what the pointer is on.
+                    title={
+                      busyText ?? (capped ? t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS }) : undefined)
+                    }
+                    onClick={() => {
+                      toggle(account.account_id);
+                    }}
+                    className={cn(
+                      'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-prose hover:bg-action-hover disabled:opacity-50',
+                      FOCUS_RING,
+                    )}
+                  >
+                    <span className="flex min-w-0 items-center gap-sm">
+                      <span className="truncate">{account.name}</span>
+                      {/* The handle tells two "Alisa"s apart, as the accounts table does. */}
+                      {account.username != null ? (
+                        <span className="truncate type-caption">@{account.username}</span>
+                      ) : null}
+                      {account.premium === true ? (
+                        <Badge tone="info" size="xs">
+                          {t(`${P}.premium`)}
+                        </Badge>
+                      ) : null}
+                    </span>
+                    {busy ? (
+                      <span className="type-caption">{busyText}</span>
+                    ) : picked ? (
+                      <Icon name="check" size={14} className="shrink-0" />
                     ) : null}
-                    {account.premium === true ? (
-                      <Badge tone="info" size="xs">
-                        {t(`${P}.premium`)}
-                      </Badge>
-                    ) : null}
-                  </span>
-                  {busy ? (
-                    <span className="type-caption">{busyText}</span>
-                  ) : picked ? (
-                    <Icon name="check" size={14} className="shrink-0" />
-                  ) : null}
-                </button>
-              );
-            })}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <p className="mt-tight type-caption">{t(`${P}.premiumHint`)}</p>
           {/* An extra line, not a replacement: why premium is preselected still holds
