@@ -116,10 +116,10 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
   options: readonly SegmentedOption<T>[];
   variant?: keyof typeof WRAP;
-  // The whole group at once. Deliberately not per-option: a segmented control whose
-  // options can be individually switched off is a list with holes in it, and the one
-  // site in the app that wants that (the run-mode picker, whose second option the
-  // server refuses) draws two description cards rather than a tray.
+  // The whole tray at once — the wearer's form is read-only, or the field does not apply
+  // (the comments filter under kind 'groups'). A single option going dead is not this
+  // flag's job: that lives on the option (`SegmentedOption.disabled`), which the roving
+  // tab stop skips, and it needs a `title` saying why.
   disabled?: boolean;
   ariaLabel?: string;
   className?: string;

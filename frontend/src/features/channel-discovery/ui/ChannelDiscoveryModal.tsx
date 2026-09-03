@@ -248,7 +248,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
 
         <div className="flex flex-col gap-sm empty:hidden">
           {refused ? (
-            <p className="type-prose text-danger">
+            <p role="status" className="type-prose text-danger">
               {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
               {refusedName === null
                 ? null
@@ -300,6 +300,10 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                 // And the outcome: `already_running` describes the board just left, and
                 // would otherwise stay pinned under the form as if it refused this one.
                 startSearch.reset();
+                // Same for the adopt: its notes and its failure describe picks from the
+                // board just left, not the form.
+                setAdopted(null);
+                adopt.reset();
                 // The list was not polled during the run; the form must not reopen on it.
                 void queryClient.invalidateQueries({ queryKey: accountsOptions.queryKey });
               }}

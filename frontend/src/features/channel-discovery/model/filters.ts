@@ -71,6 +71,23 @@ export const LIMIT_DEFAULT = 200;
 // account_ids in openapi.json, which the generated TS type does not carry).
 export const MAX_SEARCH_ACCOUNTS = 10;
 
+// `seed_channel.maxLength` on DiscoverySearchRequest in openapi.json — also not carried by
+// the generated type. Code points, like the backend's Python length.
+export const SEED_MAX_LENGTH = 32;
+
+/** The seed field invites a t.me link, so the prefix is dropped down to the handle —
+ * including the `t.me/s/` web-preview form. */
+export function stripSeed(raw: string): string {
+  return raw.trim().replace(/^(?:https?:\/\/)?(?:t\.me\/(?:s\/)?)?@*/i, '');
+}
+
+/** A typed seed that is not a handle: past the API cap, or a path (`joinchat/…`, `s/durov`,
+ * a post link) — the strip leaves those with a slash in them. '' is "no seed" and fine. */
+export function seedInvalid(raw: string): boolean {
+  const seed = stripSeed(raw);
+  return [...seed].length > SEED_MAX_LENGTH || seed.includes('/');
+}
+
 /** '' → the default; an integer within bounds → itself; anything else → undefined.
  *
  * Never clamps: a typed "600" silently becoming 500 is a request the operator did not

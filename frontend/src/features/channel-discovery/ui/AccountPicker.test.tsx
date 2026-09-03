@@ -162,17 +162,34 @@ describe('AccountPicker', () => {
     await userEvent.click(trigger());
 
     const last = screen.getByRole('option', { name: `Acc ${String(MAX_SEARCH_ACCOUNTS)}` });
+    const max = `максимум ${String(MAX_SEARCH_ACCOUNTS)} аккаунтов`;
     expect(last).toBeDisabled();
-    expect(
-      screen.getByText(`максимум ${String(MAX_SEARCH_ACCOUNTS)} аккаунтов`),
-    ).toBeInTheDocument();
+    // The dead row says why, like a busy one does; the caption is an extra line, not a
+    // replacement for the premium hint.
+    expect(last).toHaveAttribute('title', max);
+    expect(screen.getByRole('option', { name: 'Acc 0' })).not.toHaveAttribute('title');
+    expect(screen.getByText(max)).toBeInTheDocument();
+    expect(screen.getByText(/Premium-аккаунты/)).toBeInTheDocument();
     // A picked row stays live so the operator can free a slot.
     await userEvent.click(screen.getByRole('option', { name: 'Acc 0' }));
     expect(onChange).toHaveBeenLastCalledWith(
       many.slice(1, MAX_SEARCH_ACCOUNTS).map((a) => a.account_id),
     );
     expect(last).toBeEnabled();
+    expect(last).not.toHaveAttribute('title');
     expect(screen.queryByText(/максимум/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Premium-аккаунты/)).toBeInTheDocument();
+  });
+
+  it('shows where keyboard focus sits on the trigger and on every option', async () => {
+    // Real tab stops that focus moves between (arrows, Escape back to the trigger), and
+    // none of them drew a ring.
+    render(<Harness />);
+    expect(trigger()).toHaveClass('focus-visible:outline');
+    await userEvent.click(trigger());
+    for (const option of screen.getAllByRole('option')) {
+      expect(option).toHaveClass('focus-visible:outline');
+    }
   });
 
   it('says it is loading', () => {

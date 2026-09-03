@@ -17,6 +17,7 @@ from core.config import settings
 from core.repositories.neurocomment import (
     list_discovery_candidates,
     list_seen,
+    mark_seen,
     replace_discovery_candidates,
 )
 from core.telegram_client import TelegramReadError
@@ -217,11 +218,41 @@ async def test_a_pass_that_stopped_early_marks_only_the_rows_it_settled(
     re-run resumes it — but that re-run's ``hide_seen`` dropped exactly those rows.
     """
     monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 1)
+    found = matches(("alpha", "A", None), ("beta", "B", None), ("gamma", "G", None))
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=found, linked=read_error("RPC: ChannelPrivateError", only="beta")),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    # ``alpha`` answered, ``beta`` failed and emptied the one-account pool, ``gamma`` was
+    # never reached: the judged row is seen; the failed and the pending ones are not.
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+    assert await list_seen(["alpha", "beta", "gamma"]) == {"alpha"}
+
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=found))
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["beta", "gamma"]
+    assert _discovery_state.phase_of(campaign_id) == "done"
+
+
+@pytest.mark.asyncio
+async def test_a_row_the_probe_could_not_judge_is_not_marked_seen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed probe judged nothing: one dead read must not retire a channel fleet-wide."""
     monkeypatch.setattr(
         _seams,
         "execute_read",
         ReadRecorder(
-            search=matches(("alpha", "A", None), ("beta", "B", None), ("gamma", "G", None)),
+            search=matches(("alpha", "A", None), ("beta", "B", None)),
             linked=read_error("RPC: ChannelPrivateError", only="beta"),
         ),
     )
@@ -231,16 +262,30 @@ async def test_a_pass_that_stopped_early_marks_only_the_rows_it_settled(
     await start_discovery(campaign_id, search_request())
     await drain_discovery(campaign_id)
 
-    # ``alpha`` answered, ``beta`` failed and emptied the one-account pool, ``gamma`` was
-    # never reached: judged rows are seen, the pending one is not.
-    assert _discovery_state.phase_of(campaign_id) == "failed"
-    assert await list_seen(["alpha", "beta", "gamma"]) == {"alpha", "beta"}
+    assert _discovery_state.phase_of(campaign_id) == "done"
+    assert await list_seen(["alpha", "beta"]) == {"alpha"}
+
+
+@pytest.mark.asyncio
+async def test_an_all_seen_rerun_completes_without_qualifying(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing new to show is a finished run, not a failed one with no reason."""
+    reader = ReadRecorder(search=matches(("alpha", "A", None)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await seed_listener()
+    campaign_id = await new_campaign()
+    await _seed_candidates(campaign_id, "alpha")
+    await mark_seen(["alpha"], datetime.now(UTC))
 
     await start_discovery(campaign_id, search_request())
     await drain_discovery(campaign_id)
 
-    assert await _channels_of(campaign_id) == ["gamma"]
     assert _discovery_state.phase_of(campaign_id) == "done"
+    assert _discovery_state.last_error(campaign_id) is None
+    assert _discovery_state.run_report(campaign_id).filtered == {"seen": 1}
+    assert await _channels_of(campaign_id) == ["alpha"]
+    assert reader.actions_of("get_linked_discussion_group") == []
 
 
 @pytest.mark.asyncio

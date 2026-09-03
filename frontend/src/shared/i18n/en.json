@@ -1439,6 +1439,7 @@
           "seedChannel": "Similar to channel",
           "seedChannelHint": "Telegram suggests channels similar to this one based on overlapping audiences. It is the cheapest way to widen the sweep.",
           "seedChannelPlaceholder": "@channel",
+          "seedInvalid": "A channel handle, up to 32 characters, no post links",
           "expand": "Suggest keywords",
           "expanding": "Suggesting…",
           "expandTooLong": "The topic is longer than {{max}} characters — shorten it, the suggester accepts no more.",

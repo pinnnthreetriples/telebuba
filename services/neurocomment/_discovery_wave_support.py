@@ -84,12 +84,18 @@ class Budget:
         self.left = total
         self.held = 0
 
-    def take(self) -> bool:
-        """Claim one read. ``False`` means the run is out and the wave must stop."""
-        if self.left - self.held <= 0:
-            return False
+    @property
+    def exhausted(self) -> bool:
+        """Is the run out? Checked BEFORE the pace sleep and the acquire, consumed after.
+
+        Claiming the read up front charged one for every acquire the pool then refused —
+        a phantom read per wave whenever every account sat at its ceiling.
+        """
+        return self.left - self.held <= 0
+
+    def take(self) -> None:
+        """Consume the read an account was just handed out for."""
         self.left -= 1
-        return True
 
 
 def skipped(

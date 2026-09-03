@@ -145,12 +145,32 @@ describe('DiscoveryFilters', () => {
     expect(limit).toHaveAttribute('aria-invalid', 'true');
     // Announced, and read back as the field's own description — a red line under an
     // unnamed field is a colour carrying the meaning.
-    expect(screen.getByRole('status')).toHaveTextContent('Целое число от 1 до 500');
+    expect(screen.getByText('Целое число от 1 до 500')).toHaveAttribute('role', 'status');
     expect(limit).toHaveAccessibleDescription('Целое число от 1 до 500');
 
     await userEvent.clear(limit);
     expect(limit).not.toHaveAttribute('aria-invalid');
     expect(screen.queryByText('Целое число от 1 до 500')).not.toBeInTheDocument();
+  });
+
+  it('keeps every message region in the DOM before its fault exists', async () => {
+    // A live region announces a CHANGE to its content; one that mounts together with the
+    // fault is silent. So the three (bounds, limit, seed) are static and empty, out of
+    // flow while empty — never display:none, which drops them from the accessibility tree.
+    renderFilters();
+    const regions = screen.getAllByRole('status');
+    expect(regions).toHaveLength(3);
+    for (const region of regions) {
+      expect(region).toBeEmptyDOMElement();
+      expect(region).toHaveClass('empty:sr-only');
+      expect(region).not.toHaveClass('hidden');
+    }
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Лимит результатов' }), '600');
+
+    // The same element, now with text — not a new one.
+    expect(screen.getAllByRole('status')).toHaveLength(3);
+    expect(regions).toContain(screen.getByText('Целое число от 1 до 500'));
   });
 
   it('marks both subscriber bounds when they are the wrong way round', () => {
@@ -160,9 +180,32 @@ describe('DiscoveryFilters', () => {
     const max = screen.getByRole('textbox', { name: 'Подписчиков до' });
     expect(min).toHaveAttribute('aria-invalid', 'true');
     expect(max).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('status')).toHaveTextContent(/«Подписчиков от» больше/);
+    expect(screen.getByText(/«Подписчиков от» больше/)).toHaveAttribute('role', 'status');
     expect(min).toHaveAccessibleDescription(/«Подписчиков от» больше/);
     expect(max).toHaveAccessibleDescription(/«Подписчиков от» больше/);
+  });
+
+  it('refuses a seed that is not a handle, naming the rule', async () => {
+    // The API caps seed_channel at 32 and resolves a post link to nothing; without this
+    // the Search button just went dead.
+    renderFilters();
+    const seed = screen.getByRole('textbox', { name: 'Похожие на канал' });
+    const rule = 'Хэндл канала до 32 символов, без ссылок на посты';
+
+    await userEvent.type(seed, 'https://t.me/durov/123');
+    expect(seed).toHaveAttribute('aria-invalid', 'true');
+    expect(seed).toHaveAccessibleDescription(rule);
+    expect(screen.getByText(rule)).toHaveAttribute('role', 'status');
+
+    // The web-preview link form is a handle once stripped.
+    await userEvent.clear(seed);
+    await userEvent.type(seed, 'https://t.me/s/durov');
+    expect(seed).not.toHaveAttribute('aria-invalid');
+    expect(screen.queryByText(rule)).not.toBeInTheDocument();
+
+    await userEvent.clear(seed);
+    await userEvent.type(seed, 'k'.repeat(33));
+    expect(seed).toHaveAttribute('aria-invalid', 'true');
   });
 
   it('refuses a subscriber bound that is not a whole number instead of dropping it', async () => {

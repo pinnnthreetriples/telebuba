@@ -31,7 +31,7 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
         # has already stripped everything that would describe rows nobody can see.
         _discovery_state.set_run_report(campaign_id, stage.report)
         qualify_error = None
-        if not stage.replaced or stage.flooded or pool.empty:
+        if stage.flooded or pool.empty or not (stage.replaced or stage.all_seen):
             # Not replaced: no source answered (or the filter-aware one did not), so the
             # stored candidates are still the previous run's and this is not a run the
             # operator should read as done. Keyed off the write, not off ``(found,
@@ -44,6 +44,11 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
             # An empty pool: every account left the rotation, so there is nothing to
             # probe with either.
             _discovery_state.set_phase(campaign_id, "failed")
+        elif stage.all_seen:
+            # Every hit was a channel the operator already looked at: the previous rows
+            # stay (shown stale, ``filtered.seen`` says why), there is nothing to qualify
+            # and nothing new to mark. A complete run, not a failed one.
+            _discovery_state.set_phase(campaign_id, "done")
         else:
             _discovery_state.set_phase(campaign_id, "qualifying")
             signal_discovery_progress()
@@ -54,9 +59,15 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
             # probe-time filter deleted was never shown, and marking the search stage's
             # whole set hid such channels from every later search for good. Settled rows
             # only: a pass the pool's emptying stopped early leaves the rest pending, and
-            # marking those hid them from the very re-run that would have resumed them.
+            # marking those hid them from the very re-run that would have resumed them. A
+            # row whose probe failed was judged by nobody — "we could not tell" is not
+            # "shown", and marking it retired the channel fleet-wide over one dead read.
             rows = (await list_discovery_candidates(campaign_id)).rows
-            settled = (row.channel for row in rows if row.qualified_at is not None)
+            settled = (
+                row.channel
+                for row in rows
+                if row.qualified_at is not None and row.qualify_error is None
+            )
             await mark_seen(settled, datetime.now(UTC))
             if qualify_error is not None:
                 _discovery_state.set_last_error(campaign_id, qualify_error)

@@ -173,6 +173,9 @@ class DiscoverySearchStageResult(BaseModel):
     # Was the stored candidate set actually replaced? A run that answered with nothing
     # usable leaves the previous, already-qualified set alone.
     replaced: bool = False
+    # Did ``hide_seen`` alone empty the merge? Nothing new to show, so the set was not
+    # replaced — but the run is complete, not failed: there is nothing to qualify.
+    all_seen: bool = False
     # Is a Telegram rate limit in force on the search account? Either the stage caused
     # one (and wrote the cooldown itself) or a wave boundary found one somebody else
     # recorded. Qualification must not read on this account until the window closes, and

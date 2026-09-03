@@ -15,11 +15,17 @@ import {
   LIMIT_MIN,
   normalizeForKind,
   parseLimit,
+  seedInvalid,
 } from '../model/filters';
 import { Eyebrow, Row } from './FormRow';
 
 const P = 'neurocomment.modal.discovery.form';
 const SEEN = ['hide', 'show'] as const;
+// A validation line that is ALWAYS in the DOM: a `role="status"` region announces changes
+// to its content, not its own arrival, so one that mounts with the fault is silent. While
+// empty it is `sr-only` rather than `hidden` — display:none would drop it from the
+// accessibility tree, and out of flow it adds no line (and no gap) to the wrapping row.
+const MESSAGE = 'basis-full type-caption text-danger empty:sr-only';
 
 type Setter = <K extends keyof DiscoveryFormState>(key: K, value: DiscoveryFormState[K]) => void;
 
@@ -67,16 +73,17 @@ export function DiscoveryFilters({ form, onChange }: Props) {
   const limitMessageId = useId();
   const membersMessageId = useId();
   const seedId = useId();
+  const seedMessageId = useId();
   const groups = form.kind === 'groups';
   const badLimit = parseLimit(form.limit) === undefined;
+  const badSeed = seedInvalid(form.seedChannel);
   const inverted = boundsInverted(form);
   const badMin = boundInvalid(form.minSubscribers);
   const badMax = boundInvalid(form.maxSubscribers);
   // One line under the pair. The two faults exclude each other: inverted needs both
   // bounds to parse.
   const membersMessage =
-    badMin || badMax ? t(`${P}.membersInvalid`) : inverted ? t(`${P}.boundsInverted`) : undefined;
-  const membersDescribedBy = membersMessage === undefined ? undefined : membersMessageId;
+    badMin || badMax ? t(`${P}.membersInvalid`) : inverted ? t(`${P}.boundsInverted`) : null;
 
   const set: Setter = (key, value) => {
     onChange({ ...form, [key]: value });
@@ -160,7 +167,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 inputMode="numeric"
                 className="w-number tabular-nums"
                 aria-label={t(`${P}.minSubscribers`)}
-                aria-describedby={membersDescribedBy}
+                aria-describedby={membersMessageId}
                 placeholder="0"
                 invalid={inverted || badMin}
                 value={form.minSubscribers}
@@ -175,7 +182,7 @@ export function DiscoveryFilters({ form, onChange }: Props) {
                 inputMode="numeric"
                 className="w-number tabular-nums"
                 aria-label={t(`${P}.maxSubscribers`)}
-                aria-describedby={membersDescribedBy}
+                aria-describedby={membersMessageId}
                 placeholder="∞"
                 invalid={inverted || badMax}
                 value={form.maxSubscribers}
@@ -186,15 +193,9 @@ export function DiscoveryFilters({ form, onChange }: Props) {
             </div>
             {/* The API refuses members_min > members_max, and canSubmit blocks it — without
                 this the Search button would just go dead naming no field. */}
-            {membersMessage === undefined ? null : (
-              <p
-                id={membersMessageId}
-                role="status"
-                className="basis-full type-caption text-danger"
-              >
-                {membersMessage}
-              </p>
-            )}
+            <p id={membersMessageId} role="status" className={MESSAGE}>
+              {membersMessage}
+            </p>
           </Row>
 
           <Row label={t(`${P}.hideSeen.label`)} hint={t(`${P}.hideSeen.hint`)}>
@@ -222,17 +223,15 @@ export function DiscoveryFilters({ form, onChange }: Props) {
               className="w-number tabular-nums"
               placeholder={String(LIMIT_DEFAULT)}
               invalid={badLimit}
-              aria-describedby={badLimit ? limitMessageId : undefined}
+              aria-describedby={limitMessageId}
               value={form.limit}
               onChange={(event) => {
                 set('limit', event.target.value);
               }}
             />
-            {badLimit ? (
-              <p id={limitMessageId} role="status" className="basis-full type-caption text-danger">
-                {t(`${P}.limit.invalid`, { min: LIMIT_MIN, max: LIMIT_MAX })}
-              </p>
-            ) : null}
+            <p id={limitMessageId} role="status" className={MESSAGE}>
+              {badLimit ? t(`${P}.limit.invalid`, { min: LIMIT_MIN, max: LIMIT_MAX }) : null}
+            </p>
           </Row>
 
           {/* The HelpHint sits OUTSIDE the <label>: nested, its prose joined the
@@ -245,10 +244,17 @@ export function DiscoveryFilters({ form, onChange }: Props) {
               className="w-menu"
               value={form.seedChannel}
               placeholder={t(`${P}.seedChannelPlaceholder`)}
+              invalid={badSeed}
+              aria-describedby={seedMessageId}
               onChange={(event) => {
                 set('seedChannel', event.target.value);
               }}
             />
+            {/* The API caps seed_channel at 32 and resolves a path to nothing: without this
+                the Search button would go dead naming no field. */}
+            <p id={seedMessageId} role="status" className={MESSAGE}>
+              {badSeed ? t(`${P}.seedInvalid`) : null}
+            </p>
           </Row>
         </div>
       </div>

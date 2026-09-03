@@ -128,6 +128,15 @@ def _facts(
     )
 
 
+def _is_group(kind: str) -> bool | None:
+    """The row's stored kind as the verdict's tri-state: a legacy or blank kind is unknown.
+
+    Not ``kind == "group"``: that read every unrecognised string as a confident "channel",
+    and the comments filter then deleted the row on a fact nobody had measured.
+    """
+    return True if kind == "group" else False if kind == "channel" else None
+
+
 def _cache_answers(group: LinkedDiscussionGroup, request: DiscoverySearchRequest) -> bool:
     """Does this fresh cache row carry every fact the active filters need?
 
@@ -168,7 +177,7 @@ async def _settled_without_probe(
     _discovery_state.record_verdict(
         campaign_id,
         row.channel,
-        DiscoveryChannelVerdict(is_group=row.kind == "group", **facts._asdict()),
+        DiscoveryChannelVerdict(is_group=_is_group(row.kind), **facts._asdict()),
     )
     reason = _admit(row, facts, comments_enabled=comments, request=request)
     await _settle(campaign_id, row.channel, reason, rejected)
@@ -184,9 +193,10 @@ def _admit(
 ) -> str | None:
     # A group's comments verdict is structurally False (comments ARE its messages), so it
     # is handed over as unknown: the filter must not delete every group a ``kind=all``
-    # search found the moment the operator asks for comments on.
+    # search found the moment the operator asks for comments on. Only a row KNOWN to be
+    # a channel hands the verdict over — an unknown kind is not a channel by default.
     return admit_at_qualification(
-        comments_enabled=None if row.kind == "group" else comments_enabled,
+        comments_enabled=comments_enabled if _is_group(row.kind) is False else None,
         access=facts.access,
         language=facts.language,
         category_match=facts.category_match,

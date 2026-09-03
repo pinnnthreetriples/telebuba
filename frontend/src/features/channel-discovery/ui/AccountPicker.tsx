@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryAccountOption } from '@/shared/api';
+import { FOCUS_RING } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 import { Badge, Icon, Notice } from '@/shared/ui';
 
@@ -110,7 +111,13 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
             onClick={() => {
               setOpen((current) => !current);
             }}
-            className="flex w-full items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-left type-prose"
+            // The ring, as on Button: the trigger and the options below are real tab stops
+            // that focus moves between (Escape hands it back here), and none of them showed
+            // where it sat.
+            className={cn(
+              'flex w-full items-center justify-between gap-sm rounded-lg border border-line bg-surface-card px-md py-sm text-left type-prose',
+              FOCUS_RING,
+            )}
           >
             <span className="min-w-0 truncate">
               {names.length > 0 ? names.join(', ') : t(`${P}.trigger`)}
@@ -137,18 +144,26 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
               const busy = account.busy_reason != null;
               const busyText = busy ? t(`${P}.busy.${account.busy_reason}`) : undefined;
               const picked = selected.includes(account.account_id);
+              const capped = full && !picked;
               return (
                 <button
                   key={account.account_id}
                   type="button"
                   role="option"
                   aria-selected={picked}
-                  disabled={busy || (full && !picked)}
-                  title={busyText}
+                  disabled={busy || capped}
+                  // A dead row says why — a capped one too, since the caption sits below
+                  // the list and the row is what the pointer is on.
+                  title={
+                    busyText ?? (capped ? t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS }) : undefined)
+                  }
                   onClick={() => {
                     toggle(account.account_id);
                   }}
-                  className="flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-prose hover:bg-action-hover disabled:opacity-50"
+                  className={cn(
+                    'flex w-full items-center justify-between gap-sm rounded-sm px-md py-sm text-left type-prose hover:bg-action-hover disabled:opacity-50',
+                    FOCUS_RING,
+                  )}
                 >
                   <span className="flex min-w-0 items-center gap-sm">
                     <span className="truncate">{account.name}</span>
@@ -167,9 +182,12 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
               );
             })}
           </div>
-          <p className="mt-tight type-caption">
-            {full ? t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS }) : t(`${P}.premiumHint`)}
-          </p>
+          <p className="mt-tight type-caption">{t(`${P}.premiumHint`)}</p>
+          {/* An extra line, not a replacement: why premium is preselected still holds
+              once the pick is full. */}
+          {full ? (
+            <p className="mt-tight type-caption">{t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS })}</p>
+          ) : null}
           {errored ? (
             <p role="status" className="mt-tight type-caption text-warning-deep">
               {t(`${P}.stale`)}

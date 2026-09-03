@@ -59,6 +59,9 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('Суточный лимит поисков исчерпан.')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    // Announced like its siblings: the button just re-enables, so without it a
+    // screen-reader operator hears nothing happen.
+    expect(screen.getByText('Суточный лимит поисков исчерпан.')).toHaveAttribute('role', 'status');
   });
 
   it('opens the live board when a search is already running', async () => {
@@ -226,6 +229,48 @@ describe('ChannelDiscoveryModal', () => {
     });
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: /Добавить выбранные \(0\)/ })).toBeInTheDocument();
+  });
+
+  it('drops the adopt notes and the adopt failure once the operator goes back to the form', async () => {
+    // Both describe picks from the board just left; pinned under the form they read as
+    // something wrong with the parameters about to be submitted.
+    route({
+      board: boardPayload([candidate({ channel: 'good' })]),
+      adoptStatuses: ['already_assigned'],
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await waitFor(() => {
+      expect(screen.getByText(/Не добавлено: 1/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    expect(screen.queryByText(/Не добавлено/)).not.toBeInTheDocument();
+  });
+
+  it('drops a failed adopt once the operator goes back to the form', async () => {
+    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptFails: true });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось добавить каналы/)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    expect(screen.queryByText(/Не удалось добавить каналы/)).not.toBeInTheDocument();
   });
 
   it('drops the finished run rows as soon as the next search starts', async () => {

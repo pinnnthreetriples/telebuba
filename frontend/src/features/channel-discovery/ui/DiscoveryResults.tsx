@@ -55,15 +55,17 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
           const kept = report.kept ?? 0;
-          const exclusive = report.exclusive ?? 0;
+          const { exclusive } = report;
           let line = t(`neurocomment.modal.discovery.results.${SOURCE_STATE[report.state]}`, {
             source: name,
             kept,
             hits: report.hits ?? 0,
           });
           // "50 of 60" hid the case where all 50 were duplicates of another source and
-          // every row this one found alone was cut by the cap.
-          if (exclusive !== kept) {
+          // every row this one found alone was cut by the cap. Only on a MEASURED count:
+          // an absent field is not a zero, and "(only here: 0)" beside "50 of 60" would
+          // claim every one of the 50 was a duplicate.
+          if (typeof exclusive === 'number' && exclusive !== kept) {
             line += ` ${t('neurocomment.modal.discovery.results.sourceExclusive', { exclusive })}`;
           }
           // The run's read budget stopped this wave, so its counts are a floor rather

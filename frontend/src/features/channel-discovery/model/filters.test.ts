@@ -17,6 +17,9 @@ import {
   MAX_SEARCH_ACCOUNTS,
   normalizeForKind,
   parseLimit,
+  SEED_MAX_LENGTH,
+  seedInvalid,
+  stripSeed,
 } from './filters';
 
 function account(overrides: Partial<DiscoveryAccountOption> = {}): DiscoveryAccountOption {
@@ -120,5 +123,33 @@ describe('normalizeForKind', () => {
       comments: 'on',
       access: 'subscription',
     });
+  });
+});
+
+describe('seedInvalid', () => {
+  it('mirrors the API cap on seed_channel, in code points', () => {
+    expect(SEED_MAX_LENGTH).toBe(32); // seed_channel.maxLength in openapi.json
+    expect(seedInvalid('k'.repeat(SEED_MAX_LENGTH))).toBe(false);
+    expect(seedInvalid(`k${'k'.repeat(SEED_MAX_LENGTH)}`)).toBe(true);
+    // Measured after the strip: the link prefix does not count against the cap.
+    expect(seedInvalid(`https://t.me/${'k'.repeat(SEED_MAX_LENGTH)}`)).toBe(false);
+    expect(seedInvalid('')).toBe(false);
+  });
+
+  it('refuses a path that is not a handle', () => {
+    // An invite or a post link resolves to nothing server-side (`seed_unusable`).
+    expect(seedInvalid('t.me/joinchat/AbCdEf')).toBe(true);
+    expect(seedInvalid('https://t.me/durov/123')).toBe(true);
+    expect(seedInvalid('t.me/s/durov')).toBe(false);
+  });
+});
+
+describe('stripSeed', () => {
+  it('drops the t.me prefixes and the @ down to the handle', () => {
+    expect(stripSeed(' @durov ')).toBe('durov');
+    expect(stripSeed('https://t.me/durov')).toBe('durov');
+    // The web-preview form of a channel link.
+    expect(stripSeed('https://t.me/s/durov')).toBe('durov');
+    expect(stripSeed('t.me/s/durov')).toBe('durov');
   });
 });

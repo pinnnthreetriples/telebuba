@@ -141,6 +141,12 @@ describe('buildSearchRequest', () => {
       buildSearchRequest(form({ keywords: 'crypto', seedChannel: 't.me/durov' }), ACCOUNTS)
         .seed_channel,
     ).toBe('durov');
+    expect(
+      buildSearchRequest(
+        form({ keywords: 'crypto', seedChannel: 'https://t.me/s/durov' }),
+        ACCOUNTS,
+      ).seed_channel,
+    ).toBe('durov');
   });
 
   it('drops unparseable or negative bounds instead of sending NaN', () => {
@@ -233,6 +239,19 @@ describe('canSubmit', () => {
 
   it('rejects a seed channel with no keywords or category', () => {
     expect(canSubmit(form({ seedChannel: '@durov' }), ACCOUNTS)).toBe(false);
+  });
+
+  it('rejects a seed that is not a handle rather than letting the API 422 it', () => {
+    // Past seed_channel.maxLength, or a post link the strip cannot reduce to a handle.
+    expect(canSubmit(form({ keywords: 'crypto', seedChannel: 'k'.repeat(33) }), ACCOUNTS)).toBe(
+      false,
+    );
+    expect(
+      canSubmit(form({ keywords: 'crypto', seedChannel: 'https://t.me/durov/123' }), ACCOUNTS),
+    ).toBe(false);
+    expect(canSubmit(form({ keywords: 'crypto', seedChannel: 't.me/s/durov' }), ACCOUNTS)).toBe(
+      true,
+    );
   });
 
   it('rejects keywords that are all too short', () => {

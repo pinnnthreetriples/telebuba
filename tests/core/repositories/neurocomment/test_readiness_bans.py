@@ -128,6 +128,16 @@ async def test_an_upsert_without_the_probe_facts_keeps_the_cached_ones() -> None
 
 
 @pytest.mark.asyncio
+async def test_each_probe_fact_is_kept_independently() -> None:
+    """A probe always learns ``about`` but may miss the join gate; the gate must survive it."""
+    await upsert_linked_group("@chan", 1, comments_enabled=True, about="x", join_request=True)
+
+    refreshed = await upsert_linked_group("@chan", 1, comments_enabled=True, about="y")
+
+    assert (refreshed.about, refreshed.join_request) == ("y", True)
+
+
+@pytest.mark.asyncio
 async def test_readiness_upsert_and_fetch() -> None:
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     assert await fetch_readiness("acc-1", "@chan") is None

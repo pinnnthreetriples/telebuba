@@ -116,6 +116,27 @@ async def test_a_cache_hit_still_honours_the_comments_filter(
 
 
 @pytest.mark.asyncio
+async def test_an_unknown_kind_is_not_a_channel_for_the_comments_filter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A legacy or blank ``kind`` read as a confident "channel", and a cached False deleted it."""
+    reader = ReadRecorder()
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [DiscoveryCandidateRow(channel="odd", title="Odd", source="telegram_search", kind="")],
+    )
+    await upsert_linked_group("odd", None, comments_enabled=False)
+
+    await run_qualification(campaign_id, pool_of(), search_request(comments="on"))
+
+    assert reader.calls == []
+    assert await _remaining(campaign_id) == ["odd"]
+    assert _discovery_state.verdicts(campaign_id)["odd"].is_group is None
+
+
+@pytest.mark.asyncio
 async def test_a_cache_row_that_carries_about_and_the_join_gate_settles_every_filter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

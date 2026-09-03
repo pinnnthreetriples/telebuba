@@ -116,8 +116,9 @@ async def test_an_unusable_seed_is_reported_instead_of_probed(
 
     # The unusable seed itself was never sent; the wave's own seeds are the sweep's hits.
     assert [action.seed for action in reader.similar_actions()] == ["alpha"]
+    # The reason rides the source's own row; a skip is not the run's error.
     assert _report_of(stage, "telegram_similar").state == "skipped"
-    assert stage.error == "seed_unusable"
+    assert stage.error is None
 
 
 @pytest.mark.asyncio

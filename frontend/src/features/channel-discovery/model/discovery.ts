@@ -7,6 +7,8 @@ import {
   MAX_SEARCH_ACCOUNTS,
   normalizeForKind,
   parseLimit,
+  seedInvalid,
+  stripSeed,
   type DiscoveryAccess,
   type DiscoveryCategory,
   type DiscoveryComments,
@@ -156,7 +158,7 @@ export function buildSearchRequest(
   };
   // The placeholder invites a t.me link and the API caps this field at 32 chars, so a
   // pasted URL either 422s or resolves to nothing — strip the prefix instead.
-  const seed = form.seedChannel.trim().replace(/^(?:https?:\/\/)?(?:t\.me\/)?@*/i, '');
+  const seed = stripSeed(form.seedChannel);
   if (seed !== '') request.seed_channel = seed;
   const min = positiveInt(form.minSubscribers);
   const max = positiveInt(form.maxSubscribers);
@@ -184,6 +186,7 @@ export function canSubmit(form: DiscoveryFormState, accountIds: string[]): boole
     !boundInvalid(form.minSubscribers) &&
     !boundInvalid(form.maxSubscribers) &&
     !boundsInverted(form) &&
+    !seedInvalid(form.seedChannel) &&
     parseLimit(form.limit) !== undefined &&
     accountIds.length > 0 &&
     accountIds.length <= MAX_SEARCH_ACCOUNTS

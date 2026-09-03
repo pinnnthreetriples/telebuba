@@ -23,6 +23,13 @@ from schemas.telegram_actions_discovery import (
 from services.neurocomment import _seams
 from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment._discovery_search import run_search
+from services.neurocomment._discovery_wave_support import Budget
+from services.neurocomment._discovery_waves import (
+    _global_pass,
+    _keyword_pass,
+    _seed_pass,
+    _similar_wave,
+)
 from services.neurocomment._state import in_cooldown, set_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
@@ -37,12 +44,13 @@ from tests.services.neurocomment.discovery_support import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Coroutine
 
     from pydantic import BaseModel
 
     from schemas.neurocomment_discovery import DiscoverySearchStageResult, DiscoverySourceReport
     from schemas.telegram_actions import TelegramReadAction
+    from services.neurocomment._discovery_wave_support import Wave
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
@@ -439,6 +447,34 @@ async def test_one_account_alone_never_exceeds_its_ceiling(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "wave",
+    [
+        lambda pool, budget: _keyword_pass(pool, ["word"], budget, "all"),
+        lambda pool, budget: _global_pass(pool, ["word"], budget, "all"),
+        lambda pool, budget: _seed_pass(pool, search_request(seed_channel="@durov"), budget),
+        lambda pool, budget: _similar_wave(pool, ["durov"], budget, "all"),
+    ],
+    ids=["keyword", "posts", "seed", "recommended"],
+)
+async def test_an_acquire_the_pool_refuses_charges_no_read(
+    monkeypatch: pytest.MonkeyPatch,
+    wave: Callable[[AccountPool, Budget], Coroutine[None, None, Wave]],
+) -> None:
+    """The budget was claimed before the pool was asked, so every wave burnt a phantom read."""
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 1)
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder())
+    pool = pool_of()
+    pool.acquire()  # the one wave read the ceiling allows
+    budget = Budget(5)
+
+    result = await wave(pool, budget)
+
+    assert budget.left == 5
+    assert (result.stopped, result.outcomes[-1].truncated) == (False, True)
+
+
+@pytest.mark.asyncio
 async def test_premium_takes_the_recommendation_and_post_reads_while_the_sweep_rotates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -492,7 +528,26 @@ async def test_a_groups_search_skips_both_recommendation_waves(
             "kind_unsupported",
             False,
         )
-    assert stage.replaced is True
+    # A skip by design is not a degraded run.
+    assert (stage.replaced, stage.error) == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_wave_does_not_mask_a_later_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The run's error is the first FAILURE, never the reason a wave was skipped."""
+    groups = TelegramChannelMatches(
+        items=[TelegramChannelMatch(username="chat", title="Chat", kind="group")],
+    )
+    reader = ReadRecorder(search=groups, posts=read_error("RPC: TimeoutError"))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(campaign_id, pool_of(), search_request(kind="groups"))
+
+    assert _report_of(stage, "telegram_posts").state == "failed"
+    assert stage.error == "RPC: TimeoutError"
 
 
 @pytest.mark.asyncio

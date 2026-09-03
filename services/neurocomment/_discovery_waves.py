@@ -98,16 +98,18 @@ async def _keyword_pass(
     """One paced search per keyword — the cheapest wave, so it is served first."""
     outcomes: list[SourceOutcome] = []
     for index, keyword in enumerate(keywords):
-        if not budget.take():
+        if budget.exhausted:
             outcomes.append(skipped("telegram_search", READ_BUDGET, truncated=True))
             break
         if index:
             await pace()
         # AFTER the pace sleep: it is one to two seconds long, and a limit landing inside
-        # it would otherwise still buy one read.
+        # it would otherwise still buy one read. The budget is charged AFTER the acquire:
+        # an account the pool refuses makes no read.
         account_id = pool.acquire()
         if account_id is None:
             return stopped(outcomes, pool, "telegram_search")
+        budget.take()
         native = await search_native(account_id, keyword, kind)
         outcomes.append(native)
         # A full sweep is minutes of paced reads; without a nudge per keyword the
@@ -146,14 +148,15 @@ async def _global_pass(
         seen: set[str] = set()
         cursor: GlobalPostsCursor | None = None
         for _page in range(pages):
-            if not budget.take():
+            if budget.exhausted:
                 outcomes.append(skipped("telegram_posts", READ_BUDGET, truncated=True))
                 return Wave(outcomes)
-            spent += 1
             await pace()
             account_id = pool.acquire(prefer_premium=True)
             if account_id is None:
                 return stopped(outcomes, pool, "telegram_posts")
+            budget.take()
+            spent += 1
             page = await search_global(account_id, keyword, cursor, kind)
             outcomes.append(page.outcome)
             signal_discovery_progress()
@@ -194,7 +197,7 @@ async def _seed_pass(pool: AccountPool, request: DiscoverySearchRequest, budget:
         # seed that was perfectly fine.
         unusable = "seed_unusable" if request.seed_channel is not None else None
         return Wave([skipped("telegram_similar", unusable)])
-    if not budget.take():
+    if budget.exhausted:
         return Wave([skipped("telegram_similar", READ_BUDGET, truncated=True)])
     await pace()
     account_id = pool.acquire(prefer_premium=True)
@@ -202,6 +205,7 @@ async def _seed_pass(pool: AccountPool, request: DiscoverySearchRequest, budget:
         # No outcome row on a stop: ``unreached`` names every source the run never got
         # to, and a reason here would compete with the run's own stop reason.
         return stopped([], pool, "telegram_similar")
+    budget.take()
     similar = await search_similar(account_id, seed, kind=request.kind)
     return Wave([similar], await _report(pool, account_id, similar))
 
@@ -254,13 +258,14 @@ async def _similar_wave(
         return Wave([skipped("telegram_recommended", KIND_UNSUPPORTED)])
     outcomes: list[SourceOutcome] = []
     for seed in seeds:
-        if not budget.take():
+        if budget.exhausted:
             outcomes.append(skipped("telegram_recommended", READ_BUDGET, truncated=True))
             return Wave(outcomes)
         await pace()
         account_id = pool.acquire(prefer_premium=True)
         if account_id is None:
             return stopped(outcomes, pool, "telegram_recommended")
+        budget.take()
         similar = await search_similar(account_id, seed, "telegram_recommended", kind)
         outcomes.append(similar)
         signal_discovery_progress()

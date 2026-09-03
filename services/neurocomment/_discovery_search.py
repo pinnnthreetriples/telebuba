@@ -25,7 +25,7 @@ from schemas.neurocomment_discovery import (
 )
 from services.neurocomment._discovery_filters import admit_at_search
 from services.neurocomment._discovery_providers import COOLING_REASON
-from services.neurocomment._discovery_wave_support import READ_BUDGET, SOURCE_PRIORITY
+from services.neurocomment._discovery_wave_support import SOURCE_PRIORITY
 from services.neurocomment._discovery_waves import native_pass
 
 if TYPE_CHECKING:
@@ -224,15 +224,13 @@ def _merge(
     selected = ordered[:cap]
     kept_origins = {accepted[key].channel: origins[key] for key in selected}
 
-    # First error wins: the board shows one short reason, not a concatenation. The
-    # per-source report carries the rest. The read budget is NOT one of them: at default
-    # settings a full keyword list exhausts it on every run, so painting a complete answer
-    # as a degraded one made the normal case look broken. It is truncation — the source's
-    # own row still names the budget and flags itself ``truncated``.
-    error = next(
-        (out.error for out in outcomes if out.error and out.error != READ_BUDGET),
-        None,
-    )
+    # First FAILURE wins: the board shows one short reason, not a concatenation. The
+    # per-source report carries the rest. A skip is not one of them, whatever its reason:
+    # the read budget runs out on every full keyword list, and a groups search skips both
+    # recommendation waves by design — painting a complete answer as a degraded one made
+    # the normal case look broken, and the skip's reason then masked a real failure that
+    # came later. The source's own row still names it.
+    error = next((out.error for out in outcomes if out.state == "failed"), None)
     return _Merged(
         rows=[accepted[key] for key in selected],
         error=error,
@@ -308,6 +306,7 @@ async def run_search(
         # act on, and the cooldown does.
         error=COOLING_REASON if native.stop == "cooling" else merged.error,
         replaced=replaced,
+        all_seen=all_seen,
         flooded=native.stop in {"flooded", "cooling"},
         report=DiscoveryRunReport(
             sources=_source_reports(outcomes, merged.reach, origins),

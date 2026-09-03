@@ -126,6 +126,30 @@ describe('DiscoveryResults reporting', () => {
     expect(screen.getByText(/поиск Telegram: 0 из 4/)).toBeInTheDocument();
   });
 
+  it('does not print an exclusive count the source never measured', () => {
+    // An absent `exclusive` is not a zero: "(only here: 0)" beside "2 of 4" would claim
+    // both kept rows were duplicates of another source.
+    const { unmount } = render(
+      <Harness
+        data={board([candidate()], {
+          sources: [{ source: 'telegram_search', state: 'ran', hits: 4, kept: 2 }],
+        })}
+      />,
+    );
+    expect(screen.getByText(/поиск Telegram: 2 из 4/)).toBeInTheDocument();
+    expect(screen.queryByText(/только здесь/)).not.toBeInTheDocument();
+    unmount();
+
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [{ source: 'telegram_search', state: 'ran', hits: 4, kept: 2, exclusive: 1 }],
+        })}
+      />,
+    );
+    expect(screen.getByText(/только здесь: 1/)).toBeInTheDocument();
+  });
+
   it('reports the candidate cap as a ceiling, not a total', () => {
     render(<Harness data={board([candidate()], { capped: true })} />);
 
