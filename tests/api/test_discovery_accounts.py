@@ -29,7 +29,7 @@ async def test_list_accounts_serializes_the_picker(
     async def _fake() -> DiscoveryAccountList:
         return DiscoveryAccountList(
             items=[
-                DiscoveryAccountOption(account_id="a1", name="Paid", premium=True),
+                DiscoveryAccountOption(account_id="a1", name="Paid", username="paid", premium=True),
                 DiscoveryAccountOption(
                     account_id="a2",
                     name="Warm",
@@ -45,8 +45,20 @@ async def test_list_accounts_serializes_the_picker(
     assert resp.status_code == 200
     assert resp.json() == {
         "items": [
-            {"account_id": "a1", "name": "Paid", "premium": True, "busy_reason": None},
-            {"account_id": "a2", "name": "Warm", "premium": None, "busy_reason": "account_busy"},
+            {
+                "account_id": "a1",
+                "name": "Paid",
+                "username": "paid",
+                "premium": True,
+                "busy_reason": None,
+            },
+            {
+                "account_id": "a2",
+                "name": "Warm",
+                "username": None,
+                "premium": None,
+                "busy_reason": "account_busy",
+            },
         ],
     }
 

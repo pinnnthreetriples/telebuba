@@ -223,16 +223,26 @@ async def check_search_accounts(
     return accounts
 
 
+def _display_name(account: AccountRead) -> str:
+    """The SPA's ``accountDisplayName`` rule, so the picker and the table agree."""
+    full = " ".join(part for part in (account.first_name, account.last_name) if part)
+    return full or account.phone or account.account_id
+
+
 async def list_search_accounts() -> DiscoveryAccountList:
     """Every account as a pick for the search form, busy ones marked with why.
 
-    Premium first, then by name — the order the pool prefers them in.
+    Premium first, then by name — the order the pool prefers them in. Named as the
+    accounts table names them (Telegram first + last name, else phone, else id): the
+    import label is a file name like ``1_telethon`` that tells the operator nothing
+    once the fleet is fifty accounts.
     """
     fleet = await _fleet()
     items = [
         DiscoveryAccountOption(
             account_id=account.account_id,
-            name=account.label or account.account_id,
+            name=_display_name(account),
+            username=account.username,
             premium=account.premium,
             busy_reason=_blocker(account, fleet),
         )

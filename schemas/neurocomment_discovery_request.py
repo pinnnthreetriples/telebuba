@@ -148,7 +148,9 @@ class DiscoveryAccountOption(BaseModel):
     """One account the operator may pick for a search."""
 
     account_id: str
+    # The accounts table's display name (first + last, else phone, else id).
     name: str
+    username: str | None = None
     premium: bool | None = None
     busy_reason: DiscoveryBusyReason | None = None
 

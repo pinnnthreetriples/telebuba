@@ -13250,6 +13250,17 @@
             "type": "string",
             "title": "Name"
           },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
           "premium": {
             "anyOf": [
               {

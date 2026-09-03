@@ -7,7 +7,6 @@ import { cn } from '@/shared/lib/cn';
 import { Badge, Icon, Notice } from '@/shared/ui';
 
 import { eligibleAccountIds, MAX_SEARCH_ACCOUNTS } from '../model/filters';
-import { Eyebrow } from './FormRow';
 
 const P = 'neurocomment.modal.discovery.form.accounts';
 
@@ -72,6 +71,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
 
   return (
     <section
+      className="min-w-0"
       ref={rootRef}
       onKeyDown={(event) => {
         // Only while open — a closed picker has no business swallowing the Modal's Escape,
@@ -88,10 +88,13 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
         }
       }}
     >
-      <Eyebrow
-        title={t(`${P}.label`)}
-        caption={loading ? t(`${P}.loading`) : t(`${P}.selected`, { count: selected.length })}
-      />
+      {/* The same label + caption line as the keywords field it shares a row with. */}
+      <div className="mb-tight flex flex-wrap items-baseline gap-sm">
+        <span className="type-label">{t(`${P}.label`)}</span>
+        <span className="type-caption">
+          {loading ? t(`${P}.loading`) : t(`${P}.selected`, { count: selected.length })}
+        </span>
+      </div>
       {/* Only with nothing to fall back on: a failed refetch leaves status 'error' with
           the cached list intact, and the modal still submits with it — the same guard as
           DiscoveryResults. */}
@@ -167,6 +170,10 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
                 >
                   <span className="flex min-w-0 items-center gap-sm">
                     <span className="truncate">{account.name}</span>
+                    {/* The handle tells two "Alisa"s apart, as the accounts table does. */}
+                    {account.username != null ? (
+                      <span className="truncate type-caption">@{account.username}</span>
+                    ) : null}
                     {account.premium === true ? (
                       <Badge tone="info" size="xs">
                         {t(`${P}.premium`)}
