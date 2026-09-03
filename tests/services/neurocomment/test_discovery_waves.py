@@ -14,8 +14,14 @@ import pytest
 
 from core.config import settings
 from core.telegram_client import TelegramReadError
-from schemas.telegram_actions_discovery import GlobalPostsCursor
+from schemas.telegram_actions import GetSimilarChannels, SearchChannels, SearchGlobalPosts
+from schemas.telegram_actions_discovery import (
+    GlobalPostsCursor,
+    TelegramChannelMatch,
+    TelegramChannelMatches,
+)
 from services.neurocomment import _seams
+from services.neurocomment._discovery_pool import AccountPool, SearchAccount
 from services.neurocomment._discovery_search import run_search
 from services.neurocomment._state import in_cooldown, set_cooldown
 from tests.services.neurocomment.discovery_support import (
@@ -368,3 +374,122 @@ async def test_the_recommendation_wave_never_re_reads_the_operators_seed(
 
     # The operator's seed, then the sweep's next-best hit — never the same peer twice.
     assert [action.seed for action in reader.similar_actions()] == ["biggest", "second"]
+
+
+@pytest.mark.asyncio
+async def test_a_survivor_stops_at_its_own_ceiling_when_the_other_account_cooled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The shared budget is ``ceiling x pool size``; a lone survivor must not absorb it all.
+
+    Two accounts, one parked at the start: the run used to hand the other one both
+    shares — twice the traffic the ceiling exists to bound on one session. Truncation,
+    not a stop: the account is fine, the sweep is simply cut short, and the run goes on.
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 2)
+    reader = ReadRecorder(search=matches(("hit", "H", None)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await set_cooldown("acc-a", datetime.now(UTC) + timedelta(hours=1))
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id, pool_of("acc-a", "acc-b"), search_request(keywords=_keywords(6))
+    )
+
+    assert reader.accounts == ["acc-b", "acc-b"]
+    assert _report_of(stage, "telegram_search").truncated is True
+    assert (stage.flooded, stage.replaced) == (False, True)
+
+
+@pytest.mark.asyncio
+async def test_one_account_alone_never_exceeds_its_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 3)
+    reader = ReadRecorder(search=_RICH_SWEEP, posts=_PAGED_POSTS)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    await run_search(
+        campaign_id, pool_of(), search_request(keywords=_keywords(6), seed_channel="@durov")
+    )
+
+    assert len(reader.calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_premium_takes_the_recommendation_and_post_reads_while_the_sweep_rotates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recommendations are ~10x richer on Premium and searchGlobal floods a plain account.
+
+    Sorting the rotation premium-first delivered none of that: round-robin reached the
+    plain account one read later, whatever the wave.
+    """
+    reader = ReadRecorder(search=_RICH_SWEEP)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    pool = AccountPool([SearchAccount("plain"), SearchAccount("paid", premium=True)])
+    campaign_id = await new_campaign()
+
+    await run_search(
+        campaign_id, pool, search_request(keywords=_keywords(2), seed_channel="@durov")
+    )
+
+    by_action = list(zip(reader.calls, reader.accounts, strict=True))
+    sweep = [account for action, account in by_action if isinstance(action, SearchChannels)]
+    premium_only = {
+        account
+        for action, account in by_action
+        if isinstance(action, GetSimilarChannels | SearchGlobalPosts)
+    }
+    assert sweep == ["plain", "paid"]
+    assert premium_only == {"paid"}
+
+
+@pytest.mark.asyncio
+async def test_a_groups_search_skips_both_recommendation_waves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Recommendations return channels only: for groups they cost reads for nothing."""
+    groups = TelegramChannelMatches(
+        items=[TelegramChannelMatch(username="chat", title="Chat", kind="group")],
+    )
+    reader = ReadRecorder(search=groups)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id, pool_of(), search_request(kind="groups", seed_channel="@durov")
+    )
+
+    assert reader.similar_actions() == []
+    assert reader.posts_actions() != []
+    for source in ("telegram_similar", "telegram_recommended"):
+        report = _report_of(stage, source)
+        assert (report.state, report.reason, report.truncated) == (
+            "skipped",
+            "kind_unsupported",
+            False,
+        )
+    assert stage.replaced is True
+
+
+@pytest.mark.asyncio
+async def test_recommendation_seeds_come_from_channel_hits_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mixed = TelegramChannelMatches(
+        items=[
+            TelegramChannelMatch(
+                username="bigchat", title="C", kind="group", participants_count=900
+            ),
+            TelegramChannelMatch(username="chan", title="B", participants_count=100),
+        ],
+    )
+    reader = ReadRecorder(search=mixed)
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    await run_search(campaign_id, pool_of(), search_request(kind="all"))
+
+    assert [(action.seed, action.kind) for action in reader.similar_actions()] == [("chan", "all")]

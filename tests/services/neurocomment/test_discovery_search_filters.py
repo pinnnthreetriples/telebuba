@@ -11,7 +11,12 @@ from datetime import UTC, datetime
 
 import pytest
 
-from core.repositories.neurocomment import list_discovery_candidates, mark_seen
+from core.repositories.neurocomment import (
+    list_discovery_candidates,
+    mark_seen,
+    replace_discovery_candidates,
+)
+from schemas.neurocomment_discovery import DiscoveryCandidateRow
 from schemas.telegram_actions_discovery import TelegramChannelMatch, TelegramChannelMatches
 from services.neurocomment import _seams
 from services.neurocomment._discovery_categories import BUNDLES
@@ -77,41 +82,71 @@ async def test_hide_seen_off_keeps_the_familiar_rows(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("kind", "kept"),
-    [("channels", ["bcast"]), ("groups", ["chat"]), ("all", ["bcast", "chat"])],
-)
-async def test_kind_decides_which_peers_survive(
-    monkeypatch: pytest.MonkeyPatch,
-    kind: str,
-    kept: list[str],
-) -> None:
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=_MIXED))
+async def test_hide_seen_folds_case(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Usernames are case-insensitive; the seen set must be too, like every other identity."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("Alpha", "A", None))))
+    await mark_seen(["alpha"], datetime.now(UTC))
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), search_request(kind=kind))
+    stage = await run_search(campaign_id, pool_of(), search_request())
 
-    assert await _stored(campaign_id) == kept
-    assert stage.report.filtered == ({} if kind == "all" else {"kind": 1})
-    # Each stored row remembers which it is, so the board and adopt can tell them apart.
-    rows = (await list_discovery_candidates(campaign_id)).rows
-    assert {row.channel: row.kind for row in rows} == {
-        channel: "group" if channel == "chat" else "channel" for channel in kept
-    }
+    assert stage.report.filtered == {"seen": 1}
 
 
 @pytest.mark.asyncio
-async def test_the_requested_kind_reaches_the_search_actions(
+async def test_a_rerun_that_finds_only_seen_channels_keeps_the_previous_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nothing new to show is not a reason to wipe what was shown.
+
+    The merge came out empty ONLY because every hit was already seen; the sweep answered,
+    so the empty result would have replaced the reviewed set with an empty board.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("alpha", "A", None))))
+    await mark_seen(["alpha"], datetime.now(UTC))
+    campaign_id = await new_campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [DiscoveryCandidateRow(channel="alpha", title="A", source="telegram_search")],
+    )
+
+    stage = await run_search(campaign_id, pool_of(), search_request())
+
+    assert stage.replaced is False
+    assert stage.report.stored is False
+    assert stage.report.filtered == {"seen": 1}
+    assert await _stored(campaign_id) == ["alpha"]
+
+
+@pytest.mark.asyncio
+async def test_kind_is_the_gateways_to_apply_and_each_row_keeps_its_own(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every source's action carries ``kind``, so what comes back is already filtered."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=_MIXED))
+    campaign_id = await new_campaign()
+
+    stage = await run_search(campaign_id, pool_of(), search_request(kind="all"))
+
+    assert stage.report.filtered == {}
+    # Each stored row remembers which it is, so the board and adopt can tell them apart.
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    assert {row.channel: row.kind for row in rows} == {"bcast": "channel", "chat": "group"}
+
+
+@pytest.mark.asyncio
+async def test_the_requested_kind_reaches_every_sources_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     reader = ReadRecorder(search=_MIXED)
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    await run_search(campaign_id, pool_of(), search_request(kind="groups"))
+    await run_search(campaign_id, pool_of(), search_request(kind="channels", seed_channel="@durov"))
 
-    assert {action.kind for action in reader.search_actions()} == {"groups"}
-    assert {action.kind for action in reader.posts_actions()} == {"groups"}
+    assert {action.kind for action in reader.search_actions()} == {"channels"}
+    assert {action.kind for action in reader.posts_actions()} == {"channels"}
+    assert {action.kind for action in reader.similar_actions()} == {"channels"}
 
 
 @pytest.mark.asyncio

@@ -51,6 +51,7 @@ from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_comment_mode import _add_neurocomment_settings_comment_mode
 from core.migration_steps_discovery import (
     _add_discovery_kind_and_seen,
+    _add_linked_group_about,
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
 )
@@ -178,6 +179,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (58, "add_neurocomment_account_limits", _add_neurocomment_account_limits),
     (59, "add_account_premium", _add_account_premium),
     (60, "add_discovery_kind_and_seen", _add_discovery_kind_and_seen),
+    (61, "add_linked_group_about", _add_linked_group_about),
 )
 
 

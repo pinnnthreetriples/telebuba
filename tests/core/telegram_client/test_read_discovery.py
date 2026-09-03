@@ -415,6 +415,18 @@ async def test_similar_channels_without_a_seed_sends_none(
 
 
 @pytest.mark.asyncio
+async def test_similar_channels_apply_the_requested_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Recommendations have no server-side kind flag, so the gateway filters like the searches."""
+    client = _FakeClient([_channel("bcast"), _group("grp", channel_id=7)])
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read("acc-1", GetSimilarChannels(kind="groups"))
+
+    assert isinstance(result, TelegramChannelMatches)
+    assert [item.username for item in result.items] == ["grp"]
+
+
+@pytest.mark.asyncio
 async def test_similar_channels_keep_private_channels_and_groups_by_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

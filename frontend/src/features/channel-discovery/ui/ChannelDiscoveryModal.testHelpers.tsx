@@ -11,8 +11,8 @@ export type MockEventSourceCtor = {
   last: () => { emit: (payload: unknown) => void } | undefined;
 };
 
-// One premium eligible, one plain eligible, one busy: the premium default is `acc-p`
-// alone, so every spec that just presses «Найти» posts a known account list.
+// One premium eligible, one plain eligible, one busy: the default is `acc-p, acc-n` in
+// that order, so every spec that just presses «Найти» posts a known account list.
 export const ACCOUNTS: DiscoveryAccountOption[] = [
   { account_id: 'acc-p', name: 'Prem', premium: true, busy_reason: null },
   { account_id: 'acc-n', name: 'Plain', premium: false, busy_reason: null },

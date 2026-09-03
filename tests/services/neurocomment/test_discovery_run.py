@@ -16,6 +16,7 @@ import pytest
 from core.config import settings
 from core.repositories.neurocomment import (
     list_discovery_candidates,
+    list_seen,
     replace_discovery_candidates,
 )
 from core.telegram_client import TelegramReadError
@@ -26,10 +27,12 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchStageResult,
     DiscoverySourceReport,
 )
+from schemas.telegram_actions import LinkedDiscussionGroupResult
 from services.neurocomment import _discovery_run, _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
 from services.neurocomment.discovery import start_discovery
 from tests.services.neurocomment.discovery_support import (
+    LISTENER_ID,
     ReadRecorder,
     drain_discovery,
     matches,
@@ -110,20 +113,20 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
 
     gate = asyncio.Event()
     both_arrived = asyncio.Event()
-    entered: list[str] = []
-    check = discovery_module.check_search_account
+    entered: list[list[str]] = []
+    check = discovery_module.check_search_accounts
 
-    async def _gated(account_id: str) -> object:
+    async def _gated(campaign_id: str, account_ids: list[str]) -> object:
         # Park BOTH starts inside the window on purpose. Left to the event loop, the
         # two coroutines happen to serialize and the test passes even with no claim at
         # all — which is exactly how the first version of this test proved nothing.
-        entered.append(account_id)
+        entered.append(account_ids)
         if len(entered) == _CONCURRENT_STARTS:
             both_arrived.set()
         await gate.wait()
-        return await check(account_id)
+        return await check(campaign_id, account_ids)
 
-    monkeypatch.setattr(discovery_module, "check_search_account", _gated)
+    monkeypatch.setattr(discovery_module, "check_search_accounts", _gated)
     both = asyncio.gather(
         start_discovery(campaign_id, search_request()),
         start_discovery(campaign_id, search_request()),
@@ -172,7 +175,36 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
     assert first is not None
     assert second is not None
     assert first.status == "started"
-    assert second.status == "already_running"
+    # Named as the account collision it is: THIS campaign has no run of its own, so
+    # ``already_running`` pointed the operator at the wrong thing.
+    assert (second.status, second.refused_account_id) == ("account_busy", LISTENER_ID)
+
+
+@pytest.mark.asyncio
+async def test_seen_is_recorded_after_qualification_over_the_rows_the_board_shows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A row a probe-time filter deleted was never shown, so it must not become "seen".
+
+    Marked at the search stage, every channel the language filter rejected was hidden
+    from every later ``hide_seen`` search for good — including one with that language.
+    """
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            search=matches(("alpha", "Новости", None), ("beta", "Crypto news", None)),
+            linked=LinkedDiscussionGroupResult(linked_chat_id=-1, comments_enabled=True),
+        ),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request(language="en"))
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["beta"]
+    assert await list_seen(["alpha", "beta"]) == {"beta"}
 
 
 @pytest.mark.asyncio

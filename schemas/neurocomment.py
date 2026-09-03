@@ -186,6 +186,12 @@ class LinkedDiscussionGroup(BaseModel):
     linked_chat_id: int | None = None
     comments_enabled: bool
     checked_at: str = Field(min_length=1)
+    # The rest of the probe's reply that discovery's filters read (migration #61). ``None``
+    # is a row written before the column existed — a fact never learnt, so a filter that
+    # needs it re-probes; a blank description is stored as ``""`` to stay distinguishable.
+    about: str | None = None
+    # The channel's own approval-to-join gate; ``None`` = the reply did not say.
+    join_request: bool | None = None
 
 
 class LinkedGroupList(BaseModel):

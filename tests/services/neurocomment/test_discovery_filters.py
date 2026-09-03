@@ -10,6 +10,8 @@ from services.neurocomment._discovery_filters import (
     admit_at_qualification,
     admit_at_search,
     detect_language,
+    is_private_ref,
+    private_ref,
 )
 
 
@@ -47,35 +49,38 @@ def test_detect_language(text: str, expected: str | None) -> None:
         ("  ", False, "subscription"),
         ("durov", True, "join_request"),
         ("durov", False, "open"),
-        ("durov", None, "open"),
+        # A public handle with no word on the join gate is unknown, not open: "open" was
+        # a badge nothing measured, and let the join_request filter delete the channel.
+        ("durov", None, None),
     ],
 )
-def test_access_of(username: str | None, join_request: bool | None, expected: str) -> None:  # noqa: FBT001
+def test_access_of(username: str | None, join_request: bool | None, expected: str | None) -> None:  # noqa: FBT001
     assert access_of(username, join_request) == expected
 
 
+def test_private_refs() -> None:
+    assert private_ref(123) == "id:123"
+    assert is_private_ref("id:123") is True
+    assert is_private_ref("durov") is False
+
+
 def _search(request: DiscoverySearchRequest, **hit: object) -> str | None:
-    fields: dict[str, object] = {"kind": "channel", "access": "open", "ref": "x", "seen": set()}
+    fields: dict[str, object] = {"access": None, "ref": "x", "seen": set()}
     fields.update(hit)
     return admit_at_search(request=request, **fields)  # type: ignore[arg-type]
 
 
-def test_admit_at_search_kind() -> None:
-    assert _search(_request(kind="channels"), kind="group") == "kind"
-    assert _search(_request(kind="groups"), kind="channel") == "kind"
-    assert _search(_request(kind="groups"), kind="group") is None
-    assert _search(_request(kind="all"), kind="group") is None
-    assert _search(_request(kind="all"), kind="channel") is None
-
-
 def test_admit_at_search_access_decides_only_the_subscription_leg() -> None:
     assert _search(_request(access="subscription"), access="open") == "access"
+    # Unknown join gate, but a public handle: still not a subscription channel.
+    assert _search(_request(access="subscription"), access=None) == "access"
     assert _search(_request(access="subscription"), access="subscription") is None
     assert _search(_request(access="open"), access="subscription") == "access"
     assert _search(_request(access="join_request"), access="subscription") == "access"
     # open vs join_request is the probe's to tell, so neither rejects here.
     assert _search(_request(access="open"), access="join_request") is None
     assert _search(_request(access="join_request"), access="open") is None
+    assert _search(_request(access="open"), access=None) is None
     assert _search(_request(access="any"), access="subscription") is None
 
 
@@ -86,15 +91,15 @@ def test_admit_at_search_seen() -> None:
 
 
 def test_admit_at_search_reports_the_first_gate_that_fails() -> None:
-    assert _search(_request(kind="channels"), kind="group", ref="d", seen={"d"}) == "kind"
+    assert _search(_request(access="open"), access="subscription", ref="d", seen={"d"}) == "access"
 
 
 def _qualify(request: DiscoverySearchRequest, **learnt: object) -> str | None:
     fields: dict[str, object] = {
-        "title": "Crypto news",
-        "about": None,
         "comments_enabled": None,
         "access": None,
+        "language": "en",
+        "category_match": None,
     }
     fields.update(learnt)
     return admit_at_qualification(request=request, **fields)  # type: ignore[arg-type]
@@ -106,7 +111,8 @@ def test_admit_at_qualification_comments() -> None:
     assert _qualify(_request(comments="on"), comments_enabled=True) is None
     assert _qualify(_request(comments="off"), comments_enabled=False) is None
     assert _qualify(_request(comments="any"), comments_enabled=False) is None
-    # Unknown never rejects.
+    # Unknown never rejects — which is also how a group is handed in, since a megagroup's
+    # ``comments_enabled`` is structurally False (comments ARE its messages).
     assert _qualify(_request(comments="on"), comments_enabled=None) is None
 
 
@@ -119,20 +125,19 @@ def test_admit_at_qualification_access() -> None:
 
 
 def test_admit_at_qualification_language() -> None:
-    """Read off title + about, so the filter sees exactly what the verdict reports."""
-    assert _qualify(_request(language="ru"), title="Crypto news") == "language"
-    assert _qualify(_request(language="ru"), title="Новости крипты") is None
-    assert _qualify(_request(language="ru"), title="BTC", about="Новости крипты дня") is None
+    """The verdict's own reading, so the filter sees exactly what the board reports."""
+    assert _qualify(_request(language="ru"), language="en") == "language"
+    assert _qualify(_request(language="ru"), language="ru") is None
     # No letters at all: the language is unknown, and unknown never rejects.
-    assert _qualify(_request(language="ru"), title="12345") is None
-    assert _qualify(_request(language="any"), title="日本のニュース") is None
+    assert _qualify(_request(language="ru"), language=None) is None
+    assert _qualify(_request(language="any"), language="other") is None
 
 
 def test_admit_at_qualification_category() -> None:
-    assert _qualify(_request(category="food"), title="Crypto news") == "category"
-    assert _qualify(_request(category="crypto"), title="Crypto news") is None
-    assert _qualify(_request(category="food"), title="Дайджест", about="рецепты дня") is None
-    assert _qualify(_request(category="any"), title="Anything") is None
+    assert _qualify(_request(category="food"), category_match=False) == "category"
+    assert _qualify(_request(category="crypto"), category_match=True) is None
+    assert _qualify(_request(category="food"), category_match=None) is None
+    assert _qualify(_request(category="any"), category_match=False) is None
 
 
 def test_admit_at_qualification_order_is_comments_access_language_category() -> None:
@@ -140,4 +145,7 @@ def test_admit_at_qualification_order_is_comments_access_language_category() -> 
     assert _qualify(request, comments_enabled=False, access="join_request") == "comments"
     assert _qualify(request, comments_enabled=True, access="join_request") == "access"
     assert _qualify(request, comments_enabled=True, access="open") == "language"
-    assert _qualify(request, comments_enabled=True, access="open", title="Крипта") == "category"
+    assert (
+        _qualify(request, comments_enabled=True, access="open", language="ru", category_match=False)
+        == "category"
+    )

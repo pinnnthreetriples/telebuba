@@ -160,6 +160,9 @@ _neurocomment_linked_groups = Table(
     Column("linked_chat_id", BigInteger, nullable=True),
     Column("comments_enabled", Integer, nullable=False),
     Column("checked_at", String, nullable=False),
+    # #61: what discovery's filters read; NULL = never learnt (pre-#61), "" = blank about.
+    Column("about", String, nullable=True),
+    Column("join_request", Boolean, nullable=True),
 )
 _neurocomment_discovery_candidates = Table(
     # Per-campaign scratch set from the "Найти каналы" search (migration #38).

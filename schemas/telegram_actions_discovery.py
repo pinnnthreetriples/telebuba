@@ -48,6 +48,9 @@ class GetSimilarChannels(BaseModel):
 
     action_type: Literal["get_similar_channels"] = "get_similar_channels"
     seed: str | None = Field(default=None, max_length=CHANNEL_HANDLE_MAX_LENGTH)
+    # Recommendations are channels in practice; the gateway still applies this like the
+    # two searches do, so every source answers the operator's ``kind`` the same way.
+    kind: DiscoveryKind = "all"
 
 
 class GlobalPostsCursor(BaseModel):

@@ -109,6 +109,20 @@ describe('DiscoveryFilters', () => {
     expect(screen.queryByText('Для групп нет вердикта по комментариям')).not.toBeInTheDocument();
   });
 
+  it('says that groups pass a comments filter when the kind is "all"', async () => {
+    const { last } = renderFilters({ ...EMPTY_FORM, kind: 'all', comments: 'on' });
+    const hint = 'Группы не фильтруются по комментариям';
+    expect(screen.getByText(hint)).toBeInTheDocument();
+
+    // Not with the filter off, and not for channels alone — nothing passes unfiltered there.
+    await userEvent.click(radio('Любые'));
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    await userEvent.click(radio('Есть'));
+    await userEvent.click(radio('Каналы'));
+    expect(last()?.comments).toBe('on');
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+  });
+
   it('toggles previously shown channels both ways', async () => {
     const { last } = renderFilters();
     expect(radio('Скрыть')).toBeChecked();

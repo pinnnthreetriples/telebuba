@@ -14,7 +14,6 @@ from collections import Counter
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.channel_tokens import dedup_key, normalize_channel
-from core.config import settings
 from core.repositories.neurocomment import list_seen, replace_discovery_candidates
 from schemas.neurocomment_discovery import (
     CHANNEL_HANDLE_MAX_LENGTH,
@@ -106,13 +105,7 @@ def _normalized(
         if handle is None:
             continue
         key = dedup_key(handle)
-        reason = admit_at_search(
-            kind=candidate.kind,
-            access=candidate.access,
-            ref=handle,
-            request=request,
-            seen=seen,
-        )
+        reason = admit_at_search(access=candidate.access, ref=key, request=request, seen=seen)
         if reason is not None:
             rejected.setdefault(key, reason)
             continue
@@ -226,8 +219,8 @@ def _merge(
     # drops every row it found. Per OUTCOME, not per source, so the cap is shared across
     # keywords as well as sources.
     ordered = sorted(accepted, key=lambda key: (rank[key], winner[key]))
-    # The operator's own ceiling, under the configured one.
-    cap = min(request.limit, settings.neurocomment.discovery_max_candidates)
+    # The operator's own ceiling is the only one.
+    cap = request.limit
     selected = ordered[:cap]
     kept_origins = {accepted[key].channel: origins[key] for key in selected}
 
@@ -265,7 +258,7 @@ async def run_search(
 
     seen: set[str] = set()
     if request.hide_seen:
-        # One bulk read, keyed the way the rows are stored, so the merge can stay pure.
+        # One bulk read, answered as dedup keys, so the merge can stay pure.
         refs = {_handle_of(hit) for outcome in outcomes for hit in outcome.candidates}
         seen = await list_seen(ref for ref in refs if ref is not None)
     merged = _merge(outcomes, request, seen)
@@ -286,12 +279,17 @@ async def run_search(
     # not displace a reviewed set. It is reported under its own reason, because "we hit a
     # flood" and "the account was already serving one" send the operator to different
     # places.
+    # An empty merge that ``hide_seen`` alone emptied does not replace either: every hit
+    # was a channel the operator already looked at, and wiping the previous set to show
+    # them nothing threw away the only rows that were still an answer. The board says
+    # those rows are the previous search's (``stored=False``), as after a flood.
     swept = any(outcome.answered for outcome in outcomes if outcome.source == "telegram_search")
+    all_seen = not merged.rows and merged.filtered.get("seen", 0) > 0
     replaced = (
-        not native.flooded
-        and not native.cooled
+        native.stop not in {"flooded", "cooling"}
         and any(outcome.answered for outcome in outcomes)
         and (bool(merged.rows) or swept)
+        and not all_seen
     )
     if replaced:
         await replace_discovery_candidates(campaign_id, merged.rows)
@@ -308,9 +306,9 @@ async def run_search(
         # The stop wins over a source's own reason: a keyword that failed while the
         # account was being parked by something else explains nothing the operator can
         # act on, and the cooldown does.
-        error=COOLING_REASON if native.cooled else merged.error,
+        error=COOLING_REASON if native.stop == "cooling" else merged.error,
         replaced=replaced,
-        flooded=native.flooded or native.cooled,
+        flooded=native.stop in {"flooded", "cooling"},
         report=DiscoveryRunReport(
             sources=_source_reports(outcomes, merged.reach, origins),
             origins=origins,

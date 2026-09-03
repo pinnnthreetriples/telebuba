@@ -81,9 +81,7 @@ async def _no_sleep(_seconds: float) -> None:
 
 async def seed_listener(account_id: str = LISTENER_ID) -> str:
     """Create an account and pin it as the fleet listener (the default search pick)."""
-    await create_account(
-        AccountCreate(account_id=account_id, label="listener", session_name=account_id)
-    )
+    await seed_account(account_id)
     await set_listener_account_id(account_id)
     return account_id
 

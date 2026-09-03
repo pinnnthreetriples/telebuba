@@ -270,7 +270,6 @@ async def test_lower_priority_rows_survive_a_sweep_that_fills_the_cap(
     The similar pass sits last, so with 10 keyword rows against a cap of 4 it contributed
     exactly zero and the seed influenced nothing at all.
     """
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 4)
     monkeypatch.setattr(
         _seams,
         "execute_read",
@@ -281,7 +280,7 @@ async def test_lower_priority_rows_survive_a_sweep_that_fills_the_cap(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="@durov"))
+    stage = await run_search(campaign_id, pool_of(), _request(seed_channel="@durov", limit=4))
 
     stored = {row.channel for row in (await list_discovery_candidates(campaign_id)).rows}
     assert len(stored) == 4
@@ -521,14 +520,13 @@ async def test_a_pooled_count_is_stored_on_the_surviving_row(
 
 @pytest.mark.asyncio
 async def test_candidate_cap_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 2)
     reader = ReadRecorder(
         search=matches(("one", "1", None), ("two", "2", None), ("three", "3", None)),
     )
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request())
+    stage = await run_search(campaign_id, pool_of(), _request(limit=2))
 
     assert stage.found == 2
 

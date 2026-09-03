@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
-from core.repositories.neurocomment import mark_seen
+from core.repositories.neurocomment import list_discovery_candidates, mark_seen
 from services.neurocomment import _discovery_state
 from services.neurocomment._discovery_qualify import run_qualification
 from services.neurocomment._discovery_search import run_search
@@ -45,13 +45,16 @@ async def run(campaign_id: str, pool: AccountPool, request: DiscoverySearchReque
             # probe with either.
             _discovery_state.set_phase(campaign_id, "failed")
         else:
-            # Shown once is shown: ``hide_seen`` on the next search drops these. Keyed the
-            # way the rows are stored, which is what ``origins`` is keyed by.
-            await mark_seen(stage.report.origins, datetime.now(UTC))
             _discovery_state.set_phase(campaign_id, "qualifying")
             signal_discovery_progress()
 
             qualify_error = await run_qualification(campaign_id, pool, request)
+            # Shown once is shown: ``hide_seen`` on the next search drops these. Marked
+            # AFTER qualification, over the rows the board actually shows — a row a
+            # probe-time filter deleted was never shown, and marking the search stage's
+            # whole set hid such channels from every later search for good.
+            shown = (await list_discovery_candidates(campaign_id)).rows
+            await mark_seen((row.channel for row in shown), datetime.now(UTC))
             if qualify_error is not None:
                 _discovery_state.set_last_error(campaign_id, qualify_error)
                 _discovery_state.set_phase(campaign_id, "failed")

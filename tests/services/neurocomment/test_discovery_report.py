@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from core.config import settings
 from core.db import create_campaign
 from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoverySearchRequest, DiscoverySourceReport
@@ -101,7 +100,6 @@ async def test_the_candidate_cap_is_reported_as_the_ceiling_it_is(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A capped list is a floor, and "Channels found: 100" reads as everything there is."""
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 2)
     monkeypatch.setattr(
         _seams,
         "execute_read",
@@ -109,7 +107,7 @@ async def test_the_candidate_cap_is_reported_as_the_ceiling_it_is(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request())
+    stage = await run_search(campaign_id, pool_of(), _request(limit=2))
 
     assert (stage.found, stage.report.capped) == (2, True)
 
@@ -118,7 +116,6 @@ async def test_the_candidate_cap_is_reported_as_the_ceiling_it_is(
 async def test_a_set_that_fits_under_the_cap_is_not_reported_capped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 2)
     monkeypatch.setattr(
         _seams,
         "execute_read",
@@ -126,7 +123,7 @@ async def test_a_set_that_fits_under_the_cap_is_not_reported_capped(
     )
     campaign_id = await _new_campaign()
 
-    stage = await run_search(campaign_id, pool_of(), _request())
+    stage = await run_search(campaign_id, pool_of(), _request(limit=2))
 
     assert (stage.found, stage.report.capped) == (2, False)
 

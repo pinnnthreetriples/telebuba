@@ -19,7 +19,7 @@ from schemas.telegram_actions_discovery import (
     TelegramGlobalPostMatches,
 )
 from services.neurocomment import _seams
-from services.neurocomment._discovery_filters import access_of
+from services.neurocomment._discovery_filters import access_of, private_ref
 from services.neurocomment._state import in_cooldown, set_cooldown
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ COOLING_REASON = "account_cooling"
 def account_cooling(account_id: str) -> bool:
     """Is a live cooldown in force on this account right now?
 
-    The mid-run half of the health gate ``check_search_account`` applies once at the
+    The mid-run half of the health gate ``check_search_accounts`` applies once at the
     start. A run is minutes long, and the comment engine (or the run's own later reads)
     can park the account at any point in it; every read after that lands inside a live
     window, which is how Telegram turns a soft limit into a hard one.
@@ -80,14 +80,15 @@ class RawCandidate:
     subscribers: int | None
     source: DiscoverySource
     kind: str = "channel"
-    access: str = "open"
+    # ``None`` = public handle, join gate unknown until the probe.
+    access: str | None = None
     # Recommendations may return a private channel: no handle, so the id addresses it.
     channel_id: int | None = None
 
     @property
     def ref(self) -> str:
         """What the row is stored under: the handle, or ``id:<n>`` when there is none."""
-        return self.username or f"id:{self.channel_id}"
+        return self.username or private_ref(self.channel_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +194,7 @@ async def search_similar(
     account_id: str,
     seed: str,
     source: DiscoverySource = "telegram_similar",
+    kind: DiscoveryKind = "all",
 ) -> SourceOutcome:
     """Channels similar to a seed — the cheapest way to widen a sweep.
 
@@ -203,7 +205,7 @@ async def search_similar(
     ``seed_unusable``.
     """
     try:
-        result = await _seams.execute_read(account_id, GetSimilarChannels(seed=seed))
+        result = await _seams.execute_read(account_id, GetSimilarChannels(seed=seed, kind=kind))
     except TelegramReadError as exc:
         return _failed(source, exc)
     return _matches_outcome(result, source)

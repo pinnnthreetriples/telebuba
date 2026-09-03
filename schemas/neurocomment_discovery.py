@@ -78,7 +78,7 @@ DISCOVERY_BUSY_CODE = "account_running_discovery"
 
 # Upper bound on one adopt click. Onboarding's own rolling join cap (20/account/day)
 # and 30-120s join jitter absorb the burst; this just bounds the request body.
-# The ceiling of ``discovery_max_candidates``, so select-all can never silently drop a
+# The ceiling of the search request's ``limit``, so select-all can never silently drop a
 # tail.
 MAX_ADOPT_CHANNELS = 500
 
@@ -154,11 +154,11 @@ class DiscoveryRunReport(BaseModel):
     # Did this run's findings actually reach the table? A rate limit leaves the previous
     # run's rows in place, and the strip must not then credit rows that exist nowhere.
     stored: bool = True
-    # Did ``discovery_max_candidates`` cut the merged set? "Channels found: 100" is a
-    # floor when it did, and reads as everything Telegram has when it did not say so.
+    # Did the request's ``limit`` cut the merged set? "Channels found: 100" is a floor
+    # when it did, and reads as everything Telegram has when it did not say so.
     capped: bool = False
-    # Rows dropped per operator filter (``kind``, ``access``, ``seen``, ``comments``,
-    # ``language``, ``category``). Ephemeral like ``origins``: a restart forgets it.
+    # Rows dropped per operator filter (``access``, ``seen``, ``comments``, ``language``,
+    # ``category``). Ephemeral like ``origins``: a restart forgets it.
     filtered: dict[str, int] = Field(default_factory=dict)
 
 
@@ -272,10 +272,10 @@ class DiscoveryProgress(BaseModel):
     # it short), so they are the previous search's and must not be counted as this
     # run's find.
     stale_candidates: bool = False
-    # ``total`` is a ceiling, not a total: the merge had more rows than
-    # ``discovery_max_candidates`` and dropped the tail.
+    # ``total`` is a ceiling, not a total: the merge had more rows than the request's
+    # ``limit`` and dropped the tail.
     capped: bool = False
-    # Channels the last run rejected, per filter name (``kind``, ``seen``, ``language``…).
+    # Channels the last run rejected, per filter name (``seen``, ``language``, ``access``…).
     # Ephemeral like ``sources``: a rejected row is deleted, never stored hidden.
     filtered: dict[str, int] = Field(default_factory=dict)
 

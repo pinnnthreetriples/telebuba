@@ -8,6 +8,8 @@ import { discoveryAccountsQueryOptions } from '@/entities/campaign';
 
 import {
   ACCOUNTS,
+  boardPayload,
+  candidate,
   newQueryClient,
   renderModal,
   route,
@@ -16,9 +18,14 @@ import {
   typeKeywords,
 } from './ChannelDiscoveryModal.testHelpers';
 
-const postedAccounts = (calls: { path: string; body: unknown }[]) =>
+type Call = { path: string; body: unknown };
+
+const postedAccounts = (calls: Call[]) =>
   (calls.find((call) => call.path.endsWith('/discovery/search'))?.body as { account_ids: string[] })
     .account_ids;
+
+const accountFetches = (calls: Call[]) =>
+  calls.filter((call) => call.path.endsWith('/discovery/accounts')).length;
 
 // The trigger shows the picked names, so it is found by them; the options carry the
 // same names under their own role (the premium one with its badge appended).
@@ -27,13 +34,14 @@ const openPicker = async (label: string | RegExp) => {
 };
 
 describe('ChannelDiscoveryModal account picker', () => {
-  it('posts the operator pick instead of the premium default', async () => {
+  it('posts the operator pick instead of the default', async () => {
     const calls = route();
     renderModal();
 
-    await openPicker('Prem');
+    // The default is every eligible account, premium first; dropping the premium one is
+    // a pick and must travel as such.
+    await openPicker('Prem, Plain');
     await userEvent.click(screen.getByRole('option', { name: /^Prem/ }));
-    await userEvent.click(screen.getByRole('option', { name: 'Plain' }));
     await startSearch();
 
     await waitFor(() => {
@@ -41,16 +49,14 @@ describe('ChannelDiscoveryModal account picker', () => {
     });
   });
 
-  it('drops a picked account that went busy between the pick and the click', async () => {
+  it('drops a default account that went busy between the load and the click', async () => {
     const calls = route();
     const queryClient = newQueryClient();
     renderModal(undefined, queryClient);
 
-    await openPicker('Prem');
-    await userEvent.click(screen.getByRole('option', { name: 'Plain' }));
-    expect(screen.getByText('выбрано 2')).toBeInTheDocument();
-    // The list refreshed underneath the pick: the request must read the LATEST set,
-    // not the one the operator clicked on.
+    expect(await screen.findByText('выбрано 2')).toBeInTheDocument();
+    // The list refreshed underneath: the request must read the LATEST set, not the one
+    // the operator looked at.
     queryClient.setQueryData(discoveryAccountsQueryOptions().queryKey, {
       items: ACCOUNTS.map((account) =>
         account.account_id === 'acc-n'
@@ -62,6 +68,23 @@ describe('ChannelDiscoveryModal account picker', () => {
 
     await waitFor(() => {
       expect(postedAccounts(calls)).toEqual(['acc-p']);
+    });
+  });
+
+  it('refetches the account list when the operator returns to the form', async () => {
+    const calls = route({ board: boardPayload([candidate({ channel: 'good' })]) });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    const before = accountFetches(calls);
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+
+    // Nothing polls the list during a run, so the form must not reopen on a stale one.
+    await waitFor(() => {
+      expect(accountFetches(calls)).toBeGreaterThan(before);
     });
   });
 
@@ -93,22 +116,22 @@ describe('ChannelDiscoveryModal account picker', () => {
     expect(await screen.findByText(/пережидает лимит Telegram.*Аккаунт: Prem/)).toBeInTheDocument();
   });
 
-  it('restores the premium default on reset', async () => {
+  it('restores the default on reset', async () => {
     const calls = route();
     renderModal();
 
-    await openPicker('Prem');
-    await userEvent.click(screen.getByRole('option', { name: /^Prem/ }));
+    await openPicker('Prem, Plain');
     await userEvent.click(screen.getByRole('option', { name: 'Plain' }));
-    expect(screen.getByRole('button', { name: 'Plain' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prem' })).toBeInTheDocument();
+    expect(screen.getByText('выбран 1')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Сбросить' }));
 
-    expect(screen.getByRole('button', { name: 'Prem' })).toBeInTheDocument();
-    expect(screen.getByText('выбран 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prem, Plain' })).toBeInTheDocument();
+    expect(screen.getByText('выбрано 2')).toBeInTheDocument();
     await startSearch();
     await waitFor(() => {
-      expect(postedAccounts(calls)).toEqual(['acc-p']);
+      expect(postedAccounts(calls)).toEqual(['acc-p', 'acc-n']);
     });
   });
 });

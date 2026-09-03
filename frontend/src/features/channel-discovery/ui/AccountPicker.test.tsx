@@ -8,6 +8,7 @@ import '@/shared/i18n';
 import type { DiscoveryAccountOption } from '@/shared/api';
 import { expectNoAxeViolations } from '@/shared/ui/axe.test-helpers';
 
+import { MAX_SEARCH_ACCOUNTS } from '../model/filters';
 import { AccountPicker } from './AccountPicker';
 
 const ACCOUNTS: DiscoveryAccountOption[] = [
@@ -99,6 +100,79 @@ describe('AccountPicker', () => {
     const expanded = screen.getByRole('option', { name: /Plain/ });
     expanded.focus();
     expect(expanded).toHaveFocus();
+  });
+
+  it('closes on Escape and hands focus back to the trigger, without reaching the dialog', async () => {
+    const onDocumentKey = vi.fn();
+    document.addEventListener('keydown', onDocumentKey);
+    render(<Harness />);
+    await userEvent.click(trigger());
+    expect(screen.getByRole('button', { expanded: true })).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(trigger()).toHaveFocus();
+    // The Modal's Escape listener sits on `document`; one key must not close both.
+    expect(onDocumentKey).not.toHaveBeenCalled();
+    document.removeEventListener('keydown', onDocumentKey);
+  });
+
+  it('closes on a click outside', async () => {
+    render(
+      <>
+        <Harness />
+        <p>outside</p>
+      </>,
+    );
+    await userEvent.click(trigger());
+    await userEvent.click(screen.getByText('outside'));
+    expect(screen.getByRole('button', { expanded: false })).toBeInTheDocument();
+  });
+
+  it('moves focus between the live options with the arrows, wrapping', async () => {
+    render(<Harness />);
+    await userEvent.click(trigger());
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('option', { name: /Prem/ })).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('option', { name: /Plain/ })).toHaveFocus();
+    // The busy row is disabled and skipped; past the end the cursor wraps.
+    await userEvent.keyboard('{ArrowDown}');
+    expect(screen.getByRole('option', { name: /Prem/ })).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    expect(screen.getByRole('option', { name: /Plain/ })).toHaveFocus();
+  });
+
+  it('goes dead for the unpicked rows once the server cap is reached', async () => {
+    const many = Array.from({ length: MAX_SEARCH_ACCOUNTS + 1 }, (_, index) => ({
+      account_id: `acc-${String(index)}`,
+      name: `Acc ${String(index)}`,
+      premium: false,
+      busy_reason: null,
+    }));
+    const onChange = vi.fn();
+    render(
+      <Harness
+        accounts={many}
+        initial={many.slice(0, MAX_SEARCH_ACCOUNTS).map((account) => account.account_id)}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.click(trigger());
+
+    const last = screen.getByRole('option', { name: `Acc ${String(MAX_SEARCH_ACCOUNTS)}` });
+    expect(last).toBeDisabled();
+    expect(
+      screen.getByText(`максимум ${String(MAX_SEARCH_ACCOUNTS)} аккаунтов`),
+    ).toBeInTheDocument();
+    // A picked row stays live so the operator can free a slot.
+    await userEvent.click(screen.getByRole('option', { name: 'Acc 0' }));
+    expect(onChange).toHaveBeenLastCalledWith(
+      many.slice(1, MAX_SEARCH_ACCOUNTS).map((a) => a.account_id),
+    );
+    expect(last).toBeEnabled();
+    expect(screen.queryByText(/максимум/)).not.toBeInTheDocument();
   });
 
   it('says it is loading', () => {

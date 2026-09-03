@@ -4,7 +4,8 @@ import type { DiscoveryCandidate, DiscoverySearchRequest } from '@/shared/api';
 
 import {
   LIMIT_DEFAULT,
-  limitInvalid,
+  MAX_SEARCH_ACCOUNTS,
+  normalizeForKind,
   parseLimit,
   type DiscoveryAccess,
   type DiscoveryCategory,
@@ -35,7 +36,7 @@ export type DiscoveryFormState = {
   hideSeen: boolean;
   // '' = the server default (LIMIT_DEFAULT).
   limit: string;
-  // null = the picker was never touched → `defaultAccountIds()` decides.
+  // null = the picker was never touched → `effectiveAccountIds()` picks the default.
   accountIds: string[] | null;
 };
 
@@ -136,16 +137,15 @@ export function buildSearchRequest(
   form: DiscoveryFormState,
   accountIds: string[],
 ): DiscoverySearchRequest {
-  const groups = form.kind === 'groups';
+  // A pick left over from 'channels' must not 422 the whole request.
+  const normal = normalizeForKind(form);
   const request: DiscoverySearchRequest = {
     keywords: parseKeywords(form.keywords),
     kind: form.kind,
     category: form.category,
     language: form.language,
-    // Mirror of the server rule (groups have no comments verdict and never come by
-    // subscription): a pick left over from 'channels' must not 422 the whole request.
-    comments: groups ? 'any' : form.comments,
-    access: groups && form.access === 'subscription' ? 'any' : form.access,
+    comments: normal.comments,
+    access: normal.access,
     hide_seen: form.hideSeen,
     limit: parseLimit(form.limit) ?? LIMIT_DEFAULT,
     account_ids: accountIds,
@@ -170,24 +170,33 @@ export function boundsInverted(form: DiscoveryFormState): boolean {
 
 /**
  * Can the form be submitted? The API needs something to search on — keywords or a
- * category (its word bundle) — and at least one account, so surface that here instead
- * of letting the request 422. A seed channel alone is still not enough.
+ * category (its word bundle) — and 1..MAX_SEARCH_ACCOUNTS accounts, so surface that
+ * here instead of letting the request 422. A seed channel alone is still not enough.
  */
 export function canSubmit(form: DiscoveryFormState, accountIds: string[]): boolean {
   const searchable = parseKeywords(form.keywords).length > 0 || form.category !== 'any';
-  return searchable && !boundsInverted(form) && !limitInvalid(form.limit) && accountIds.length > 0;
+  return (
+    searchable &&
+    !boundsInverted(form) &&
+    parseLimit(form.limit) !== undefined &&
+    accountIds.length > 0 &&
+    accountIds.length <= MAX_SEARCH_ACCOUNTS
+  );
 }
 
 /**
  * Is this row eligible to adopt? Comments must not be known-off, and the channel
  * must be free — the one-active-campaign-per-channel guard would refuse the rest.
  * A group or a subscription-gated channel is not a place the campaign can comment
- * in at all, and the adopt endpoint answers 'not_adoptable' for both.
+ * in at all, and the adopt endpoint answers 'not_adoptable' for both. A private row
+ * (`id:` — no username) loses its access badge once the in-memory verdict is gone after
+ * a restart, so it is refused by its name rather than trusted on a missing flag.
  */
 export function isSelectable(candidate: DiscoveryCandidate): boolean {
   if (candidate.in_campaign === true) return false;
   if (candidate.taken_by_other_campaign === true) return false;
   if (candidate.kind === 'group' || candidate.access === 'subscription') return false;
+  if (candidate.channel.startsWith('id:')) return false;
   return candidate.qualification !== 'comments_off';
 }
 

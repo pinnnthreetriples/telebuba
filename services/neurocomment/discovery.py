@@ -35,14 +35,11 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchOutcome,
 )
 from services.neurocomment import _discovery_state, _runtime
-from services.neurocomment._discovery_pool import (
-    AccountPool,
-    SearchAccount,
-    account_taken,
-    check_search_account,
-)
-from services.neurocomment._discovery_qualify import PRIVATE_PREFIX, is_fresh
+from services.neurocomment._discovery_filters import is_private_ref
+from services.neurocomment._discovery_pool import AccountPool, check_search_accounts, taken_account
+from services.neurocomment._discovery_qualify import is_fresh
 from services.neurocomment._discovery_run import run
+from services.neurocomment._discovery_waves import sweep_keywords
 
 if TYPE_CHECKING:
     from schemas.neurocomment import LinkedGroupList
@@ -70,15 +67,16 @@ async def start_discovery(
     """
     if await db.fetch_campaign(campaign_id) is None:
         return None
+    # Ahead of the account check: this campaign's own run holds its accounts, and that
+    # must read as "already running", not as an account another campaign took.
+    if _discovery_state.is_running(campaign_id):
+        return DiscoverySearchOutcome(status="already_running")
     # Sorted, here and for the locks below: two starts picking overlapping accounts must
     # take the locks in one order, or they deadlock each other.
     account_ids = sorted(request.account_ids)
-    accounts: list[SearchAccount] = []
-    for account_id in account_ids:
-        checked = await check_search_account(account_id)
-        if not isinstance(checked, SearchAccount):
-            return DiscoverySearchOutcome(status=checked, refused_account_id=account_id)
-        accounts.append(checked)
+    accounts = await check_search_accounts(campaign_id, account_ids)
+    if isinstance(accounts, DiscoverySearchOutcome):
+        return accounts
 
     # Checks first, then one synchronous claim: everything from ``try_reserve`` to
     # ``spawn`` is await-free, so a second start cannot straddle it and no failure can
@@ -86,7 +84,7 @@ async def start_discovery(
     #
     # Under warming's own per-account lifecycle lock for every picked account, re-asking
     # BOTH owners inside it, for the reason ``start_neurocomment`` takes the same lock:
-    # ``check_search_account`` answered several awaits ago, and ``start_warming`` and the
+    # ``check_search_accounts`` answered several awaits ago, and ``start_warming`` and the
     # listener start both read this claim under that lock before they commit. Without it
     # their checks and this one all pass in the gap and the account ends up carrying two
     # paced streams. The spawned task cannot start before this coroutine next yields,
@@ -96,9 +94,9 @@ async def start_discovery(
     async with contextlib.AsyncExitStack() as locks:
         for account_id in account_ids:
             await locks.enter_async_context(account_lock(account_id))
-        for account_id in account_ids:
-            if await account_taken(account_id):
-                return DiscoverySearchOutcome(status="account_busy", refused_account_id=account_id)
+        taken = await taken_account(account_ids)
+        if taken is not None:
+            return DiscoverySearchOutcome(status="account_busy", refused_account_id=taken)
         refusal = _discovery_state.try_reserve(campaign_id, frozenset(account_ids))
         if refusal is not None:
             return DiscoverySearchOutcome(status=refusal)
@@ -122,7 +120,8 @@ async def start_discovery(
         extra={
             "campaign_id": campaign_id,
             "account_ids": account_ids,
-            "keywords": len(request.keywords),
+            # The sweep as run: the typed words plus the category's bundle, deduped.
+            "keywords": len(sweep_keywords(request)),
         },
     )
     return DiscoverySearchOutcome(status="started")
@@ -290,7 +289,7 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
                 DiscoveryAdoptOutcome(status="failed", channel=rest) for rest in remainder
             )
             break
-        if channel.startswith(PRIVATE_PREFIX) or channel in groups:
+        if is_private_ref(channel) or channel in groups:
             # Like ``comments_off`` below: no write attempted, counter left alone.
             outcomes.append(DiscoveryAdoptOutcome(status="not_adoptable", channel=channel))
             continue

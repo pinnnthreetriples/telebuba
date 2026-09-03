@@ -64,11 +64,15 @@ def _upsert_linked_group(
     linked_chat_id: int | None,
     *,
     comments_enabled: bool,
+    about: str | None,
+    join_request: bool | None,
 ) -> LinkedDiscussionGroup:
     fields = {
         "linked_chat_id": linked_chat_id,
         "comments_enabled": int(comments_enabled),
         "checked_at": _now_iso(),
+        "about": about,
+        "join_request": join_request,
     }
     statement = (
         sqlite_insert(_neurocomment_linked_groups)
@@ -92,13 +96,21 @@ async def upsert_linked_group(
     linked_chat_id: int | None,
     *,
     comments_enabled: bool,
+    about: str | None = None,
+    join_request: bool | None = None,
 ) -> LinkedDiscussionGroup:
-    """Cache (or refresh) a channel's linked discussion-group resolution."""
+    """Cache (or refresh) a channel's linked discussion-group resolution.
+
+    ``about``/``join_request`` are the probe-time facts discovery's filters read; a caller
+    that did not learn them leaves ``None``, which discovery reads as "must probe".
+    """
     return await asyncio.to_thread(
         _upsert_linked_group,
         channel,
         linked_chat_id,
         comments_enabled=comments_enabled,
+        about=about,
+        join_request=join_request,
     )
 
 

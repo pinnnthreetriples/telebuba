@@ -27,7 +27,22 @@ import { DiscoveryResults } from './DiscoveryResults';
 // The operator is watching this run, so it polls far faster than the page's 30s
 // fallback net — and it stops itself once the run settles.
 const SEARCH_POLL_MS = 3000;
+// Accounts go busy (warming, listener, cooling) behind the operator's back and nothing
+// else refreshes this list: refetchOnWindowFocus is off globally and the SSE handler
+// below invalidates only the board. Polled while the form is on screen, not during a run.
+const ACCOUNTS_POLL_MS = 15_000;
 const CLOSE_DELAY_MS = 700;
+
+// The adopt outcomes that get their own paragraph, in display order: "taken by another
+// campaign", "comments are off there" and "a group / subscription-gated channel the row's
+// traits did not yet show" are final and for different reasons (the third is not the
+// operator's fault); "the link itself failed" is worth retrying, hence the danger tone.
+const NOTES = [
+  ['refused', 'addedRefused', 'text-warning-deep'],
+  ['commentsOff', 'addedCommentsOff', 'text-warning-deep'],
+  ['notAdoptable', 'addedNotAdoptable', 'text-warning-deep'],
+  ['failed', 'addedFailed', 'text-danger'],
+] as const;
 
 type Props = {
   campaignId: string;
@@ -68,7 +83,11 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // Derived, not synced in an effect: an untouched picker (null) resolves to the
   // default against whatever list is CURRENT, so an account that went busy between
   // load and click drops out of the request by itself.
-  const accounts = useQuery(discoveryAccountsQueryOptions());
+  const accountsOptions = discoveryAccountsQueryOptions();
+  const accounts = useQuery({
+    ...accountsOptions,
+    refetchInterval: submitted ? false : ACCOUNTS_POLL_MS,
+  });
   const accountList = accounts.data?.items ?? [];
   const accountIds = effectiveAccountIds(form.accountIds, accountList);
 
@@ -246,36 +265,15 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             </p>
           ) : null}
 
-          {adopted !== null && adopted.refused > 0 ? (
-            <p role="status" className="type-prose text-warning-deep">
-              {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
-            </p>
-          ) : null}
-
-          {/* Its own line, not folded into "already taken": the operator's next move is
-              to drop the channel, not to look for the campaign holding it. */}
-          {adopted !== null && adopted.commentsOff > 0 ? (
-            <p role="status" className="type-prose text-warning-deep">
-              {t('neurocomment.modal.discovery.addedCommentsOff', { count: adopted.commentsOff })}
-            </p>
-          ) : null}
-
-          {/* A group or a subscription-gated channel the row's traits did not yet show
-              (an older row, or a pick made before the flag arrived): final, like the two
-              above, and not the operator's fault. */}
-          {adopted !== null && adopted.notAdoptable > 0 ? (
-            <p role="status" className="type-prose text-warning-deep">
-              {t('neurocomment.modal.discovery.addedNotAdoptable', {
-                count: adopted.notAdoptable,
-              })}
-            </p>
-          ) : null}
-
-          {adopted !== null && adopted.failed > 0 ? (
-            <p role="status" className="type-prose text-danger">
-              {t('neurocomment.modal.discovery.addedFailed', { count: adopted.failed })}
-            </p>
-          ) : null}
+          {adopted === null
+            ? null
+            : NOTES.map(([field, key, tone]) =>
+                adopted[field] > 0 ? (
+                  <p key={key} role="status" className={`type-prose ${tone}`}>
+                    {t(`neurocomment.modal.discovery.${key}`, { count: adopted[field] })}
+                  </p>
+                ) : null,
+              )}
 
           {/* The request itself never landed, so nothing can be read from the outcomes —
               silence would read as "nothing happened". */}
@@ -299,6 +297,8 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                 // The only way back to the form, so it owns dropping the picks: the
                 // next run's rows have nothing to do with the ones ticked here.
                 setSelected(new Set());
+                // The list was not polled during the run; the form must not reopen on it.
+                void queryClient.invalidateQueries({ queryKey: accountsOptions.queryKey });
               }}
             >
               {t('neurocomment.modal.discovery.results.back')}

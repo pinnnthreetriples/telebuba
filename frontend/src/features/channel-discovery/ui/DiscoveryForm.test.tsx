@@ -184,10 +184,12 @@ describe('DiscoveryForm', () => {
   it('writes a picked account into the form', async () => {
     renderForm({ initial: { ...EMPTY_FORM, keywords: 'crypto' } });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Prem' }));
+    // Both eligible accounts are the default; dropping one is a pick the form must keep.
+    await userEvent.click(screen.getByRole('button', { name: 'Prem, Plain' }));
     await userEvent.click(screen.getByRole('option', { name: 'Plain' }));
 
-    expect(screen.getByText('выбрано 2')).toBeInTheDocument();
+    expect(screen.getByText('выбран 1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Prem' })).toBeInTheDocument();
   });
 });
 

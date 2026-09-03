@@ -15,7 +15,10 @@ That one reply answers more than comments on/off — writing rights, the join ga
 mode, Telegram's scam/fake/restricted marks, the about text — so the whole verdict is
 kept (in memory, see ``_discovery_state``) instead of being thrown away for the sake of
 one bool, and the operator's probe-time filters (comments, access, language, category)
-are applied to it: a row they refuse is deleted, and the run report counts the drop.
+are applied to it: a row they refuse is deleted, and the run report counts the drop. The
+cache keeps the two facts those filters read (about, the join gate — migration #61), so a
+fresh row settles them through the SAME derivation as a probe; a row that never learnt a
+fact the active filters need is probed.
 """
 
 from __future__ import annotations
@@ -40,8 +43,10 @@ from services.neurocomment._discovery_filters import (
     access_of,
     admit_at_qualification,
     detect_language,
+    is_private_ref,
 )
 from services.neurocomment._discovery_providers import COOLING_REASON, flood_cooldown
+from services.neurocomment._discovery_wave_support import pace
 from services.neurocomment._signals import signal_discovery_progress
 
 if TYPE_CHECKING:
@@ -51,6 +56,7 @@ if TYPE_CHECKING:
 
 # Emit an SSE nudge every N probes rather than per probe: the stream is debounced
 # on the client anyway, and this keeps a 100-candidate run from publishing 100 frames.
+# The filters' deletes are flushed on the same tick, one statement instead of one per row.
 _PROGRESS_EVERY = 5
 
 # Probes a pass must spend before its failure RATE means anything. Past that, half of
@@ -61,10 +67,6 @@ _PROGRESS_EVERY = 5
 # ordinary sweep off a broad keyword search; a session failing as often as it answers over
 # twenty probes is broken, and that is the case the pool's consecutive counter cannot see.
 _ERROR_RATE_MIN_PROBES = 20
-
-# Rows stored under ``id:<n>``: a channel with no public handle, which nothing can probe
-# and no campaign can comment in. Qualified as-is with this verdict.
-PRIVATE_PREFIX = "id:"
 
 
 class _Probe(NamedTuple):
@@ -77,6 +79,14 @@ class _Probe(NamedTuple):
 
     reason: str | None
     flood_seconds: int | None = None
+
+
+class _Facts(NamedTuple):
+    """The three derived facts the filters and the verdict share, whatever answered."""
+
+    access: str | None
+    language: str | None
+    category_match: bool | None
 
 
 def is_fresh(checked_at: str, now: datetime) -> bool:
@@ -97,48 +107,86 @@ def is_fresh(checked_at: str, now: datetime) -> bool:
     return stamped + timedelta(hours=ttl_hours) > now
 
 
-def _fresh_cache(
-    groups: list[LinkedDiscussionGroup],
-    now: datetime,
+def _facts(
+    row: DiscoveryCandidateRow,
     request: DiscoverySearchRequest,
-) -> dict[str, bool]:
-    """Channel -> cached comments verdict, for the rows the cache still answers.
+    *,
+    about: str | None,
+    join_request: bool | None,
+) -> _Facts:
+    """Access, language and category match — derived ONCE, for the verdict and the filters.
 
-    The cache answers comments on/off only. A language or category filter needs the
-    ``about`` text, which only the probe carries, so those requests get no shortcut.
+    The row's ``channel`` is a ref, not always a handle: a private ``id:`` row has no
+    username, which is exactly what makes its access ``subscription``.
     """
-    if request.language != "any" or request.category != "any":
-        return {}
-    return {
-        group.channel: group.comments_enabled for group in groups if is_fresh(group.checked_at, now)
-    }
+    username = None if is_private_ref(row.channel) else row.channel
+    category = request.category
+    return _Facts(
+        access=access_of(username, join_request),
+        language=detect_language(f"{row.title} {about or ''}"),
+        category_match=None if category == "any" else matches(row.title, about, category),
+    )
+
+
+def _cache_answers(group: LinkedDiscussionGroup, request: DiscoverySearchRequest) -> bool:
+    """Does this fresh cache row carry every fact the active filters need?
+
+    A pre-#61 row has ``NULL`` where the about text and the join gate should be — facts
+    never learnt, not facts known to be blank — so a filter that reads them re-probes.
+    """
+    if (request.language != "any" or request.category != "any") and group.about is None:
+        return False
+    return not (request.access in {"open", "join_request"} and group.join_request is None)
 
 
 async def _settled_without_probe(
     campaign_id: str,
     row: DiscoveryCandidateRow,
-    fresh: dict[str, bool],
+    fresh: dict[str, LinkedDiscussionGroup],
     request: DiscoverySearchRequest,
+    rejected: list[str],
 ) -> bool:
     """Qualify the row from what is already known, if that is enough. No RPC either way."""
-    if row.channel.startswith(PRIVATE_PREFIX):
-        verdict = DiscoveryChannelVerdict(access="subscription")
-        _discovery_state.record_verdict(campaign_id, row.channel, verdict)
-        await mark_discovery_qualified(campaign_id, row.channel)
-        return True
-    if row.channel not in fresh:
-        return False
-    # Cache hit: no RPC, and deliberately no sleep — this is what makes a re-search over
-    # familiar keywords finish in milliseconds. The comments filter still applies.
-    reason = admit_at_qualification(
-        title=row.title,
-        about=None,
-        comments_enabled=fresh[row.channel],
-        access=None,
+    if is_private_ref(row.channel):
+        # Nothing can probe it, so the filters read the title alone and access is
+        # ``subscription``. ``comments=False`` is an explicit rule, not a measurement: a
+        # channel nobody can probe or comment in can never satisfy "has comments", so
+        # ``comments=on`` refuses it rather than admitting on unknown.
+        about, join_request, comments = None, None, False
+        facts = _facts(row, request, about=about, join_request=join_request)
+        _discovery_state.record_verdict(
+            campaign_id, row.channel, DiscoveryChannelVerdict(**facts._asdict())
+        )
+    else:
+        group = fresh.get(row.channel)
+        if group is None or not _cache_answers(group, request):
+            return False
+        # Cache hit: no RPC, and deliberately no sleep — this is what makes a re-search
+        # over familiar keywords finish in milliseconds. Every filter still applies.
+        about, join_request, comments = group.about, group.join_request, group.comments_enabled
+        facts = _facts(row, request, about=about, join_request=join_request)
+    reason = _admit(row, facts, comments_enabled=comments, request=request)
+    await _settle(campaign_id, row.channel, reason, rejected)
+    return True
+
+
+def _admit(
+    row: DiscoveryCandidateRow,
+    facts: _Facts,
+    *,
+    comments_enabled: bool | None,
+    request: DiscoverySearchRequest,
+) -> str | None:
+    # A group's comments verdict is structurally False (comments ARE its messages), so it
+    # is handed over as unknown: the filter must not delete every group a ``kind=all``
+    # search found the moment the operator asks for comments on.
+    return admit_at_qualification(
+        comments_enabled=None if row.kind == "group" else comments_enabled,
+        access=facts.access,
+        language=facts.language,
+        category_match=facts.category_match,
         request=request,
     )
-    await _settle(campaign_id, row.channel, reason)
-    return True
 
 
 async def run_qualification(
@@ -160,61 +208,68 @@ async def run_qualification(
 
     now = datetime.now(UTC)
     cached = await list_linked_groups([row.channel for row in pending.rows])
-    fresh = _fresh_cache(cached.groups, now, request)
+    fresh = {g.channel: g for g in cached.groups if is_fresh(g.checked_at, now)}
+    return await _probe_pending(campaign_id, pool, request, pending.rows, fresh)
 
+
+async def _probe_pending(
+    campaign_id: str,
+    pool: AccountPool,
+    request: DiscoverySearchRequest,
+    rows: list[DiscoveryCandidateRow],
+    fresh: dict[str, LinkedDiscussionGroup],
+) -> str | None:
+    # Rows the filters refused, deleted in batches: at the progress tick and at the end,
+    # whichever way the pass ends.
+    rejected: list[str] = []
     total_errors = 0
     probed = 0
-    for index, row in enumerate(pending.rows):
-        if await _settled_without_probe(campaign_id, row, fresh, request):
-            continue
+    try:
+        for index, row in enumerate(rows):
+            if not await _settled_without_probe(campaign_id, row, fresh, request, rejected):
+                if probed:
+                    await pace()
+                # AFTER the pace sleep, because that sleep is one to two seconds long and
+                # a limit landing inside it would otherwise still buy one probe. Uncharged:
+                # the per-account wave ceiling is not this pass's bound, the candidate
+                # limit is.
+                account_id = pool.acquire(charge=False)
+                if account_id is None:
+                    return COOLING_REASON
+                probed += 1
+                probe = await _probe_one(campaign_id, account_id, row, request, rejected)
+                failed = probe.reason is not None
+                if await pool.report(account_id, flood_seconds=probe.flood_seconds, failed=failed):
+                    return probe.reason
+                if failed:
+                    total_errors += 1
+                    if probed >= _ERROR_RATE_MIN_PROBES and total_errors * 2 >= probed:
+                        # A session failing as often as it answers has stopped saying
+                        # anything new — see :data:`_ERROR_RATE_MIN_PROBES`.
+                        return probe.reason
 
-        if probed:
-            await _pace()
-        # AFTER the pace sleep, because that sleep is one to two seconds long and a limit
-        # landing inside it would otherwise still buy one probe.
-        account_id = pool.acquire()
-        if account_id is None:
-            return COOLING_REASON
-        probed += 1
-        probe = await _probe_one(campaign_id, account_id, row, request)
-        failed = probe.reason is not None
-        if await pool.report(account_id, flood_seconds=probe.flood_seconds, failed=failed):
-            return probe.reason
-        if failed:
-            total_errors += 1
-            if probed >= _ERROR_RATE_MIN_PROBES and total_errors * 2 >= probed:
-                # A session failing as often as it answers has stopped saying anything
-                # new about the candidates — see :data:`_ERROR_RATE_MIN_PROBES`.
-                return probe.reason
-
-        if (index + 1) % _PROGRESS_EVERY == 0:
-            signal_discovery_progress()
-
-    return None
-
-
-async def _pace() -> None:
-    neuro = settings.neurocomment
-    await _seams.sleep(
-        _seams.rng.uniform(
-            neuro.discovery_qualify_delay_min_seconds,
-            neuro.discovery_qualify_delay_max_seconds,
-        ),
-    )
+            if (index + 1) % _PROGRESS_EVERY == 0:
+                await delete_discovery_candidates(campaign_id, rejected)
+                rejected.clear()
+                signal_discovery_progress()
+        return None
+    finally:
+        await delete_discovery_candidates(campaign_id, rejected)
 
 
 async def _settle(
     campaign_id: str,
     channel: str,
     reason: str | None,
+    rejected: list[str],
     *,
     subscribers: int | None = None,
 ) -> None:
-    """Keep the row as qualified, or drop it when an operator filter refused it."""
+    """Keep the row as qualified, or queue it for deletion when an operator filter refused it."""
     if reason is None:
         await mark_discovery_qualified(campaign_id, channel, subscribers=subscribers)
         return
-    await delete_discovery_candidates(campaign_id, [channel])
+    rejected.append(channel)
     _discovery_state.bump_filtered(campaign_id, reason)
 
 
@@ -222,18 +277,18 @@ def _verdict_of(
     result: LinkedDiscussionGroupResult,
     row: DiscoveryCandidateRow,
     request: DiscoverySearchRequest,
-) -> DiscoveryChannelVerdict:
+) -> tuple[DiscoveryChannelVerdict, _Facts]:
     """Everything the one ``getFullChannel`` reply says about fitness, carried verbatim.
 
     Copied field for field rather than folded into a summary: collapsing any of these
     into a bool here would break the tri-state contract
     :class:`schemas.telegram_action_results.LinkedDiscussionGroupResult` states, turning
     an unanswered signal into a confident "no" for every reader downstream. The three
-    derived facts (access, language, category match) are derived HERE because the
-    about text they need is not persisted.
+    derived facts (access, language, category match) are derived HERE, once, and handed
+    back beside the verdict so the filters read the very values the board will show.
     """
-    category = request.category
-    return DiscoveryChannelVerdict(
+    facts = _facts(row, request, about=result.about, join_request=result.target_join_request)
+    verdict = DiscoveryChannelVerdict(
         can_send_messages=result.can_send_messages,
         join_to_send=result.join_to_send,
         join_request=result.join_request,
@@ -241,11 +296,10 @@ def _verdict_of(
         scam=result.scam,
         fake=result.fake,
         restricted=result.restricted,
-        access=access_of(row.channel, result.target_join_request),
-        language=detect_language(f"{row.title} {result.about or ''}"),
         is_group=result.is_group,
-        category_match=None if category == "any" else matches(row.title, result.about, category),
+        **facts._asdict(),
     )
+    return verdict, facts
 
 
 async def _probe_one(
@@ -253,6 +307,7 @@ async def _probe_one(
     account_id: str,
     row: DiscoveryCandidateRow,
     request: DiscoverySearchRequest,
+    rejected: list[str],
 ) -> _Probe:
     """One comments-enabled probe. Records the attempt either way — except a rate limit."""
     try:
@@ -275,22 +330,19 @@ async def _probe_one(
         await mark_discovery_qualified(campaign_id, row.channel, error="unexpected_result")
         return _Probe("unexpected_result")
 
-    # Refresh the shared cache so every campaign (and onboarding) benefits. Only the
-    # comments verdict has a column there; the rest of the reply rides the run's
-    # in-memory state, the same way per-row provenance does.
+    # Refresh the shared cache so every campaign (and onboarding) benefits. The two facts
+    # the filters read ride along; a blank about is stored as "" so it reads as known,
+    # unlike a legacy NULL. The rest of the reply rides the run's in-memory state, the
+    # same way per-row provenance does.
     await upsert_linked_group(
         row.channel,
         result.linked_chat_id,
         comments_enabled=result.comments_enabled,
+        about=result.about or "",
+        join_request=result.target_join_request,
     )
-    verdict = _verdict_of(result, row, request)
+    verdict, facts = _verdict_of(result, row, request)
     _discovery_state.record_verdict(campaign_id, row.channel, verdict)
-    reason = admit_at_qualification(
-        title=row.title,
-        about=result.about,
-        comments_enabled=result.comments_enabled,
-        access=verdict.access,
-        request=request,
-    )
-    await _settle(campaign_id, row.channel, reason, subscribers=result.participants_count)
+    reason = _admit(row, facts, comments_enabled=result.comments_enabled, request=request)
+    await _settle(campaign_id, row.channel, reason, rejected, subscribers=result.participants_count)
     return _Probe(None)

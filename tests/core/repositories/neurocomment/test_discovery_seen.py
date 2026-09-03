@@ -40,6 +40,15 @@ async def test_mark_seen_again_moves_last_seen_and_keeps_first_seen() -> None:
 
 
 @pytest.mark.asyncio
+async def test_seen_is_keyed_case_folded_and_private_refs_verbatim() -> None:
+    """``News`` and ``news`` are one Telegram peer; an ``id:`` ref has no case to fold."""
+    await mark_seen(["News", "id:42"], _T0)
+
+    assert await list_seen(["news", "NEWS", "@News", "id:42"]) == {"news", "id:42"}
+    assert _stamps("news")[0] == _T0.isoformat()
+
+
+@pytest.mark.asyncio
 async def test_mark_seen_with_nothing_is_a_noop() -> None:
     await mark_seen([], _T0)
 

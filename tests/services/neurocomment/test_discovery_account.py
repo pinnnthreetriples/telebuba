@@ -273,7 +273,7 @@ async def test_a_warming_start_between_resolution_and_the_claim_still_wins(
 ) -> None:
     """The claim may not be made on a health verdict that has gone stale.
 
-    ``check_search_account`` answers several awaits before ``try_reserve`` runs, and
+    ``check_search_accounts`` answers several awaits before ``try_reserve`` runs, and
     ``start_warming`` needs only that gap to commit. So the claim is made under warming's
     own per-account lifecycle lock, re-checking warming inside it — the shape
     ``start_neurocomment`` already uses for the listener. Held open here on purpose:
@@ -285,15 +285,15 @@ async def test_a_warming_start_between_resolution_and_the_claim_still_wins(
 
     resolved = asyncio.Event()
     warming_committed = asyncio.Event()
-    real_check = discovery_service.check_search_account
+    real_check = discovery_service.check_search_accounts
 
-    async def _stalled_check(account_id: str) -> object:
-        account = await real_check(account_id)
+    async def _stalled_check(campaign_id: str, account_ids: list[str]) -> object:
+        accounts = await real_check(campaign_id, account_ids)
         resolved.set()
         await warming_committed.wait()
-        return account
+        return accounts
 
-    monkeypatch.setattr(discovery_service, "check_search_account", _stalled_check)
+    monkeypatch.setattr(discovery_service, "check_search_accounts", _stalled_check)
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
     await seed_listener()
     await _warmable_listener(monkeypatch)
@@ -399,7 +399,7 @@ async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
 ) -> None:
     """The listener half of the stale-resolution refusal, not only the warming half.
 
-    ``check_search_account``'s listener check sits outside the claim lock too, so the
+    ``check_search_accounts``'s listener check sits outside the claim lock too, so the
     account could be re-armed as the running listener in the same gap warming used.
     """
     from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
@@ -407,15 +407,15 @@ async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
 
     resolved = asyncio.Event()
     listener_committed = asyncio.Event()
-    real_check = discovery_service.check_search_account
+    real_check = discovery_service.check_search_accounts
 
-    async def _stalled_check(account_id: str) -> object:
-        account = await real_check(account_id)
+    async def _stalled_check(campaign_id: str, account_ids: list[str]) -> object:
+        accounts = await real_check(campaign_id, account_ids)
         resolved.set()
         await listener_committed.wait()
-        return account
+        return accounts
 
-    monkeypatch.setattr(discovery_service, "check_search_account", _stalled_check)
+    monkeypatch.setattr(discovery_service, "check_search_accounts", _stalled_check)
     monkeypatch.setattr(nc_runtime, "reconcile_neurocomment_runtime", _noop_reconcile)
     monkeypatch.setattr(nc_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))

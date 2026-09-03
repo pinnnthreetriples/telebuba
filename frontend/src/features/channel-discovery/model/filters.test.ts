@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import type { DiscoveryAccountOption } from '@/shared/api';
 
+import { EMPTY_FORM } from './discovery';
 import {
   ACCESS,
   CATEGORIES,
   COMMENTS,
-  defaultAccountIds,
   effectiveAccountIds,
   eligibleAccountIds,
-  groupsDisable,
   KINDS,
   LANGUAGES,
   LIMIT_DEFAULT,
   LIMIT_MAX,
   LIMIT_MIN,
-  limitInvalid,
+  MAX_SEARCH_ACCOUNTS,
+  normalizeForKind,
   parseLimit,
 } from './filters';
 
@@ -39,7 +39,6 @@ describe('parseLimit', () => {
   it('reads an empty field as the server default', () => {
     expect(parseLimit('')).toBe(LIMIT_DEFAULT);
     expect(parseLimit('   ')).toBe(LIMIT_DEFAULT);
-    expect(limitInvalid('')).toBe(false);
   });
 
   it('accepts an integer within the bounds', () => {
@@ -55,7 +54,6 @@ describe('parseLimit', () => {
     expect(parseLimit('-5')).toBeUndefined();
     expect(parseLimit('12.5')).toBeUndefined();
     expect(parseLimit('abc')).toBeUndefined();
-    expect(limitInvalid('abc')).toBe(true);
   });
 });
 
@@ -72,22 +70,24 @@ describe('account picking', () => {
     expect(eligibleAccountIds(accounts)).toEqual(['plain', 'gold', 'silver']);
   });
 
-  it('defaults to the premium accounts when there is at least one', () => {
-    expect(defaultAccountIds(accounts)).toEqual(['gold', 'silver']);
+  it('defaults to the eligible accounts, premium first, then the rest in list order', () => {
+    expect(effectiveAccountIds(null, accounts)).toEqual(['gold', 'silver', 'plain']);
+    expect(effectiveAccountIds(null, [account({ premium: null })])).toEqual(['a1']);
+    expect(effectiveAccountIds(null, [])).toEqual([]);
   });
 
-  it('defaults to every eligible account when none is premium', () => {
-    const plain = [
-      account({ account_id: 'one' }),
-      account({ account_id: 'two', premium: null }),
-      account({ account_id: 'busy', busy_reason: 'no_session' }),
-    ];
-    expect(defaultAccountIds(plain)).toEqual(['one', 'two']);
-    expect(defaultAccountIds([])).toEqual([]);
-  });
-
-  it('resolves an untouched picker to the default', () => {
-    expect(effectiveAccountIds(null, accounts)).toEqual(['gold', 'silver']);
+  it('caps the default at what the server accepts', () => {
+    // Two premium at the END of a long list: they lead the pick, the plain ones fill it.
+    const many = Array.from({ length: MAX_SEARCH_ACCOUNTS + 2 }, (_, index) =>
+      account({ account_id: `p${String(index)}` }),
+    ).concat([
+      account({ account_id: 'gold', premium: true }),
+      account({ account_id: 'silver', premium: true }),
+    ]);
+    const picked = effectiveAccountIds(null, many);
+    expect(picked).toHaveLength(MAX_SEARCH_ACCOUNTS);
+    expect(picked.slice(0, 2)).toEqual(['gold', 'silver']);
+    expect(picked[2]).toBe('p0');
   });
 
   it('re-intersects a pick with the latest eligible set, in list order', () => {
@@ -100,10 +100,25 @@ describe('account picking', () => {
   });
 });
 
-describe('groupsDisable', () => {
-  it('disables the comments filter and subscription access for groups only', () => {
-    expect(groupsDisable('groups')).toEqual({ comments: true, subscription: true });
-    expect(groupsDisable('channels')).toEqual({ comments: false, subscription: false });
-    expect(groupsDisable('all')).toEqual({ comments: false, subscription: false });
+describe('normalizeForKind', () => {
+  it('drops the picks the server refuses for groups', () => {
+    // Groups have no comments verdict and never come by subscription.
+    const groups = { ...EMPTY_FORM, kind: 'groups' as const, comments: 'on' as const };
+    expect(normalizeForKind({ ...groups, access: 'subscription' })).toMatchObject({
+      kind: 'groups',
+      comments: 'any',
+      access: 'any',
+    });
+    // Any other access filter is legitimate for groups.
+    expect(normalizeForKind({ ...groups, access: 'open' }).access).toBe('open');
+  });
+
+  it('leaves channels and "all" untouched', () => {
+    const form = { ...EMPTY_FORM, comments: 'on' as const, access: 'subscription' as const };
+    expect(normalizeForKind(form)).toBe(form);
+    expect(normalizeForKind({ ...form, kind: 'all' })).toMatchObject({
+      comments: 'on',
+      access: 'subscription',
+    });
   });
 });

@@ -25,6 +25,7 @@ from telethon.tl.functions.messages import SearchGlobalRequest
 from telethon.tl.types import InputMessagesFilterEmpty, InputPeerEmpty
 
 from core.telegram_client._channels import ChannelGatewayError
+from core.telegram_client._util import optional_bool
 from schemas.telegram_actions_discovery import (
     CHANNEL_SEARCH_MIN_QUERY_LENGTH,
     GlobalPostsCursor,
@@ -62,14 +63,13 @@ def _to_match(
     if not handle and not (allow_private and isinstance(channel_id, int)):
         return None
     participants = getattr(entity, "participants_count", None)
-    join_request = getattr(entity, "join_request", None)
     return TelegramChannelMatch(
         username=handle or None,
         channel_id=channel_id if isinstance(channel_id, int) else None,
         title=str(getattr(entity, "title", "") or ""),
         participants_count=participants if isinstance(participants, int) else None,
         kind=entity_kind,
-        join_request=join_request if isinstance(join_request, bool) else None,
+        join_request=optional_bool(getattr(entity, "join_request", None)),
     )
 
 
@@ -119,8 +119,9 @@ async def dispatch_get_similar_channels(
     refusal, not an empty answer: swallowing it reported the source as having run
     and found nothing, which is exactly what a perfectly good seed with no
     recommendations looks like — so the operator kept a dead handle in the form.
-    Recommendations carry no kind filter and may include private channels, so this
-    is the one place a username-less match is admitted (addressed by ``channel_id``).
+    Recommendations carry no server-side kind filter, so ``action.kind`` is applied
+    locally like the other two; they may include private channels, so this is the one
+    place a username-less match is admitted (addressed by ``channel_id``).
     """
     seed = None if action.seed is None else action.seed.strip().lstrip("@")
     channel: object = None
@@ -134,7 +135,7 @@ async def dispatch_get_similar_channels(
             code = "channel_not_found"
             raise ChannelGatewayError(code) from exc
     result = await client(GetChannelRecommendationsRequest(channel=channel))  # ty: ignore[invalid-argument-type]
-    return _collect(getattr(result, "chats", None), kind="all", allow_private=True)
+    return _collect(getattr(result, "chats", None), kind=action.kind, allow_private=True)
 
 
 async def dispatch_search_global_posts(

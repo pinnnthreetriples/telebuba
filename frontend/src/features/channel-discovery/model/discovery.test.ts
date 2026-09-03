@@ -17,7 +17,7 @@ import {
   selectableChannels,
   type DiscoveryFormState,
 } from './discovery';
-import { LIMIT_DEFAULT } from './filters';
+import { LIMIT_DEFAULT, MAX_SEARCH_ACCOUNTS } from './filters';
 
 function form(overrides: Partial<DiscoveryFormState> = {}): DiscoveryFormState {
   return { ...EMPTY_FORM, ...overrides };
@@ -225,6 +225,13 @@ describe('canSubmit', () => {
     expect(canSubmit(form({ keywords: 'crypto' }), [])).toBe(false);
   });
 
+  it('rejects more accounts than the server accepts', () => {
+    const ids = (count: number) =>
+      Array.from({ length: count }, (_, index) => `acc-${String(index)}`);
+    expect(canSubmit(form({ keywords: 'crypto' }), ids(MAX_SEARCH_ACCOUNTS))).toBe(true);
+    expect(canSubmit(form({ keywords: 'crypto' }), ids(MAX_SEARCH_ACCOUNTS + 1))).toBe(false);
+  });
+
   it('rejects an invalid result limit', () => {
     expect(canSubmit(form({ keywords: 'crypto', limit: '600' }), ACCOUNTS)).toBe(false);
     expect(canSubmit(form({ keywords: 'crypto', limit: '' }), ACCOUNTS)).toBe(true);
@@ -269,6 +276,13 @@ describe('isSelectable', () => {
     expect(isSelectable(candidate({ kind: 'group', qualification: 'comments_on' }))).toBe(false);
     expect(isSelectable(candidate({ access: 'subscription' }))).toBe(false);
     expect(isSelectable(candidate({ kind: 'channel', access: 'join_request' }))).toBe(true);
+  });
+
+  it('rejects a private row by its id: name even when the access badge is gone', () => {
+    // After a restart the in-memory verdict is lost and `access` comes back null.
+    expect(isSelectable(candidate({ channel: 'id:123456', qualification: 'comments_on' }))).toBe(
+      false,
+    );
   });
 });
 

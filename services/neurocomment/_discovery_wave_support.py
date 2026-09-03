@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 # Short locale-neutral reason for a wave the run's read budget stopped. Deliberately not
 # a run-level error — see ``_discovery_search._merge``.
 READ_BUDGET = "read_budget"
+# A recommendation wave not asked because recommendations only ever return channels.
+KIND_UNSUPPORTED = "kind_unsupported"
 
 # Native hits win a cross-source tie: their handles come straight from Telegram in
 # canonical case, which is what adopt writes into the campaign verbatim. This governs
@@ -36,34 +38,33 @@ SOURCE_PRIORITY: dict[DiscoverySource, int] = {
 
 
 class Wave(NamedTuple):
-    """One wave's outcomes, and whether the run must stop reading after it."""
+    """One wave's outcomes, and why the run must stop reading after it, if it must.
+
+    ``stop`` is the reason the pool has no account left: ``flooded`` (a read of ours
+    landed a limit and wrote the cooldown), ``cooling`` (a limit somebody else recorded
+    was found before a read), or ``aborted`` (a dead session, nothing written). Only the
+    first two keep the run from replacing its stored candidates.
+    """
 
     outcomes: list[SourceOutcome]
-    flooded: bool = False
-    # A non-flood stop: the last account answered nothing often enough that the rest of
-    # the run would only prove it again. Kept apart from ``flooded`` because only a flood
-    # writes a cooldown and stops the run replacing its stored candidates.
-    aborted: bool = False
-    # A limit this run did not cause: the last account was already cooling when a read
-    # was about to be spent. Its own field because it is neither of the two above —
-    # nothing failed and nothing was written — but it must stop the run exactly like a
-    # flood.
-    cooled: bool = False
+    stop: str | None = None
 
     @property
     def stopped(self) -> bool:
-        return self.flooded or self.aborted or self.cooled
+        return self.stop is not None
 
 
-def stopped(outcomes: list[SourceOutcome], pool: AccountPool) -> Wave:
-    """A wave the pool ended: its last account left, and ``dropped_reason`` says how."""
-    reason = pool.dropped_reason
-    return Wave(
-        outcomes,
-        flooded=reason == "flooded",
-        aborted=reason == "aborted",
-        cooled=reason == "cooling",
-    )
+def stopped(outcomes: list[SourceOutcome], pool: AccountPool, source: DiscoverySource) -> Wave:
+    """A wave the pool would not hand an account to.
+
+    Every account gone is a stop, and at this point only ``cooling`` can have emptied it
+    — a flood or a dead session is reported by ``report`` and ends the wave before the
+    next acquire. Accounts still in the pool means each has spent its own wave ceiling:
+    truncation, reported like the shared budget's, and the run goes on to qualify.
+    """
+    if pool.empty:
+        return Wave(outcomes, stop="cooling")
+    return Wave([*outcomes, skipped(source, READ_BUDGET, truncated=True)])
 
 
 class Budget:
@@ -73,7 +74,7 @@ class Budget:
     emits per account, and spending it in wave order is what puts the cheap keyword
     sweep first in line for it.
 
-    ``hold`` fences reads off for a wave that has not run yet. Wave order alone left the
+    ``held`` fences reads off for a wave that has not run yet. Wave order alone left the
     LAST wave — Telegram's recommendations, the only source that reaches channels the
     account is nowhere near — living on whatever the post pages had not eaten, which on a
     full keyword list was nothing at all.
@@ -82,10 +83,6 @@ class Budget:
     def __init__(self, total: int) -> None:
         self.left = total
         self.held = 0
-
-    def hold(self, count: int) -> None:
-        """Keep ``count`` of the remaining reads back for a later wave."""
-        self.held = count
 
     def take(self) -> bool:
         """Claim one read. ``False`` means the run is out and the wave must stop."""
@@ -106,6 +103,7 @@ def skipped(
 
 
 async def pace() -> None:
+    """The jittered gap between two real Telegram reads, waves and probes alike."""
     neuro = settings.neurocomment
     await _seams.sleep(
         _seams.rng.uniform(

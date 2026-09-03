@@ -1502,7 +1502,8 @@
             "any": "Any",
             "on": "On",
             "off": "Off",
-            "groupsHint": "Groups have no comments verdict"
+            "groupsHint": "Groups have no comments verdict",
+            "allHint": "Groups are not filtered by comments"
           },
           "access": {
             "label": "Access",
@@ -1534,6 +1535,7 @@
             "loading": "Loading accounts…",
             "loadFailed": "Couldn't load the accounts. Search is unavailable until the list loads.",
             "empty": "No free accounts: all are warming, listening or cooling down.",
+            "max": "at most {{max}} accounts",
             "busy": {
               "account_busy": "busy",
               "account_cooling": "cooling down",
@@ -1588,6 +1590,7 @@
             "seed_unusable": "the seed channel is not a usable handle",
             "channel_not_found": "Telegram could not find that channel",
             "read_budget": "the read budget for one search ran out",
+            "kind_unsupported": "recommendations return channels only",
             "account_cooling": "the search account is waiting out a Telegram limit",
             "unexpected_result": "Telegram returned an unexpected reply"
           },

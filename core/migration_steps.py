@@ -20,6 +20,8 @@ _ALLOWED_TABLES = frozenset(
         "warming_account_state",
         "warming_settings",
         "neurocomment_campaigns",
+        "neurocomment_discovery_candidates",
+        "neurocomment_linked_groups",
         "neurocomment_readiness",
         "neurocomment_runtime",
         "proxies",

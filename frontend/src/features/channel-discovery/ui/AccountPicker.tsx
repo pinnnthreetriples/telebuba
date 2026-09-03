@@ -1,11 +1,11 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryAccountOption } from '@/shared/api';
 import { cn } from '@/shared/lib/cn';
 import { Badge, Icon, Notice } from '@/shared/ui';
 
-import { eligibleAccountIds } from '../model/filters';
+import { eligibleAccountIds, MAX_SEARCH_ACCOUNTS } from '../model/filters';
 import { Eyebrow } from './FormRow';
 
 const P = 'neurocomment.modal.discovery.form.accounts';
@@ -26,10 +26,15 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const listId = useId();
+  const rootRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const names = accounts
     .filter((account) => selected.includes(account.account_id))
     .map((account) => account.name);
   const empty = !loading && !errored && eligibleAccountIds(accounts).length === 0;
+  // The server caps account_ids; past the cap the unpicked rows go dead instead of 422ing.
+  const full = selected.length >= MAX_SEARCH_ACCOUNTS;
 
   const toggle = (id: string) => {
     const chosen = new Set(selected);
@@ -39,8 +44,49 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
     onChange(accounts.map((account) => account.account_id).filter((next) => chosen.has(next)));
   };
 
+  // Same outside-click close as shared/ui Select.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open]);
+
+  // Unlike Select, the options here are real tab stops (a multi-select keeps focus on the
+  // row being toggled), so the arrows move DOM focus itself, wrapping at both ends.
+  const moveFocus = (delta: 1 | -1) => {
+    const options = [
+      ...(listRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') ??
+        []),
+    ];
+    if (options.length === 0) return;
+    const at = options.indexOf(document.activeElement as HTMLButtonElement);
+    const next = at === -1 ? (delta === 1 ? 0 : options.length - 1) : at + delta;
+    options[(next + options.length) % options.length]?.focus();
+  };
+
   return (
-    <section>
+    <section
+      ref={rootRef}
+      onKeyDown={(event) => {
+        // Only while open — a closed picker has no business swallowing the Modal's Escape,
+        // which listens on `document`; open, one key must not both close the list and
+        // throw the dialog away.
+        if (!open) return;
+        if (event.key === 'Escape') {
+          event.stopPropagation();
+          setOpen(false);
+          triggerRef.current?.focus();
+        } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          moveFocus(event.key === 'ArrowDown' ? 1 : -1);
+        }
+      }}
+    >
       <Eyebrow
         title={t(`${P}.label`)}
         caption={loading ? t(`${P}.loading`) : t(`${P}.selected`, { count: selected.length })}
@@ -52,6 +98,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
       ) : (
         <>
           <button
+            ref={triggerRef}
             type="button"
             aria-haspopup="listbox"
             aria-expanded={open}
@@ -72,6 +119,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
           {/* Box styling open-only on purpose: under border-box a collapsed max-height:0
               still reserves its border and padding. See NeuroAccountsModal. */}
           <div
+            ref={listRef}
             id={listId}
             role="listbox"
             aria-multiselectable
@@ -92,7 +140,7 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
                   type="button"
                   role="option"
                   aria-selected={picked}
-                  disabled={busy}
+                  disabled={busy || (full && !picked)}
                   title={busyText}
                   onClick={() => {
                     toggle(account.account_id);
@@ -116,7 +164,9 @@ export function AccountPicker({ accounts, selected, onChange, loading, errored }
               );
             })}
           </div>
-          <p className="mt-tight type-caption">{t(`${P}.premiumHint`)}</p>
+          <p className="mt-tight type-caption">
+            {full ? t(`${P}.max`, { max: MAX_SEARCH_ACCOUNTS }) : t(`${P}.premiumHint`)}
+          </p>
         </>
       )}
     </section>

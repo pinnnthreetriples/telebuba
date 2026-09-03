@@ -38,11 +38,11 @@ describe('ChannelDiscoveryModal', () => {
     await waitFor(() => {
       expect(screen.getByText('@alpha')).toBeInTheDocument();
     });
-    // The untouched form posts its defaults, the premium account among them.
+    // The untouched form posts its defaults: every eligible account, premium first.
     const search = calls.find((call) => call.path.endsWith('/discovery/search'));
     expect(search?.body).toMatchObject({
       keywords: ['crypto'],
-      account_ids: ['acc-p'],
+      account_ids: ['acc-p', 'acc-n'],
       kind: 'channels',
       hide_seen: true,
       limit: 200,

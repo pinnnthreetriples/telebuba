@@ -102,9 +102,8 @@ def set_run_report(campaign_id: str, report: DiscoveryRunReport) -> None:
 
 def bump_filtered(campaign_id: str, reason: str) -> None:
     """Count one row the qualification pass dropped under an operator filter."""
-    report = run_report(campaign_id)
-    report.filtered[reason] = report.filtered.get(reason, 0) + 1
-    _REPORTS[campaign_id] = report
+    filtered = _REPORTS.setdefault(campaign_id, DiscoveryRunReport()).filtered
+    filtered[reason] = filtered.get(reason, 0) + 1
 
 
 def verdicts(campaign_id: str) -> dict[str, DiscoveryChannelVerdict]:
@@ -143,10 +142,15 @@ def at_daily_search_cap(now: datetime | None = None) -> bool:
     return len(_SEARCH_TIMES) >= settings.neurocomment.discovery_max_searches_per_day
 
 
-def account_busy(account_id: str) -> bool:
-    """Is some in-flight run already reading with this account?"""
+def account_busy(account_id: str, *, other_than: str | None = None) -> bool:
+    """Is some in-flight run — of a campaign other than ``other_than`` — reading with this account?
+
+    The exclusion keeps a campaign's OWN run reading as ``already_running``, not as an
+    account another campaign took.
+    """
     return any(
-        account_id in held and is_running(campaign) for campaign, held in _RUN_ACCOUNTS.items()
+        account_id in held and campaign != other_than and is_running(campaign)
+        for campaign, held in _RUN_ACCOUNTS.items()
     )
 
 

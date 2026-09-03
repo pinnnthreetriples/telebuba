@@ -129,9 +129,10 @@ async def test_the_probe_keeps_every_fitness_signal_of_the_one_reply(
         "scam": True,
         "fake": False,
         "restricted": True,
-        # Derived from the same reply: a public handle with no target join gate is
-        # open, the title reads as English, and no category was asked for.
-        "access": "open",
+        # Derived from the same reply: the reply said nothing about the TARGET's join
+        # gate (``join_request`` above is the linked group's), so access is unknown — not
+        # "open" — the title reads as English, and no category was asked for.
+        "access": None,
         "language": "en",
         "is_group": None,
         "category_match": None,
