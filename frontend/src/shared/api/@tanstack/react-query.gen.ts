@@ -66,6 +66,7 @@ import {
   listCampaignChallenges,
   listCampaigns,
   listChannelChallenges,
+  listDiscoveryAccounts,
   listLogs,
   listNeurocommentComments,
   listNeuroshillingCampaigns,
@@ -298,6 +299,9 @@ import type {
   ListChannelChallengesData,
   ListChannelChallengesError,
   ListChannelChallengesResponse,
+  ListDiscoveryAccountsData,
+  ListDiscoveryAccountsError,
+  ListDiscoveryAccountsResponse,
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
@@ -2597,6 +2601,33 @@ export const adoptCampaignDiscoveryMutation = (
   };
   return mutationOptions;
 };
+
+export const listDiscoveryAccountsQueryKey = (options?: Options<ListDiscoveryAccountsData>) =>
+  createQueryKey('listDiscoveryAccounts', options);
+
+/**
+ * List Discovery Accounts
+ *
+ * Every account the search form may pick, busy ones marked with why. Fleet-wide.
+ */
+export const listDiscoveryAccountsOptions = (options?: Options<ListDiscoveryAccountsData>) =>
+  queryOptions<
+    ListDiscoveryAccountsResponse,
+    ListDiscoveryAccountsError,
+    ListDiscoveryAccountsResponse,
+    ReturnType<typeof listDiscoveryAccountsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listDiscoveryAccounts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listDiscoveryAccountsQueryKey(options),
+  });
 
 /**
  * Expand Discovery Keywords

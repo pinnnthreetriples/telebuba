@@ -216,6 +216,9 @@ class DiscoveryChannelVerdict(BaseModel):
     language: str | None = None
     # Supergroup rather than broadcast channel — no comment verdict applies.
     is_group: bool | None = None
+    # Did title + about match the requested category's bundle? ``None`` = not asked.
+    # Here rather than recomputed by the board: ``about`` is not persisted.
+    category_match: bool | None = None
 
 
 class DiscoveryCandidate(BaseModel):
@@ -272,6 +275,9 @@ class DiscoveryProgress(BaseModel):
     # ``total`` is a ceiling, not a total: the merge had more rows than
     # ``discovery_max_candidates`` and dropped the tail.
     capped: bool = False
+    # Channels the last run rejected, per filter name (``kind``, ``seen``, ``language``…).
+    # Ephemeral like ``sources``: a rejected row is deleted, never stored hidden.
+    filtered: dict[str, int] = Field(default_factory=dict)
 
 
 class DiscoveryBoard(BaseModel):

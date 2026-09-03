@@ -24,6 +24,7 @@ from tests.services.neurocomment.discovery_support import (
     flood_error,
     matches,
     new_campaign,
+    pool_of,
     posts_page,
     read_error,
     search_request,
@@ -106,7 +107,7 @@ async def test_a_cooldown_somebody_else_recorded_stops_the_next_read(
 
     stage = await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         search_request(keywords=_keywords(6), seed_channel="@durov"),
     )
 
@@ -139,7 +140,7 @@ async def test_a_channel_scoped_cooldown_does_not_stop_the_run(
 
     stage = await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         search_request(keywords=["crypto"], seed_channel="@durov"),
     )
 
@@ -163,7 +164,7 @@ async def test_a_premium_wait_stops_the_run_like_any_other_rate_limit(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, search_request(keywords=_keywords(4)))
+    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(4)))
 
     assert len(reader.calls) == 1
     assert stage.flooded is True
@@ -180,7 +181,7 @@ async def test_a_rate_limit_with_no_duration_takes_the_configured_cooldown(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, search_request(keywords=_keywords(4)))
+    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(4)))
 
     assert len(reader.calls) == 1
     assert stage.flooded is True
@@ -201,7 +202,7 @@ async def test_consecutive_failures_end_the_run_instead_of_draining_the_budget(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, search_request(keywords=_keywords(10)))
+    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(10)))
 
     assert len(reader.calls) == 3
     # Not a flood: no cooldown is written and the run keeps its own error, not a wait.
@@ -223,7 +224,7 @@ async def test_the_failure_counter_spans_the_waves(monkeypatch: pytest.MonkeyPat
 
     await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         search_request(keywords=_keywords(2), seed_channel="@durov"),
     )
 
@@ -242,7 +243,7 @@ async def test_an_answer_resets_the_failure_counter(monkeypatch: pytest.MonkeyPa
     campaign_id = await new_campaign()
 
     # Every second keyword refuses, so two failures never land in a row.
-    await run_search(campaign_id, LISTENER_ID, search_request(keywords=_keywords(6)))
+    await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(6)))
 
     assert len(reader.search_actions()) == 6
 
@@ -262,7 +263,7 @@ async def test_the_post_wave_yields_its_reads_to_the_recommendation_wave(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await new_campaign()
 
-    stage = await run_search(campaign_id, LISTENER_ID, search_request(keywords=_keywords(3)))
+    stage = await run_search(campaign_id, pool_of(), search_request(keywords=_keywords(3)))
 
     # 3 sweep + 2 post pages + the 5 seeds held back for the wave = the whole budget.
     assert len(reader.search_actions()) == 3
@@ -290,7 +291,7 @@ async def test_a_full_keyword_list_runs_untruncated_at_default_settings(
 
     stage = await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         search_request(keywords=_keywords(10), seed_channel="@durov"),
     )
 
@@ -304,6 +305,53 @@ async def test_a_full_keyword_list_runs_untruncated_at_default_settings(
 
 
 @pytest.mark.asyncio
+async def test_the_budget_scales_with_the_pool_and_the_reads_alternate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ceiling bounds what ONE session emits; two accounts may spend twice as much."""
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_reads_per_run", 2)
+    reader = ReadRecorder(search=matches())
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id, pool_of("acc-a", "acc-b"), search_request(keywords=_keywords(6))
+    )
+
+    assert len(reader.search_actions()) == 4
+    assert reader.accounts == ["acc-a", "acc-b", "acc-a", "acc-b"]
+    assert _report_of(stage, "telegram_search").truncated is True
+
+
+@pytest.mark.asyncio
+async def test_a_flooded_account_leaves_and_the_run_finishes_on_the_rest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One parked session is not a parked run any more — but it IS parked."""
+
+    async def _flood_a(account_id: str, _action: object) -> object:
+        if account_id == "acc-a":
+            reason = "FloodWait(60s)"
+            raise TelegramReadError(reason, kind="flood_wait", seconds=60)
+        return _RICH_SWEEP
+
+    monkeypatch.setattr(_seams, "execute_read", _flood_a)
+    campaign_id = await new_campaign()
+
+    stage = await run_search(
+        campaign_id, pool_of("acc-a", "acc-b"), search_request(keywords=_keywords(3))
+    )
+
+    # The first read floods ``acc-a`` out; the remaining keywords go to ``acc-b`` and the
+    # run completes — stored, not failed, though the flooded read still names its reason.
+    assert stage.flooded is False
+    assert stage.replaced is True
+    assert stage.error == "FloodWait(60s)"
+    assert in_cooldown("acc-a", datetime.now(UTC)) is True
+    assert in_cooldown("acc-b", datetime.now(UTC)) is False
+
+
+@pytest.mark.asyncio
 async def test_the_recommendation_wave_never_re_reads_the_operators_seed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,7 +362,7 @@ async def test_the_recommendation_wave_never_re_reads_the_operators_seed(
 
     await run_search(
         campaign_id,
-        LISTENER_ID,
+        pool_of(),
         search_request(keywords=["crypto"], seed_channel="@biggest"),
     )
 

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-21
+last_updated: 2026-09-03
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -17,7 +17,7 @@ grounds_to:
 - Only `core/telegram_client/` imports Telethon and owns pooled clients/listeners; services choose policy and persist outcomes. Never expose Telethon/session/tdata objects across the boundary.
 - The client pool is the sole owner of an account connection that may be in service. Probes borrow from it; login/logout flows that must build directly are serialized separately. Account removal tombstones pool access for the full evict/unlink/delete sequence.
 - Session filenames are one plain child of the session directory. Stored `session_name` overrides `account_id`; migration 7 enforces uniqueness. The lexical path guard is authoritative before filesystem resolution.
-- Frozen accounts can remain authorized, so health classification uses Telegram freeze signals rather than `get_me()` alone. Rate-limit/frozen errors are converted to stable outcomes; services decide what state is durable.
+- Frozen accounts can remain authorized, so health classification uses Telegram freeze signals rather than `get_me()` alone. Rate-limit/frozen errors are converted to stable outcomes; services decide what state is durable. The Premium flag is a point-in-time snapshot taken from `get_me()` at session check and login only; None means never observed.
 - Device fingerprints are immutable except the language pair, which any session check that learns a mapped phone may correct while it is still the fallback — established rows included, deliberately. Proxy credentials are resolved inside `core/` from the shared pool; capacity is config-driven. Proxy checks discover the exit IP over TLS and persist geolocation consensus without exposing credentials.
 - Profile/privacy writes use stable error codes. Telegram privacy `setPrivacy` replaces the key's entire rule vector, so applying a simplified level can discard exceptions and must remain an explicit operator action.
 - Neither cloud-password write delegates to Telethon's `edit_2fa`, because it can fail to return at all: its SRP helpers call `check_prime_and_good`, whose fast path fires only for Telethon's hardcoded prime AND a generator of 3/4/5/7 — so a rotated prime, or that same prime with `g` of 2 or 6, falls into Pollard–Brent factorisation OF a prime, measured still running past 30s on the RFC 3526 group-14 prime. Both fields are server-supplied, so one Telegram rotation would wedge the single uvicorn worker permanently. Hence the gateway issues `account.updatePasswordSettings` itself and admits the `(p, g)` pair BEFORE offloading anything: refusing the input it cannot compute safely is what makes that path unreachable rather than merely bounded.

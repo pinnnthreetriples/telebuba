@@ -26,7 +26,7 @@ from schemas.neurocomment_discovery import (
     DiscoverySearchStageResult,
     DiscoverySourceReport,
 )
-from services.neurocomment import _discovery_state, _seams
+from services.neurocomment import _discovery_run, _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
 from services.neurocomment.discovery import start_discovery
 from tests.services.neurocomment.discovery_support import (
@@ -84,7 +84,7 @@ def _hit_then_flood() -> Callable[[TelegramReadAction], BaseModel]:
 async def test_two_concurrent_starts_produce_exactly_one_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Resolving the account awaits, so the slot must be claimed before that.
+    """Checking the account awaits, so the slot must be claimed after that, atomically.
 
     Otherwise both starts pass the is-running check, the loser overwrites the winner
     in the task table and becomes untrackable: two paced RPC streams on one account,
@@ -111,19 +111,19 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
     gate = asyncio.Event()
     both_arrived = asyncio.Event()
     entered: list[str] = []
-    resolve = discovery_module.resolve_search_account
+    check = discovery_module.check_search_account
 
-    async def _gated(target: str) -> object:
+    async def _gated(account_id: str) -> object:
         # Park BOTH starts inside the window on purpose. Left to the event loop, the
         # two coroutines happen to serialize and the test passes even with no claim at
         # all — which is exactly how the first version of this test proved nothing.
-        entered.append(target)
+        entered.append(account_id)
         if len(entered) == _CONCURRENT_STARTS:
             both_arrived.set()
         await gate.wait()
-        return await resolve(target)
+        return await check(account_id)
 
-    monkeypatch.setattr(discovery_module, "resolve_search_account", _gated)
+    monkeypatch.setattr(discovery_module, "check_search_account", _gated)
     both = asyncio.gather(
         start_discovery(campaign_id, search_request()),
         start_discovery(campaign_id, search_request()),
@@ -149,9 +149,9 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
 ) -> None:
     """Per-campaign single-flight alone does not deliver the one-paced-stream rule.
 
-    Every campaign resolves to the same fleet listener, so N campaigns would otherwise
-    mean N simultaneous RPC streams on one account — the burst the pacing exists to
-    avoid, and the allowance bounds total searches, not concurrency.
+    Two campaigns can pick the same account, so N campaigns would otherwise mean N
+    simultaneous RPC streams on one account — the burst the pacing exists to avoid, and
+    the allowance bounds total searches, not concurrency.
     """
     running = asyncio.Event()
 
@@ -160,7 +160,7 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
         await asyncio.Event().wait()
         return DiscoverySearchStageResult()
 
-    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
     await seed_listener()
     first_campaign = await new_campaign()
     second_campaign = await new_campaign()
@@ -422,7 +422,7 @@ async def test_deleting_a_campaign_cancels_its_run(monkeypatch: pytest.MonkeyPat
         await asyncio.Event().wait()
         return DiscoverySearchStageResult()
 
-    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
     await seed_listener()
     campaign_id = await new_campaign()
 
@@ -442,7 +442,7 @@ async def test_the_rolling_window_lets_the_allowance_recover(
     monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 2)
     now = datetime.now(UTC)
     for index in range(2):
-        assert _discovery_state.try_reserve(f"c{index}", f"acc-{index}", now) is None
+        assert _discovery_state.try_reserve(f"c{index}", frozenset({f"acc-{index}"}), now) is None
 
     assert _discovery_state.at_daily_search_cap(now) is True
     assert _discovery_state.at_daily_search_cap(now + timedelta(hours=25)) is False
@@ -458,7 +458,7 @@ async def test_an_unexpected_error_fails_the_run_without_escaping(
         raise RuntimeError
 
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    monkeypatch.setattr(discovery_module, "run_search", _boom)
+    monkeypatch.setattr(_discovery_run, "run_search", _boom)
     await seed_listener()
     campaign_id = await new_campaign()
     _discovery_state.set_run_report(
@@ -488,7 +488,7 @@ async def test_shutdown_cancels_an_in_flight_run(monkeypatch: pytest.MonkeyPatch
         await asyncio.Event().wait()
         return DiscoverySearchStageResult()
 
-    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    monkeypatch.setattr(_discovery_run, "run_search", _hang)
     await seed_listener()
     campaign_id = await new_campaign()
 

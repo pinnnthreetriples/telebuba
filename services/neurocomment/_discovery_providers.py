@@ -1,8 +1,8 @@
-"""Channel-discovery sources: the Telegram adapters plus the account choice.
+"""Channel-discovery sources: the Telegram adapters and the account health signals.
 
 ``core`` exposes typed read actions; dedup order, merge policy and which account
-does the reading are business logic and live here. ``services/`` therefore never
-imports telethon.
+does the reading are business logic and live here (the account choice itself in
+``_discovery_pool``). ``services/`` therefore never imports telethon.
 """
 
 from __future__ import annotations
@@ -12,12 +12,6 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_warming_state, list_warming_account_ids
-from core.repositories.neurocomment import (
-    get_listener_account_id,
-    get_listener_running,
-    list_campaign_accounts,
-)
 from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import GetSimilarChannels, SearchChannels, SearchGlobalPosts
 from schemas.telegram_actions_discovery import (
@@ -25,12 +19,12 @@ from schemas.telegram_actions_discovery import (
     TelegramGlobalPostMatches,
 )
 from services.neurocomment import _seams
+from services.neurocomment._discovery_filters import access_of
 from services.neurocomment._state import in_cooldown, set_cooldown
-from services.trust import flood_active
 
 if TYPE_CHECKING:
     from schemas.neurocomment_discovery import DiscoverySource, DiscoverySourceState
-    from schemas.telegram_actions_discovery import GlobalPostsCursor
+    from schemas.telegram_actions_discovery import DiscoveryKind, GlobalPostsCursor
 
 
 # Short locale-neutral reason for a run stopped mid-flight because the account is
@@ -42,7 +36,7 @@ COOLING_REASON = "account_cooling"
 def account_cooling(account_id: str) -> bool:
     """Is a live cooldown in force on this account right now?
 
-    The mid-run half of the health gate ``resolve_search_account`` applies once at the
+    The mid-run half of the health gate ``check_search_account`` applies once at the
     start. A run is minutes long, and the comment engine (or the run's own later reads)
     can park the account at any point in it; every read after that lands inside a live
     window, which is how Telegram turns a soft limit into a hard one.
@@ -81,10 +75,19 @@ def flood_cooldown(exc: TelegramReadError) -> int | None:
 class RawCandidate:
     """One provider hit, before normalization and cross-source dedup."""
 
-    username: str
+    username: str | None
     title: str
     subscribers: int | None
     source: DiscoverySource
+    kind: str = "channel"
+    access: str = "open"
+    # Recommendations may return a private channel: no handle, so the id addresses it.
+    channel_id: int | None = None
+
+    @property
+    def ref(self) -> str:
+        """What the row is stored under: the handle, or ``id:<n>`` when there is none."""
+        return self.username or f"id:{self.channel_id}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,76 +122,6 @@ class SourceOutcome:
         decides whether an empty merge may replace the stored candidate set.
         """
         return self.state == "ran"
-
-
-@dataclass(frozen=True, slots=True)
-class SearchAccount:
-    """The single account a run uses for every Telegram read it makes."""
-
-    account_id: str
-
-
-async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
-    """Pick the account that will search and qualify, or return a refusal status.
-
-    Prefers the listener: it is already the fleet's designated read-only account
-    (it resolves peers and subscribes, never comments), so discovery traffic stays
-    off the commenting accounts. Falls back to the campaign's first serving account.
-
-    Returns a status string instead of raising, so the API layer can report it
-    without catching service internals: ``"no_account"``, ``"account_busy"`` (the
-    session is held by a running listener or by warming) or ``"account_cooling"``
-    (Telegram is rate-limiting the account).
-    """
-    listener_id = await get_listener_account_id()
-    account_id = listener_id
-    if account_id is None:
-        links = await list_campaign_accounts(campaign_id)
-        account_id = links.links[0].account_id if links.links else None
-    if account_id is None:
-        return "no_account"
-
-    # The listener is preferred precisely because it is read-only, but a *running* one
-    # holds the session and reads continuously. Layering a multi-minute paced keyword
-    # stream plus up to 100 probes on top of it is the same mutual-exclusion violation
-    # the warming check below prevents, and the listener is routinely running.
-    if account_id == listener_id and await get_listener_running():
-        return "account_busy"
-
-    now = datetime.now(UTC)
-    # Two independent health signals: the engine's in-memory cooldown (flood /
-    # peer-flood / slow-mode) and warming's persisted flood deadline. Searching on a
-    # cooling account would deepen the very limit it is serving out.
-    # Ahead of the warming check below: a warming account can also be flood-waiting,
-    # and both refuse, so the order only picks which reason the operator is told.
-    if in_cooldown(account_id, now):
-        return "account_cooling"
-    state = await fetch_warming_state(account_id)
-    if state is not None and flood_active(state.flood_wait_until, now):
-        return "account_cooling"
-
-    # Warming assumes it owns its accounts' traffic — that assumption is the whole
-    # basis of its freeze avoidance. Every other listener consumer enforces the same
-    # mutual exclusion; a paused listener can legally be warming, so without this a
-    # multi-minute read stream would interleave with warming's own paced traffic.
-    if account_id in await list_warming_account_ids():
-        return "account_busy"
-    return SearchAccount(account_id=account_id)
-
-
-async def account_taken(account_id: str) -> bool:
-    """Is another runtime holding this session? The re-read for under the claim lock.
-
-    Both halves of ``resolve_search_account``'s ``account_busy`` verdict, asked again:
-    that verdict is several awaits old by the time the claim is made, and either runtime
-    can commit in the gap. Deliberately NOT reused inside ``resolve_search_account`` —
-    there the listener check runs before the health checks and the warming check after,
-    so a warming account that is also flood-waiting is reported as cooling rather than
-    busy. Folding the two into one call would silently reorder that.
-    """
-    if account_id in await list_warming_account_ids():
-        return True
-    return await get_listener_running() and await get_listener_account_id() == account_id
 
 
 async def record_flood(account_id: str, seconds: int | None) -> bool:
@@ -231,18 +164,25 @@ def _matches_outcome(result: object, source: DiscoverySource) -> SourceOutcome:
                 title=item.title,
                 subscribers=item.participants_count,
                 source=source,
+                kind=item.kind,
+                access=access_of(item.username, item.join_request),
+                channel_id=item.channel_id,
             )
             for item in result.items
         ),
     )
 
 
-async def search_native(account_id: str, keyword: str) -> SourceOutcome:
-    """Telegram's own channel search for one keyword."""
+async def search_native(
+    account_id: str,
+    keyword: str,
+    kind: DiscoveryKind = "channels",
+) -> SourceOutcome:
+    """Telegram's own channel (and/or group) search for one keyword."""
     try:
         result = await _seams.execute_read(
             account_id,
-            SearchChannels(query=keyword),
+            SearchChannels(query=keyword, kind=kind),
         )
     except TelegramReadError as exc:
         return _failed("telegram_search", exc)
@@ -286,6 +226,7 @@ async def search_global(
     account_id: str,
     keyword: str,
     cursor: GlobalPostsCursor | None = None,
+    kind: DiscoveryKind = "channels",
 ) -> GlobalPage:
     """One page of channels whose POSTS match a keyword (``messages.searchGlobal``).
 
@@ -297,7 +238,7 @@ async def search_global(
     try:
         result = await _seams.execute_read(
             account_id,
-            SearchGlobalPosts(query=keyword, cursor=cursor),
+            SearchGlobalPosts(query=keyword, cursor=cursor, kind=kind),
         )
     except TelegramReadError as exc:
         return GlobalPage(_failed("telegram_posts", exc))

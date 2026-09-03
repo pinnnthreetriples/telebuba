@@ -7261,6 +7261,76 @@
         }
       }
     },
+    "/api/v1/neurocomment/discovery/accounts": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "List Discovery Accounts",
+        "description": "Every account the search form may pick, busy ones marked with why. Fleet-wide.",
+        "operationId": "listDiscoveryAccounts",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryAccountList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/discovery/keywords": {
       "post": {
         "tags": [
@@ -11582,6 +11652,17 @@
             ],
             "title": "Last Name"
           },
+          "premium": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium"
+          },
           "avatar_etag": {
             "anyOf": [
               {
@@ -13143,6 +13224,68 @@
         "title": "DialogueFeedMessage",
         "description": "One dialogue message with both accounts resolved to display labels.\n\nLocale-neutral (#12): ``from_label``/``to_label`` are the account's own\nphone / label / id strings, never translated UI text; ``created_at`` is the\nstored ISO-8601 timestamp. The SPA owns any presentation.\n\nThe Telegram name is carried as *parts*, never pre-joined: account display\nidentity is per-surface, so the SPA composes it with ``accountDisplayName``\nexactly as the warming cards do. ``None`` on both parts (a never-registered\npeer, or one that has not been logged in yet) leaves the label as the name."
       },
+      "DiscoveryAccountList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryAccountOption"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "DiscoveryAccountList"
+      },
+      "DiscoveryAccountOption": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "premium": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premium"
+          },
+          "busy_reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "account_busy",
+                  "account_cooling",
+                  "no_session"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Busy Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "name"
+        ],
+        "title": "DiscoveryAccountOption",
+        "description": "One account the operator may pick for a search."
+      },
       "DiscoveryAdoptOutcome": {
         "properties": {
           "status": {
@@ -13151,7 +13294,8 @@
               "linked",
               "already_assigned",
               "comments_off",
-              "failed"
+              "failed",
+              "not_adoptable"
             ],
             "title": "Status"
           },
@@ -13255,6 +13399,44 @@
             "type": "string",
             "minLength": 1,
             "title": "Source"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "channel"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "category_match": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Match"
           },
           "sources": {
             "items": {
@@ -13386,6 +13568,50 @@
               }
             ],
             "title": "Restricted"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "is_group": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Group"
+          },
+          "category_match": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Match"
           }
         },
         "type": "object",
@@ -13498,6 +13724,13 @@
             "type": "boolean",
             "title": "Capped",
             "default": false
+          },
+          "filtered": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Filtered"
           }
         },
         "type": "object",
@@ -13519,6 +13752,17 @@
               "daily_limit_reached"
             ],
             "title": "Status"
+          },
+          "refused_account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refused Account Id"
           }
         },
         "type": "object",
@@ -13538,7 +13782,6 @@
             },
             "type": "array",
             "maxItems": 10,
-            "minItems": 1,
             "title": "Keywords"
           },
           "seed_channel": {
@@ -13577,15 +13820,112 @@
               }
             ],
             "title": "Members Max"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "all",
+              "channels",
+              "groups"
+            ],
+            "title": "Kind",
+            "default": "channels"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "any",
+              "it_programming",
+              "beauty_health",
+              "crypto",
+              "trading",
+              "news",
+              "business",
+              "marketing",
+              "education",
+              "entertainment",
+              "games",
+              "sport",
+              "travel",
+              "food",
+              "cars",
+              "real_estate",
+              "finance",
+              "psychology",
+              "humor",
+              "music",
+              "movies",
+              "fashion",
+              "politics",
+              "science",
+              "parenting",
+              "jobs"
+            ],
+            "title": "Category",
+            "default": "any"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "any",
+              "ru",
+              "en",
+              "uk",
+              "other"
+            ],
+            "title": "Language",
+            "default": "any"
+          },
+          "comments": {
+            "type": "string",
+            "enum": [
+              "any",
+              "on",
+              "off"
+            ],
+            "title": "Comments",
+            "default": "any"
+          },
+          "access": {
+            "type": "string",
+            "enum": [
+              "any",
+              "open",
+              "join_request",
+              "subscription"
+            ],
+            "title": "Access",
+            "default": "any"
+          },
+          "hide_seen": {
+            "type": "boolean",
+            "title": "Hide Seen",
+            "default": true
+          },
+          "limit": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "default": 200
+          },
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Account Ids"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
-          "keywords"
+          "account_ids"
         ],
         "title": "DiscoverySearchRequest",
-        "description": "Operator-supplied search parameters.\n\n``members_min``/``members_max`` are applied client-side to the hits whose subscriber\ncount Telegram happens to return.\n\n``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped\nbefore, so a direct caller posting one keyword ten times spent ten identical Telegram\nRPCs against the flood budget."
+        "description": "Operator-supplied search parameters.\n\n``members_min``/``members_max`` are applied client-side to the hits whose subscriber\ncount Telegram happens to return. ``keywords`` come out stripped and deduped\ncase-insensitively; a category alone (its word bundle) is enough to search on.\n\n``account_ids`` is required: the SPA is the only caller and it lets the operator\npick the searching accounts, so the server no longer auto-picks the listener."
       },
       "DiscoverySourceReport": {
         "properties": {

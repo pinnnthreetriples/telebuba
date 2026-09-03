@@ -341,6 +341,10 @@ export type AccountRead = {
    */
   last_name?: string | null;
   /**
+   * Premium
+   */
+  premium?: boolean | null;
+  /**
    * Avatar Etag
    */
   avatar_etag?: string | null;
@@ -1289,6 +1293,40 @@ export type DialogueFeedMessage = {
 };
 
 /**
+ * DiscoveryAccountList
+ */
+export type DiscoveryAccountList = {
+  /**
+   * Items
+   */
+  items: Array<DiscoveryAccountOption>;
+};
+
+/**
+ * DiscoveryAccountOption
+ *
+ * One account the operator may pick for a search.
+ */
+export type DiscoveryAccountOption = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Premium
+   */
+  premium?: boolean | null;
+  /**
+   * Busy Reason
+   */
+  busy_reason?: 'account_busy' | 'account_cooling' | 'no_session' | null;
+};
+
+/**
  * DiscoveryAdoptOutcome
  *
  * What happened to one channel of a batch adopt.
@@ -1297,7 +1335,7 @@ export type DiscoveryAdoptOutcome = {
   /**
    * Status
    */
-  status: 'linked' | 'already_assigned' | 'comments_off' | 'failed';
+  status: 'linked' | 'already_assigned' | 'comments_off' | 'failed' | 'not_adoptable';
   /**
    * Channel
    */
@@ -1361,6 +1399,22 @@ export type DiscoveryCandidate = {
    * Source
    */
   source: string;
+  /**
+   * Kind
+   */
+  kind?: string;
+  /**
+   * Access
+   */
+  access?: string | null;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
+   * Category Match
+   */
+  category_match?: boolean | null;
   /**
    * Sources
    */
@@ -1428,6 +1482,22 @@ export type DiscoveryChannelVerdict = {
    * Restricted
    */
   restricted?: boolean | null;
+  /**
+   * Access
+   */
+  access?: string | null;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
+   * Is Group
+   */
+  is_group?: boolean | null;
+  /**
+   * Category Match
+   */
+  category_match?: boolean | null;
 };
 
 /**
@@ -1541,6 +1611,12 @@ export type DiscoveryProgress = {
    * Capped
    */
   capped?: boolean;
+  /**
+   * Filtered
+   */
+  filtered?: {
+    [key: string]: number;
+  };
 };
 
 /**
@@ -1559,6 +1635,10 @@ export type DiscoverySearchOutcome = {
     | 'account_busy'
     | 'account_cooling'
     | 'daily_limit_reached';
+  /**
+   * Refused Account Id
+   */
+  refused_account_id?: string | null;
 };
 
 /**
@@ -1567,17 +1647,17 @@ export type DiscoverySearchOutcome = {
  * Operator-supplied search parameters.
  *
  * ``members_min``/``members_max`` are applied client-side to the hits whose subscriber
- * count Telegram happens to return.
+ * count Telegram happens to return. ``keywords`` come out stripped and deduped
+ * case-insensitively; a category alone (its word bundle) is enough to search on.
  *
- * ``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped
- * before, so a direct caller posting one keyword ten times spent ten identical Telegram
- * RPCs against the flood budget.
+ * ``account_ids`` is required: the SPA is the only caller and it lets the operator
+ * pick the searching accounts, so the server no longer auto-picks the listener.
  */
 export type DiscoverySearchRequest = {
   /**
    * Keywords
    */
-  keywords: Array<string>;
+  keywords?: Array<string>;
   /**
    * Seed Channel
    */
@@ -1590,6 +1670,64 @@ export type DiscoverySearchRequest = {
    * Members Max
    */
   members_max?: number | null;
+  /**
+   * Kind
+   */
+  kind?: 'all' | 'channels' | 'groups';
+  /**
+   * Category
+   */
+  category?:
+    | 'any'
+    | 'it_programming'
+    | 'beauty_health'
+    | 'crypto'
+    | 'trading'
+    | 'news'
+    | 'business'
+    | 'marketing'
+    | 'education'
+    | 'entertainment'
+    | 'games'
+    | 'sport'
+    | 'travel'
+    | 'food'
+    | 'cars'
+    | 'real_estate'
+    | 'finance'
+    | 'psychology'
+    | 'humor'
+    | 'music'
+    | 'movies'
+    | 'fashion'
+    | 'politics'
+    | 'science'
+    | 'parenting'
+    | 'jobs';
+  /**
+   * Language
+   */
+  language?: 'any' | 'ru' | 'en' | 'uk' | 'other';
+  /**
+   * Comments
+   */
+  comments?: 'any' | 'on' | 'off';
+  /**
+   * Access
+   */
+  access?: 'any' | 'open' | 'join_request' | 'subscription';
+  /**
+   * Hide Seen
+   */
+  hide_seen?: boolean;
+  /**
+   * Limit
+   */
+  limit?: number;
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
 };
 
 /**
@@ -7213,6 +7351,41 @@ export type AdoptCampaignDiscoveryResponses = {
 
 export type AdoptCampaignDiscoveryResponse =
   AdoptCampaignDiscoveryResponses[keyof AdoptCampaignDiscoveryResponses];
+
+export type ListDiscoveryAccountsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/discovery/accounts';
+};
+
+export type ListDiscoveryAccountsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type ListDiscoveryAccountsError =
+  ListDiscoveryAccountsErrors[keyof ListDiscoveryAccountsErrors];
+
+export type ListDiscoveryAccountsResponses = {
+  /**
+   * Successful Response
+   */
+  200: DiscoveryAccountList;
+};
+
+export type ListDiscoveryAccountsResponse =
+  ListDiscoveryAccountsResponses[keyof ListDiscoveryAccountsResponses];
 
 export type ExpandDiscoveryKeywordsData = {
   body: DiscoveryKeywordRequest;

@@ -264,6 +264,68 @@ async def test_the_board_carries_the_fitness_verdict_of_the_run_in_flight() -> N
 
 
 @pytest.mark.asyncio
+async def test_the_board_lifts_kind_and_the_probe_derived_facts_onto_the_row() -> None:
+    """``kind`` is stored; access, language and the category match live on the verdict."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [
+            DiscoveryCandidateRow(
+                channel="chat", title="Chat", source="telegram_search", kind="group"
+            ),
+            _row("plain"),
+        ],
+    )
+    _discovery_state.record_verdict(
+        campaign_id,
+        "chat",
+        DiscoveryChannelVerdict(access="join_request", language="ru", category_match=True),
+    )
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    chat, plain = board.candidates
+    assert (chat.kind, chat.access, chat.language, chat.category_match) == (
+        "group",
+        "join_request",
+        "ru",
+        True,
+    )
+    # No verdict: the facts are unknown, and the row's own kind still shows.
+    assert (plain.kind, plain.access, plain.language, plain.category_match) == (
+        "channel",
+        None,
+        None,
+        None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_adopt_refuses_groups_and_private_rows_without_a_write() -> None:
+    """Nothing a campaign could comment in, so no link is even attempted."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(
+        campaign_id,
+        [
+            DiscoveryCandidateRow(
+                channel="chat", title="Chat", source="telegram_search", kind="group"
+            ),
+            _row("plain"),
+        ],
+    )
+
+    result = await adopt_candidates(campaign_id, ["chat", "id:123456", "plain"])
+
+    assert result is not None
+    assert [(o.channel, o.status) for o in result.outcomes] == [
+        ("chat", "not_adoptable"),
+        ("id:123456", "not_adoptable"),
+        ("plain", "linked"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_a_candidate_with_no_recorded_verdict_reads_as_unknown_not_fine() -> None:
     """The verdict is not persisted, so a board read after a restart has none.
 

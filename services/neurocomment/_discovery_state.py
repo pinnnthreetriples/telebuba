@@ -42,10 +42,10 @@ _TASKS: dict[str, asyncio.Task[None]] = {}
 # resolve its account BEFORE claiming, so that everything from ``try_reserve`` to
 # ``spawn`` is await-free; that is what makes the claim atomic.
 _RESERVED: dict[str, datetime] = {}
-# The account each in-flight run is reading with. Per-campaign single-flight alone
-# does not deliver the one-paced-stream invariant, because every campaign resolves to
-# the same fleet listener: N campaigns would mean N streams on one account.
-_RUN_ACCOUNTS: dict[str, str] = {}
+# The accounts each in-flight run is reading with. Per-campaign single-flight alone
+# does not deliver the one-paced-stream invariant, because two campaigns can pick the
+# same accounts: N campaigns would mean N streams on one account.
+_RUN_ACCOUNTS: dict[str, frozenset[str]] = {}
 _PHASES: dict[str, DiscoveryPhase] = {}
 _LAST_ERRORS: dict[str, str] = {}
 # Per-source outcome plus per-row provenance of the last run. Not persisted, for the same
@@ -100,6 +100,13 @@ def set_run_report(campaign_id: str, report: DiscoveryRunReport) -> None:
     _REPORTS[campaign_id] = report
 
 
+def bump_filtered(campaign_id: str, reason: str) -> None:
+    """Count one row the qualification pass dropped under an operator filter."""
+    report = run_report(campaign_id)
+    report.filtered[reason] = report.filtered.get(reason, 0) + 1
+    _REPORTS[campaign_id] = report
+
+
 def verdicts(campaign_id: str) -> dict[str, DiscoveryChannelVerdict]:
     """Fitness verdicts this process's qualification passes recorded, keyed by channel.
 
@@ -139,30 +146,30 @@ def at_daily_search_cap(now: datetime | None = None) -> bool:
 def account_busy(account_id: str) -> bool:
     """Is some in-flight run already reading with this account?"""
     return any(
-        held == account_id and is_running(campaign) for campaign, held in _RUN_ACCOUNTS.items()
+        account_id in held and is_running(campaign) for campaign, held in _RUN_ACCOUNTS.items()
     )
 
 
 def try_reserve(
     campaign_id: str,
-    account_id: str,
+    account_ids: frozenset[str],
     now: datetime | None = None,
 ) -> DiscoveryStartStatus | None:
-    """Claim the run slot for this campaign AND this account, plus one search.
+    """Claim the run slot for this campaign AND these accounts, plus one search.
 
     Returns the refusal status, or ``None`` when the claim succeeded. Contains no
-    await by design — the caller must already have resolved ``account_id``, so the
+    await by design — the caller must already have checked ``account_ids``, so the
     whole claim-to-spawn sequence is synchronous and cannot be straddled by a second
     start. It also means no path between the claim and ``spawn`` can fail, so there is
     nothing to refund and no release to forget.
     """
-    if is_running(campaign_id) or account_busy(account_id):
+    if is_running(campaign_id) or any(account_busy(account_id) for account_id in account_ids):
         return "already_running"
     moment = now or datetime.now(UTC)
     if at_daily_search_cap(moment):
         return "daily_limit_reached"
     _RESERVED[campaign_id] = moment
-    _RUN_ACCOUNTS[campaign_id] = account_id
+    _RUN_ACCOUNTS[campaign_id] = account_ids
     _SEARCH_TIMES.append(moment)
     return None
 

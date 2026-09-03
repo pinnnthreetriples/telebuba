@@ -1,7 +1,7 @@
-"""Which account a discovery run may use, and the start refusals that follow.
+"""Which accounts a discovery run may use, and the start refusals that follow.
 
 Split out of ``test_discovery_search.py`` (700-line test cap): that file covers the
-source fan-out and the merge, this one covers ``resolve_search_account`` plus the
+source fan-out and the merge, this one covers the per-pick account check plus the
 statuses ``start_discovery`` answers instead of raising.
 """
 
@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from core.config import settings
-from core.db import assign_account_to_campaign, create_account, upsert_warming_state
+from core.db import create_account, upsert_warming_state
 from core.repositories.neurocomment import get_listener_running, set_listener_running
 from schemas.accounts import AccountCreate
 from schemas.warming import StartWarmingRequest, WarmingStateWrite
@@ -27,6 +27,7 @@ from tests.services.neurocomment.discovery_support import (
     matches,
     new_campaign,
     search_request,
+    seed_account,
     seed_listener,
     start_run,
 )
@@ -65,28 +66,26 @@ async def test_start_discovery_is_single_flighted(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_start_discovery_without_any_account_refuses() -> None:
+async def test_start_discovery_with_an_unknown_pick_refuses() -> None:
+    """The picked id names no account on this dashboard."""
     campaign_id = await new_campaign()
 
     outcome = await start_run(campaign_id, search_request())
 
     assert outcome.status == "no_account"
+    assert outcome.refused_account_id == LISTENER_ID
 
 
 @pytest.mark.asyncio
-async def test_start_discovery_falls_back_to_a_campaign_account(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await create_account(
-        AccountCreate(account_id="acc-serving", label="server", session_name="acc-serving")
-    )
+async def test_a_pick_that_was_never_signed_in_is_refused() -> None:
+    """An account row with no session has nothing to read with."""
+    await create_account(AccountCreate(account_id="acc-fresh", label="fresh"))
     campaign_id = await new_campaign()
-    await assign_account_to_campaign(campaign_id, "acc-serving")
 
-    outcome = await start_run(campaign_id, search_request())
+    outcome = await start_run(campaign_id, search_request(account_ids=["acc-fresh"]))
 
-    assert outcome.status == "started"
+    assert outcome.status == "no_account"
+    assert outcome.refused_account_id == "acc-fresh"
 
 
 @pytest.mark.asyncio
@@ -101,6 +100,7 @@ async def test_a_warming_account_is_refused(monkeypatch: pytest.MonkeyPatch) -> 
 
     # busy, not cooling: the account is healthy, its session is just taken.
     assert refused.status == "account_busy"
+    assert refused.refused_account_id == LISTENER_ID
 
 
 @pytest.mark.asyncio
@@ -126,14 +126,12 @@ async def test_a_running_listener_does_not_block_a_serving_account(
 ) -> None:
     """The guard is about sharing one session, not about the listener existing."""
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await create_account(
-        AccountCreate(account_id="acc-serving", label="server", session_name="acc-serving")
-    )
+    await seed_listener()
+    await seed_account("acc-serving")
     campaign_id = await new_campaign()
-    await assign_account_to_campaign(campaign_id, "acc-serving")
     await set_listener_running(running=True)
 
-    outcome = await start_run(campaign_id, search_request())
+    outcome = await start_run(campaign_id, search_request(account_ids=["acc-serving"]))
 
     assert outcome.status == "started"
 
@@ -275,11 +273,11 @@ async def test_a_warming_start_between_resolution_and_the_claim_still_wins(
 ) -> None:
     """The claim may not be made on a health verdict that has gone stale.
 
-    ``resolve_search_account`` answers several awaits before ``try_reserve`` runs, and
+    ``check_search_account`` answers several awaits before ``try_reserve`` runs, and
     ``start_warming`` needs only that gap to commit. So the claim is made under warming's
     own per-account lifecycle lock, re-checking warming inside it — the shape
     ``start_neurocomment`` already uses for the listener. Held open here on purpose:
-    with only the resolve-time check, both starts commit and one account carries two
+    with only the check-time verdict, both starts commit and one account carries two
     paced streams.
     """
     from services import warming  # noqa: PLC0415
@@ -287,15 +285,15 @@ async def test_a_warming_start_between_resolution_and_the_claim_still_wins(
 
     resolved = asyncio.Event()
     warming_committed = asyncio.Event()
-    real_resolve = discovery_service.resolve_search_account
+    real_check = discovery_service.check_search_account
 
-    async def _stalled_resolve(campaign_id: str) -> object:
-        account = await real_resolve(campaign_id)
+    async def _stalled_check(account_id: str) -> object:
+        account = await real_check(account_id)
         resolved.set()
         await warming_committed.wait()
         return account
 
-    monkeypatch.setattr(discovery_service, "resolve_search_account", _stalled_resolve)
+    monkeypatch.setattr(discovery_service, "check_search_account", _stalled_check)
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
     await seed_listener()
     await _warmable_listener(monkeypatch)
@@ -401,7 +399,7 @@ async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
 ) -> None:
     """The listener half of the stale-resolution refusal, not only the warming half.
 
-    ``resolve_search_account``'s listener check sits outside the claim lock too, so the
+    ``check_search_account``'s listener check sits outside the claim lock too, so the
     account could be re-armed as the running listener in the same gap warming used.
     """
     from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
@@ -409,15 +407,15 @@ async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
 
     resolved = asyncio.Event()
     listener_committed = asyncio.Event()
-    real_resolve = discovery_service.resolve_search_account
+    real_check = discovery_service.check_search_account
 
-    async def _stalled_resolve(campaign_id: str) -> object:
-        account = await real_resolve(campaign_id)
+    async def _stalled_check(account_id: str) -> object:
+        account = await real_check(account_id)
         resolved.set()
         await listener_committed.wait()
         return account
 
-    monkeypatch.setattr(discovery_service, "resolve_search_account", _stalled_resolve)
+    monkeypatch.setattr(discovery_service, "check_search_account", _stalled_check)
     monkeypatch.setattr(nc_runtime, "reconcile_neurocomment_runtime", _noop_reconcile)
     monkeypatch.setattr(nc_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
@@ -435,31 +433,71 @@ async def test_a_listener_start_between_resolution_and_the_claim_still_wins(
 
 
 @pytest.mark.asyncio
-async def test_listener_is_preferred_over_a_campaign_account(
+async def test_every_picked_account_reads_and_all_are_claimed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Discovery traffic must stay off the commenting accounts."""
-    seen: list[str] = []
-
-    async def _record(account_id: str, _action: object) -> object:
-        seen.append(account_id)
-        return matches()
-
-    monkeypatch.setattr(_seams, "execute_read", _record)
-    await create_account(
-        AccountCreate(account_id="acc-serving", label="server", session_name="acc-serving")
-    )
+    """The run rotates over the operator's picks, and each one is held while it runs."""
+    reader = ReadRecorder(search=matches())
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await seed_account("acc-b")
+    await seed_account("acc-a")
     campaign_id = await new_campaign()
-    await assign_account_to_campaign(campaign_id, "acc-serving")
-    await seed_listener()
 
-    # Through start_discovery, not run_search: handing the account in as a literal
-    # would assert nothing about which one the policy actually picks.
-    await start_run(campaign_id, search_request())
+    started = await start_run(
+        campaign_id, search_request(keywords=["alpha", "bravo"], account_ids=["acc-b", "acc-a"])
+    )
+
+    assert started.status == "started"
+    # Both are busy for warming and the listener for as long as the run is in flight.
+    assert _discovery_state.account_busy("acc-a") is True
+    assert _discovery_state.account_busy("acc-b") is True
+    await drain_discovery(campaign_id)
+    assert set(reader.accounts) == {"acc-a", "acc-b"}
+    assert _discovery_state.account_busy("acc-a") is False
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_names_the_first_bad_pick_in_id_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Checked in sorted order, so which account the SPA points at is deterministic."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    await seed_account("acc-a")
+    await seed_account("acc-c")
+    campaign_id = await new_campaign()
+    await _state.set_cooldown("acc-c", datetime.now(UTC) + timedelta(hours=1))
+
+    refused = await start_run(campaign_id, search_request(account_ids=["acc-c", "acc-b", "acc-a"]))
+
+    # ``acc-b`` is unknown and sorts before the cooling ``acc-c``; nothing was claimed.
+    assert refused.status == "no_account"
+    assert refused.refused_account_id == "acc-b"
+    assert _discovery_state.is_running(campaign_id) is False
+
+
+@pytest.mark.asyncio
+async def test_the_locks_are_taken_in_id_order_whatever_the_pick_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two starts over overlapping picks must lock in ONE order, or they deadlock."""
+    from services import warming  # noqa: PLC0415
+
+    taken: list[str] = []
+    real_lock = warming.account_lock
+
+    def _recording_lock(account_id: str) -> asyncio.Lock:
+        taken.append(account_id)
+        return real_lock(account_id)
+
+    monkeypatch.setattr(warming, "account_lock", _recording_lock)
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    await seed_account("acc-a")
+    await seed_account("acc-b")
+    campaign_id = await new_campaign()
+
+    started = await start_run(campaign_id, search_request(account_ids=["acc-b", "acc-a"]))
     await drain_discovery(campaign_id)
 
-    # WHICH account, not how many reads: a run is several waves (keyword sweep, global post
-    # pages, recommendations), and every one of them is deliberately spent on the same
-    # single account this policy picked.
-    assert set(seen) == {LISTENER_ID}
-    assert seen
+    assert started.status == "started"
+    # The run's own reads take the lock too, so only the start's first two matter.
+    assert taken[:2] == ["acc-a", "acc-b"]

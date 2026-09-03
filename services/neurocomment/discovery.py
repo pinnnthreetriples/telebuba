@@ -29,19 +29,20 @@ from schemas.neurocomment_discovery import (
     DiscoveryAdoptResult,
     DiscoveryBoard,
     DiscoveryCandidate,
+    DiscoveryChannelVerdict,
     DiscoveryProgress,
     DiscoveryRunReport,
     DiscoverySearchOutcome,
 )
 from services.neurocomment import _discovery_state, _runtime
-from services.neurocomment._discovery_providers import (
+from services.neurocomment._discovery_pool import (
+    AccountPool,
     SearchAccount,
     account_taken,
-    resolve_search_account,
+    check_search_account,
 )
-from services.neurocomment._discovery_qualify import is_fresh, run_qualification
-from services.neurocomment._discovery_search import run_search
-from services.neurocomment._signals import signal_discovery_progress
+from services.neurocomment._discovery_qualify import PRIVATE_PREFIX, is_fresh
+from services.neurocomment._discovery_run import run
 
 if TYPE_CHECKING:
     from schemas.neurocomment import LinkedGroupList
@@ -58,125 +59,73 @@ async def start_discovery(
 ) -> DiscoverySearchOutcome | None:
     """Validate, then spawn one background run for this campaign.
 
-    ``None`` for an unknown campaign, as in ``load_discovery``. Checked first and
-    against the campaign, not the account: ``resolve_search_account`` falls back to
-    the global listener, so without this a deleted campaign would answer "started",
-    spend a search slot and real RPCs, then die on the foreign key.
+    ``None`` for an unknown campaign, as in ``load_discovery``. Checked first: without
+    this a deleted campaign would answer "started", spend a search slot and real RPCs,
+    then die on the foreign key.
 
     Refusals are statuses, not exceptions, so the API can report them verbatim:
-    another run in flight, no usable account, that account busy or cooling off, or
-    the rolling-24h search allowance spent.
+    another run in flight, a picked account that is unknown, busy or cooling off (named
+    in ``refused_account_id``, first in id order), or the rolling-24h search allowance
+    spent.
     """
     if await db.fetch_campaign(campaign_id) is None:
         return None
-    account = await resolve_search_account(campaign_id)
-    if isinstance(account, str):
-        return DiscoverySearchOutcome(status=account)  # ty: ignore[invalid-argument-type]
+    # Sorted, here and for the locks below: two starts picking overlapping accounts must
+    # take the locks in one order, or they deadlock each other.
+    account_ids = sorted(request.account_ids)
+    accounts: list[SearchAccount] = []
+    for account_id in account_ids:
+        checked = await check_search_account(account_id)
+        if not isinstance(checked, SearchAccount):
+            return DiscoverySearchOutcome(status=checked, refused_account_id=account_id)
+        accounts.append(checked)
 
-    # Resolution first, then one synchronous claim: everything from here to ``spawn``
-    # is await-free, so a second start cannot straddle it and no failure can strand a
-    # claim. The claim covers the account too, not just the campaign — every campaign
-    # resolves to the same listener.
+    # Checks first, then one synchronous claim: everything from ``try_reserve`` to
+    # ``spawn`` is await-free, so a second start cannot straddle it and no failure can
+    # strand a claim. The claim covers the accounts too, not just the campaign.
     #
-    # Under warming's own per-account lifecycle lock, re-asking BOTH owners inside it, for
-    # the reason ``start_neurocomment`` takes the same lock: ``resolve_search_account``
-    # answered several awaits ago, and ``start_warming`` and the listener start both read
-    # this claim under that lock before they commit. Without it their checks and this one
-    # all pass in the gap and the account ends up carrying two paced streams. Released
-    # before ``spawn``, so the lock never spans the multi-minute run itself.
+    # Under warming's own per-account lifecycle lock for every picked account, re-asking
+    # BOTH owners inside it, for the reason ``start_neurocomment`` takes the same lock:
+    # ``check_search_account`` answered several awaits ago, and ``start_warming`` and the
+    # listener start both read this claim under that lock before they commit. Without it
+    # their checks and this one all pass in the gap and the account ends up carrying two
+    # paced streams. The spawned task cannot start before this coroutine next yields,
+    # which is after the locks are released, so they never span the run itself.
     from services.warming import account_lock  # noqa: PLC0415 - avoid a load-time cycle.
 
-    async with account_lock(account.account_id):
-        if await account_taken(account.account_id):
-            return DiscoverySearchOutcome(status="account_busy")
-        refusal = _discovery_state.try_reserve(campaign_id, account.account_id)
-    if refusal is not None:
-        return DiscoverySearchOutcome(status=refusal)
+    async with contextlib.AsyncExitStack() as locks:
+        for account_id in account_ids:
+            await locks.enter_async_context(account_lock(account_id))
+        for account_id in account_ids:
+            if await account_taken(account_id):
+                return DiscoverySearchOutcome(status="account_busy", refused_account_id=account_id)
+        refusal = _discovery_state.try_reserve(campaign_id, frozenset(account_ids))
+        if refusal is not None:
+            return DiscoverySearchOutcome(status=refusal)
 
-    _discovery_state.set_phase(campaign_id, "searching")
-    _discovery_state.set_last_error(campaign_id, None)
-    # Per-run state, so it is cleared where the rest of it is. A verdict describes the
-    # channel a PREVIOUS run probed, and the linked-group cache lets this run qualify a
-    # channel without probing it at all — so a kept verdict would be shown beside a row
-    # nothing measured this time, and the map would grow for the life of the process.
-    _discovery_state.clear_verdicts(campaign_id)
-    # The source strip is per-run for the same reason, and the exception path below never
-    # sets one: without this, a run that crashed published the PREVIOUS run's strip
-    # beside its own failure.
-    _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
-    _discovery_state.spawn(campaign_id, _run(campaign_id, account, request))
+        _discovery_state.set_phase(campaign_id, "searching")
+        _discovery_state.set_last_error(campaign_id, None)
+        # Per-run state, so it is cleared where the rest of it is. A verdict describes the
+        # channel a PREVIOUS run probed, and the linked-group cache lets this run qualify
+        # a channel without probing it at all — so a kept verdict would be shown beside a
+        # row nothing measured this time, and the map would grow for the life of the
+        # process.
+        _discovery_state.clear_verdicts(campaign_id)
+        # The source strip is per-run for the same reason, and the run's exception path
+        # never sets one: without this, a run that crashed published the PREVIOUS run's
+        # strip beside its own failure.
+        _discovery_state.set_run_report(campaign_id, DiscoveryRunReport())
+        _discovery_state.spawn(campaign_id, run(campaign_id, AccountPool(accounts), request))
     await log_event(
         "INFO",
         "neurocomment_discovery_started",
         extra={
             "campaign_id": campaign_id,
-            "account_id": account.account_id,
+            "account_ids": account_ids,
             "keywords": len(request.keywords),
         },
     )
     return DiscoverySearchOutcome(status="started")
-
-
-async def _run(
-    campaign_id: str,
-    account: SearchAccount,
-    request: DiscoverySearchRequest,
-) -> None:
-    """The background run: search, then qualify. Never lets an error escape."""
-    try:
-        stage = await run_search(campaign_id, account.account_id, request)
-        _discovery_state.set_last_error(campaign_id, stage.error)
-        # Published whether or not the rows were stored: a run that stored nothing is
-        # exactly when the operator needs to see which source refused. The search stage
-        # has already stripped everything that would describe rows nobody can see.
-        _discovery_state.set_run_report(campaign_id, stage.report)
-        qualify_error = None
-        if not stage.replaced or stage.flooded:
-            # Not replaced: no source answered (or the filter-aware one did not), so the
-            # stored candidates are still the previous run's and this is not a run the
-            # operator should read as done. Keyed off the write, not off ``(found,
-            # error)``: a source that answered with zero hits, or a filter that removed
-            # every hit, is an empty result — not a failure.
-            # Flooded: a rate limit is in force on the search account — the search stage
-            # either caused it and wrote the cooldown, or found one somebody else
-            # recorded. Qualifying would fire getFullChannel straight into the live
-            # window, which is how Telegram turns a soft limit into a hard one.
-            _discovery_state.set_phase(campaign_id, "failed")
-        else:
-            _discovery_state.set_phase(campaign_id, "qualifying")
-            signal_discovery_progress()
-
-            qualify_error = await run_qualification(campaign_id, account.account_id)
-            if qualify_error is not None:
-                _discovery_state.set_last_error(campaign_id, qualify_error)
-                _discovery_state.set_phase(campaign_id, "failed")
-            else:
-                _discovery_state.set_phase(campaign_id, "done")
-        await log_event(
-            "INFO",
-            "neurocomment_discovery_finished",
-            extra={
-                "campaign_id": campaign_id,
-                "found": stage.found,
-                "reason": qualify_error or stage.error,
-                # Per source, so a run that reached "done" with a filter that never
-                # applied is visible in the log too, not only on the board — including
-                # the gateway's diagnostic text, which the short reason cannot carry.
-                "sources": [
-                    report.model_dump(exclude_none=True) for report in stage.report.sources
-                ],
-            },
-        )
-    except Exception as exc:  # noqa: BLE001 - a background task must not die silently
-        _discovery_state.set_phase(campaign_id, "failed")
-        _discovery_state.set_last_error(campaign_id, type(exc).__name__)
-        await log_event(
-            "ERROR",
-            "neurocomment_discovery_failed",
-            extra={"campaign_id": campaign_id, "reason": type(exc).__name__},
-        )
-    finally:
-        signal_discovery_progress()
 
 
 def _qualification(
@@ -226,18 +175,25 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
         # Provenance and the fitness verdict are only known while the run's state lives;
         # a board read after a restart falls back to the one source the row itself stores
         # — verbatim, whatever build wrote it — and to no verdict at all, which the wire
-        # model documents as unknown.
+        # model documents as unknown. The three probe-derived facts are lifted off the
+        # verdict for the same reason: nothing else holds them.
         origin = report.origins.get(row.channel)
+        verdict = verdicts.get(row.channel)
+        facts = verdict or DiscoveryChannelVerdict()
         candidates.append(
             DiscoveryCandidate(
                 channel=row.channel,
                 title=row.title,
                 subscribers=row.subscribers,
                 source=row.source,
+                kind=row.kind,
+                access=facts.access,
+                language=facts.language,
+                category_match=facts.category_match,
                 sources=[row.source] if origin is None else list(origin.sources),
                 qualification=qualification,
                 uncounted=origin is not None and origin.uncounted,
-                verdict=verdicts.get(row.channel),
+                verdict=verdict,
                 in_campaign=owner_id == campaign_id,
                 taken_by_other_campaign=owner_id is not None and owner_id != campaign_id,
             ),
@@ -257,6 +213,7 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
             # previous search's and the board must not present them as this one's find.
             stale_candidates=not report.stored,
             capped=report.capped,
+            filtered=report.filtered,
         ),
         candidates=candidates,
     )
@@ -290,10 +247,12 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
 
     Every refusal AND every failure is a per-channel status, never an exception:
     ``already_assigned`` (the channel is another campaign's active target),
-    ``comments_off`` (its cached verdict says the campaign could never comment there) and
-    ``failed`` (the attempt raised). One bad channel must not cost the report for the
-    other 29 — those stay linked either way, so aborting the batch left the operator
-    with an opaque 500 and no way to know what had already happened.
+    ``comments_off`` (its cached verdict says the campaign could never comment there),
+    ``not_adoptable`` (a group, or a channel with no public handle — nothing a campaign
+    could comment in, so no link is attempted) and ``failed`` (the attempt raised). One
+    bad channel must not cost the report for the other 29 — those stay linked either way,
+    so aborting the batch left the operator with an opaque 500 and no way to know what
+    had already happened.
 
     The comments check is here and not only in the SPA: the UI merely disables those
     checkboxes, so any caller that skipped it linked a channel the campaign can never
@@ -319,6 +278,8 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
     reason: str | None = None
     consecutive = 0
     comments_off = await _comments_off_channels(channels)
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    groups = {row.channel for row in rows if row.kind == "group"}
     for index, channel in enumerate(channels):
         if consecutive >= settings.neurocomment.discovery_max_consecutive_errors:
             # Nothing is working; stop writing. A refusal resets the counter, so only real
@@ -329,6 +290,10 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
                 DiscoveryAdoptOutcome(status="failed", channel=rest) for rest in remainder
             )
             break
+        if channel.startswith(PRIVATE_PREFIX) or channel in groups:
+            # Like ``comments_off`` below: no write attempted, counter left alone.
+            outcomes.append(DiscoveryAdoptOutcome(status="not_adoptable", channel=channel))
+            continue
         if channel in comments_off:
             # No write attempted, so the abort counter is left alone: this says nothing
             # about whether the database is answering.

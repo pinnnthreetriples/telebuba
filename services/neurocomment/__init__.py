@@ -12,6 +12,7 @@ from __future__ import annotations
 from core.repositories.neurocomment import ChannelNotInCampaignError
 from services.logs import InvalidCursorError
 from services.neurocomment._discovery_keywords import expand_discovery_keywords
+from services.neurocomment._discovery_pool import list_search_accounts
 from services.neurocomment._runtime import (
     ListenerBusyWarmingError,
     clear_neurocomment_listener,
@@ -91,6 +92,7 @@ __all__ = [
     "list_campaigns",
     "list_channel_challenges",
     "list_comments_page",
+    "list_search_accounts",
     "load_account_limits",
     "load_discovery",
     "load_neurocomment_board",

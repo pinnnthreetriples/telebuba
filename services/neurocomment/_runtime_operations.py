@@ -241,7 +241,7 @@ async def remember_neurocomment_listener(listener_account_id: str) -> bool:
     between them and leave the pointer naming an account no runtime owner ever took.
 
     Refuses a busy account on the same terms as Start, even though nothing is started
-    here: a saved pointer is not inert. ``resolve_search_account`` prefers it for channel
+    here: a saved pointer is not inert. The listener is the natural pick for channel
     discovery whether or not the engine runs, so a pointer at a warming or campaign-held
     session would put a multi-minute keyword stream on a session another runtime owns.
     """

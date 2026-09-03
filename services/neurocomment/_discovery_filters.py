@@ -83,19 +83,19 @@ def admit_at_search(
     return None
 
 
-def admit_at_qualification(  # noqa: PLR0913 — one keyword per probed fact
+def admit_at_qualification(
     *,
     title: str,
     about: str | None,
     comments_enabled: bool | None,
     access: str | None,
-    language: str | None,
     request: DiscoverySearchRequest,
 ) -> str | None:
     """Reject on what the probe learnt: ``comments``, ``access``, ``language``, ``category``.
 
-    ``None`` for ``comments_enabled`` / ``access`` / ``language`` means the probe could
-    not tell, and an unknown fact never rejects.
+    ``None`` for ``comments_enabled`` / ``access`` means the probe could not tell, and an
+    unknown fact never rejects. The language is read off ``title`` + ``about`` here, the
+    same way the verdict reads it, so a text with no letters cannot reject either.
     """
     if request.comments == "on" and comments_enabled is False:
         return "comments"
@@ -104,6 +104,7 @@ def admit_at_qualification(  # noqa: PLR0913 — one keyword per probed fact
     wants_known_access = request.access in {"open", "join_request"} and access is not None
     if wants_known_access and access != request.access:
         return "access"
+    language = detect_language(f"{title} {about or ''}")
     if request.language != "any" and language is not None and language != request.language:
         return "language"
     if request.category != "any" and not matches(title, about, request.category):

@@ -313,9 +313,10 @@ class NeurocommentSettings(BaseSettings):
     # Rows shown in the engine panel's collapsible neurocomment-activity log.
     log_limit: int = Field(default=50, ge=1, le=200)
     # Channel-discovery knobs (the "Найти каналы" search) follow.
-    # Hard cap on candidates kept per campaign. The UI shows one unpaginated list
-    # and every candidate costs up to one getFullChannel probe, so this bounds both.
-    discovery_max_candidates: int = Field(default=100, ge=1, le=500)
+    # Hard cap on candidates kept per campaign, over the operator's own per-search
+    # ``limit`` (1..500). At the ceiling so that limit is the one that decides; every
+    # candidate still costs up to one getFullChannel probe.
+    discovery_max_candidates: int = Field(default=500, ge=1, le=500)
     # Rolling-24h ceiling on operator-initiated searches (in-memory: a search is a
     # human button press, and contacts.Search is a cheap read).
     discovery_max_searches_per_day: int = Field(default=20, ge=1)

@@ -6,15 +6,15 @@ or writes the database, and nothing there talks to Telegram.
 
 The run is a sequence of waves: the keyword sweep, the operator's own seed, the global
 post pages, then Telegram's recommendations around the sweep's own best hits. They
-multiply reads, so they share ONE budget (``discovery_max_reads_per_run``) spent in
-that order rather than each bounding itself — except that the recommendation wave's
-reads are held back before the post pages run, because pure wave order let the weakest
-source spend the last of the budget on itself. A wave the budget stops reports itself
-truncated; a rate limit in any wave ends every later one, and so does a session that
-answers nothing ``discovery_max_consecutive_errors`` reads in a row. A limit the run did
-not cause ends it too: the account's cooldown is re-read before EVERY read, not once per
-wave — the keyword sweep alone can spend the whole budget, so a per-wave check left the
-rest of it firing into a live window.
+multiply reads, so they share ONE budget (``discovery_max_reads_per_run`` per account
+in the pool) spent in that order rather than each bounding itself — except that the
+recommendation wave's reads are held back before the post pages run, because pure wave
+order let the weakest source spend the last of the budget on itself. A wave the budget
+stops reports itself truncated. Every read is made with the account the pool hands out
+next; the pool drops an account that floods, that somebody else parked, or that answers
+nothing ``discovery_max_consecutive_errors`` reads in a row, and the run ends the moment
+the pool is empty — which is why the cooldown is re-read before EVERY read, not once per
+wave: the keyword sweep alone can spend the whole budget.
 
 Pacing note: every RPC is jittered exactly like the qualification pass. Even a modest
 sweep is ~11 reads, and firing them as one burst is the freeze vector the whole
@@ -24,29 +24,33 @@ discovery design is built to avoid. That pacing is what sets the stage's duratio
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from core.channel_tokens import dedup_key, normalize_channel
 from core.config import settings
 from schemas.neurocomment_discovery import CHANNEL_HANDLE_MAX_LENGTH
-from services.neurocomment import _seams
+from services.neurocomment._discovery_categories import keywords_for
 from services.neurocomment._discovery_providers import (
     SourceOutcome,
-    account_cooling,
-    record_flood,
     search_global,
     search_native,
     search_similar,
 )
+from services.neurocomment._discovery_wave_support import (
+    READ_BUDGET,
+    Budget,
+    Wave,
+    pace,
+    skipped,
+    stopped,
+    unreached,
+)
 from services.neurocomment._signals import signal_discovery_progress
 
 if TYPE_CHECKING:
-    from schemas.neurocomment_discovery import DiscoverySearchRequest, DiscoverySource
-    from schemas.telegram_actions_discovery import GlobalPostsCursor
-
-# Short locale-neutral reason for a wave the run's read budget stopped. Deliberately not
-# a run-level error — see ``_discovery_search._merge``.
-READ_BUDGET = "read_budget"
+    from schemas.neurocomment_discovery import DiscoverySearchRequest
+    from schemas.telegram_actions_discovery import DiscoveryKind, GlobalPostsCursor
+    from services.neurocomment._discovery_pool import AccountPool
 
 # Pages of ``messages.searchGlobal`` per keyword, the reads the post wave may spend in
 # total, and channels of the keyword sweep that each get their own recommendations read.
@@ -63,152 +67,58 @@ _GLOBAL_MAX_PAGES = 2
 _GLOBAL_MAX_READS = 10
 _SIMILAR_FROM_TOP = 5
 
-# Native hits win a cross-source tie: their handles come straight from Telegram in
-# canonical case, which is what adopt writes into the campaign verbatim. This governs
-# the DEDUP order only — see ``_discovery_search._merge`` for why it must not govern
-# truncation as well.
-# Annotated because the keys are also iterated as the report's source list, where a
-# widened ``str`` would not satisfy ``DiscoverySourceReport``.
-# Also the board's row order — which the run's wave order no longer follows, since the
-# operator's seed is read ahead of the wider post wave.
-SOURCE_PRIORITY: dict[DiscoverySource, int] = {
-    "telegram_search": 0,
-    "telegram_posts": 1,
-    "telegram_similar": 2,
-    "telegram_recommended": 3,
-}
+
+def sweep_keywords(request: DiscoverySearchRequest) -> list[str]:
+    """The operator's keywords plus the category's bundle, deduped case-insensitively."""
+    words: dict[str, str] = {}
+    for word in [*request.keywords, *keywords_for(request.category)]:
+        words.setdefault(word.casefold(), word)
+    return list(words.values())
 
 
-class Wave(NamedTuple):
-    """One wave's outcomes, and whether the run must stop reading after it."""
-
-    outcomes: list[SourceOutcome]
-    flooded: bool = False
-    # A non-flood stop: the session answered nothing often enough that the rest of the
-    # run would only prove it again. Kept apart from ``flooded`` because only a flood
-    # writes a cooldown and stops the run replacing its stored candidates.
-    aborted: bool = False
-    # A limit this run did not cause: the account was already cooling when a read was
-    # about to be spent. Its own field because it is neither of the two above — nothing
-    # failed and nothing was written — but it must stop the run exactly like a flood.
-    cooled: bool = False
-
-    @property
-    def stopped(self) -> bool:
-        return self.flooded or self.aborted or self.cooled
-
-
-class _Budget:
-    """Telegram reads the run has left, shared by every wave.
-
-    One counter, not a cap per wave: what has to stay bounded is the traffic this single
-    account emits in one run, and spending it in wave order is what puts the cheap
-    keyword sweep first in line for it.
-
-    ``hold`` fences reads off for a wave that has not run yet. Wave order alone left the
-    LAST wave — Telegram's recommendations, the only source that reaches channels the
-    account is nowhere near — living on whatever the post pages had not eaten, which on a
-    full keyword list was nothing at all.
-    """
-
-    def __init__(self, total: int) -> None:
-        self.left = total
-        self.held = 0
-
-    def hold(self, count: int) -> None:
-        """Keep ``count`` of the remaining reads back for a later wave."""
-        self.held = count
-
-    def take(self) -> bool:
-        """Claim one read. ``False`` means the run is out and the wave must stop."""
-        if self.left - self.held <= 0:
-            return False
-        self.left -= 1
-        return True
-
-
-class _Faults:
-    """Consecutive failed reads, counted across every wave of one run.
-
-    The rule ``run_qualification`` already applies, for the reason its own comment gives:
-    a dead session must not burn one RPC per remaining candidate. Without it here a
-    wedged proxy simply moved on to the next keyword and spent the whole run — every read
-    of it up to three socket attempts down at the Telethon layer — proving the same thing
-    over and over.
-
-    Counted across waves rather than per wave: one broken session fails them all alike,
-    and three failures spread over the sweep and the post pages say exactly what three in
-    a row inside one wave do. Only the CONSECUTIVE half of that rule is copied — its
-    failure-RATE half needs 20 probes before it means anything, and a whole run is
-    budgeted fewer reads than the sweep and the post wave together would have to spend
-    before it could ever speak.
-    """
-
-    def __init__(self) -> None:
-        self.consecutive = 0
-
-    def record(self, outcome: SourceOutcome) -> bool:
-        """Count one read's outcome; ``True`` means the run must stop reading."""
-        self.consecutive = 0 if outcome.answered else self.consecutive + 1
-        return self.consecutive >= settings.neurocomment.discovery_max_consecutive_errors
-
-
-def _skipped(
-    source: DiscoverySource,
-    reason: str | None = None,
-    *,
-    truncated: bool = False,
-) -> SourceOutcome:
-    """A source that was not asked (again) — never a silent absence from the report."""
-    return SourceOutcome(source=source, state="skipped", error=reason, truncated=truncated)
-
-
-async def _pace() -> None:
-    neuro = settings.neurocomment
-    await _seams.sleep(
-        _seams.rng.uniform(
-            neuro.discovery_qualify_delay_min_seconds,
-            neuro.discovery_qualify_delay_max_seconds,
-        ),
+async def _report(pool: AccountPool, account_id: str, outcome: SourceOutcome) -> bool:
+    """Hand one read's outcome to the pool; ``True`` means no account is left to read with."""
+    return await pool.report(
+        account_id,
+        flood_seconds=outcome.flood_seconds,
+        failed=not outcome.answered,
     )
 
 
 async def _keyword_pass(
-    account_id: str,
+    pool: AccountPool,
     keywords: list[str],
-    budget: _Budget,
-    faults: _Faults,
+    budget: Budget,
+    kind: DiscoveryKind,
 ) -> Wave:
     """One paced search per keyword — the cheapest wave, so it is served first."""
     outcomes: list[SourceOutcome] = []
     for index, keyword in enumerate(keywords):
-        if account_cooling(account_id):
-            return Wave(outcomes, cooled=True)
         if not budget.take():
-            outcomes.append(_skipped("telegram_search", READ_BUDGET, truncated=True))
+            outcomes.append(skipped("telegram_search", READ_BUDGET, truncated=True))
             break
         if index:
-            await _pace()
-        native = await search_native(account_id, keyword)
+            await pace()
+        # AFTER the pace sleep: it is one to two seconds long, and a limit landing inside
+        # it would otherwise still buy one read.
+        account_id = pool.acquire()
+        if account_id is None:
+            return stopped(outcomes, pool)
+        native = await search_native(account_id, keyword, kind)
         outcomes.append(native)
         # A full sweep is minutes of paced reads; without a nudge per keyword the
         # operator watches a frozen modal and clicks the button again.
         signal_discovery_progress()
-        if await record_flood(account_id, native.flood_seconds):
-            # Every remaining read would land inside the live window, and Telegram
-            # escalates the wait on repeat violations. Same rule the qualification
-            # loop follows; recording it also keeps the retry off this account.
-            return Wave(outcomes, flooded=True)
-        if faults.record(native):
-            return Wave(outcomes, aborted=True)
+        if await _report(pool, account_id, native):
+            return stopped(outcomes, pool)
     return Wave(outcomes)
 
 
 async def _global_pass(
-    account_id: str,
+    pool: AccountPool,
     keywords: list[str],
-    budget: _Budget,
-    faults: _Faults,
+    budget: Budget,
+    kind: DiscoveryKind,
 ) -> Wave:
     """Page the post index per keyword: channels whose posts match, not their titles.
 
@@ -225,20 +135,19 @@ async def _global_pass(
         seen: set[str] = set()
         cursor: GlobalPostsCursor | None = None
         for _page in range(pages):
-            if account_cooling(account_id):
-                return Wave(outcomes, cooled=True)
             if not budget.take():
-                outcomes.append(_skipped("telegram_posts", READ_BUDGET, truncated=True))
+                outcomes.append(skipped("telegram_posts", READ_BUDGET, truncated=True))
                 return Wave(outcomes)
-            await _pace()
-            page = await search_global(account_id, keyword, cursor)
+            await pace()
+            account_id = pool.acquire()
+            if account_id is None:
+                return stopped(outcomes, pool)
+            page = await search_global(account_id, keyword, cursor, kind)
             outcomes.append(page.outcome)
             signal_discovery_progress()
-            if await record_flood(account_id, page.outcome.flood_seconds):
-                return Wave(outcomes, flooded=True)
-            if faults.record(page.outcome):
-                return Wave(outcomes, aborted=True)
-            fresh = {dedup_key(hit.username) for hit in page.outcome.candidates} - seen
+            if await _report(pool, account_id, page.outcome):
+                return stopped(outcomes, pool)
+            fresh = {dedup_key(hit.ref) for hit in page.outcome.candidates} - seen
             if page.cursor is None or not fresh:
                 break
             seen |= fresh
@@ -256,12 +165,7 @@ def _seed_handle(request: DiscoverySearchRequest) -> str | None:
     return normalize_channel(request.seed_channel, max_length=CHANNEL_HANDLE_MAX_LENGTH)
 
 
-async def _seed_pass(
-    account_id: str,
-    request: DiscoverySearchRequest,
-    budget: _Budget,
-    faults: _Faults,
-) -> Wave:
+async def _seed_pass(pool: AccountPool, request: DiscoverySearchRequest, budget: Budget) -> Wave:
     """The operator's optional seed channel, unchanged, still its own report row."""
     seed = _seed_handle(request)
     if seed is None:
@@ -270,17 +174,19 @@ async def _seed_pass(
         # off the flood: reporting "seed_unusable" for a flood sent the operator to edit a
         # seed that was perfectly fine.
         unusable = "seed_unusable" if request.seed_channel is not None else None
-        return Wave([_skipped("telegram_similar", unusable)])
-    if account_cooling(account_id):
-        # No outcome row: ``_unreached`` names every source the run never got to, and a
-        # reason here would compete with the run's own stop reason for the board's line.
-        return Wave([], cooled=True)
+        return Wave([skipped("telegram_similar", unusable)])
     if not budget.take():
-        return Wave([_skipped("telegram_similar", READ_BUDGET, truncated=True)])
-    await _pace()
+        return Wave([skipped("telegram_similar", READ_BUDGET, truncated=True)])
+    await pace()
+    account_id = pool.acquire()
+    if account_id is None:
+        # No outcome row: ``unreached`` names every source the run never got to, and a
+        # reason here would compete with the run's own stop reason for the board's line.
+        return stopped([], pool)
     similar = await search_similar(account_id, seed)
-    flooded = await record_flood(account_id, similar.flood_seconds)
-    return Wave([similar], flooded, faults.record(similar))
+    if await _report(pool, account_id, similar):
+        return stopped([similar], pool)
+    return Wave([similar])
 
 
 def _wave_seeds(outcomes: list[SourceOutcome], limit: int, spent: str | None = None) -> list[str]:
@@ -302,6 +208,8 @@ def _wave_seeds(outcomes: list[SourceOutcome], limit: int, spent: str | None = N
     for hit in sorted(hits, key=lambda hit: (hit.subscribers is None, -(hit.subscribers or 0))):
         if len(seeds) >= limit:
             break
+        if hit.username is None:
+            continue
         handle = normalize_channel(hit.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
         if handle is None:
             continue
@@ -312,12 +220,7 @@ def _wave_seeds(outcomes: list[SourceOutcome], limit: int, spent: str | None = N
     return list(seeds.values())
 
 
-async def _similar_wave(
-    account_id: str,
-    seeds: list[str],
-    budget: _Budget,
-    faults: _Faults,
-) -> Wave:
+async def _similar_wave(pool: AccountPool, seeds: list[str], budget: Budget) -> Wave:
     """Telegram's recommendations around each seed the sweep produced.
 
     Reported as ``telegram_recommended``, separate from the operator's seed pass: they
@@ -326,41 +229,30 @@ async def _similar_wave(
     """
     outcomes: list[SourceOutcome] = []
     for seed in seeds:
-        if account_cooling(account_id):
-            return Wave(outcomes, cooled=True)
         if not budget.take():
-            outcomes.append(_skipped("telegram_recommended", READ_BUDGET, truncated=True))
+            outcomes.append(skipped("telegram_recommended", READ_BUDGET, truncated=True))
             return Wave(outcomes)
-        await _pace()
+        await pace()
+        account_id = pool.acquire()
+        if account_id is None:
+            return stopped(outcomes, pool)
         similar = await search_similar(account_id, seed, "telegram_recommended")
         outcomes.append(similar)
         signal_discovery_progress()
-        if await record_flood(account_id, similar.flood_seconds):
-            return Wave(outcomes, flooded=True)
-        if faults.record(similar):
-            return Wave(outcomes, aborted=True)
+        if await _report(pool, account_id, similar):
+            return stopped(outcomes, pool)
     return Wave(outcomes)
 
 
-def _unreached(outcomes: list[SourceOutcome]) -> list[SourceOutcome]:
-    """Name every source this run never got to, so none is silently absent from the strip.
-
-    A flood, or a sweep with no hit to seed the recommendation wave from, used to drop a
-    whole row off the board — leaving the operator to guess whether that source had
-    answered with nothing or had never been asked. No reason code: a FloodWait already
-    rides the run's error and a second one would only compete with it.
-    """
-    reached = {outcome.source for outcome in outcomes}
-    return [_skipped(source) for source in SOURCE_PRIORITY if source not in reached]
-
-
-async def native_pass(account_id: str, request: DiscoverySearchRequest) -> Wave:
+async def native_pass(pool: AccountPool, request: DiscoverySearchRequest) -> Wave:
     """Every Telegram wave of one run, under one shared read budget."""
-    budget = _Budget(settings.neurocomment.discovery_max_reads_per_run)
-    faults = _Faults()
-    keywords = await _keyword_pass(account_id, request.keywords, budget, faults)
-    outcomes = list(keywords.outcomes)
-    last = keywords
+    # Per account, not per run: the ceiling bounds what ONE session emits, and the pool
+    # spreads the reads over all of them.
+    budget = Budget(settings.neurocomment.discovery_max_reads_per_run * pool.size)
+    keywords = sweep_keywords(request)
+    sweep = await _keyword_pass(pool, keywords, budget, request.kind)
+    outcomes = list(sweep.outcomes)
+    last = sweep
 
     # The operator's seed is read BEFORE the automatic post pages, though the post wave is
     # the broader source: the seed is exactly ONE read, while the post pages want one per
@@ -369,7 +261,7 @@ async def native_pass(account_id: str, request: DiscoverySearchRequest) -> Wave:
     # sources reported themselves out of budget. An explicit input does not lose its
     # single read to an automatic wave; the post wave is what absorbs the squeeze.
     if not last.stopped:
-        seed = await _seed_pass(account_id, request, budget, faults)
+        seed = await _seed_pass(pool, request, budget)
         outcomes.extend(seed.outcomes)
         last = seed
     # Seeded from the keyword sweep only: those hits are Telegram's answer to what the
@@ -377,15 +269,15 @@ async def native_pass(account_id: str, request: DiscoverySearchRequest) -> Wave:
     # ahead of the post pages, because their exact count is what the budget holds back:
     # reserving the wave's literal ceiling instead would strand reads a short sweep is
     # never going to spend.
-    seeds = _wave_seeds(keywords.outcomes, _SIMILAR_FROM_TOP, _seed_handle(request))
+    seeds = _wave_seeds(sweep.outcomes, _SIMILAR_FROM_TOP, _seed_handle(request))
     if not last.stopped:
         budget.hold(len(seeds))
-        posts = await _global_pass(account_id, request.keywords, budget, faults)
+        posts = await _global_pass(pool, keywords, budget, request.kind)
         outcomes.extend(posts.outcomes)
         last = posts
     if not last.stopped:
         budget.hold(0)
-        wave = await _similar_wave(account_id, seeds, budget, faults)
+        wave = await _similar_wave(pool, seeds, budget)
         outcomes.extend(wave.outcomes)
         last = wave
-    return Wave(outcomes + _unreached(outcomes), last.flooded, cooled=last.cooled)
+    return Wave(outcomes + unreached(outcomes), last.flooded, cooled=last.cooled)

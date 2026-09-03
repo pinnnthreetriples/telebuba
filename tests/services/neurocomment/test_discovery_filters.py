@@ -95,7 +95,6 @@ def _qualify(request: DiscoverySearchRequest, **learnt: object) -> str | None:
         "about": None,
         "comments_enabled": None,
         "access": None,
-        "language": None,
     }
     fields.update(learnt)
     return admit_at_qualification(request=request, **fields)  # type: ignore[arg-type]
@@ -120,10 +119,13 @@ def test_admit_at_qualification_access() -> None:
 
 
 def test_admit_at_qualification_language() -> None:
-    assert _qualify(_request(language="ru"), language="en") == "language"
-    assert _qualify(_request(language="ru"), language="ru") is None
-    assert _qualify(_request(language="ru"), language=None) is None
-    assert _qualify(_request(language="any"), language="other") is None
+    """Read off title + about, so the filter sees exactly what the verdict reports."""
+    assert _qualify(_request(language="ru"), title="Crypto news") == "language"
+    assert _qualify(_request(language="ru"), title="Новости крипты") is None
+    assert _qualify(_request(language="ru"), title="BTC", about="Новости крипты дня") is None
+    # No letters at all: the language is unknown, and unknown never rejects.
+    assert _qualify(_request(language="ru"), title="12345") is None
+    assert _qualify(_request(language="any"), title="日本のニュース") is None
 
 
 def test_admit_at_qualification_category() -> None:
@@ -137,5 +139,5 @@ def test_admit_at_qualification_order_is_comments_access_language_category() -> 
     request = _request(comments="on", access="open", language="ru", category="food")
     assert _qualify(request, comments_enabled=False, access="join_request") == "comments"
     assert _qualify(request, comments_enabled=True, access="join_request") == "access"
-    assert _qualify(request, comments_enabled=True, access="open", language="en") == "language"
-    assert _qualify(request, comments_enabled=True, access="open", language="ru") == "category"
+    assert _qualify(request, comments_enabled=True, access="open") == "language"
+    assert _qualify(request, comments_enabled=True, access="open", title="Крипта") == "category"
