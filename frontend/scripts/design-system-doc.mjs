@@ -303,7 +303,7 @@ const RUNG = {
     flag: 'Ширина флага страны',
     action:
       'Постоянная колонка, которую строка отдаёт контролу: кнопки запуска и удаления в CampaignsCard и ListenerCard, показ ключа в ApiKeyField, колонка флажков в DiscoveryResults. Дорожка Switch, полоса доверия в таблице аккаунтов и плитка раскладки в AddStoryModal мерили те же 46px, но ни одна не стоит в колонке строки, и каждая теперь своя',
-    number: 'Числовое поле: дни и часы в WarmConfigModal, время в CommentModeFields',
+    number: 'Числовое поле: фильтры в DiscoveryFilters, время в CommentModeFields',
     readout:
       'Число, которое не должно прыгать при изменении: показание ползунка в CampaignSetupCard, лимит в AccountLimitsModal. Ту же меру занимает карточка истории в AddStoryModal',
     stamp: 'Колонка таблицы со временем или идентификатором: LogsPage, канал в LogTerminal',
@@ -312,8 +312,7 @@ const RUNG = {
     tip: 'Подсказка HelpHint и поле поиска на странице аккаунтов',
     confirm: 'Диалог-вопрос с двумя кнопками: ConfirmModal и три диалога удаления',
     form: 'Диалог, который заполняют: AddAccountModal, AddStoryModal, ProxyAddModal, WarmDaysModal',
-    panel:
-      'Диалог со списком или вкладками: ProfileModal, ChannelEditModal, NeuroAccountsModal, WarmConfigModal',
+    panel: 'Диалог со списком или вкладками: ProfileModal, ChannelEditModal, NeuroAccountsModal',
     table:
       'Диалог вокруг таблицы: история комментариев и подбор каналов. 926 — это 880 порога DataTable плюс собственные поля более щедрого из двух: ниже диалог показал бы карточки, а не таблицу',
   },

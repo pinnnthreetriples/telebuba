@@ -10,6 +10,7 @@ export { FeedbackMark } from './FeedbackMark';
 export { FieldError, FormField } from './FormField';
 export { HelpHint, HintBubble } from './HelpHint';
 export { Icon } from './Icon';
+export type { IconName } from './Icon';
 export { Input, Textarea } from './Input';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';

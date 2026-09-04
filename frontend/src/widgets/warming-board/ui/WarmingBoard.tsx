@@ -8,9 +8,8 @@ import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { Button, Card, FeedbackMark, Icon, IconButton } from '@/shared/ui';
+import { Button, Card, FeedbackMark, Icon } from '@/shared/ui';
 
-import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
 
 interface WarmingBoardProps {
@@ -170,7 +169,6 @@ function WarmingCard({
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
-  const [cfgOpen, setCfgOpen] = useState(false);
   // One card per account, so the two tooltip ids have to be per-INSTANCE: a literal
   // would collide across the board's rows and `aria-describedby` would resolve every
   // card's badge to the first card's bubble.
@@ -306,17 +304,6 @@ function WarmingCard({
               </span>
             </span>
           </span>
-          <IconButton
-            size="md"
-            tone="primary"
-            title={t('warming.card.cfgTitle')}
-            aria-label={t('warming.card.cfgTitle')}
-            onClick={() => {
-              setCfgOpen(true);
-            }}
-          >
-            <Icon name="gear" size={14} />
-          </IconButton>
           {!complete ? (
             <>
               <FeedbackMark result={result} />
@@ -349,15 +336,6 @@ function WarmingCard({
           }}
         />
       ) : null}
-      {cfgOpen ? (
-        <WarmConfigModal
-          phone={primaryId}
-          onClose={() => {
-            setCfgOpen(false);
-          }}
-        />
-      ) : null}
-
       {/* pipeline */}
       {/* The hairline, not a bare fill: this panel is the one place the two pale
           blues used to meet, and with them collapsed it would paint its parent's
