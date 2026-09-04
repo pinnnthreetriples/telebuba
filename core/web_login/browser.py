@@ -111,6 +111,15 @@ class BrowserNotFoundError(RuntimeError):
     """No Chrome or Edge executable was found in the usual Windows locations."""
 
 
+class BrowserStartError(RuntimeError):
+    """The browser exited before exposing a DevTools endpoint.
+
+    Almost always a hand-off: a Chrome already running claimed this profile, took the
+    command line and exited 0. Reported as itself rather than as a 20-second timeout,
+    because the two need very different fixes.
+    """
+
+
 @dataclass(frozen=True)
 class WebWindow:
     """One open browser window: the socket that dresses it, its page, its process.
@@ -190,8 +199,14 @@ def build_launch_args(
 
 
 def account_profile_dir(account_id: str) -> Path:
-    """Per-account persistent profile dir, sibling to the sessions dir. Persists between clicks."""
-    return settings.telegram.session_dir.with_name(_PROFILE_SUBDIR) / account_id
+    """Per-account persistent profile dir, sibling to the sessions dir. Persists between clicks.
+
+    ABSOLUTE on purpose, and ``session_dir`` is relative in a default deployment. Given a
+    relative ``--user-data-dir`` Chrome does not open an isolated profile at all: it hands
+    its command line to whatever Chrome is already running and exits 0, so the account's
+    window would appear in the OPERATOR's own browser, on the operator's own IP.
+    """
+    return (settings.telegram.session_dir.with_name(_PROFILE_SUBDIR) / account_id).resolve()
 
 
 def token_bytes(b64url: str) -> bytes:
@@ -206,11 +221,14 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-async def _browser_ws(debug_port: int) -> str:
+async def _browser_ws(debug_port: int, process: asyncio.subprocess.Process) -> str:
     """Poll the DevTools endpoint for the BROWSER-level WebSocket URL.
 
     Browser level, not page level: a SHARED worker is a browser-scoped target, so a
     page-scoped socket would never be handed the one worker that matters most.
+
+    A browser that has already exited is reported at once — waiting out the timeout
+    would only mislabel a hand-off as a slow start.
     """
     loop = asyncio.get_running_loop()
     deadline = loop.time() + _CDP_READY_TIMEOUT
@@ -219,6 +237,12 @@ async def _browser_ws(debug_port: int) -> str:
             with_ws = await _try_browser_ws(client, debug_port)
             if with_ws is not None:
                 return with_ws
+            if process.returncode is not None:
+                msg = (
+                    f"The browser exited ({process.returncode}) without a DevTools "
+                    "endpoint; a running Chrome most likely claimed this profile."
+                )
+                raise BrowserStartError(msg)
             if loop.time() >= deadline:
                 msg = "Browser DevTools endpoint did not come up in time."
                 raise TimeoutError(msg)
@@ -266,7 +290,7 @@ async def launch_account_web(
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.DEVNULL,
     )
-    session = await CdpSession.connect(await _browser_ws(debug_port))
+    session = await CdpSession.connect(await _browser_ws(debug_port, proc))
     driver = TargetDriver(
         session,
         fingerprint,

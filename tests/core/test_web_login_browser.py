@@ -23,6 +23,7 @@ from core.web_login import browser
 from core.web_login._targets import TargetDriver
 from core.web_login.browser import (
     WebWindow,
+    account_profile_dir,
     build_launch_args,
     find_browser,
     latest_login_token,
@@ -201,6 +202,42 @@ def test_token_bytes_decodes_base64url_without_padding() -> None:
     assert token_bytes(b64url) == raw
 
 
+# ----------------------------------------------------------------------- profile dir
+
+
+def test_account_profile_dir_is_absolute() -> None:
+    """A relative --user-data-dir does not isolate anything.
+
+    Chrome hands its command line to whatever Chrome is already running and exits 0,
+    so the account's window would open in the operator's own browser, on the
+    operator's own IP. The sessions dir is relative in a default deployment, so this
+    is the load-bearing assertion, not a formality.
+    """
+    profile = account_profile_dir("acct-1")
+
+    assert profile.is_absolute()
+    assert profile.name == "acct-1"
+    assert profile.parent.name == "web_profiles"
+
+
+# --------------------------------------------------------------------- devtools wait
+
+
+@pytest.mark.asyncio
+async def test_browser_ws_reports_a_handoff_rather_than_waiting_out_the_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _never(_client: object, _debug_port: int) -> str | None:
+        return None
+
+    monkeypatch.setattr(browser, "_try_browser_ws", _never)
+    exited = _FakeProc({})
+    exited.returncode = 0  # Chrome forwarded its argv to a running instance and quit
+
+    with pytest.raises(browser.BrowserStartError):
+        await browser._browser_ws(5555, exited)  # ty: ignore[invalid-argument-type]
+
+
 # ------------------------------------------------------------------- launch_account_web
 
 
@@ -218,7 +255,7 @@ async def _launch(
         recorder["exec"] = (program, args, kwargs)
         return _FakeProc(recorder)
 
-    async def _fake_ws(_debug_port: int) -> str:
+    async def _fake_ws(_debug_port: int, _process: object) -> str:
         return "ws://127.0.0.1:5555/devtools/browser/ABC"
 
     class _FakeCdp:

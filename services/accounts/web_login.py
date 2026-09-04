@@ -41,7 +41,7 @@ from core.web_login import (
     type_2fa_password,
 )
 from core.web_login._cdp import CdpError
-from core.web_login.browser import BrowserNotFoundError, WebWindow
+from core.web_login.browser import BrowserNotFoundError, BrowserStartError, WebWindow
 from schemas.accounts import OpenWebResult
 
 if TYPE_CHECKING:
@@ -181,7 +181,7 @@ async def _launch(account_id: str, relay_port: int, profile: Path) -> None:
             fingerprint=fingerprint,
             capture_tokens=not seeded,
         )
-    except (BrowserNotFoundError, CdpError, TimeoutError, OSError) as exc:
+    except (BrowserNotFoundError, BrowserStartError, CdpError, TimeoutError, OSError) as exc:
         raise WebLoginLaunchError(str(exc)) from exc
     # Register before driving: the window is the operator's from this point, and a
     # failed login must not leak an undressed browser we no longer track.
