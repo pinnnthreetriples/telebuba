@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   FileIcon,
+  Globe,
   Paperclip,
   Pause,
   PencilLine,
@@ -65,6 +66,7 @@ const GLYPH = {
   'eye-off': EyeOff,
   file: FileIcon,
   gear: Settings,
+  globe: Globe,
   paperclip: Paperclip,
   pause: Pause,
   // `pencil`, not `pencil-line`, would drop the baseline stroke the app's edit glyph

@@ -707,6 +707,117 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/open-web": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Open Account Web",
+        "description": "Open a signed-in web.telegram.org window for the account through its proxy.",
+        "operationId": "openAccountWeb",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenWebResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/start-login": {
       "post": {
         "tags": [
@@ -15763,6 +15874,20 @@
         "type": "object",
         "title": "NeuroshillingStepInput",
         "description": "One dialogue step as the form declares it \u2014 no ``position``, see the module docstring.\n\nWhich of ``reply_to_position``, ``target_position`` and ``emoji`` a ``kind`` may\ncarry is NOT checked here. ``services.neuroshilling.scenario._kind_field_problem``\nholds the write to it, so that the operator gets ``scenario_invalid`` \u2014 the refusal\nthe page already has copy for \u2014 rather than the generic 422 a schema rule raises."
+      },
+      "OpenWebResult": {
+        "properties": {
+          "launched": {
+            "type": "boolean",
+            "title": "Launched"
+          }
+        },
+        "type": "object",
+        "required": [
+          "launched"
+        ],
+        "title": "OpenWebResult",
+        "description": "Whether a signed-in web.telegram.org window was launched for the account."
       },
       "Page_AccountRead_": {
         "properties": {

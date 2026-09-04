@@ -38,6 +38,7 @@ from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.openai import close_openai_client
 from core.telegram_client import shutdown_telegram_pool
+from services.accounts import shutdown_web_login_relays
 from services.auth import seed_admin_if_empty
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
@@ -150,6 +151,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
         await _shutdown_step("telegram_pool", shutdown_telegram_pool)
+        await _shutdown_step("web_login_relays", shutdown_web_login_relays)
         maintenance_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await maintenance_task

@@ -29,6 +29,7 @@ from schemas.accounts import (
     AccountRead,
     AccountSessionFileImport,
     AccountStats,
+    OpenWebResult,
 )
 from schemas.api import Page
 from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
@@ -115,6 +116,22 @@ async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     with service_errors_to_http():
         await accounts.require_account(account_id)
         return await spam_status.refresh_spam_status(account_id, force=True)
+
+
+@router.post(
+    "/accounts/{account_id}/open-web",
+    response_model=OpenWebResult,
+    operation_id="openAccountWeb",
+    responses=SERVICE_ERRORS,
+)
+async def open_account_web(account_id: AccountIdPath) -> OpenWebResult:
+    """Open a signed-in web.telegram.org window for the account through its proxy."""
+    # 404 on a missing row like every sibling route; the service's own refusals
+    # (no proxy, missing 2FA, browser/relay launch failure) are bounded
+    # credential-free ``ValueError``s the mapper bills as 400.
+    with service_errors_to_http():
+        await accounts.require_account(account_id)
+        return await accounts.open_account_web(account_id)
 
 
 @router.post(

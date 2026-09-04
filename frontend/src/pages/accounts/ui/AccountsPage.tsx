@@ -8,6 +8,7 @@ import {
   checkAccountMutation,
   deleteAccountMutation,
   invalidateAccountViews,
+  openAccountWebMutation,
 } from '@/entities/account';
 import { Button, Card } from '@/shared/ui';
 
@@ -34,6 +35,9 @@ export function AccountsPage() {
   // row and re-enabled its buttons mid-request, and the first response to land
   // cleared the OTHER row's spinner.
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
+  // Kept apart from busyIds so opening web doesn't disable a row's check/delete
+  // and its spinner sits only on the globe.
+  const [openWebBusyIds, setOpenWebBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -73,6 +77,7 @@ export function AccountsPage() {
   const { feedback: checkResults, mark: markChecked } = useTransientFeedback();
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
+  const openWeb = useMutation(openAccountWebMutation());
 
   const markBusy = (accountId: string, busy: boolean) => {
     setBusyIds((ids) => {
@@ -116,6 +121,23 @@ export function AccountsPage() {
   };
   const onDelete = (accountId: string) => {
     setDeletingId(accountId);
+  };
+  // Not runOnRow: opening web changes no account data, so there is nothing to
+  // invalidate, and its busy flag lives in its own set. Failures (no proxy,
+  // missing 2FA) surface through the global MutationCache toast; the .catch only
+  // keeps the rejection from escaping as unhandled.
+  const onOpenWeb = (accountId: string) => {
+    setOpenWebBusyIds((ids) => new Set(ids).add(accountId));
+    void openWeb
+      .mutateAsync({ path: { account_id: accountId } })
+      .catch(() => undefined)
+      .finally(() => {
+        setOpenWebBusyIds((ids) => {
+          const next = new Set(ids);
+          next.delete(accountId);
+          return next;
+        });
+      });
   };
   const confirmDelete = () => {
     if (!deletingId) return;
@@ -256,7 +278,9 @@ export function AccountsPage() {
               onProfile={(account) => {
                 setProfilingRow(account);
               }}
+              onOpenWeb={onOpenWeb}
               busyIds={busyIds}
+              openWebBusyIds={openWebBusyIds}
               checkResults={checkResults}
             />
           )}

@@ -115,6 +115,12 @@ class AccountList(BaseModel):
     accounts: list[AccountRead]
 
 
+class OpenWebResult(BaseModel):
+    """Whether a signed-in web.telegram.org window was launched for the account."""
+
+    launched: bool
+
+
 class AccountCheckRequest(BaseModel):
     account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
 

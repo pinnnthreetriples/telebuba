@@ -214,6 +214,9 @@ import type {
   LogoutData,
   LogoutErrors,
   LogoutResponses,
+  OpenAccountWebData,
+  OpenAccountWebErrors,
+  OpenAccountWebResponses,
   PostAccountStoryData,
   PostAccountStoryErrors,
   PostAccountStoryResponses,
@@ -494,6 +497,19 @@ export const spamCheckAccount = <ThrowOnError extends boolean = false>(
 ): RequestResult<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/spam-check',
+    ...options,
+  });
+
+/**
+ * Open Account Web
+ *
+ * Open a signed-in web.telegram.org window for the account through its proxy.
+ */
+export const openAccountWeb = <ThrowOnError extends boolean = false>(
+  options: Options<OpenAccountWebData, ThrowOnError>,
+): RequestResult<OpenAccountWebResponses, OpenAccountWebErrors, ThrowOnError> =>
+  (options.client ?? client).post<OpenAccountWebResponses, OpenAccountWebErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/open-web',
     ...options,
   });
 

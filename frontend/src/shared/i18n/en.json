@@ -205,7 +205,8 @@
       "add": "Account",
       "check": "Check",
       "delete": "Delete",
-      "profile": "Edit profile"
+      "profile": "Edit profile",
+      "web": "Open in Telegram Web"
     },
     "pagination": {
       "prev": "Prev",

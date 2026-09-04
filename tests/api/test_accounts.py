@@ -14,10 +14,12 @@ from schemas.tdata import TdataConvertRequest, TdataImportResult
 from services import warming as warming_service
 from services.accounts import (
     AccountActionError,
+    OpenWebResult,
     PhoneLoginError,
     SessionAlreadyExistsError,
     add_account,
 )
+from services.accounts.web_login import NoProxyForWebLoginError
 from tests.api.accounts_helpers import account as _account
 from tests.api.accounts_helpers import client as _client
 
@@ -130,6 +132,56 @@ async def test_spam_check_unknown_account_is_404(
         resp = await client.post("/api/v1/accounts/acc-nope/spam-check")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_open_web_launches_the_window(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> OpenWebResult:
+        assert account_id == "acc-1"
+        return OpenWebResult(launched=True)
+
+    monkeypatch.setattr("services.accounts.open_account_web", _fake)
+    await add_account(AccountCreate(account_id="acc-1"))
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-1/open-web")
+    assert resp.status_code == 200
+    assert resp.json() == {"launched": True}
+
+
+@pytest.mark.asyncio
+async def test_open_web_unknown_account_is_404(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> OpenWebResult:  # noqa: ARG001
+        msg = "service must not be reached for a missing account"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.open_account_web", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-nope/open-web")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_open_web_no_proxy_is_400(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> OpenWebResult:  # noqa: ARG001
+        msg = "account has no proxy assigned"
+        raise NoProxyForWebLoginError(msg)
+
+    monkeypatch.setattr("services.accounts.open_account_web", _fake)
+    await add_account(AccountCreate(account_id="acc-1"))
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-1/open-web")
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "bad_request"
 
 
 @pytest.mark.asyncio

@@ -65,12 +65,21 @@ from core.telegram_client._read import (
 from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
+from core.telegram_client._web_login import (
+    MintedWebAuth,
+    TwoFactorRequiredError,
+    WebLoginError,
+    mint_web_authorization,
+)
 
 __all__ = [
     "UNCONFIRMED_ERROR_TYPE",
+    "MintedWebAuth",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
+    "TwoFactorRequiredError",
+    "WebLoginError",
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
@@ -84,6 +93,7 @@ __all__ = [
     "get_client",
     "invalidate_reaction_whitelist_cache",
     "log_out_session",
+    "mint_web_authorization",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
     "refresh_account_avatar",
