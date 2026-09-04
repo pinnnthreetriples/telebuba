@@ -10,21 +10,38 @@ so the caller retries with the next captured token when an accept is rejected.
 
 from __future__ import annotations
 
+from telethon.errors import (
+    AuthTokenAlreadyAcceptedError,
+    AuthTokenExpiredError,
+    AuthTokenInvalidxError,
+)
 from telethon.tl import functions
 
 from core.telegram_client._pool import get_client
+
+# WebK's exported token rotates; an accept against a stale one raises one of these.
+# Kept here (not in services) so the telethon dependency stays inside core.
+_ROTATION_ERRORS = (
+    AuthTokenExpiredError,
+    AuthTokenAlreadyAcceptedError,
+    AuthTokenInvalidxError,
+)
 
 
 class WebLoginError(Exception):
     """A web-login guard failed (no proxy, or the browser/relay could not start)."""
 
 
-async def accept_web_login_token(account_id: str, token: bytes) -> None:
+async def accept_web_login_token(account_id: str, token: bytes) -> bool:
     """Accept ``token`` (WebK's exported login token) with the account's pooled client.
 
-    Telethon's ``AUTH_TOKEN_EXPIRED`` / ``AUTH_TOKEN_ALREADY_ACCEPTED`` /
-    ``AUTH_TOKEN_INVALIDX`` errors are left to propagate: the exported token rotates,
-    so the caller treats those as "try the next captured token".
+    Returns ``True`` when the token was accepted, ``False`` when it had already rotated
+    (expired / already-accepted / invalidated) so the caller retries the next captured
+    token. Any other Telethon error propagates as a genuine failure.
     """
     confirmer = await get_client(account_id)
-    await confirmer(functions.auth.AcceptLoginTokenRequest(token=token))
+    try:
+        await confirmer(functions.auth.AcceptLoginTokenRequest(token=token))
+    except _ROTATION_ERRORS:
+        return False
+    return True

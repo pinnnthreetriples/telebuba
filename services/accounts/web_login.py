@@ -23,12 +23,6 @@ import asyncio
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from telethon.errors import (
-    AuthTokenAlreadyAcceptedError,
-    AuthTokenExpiredError,
-    AuthTokenInvalidxError,
-)
-
 from core.db import fetch_account_proxy_settings, fetch_account_twofa_password
 from core.telegram_client import accept_web_login_token
 from core.web_login import (
@@ -59,14 +53,6 @@ __all__ = [
     "open_account_web",
     "shutdown_web_login_relays",
 ]
-
-# The QR token WebK exports rotates; an accept against a stale one raises one of
-# these, and the drive loop just tries the next captured token.
-_ROTATION_ERRORS = (
-    AuthTokenExpiredError,
-    AuthTokenAlreadyAcceptedError,
-    AuthTokenInvalidxError,
-)
 
 # Overall bound on driving a first-open login, and the poll cadence within it.
 _DRIVE_TIMEOUT = 90.0
@@ -213,8 +199,8 @@ async def _accept_fresh_token(
     if token is None or token in accepted:
         return
     accepted.add(token)
-    with suppress(*_ROTATION_ERRORS):
-        await accept_web_login_token(account_id, token_bytes(token))
+    # A rotated/stale token returns False; the loop just tries the next capture.
+    await accept_web_login_token(account_id, token_bytes(token))
 
 
 async def _relaunch(relay_port: int, profile: Path) -> None:
