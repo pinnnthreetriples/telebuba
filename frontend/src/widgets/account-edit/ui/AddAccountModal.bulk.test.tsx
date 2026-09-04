@@ -76,6 +76,14 @@ async function requests(fragment: string): Promise<Request[]> {
     .filter((request) => request.url.includes(fragment));
 }
 
+// A file import ends on the cloud-password step (step 3 of 3), not on a closed
+// modal: the proxy step hands the whole batch over to it. What these tests used
+// to prove by waiting for `onClose` they now prove by standing on that step.
+async function expectCloudPasswordStep(): Promise<void> {
+  expect(await screen.findByText('Шаг 3 · облачный пароль')).toBeInTheDocument();
+  expect(screen.getByText('Выбрать все')).toBeInTheDocument();
+}
+
 test('three session files → three imports, Next waits for the batch, step 2 counts them', async () => {
   routeApi();
   const onImported = vi.fn();
@@ -160,10 +168,9 @@ test('Next stays locked while any file of the batch is still importing', async (
   });
 });
 
-test('manual proxy is created once and assigned to EVERY imported account before closing', async () => {
+test('manual proxy is created once and assigned to EVERY imported account', async () => {
   routeApi();
-  const onClose = vi.fn();
-  renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
   await userEvent.click(screen.getByText('Файл .session'));
   pickSessions('a.session', 'b.session');
   await waitFor(() => {
@@ -178,9 +185,7 @@ test('manual proxy is created once and assigned to EVERY imported account before
   });
   await userEvent.click(screen.getByText('Готово'));
 
-  await waitFor(() => {
-    expect(onClose).toHaveBeenCalled();
-  });
+  await expectCloudPasswordStep();
   const assigns = await requests('/proxies/pool-1/assign');
   const bodies = await Promise.all(assigns.map(async (request) => request.json()));
   expect(bodies.map((body: { account_id: string }) => body.account_id).sort()).toEqual(['a', 'b']);
@@ -190,7 +195,7 @@ test('manual proxy is created once and assigned to EVERY imported account before
   expect(created).toHaveLength(1);
 });
 
-test('pool step distributes the batch and closes on Done', async () => {
+test('pool step distributes the batch and moves on from Done', async () => {
   routeApi();
   const onClose = vi.fn();
   renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
@@ -205,10 +210,12 @@ test('pool step distributes the batch and closes on Done', async () => {
   await waitFor(() => {
     expect(screen.getByText('Назначено: 2 из 2')).toBeInTheDocument();
   });
-  // More than one account never auto-closes: the operator reads the tally first.
-  expect(onClose).not.toHaveBeenCalled();
+  // More than one account never auto-advances: the operator reads the tally first.
+  expect(screen.queryByText('Шаг 3 · облачный пароль')).not.toBeInTheDocument();
   await userEvent.click(screen.getByText('Готово'));
-  expect(onClose).toHaveBeenCalled();
+
+  await expectCloudPasswordStep();
+  expect(onClose).not.toHaveBeenCalled();
 });
 
 async function reachManualForm(): Promise<void> {
@@ -226,7 +233,7 @@ async function reachManualForm(): Promise<void> {
   });
 }
 
-test('manual proxy: a refused create closes the wizard without assigning anything', async () => {
+test('manual proxy: a refused create moves the wizard on without assigning anything', async () => {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
@@ -243,15 +250,14 @@ test('manual proxy: a refused create closes the wizard without assigning anythin
   renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
   await reachManualForm();
   await userEvent.click(screen.getByText('Готово'));
-  // Same outcome as the pre-bulk wizard (onSettled: afterProxy) — and no
+  // Same outcome as any other proxy ending (afterProxy in `finally`) — and no
   // unhandled rejection escaping `void createAndAssign()`.
-  await waitFor(() => {
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
+  await expectCloudPasswordStep();
+  expect(onClose).not.toHaveBeenCalled();
   expect(await requests('/assign')).toHaveLength(0);
 });
 
-test('manual proxy: one refused assign does not stop the others or the close', async () => {
+test('manual proxy: one refused assign does not stop the others or the wizard', async () => {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
@@ -268,14 +274,11 @@ test('manual proxy: one refused assign does not stop the others or the close', a
     }
     return jsonResponse({});
   });
-  const onClose = vi.fn();
   const onImported = vi.fn();
-  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
   await reachManualForm();
   await userEvent.click(screen.getByText('Готово'));
-  await waitFor(() => {
-    expect(onClose).toHaveBeenCalled();
-  });
+  await expectCloudPasswordStep();
   const bodies = await Promise.all(
     (await requests('/assign')).map(async (request) => request.clone().json()),
   );

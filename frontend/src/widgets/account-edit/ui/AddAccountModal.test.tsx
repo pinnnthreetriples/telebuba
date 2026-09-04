@@ -101,6 +101,15 @@ function pickSession(): void {
   });
 }
 
+// The proxy step no longer ends the wizard for anybody: every method goes on to
+// the cloud-password step, which is the LAST one — 3 for a file import, 4 for a
+// phone (which spends a step on the login code). What the wizard used to prove
+// by closing it now proves by standing on that step.
+async function expectCloudPasswordStep(label: string): Promise<void> {
+  expect(await screen.findByText(label)).toBeInTheDocument();
+  expect(screen.getByText('Выбрать все')).toBeInTheDocument();
+}
+
 test('stepper navigates method → choice → manual/pool → back to step 1', async () => {
   routeApi();
   renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
@@ -156,9 +165,8 @@ test('tdata upload imports the account', async () => {
 
 test('session upload imports then a pool proxy is assigned', async () => {
   routeApi();
-  const onClose = vi.fn();
   const onImported = vi.fn();
-  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
   await userEvent.click(screen.getByText('Файл .session'));
   fireEvent.change(fileInput(), {
     target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
@@ -182,11 +190,9 @@ test('session upload imports then a pool proxy is assigned', async () => {
       .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
     expect(assigned).toBe(true);
   });
-  // The close is the assign's own onSuccess now, so it lands after the response,
-  // not beside the request.
-  await waitFor(() => {
-    expect(onClose).toHaveBeenCalled();
-  });
+  // The advance is the assign's own onSuccess now, so it lands after the
+  // response, not beside the request — and it lands on the cloud-password step.
+  await expectCloudPasswordStep('Шаг 3 · облачный пароль');
 });
 
 // Routes everything the pool flow needs, with the assign under the test's control.
@@ -226,24 +232,21 @@ test('a pool assign advances only once it has RESOLVED, not while it is in fligh
         resolveAssign = resolve;
       }),
   );
-  const onClose = vi.fn();
-  renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
   await reachPool();
 
   // Pre-fix `afterProxy()` ran synchronously beside the mutate, so the wizard
-  // left this step — for a file method, unmounting the modal — while the assign
-  // was still in flight. The row is disabled instead, so a second press cannot
-  // fire a second assign onto the same observer.
-  expect(onClose).not.toHaveBeenCalled();
+  // left this step while the assign was still in flight. The row is disabled
+  // instead, so a second press cannot fire a second assign onto the same
+  // observer.
   expect(screen.getByText('nl-1.proxyhub.net:1080')).toBeInTheDocument();
+  expect(screen.queryByText('Шаг 3 · облачный пароль')).not.toBeInTheDocument();
   await waitFor(() => {
     expect(screen.getByText('nl-1.proxyhub.net:1080').closest('button')).toBeDisabled();
   });
 
   resolveAssign(jsonResponse(POOL_PROXY));
-  await waitFor(() => {
-    expect(onClose).toHaveBeenCalled();
-  });
+  await expectCloudPasswordStep('Шаг 3 · облачный пароль');
 });
 
 test('a FAILED pool assign keeps the wizard on the proxy step and tells the operator', async () => {
@@ -318,9 +321,8 @@ test('a failed import shows the error state and keeps Next disabled', async () =
 
 test('phone method: create account → skip proxy → request + confirm code', async () => {
   routeApi();
-  const onClose = vi.fn();
   const onImported = vi.fn();
-  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
 
   await userEvent.click(screen.getByText('Номер телефона'));
   await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
@@ -359,7 +361,9 @@ test('phone method: create account → skip proxy → request + confirm code', a
       .mock.calls.some(([input]) => (input as Request).url.includes('/submit-code'));
     expect(submitted).toBe(true);
   });
-  expect(onClose).toHaveBeenCalled();
+  // A signed-in account is the one that can be given a cloud password, so the
+  // code step hands over to it instead of ending the wizard.
+  await expectCloudPasswordStep('Шаг 4 · облачный пароль');
 });
 
 test('phone method: a failed start-login shows the error and keeps Next disabled', async () => {
@@ -509,7 +513,7 @@ test('cancel on step 1 closes', async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test('skip on the proxy choice closes', async () => {
+test('skip on the proxy choice goes on to the cloud password, it does not close', async () => {
   routeApi();
   const onClose = vi.fn();
   renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
@@ -522,5 +526,7 @@ test('skip on the proxy choice closes', async () => {
   });
   await userEvent.click(screen.getByText('Далее'));
   await userEvent.click(screen.getByText('Пропустить'));
-  expect(onClose).toHaveBeenCalledTimes(1);
+
+  await expectCloudPasswordStep('Шаг 3 · облачный пароль');
+  expect(onClose).not.toHaveBeenCalled();
 });
