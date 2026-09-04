@@ -64,6 +64,10 @@ def build_webk_localstorage(auth: MintedWebAuth) -> dict[str, str]:
     store: dict[str, str] = {
         "dc": _dumps(dc),
         f"dc{dc}_auth_key": _dumps(key_hex),
+        # WebK gates "is a session present" on this account count; without it the
+        # client treats the seeded keys as no account and shows the QR login
+        # (verified live against build 675, whose auth check reads this).
+        "number_of_accounts": _dumps(1),
         "user_auth": _dumps({"date": int(time.time()), "id": auth.user_id, "dcID": dc}),
         "auth_key_fingerprint": _dumps(fingerprint),
         "server_time_offset": _dumps(0),

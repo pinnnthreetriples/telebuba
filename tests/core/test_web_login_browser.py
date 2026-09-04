@@ -49,6 +49,7 @@ def test_build_webk_localstorage_exact_values() -> None:
     store = build_webk_localstorage(_AUTH)
 
     assert store["dc"] == "2"
+    assert store["number_of_accounts"] == "1"  # WebK's session-present gate
     assert store["dc2_auth_key"] == f'"{_KEY_HEX}"'
     assert len(_KEY_HEX) == 512
     assert store["dc2_server_salt"] == f'"{_SALT_HEX}"'
@@ -175,6 +176,12 @@ def _fake_session_class(recorder: dict[str, Any]) -> type:
             params: dict[str, object] | None = None,
         ) -> dict[str, object]:
             recorder.setdefault("commands", []).append((method, params))
+            if method == "Runtime.evaluate":
+                # The seed-applied poll: report the marker present on first check.
+                return {
+                    "id": len(recorder["commands"]),
+                    "result": {"result": {"type": "boolean", "value": True}},
+                }
             return {"id": len(recorder["commands"]), "result": {}}
 
         async def aclose(self) -> None:
@@ -226,6 +233,7 @@ async def test_open_account_web_seeds_navigates_and_leaves_browser(
         "Page.enable",
         "Page.addScriptToEvaluateOnNewDocument",
         "Page.navigate",
+        "Runtime.evaluate",
     ]
 
     # (b) the seed script carries the authorization's localStorage values.

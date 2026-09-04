@@ -35,9 +35,18 @@ _CDP_POLL_INTERVAL = 0.25
 # A stalled DevTools socket must not hang the open forever; bound the whole
 # seed+navigate exchange.
 _CDP_SEQUENCE_TIMEOUT = 30.0
-# After navigate is acknowledged, give the /k/ document a moment to commit so the
-# document-start seed is settled before we drop the socket. Best-effort, non-fatal.
-_NAVIGATE_SETTLE_SECONDS = 0.5
+# Closing the CDP socket removes the session-scoped document-start script, so we
+# must keep it open until the seed has actually run on the /k/ document — over a
+# slow proxy the navigation commits well after the navigate ack, and dropping the
+# socket in between loses the seed entirely (the client then shows the QR login).
+# Poll for the seeded marker up to this bound (kept under _CDP_SEQUENCE_TIMEOUT).
+_SEED_CONFIRM_TIMEOUT = 25.0
+_SEED_CONFIRM_POLL = 0.4
+# Cheap in-page predicate: the seed has run once account1 exists on the origin.
+# (account1 is the key WebK keeps; it rewrites/removes some legacy keys on boot.)
+_SEED_CONFIRM_EXPR = (
+    "location.origin === 'https://web.telegram.org' && !!localStorage.getItem('account1')"
+)
 
 
 class BrowserNotFoundError(RuntimeError):
@@ -193,12 +202,12 @@ async def open_account_web(auth: MintedWebAuth, relay_port: int, *, profile_dir:
 
 
 async def _seed_and_navigate(session: CdpSession, auth: MintedWebAuth) -> None:
-    """Install the document-start seed, then navigate to WebK and let it commit.
+    """Install the seed, navigate to WebK, and hold the socket until the seed runs.
 
-    ``addScriptToEvaluateOnNewDocument`` is acknowledged before ``navigate``, so the
-    seed is guaranteed installed for the ``/k/`` document. The short settle keeps us
-    from dropping the socket the instant navigate is acked (before the document
-    commits) — it is best-effort, so a slow commit still proceeds to close.
+    ``addScriptToEvaluateOnNewDocument`` is session-scoped: closing the CDP socket
+    drops it. Over the account's proxy the navigation can commit seconds after the
+    navigate ack, so closing early loses the seed and the client shows QR login. We
+    poll for the seed's marker before returning to the caller's socket close.
     """
     await session.send_command("Page.enable")
     await session.send_command(
@@ -206,7 +215,30 @@ async def _seed_and_navigate(session: CdpSession, auth: MintedWebAuth) -> None:
         {"source": _seed_script(auth)},
     )
     await session.send_command("Page.navigate", {"url": _WEBK_URL})
-    await asyncio.sleep(_NAVIGATE_SETTLE_SECONDS)
+    await _await_seed_applied(session)
+
+
+async def _await_seed_applied(session: CdpSession) -> None:
+    """Poll until the document-start seed has run on the telegram origin, bounded."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _SEED_CONFIRM_TIMEOUT
+    while True:
+        if await _seed_marker_present(session):
+            return
+        if loop.time() >= deadline:
+            return  # best-effort: proceed to close even if unconfirmed
+        await asyncio.sleep(_SEED_CONFIRM_POLL)
+
+
+async def _seed_marker_present(session: CdpSession) -> bool:
+    try:
+        result = await session.send_command(
+            "Runtime.evaluate",
+            {"expression": _SEED_CONFIRM_EXPR, "returnByValue": True},
+        )
+        return result["result"]["result"].get("value") is True
+    except (KeyError, TypeError):
+        return False
 
 
 async def relaunch_account_web(relay_port: int, *, profile_dir: Path) -> None:
