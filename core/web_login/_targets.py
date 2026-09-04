@@ -97,11 +97,14 @@ class TargetDriver:
         """Dress one attached target; return its id when it is a page, else ``None``."""
         if event.get("method") != _ATTACHED:
             return None
-        params = event.get("params", {})
+        params = event.get("params")
+        if not isinstance(params, dict):
+            return None
         session_id = params.get("sessionId")
-        kind = params.get("targetInfo", {}).get("type")
         if not isinstance(session_id, str):
             return None
+        target_info = params.get("targetInfo")
+        kind = target_info.get("type") if isinstance(target_info, dict) else None
         page: str | None = None
         try:
             if kind == _PAGE:
