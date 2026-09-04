@@ -17,6 +17,11 @@ wheels/
 *.session
 *.session-journal
 
+# Per-account Telegram Web browser profiles (credentials) — the profile's
+# Local Storage holds a live web.telegram.org auth key, so it is exactly as
+# committable as a .session file. Created next to the sessions dir.
+web_profiles/
+
 # Upload staging (credentials) — API__UPLOAD_STAGING_DIR defaults inside the
 # working tree, and a staged telebuba_upload_* file IS the tdata/session archive.
 # The name pattern covers a staging dir relocated elsewhere in the tree.

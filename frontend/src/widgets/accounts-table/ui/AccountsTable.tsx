@@ -28,8 +28,12 @@ interface AccountsTableProps {
   onDelete: (accountId: string) => void;
   onOpen?: (account: AccountRead) => void;
   onProfile?: (account: AccountRead) => void;
+  onOpenWeb?: (accountId: string) => void;
   // A set, not one id: two rows can have a check or a delete in flight at once.
   busyIds: ReadonlySet<string>;
+  // Its own set, kept apart from busyIds: opening web must not disable the row's
+  // check/delete, and the globe's spinner must not light up during a check.
+  openWebBusyIds?: ReadonlySet<string>;
   // Verdict of the row's last check, while it is being flashed. Absent = the
   // button shows its ordinary refresh glyph.
   checkResults: Readonly<Record<string, FeedbackResult>>;
@@ -100,7 +104,9 @@ export function AccountsTable({
   onDelete,
   onOpen,
   onProfile,
+  onOpenWeb,
   busyIds,
+  openWebBusyIds,
   checkResults,
 }: AccountsTableProps) {
   const { t } = useTranslation();
@@ -204,8 +210,23 @@ export function AccountsTable({
         // on the previous verdict's fill, the old answer asserted over an unresolved
         // check. One expression, because three of them drifted apart once already.
         const verdict = busy ? undefined : checkResults[account.account_id];
+        const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
         return (
           <div className="flex items-center justify-end gap-sm">
+            <button
+              type="button"
+              title={t('accounts.actions.web')}
+              // No proxy means the backend can't reach Telegram signed-in as this
+              // account, so the globe is dead until one is assigned.
+              disabled={!account.proxy_id || openingWeb}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenWeb?.(account.account_id);
+              }}
+              className={`${ACTION_BTN} text-content-muted hover:border-info-line hover:text-action-primary`}
+            >
+              {openingWeb ? <Spinner /> : <Icon name="globe" size={14} />}
+            </button>
             <IconButton
               shape="circle"
               title={t('accounts.actions.check')}

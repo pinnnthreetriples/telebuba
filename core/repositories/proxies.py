@@ -193,6 +193,26 @@ async def fetch_account_proxy_settings(account_id: str) -> ProxySettings | None:
     return await asyncio.to_thread(_fetch_account_proxy_settings, account_id)
 
 
+def _fetch_account_proxy_country(account_id: str) -> str | None:
+    statement = (
+        select(_proxies.c.country_code)
+        .select_from(_accounts.join(_proxies, _accounts.c.proxy_id == _proxies.c.id))
+        .where(_accounts.c.account_id == account_id)
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    return None if row is None else _optional_str(row.get("country_code"))
+
+
+async def fetch_account_proxy_country(account_id: str) -> str | None:
+    """The exit country a check last measured for the account's proxy, if any.
+
+    ``None`` when the account has no proxy or no check has resolved a country yet;
+    callers align a locale to it and fall back on their own default.
+    """
+    return await asyncio.to_thread(_fetch_account_proxy_country, account_id)
+
+
 def _create_proxy(data: ProxyCreate) -> ProxyRead:
     # Keep the same strict canonicalizer at the persistence boundary for callers
     # using ``model_construct`` or a future non-Pydantic adapter. It runs before

@@ -105,11 +105,17 @@ from services.accounts.twofa import (
     remove_account_twofa,
     set_account_twofa,
 )
+from services.accounts.web_login import (
+    OpenWebResult,
+    open_account_web,
+    shutdown_web_login,
+)
 
 __all__ = [
     "AccountActionError",
     "AccountNotFoundError",
     "InvalidCursorError",
+    "OpenWebResult",
     "PhoneLoginError",
     "SessionAlreadyExistsError",
     "account_avatar_image",
@@ -141,6 +147,7 @@ __all__ = [
     "list_accounts_page",
     "list_listener_accounts",
     "logout_account",
+    "open_account_web",
     "post_account_story",
     "publish_account_channel_post",
     "read_account_privacy",
@@ -161,6 +168,7 @@ __all__ = [
     "set_account_story_pinned",
     "set_account_twofa",
     "set_account_twofa_email",
+    "shutdown_web_login",
     "start_phone_login",
     "submit_login_code",
     "update_account_channel",

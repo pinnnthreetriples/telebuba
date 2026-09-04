@@ -77,6 +77,7 @@ import {
   login,
   logout,
   logoutAccount,
+  openAccountWeb,
   type Options,
   postAccountStory,
   probeProxy,
@@ -332,6 +333,9 @@ import type {
   LogoutData,
   LogoutError,
   LogoutResponse,
+  OpenAccountWebData,
+  OpenAccountWebError,
+  OpenAccountWebResponse,
   PostAccountStoryData,
   PostAccountStoryError,
   PostAccountStoryResponse,
@@ -807,6 +811,31 @@ export const spamCheckAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await spamCheckAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Open Account Web
+ *
+ * Open a signed-in web.telegram.org window for the account through its proxy.
+ */
+export const openAccountWebMutation = (
+  options?: Partial<Options<OpenAccountWebData>>,
+): UseMutationOptions<OpenAccountWebResponse, OpenAccountWebError, Options<OpenAccountWebData>> => {
+  const mutationOptions: UseMutationOptions<
+    OpenAccountWebResponse,
+    OpenAccountWebError,
+    Options<OpenAccountWebData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await openAccountWeb({
         ...options,
         ...fnOptions,
         throwOnError: true,

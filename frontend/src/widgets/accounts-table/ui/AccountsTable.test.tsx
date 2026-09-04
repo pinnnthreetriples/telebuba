@@ -224,6 +224,43 @@ test('busy state is per row, and more than one row can be busy', () => {
   }
 });
 
+test('the globe opens web for the row and its click does not open the row', async () => {
+  const onOpenWeb = vi.fn();
+  const onOpen = vi.fn();
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpen={onOpen}
+      onOpenWeb={onOpenWeb}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  await userEvent.click(screen.getAllByTitle('Открыть в Telegram Web')[0]!);
+  expect(onOpenWeb).toHaveBeenCalledWith('acc-1');
+  // stopPropagation keeps the clickable row from also opening the edit view.
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
+test('the globe is disabled without a proxy and enabled with one', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpenWeb={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+  const globes = screen.getAllByTitle('Открыть в Telegram Web');
+  // acc-1 carries a proxy, acc-2 has none → no backend route to Telegram.
+  expect(globes[0]).toBeEnabled();
+  expect(globes[1]).toBeDisabled();
+});
+
 test('a row opens from the keyboard', async () => {
   const onOpen = vi.fn();
   render(

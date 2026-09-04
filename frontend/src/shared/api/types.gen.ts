@@ -2897,6 +2897,18 @@ export type NeuroshillingStepInput = {
 };
 
 /**
+ * OpenWebResult
+ *
+ * Whether a signed-in web.telegram.org window was launched for the account.
+ */
+export type OpenWebResult = {
+  /**
+   * Launched
+   */
+  launched: boolean;
+};
+
+/**
  * Page[AccountRead]
  */
 export type PageAccountRead = {
@@ -4467,6 +4479,56 @@ export type SpamCheckAccountResponses = {
 };
 
 export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
+
+export type OpenAccountWebData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/open-web';
+};
+
+export type OpenAccountWebErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type OpenAccountWebError = OpenAccountWebErrors[keyof OpenAccountWebErrors];
+
+export type OpenAccountWebResponses = {
+  /**
+   * Successful Response
+   */
+  200: OpenWebResult;
+};
+
+export type OpenAccountWebResponse = OpenAccountWebResponses[keyof OpenAccountWebResponses];
 
 export type StartPhoneLoginData = {
   body: StartPhoneLoginRequest;

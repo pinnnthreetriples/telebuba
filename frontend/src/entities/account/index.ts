@@ -35,6 +35,7 @@ export {
   importAccountSessionMutation,
   importAccountTdataMutation,
   logoutAccountMutation,
+  openAccountWebMutation,
   postAccountStoryMutation,
   publishAccountChannelPostMutation,
   removeAccountMusicMutation,
