@@ -108,7 +108,7 @@ from services.accounts.twofa import (
 from services.accounts.web_login import (
     OpenWebResult,
     open_account_web,
-    shutdown_web_login_relays,
+    shutdown_web_login,
 )
 
 __all__ = [
@@ -168,7 +168,7 @@ __all__ = [
     "set_account_story_pinned",
     "set_account_twofa",
     "set_account_twofa_email",
-    "shutdown_web_login_relays",
+    "shutdown_web_login",
     "start_phone_login",
     "submit_login_code",
     "update_account_channel",

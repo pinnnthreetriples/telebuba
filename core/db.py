@@ -391,6 +391,7 @@ from core.repositories.proxies import (  # noqa: E402, F401
     assign_account_to_proxy,
     create_proxy,
     delete_proxy,
+    fetch_account_proxy_country,
     fetch_account_proxy_settings,
     fetch_proxy,
     fetch_proxy_settings,
