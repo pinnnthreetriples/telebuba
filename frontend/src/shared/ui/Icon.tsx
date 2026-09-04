@@ -22,6 +22,8 @@ import {
   Sparkles,
   Trash,
   TriangleAlert,
+  UserRound,
+  Users,
   Video,
   X,
   type LucideIcon,
@@ -77,6 +79,11 @@ const GLYPH = {
   sparkles: Sparkles,
   trash: Trash,
   'upload-cloud': CloudUpload,
+  // Two people and one person: the group and the profile sections of the warming
+  // action card. Lucide's `UserRound` and not `User`, so the head matches the round
+  // avatars the app already draws beside it.
+  'user-round': UserRound,
+  users: Users,
   video: Video,
   'x-circle': CircleX,
 } satisfies Record<string, LucideIcon>;

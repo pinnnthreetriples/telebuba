@@ -2172,7 +2172,6 @@
       "dayProgress_one": "{{days}} / {{target}} day",
       "dayProgress_other": "{{days}} / {{target}} days",
       "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
-      "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
       "storiesSeen": "stories viewed: {{count}}",
       "storiesNone": "no active stories",
@@ -2227,40 +2226,64 @@
       "keep": "Continue",
       "stop": "Stop"
     },
-    "cfg": {
-      "title": "Warming settings",
-      "behaviorTitle": "Behaviour",
-      "limitsTitle": "Limits & safety",
-      "quietHours": "Quiet hours (sleep)",
-      "quietFrom": "From",
-      "quietTo": "To",
-      "quietNote": "Time zone is taken from the account locale. Not saved yet.",
-      "scopeOne": "This account only",
-      "scopeAll": "All in warming",
-      "scopeOneNote": "Per-account settings are not saved yet — settings apply to all accounts in warming.",
+    "tune": {
+      "title": "Action fine-tuning",
+      "subtitle": "Turn individual warming actions on or off. These settings apply to every account",
+      "enableAll": "Enable all",
+      "disableAll": "Disable all",
+      "trafficHeavy": "heavy traffic",
       "save": "Save",
-      "cancel": "Cancel",
-      "toggle": {
-        "reactions_enabled": {
-          "title": "Reactions",
-          "desc": "Accounts place reactions on posts in the warming channels."
-        },
-        "join_enabled": {
-          "title": "Join channels",
-          "desc": "Accounts subscribe to the warming channels on their own."
-        },
-        "inter_account_chat": {
-          "title": "Mutual chat",
-          "desc": "Warming accounts message each other for realistic activity."
-        },
-        "enforce_readiness": {
-          "title": "Check readiness",
-          "desc": "Block warming for accounts that fail the pre-start checks."
-        },
-        "local_time": {
-          "title": "Local time",
-          "desc": "Follow the account time zone for the quiet-hours window."
-        }
+      "legend": {
+        "working": "working · {{n}}",
+        "soon": "soon · {{n}}"
+      },
+      "state": {
+        "always": "always",
+        "soon": "soon"
+      },
+      "gate": {
+        "title": "Readiness gate",
+        "desc": "Keep an account out of warming until its proxy works and its checks pass"
+      },
+      "group": {
+        "reading": "Reading",
+        "activity": "Activity",
+        "fun": "Entertainment",
+        "social": "Social",
+        "chats": "Groups and chats",
+        "profile": "Profile"
+      },
+      "action": {
+        "scroll": "Scroll channels",
+        "markRead": "Mark as read",
+        "dialogs": "Browse dialogs",
+        "searchMessages": "Search messages",
+        "online": "Online status",
+        "reactions": "React to posts",
+        "polls": "Vote in polls",
+        "video": "Watch video",
+        "voice": "Listen to voice notes",
+        "stories": "Watch stories",
+        "gif": "Search GIFs",
+        "stickers": "Browse sticker packs",
+        "inlineBots": "Inline bots",
+        "linkPreview": "Link previews",
+        "interAccountChat": "Chat between accounts",
+        "typing": "Typing simulation",
+        "forward": "Forward messages",
+        "saved": "Notes in Saved Messages",
+        "contacts": "Sync contacts",
+        "scheduled": "Scheduled messages",
+        "join": "Join channels",
+        "leave": "Leave channels",
+        "archive": "Archive chats",
+        "mute": "Mute chats",
+        "notifications": "Notification settings",
+        "viewProfiles": "View profiles",
+        "checkSettings": "Check settings",
+        "updateProfile": "Update profile",
+        "emojiStatus": "Emoji status",
+        "drafts": "Drafts"
       }
     },
     "days": {

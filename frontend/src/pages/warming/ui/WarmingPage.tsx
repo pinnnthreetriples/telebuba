@@ -26,7 +26,7 @@ import {
   Icon,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
-import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
+import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
@@ -605,6 +605,14 @@ export function WarmingPage() {
           />
           <DialogueFeed />
         </div>
+      </div>
+
+      {/* Настройки прогрева ОБЩИЕ, а не по аккаунту, поэтому карточка одна и стоит
+          ПОД сеткой во всю ширину: три колонки тумблеров не встают в 340px левой
+          колонки, а шестерёнка на карточке аккаунта обещала «настройку этого
+          аккаунта» и писала всем (#194-#196 оставили те же четыре поля глобальными). */}
+      <div className="mt-lg">
+        <ActionTuningCard />
       </div>
 
       {warmDaysFor ? (
