@@ -198,6 +198,40 @@ async def test_missing_proxy_raises_web_login_error_before_building_a_client(
 
 
 @pytest.mark.asyncio
+async def test_qr_wait_registers_before_confirmer_accepts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """qr.wait() must register its UpdateLoginToken handler before accept fires.
+
+    qr.wait() installs that handler only when entered; the server pushes to the
+    fresh client the instant we accept, so an accept-then-wait order can drop the
+    push and hang wait() until timeout. This asserts wait() was ENTERED before the
+    confirmer saw the AcceptLoginToken, and fails against the old order.
+    """
+    order: dict[str, object] = {"wait_entered": False, "entered_at_accept": None}
+
+    class _OrderedQr(_FakeQr):
+        async def wait(self, timeout: float | None = None) -> None:  # noqa: ASYNC109, ARG002 - mirrors QRLogin.wait; records entry ordering
+            order["wait_entered"] = True
+
+    client = _FakeNewClient(_OrderedQr())
+
+    async def fake_get_client(_account_id: str) -> object:
+        async def confirmer(_request: object) -> None:
+            order["entered_at_accept"] = order["wait_entered"]
+
+        return confirmer
+
+    _patch(monkeypatch, new_client=client)
+    monkeypatch.setattr(f"{_MODULE}.get_client", fake_get_client)
+
+    await mint_web_authorization("acc-1")
+
+    # wait() had already registered its handler by the time the confirmer accepted.
+    assert order["entered_at_accept"] is True
+
+
+@pytest.mark.asyncio
 async def test_server_salt_is_none_when_connection_has_no_salt_yet(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

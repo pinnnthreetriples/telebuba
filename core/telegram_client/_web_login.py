@@ -19,7 +19,9 @@ never persists its session. The pooled confirmer is left untouched — it is sha
 
 from __future__ import annotations
 
+import asyncio
 import struct
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
@@ -30,6 +32,7 @@ from telethon.tl import functions
 
 from core.config import settings
 from core.db import fetch_account_proxy_settings, fetch_account_twofa_password
+from core.telegram_client._client import telethon_proxy_dict
 from core.telegram_client._pool import get_client
 
 if TYPE_CHECKING:
@@ -88,20 +91,14 @@ class MintedWebAuth:
 
 
 def _proxy_dict(proxy: ProxySettings) -> dict[str, object]:
-    """Build the Telethon proxy dict, mirroring ``_client._proxy_config``.
-
-    Our internal type advertises ``https`` (how proxy sellers label the CONNECT
-    tunnel); python-socks calls the same thing ``http``.
-    """
-    telethon_type = "http" if proxy.proxy_type == "https" else proxy.proxy_type
-    return {
-        "proxy_type": telethon_type,
-        "addr": proxy.host,
-        "port": proxy.port,
-        "rdns": True,
-        "username": proxy.username,
-        "password": proxy.password,
-    }
+    """The account's proxy as a Telethon dict, via the shared builder in ``_client``."""
+    telethon = telethon_proxy_dict(
+        proxy.proxy_type, proxy.host, proxy.port, proxy.username, proxy.password
+    )
+    if telethon is None:  # pragma: no cover - ProxySettings always has type/host/port
+        msg = "proxy settings for the web session are incomplete"
+        raise WebLoginError(msg)
+    return telethon
 
 
 def _build_new_device_client(proxy: dict[str, object]) -> TelegramClient:
@@ -143,16 +140,29 @@ def _extract_server_salt(new_client: TelegramClient) -> bytes | None:
 async def _finish_login(new_client: TelegramClient, qr: QRLogin, account_id: str) -> None:
     """Confirm the token with the pooled client, then complete the login, 2FA and all."""
     confirmer = await get_client(account_id)
-    # Raw token bytes go straight across in-process — no base64 round-trip needed.
-    await confirmer(functions.auth.AcceptLoginTokenRequest(token=qr.token))
+    # Start qr.wait() FIRST so its UpdateLoginToken handler is registered before we
+    # trigger the update: qr.wait() only installs that handler when entered, and the
+    # server pushes updateLoginToken to the fresh client the instant we accept, so an
+    # accept-then-wait order can drop the push and hang wait() until timeout.
+    wait_task = asyncio.create_task(qr.wait(timeout=_QR_WAIT_TIMEOUT))
+    await asyncio.sleep(0)  # let qr.wait() install its handler before we accept
     try:
-        await qr.wait(timeout=_QR_WAIT_TIMEOUT)
+        # Raw token bytes go straight across in-process — no base64 round-trip needed.
+        await confirmer(functions.auth.AcceptLoginTokenRequest(token=qr.token))
+        await wait_task
     except SessionPasswordNeededError as exc:
         password = await fetch_account_twofa_password(account_id)
         if not password:
             msg = "account has a cloud password but none is stored"
             raise TwoFactorRequiredError(msg) from exc
         await new_client.sign_in(password=password)
+    finally:
+        # If the accept failed before we awaited it, wait_task is still pending —
+        # cancel and drain it so it can't outlive this call.
+        if not wait_task.done():
+            wait_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await wait_task
 
 
 async def _extract_minted_auth(new_client: TelegramClient, account_id: str) -> MintedWebAuth:

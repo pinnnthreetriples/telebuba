@@ -71,11 +71,29 @@ class WebLoginLaunchError(WebLoginServiceError):
     """The relay or browser could not be started (never carries proxy creds)."""
 
 
-# One relay per account, created lazily and reused across clicks. Guarded by a
-# single lock so two near-simultaneous clicks for the same account cannot each
-# bind a relay and leak one. The relay lives until app shutdown.
+# One relay per account, created lazily and reused across clicks. The relay
+# registry is guarded by a single lock so its dict access stays consistent; the
+# whole per-account open is serialized by a PER-ACCOUNT lock (below) so the
+# seeded-check + mint/relaunch decision cannot race and double-mint. The relay
+# lives until app shutdown.
 _relays: dict[str, LocalProxyRelay] = {}
 _relays_lock = asyncio.Lock()
+
+# One lock per account so two concurrent first-clicks for the SAME account run the
+# seeded-check + mint/relaunch decision serially (no double-mint), while different
+# accounts still open concurrently. Created under a global guard.
+_open_locks: dict[str, asyncio.Lock] = {}
+_open_locks_guard = asyncio.Lock()
+
+
+async def _account_open_lock(account_id: str) -> asyncio.Lock:
+    """Get-or-create the per-account open lock, under the global guard."""
+    async with _open_locks_guard:
+        lock = _open_locks.get(account_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            _open_locks[account_id] = lock
+        return lock
 
 
 async def open_account_web(account_id: str) -> OpenWebResult:
@@ -83,27 +101,33 @@ async def open_account_web(account_id: str) -> OpenWebResult:
 
     Requires a proxy: the browser must reach Telegram through the account's own
     exit, never the host's. First open mints + seeds a new profile; every repeat
-    reuses the signed-in profile without minting again.
+    reuses the signed-in profile without minting again. The whole per-account body
+    is serialized so concurrent first-clicks cannot each mint.
     """
     proxy = await fetch_account_proxy_settings(account_id)
     if proxy is None:
         msg = "account has no proxy assigned"
         raise NoProxyForWebLoginError(msg)
-    relay_port = await _relay_port_for(account_id, proxy)
-    profile = account_profile_dir(account_id)
-    if _profile_is_seeded(profile):
-        await _relaunch(relay_port, profile)
-    else:
-        await _first_open(account_id, relay_port, profile)
+    async with await _account_open_lock(account_id):
+        relay_port = await _relay_port_for(account_id, proxy)
+        profile = account_profile_dir(account_id)
+        if _profile_is_seeded(profile):
+            await _relaunch(relay_port, profile)
+        else:
+            await _first_open(account_id, relay_port, profile)
     return OpenWebResult(launched=True)
 
 
 async def _relay_port_for(account_id: str, proxy: ProxySettings) -> int:
     """Get-or-create the account's relay and return the loopback port it serves."""
     async with _relays_lock:
-        relay = _relays.get(account_id)
-        if relay is not None and relay.port is not None:
-            return relay.port
+        existing = _relays.get(account_id)
+        if existing is not None and existing.port is not None:
+            return existing.port
+        if existing is not None:
+            # A stored relay that bound no port is half-started; close it before we
+            # replace it so it can't be orphaned.
+            await existing.aclose()
         relay = LocalProxyRelay(proxy)
         try:
             port = await relay.start()
@@ -130,7 +154,8 @@ async def _first_open(account_id: str, relay_port: int, profile: Path) -> None:
         raise WebLoginLaunchError(msg) from exc
     try:
         await _launch_seeded_web(auth, relay_port, profile_dir=profile)
-    except BrowserNotFoundError as exc:
+    except (BrowserNotFoundError, TimeoutError) as exc:
+        # TimeoutError: the bounded CDP seed+navigate stalled — a launch failure.
         raise WebLoginLaunchError(str(exc)) from exc
 
 

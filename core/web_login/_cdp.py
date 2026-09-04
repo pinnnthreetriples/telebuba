@@ -35,6 +35,10 @@ _OP_PONG = 0xA
 _DEFAULT_WS_PORT = 80
 _SWITCHING = b"101"
 
+# A CDP response for a browser we launched is small; refuse an absurd declared
+# length (only reachable on the 64-bit path) before allocating for the read.
+_MAX_FRAME_BYTES = 8 * 1024 * 1024
+
 
 class CdpError(RuntimeError):
     """The DevTools WebSocket handshake or transport failed."""
@@ -137,6 +141,9 @@ class CdpSession:
             length = struct.unpack("!H", await self._reader.readexactly(2))[0]
         elif length == _LEN_64:
             length = struct.unpack("!Q", await self._reader.readexactly(8))[0]
+            if length > _MAX_FRAME_BYTES:
+                msg = f"CDP frame length {length} exceeds the {_MAX_FRAME_BYTES}-byte cap"
+                raise CdpError(msg)
         mask = await self._reader.readexactly(_MASK_BYTES) if head[1] & _MASK_FLAG else b""
         payload = await self._reader.readexactly(length)
         if mask:

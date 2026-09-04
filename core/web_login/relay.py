@@ -45,14 +45,8 @@ class LocalProxyRelay:
     through ``upstream`` by ``python_socks``. Usable as an async context manager.
     """
 
-    def __init__(
-        self,
-        upstream: ProxySettings,
-        *,
-        connect_timeout: float = _DEFAULT_TIMEOUT_SECONDS,
-    ) -> None:
+    def __init__(self, upstream: ProxySettings) -> None:
         self._upstream = upstream
-        self._connect_timeout = connect_timeout
         self._server: asyncio.Server | None = None
         self._conns: set[asyncio.Task[None]] = set()
 
@@ -143,7 +137,7 @@ class LocalProxyRelay:
         try:
             header = await asyncio.wait_for(
                 reader.readuntil(b"\r\n\r\n"),
-                timeout=self._connect_timeout,
+                timeout=_DEFAULT_TIMEOUT_SECONDS,
             )
         except (OSError, TimeoutError, asyncio.IncompleteReadError, asyncio.LimitOverrunError):
             return None
@@ -163,8 +157,8 @@ class LocalProxyRelay:
             password=self._upstream.password,
         )
         sock = await asyncio.wait_for(
-            proxy.connect(dest_host=host, dest_port=port, timeout=self._connect_timeout),
-            timeout=self._connect_timeout,
+            proxy.connect(dest_host=host, dest_port=port, timeout=_DEFAULT_TIMEOUT_SECONDS),
+            timeout=_DEFAULT_TIMEOUT_SECONDS,
         )
         return await asyncio.open_connection(sock=sock)
 

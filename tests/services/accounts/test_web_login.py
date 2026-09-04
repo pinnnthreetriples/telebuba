@@ -36,9 +36,15 @@ _AUTH = object()  # opaque: the seeded launch is mocked, so its shape is irrelev
 
 @pytest.fixture(autouse=True)
 def _fresh_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Isolate the process-global relay registry + its loop-bound lock per test."""
+    """Isolate the process-global relay + per-account-lock registries per test.
+
+    The locks are loop-bound, so each test gets fresh ones (a Lock from a prior
+    test's event loop would be rejected by this test's loop).
+    """
     monkeypatch.setattr(web_login, "_relays", {})
     monkeypatch.setattr(web_login, "_relays_lock", asyncio.Lock())
+    monkeypatch.setattr(web_login, "_open_locks", {})
+    monkeypatch.setattr(web_login, "_open_locks_guard", asyncio.Lock())
 
 
 class _FakeRelay:
@@ -46,9 +52,8 @@ class _FakeRelay:
 
     created: list[_FakeRelay] = []  # noqa: RUF012 - test double, reset per test below
 
-    def __init__(self, upstream: ProxySettings, *, connect_timeout: float = 30.0) -> None:
+    def __init__(self, upstream: ProxySettings) -> None:
         self.upstream = upstream
-        self.connect_timeout = connect_timeout
         self.starts = 0
         self.closed = False
         self._port: int | None = None
@@ -198,6 +203,83 @@ async def test_second_click_reuses_the_same_relay(
     assert relay.created[0].starts == 1
 
 
+@pytest.mark.asyncio
+async def test_first_open_seeds_then_second_open_relaunches_minting_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relay: type[_FakeRelay],
+) -> None:
+    """Mint runs once across first-open -> profile-seeded -> second-open.
+
+    The real seed makes the profile dir non-empty, so the second open relaunches.
+    """
+    profile = tmp_path / "acct"  # does not exist yet -> first open mints
+    calls: dict[str, int] = {"mint": 0, "relaunch": 0}
+
+    async def _mint(account_id: str) -> object:  # noqa: ARG001
+        calls["mint"] += 1
+        return _AUTH
+
+    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        (profile_dir / "Default").write_text("seeded", encoding="utf-8")
+
+    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
+        calls["relaunch"] += 1
+
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, profile)
+    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
+    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
+    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
+
+    await open_account_web("acct")
+    await open_account_web("acct")
+
+    assert calls["mint"] == 1
+    assert calls["relaunch"] == 1
+    assert len(relay.created) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_first_opens_mint_exactly_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    relay: type[_FakeRelay],
+) -> None:
+    """FIX 2: two concurrent first-clicks for an un-seeded account must mint ONCE.
+
+    The per-account lock serializes the seeded-check + mint decision; without it
+    both clicks would see an un-seeded profile and each mint a second device.
+    """
+    profile = tmp_path / "acct"
+    calls: dict[str, int] = {"mint": 0, "relaunch": 0}
+
+    async def _mint(account_id: str) -> object:  # noqa: ARG001
+        calls["mint"] += 1
+        await asyncio.sleep(0)  # widen the window a racing second open could exploit
+        return _AUTH
+
+    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
+        profile_dir.mkdir(parents=True, exist_ok=True)
+        (profile_dir / "Default").write_text("seeded", encoding="utf-8")
+
+    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
+        calls["relaunch"] += 1
+
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, profile)
+    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
+    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
+    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
+
+    await asyncio.gather(open_account_web("acct"), open_account_web("acct"))
+
+    assert calls["mint"] == 1
+    assert calls["relaunch"] == 1
+    assert len(relay.created) == 1
+
+
 @pytest.mark.usefixtures("relay")
 @pytest.mark.asyncio
 async def test_missing_two_factor_password_maps_to_its_error(
@@ -238,7 +320,7 @@ async def test_relay_start_failure_maps_to_launch_error(
     tmp_path: Path,
 ) -> None:
     class _DeadRelay:
-        def __init__(self, upstream: ProxySettings, *, connect_timeout: float = 30.0) -> None: ...
+        def __init__(self, upstream: ProxySettings) -> None: ...
 
         async def start(self) -> int:
             msg = "bind refused"

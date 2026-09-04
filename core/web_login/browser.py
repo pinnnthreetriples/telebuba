@@ -32,6 +32,12 @@ _LAUNCH_URL = "about:blank"
 _PROFILE_SUBDIR = "web_profiles"
 _CDP_READY_TIMEOUT = 20.0
 _CDP_POLL_INTERVAL = 0.25
+# A stalled DevTools socket must not hang the open forever; bound the whole
+# seed+navigate exchange.
+_CDP_SEQUENCE_TIMEOUT = 30.0
+# After navigate is acknowledged, give the /k/ document a moment to commit so the
+# document-start seed is settled before we drop the socket. Best-effort, non-fatal.
+_NAVIGATE_SETTLE_SECONDS = 0.5
 
 
 class BrowserNotFoundError(RuntimeError):
@@ -65,19 +71,33 @@ def build_launch_args(
     *,
     user_data_dir: Path,
     relay_port: int,
-    debug_port: int,
     url: str,
+    debug_port: int | None = None,
 ) -> list[str]:
-    """The Chromium argv: isolated profile, loopback proxy, WebRTC guards, CDP, app mode."""
+    """The Chromium argv: isolated profile, loopback proxy, WebRTC guards, app mode.
+
+    The DevTools endpoint is emitted ONLY when ``debug_port`` is given (the seeding
+    path). Its allow-origin is scoped to that exact loopback origin rather than the
+    lifetime-wide ``*``. The relaunch path passes no port, so its window opens with
+    no DevTools endpoint at all.
+    """
+    debug_flags = (
+        [
+            f"--remote-debugging-port={debug_port}",
+            # Recent Chrome refuses the CDP WebSocket without an allowed origin;
+            # scope it to this endpoint instead of disabling the check with "*".
+            f"--remote-allow-origins=http://127.0.0.1:{debug_port}",
+        ]
+        if debug_port is not None
+        else []
+    )
     return [
         f"--user-data-dir={user_data_dir}",
         f"--proxy-server=http://127.0.0.1:{relay_port}",
         # Keep WebRTC from leaking the real IP around the proxy.
         "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
         "--disable-features=WebRtcHideLocalIpsWithMdns",
-        f"--remote-debugging-port={debug_port}",
-        # Recent Chrome refuses the CDP WebSocket without an allowed origin.
-        "--remote-allow-origins=*",
+        *debug_flags,
         "--no-first-run",
         "--no-default-browser-check",
         "--no-service-autorun",
@@ -161,14 +181,32 @@ async def open_account_web(auth: MintedWebAuth, relay_port: int, *, profile_dir:
     ws_url = await _discover_page_ws(debug_port)
     session = await CdpSession.connect(ws_url)
     try:
-        await session.send_command("Page.enable")
-        await session.send_command(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {"source": _seed_script(auth)},
+        await asyncio.wait_for(
+            _seed_and_navigate(session, auth),
+            timeout=_CDP_SEQUENCE_TIMEOUT,
         )
-        await session.send_command("Page.navigate", {"url": _WEBK_URL})
+    except TimeoutError as exc:
+        msg = "Seeding the web session over DevTools timed out."
+        raise TimeoutError(msg) from exc
     finally:
         await session.aclose()
+
+
+async def _seed_and_navigate(session: CdpSession, auth: MintedWebAuth) -> None:
+    """Install the document-start seed, then navigate to WebK and let it commit.
+
+    ``addScriptToEvaluateOnNewDocument`` is acknowledged before ``navigate``, so the
+    seed is guaranteed installed for the ``/k/`` document. The short settle keeps us
+    from dropping the socket the instant navigate is acked (before the document
+    commits) — it is best-effort, so a slow commit still proceeds to close.
+    """
+    await session.send_command("Page.enable")
+    await session.send_command(
+        "Page.addScriptToEvaluateOnNewDocument",
+        {"source": _seed_script(auth)},
+    )
+    await session.send_command("Page.navigate", {"url": _WEBK_URL})
+    await asyncio.sleep(_NAVIGATE_SETTLE_SECONDS)
 
 
 async def relaunch_account_web(relay_port: int, *, profile_dir: Path) -> None:
@@ -177,15 +215,14 @@ async def relaunch_account_web(relay_port: int, *, profile_dir: Path) -> None:
     A repeat click has a persistent profile that already holds WebK's
     localStorage from the first open, so minting again would only spawn another
     'Active Sessions' device. This boots the browser straight at ``/k/`` through
-    the account's relay — no CDP socket, no document-start seed — and leaves the
-    operator's window running.
+    the account's relay — no CDP socket, no document-start seed, no DevTools
+    endpoint — and leaves the operator's window running.
     """
     make_private_dir(profile_dir)
     browser = find_browser()
     args = build_launch_args(
         user_data_dir=profile_dir,
         relay_port=relay_port,
-        debug_port=_free_port(),
         url=_WEBK_URL,
     )
     await asyncio.create_subprocess_exec(

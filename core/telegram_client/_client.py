@@ -204,18 +204,39 @@ async def telegram_client(request: TelegramClientRequest) -> AsyncIterator[Teleg
         await client.disconnect()
 
 
-def _proxy_config(profile: TelegramClientProfile) -> dict[str, object] | None:
-    if not profile.proxy_type or not profile.proxy_host or profile.proxy_port is None:
+def telethon_proxy_dict(
+    proxy_type: str | None,
+    host: str | None,
+    port: int | None,
+    username: str | None,
+    password: str | None,
+) -> dict[str, object] | None:
+    """Build Telethon's proxy dict from primitive fields, or ``None`` when unset.
+
+    The one place the Telethon proxy dict is shaped, shared by the pooled/probe
+    client (:func:`_proxy_config`) and the web-login minter's fresh client so the
+    two cannot drift. Telethon's proxy dict speaks python-socks names: "socks5" /
+    "http". Our internal type uses "https" to match how proxy sellers advertise
+    the protocol — same underlying CONNECT tunnel, just relabelled at the edge.
+    """
+    if not proxy_type or not host or port is None:
         return None
-    # Telethon's proxy dict speaks python-socks names: "socks5" / "http". Our
-    # internal type uses "https" to match how proxy sellers advertise the
-    # protocol — same underlying CONNECT tunnel, just relabelled at the edge.
-    telethon_type = "http" if profile.proxy_type == "https" else profile.proxy_type
+    telethon_type = "http" if proxy_type == "https" else proxy_type
     return {
         "proxy_type": telethon_type,
-        "addr": profile.proxy_host,
-        "port": profile.proxy_port,
+        "addr": host,
+        "port": port,
         "rdns": True,
-        "username": profile.proxy_username,
-        "password": profile.proxy_password,
+        "username": username,
+        "password": password,
     }
+
+
+def _proxy_config(profile: TelegramClientProfile) -> dict[str, object] | None:
+    return telethon_proxy_dict(
+        profile.proxy_type,
+        profile.proxy_host,
+        profile.proxy_port,
+        profile.proxy_username,
+        profile.proxy_password,
+    )

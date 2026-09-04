@@ -93,7 +93,9 @@ def test_build_launch_args_carries_every_required_flag() -> None:
     assert r"--user-data-dir=C:\profiles\acct-1" in args
     assert "--proxy-server=http://127.0.0.1:41000" in args
     assert "--remote-debugging-port=42000" in args
-    assert "--remote-allow-origins=*" in args
+    # Origin is scoped to this exact loopback endpoint, never the lifetime-wide "*".
+    assert "--remote-allow-origins=http://127.0.0.1:42000" in args
+    assert "--remote-allow-origins=*" not in args
     assert "--force-webrtc-ip-handling-policy=disable_non_proxied_udp" in args
     assert "--disable-features=WebRtcHideLocalIpsWithMdns" in args
     assert "--app=about:blank" in args
@@ -272,17 +274,19 @@ async def test_relaunch_boots_webk_through_relay_without_seeding(
 
     await relaunch_account_web(relay_port, profile_dir=profile_dir)
 
-    # Launched with the relay + persistent profile, pointed straight at WebK.
+    # Launched with the relay + persistent profile, pointed straight at WebK, with
+    # NO DevTools endpoint (no debug port) on the relaunch path.
     expected_args = build_launch_args(
         user_data_dir=profile_dir,
         relay_port=relay_port,
-        debug_port=debug_port,
         url=browser._WEBK_URL,
     )
     program, args, _kwargs = recorder["exec"]
     assert program == str(fake_browser)
     assert list(args) == expected_args
     assert profile_dir.is_dir()
+    assert not any(arg.startswith("--remote-debugging-port") for arg in args)
+    assert not any(arg.startswith("--remote-allow-origins") for arg in args)
 
     # No CDP seed on a repeat open, and the operator's window is never killed.
     assert "cdp_connect" not in recorder
