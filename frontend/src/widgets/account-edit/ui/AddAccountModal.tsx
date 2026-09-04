@@ -11,6 +11,7 @@ import { ImportFileList } from './ImportFileList';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 import { ProxyPoolStep } from './ProxyPoolStep';
+import { TwoFactorBulkStep } from './TwoFactorBulkStep';
 import { useBulkImport } from './useBulkImport';
 
 // The design's add-account wizard. STEP 1 provisions accounts: MANY .session /
@@ -18,7 +19,8 @@ import { useBulkImport } from './useBulkImport';
 // a bare phone number (start-login). STEP 2 assigns proxies to the just-created
 // accounts. For the phone method a STEP 3 then requests + confirms the Telegram
 // login code — run after the proxy is assigned so the first Telegram connection
-// uses it. The created account ids thread across all steps.
+// uses it. A LAST step then offers Telegram's cloud password for the whole batch.
+// The created account ids thread across all steps.
 type Method = 'session' | 'tdata' | 'phone' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
 
@@ -70,7 +72,7 @@ export function AddAccountModal({
 }) {
   const { t } = useTranslation();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [method, setMethod] = useState<Method>(null);
   const [phone, setPhone] = useState('');
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
@@ -86,6 +88,11 @@ export function AddAccountModal({
   // the NEW method, POSTing a phone login at an already-authorised .session
   // account. `selectMethod` owns both this and the state.
   const methodRef = useRef<Method>(null);
+  // The cloud-password step's RESULT phase renames the dialog: the passwords it
+  // shows are the point of that screen, and "Добавить аккаунт" over them is a
+  // title for a wizard that is already finished. The step reports the phase up
+  // because the title belongs to this component, which owns the chrome.
+  const [twofaResult, setTwofaResult] = useState(false);
 
   const bulk = useBulkImport(method === 'tdata' ? 'tdata' : 'session', onImported);
   const startLogin = useMutation(startPhoneLoginMutation());
@@ -94,6 +101,20 @@ export function AddAccountModal({
 
   const accountIds =
     method === 'phone' ? (createdAccountId ? [createdAccountId] : []) : bulk.accountIds;
+
+  // What the operator recognises each just-created account by on the 2FA step:
+  // the file it came out of, or the number they typed. The Telegram name is
+  // usually not known yet — nothing has connected as this account.
+  const sources: Record<string, string> =
+    method === 'phone'
+      ? createdAccountId
+        ? { [createdAccountId]: phone }
+        : {}
+      : Object.fromEntries(
+          bulk.files.flatMap((file) =>
+            file.accountIds.map((id): [string, string] => [id, file.name]),
+          ),
+        );
 
   // Clear a FINISHED start-login only. `reset()` detaches the observer from the
   // mutation ("there is no way to get it back" — mutationObserver.ts), so
@@ -107,7 +128,7 @@ export function AddAccountModal({
     if (!startLogin.isPending) startLogin.reset();
   };
 
-  const totalSteps = method === 'phone' ? 3 : 2;
+  const totalSteps = method === 'phone' ? 4 : 3;
 
   // Picking a method un-provisions the wizard, because an account created by an
   // earlier method would keep "Next" unlocked with nothing to show for it and
@@ -142,14 +163,11 @@ export function AddAccountModal({
     );
   };
 
-  // After proxy is assigned/skipped: phone goes on to the code step, the file
-  // methods are done and close.
+  // After proxy is assigned/skipped: step 3 either way — the code step for the
+  // phone method, the cloud-password step for the file methods (which reach it
+  // one step earlier, having no code to confirm).
   const afterProxy = () => {
-    if (method === 'phone') {
-      setStep(3);
-    } else {
-      onClose();
-    }
+    setStep(3);
   };
 
   // Every picked file becomes its own import request; the hook ignores results
@@ -204,13 +222,21 @@ export function AddAccountModal({
       <div className="px-2xl pb-xl pt-2xl">
         <div className="mb-lg flex items-start justify-between">
           <div>
-            <div className="type-dialog-title">{t('accounts.addWizard.title')}</div>
+            <div className="type-dialog-title">
+              {twofaResult
+                ? t('accounts.addWizard.twofaResultTitle')
+                : t('accounts.addWizard.title')}
+            </div>
             <div className="mt-hair type-prose">
               {step === 1
                 ? t('accounts.addWizard.step1Label')
                 : step === 2
                   ? t('accounts.addWizard.step2Label')
-                  : t('accounts.addWizard.step3Label')}
+                  : step === 3 && method === 'phone'
+                    ? t('accounts.addWizard.step3Label')
+                    : // The cloud password is always the LAST step, and which
+                      // number that is depends on the method.
+                      t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
             </div>
           </div>
           <IconButton
@@ -384,13 +410,21 @@ export function AddAccountModal({
               </Button>
             </div>
           </>
+        ) : step === 4 || (step === 3 && method !== 'phone') ? (
+          <TwoFactorBulkStep
+            accountIds={accountIds}
+            sources={sources}
+            onDone={onClose}
+            onImported={onImported}
+            onPhaseChange={setTwofaResult}
+          />
         ) : step === 3 ? (
           <CodeLoginStep
             accountId={createdAccountId}
             phone={phone}
             onDone={() => {
               onImported();
-              onClose();
+              setStep(4);
             }}
           />
         ) : proxyStep === 'choice' ? (
