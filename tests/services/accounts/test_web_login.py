@@ -1,11 +1,11 @@
-"""The ``open_account_web`` orchestrator: proxy gate, mint-once, relay reuse.
+"""The ``open_account_web`` orchestrator: proxy gate, drive-once, relay reuse.
 
 Every live collaborator is faked at this module's own globals (the re-export
-contract): the proxy lookup, the mint, the :class:`LocalProxyRelay`, the seeded
-launch and the no-seed relaunch. The tests pin the branch logic — no proxy is
-refused, a fresh profile mints and seeds exactly once, an already-signed-in
-profile relaunches WITHOUT minting, a second click reuses the one relay, and a
-missing stored 2FA password maps to its own domain error.
+contract): the proxy/2FA lookups, the :class:`LocalProxyRelay`, the hooked launch,
+the page-state/token probes, the token accept, the 2FA typing and the relaunch. The
+tests pin the branch logic — no proxy is refused, a fresh profile drives the QR
+login exactly once, a stored 2FA password is typed when WebK asks, an already
+signed-in profile relaunches WITHOUT driving, and a second click reuses the one relay.
 """
 
 from __future__ import annotations
@@ -15,36 +15,37 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from core.telegram_client import TwoFactorRequiredError, WebLoginError
 from schemas.proxy import ProxySettings
 from services.accounts import web_login
 from services.accounts.web_login import (
     NoProxyForWebLoginError,
     WebLoginLaunchError,
-    WebLoginTwoFactorError,
     open_account_web,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
 _PROXY = ProxySettings(
     proxy_type="socks5", host="proxy.example", port=1080, username="u", password="p"
 )
-_AUTH = object()  # opaque: the seeded launch is mocked, so its shape is irrelevant.
 
 
 @pytest.fixture(autouse=True)
 def _fresh_registry(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Isolate the process-global relay + per-account-lock registries per test.
+    """Isolate the process-global registries per test and make the drive loop instant.
 
     The locks are loop-bound, so each test gets fresh ones (a Lock from a prior
-    test's event loop would be rejected by this test's loop).
+    test's event loop would be rejected by this test's loop). The poll cadence and
+    the post-2FA grace are zeroed so the drive loop does not really sleep.
     """
     monkeypatch.setattr(web_login, "_relays", {})
     monkeypatch.setattr(web_login, "_relays_lock", asyncio.Lock())
     monkeypatch.setattr(web_login, "_open_locks", {})
     monkeypatch.setattr(web_login, "_open_locks_guard", asyncio.Lock())
+    monkeypatch.setattr(web_login, "_POLL_INTERVAL", 0)
+    monkeypatch.setattr(web_login, "_PASSWORD_GRACE", 0)
 
 
 class _FakeRelay:
@@ -73,6 +74,16 @@ class _FakeRelay:
         self._port = None
 
 
+class _FakeSession:
+    """The CDP session the hooked launch returns; only aclose is exercised."""
+
+    def __init__(self) -> None:
+        self.closed = False
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
 @pytest.fixture
 def relay(monkeypatch: pytest.MonkeyPatch) -> type[_FakeRelay]:
     _FakeRelay.created = []
@@ -91,6 +102,56 @@ def _patch_profile(monkeypatch: pytest.MonkeyPatch, profile: Path) -> None:
     monkeypatch.setattr(web_login, "account_profile_dir", lambda account_id: profile)  # noqa: ARG005
 
 
+def _scripted_states(seq: Sequence[str]) -> Callable[[object], Any]:
+    """A ``page_state`` fake that walks ``seq`` then holds on its last value."""
+    box = list(seq)
+
+    async def _state(_session: object) -> str:
+        return box.pop(0) if len(box) > 1 else box[0]
+
+    return _state
+
+
+def _wire_drive(
+    monkeypatch: pytest.MonkeyPatch,
+    calls: dict[str, Any],
+    *,
+    states: Sequence[str],
+    token: str | None = "dG9rZW4x",  # base64url for b"token1"
+    twofa: str | None = None,
+) -> _FakeSession:
+    """Wire the hooked-launch + drive collaborators; return the fake session."""
+    session = _FakeSession()
+
+    async def _launch(relay_port: int, *, profile_dir: Path) -> tuple[_FakeSession, object]:
+        calls["launched"] = (relay_port, profile_dir)
+        return session, object()
+
+    async def _latest(_session: object) -> str | None:
+        return token
+
+    async def _accept(account_id: str, token_bytes: bytes) -> None:  # noqa: ARG001
+        calls.setdefault("accepted", []).append(token_bytes)
+
+    async def _type(_session: object, password: str) -> None:
+        calls["typed"] = password
+
+    async def _twofa(_account_id: str) -> str | None:
+        return twofa
+
+    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
+        calls["relaunch"] = calls.get("relaunch", 0) + 1
+
+    monkeypatch.setattr(web_login, "launch_webk_with_hook", _launch)
+    monkeypatch.setattr(web_login, "page_state", _scripted_states(states))
+    monkeypatch.setattr(web_login, "latest_login_token", _latest)
+    monkeypatch.setattr(web_login, "accept_web_login_token", _accept)
+    monkeypatch.setattr(web_login, "type_2fa_password", _type)
+    monkeypatch.setattr(web_login, "fetch_account_twofa_password", _twofa)
+    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
+    return session
+
+
 @pytest.mark.asyncio
 async def test_no_proxy_is_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_proxy(monkeypatch, None)
@@ -101,80 +162,93 @@ async def test_no_proxy_is_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 @pytest.mark.asyncio
-async def test_first_open_mints_seeds_and_starts_one_relay(
+async def test_first_open_accepts_the_token_once_and_finishes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     relay: type[_FakeRelay],
 ) -> None:
-    calls: dict[str, Any] = {"mint": 0, "relaunch": 0}
-    profile = tmp_path / "acct"  # does not exist yet -> first open
-
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        calls["mint"] += 1
-        return _AUTH
-
-    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None:
-        calls["seed"] = (auth, relay_port, profile_dir)
-
-    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
-        calls["relaunch"] += 1
-
+    calls: dict[str, Any] = {}
+    profile = tmp_path / "acct"  # does not exist yet -> first open drives login
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, profile)
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
-    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
+    session = _wire_drive(monkeypatch, calls, states=["qr", "logged_in"])
 
     result = await open_account_web("acct")
 
     assert result.launched is True
-    assert calls["mint"] == 1
-    assert calls["relaunch"] == 0
-    auth, port, seeded_dir = calls["seed"]
-    assert auth is _AUTH
-    assert seeded_dir == profile
+    assert len(calls["accepted"]) == 1  # one QR token accepted, then logged in
+    assert "typed" not in calls  # no password screen -> no 2FA typing
+    assert "relaunch" not in calls
+    assert session.closed is True  # CDP socket closed after the drive
+    relay_port, launched_dir = calls["launched"]
+    assert launched_dir == profile
+    assert relay_port == relay.created[0].port
     assert len(relay.created) == 1
-    assert relay.created[0].starts == 1
-    assert relay.created[0].upstream is _PROXY
-    assert port == relay.created[0].port
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_first_open_types_stored_password_on_the_password_screen(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: dict[str, Any] = {}
+    profile = tmp_path / "acct"
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, profile)
+    _wire_drive(monkeypatch, calls, states=["qr", "password"], twofa="hunter2")
+
+    result = await open_account_web("acct")
+
+    assert result.launched is True
+    assert calls["typed"] == "hunter2"  # typed exactly the stored password, once
+    assert len(calls["accepted"]) == 1
+
+
+@pytest.mark.usefixtures("relay")
+@pytest.mark.asyncio
+async def test_password_screen_without_stored_password_still_launches(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: dict[str, Any] = {}
+    profile = tmp_path / "acct"
+    _patch_proxy(monkeypatch, _PROXY)
+    _patch_profile(monkeypatch, profile)
+    _wire_drive(monkeypatch, calls, states=["password"], token=None, twofa=None)
+
+    result = await open_account_web("acct")
+
+    assert result.launched is True  # operator sees the blank password screen
+    assert "typed" not in calls  # nothing stored -> nothing typed
 
 
 @pytest.mark.asyncio
-async def test_repeat_open_relaunches_without_minting(
+async def test_repeat_open_relaunches_without_driving(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     relay: type[_FakeRelay],
 ) -> None:
-    calls: dict[str, Any] = {"relaunch": 0}
+    calls: dict[str, Any] = {}
     profile = tmp_path / "acct"
     profile.mkdir()
     (profile / "Default").write_text("seeded", encoding="utf-8")  # non-empty -> signed in
-
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        msg = "must not mint on a repeat open"
-        raise AssertionError(msg)
-
-    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
-        msg = "must not seed on a repeat open"
-        raise AssertionError(msg)
-
-    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:
-        calls["relaunch"] += 1
-        calls["relaunch_args"] = (relay_port, profile_dir)
-
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, profile)
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
-    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
+
+    async def _launch(relay_port: int, *, profile_dir: Path) -> tuple[_FakeSession, object]:  # noqa: ARG001
+        msg = "must not drive login on a repeat open"
+        raise AssertionError(msg)
+
+    _wire_drive(monkeypatch, calls, states=["logged_in"])
+    monkeypatch.setattr(web_login, "launch_webk_with_hook", _launch)
 
     result = await open_account_web("acct")
 
     assert result.launched is True
     assert calls["relaunch"] == 1
-    relay_port, relaunch_dir = calls["relaunch_args"]
-    assert relaunch_dir == profile
-    assert relay_port == relay.created[0].port
+    assert "launched" not in calls
+    assert relay.created[0].port is not None
 
 
 @pytest.mark.asyncio
@@ -183,135 +257,17 @@ async def test_second_click_reuses_the_same_relay(
     tmp_path: Path,
     relay: type[_FakeRelay],
 ) -> None:
+    calls: dict[str, Any] = {}
     profile = tmp_path / "acct"
-
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        return _AUTH
-
-    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None: ...
-
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, profile)
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
-    monkeypatch.setattr(web_login, "relaunch_account_web", _seed)
+    _wire_drive(monkeypatch, calls, states=["logged_in"])
 
     await open_account_web("acct")
     await open_account_web("acct")
 
     assert len(relay.created) == 1  # one relay for both clicks
     assert relay.created[0].starts == 1
-
-
-@pytest.mark.asyncio
-async def test_first_open_seeds_then_second_open_relaunches_minting_once(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    relay: type[_FakeRelay],
-) -> None:
-    """Mint runs once across first-open -> profile-seeded -> second-open.
-
-    The real seed makes the profile dir non-empty, so the second open relaunches.
-    """
-    profile = tmp_path / "acct"  # does not exist yet -> first open mints
-    calls: dict[str, int] = {"mint": 0, "relaunch": 0}
-
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        calls["mint"] += 1
-        return _AUTH
-
-    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        (profile_dir / "Default").write_text("seeded", encoding="utf-8")
-
-    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
-        calls["relaunch"] += 1
-
-    _patch_proxy(monkeypatch, _PROXY)
-    _patch_profile(monkeypatch, profile)
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
-    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
-
-    await open_account_web("acct")
-    await open_account_web("acct")
-
-    assert calls["mint"] == 1
-    assert calls["relaunch"] == 1
-    assert len(relay.created) == 1
-
-
-@pytest.mark.asyncio
-async def test_concurrent_first_opens_mint_exactly_once(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    relay: type[_FakeRelay],
-) -> None:
-    """FIX 2: two concurrent first-clicks for an un-seeded account must mint ONCE.
-
-    The per-account lock serializes the seeded-check + mint decision; without it
-    both clicks would see an un-seeded profile and each mint a second device.
-    """
-    profile = tmp_path / "acct"
-    calls: dict[str, int] = {"mint": 0, "relaunch": 0}
-
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        calls["mint"] += 1
-        await asyncio.sleep(0)  # widen the window a racing second open could exploit
-        return _AUTH
-
-    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
-        profile_dir.mkdir(parents=True, exist_ok=True)
-        (profile_dir / "Default").write_text("seeded", encoding="utf-8")
-
-    async def _relaunch(relay_port: int, *, profile_dir: Path) -> None:  # noqa: ARG001
-        calls["relaunch"] += 1
-
-    _patch_proxy(monkeypatch, _PROXY)
-    _patch_profile(monkeypatch, profile)
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
-    monkeypatch.setattr(web_login, "relaunch_account_web", _relaunch)
-
-    await asyncio.gather(open_account_web("acct"), open_account_web("acct"))
-
-    assert calls["mint"] == 1
-    assert calls["relaunch"] == 1
-    assert len(relay.created) == 1
-
-
-@pytest.mark.usefixtures("relay")
-@pytest.mark.asyncio
-async def test_missing_two_factor_password_maps_to_its_error(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        raise TwoFactorRequiredError
-
-    _patch_proxy(monkeypatch, _PROXY)
-    _patch_profile(monkeypatch, tmp_path / "acct")
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-
-    with pytest.raises(WebLoginTwoFactorError):
-        await open_account_web("acct")
-
-
-@pytest.mark.usefixtures("relay")
-@pytest.mark.asyncio
-async def test_mint_failure_maps_to_launch_error(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        raise WebLoginError
-
-    _patch_proxy(monkeypatch, _PROXY)
-    _patch_profile(monkeypatch, tmp_path / "acct")
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-
-    with pytest.raises(WebLoginLaunchError):
-        await open_account_web("acct")
 
 
 @pytest.mark.asyncio
@@ -340,15 +296,10 @@ async def test_shutdown_closes_and_clears_registered_relays(
     tmp_path: Path,
     relay: type[_FakeRelay],
 ) -> None:
-    async def _mint(account_id: str) -> object:  # noqa: ARG001
-        return _AUTH
-
-    async def _seed(auth: object, relay_port: int, *, profile_dir: Path) -> None: ...
-
+    calls: dict[str, Any] = {}
     _patch_proxy(monkeypatch, _PROXY)
     _patch_profile(monkeypatch, tmp_path / "acct")
-    monkeypatch.setattr(web_login, "mint_web_authorization", _mint)
-    monkeypatch.setattr(web_login, "_launch_seeded_web", _seed)
+    _wire_drive(monkeypatch, calls, states=["logged_in"])
 
     await open_account_web("acct")
     assert relay.created[0].closed is False

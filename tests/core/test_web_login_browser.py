@@ -1,16 +1,18 @@
 """The per-account browser launcher: pure seams verified, the live parts mocked.
 
-A real browser cannot run in CI, so the launch argv, the WebK localStorage map and
-the browser discovery are tested directly, and :func:`open_account_web` runs with
-``create_subprocess_exec``, the DevTools discovery and the CDP session all faked —
-asserting it launches with the right args, seeds the authorization, navigates to
-``/k/`` and never kills the operator's window. The hand-rolled CDP WebSocket client
-is exercised for real against a tiny loopback server (handshake, masking, ping/pong).
+A real browser cannot run in CI, so the launch argv and the browser discovery are
+tested directly, and the CDP-driven primitives (:func:`launch_webk_with_hook`,
+:func:`latest_login_token`, :func:`page_state`, :func:`type_2fa_password`) run
+against a recording fake session — asserting the hook is installed, ``/k/`` is
+navigated, the captured token is read, the page is classified and the 2FA password
+is typed with real key events. The hand-rolled CDP WebSocket client is exercised for
+real against a tiny loopback server (handshake, masking, ping/pong).
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from contextlib import suppress
 from pathlib import Path
@@ -18,66 +20,67 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from core.telegram_client._web_login import MintedWebAuth
 from core.web_login import browser
 from core.web_login._cdp import CdpSession
 from core.web_login.browser import (
     build_launch_args,
     find_browser,
-    open_account_web,
+    latest_login_token,
+    launch_webk_with_hook,
+    page_state,
     relaunch_account_web,
+    token_bytes,
+    type_2fa_password,
 )
-from core.web_login.storage import build_webk_localstorage
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-_KEY = bytes([0xAB]) * 256
-_KEY_HEX = "ab" * 256
-_SALT = bytes([1, 2, 3, 4, 5, 6, 7, 8])
-_SALT_HEX = "0102030405060708"
-_USER_ID = 123456789
-_AUTH = MintedWebAuth(dc_id=2, auth_key=_KEY, server_salt=_SALT, user_id=_USER_ID)
-_AUTH_NO_SALT = MintedWebAuth(dc_id=2, auth_key=_KEY, server_salt=None, user_id=_USER_ID)
 _TIMEOUT = 5.0
 
 
-# --------------------------------------------------------------------------- storage
+# --------------------------------------------------------------------------- helpers
 
 
-def test_build_webk_localstorage_exact_values() -> None:
-    store = build_webk_localstorage(_AUTH)
+class _RecordingSession:
+    """A fake CdpSession: records every command, scripts Runtime.evaluate by expression."""
 
-    assert store["dc"] == "2"
-    assert store["number_of_accounts"] == "1"  # WebK's session-present gate
-    assert store["dc2_auth_key"] == f'"{_KEY_HEX}"'
-    assert len(_KEY_HEX) == 512
-    assert store["dc2_server_salt"] == f'"{_SALT_HEX}"'
-    assert store["auth_key_fingerprint"] == '"abababab"'  # first 8 chars of the key hex
-    assert store["server_time_offset"] == "0"
+    def __init__(self, evaluate_values: dict[str, str] | None = None) -> None:
+        self.commands: list[tuple[str, dict[str, object]]] = []
+        self._evaluate_values = evaluate_values or {}
+        self.closed = False
 
-    user_auth = json.loads(store["user_auth"])
-    assert user_auth["id"] == _USER_ID
-    assert user_auth["dcID"] == 2
-    assert isinstance(user_auth["date"], int)
+    async def send_command(
+        self,
+        method: str,
+        params: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        params = params or {}
+        self.commands.append((method, params))
+        expr = params.get("expression")
+        if method == "Runtime.evaluate" and isinstance(expr, str):
+            value = self._evaluate_values.get(expr)
+            if value is not None:
+                return {"result": {"result": {"type": "string", "value": value}}}
+        return {"result": {}}
 
-    account = json.loads(store["account1"])
-    assert account == {
-        "userId": _USER_ID,
-        "dcId": 2,
-        "dc2_auth_key": _KEY_HEX,
-        "dc2_server_salt": _SALT_HEX,
-        "auth_key_fingerprint": "abababab",
-    }
+    async def aclose(self) -> None:
+        self.closed = True
 
 
-def test_build_webk_localstorage_omits_salt_when_unknown() -> None:
-    store = build_webk_localstorage(_AUTH_NO_SALT)
+class _FakeProc:
+    def __init__(self, recorder: dict[str, Any]) -> None:
+        self._recorder = recorder
 
-    assert "dc2_server_salt" not in store
-    account = json.loads(store["account1"])
-    assert "dc2_server_salt" not in account
-    assert account["dc2_auth_key"] == _KEY_HEX
+    def terminate(self) -> None:
+        self._recorder["terminated"] = True
+
+    def kill(self) -> None:
+        self._recorder["killed"] = True
+
+    async def wait(self) -> int:
+        self._recorder["waited"] = True
+        return 0
 
 
 # ----------------------------------------------------------------------- launch args
@@ -145,53 +148,21 @@ def test_candidate_browsers_lists_chrome_before_edge() -> None:
     assert first_chrome < first_edge
 
 
-# ------------------------------------------------------------------- open_account_web
+# --------------------------------------------------------------------------- token_bytes
 
 
-class _FakeProc:
-    def __init__(self, recorder: dict[str, Any]) -> None:
-        self._recorder = recorder
-
-    def terminate(self) -> None:
-        self._recorder["terminated"] = True
-
-    def kill(self) -> None:
-        self._recorder["killed"] = True
-
-    async def wait(self) -> int:
-        self._recorder["waited"] = True
-        return 0
+def test_token_bytes_decodes_base64url_without_padding() -> None:
+    raw = bytes(range(20))  # 20 bytes -> base64 needs padding stripped by the hook
+    b64url = base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+    assert "=" not in b64url
+    assert token_bytes(b64url) == raw
 
 
-def _fake_session_class(recorder: dict[str, Any]) -> type:
-    class _FakeSession:
-        @classmethod
-        async def connect(cls, ws_url: str) -> _FakeSession:
-            recorder["ws_url"] = ws_url
-            return cls()
-
-        async def send_command(
-            self,
-            method: str,
-            params: dict[str, object] | None = None,
-        ) -> dict[str, object]:
-            recorder.setdefault("commands", []).append((method, params))
-            if method == "Runtime.evaluate":
-                # The seed-applied poll: report the marker present on first check.
-                return {
-                    "id": len(recorder["commands"]),
-                    "result": {"result": {"type": "boolean", "value": True}},
-                }
-            return {"id": len(recorder["commands"]), "result": {}}
-
-        async def aclose(self) -> None:
-            recorder["closed"] = True
-
-    return _FakeSession
+# -------------------------------------------------------------------- launch_webk_with_hook
 
 
 @pytest.mark.asyncio
-async def test_open_account_web_seeds_navigates_and_leaves_browser(
+async def test_launch_webk_with_hook_installs_hook_navigates_and_returns_handles(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -200,6 +171,7 @@ async def test_open_account_web_seeds_navigates_and_leaves_browser(
     profile_dir = tmp_path / "acct-1"
     debug_port = 5555
     relay_port = 41000
+    fake_session = _RecordingSession()
 
     async def _fake_exec(program: str, *args: str, **kwargs: object) -> _FakeProc:
         recorder["exec"] = (program, args, kwargs)
@@ -208,15 +180,21 @@ async def test_open_account_web_seeds_navigates_and_leaves_browser(
     async def _fake_discover(_debug_port: int) -> str:
         return "ws://127.0.0.1:5555/devtools/page/ABC"
 
+    class _FakeCdp:
+        @classmethod
+        async def connect(cls, ws_url: str) -> _RecordingSession:
+            recorder["ws_url"] = ws_url
+            return fake_session
+
     monkeypatch.setattr(browser, "find_browser", lambda: fake_browser)
     monkeypatch.setattr(browser, "_free_port", lambda: debug_port)
     monkeypatch.setattr(browser, "_discover_page_ws", _fake_discover)
-    monkeypatch.setattr(browser, "CdpSession", _fake_session_class(recorder))
+    monkeypatch.setattr(browser, "CdpSession", _FakeCdp)
     monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _fake_exec)
 
-    await open_account_web(_AUTH, relay_port, profile_dir=profile_dir)
+    session, proc = await launch_webk_with_hook(relay_port, profile_dir=profile_dir)
 
-    # (a) launched with exactly the args build_launch_args produces.
+    # Launched with the debug-port hook args build_launch_args produces.
     expected_args = build_launch_args(
         user_data_dir=profile_dir,
         relay_port=relay_port,
@@ -228,44 +206,113 @@ async def test_open_account_web_seeds_navigates_and_leaves_browser(
     assert list(args) == expected_args
     assert profile_dir.is_dir()
 
-    methods = [method for method, _params in recorder["commands"]]
-    assert methods == [
-        "Page.enable",
-        "Page.addScriptToEvaluateOnNewDocument",
-        "Page.navigate",
-        "Runtime.evaluate",
-    ]
+    methods = [method for method, _params in fake_session.commands]
+    assert methods == ["Page.enable", "Page.addScriptToEvaluateOnNewDocument", "Page.navigate"]
 
-    # (b) the seed script carries the authorization's localStorage values.
-    _add_method, add_params = recorder["commands"][1]
-    source = add_params["source"]
-    assert _KEY_HEX in source
-    assert "abababab" in source
-    assert browser._WEBK_ORIGIN in source
-
-    # (c) navigate goes to the WebK client.
-    _nav_method, nav_params = recorder["commands"][2]
+    _add_method, add_params = fake_session.commands[1]
+    assert add_params["source"] == browser.WORKER_HOOK
+    _nav_method, nav_params = fake_session.commands[2]
     assert nav_params == {"url": browser._WEBK_URL}
 
-    # (d) the CDP socket is closed but the browser is never terminated.
-    assert recorder["closed"] is True
+    # Both handles are returned to the caller; the browser is never terminated here.
+    assert session is fake_session
+    assert isinstance(proc, _FakeProc)
     assert "terminated" not in recorder
     assert "killed" not in recorder
-    assert "waited" not in recorder
+
+
+# ------------------------------------------------------------------- latest_login_token
+
+
+@pytest.mark.asyncio
+async def test_latest_login_token_returns_the_freshest_captured() -> None:
+    session = _RecordingSession({browser._READ_CAPTURED_EXPR: json.dumps(["tok-a", "tok-b"])})
+    assert await latest_login_token(session) == "tok-b"  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.asyncio
+async def test_latest_login_token_is_none_when_nothing_captured() -> None:
+    session = _RecordingSession({browser._READ_CAPTURED_EXPR: json.dumps([])})
+    assert await latest_login_token(session) is None  # ty: ignore[invalid-argument-type]
+
+
+# -------------------------------------------------------------------------- page_state
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("info", "expected"),
+    [
+        ({"inp": True, "b": ""}, "password"),
+        ({"inp": False, "b": "please enter your password to continue"}, "password"),
+        ({"inp": False, "b": "scan the qr code with telegram"}, "qr"),
+        ({"inp": False, "b": "settings archived chats saved messages contacts"}, "logged_in"),
+        ({"inp": False, "b": ""}, "loading"),
+    ],
+)
+async def test_page_state_classifies_the_visible_page(
+    info: dict[str, object],
+    expected: str,
+) -> None:
+    session = _RecordingSession({browser._PAGE_STATE_EXPR: json.dumps(info)})
+    assert await page_state(session) == expected  # ty: ignore[invalid-argument-type]
+
+
+@pytest.mark.asyncio
+async def test_page_state_is_loading_when_the_probe_yields_no_value() -> None:
+    session = _RecordingSession()  # no scripted value -> {"result": {}}
+    assert await page_state(session) == "loading"  # ty: ignore[invalid-argument-type]
+
+
+# --------------------------------------------------------------------- type_2fa_password
+
+
+@pytest.mark.asyncio
+async def test_type_2fa_password_clicks_field_types_and_clicks_submit() -> None:
+    session = _RecordingSession(
+        {
+            browser._INPUT_RECT_EXPR: '{"x":100,"y":200}',
+            browser._SUBMIT_RECT_EXPR: '{"x":300,"y":400}',
+        }
+    )
+
+    await type_2fa_password(session, "pw1")  # ty: ignore[invalid-argument-type]
+
+    key_events = [
+        params for method, params in session.commands if method == "Input.dispatchKeyEvent"
+    ]
+    downs = [e for e in key_events if e["type"] == "keyDown"]
+    typed = "".join(str(e.get("text", "")) for e in downs)
+    assert typed == "pw1"  # the password chars went in as real key text
+    assert {"type": "keyDown", "key": "a", "code": "KeyA", "modifiers": 2} in key_events
+
+    # A real mouse click focuses the visible field, and another submits via Next.
+    clicks = [
+        (p["x"], p["y"])
+        for method, p in session.commands
+        if method == "Input.dispatchMouseEvent" and p["type"] == "mousePressed"
+    ]
+    assert (100, 200) in clicks  # clicked the visible password field
+    assert (300, 400) in clicks  # clicked the Next button
+
+    evals = [
+        params["expression"] for method, params in session.commands if method == "Runtime.evaluate"
+    ]
+    assert browser._INPUT_RECT_EXPR in evals
+    assert browser._SUBMIT_RECT_EXPR in evals
 
 
 # ---------------------------------------------------------------- relaunch_account_web
 
 
 @pytest.mark.asyncio
-async def test_relaunch_boots_webk_through_relay_without_seeding(
+async def test_relaunch_boots_webk_through_relay_without_a_hook(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     recorder: dict[str, Any] = {}
     fake_browser = Path(r"C:\fake\chrome.exe")
     profile_dir = tmp_path / "acct-1"
-    debug_port = 5555
     relay_port = 41000
 
     async def _fake_exec(program: str, *args: str, **kwargs: object) -> _FakeProc:
@@ -276,7 +323,6 @@ async def test_relaunch_boots_webk_through_relay_without_seeding(
         recorder["cdp_connect"] = True
 
     monkeypatch.setattr(browser, "find_browser", lambda: fake_browser)
-    monkeypatch.setattr(browser, "_free_port", lambda: debug_port)
     monkeypatch.setattr(browser.CdpSession, "connect", _no_cdp)
     monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _fake_exec)
 
@@ -296,11 +342,10 @@ async def test_relaunch_boots_webk_through_relay_without_seeding(
     assert not any(arg.startswith("--remote-debugging-port") for arg in args)
     assert not any(arg.startswith("--remote-allow-origins") for arg in args)
 
-    # No CDP seed on a repeat open, and the operator's window is never killed.
+    # No CDP on a repeat open, and the operator's window is never killed.
     assert "cdp_connect" not in recorder
     assert "terminated" not in recorder
     assert "killed" not in recorder
-    assert "waited" not in recorder
 
 
 # --------------------------------------------------------------- CDP WebSocket client

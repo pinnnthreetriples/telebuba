@@ -1,52 +1,97 @@
 """Launch a per-account Chrome/Edge window that boots web.telegram.org/k/ signed in.
 
 The browser is pointed at the account's :class:`LocalProxyRelay` (a credential-free
-loopback proxy), given an isolated persistent per-account profile, and — before any
-web.telegram.org document loads — seeded with the minted authorization's localStorage
-via CDP. The operator's window is then left running; the relay lifecycle is the
-caller's, not ours.
+loopback proxy) and given an isolated persistent per-account profile. On the first
+open we inject a document-start hook that captures WebK's own QR ``auth.loginToken``
+into ``window.__cap``; the caller accepts that token with the account's authorized
+session so WebK completes its OWN login (no storage injection). The operator's window
+is then left running; the relay lifecycle is the caller's, not ours.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import os
 import socket
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import httpx
 
 from core.config import settings
 from core.secure_paths import make_private_dir
 from core.web_login._cdp import CdpSession
-from core.web_login.storage import build_webk_localstorage
-
-if TYPE_CHECKING:
-    from core.telegram_client._web_login import MintedWebAuth
 
 _WEBK_URL = "https://web.telegram.org/k/"
-_WEBK_ORIGIN = "https://web.telegram.org"
 _LAUNCH_URL = "about:blank"
 _PROFILE_SUBDIR = "web_profiles"
 _CDP_READY_TIMEOUT = 20.0
 _CDP_POLL_INTERVAL = 0.25
-# A stalled DevTools socket must not hang the open forever; bound the whole
-# seed+navigate exchange.
-_CDP_SEQUENCE_TIMEOUT = 30.0
-# Closing the CDP socket removes the session-scoped document-start script, so we
-# must keep it open until the seed has actually run on the /k/ document — over a
-# slow proxy the navigation commits well after the navigate ack, and dropping the
-# socket in between loses the seed entirely (the client then shows the QR login).
-# Poll for the seeded marker up to this bound (kept under _CDP_SEQUENCE_TIMEOUT).
-_SEED_CONFIRM_TIMEOUT = 25.0
-_SEED_CONFIRM_POLL = 0.4
-# Cheap in-page predicate: the seed has run once account1 exists on the origin.
-# (account1 is the key WebK keeps; it rewrites/removes some legacy keys on boot.)
-_SEED_CONFIRM_EXPR = (
-    "location.origin === 'https://web.telegram.org' && !!localStorage.getItem('account1')"
+# CDP real-key typing gap between characters, so WebK's field handlers keep up.
+_KEY_GAP_SECONDS = 0.02
+_CTRL_MODIFIER = 2
+# A non-trivial page body means WebK booted past the QR/password screens.
+_MIN_LOGGED_IN_BODY = 5
+
+# Injected at document-start on every frame: hooks the Web Worker / MessagePort
+# message paths and captures WebK's own QR ``auth.loginToken`` (base64url) into
+# ``window.__cap``. Pure page script — no MTProto. Kept byte-for-byte as the build
+# that was validated live (WebK build 675); split only for line length.
+WORKER_HOOK = (
+    "window.__cap=[];\n"
+    "function u8(x){return x instanceof Uint8Array?x:Array.isArray(x)?"
+    "Uint8Array.from(x):(x&&x.buffer?new Uint8Array(x.buffer):null);}\n"
+    "function b(u){return btoa(String.fromCharCode.apply(null,u))"
+    r".replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}"
+    "\n"
+    "function scan(o,d,s){if(o==null||d>6||typeof o!=='object'||s.has(o))"
+    "return;s.add(o);\n"
+    " try{if(o._==='auth.loginToken'&&o.token!=null){const v=u8(o.token);"
+    "if(v)window.__cap.push(b(v));}}catch(e){}\n"
+    " for(const k in o){try{scan(o[k],d+1,s);}catch(e){}}}\n"
+    "function w(fn){return function(ev){try{scan(ev&&ev.data,0,new WeakSet());}"
+    "catch(e){}return fn.apply(this,arguments);};}\n"
+    "for(const P of [MessagePort.prototype,Worker.prototype]){"
+    "const a=P.addEventListener;\n"
+    " P.addEventListener=function(t,fn,...r){if(t==='message'&&"
+    "typeof fn==='function')fn=w(fn);return a.call(this,t,fn,...r);};\n"
+    " const dd=Object.getOwnPropertyDescriptor(P,'onmessage');\n"
+    " if(dd&&dd.set)Object.defineProperty(P,'onmessage',{configurable:true,"
+    "get(){return dd.get.call(this);},set(fn){dd.set.call(this,"
+    "typeof fn==='function'?w(fn):fn);}});}\n"
+    "const mp=MessagePort.prototype.postMessage;"
+    "MessagePort.prototype.postMessage=function(m,...r){try{scan(m,0,new WeakSet());}"
+    "catch(e){}return mp.call(this,m,...r);};\n"
 )
+
+# In-page probes: read the captured tokens, and classify the visible page.
+_READ_CAPTURED_EXPR = "JSON.stringify(window.__cap||[])"
+_PAGE_STATE_EXPR = (
+    "JSON.stringify({inp: !!document.querySelector('input[type=password]'), "
+    "b: (document.body?document.body.innerText:'').toLowerCase()"
+    ".replace(/\\s+/g,' ').slice(0,300)})"
+)
+# WebK's controlled password input only accepts typed characters after a REAL mouse
+# click (a JS ``.focus()`` leaves its React state empty, so the submit sends a blank
+# password). It also renders a hidden decoy ``input[type=password]`` alongside the
+# visible one, so we target the wide, visible input by its bounding width and click
+# both it and the Next button at their on-screen centres. These return the element
+# centre as JSON (or '' when absent).
+_INPUT_RECT_EXPR = (
+    "(()=>{const i=[...document.querySelectorAll('input')]"
+    ".find(i=>i.getBoundingClientRect().width>200);if(!i)return '';"
+    "const r=i.getBoundingClientRect();"
+    "return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2});})()"
+)
+_SUBMIT_RECT_EXPR = (
+    "(()=>{const b=[...document.querySelectorAll('button')]"
+    ".find(b=>/next|\u0434\u0430\u043b\u0435\u0435|\u0432\u043e\u0439\u0442\u0438|"
+    "log ?in/i.test(b.textContent||''));if(!b)return '';"
+    "const r=b.getBoundingClientRect();"
+    "return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2});})()"
+)
+_CLICK_SETTLE_SECONDS = 0.2
 
 
 class BrowserNotFoundError(RuntimeError):
@@ -85,9 +130,9 @@ def build_launch_args(
 ) -> list[str]:
     """The Chromium argv: isolated profile, loopback proxy, WebRTC guards, app mode.
 
-    The DevTools endpoint is emitted ONLY when ``debug_port`` is given (the seeding
-    path). Its allow-origin is scoped to that exact loopback origin rather than the
-    lifetime-wide ``*``. The relaunch path passes no port, so its window opens with
+    The DevTools endpoint is emitted ONLY when ``debug_port`` is given (the first-open
+    hook path). Its allow-origin is scoped to that exact loopback origin rather than
+    the lifetime-wide ``*``. The relaunch path passes no port, so its window opens with
     no DevTools endpoint at all.
     """
     debug_flags = (
@@ -118,6 +163,11 @@ def build_launch_args(
 def account_profile_dir(account_id: str) -> Path:
     """Per-account persistent profile dir, sibling to the sessions dir. Persists between clicks."""
     return settings.telegram.session_dir.with_name(_PROFILE_SUBDIR) / account_id
+
+
+def token_bytes(b64url: str) -> bytes:
+    """Decode a base64url login token (as the worker hook captured it) to raw bytes."""
+    return base64.urlsafe_b64decode(b64url + "=" * (-len(b64url) % 4))
 
 
 def _free_port() -> int:
@@ -154,23 +204,17 @@ async def _try_page_ws(client: httpx.AsyncClient, debug_port: int) -> str | None
     return None
 
 
-def _seed_script(auth: MintedWebAuth) -> str:
-    """A document-start script that seeds WebK's localStorage on the telegram origin only."""
-    seed = build_webk_localstorage(auth)
-    return (
-        f"if (location.origin === {json.dumps(_WEBK_ORIGIN)}) {{"
-        f"  const seed = {json.dumps(seed)};"
-        "  for (const key in seed) localStorage.setItem(key, seed[key]);"
-        "}"
-    )
+async def launch_webk_with_hook(
+    relay_port: int,
+    *,
+    profile_dir: Path,
+) -> tuple[CdpSession, asyncio.subprocess.Process]:
+    """Launch WebK through the relay with the login-token capture hook installed.
 
-
-async def open_account_web(auth: MintedWebAuth, relay_port: int, *, profile_dir: Path) -> None:
-    """Launch a signed-in web.telegram.org window for one account, then leave it running.
-
-    Seeds the minted authorization into localStorage over CDP before the first
-    telegram document loads, navigates to ``/k/``, closes the CDP socket, and does
-    NOT terminate the browser — it is the operator's window.
+    Boots Chrome at ``about:blank`` in ``--app`` mode with a DevTools endpoint,
+    installs :data:`WORKER_HOOK` as a document-start script, then navigates to
+    ``/k/``. The caller owns both handles: it drives login over the returned session
+    and leaves the browser process running for the operator.
     """
     make_private_dir(profile_dir)
     browser = find_browser()
@@ -181,7 +225,7 @@ async def open_account_web(auth: MintedWebAuth, relay_port: int, *, profile_dir:
         debug_port=debug_port,
         url=_LAUNCH_URL,
     )
-    await asyncio.create_subprocess_exec(
+    proc = await asyncio.create_subprocess_exec(
         str(browser),
         *args,
         stdout=asyncio.subprocess.DEVNULL,
@@ -189,66 +233,121 @@ async def open_account_web(auth: MintedWebAuth, relay_port: int, *, profile_dir:
     )
     ws_url = await _discover_page_ws(debug_port)
     session = await CdpSession.connect(ws_url)
-    try:
-        await asyncio.wait_for(
-            _seed_and_navigate(session, auth),
-            timeout=_CDP_SEQUENCE_TIMEOUT,
-        )
-    except TimeoutError as exc:
-        msg = "Seeding the web session over DevTools timed out."
-        raise TimeoutError(msg) from exc
-    finally:
-        await session.aclose()
-
-
-async def _seed_and_navigate(session: CdpSession, auth: MintedWebAuth) -> None:
-    """Install the seed, navigate to WebK, and hold the socket until the seed runs.
-
-    ``addScriptToEvaluateOnNewDocument`` is session-scoped: closing the CDP socket
-    drops it. Over the account's proxy the navigation can commit seconds after the
-    navigate ack, so closing early loses the seed and the client shows QR login. We
-    poll for the seed's marker before returning to the caller's socket close.
-    """
     await session.send_command("Page.enable")
     await session.send_command(
         "Page.addScriptToEvaluateOnNewDocument",
-        {"source": _seed_script(auth)},
+        {"source": WORKER_HOOK},
     )
     await session.send_command("Page.navigate", {"url": _WEBK_URL})
-    await _await_seed_applied(session)
+    return session, proc
 
 
-async def _await_seed_applied(session: CdpSession) -> None:
-    """Poll until the document-start seed has run on the telegram origin, bounded."""
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + _SEED_CONFIRM_TIMEOUT
-    while True:
-        if await _seed_marker_present(session):
-            return
-        if loop.time() >= deadline:
-            return  # best-effort: proceed to close even if unconfirmed
-        await asyncio.sleep(_SEED_CONFIRM_POLL)
-
-
-async def _seed_marker_present(session: CdpSession) -> bool:
+def _evaluate_value(response: dict) -> object:
+    """Pull ``result.result.value`` off a Runtime.evaluate response, or ``None``."""
     try:
-        result = await session.send_command(
-            "Runtime.evaluate",
-            {"expression": _SEED_CONFIRM_EXPR, "returnByValue": True},
-        )
-        return result["result"]["result"].get("value") is True
+        return response["result"]["result"]["value"]
     except (KeyError, TypeError):
+        return None
+
+
+async def latest_login_token(session: CdpSession) -> str | None:
+    """The freshest ``auth.loginToken`` the hook captured (base64url), or ``None``."""
+    response = await session.send_command(
+        "Runtime.evaluate",
+        {"expression": _READ_CAPTURED_EXPR, "returnByValue": True},
+    )
+    value = _evaluate_value(response)
+    if not isinstance(value, str):
+        return None
+    try:
+        tokens = json.loads(value)
+    except ValueError:
+        return None
+    return tokens[-1] if tokens else None
+
+
+async def page_state(session: CdpSession) -> str:
+    """Classify the WebK page as ``password`` / ``qr`` / ``logged_in`` / ``loading``."""
+    response = await session.send_command(
+        "Runtime.evaluate",
+        {"expression": _PAGE_STATE_EXPR, "returnByValue": True},
+    )
+    value = _evaluate_value(response)
+    if not isinstance(value, str):
+        return "loading"
+    try:
+        info = json.loads(value)
+    except ValueError:
+        return "loading"
+    body = info.get("b", "")
+    if info.get("inp") or "enter your password" in body or "additional password" in body:
+        return "password"
+    if "qr code" in body or "scan with telegram" in body:
+        return "qr"
+    if len(body) > _MIN_LOGGED_IN_BODY:
+        return "logged_in"
+    return "loading"
+
+
+async def _dispatch_key(session: CdpSession, event: dict[str, object]) -> None:
+    await session.send_command("Input.dispatchKeyEvent", event)
+
+
+async def _click_center(session: CdpSession, rect_expr: str) -> bool:
+    """Real-mouse-click the centre of the element ``rect_expr`` locates; False if none."""
+    raw = await session.send_command(
+        "Runtime.evaluate", {"expression": rect_expr, "returnByValue": True}
+    )
+    value = raw.get("result", {}).get("result", {}).get("value")
+    if not value:
         return False
+    point = json.loads(value)
+    for kind in ("mousePressed", "mouseReleased"):
+        await session.send_command(
+            "Input.dispatchMouseEvent",
+            {
+                "type": kind,
+                "x": point["x"],
+                "y": point["y"],
+                "button": "left",
+                "clickCount": 1,
+                "buttons": 1,
+            },
+        )
+    return True
+
+
+async def type_2fa_password(session: CdpSession, password: str) -> None:
+    """Type the account's 2FA password into WebK's field and submit. Never logged.
+
+    Real-mouse-clicks the visible password input to focus it (a JS focus leaves WebK's
+    controlled input empty), clears it (Ctrl+A, Delete), types each character with real
+    CDP key events, then real-mouse-clicks the Next button.
+    """
+    if not await _click_center(session, _INPUT_RECT_EXPR):
+        return
+    await asyncio.sleep(_CLICK_SETTLE_SECONDS)
+    for kind in ("keyDown", "keyUp"):
+        await _dispatch_key(
+            session, {"type": kind, "key": "a", "code": "KeyA", "modifiers": _CTRL_MODIFIER}
+        )
+    for kind in ("keyDown", "keyUp"):
+        await _dispatch_key(session, {"type": kind, "key": "Delete", "code": "Delete"})
+    for char in password:
+        await _dispatch_key(session, {"type": "keyDown", "text": char, "key": char})
+        await _dispatch_key(session, {"type": "keyUp", "key": char})
+        await asyncio.sleep(_KEY_GAP_SECONDS)
+    await _click_center(session, _SUBMIT_RECT_EXPR)
 
 
 async def relaunch_account_web(relay_port: int, *, profile_dir: Path) -> None:
-    """Reopen an already-signed-in profile through the relay, without re-seeding.
+    """Reopen an already-signed-in profile through the relay, without the hook.
 
-    A repeat click has a persistent profile that already holds WebK's
-    localStorage from the first open, so minting again would only spawn another
-    'Active Sessions' device. This boots the browser straight at ``/k/`` through
-    the account's relay — no CDP socket, no document-start seed, no DevTools
-    endpoint — and leaves the operator's window running.
+    A repeat click has a persistent profile that already holds WebK's session from
+    the first open, so accepting a token again would only spawn another 'Active
+    Sessions' device. This boots the browser straight at ``/k/`` through the account's
+    relay — no CDP socket, no document-start hook, no DevTools endpoint — and leaves
+    the operator's window running.
     """
     make_private_dir(profile_dir)
     browser = find_browser()
