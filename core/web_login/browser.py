@@ -298,8 +298,8 @@ async def _click_center(session: CdpSession, rect_expr: str) -> bool:
     raw = await session.send_command(
         "Runtime.evaluate", {"expression": rect_expr, "returnByValue": True}
     )
-    value = raw.get("result", {}).get("result", {}).get("value")
-    if not value:
+    value = _evaluate_value(raw)
+    if not isinstance(value, str) or not value:
         return False
     point = json.loads(value)
     for kind in ("mousePressed", "mouseReleased"):
