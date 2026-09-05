@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-03
+last_updated: 2026-09-05
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -25,6 +25,7 @@ grounds_to:
 - `edit_2fa` also writes an empty new-password hash whenever `new_password` is falsy, and a present-but-empty hash REMOVES the cloud password — so an email-only change must omit the password fields from the flags entirely. `EMAIL_UNCONFIRMED_<N>` there is a success signal, not a failure: the setting applied and N is the mailed code's length, which the operator types back in a second request.
 - The gateway's "was this dispatched" verdict keys off whether a client was borrowed, not off which RPC failed, so a dispatcher's FIRST call must be one it owns: a convenience method that reads before it writes turns a lost read into a reported "may have been applied", which the service then persists as an unconfirmed credential.
 - A cloud password is stored because an account whose session is reset cannot re-authorise without it, and it is returned to the operator exactly once. A write whose answer was lost still persists when nothing was stored; an unconfirmed change keeps the previous value instead, rather than overwrite a credential Telegram is known to accept with one that may never have been applied — unless the live read shows no password at all, which makes the stored value stale rather than the previous one in force.
+- Web-login dresses the page AND every paused worker (Telegram reads it in WebK's MTProto worker; page overrides never cross), holding its CDP socket open — Chrome strips overrides on detach. The profile dir must be absolute, or Chrome hands its argv to a running Chrome and exits 0, on the operator's IP.
 - An RPC success is not proof that every profile field became visible/stored. UI confirmation comes from a fresh read; do not persist a lag-sensitive "confirmed" verdict.
 - Sending clients set `parse_mode=None` so operator text is not silently transformed. Markdown-like cleanup applies only to generated text.
 
