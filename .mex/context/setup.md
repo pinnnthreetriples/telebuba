@@ -19,7 +19,7 @@ cd frontend && npm ci && cd ..
 uv run uvicorn main:app
 ```
 
-No `--reload` (and no `--workers N`): both force a Windows SelectorEventLoop, which cannot start the web-login browser. `.env.example` is the configuration reference. Login needs admin credentials and a 32+ byte `AUTH__SECRET`; provider keys are needed only for enabled features.
+No `--reload`/`--workers`: both force a Windows SelectorEventLoop that cannot spawn the web-login browser. `.env.example` is the config reference; login needs admin creds and a 32+ byte `AUTH__SECRET`, provider keys only for enabled features.
 
 ## Verify
 ```bash
