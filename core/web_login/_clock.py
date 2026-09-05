@@ -104,6 +104,15 @@ CLOCK = r"""
   const wallOf = (ms) => ms - offsetAt(ms) * 60000;
   const fromWall = (wall) =>
     (isFinite(wall) ? wall + offsetAt(wall + offsetAt(wall) * 60000) * 60000 : NaN);
+  // ICU answers some zones under a legacy alias — a page asked for Asia/Kolkata
+  // reports Asia/Calcutta — so the claimed name is canonicalised through the real
+  // formatter once. The Intl shim gets this for free by passing the name through;
+  // Temporal has to be told, or the worker answers Kolkata where its own page says
+  // Calcutta: a one-expression page/worker split on a value we control.
+  const CANON = (() => {
+    try { return new RealFormat('en-US', { timeZone: C.timezone })
+      .resolvedOptions().timeZone; } catch (e) { return C.timezone; }
+  })();
   const pad = (n) => (n < 10 ? '0' : '') + n;
   const dateText = (ms) => {
     const p = parts(ms, 'date');
@@ -245,12 +254,12 @@ CLOCK = r"""
   // an OPTIONAL zone, so only a caller that named none is substituted for.
   if (self.Temporal) {
     const Now = Temporal.Now;
-    Now.timeZoneId = F({ f() { return C.timezone; } }, 'timeZoneId');
+    Now.timeZoneId = F({ f() { return CANON; } }, 'timeZoneId');
     for (const name of ['plainDateTimeISO', 'plainDateISO', 'plainTimeISO',
         'zonedDateTimeISO']) {
       const real = Now[name];
       Now[name] = F({ f(zone) {
-        return real.call(this, zone === undefined ? C.timezone : zone);
+        return real.call(this, zone === undefined ? CANON : zone);
       } }, name, real.length);
     }
   }

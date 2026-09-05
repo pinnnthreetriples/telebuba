@@ -45,10 +45,14 @@ from core.web_login.fingerprint import fingerprint_for
 if TYPE_CHECKING:
     from core.web_login.browser import WebWindow
 
-# Any account id and country: this never talks to Telegram, it only needs a
-# fingerprint that is internally consistent and not the host's own.
+# Any account id: this never talks to Telegram, it only needs a fingerprint that is
+# internally consistent and not the host's own. Two countries, on purpose — "IN" claims
+# Asia/Kolkata, which ICU answers under its legacy alias Asia/Calcutta. A shim that
+# hands back the name it was configured with instead of the one the engine canonicalises
+# to disagrees with its own page in one expression, and that is exactly how the Temporal
+# override was caught. A single-zone check would have passed.
 _ACCOUNT = "browser-check"
-_COUNTRY = "DE"
+_COUNTRIES = ("DE", "IN")
 _SETTLE_SECONDS = 4.0
 
 # Read in all three scopes and compared. Kept to what the identity actually
@@ -178,11 +182,9 @@ def _report(scopes: dict[str, dict[str, object]], claimed: str) -> int:
     return disagreements
 
 
-async def _run() -> int:
-    http_port = _serve()
-    browser_module._WEBK_URL = f"http://127.0.0.1:{http_port}/"  # noqa: SLF001
+async def _check_one(country: str) -> int:
     profile = Path(tempfile.mkdtemp(prefix="web_login_check_"))
-    fingerprint = fingerprint_for(_ACCOUNT, _COUNTRY)
+    fingerprint = fingerprint_for(_ACCOUNT, country)
     print(f"device: {fingerprint.device.name}  ua: {fingerprint.user_agent}")
     # A port nothing listens on: Chrome bypasses the proxy for loopback, so the
     # local page still loads and no traffic can leave the machine.
@@ -196,7 +198,16 @@ async def _run() -> int:
         await window.kill()
         await asyncio.sleep(1.0)
         shutil.rmtree(profile, ignore_errors=True)
-    disagreements = _report(scopes, fingerprint.timezone)
+    return _report(scopes, fingerprint.timezone)
+
+
+async def _run() -> int:
+    http_port = _serve()
+    browser_module._WEBK_URL = f"http://127.0.0.1:{http_port}/"  # noqa: SLF001
+    disagreements = 0
+    for country in _COUNTRIES:
+        print(f"\n=== claiming {country} ===")
+        disagreements += await _check_one(country)
     if disagreements:
         print(f"\nFAIL: {disagreements} page/worker disagreement(s)")
         return 1
