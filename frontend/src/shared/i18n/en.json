@@ -208,6 +208,9 @@
       "profile": "Edit profile",
       "web": "Open in Telegram Web"
     },
+    "openWeb": {
+      "notSignedIn": "The window opened but the account is not signed in — finish the login in that window."
+    },
     "pagination": {
       "prev": "Prev",
       "next": "Next"
@@ -646,7 +649,13 @@
       "twofa_password_algo_unsupported": "Telegram answered with a password challenge this version cannot use.",
       "twofa_password_compute_timeout": "Telegram's password challenge did not finish in time. Try again; if it keeps happening the server changed its parameters.",
       "twofa_removal_unconfirmed": "Telegram answered that a recovery-email confirmation is still pending, so it is unknown whether the password was removed. Re-read the state before trying again.",
-      "twofa_rollback_failed": "Telegram refused the password and the dashboard could not delete the copy it had already saved. Use “forget the saved password”, then try again."
+      "twofa_rollback_failed": "Telegram refused the password and the dashboard could not delete the copy it had already saved. Use “forget the saved password”, then try again.",
+      "web_login_no_proxy": "This account has no proxy assigned, and the browser must reach Telegram through the account's own exit. Assign a proxy and try again.",
+      "web_login_browser_failed": "The web-login browser window could not be started. Check that Chrome or Edge is installed and that no window for this account is still open.",
+      "web_login_relay_failed": "The local proxy relay for the web session could not be started. Try again in a moment.",
+      "web_login_drive_failed": "The account could not be signed in to Telegram Web. Try again, or finish the login by hand in the window.",
+      "web_login_reload_loop": "The API server is running with --reload, whose Windows event loop cannot start a browser process. Restart it without --reload to open web sessions.",
+      "web_login_shutting_down": "The server is shutting down, so no new web session can be opened."
     },
     "sessionError": "Could not verify your session. Check the connection and try again.",
     "sessionRetry": "Try again",

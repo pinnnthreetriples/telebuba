@@ -713,7 +713,7 @@
           "accounts"
         ],
         "summary": "Open Account Web",
-        "description": "Open a signed-in web.telegram.org window for the account through its proxy.",
+        "description": "Open a web.telegram.org window for the account through its proxy.\n\nThe body reports the window AND the login separately: a launched window whose\nlogin never completed is not a success the caller may show as one.",
         "operationId": "openAccountWeb",
         "parameters": [
           {
@@ -15880,14 +15880,19 @@
           "launched": {
             "type": "boolean",
             "title": "Launched"
+          },
+          "signed_in": {
+            "type": "boolean",
+            "title": "Signed In"
           }
         },
         "type": "object",
         "required": [
-          "launched"
+          "launched",
+          "signed_in"
         ],
         "title": "OpenWebResult",
-        "description": "Whether a signed-in web.telegram.org window was launched for the account."
+        "description": "The outcome of opening a web.telegram.org window for the account.\n\nTwo answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a\nlogin actually completed in it. They differ whenever every QR token was refused or\nthe 2FA screen was left standing \u2014 a case that is otherwise indistinguishable from\na clean login, and that the operator has to finish in the window by hand."
       },
       "Page_AccountRead_": {
         "properties": {

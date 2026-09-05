@@ -12,11 +12,17 @@ leaves a task running that dresses each one as it attaches. Two rules matter for
 operator: a paused target is a hung tab, so every attach is resumed even when dressing
 it failed; and dressing failures are swallowed rather than killing the driver, because
 a dead driver would freeze the next tab the operator opens.
+
+Both rules are worth nothing without a clock on them, so dressing one target has its own
+short deadline (:data:`_DRESS_TIMEOUT`). A CDP command that a target simply never answers
+would otherwise hold that target paused for the transport's whole 30 s timeout — which is
+not a hypothetical: it happened, several times over in one launch, and the login died.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -39,6 +45,17 @@ _AUTO_ATTACH: dict[str, object] = {
 # background driver parks on between attaches.
 _FIRST_PAGE_TIMEOUT = 20.0
 _EVENT_POLL = 1.0
+# The whole budget for dressing ONE target, and the reason it exists: the target is
+# PAUSED while we dress it, so every second spent here is a second WebK is not loading.
+# A CDP command against a paused target on loopback answers in milliseconds — but a
+# command a target does not implement can simply never answer, and one that did cost a
+# live login its session by burning ``_cdp._COMMAND_TIMEOUT`` (30 s) per worker inside
+# the 90 s the drive has to reach a signed-in screen. That global timeout is right for
+# what it bounds (a dead browser); this path needs its own, three orders of magnitude
+# above a real round trip and still far below anything the operator would notice.
+_DRESS_TIMEOUT = 3.0
+
+logger = logging.getLogger(__name__)
 
 
 class TargetDriver:
@@ -108,16 +125,19 @@ class TargetDriver:
         page: str | None = None
         try:
             if kind == _PAGE:
-                await self._dress_page(session_id)
+                await asyncio.wait_for(self._dress_page(session_id), _DRESS_TIMEOUT)
                 page = session_id
             elif kind in _WORKER_TYPES:
-                await self._dress_worker(session_id)
-        except (CdpError, OSError):
+                await asyncio.wait_for(self._dress_worker(session_id), _DRESS_TIMEOUT)
+        except (CdpError, OSError, TimeoutError) as exc:
+            # Logged, not swallowed silently: a stall here is invisible from the page,
+            # and the last one was only ever found because it was in the log.
+            logger.warning("Dressing a %s target failed (%r); it is resumed undressed.", kind, exc)
             # Fail CLOSED: an undressed page is NOT handed back, so the launch waits
             # and then refuses rather than navigating to Telegram wearing the
             # operator's real machine. It is still resumed below — a paused target is
-            # a frozen tab — it just never becomes the window's page.
-            page = None
+            # a frozen tab — it just never becomes the window's page. Nothing to unset:
+            # ``page`` only becomes non-None after the awaited call has returned.
         finally:
             if params.get("waitingForDebugger"):
                 with suppress(CdpError, OSError):
@@ -139,6 +159,14 @@ class TargetDriver:
             )
 
     async def _dress_worker(self, session_id: str) -> None:
+        """Give a worker the SAME identity the page has, client hints included.
+
+        ONE command, and it is the script: ``navigator.userAgentData`` is dressed inside
+        the worker rather than over CDP. ``Emulation`` does not exist on a worker target,
+        and ``Network.setUserAgentOverride`` sent to one never answers — a live run
+        measured it burning the whole command timeout per worker while that worker sat
+        paused on start, which cost the login its budget and the account its session.
+        """
         await self._session.send_command(
             "Runtime.evaluate",
             {"expression": self._worker_script, "returnByValue": True},

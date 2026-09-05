@@ -141,14 +141,36 @@ async def test_open_web_launches_the_window(
 ) -> None:
     async def _fake(account_id: str) -> OpenWebResult:
         assert account_id == "acc-1"
-        return OpenWebResult(launched=True)
+        return OpenWebResult(launched=True, signed_in=True)
 
     monkeypatch.setattr("services.accounts.open_account_web", _fake)
     await add_account(AccountCreate(account_id="acc-1"))
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/acc-1/open-web")
     assert resp.status_code == 200
-    assert resp.json() == {"launched": True}
+    assert resp.json() == {"launched": True, "signed_in": True}
+
+
+@pytest.mark.asyncio
+async def test_open_web_reports_a_window_whose_login_never_completed(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """90 s of refused tokens is indistinguishable from a clean login without this.
+
+    The route used to answer ``launched: true`` either way, so the UI showed a silent
+    success while the browser sat on a QR screen nobody was told to finish.
+    """
+
+    async def _fake(account_id: str) -> OpenWebResult:  # noqa: ARG001
+        return OpenWebResult(launched=True, signed_in=False)
+
+    monkeypatch.setattr("services.accounts.open_account_web", _fake)
+    await add_account(AccountCreate(account_id="acc-1"))
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-1/open-web")
+    assert resp.status_code == 200
+    assert resp.json() == {"launched": True, "signed_in": False}
 
 
 @pytest.mark.asyncio

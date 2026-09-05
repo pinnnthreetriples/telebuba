@@ -59,6 +59,13 @@ class CdpError(RuntimeError):
     """The DevTools WebSocket handshake or transport failed."""
 
 
+async def _abort(writer: asyncio.StreamWriter) -> None:
+    """Drop a socket whose handshake never completed, waiting for it to actually go."""
+    writer.close()
+    with contextlib.suppress(Exception):
+        await writer.wait_closed()
+
+
 class CdpSession:
     """One browser-level CDP connection, multiplexed over target ``sessionId``s."""
 
@@ -73,7 +80,15 @@ class CdpSession:
 
     @classmethod
     async def connect(cls, ws_url: str) -> Self:
-        """Handshake with ``ws_url`` and start routing replies in the background."""
+        """Handshake with ``ws_url`` and start routing replies in the background.
+
+        Every failure past the connect closes the socket and surfaces as
+        :class:`CdpError`. Chrome accepting the TCP connection and then closing it —
+        a browser shutting down, or a port claimed by something else — makes
+        ``readuntil`` raise ``IncompleteReadError``, which subclasses ``EOFError`` and
+        so escaped the launcher's except tuple as a bare 500 with a traceback, on top
+        of leaking one file descriptor per attempt.
+        """
         parts = urlsplit(ws_url)
         host = parts.hostname or "127.0.0.1"
         port = parts.port or _DEFAULT_WS_PORT
@@ -90,11 +105,19 @@ class CdpSession:
             f"Sec-WebSocket-Key: {key}\r\n"
             "Sec-WebSocket-Version: 13\r\n\r\n"
         )
-        writer.write(handshake.encode("ascii"))
-        await writer.drain()
-        status = (await reader.readuntil(b"\r\n\r\n")).split(b"\r\n", 1)[0]
+        try:
+            writer.write(handshake.encode("ascii"))
+            await writer.drain()
+            status = (await reader.readuntil(b"\r\n\r\n")).split(b"\r\n", 1)[0]
+        except Exception as exc:
+            await _abort(writer)
+            msg = "DevTools WebSocket handshake failed before the upgrade"
+            raise CdpError(msg) from exc
+        except BaseException:
+            await _abort(writer)
+            raise
         if _SWITCHING not in status:
-            writer.close()
+            await _abort(writer)
             msg = f"DevTools WebSocket handshake failed: {status!r}"
             raise CdpError(msg)
         session = cls(reader, writer)

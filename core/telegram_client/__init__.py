@@ -65,17 +65,13 @@ from core.telegram_client._read import (
 from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
-from core.telegram_client._web_login import (
-    WebLoginError,
-    accept_web_login_token,
-)
+from core.telegram_client._web_login import accept_web_login_token
 
 __all__ = [
     "UNCONFIRMED_ERROR_TYPE",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
-    "WebLoginError",
     "accept_web_login_token",
     "check_spam_status",
     "check_telegram_session",

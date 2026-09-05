@@ -2899,13 +2899,22 @@ export type NeuroshillingStepInput = {
 /**
  * OpenWebResult
  *
- * Whether a signed-in web.telegram.org window was launched for the account.
+ * The outcome of opening a web.telegram.org window for the account.
+ *
+ * Two answers, not one: ``launched`` says a window is on screen, ``signed_in`` says a
+ * login actually completed in it. They differ whenever every QR token was refused or
+ * the 2FA screen was left standing — a case that is otherwise indistinguishable from
+ * a clean login, and that the operator has to finish in the window by hand.
  */
 export type OpenWebResult = {
   /**
    * Launched
    */
   launched: boolean;
+  /**
+   * Signed In
+   */
+  signed_in: boolean;
 };
 
 /**

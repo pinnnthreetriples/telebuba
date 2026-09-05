@@ -824,7 +824,10 @@ export const spamCheckAccountMutation = (
 /**
  * Open Account Web
  *
- * Open a signed-in web.telegram.org window for the account through its proxy.
+ * Open a web.telegram.org window for the account through its proxy.
+ *
+ * The body reports the window AND the login separately: a launched window whose
+ * login never completed is not a success the caller may show as one.
  */
 export const openAccountWebMutation = (
   options?: Partial<Options<OpenAccountWebData>>,

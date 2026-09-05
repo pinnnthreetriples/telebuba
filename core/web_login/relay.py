@@ -29,6 +29,10 @@ _PROXY_TYPE_BY_NAME: dict[ProxyType, SocksProxyType] = {
     "https": SocksProxyType.HTTP,
 }
 _DEFAULT_TIMEOUT_SECONDS = 30.0
+# How long the surviving direction may keep flushing after the other one ends. One
+# residential round trip is a few hundred ms, so this covers the answer already on its
+# way while still bounding a peer that never closes.
+_DRAIN_SECONDS = 1.0
 _PUMP_CHUNK = 64 * 1024
 _MAX_PORT = 65_535
 _CONNECT_PARTS = 3
@@ -192,9 +196,23 @@ async def _tunnel(
 ) -> None:
     forward = asyncio.create_task(_pump(client_reader, up_writer))
     backward = asyncio.create_task(_pump(up_reader, client_writer))
+    pending: set[asyncio.Task[None]] = set()
     try:
-        await asyncio.gather(forward, backward)
+        # FIRST_COMPLETED, never gather: gather returns only when BOTH directions end,
+        # and an upstream that does not propagate the half-close leaves the surviving
+        # pump blocked on read for the life of the relay — which is the life of the
+        # backend process — leaking two sockets and a task per tunnel. One side closing
+        # is the end of the tunnel; the finally below drains and closes the other.
+        _done, pending = await asyncio.wait(
+            {forward, backward}, return_when=asyncio.FIRST_COMPLETED
+        )
     finally:
+        if pending:
+            # A client half-close does not mean Telegram has finished answering, and
+            # cancelling the surviving pump on the spot discards whatever is still in
+            # flight — a truncated response the page reads as a network error. Bounded,
+            # because waiting for it unbounded is the leak FIRST_COMPLETED just fixed.
+            await asyncio.wait(pending, timeout=_DRAIN_SECONDS)
         for task in (forward, backward):
             task.cancel()
         for writer in (up_writer, client_writer):
