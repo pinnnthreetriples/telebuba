@@ -189,3 +189,111 @@ async def test_async_context_manager_stops_listening_on_exit(
     finally:
         echo_server.close()
         await echo_server.wait_closed()
+
+
+class _EndedReader:
+    """A peer that closed its side: read returns EOF at once."""
+
+    @staticmethod
+    async def read(_size: int) -> bytes:
+        return b""
+
+
+class _SilentReader:
+    """An upstream that never propagates the half-close: read blocks forever."""
+
+    @staticmethod
+    async def read(_size: int) -> bytes:
+        await asyncio.sleep(3600)
+        return b""
+
+
+class _NullWriter:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def write(self, _data: bytes) -> None: ...
+
+    @staticmethod
+    async def drain() -> None: ...
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def wait_closed(self) -> None: ...
+
+    @staticmethod
+    def can_write_eof() -> bool:
+        return False
+
+
+@pytest.mark.asyncio
+async def test_one_direction_ending_tears_the_whole_tunnel_down() -> None:
+    """Waiting for BOTH pumps leaks the tunnel for the life of the backend process.
+
+    An upstream that does not propagate the half-close leaves the surviving pump
+    blocked on ``read`` effectively forever — two sockets and a task per tunnel, and
+    relays live as long as the process does.
+    """
+    client_writer, up_writer = _NullWriter(), _NullWriter()
+
+    await asyncio.wait_for(
+        relay_module._tunnel(
+            _EndedReader(),  # ty: ignore[invalid-argument-type]
+            client_writer,  # ty: ignore[invalid-argument-type]
+            _SilentReader(),  # ty: ignore[invalid-argument-type]
+            up_writer,  # ty: ignore[invalid-argument-type]
+        ),
+        timeout=_TIMEOUT,
+    )
+
+    assert client_writer.closed is True
+    assert up_writer.closed is True
+
+
+class _LateReader:
+    """Telegram's side: one more chunk lands just after the client half-closes."""
+
+    def __init__(self) -> None:
+        self._sent = False
+
+    async def read(self, _size: int) -> bytes:
+        if self._sent:
+            await asyncio.sleep(3600)
+            return b""
+        self._sent = True
+        await asyncio.sleep(0.05)
+        return b"late"
+
+
+class _RecordingWriter(_NullWriter):
+    def __init__(self) -> None:
+        super().__init__()
+        self.data = bytearray()
+
+    def write(self, _data: bytes) -> None:
+        self.data += _data
+
+
+@pytest.mark.asyncio
+async def test_the_surviving_direction_gets_a_bounded_drain() -> None:
+    """A client half-close is not "Telegram has finished answering".
+
+    Cancelling the other pump the instant the first one ends discards whatever is
+    still in flight — the tail of a response the page then reads as a network error.
+    Bounded, because waiting for it without a limit is exactly the tunnel leak
+    FIRST_COMPLETED was introduced to fix.
+    """
+    client_writer, up_writer = _RecordingWriter(), _NullWriter()
+
+    await asyncio.wait_for(
+        relay_module._tunnel(
+            _EndedReader(),  # ty: ignore[invalid-argument-type]
+            client_writer,  # ty: ignore[invalid-argument-type]
+            _LateReader(),  # ty: ignore[invalid-argument-type]
+            up_writer,  # ty: ignore[invalid-argument-type]
+        ),
+        timeout=_TIMEOUT,
+    )
+
+    assert bytes(client_writer.data) == b"late"

@@ -28,10 +28,6 @@ _ROTATION_ERRORS = (
 )
 
 
-class WebLoginError(Exception):
-    """A web-login guard failed (no proxy, or the browser/relay could not start)."""
-
-
 async def accept_web_login_token(account_id: str, token: bytes) -> bool:
     """Accept ``token`` (WebK's exported login token) with the account's pooled client.
 

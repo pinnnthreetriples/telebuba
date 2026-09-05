@@ -13,15 +13,17 @@ the operator's real machine straight to Telegram on the next reconnect.
 On the first open we also inject a document-start hook that captures WebK's own QR
 ``auth.loginToken`` into ``window.__cap``; the caller accepts that token with the
 account's authorized session so WebK completes its OWN login (no storage injection).
+
+The primitives that drive an already-open page live in :mod:`core.web_login._page`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import base64
-import json
 import os
 import socket
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,7 +33,9 @@ import httpx
 from core.config import settings
 from core.secure_paths import make_private_dir
 from core.web_login._cdp import CdpSession
+from core.web_login._scripts import QR_CAPTURE_HOOK
 from core.web_login._targets import TargetDriver
+from core.web_login.fingerprint import note_browser_version
 
 if TYPE_CHECKING:
     from core.web_login.fingerprint import Fingerprint
@@ -40,71 +44,33 @@ _WEBK_URL = "https://web.telegram.org/k/"
 _LAUNCH_URL = "about:blank"
 _PROFILE_SUBDIR = "web_profiles"
 _CDP_READY_TIMEOUT = 20.0
-_CDP_POLL_INTERVAL = 0.25
-# CDP real-key typing gap between characters, so WebK's field handlers keep up.
-_KEY_GAP_SECONDS = 0.02
-_CTRL_MODIFIER = 2
-# A non-trivial page body means WebK booted past the QR/password screens.
-_MIN_LOGGED_IN_BODY = 5
+# The endpoint is on loopback, where a connect to a port nobody listens on is refused
+# in microseconds — so every tick of this interval is dead time in front of the
+# operator's first window, and the only cost of shortening it is a few hundred extra
+# refused loopback connects across the timeout above.
+_CDP_POLL_INTERVAL = 0.05
+# Chrome writes this into --user-data-dir the moment it starts listening: line 1 is the
+# port, line 2 the browser target path. It is the only cheap proof that the endpoint we
+# found belongs to the process WE spawned rather than another account's browser.
+_ACTIVE_PORT_FILE = "DevToolsActivePort"
+_ACTIVE_PORT_LINES = 2
 
-# Injected at document-start on every frame: hooks the Web Worker / MessagePort
-# message paths and captures WebK's own QR ``auth.loginToken`` (base64url) into
-# ``window.__cap``. Pure page script — no MTProto. Kept byte-for-byte as the build
-# that was validated live (WebK build 675); split only for line length.
-WORKER_HOOK = (
-    "window.__cap=[];\n"
-    "function u8(x){return x instanceof Uint8Array?x:Array.isArray(x)?"
-    "Uint8Array.from(x):(x&&x.buffer?new Uint8Array(x.buffer):null);}\n"
-    "function b(u){return btoa(String.fromCharCode.apply(null,u))"
-    r".replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}"
-    "\n"
-    "function scan(o,d,s){if(o==null||d>6||typeof o!=='object'||s.has(o))"
-    "return;s.add(o);\n"
-    " try{if(o._==='auth.loginToken'&&o.token!=null){const v=u8(o.token);"
-    "if(v)window.__cap.push(b(v));}}catch(e){}\n"
-    " for(const k in o){try{scan(o[k],d+1,s);}catch(e){}}}\n"
-    "function w(fn){return function(ev){try{scan(ev&&ev.data,0,new WeakSet());}"
-    "catch(e){}return fn.apply(this,arguments);};}\n"
-    "for(const P of [MessagePort.prototype,Worker.prototype]){"
-    "const a=P.addEventListener;\n"
-    " P.addEventListener=function(t,fn,...r){if(t==='message'&&"
-    "typeof fn==='function')fn=w(fn);return a.call(this,t,fn,...r);};\n"
-    " const dd=Object.getOwnPropertyDescriptor(P,'onmessage');\n"
-    " if(dd&&dd.set)Object.defineProperty(P,'onmessage',{configurable:true,"
-    "get(){return dd.get.call(this);},set(fn){dd.set.call(this,"
-    "typeof fn==='function'?w(fn):fn);}});}\n"
-    "const mp=MessagePort.prototype.postMessage;"
-    "MessagePort.prototype.postMessage=function(m,...r){try{scan(m,0,new WeakSet());}"
-    "catch(e){}return mp.call(this,m,...r);};\n"
-)
-
-# In-page probes: read the captured tokens, and classify the visible page.
-_READ_CAPTURED_EXPR = "JSON.stringify(window.__cap||[])"
-_PAGE_STATE_EXPR = (
-    "JSON.stringify({inp: !!document.querySelector('input[type=password]'), "
-    "b: (document.body?document.body.innerText:'').toLowerCase()"
-    ".replace(/\\s+/g,' ').slice(0,300)})"
-)
-# WebK's controlled password input only accepts typed characters after a REAL mouse
-# click (a JS ``.focus()`` leaves its React state empty, so the submit sends a blank
-# password). It also renders a hidden decoy ``input[type=password]`` alongside the
-# visible one, so we target the wide, visible input by its bounding width and click
-# both it and the Next button at their on-screen centres. These return the element
-# centre as JSON (or '' when absent).
-_INPUT_RECT_EXPR = (
-    "(()=>{const i=[...document.querySelectorAll('input')]"
-    ".find(i=>i.getBoundingClientRect().width>200);if(!i)return '';"
-    "const r=i.getBoundingClientRect();"
-    "return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2});})()"
-)
-_SUBMIT_RECT_EXPR = (
-    "(()=>{const b=[...document.querySelectorAll('button')]"
-    ".find(b=>/next|\u0434\u0430\u043b\u0435\u0435|\u0432\u043e\u0439\u0442\u0438|"
-    "log ?in/i.test(b.textContent||''));if(!b)return '';"
-    "const r=b.getBoundingClientRect();"
-    "return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2});})()"
-)
-_CLICK_SETTLE_SECONDS = 0.2
+# Picking a port and spawning are one critical section, process-wide. ``_free_port``
+# binds :0 and closes again, so two accounts opening concurrently — which is the whole
+# point of the per-account locks — can be handed the SAME port. The loser then either
+# times out or, far worse, attaches to the other account's browser and re-dresses its
+# page with the wrong fingerprint.
+#
+# The lock spans the pick and the spawn ONLY. Holding it across the 20 s wait for the
+# DevTools endpoint would make one slow Chrome start delay every other account's open
+# by up to that long. What the wait actually needs is that nobody else is handed the
+# same port meanwhile, and ``_ports_in_flight`` gives exactly that: a port stays
+# reserved until its launch has finished waiting, and a collision re-rolls.
+_launch_lock = asyncio.Lock()
+_ports_in_flight: set[int] = set()
+# ``_free_port`` asks the OS for an unused port, so a collision means a port picked by
+# a launch that is still waiting; a handful of re-rolls is far more than enough.
+_PORT_PICK_TRIES = 20
 
 
 class BrowserNotFoundError(RuntimeError):
@@ -143,6 +109,33 @@ class WebWindow:
         await self.driver.aclose()
         await self.session.aclose()
 
+    async def kill(self) -> None:
+        """Close the socket AND end the browser process. Shutdown only.
+
+        Leaving the window running is not neutral: it holds ``--proxy-server`` on a
+        loopback port that the same shutdown frees, so after a restart a DIFFERENT
+        account's relay can bind that port and this window silently egresses through
+        the wrong account's proxy — a cross-account IP correlation nobody would see.
+        Dropping the socket has already stripped its fingerprint anyway.
+
+        ``aclose`` first, but in a ``try`` — a driver or pump task that ended with an
+        exception outside the handful ``_route`` catches re-raises out of that await,
+        and every caller wraps ``kill`` in ``suppress(Exception)``, so a bare second
+        statement would leave the browser running and nobody the wiser.
+        """
+        try:
+            await self.aclose()
+        finally:
+            await _end_process(self.process)
+
+
+async def _end_process(process: asyncio.subprocess.Process) -> None:
+    """Kill a browser we own and reap it, tolerating one that is already gone."""
+    with suppress(OSError, ProcessLookupError):
+        process.kill()
+    with suppress(OSError, ProcessLookupError):
+        await process.wait()
+
 
 def _candidate_browsers() -> list[Path]:
     """Chrome first, then Edge, across Program Files / Program Files (x86) / LocalAppData."""
@@ -173,19 +166,28 @@ def build_launch_args(
     relay_port: int,
     url: str,
     debug_port: int,
+    fingerprint: Fingerprint,
 ) -> list[str]:
-    """The Chromium argv: isolated profile, loopback proxy, WebRTC guards, app mode.
+    """The Chromium argv: isolated profile, loopback proxy, WebRTC guard, identity, app mode.
 
     The DevTools endpoint is always emitted: the fingerprint is applied over it and
     dies with it. Its allow-origin is scoped to that exact loopback origin rather than
     the lifetime-wide ``*``.
+
+    ``--user-agent`` / ``--lang`` are the NETWORK-layer half of the identity.
+    ``Emulation.setUserAgentOverride`` is page-scoped and never reaches a browser-level
+    shared worker, so without these the very connection whose ``initConnection`` claims
+    a Mac would carry the operator's real Chrome/Windows request headers.
     """
     return [
         f"--user-data-dir={user_data_dir}",
         f"--proxy-server=http://127.0.0.1:{relay_port}",
-        # Keep WebRTC from leaking the real IP around the proxy.
+        # Keep WebRTC from leaking the real IP around the proxy. mDNS host-candidate
+        # obfuscation stays ON: disabling it puts this desktop's LAN IP into the SDP of
+        # every account's window — the same address in all of them.
         "--force-webrtc-ip-handling-policy=disable_non_proxied_udp",
-        "--disable-features=WebRtcHideLocalIpsWithMdns",
+        f"--user-agent={fingerprint.user_agent}",
+        f"--lang={fingerprint.locale}",
         f"--remote-debugging-port={debug_port}",
         # Recent Chrome refuses the CDP WebSocket without an allowed origin;
         # scope it to this endpoint instead of disabling the check with "*".
@@ -194,6 +196,13 @@ def build_launch_args(
         "--no-default-browser-check",
         "--no-service-autorun",
         "--disable-sync",
+        # Component updates, the optimization guide, Safe Browsing update fetches and
+        # domain reliability all go through --proxy-server, and each one opens a fresh
+        # upstream tunnel — TCP + greeting + auth + CONNECT, ~600 ms at a residential
+        # RTT — competing with WebK's own bundle exactly while time-to-signed-in is
+        # being decided. The umbrella flag covers the lot and touches no page load.
+        # It also keeps Google-domain background traffic off the account's exit IP.
+        "--disable-background-networking",
         f"--app={url}",
     ]
 
@@ -210,7 +219,7 @@ def account_profile_dir(account_id: str) -> Path:
 
 
 def token_bytes(b64url: str) -> bytes:
-    """Decode a base64url login token (as the worker hook captured it) to raw bytes."""
+    """Decode a base64url login token (as the QR capture hook captured it) to raw bytes."""
     return base64.urlsafe_b64decode(b64url + "=" * (-len(b64url) % 4))
 
 
@@ -221,7 +230,40 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-async def _browser_ws(debug_port: int, process: asyncio.subprocess.Process) -> str:
+def _pick_port() -> int:
+    """Reserve a debug port no launch that is still waiting has been handed.
+
+    Caller holds ``_launch_lock``; the reservation is released by ``launch_account_web``
+    once its DevTools wait is over (by which point Chrome owns the port for real).
+    """
+    for _ in range(_PORT_PICK_TRIES):
+        port = _free_port()
+        if port not in _ports_in_flight:
+            _ports_in_flight.add(port)
+            return port
+    msg = "No free DevTools port was available for the web-login browser."
+    raise BrowserStartError(msg)
+
+
+def _endpoint_is_foreign(profile_dir: Path, ws_url: str) -> bool:
+    """True when this profile's ``DevToolsActivePort`` names a DIFFERENT browser target.
+
+    Ownership proof, deliberately one-sided: a file that disagrees means the endpoint on
+    our port belongs to somebody else (or is a stale listener), so the caller must keep
+    waiting. A file that is missing proves nothing — Chrome may not have written it yet —
+    and must never reject the endpoint, or a browser that does not write it at all could
+    never be attached to.
+    """
+    try:
+        lines = (profile_dir / _ACTIVE_PORT_FILE).read_text(encoding="utf-8").split("\n")
+    except OSError:
+        return False
+    if len(lines) < _ACTIVE_PORT_LINES:
+        return False
+    return not ws_url.endswith(lines[1].strip())
+
+
+async def _browser_ws(debug_port: int, process: asyncio.subprocess.Process, profile: Path) -> str:
     """Poll the DevTools endpoint for the BROWSER-level WebSocket URL.
 
     Browser level, not page level: a SHARED worker is a browser-scoped target, so a
@@ -235,7 +277,11 @@ async def _browser_ws(debug_port: int, process: asyncio.subprocess.Process) -> s
     async with httpx.AsyncClient(trust_env=False) as client:
         while True:
             with_ws = await _try_browser_ws(client, debug_port)
-            if with_ws is not None:
+            # Off the loop: a blocking ``read_text`` inside a 20 Hz poll is a stall
+            # every other account's open pays for, however small each one is.
+            if with_ws is not None and not await asyncio.to_thread(
+                _endpoint_is_foreign, profile, with_ws
+            ):
                 return with_ws
             if process.returncode is not None:
                 msg = (
@@ -250,11 +296,19 @@ async def _browser_ws(debug_port: int, process: asyncio.subprocess.Process) -> s
 
 
 async def _try_browser_ws(client: httpx.AsyncClient, debug_port: int) -> str | None:
+    """The browser WebSocket, recording the REAL browser build on the way past.
+
+    ``/json/version`` reports the running binary as ``"Browser": "Chrome/<version>"``,
+    and that is where the claimed version comes from: a hardcoded one drifts from the
+    installed chrome.exe, and claiming a milestone the binary is not is one feature
+    probe away from being caught. Only the first launch of a run predates an answer.
+    """
     try:
-        response = await client.get(f"http://127.0.0.1:{debug_port}/json/version")
-        url = response.json().get("webSocketDebuggerUrl")
+        payload = (await client.get(f"http://127.0.0.1:{debug_port}/json/version")).json()
+        url = payload.get("webSocketDebuggerUrl")
     except (httpx.HTTPError, ValueError, AttributeError):
         return None
+    note_browser_version(payload.get("Browser"))
     return str(url) if url else None
 
 
@@ -273,132 +327,79 @@ async def launch_account_web(
     login hook — first open only, since a repeat accept would spawn a second device.
 
     The caller owns the window and MUST keep it: closing the session undresses the
-    browser.
+    browser. Every failure after the spawn kills the browser instead of orphaning it:
+    a Chrome nobody holds a DevTools client for has already had its fingerprint
+    stripped, still claims this account's ``--user-data-dir`` (so every later open for
+    it fails as a hand-off) and is sitting on Telegram as the operator's real machine.
     """
     make_private_dir(profile_dir)
     browser = find_browser()
-    debug_port = _free_port()
-    args = build_launch_args(
-        user_data_dir=profile_dir,
-        relay_port=relay_port,
-        debug_port=debug_port,
-        url=_LAUNCH_URL,
-    )
-    proc = await asyncio.create_subprocess_exec(
-        str(browser),
-        *args,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    session = await CdpSession.connect(await _browser_ws(debug_port, proc))
-    driver = TargetDriver(
-        session,
-        fingerprint,
-        page_scripts=(WORKER_HOOK,) if capture_tokens else (),
-    )
-    page = await driver.first_page_session()
-    driver.start()
-    await session.send_command("Page.navigate", {"url": _WEBK_URL}, session_id=page)
+    async with _launch_lock:
+        debug_port = _pick_port()
+        args = build_launch_args(
+            user_data_dir=profile_dir,
+            relay_port=relay_port,
+            debug_port=debug_port,
+            url=_LAUNCH_URL,
+            fingerprint=fingerprint,
+        )
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                str(browser),
+                *args,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+        except BaseException:
+            # The reservation is released by the wait below, which a spawn that never
+            # returned does not reach: NotImplementedError on a Windows
+            # SelectorEventLoop (``uvicorn --reload``, where EVERY click fails here),
+            # FileNotFoundError, an OSError under handle pressure. Leaked, the port is
+            # off the pool for the life of the process.
+            _ports_in_flight.discard(debug_port)
+            raise
+    try:
+        ws_url = await _browser_ws(debug_port, proc, profile_dir)
+    except BaseException:
+        await _end_process(proc)
+        raise
+    finally:
+        # Chrome owns the port from here (or the browser is gone), so the reservation
+        # that kept a concurrent launch off it has done its job.
+        _ports_in_flight.discard(debug_port)
+    return await _attach(proc, ws_url, fingerprint, capture_tokens=capture_tokens)
+
+
+async def _attach(
+    proc: asyncio.subprocess.Process,
+    ws_url: str,
+    fingerprint: Fingerprint,
+    *,
+    capture_tokens: bool,
+) -> WebWindow:
+    """Dress the spawned browser over CDP and navigate it; kill it if any step fails."""
+    session: CdpSession | None = None
+    driver: TargetDriver | None = None
+    try:
+        session = await CdpSession.connect(ws_url)
+        driver = TargetDriver(
+            session,
+            fingerprint,
+            page_scripts=(QR_CAPTURE_HOOK,) if capture_tokens else (),
+        )
+        page = await driver.first_page_session()
+        driver.start()
+        await session.send_command("Page.navigate", {"url": _WEBK_URL}, session_id=page)
+    except BaseException:
+        for closer in (driver, session):
+            if closer is not None:
+                with suppress(Exception):
+                    await closer.aclose()
+        await _end_process(proc)
+        raise
     return WebWindow(session=session, driver=driver, page=page, process=proc)
 
 
 async def focus_window(window: WebWindow) -> None:
     """Raise an already-open window instead of launching a second one."""
     await window.session.send_command("Page.bringToFront", session_id=window.page)
-
-
-def _evaluate_value(response: dict) -> object:
-    """Pull ``result.result.value`` off a Runtime.evaluate response, or ``None``."""
-    try:
-        return response["result"]["result"]["value"]
-    except (KeyError, TypeError):
-        return None
-
-
-async def _evaluate(window: WebWindow, expression: str) -> object:
-    response = await window.session.send_command(
-        "Runtime.evaluate",
-        {"expression": expression, "returnByValue": True},
-        session_id=window.page,
-    )
-    return _evaluate_value(response)
-
-
-async def latest_login_token(window: WebWindow) -> str | None:
-    """The freshest ``auth.loginToken`` the hook captured (base64url), or ``None``."""
-    value = await _evaluate(window, _READ_CAPTURED_EXPR)
-    if not isinstance(value, str):
-        return None
-    try:
-        tokens = json.loads(value)
-    except ValueError:
-        return None
-    return tokens[-1] if tokens else None
-
-
-async def page_state(window: WebWindow) -> str:
-    """Classify the WebK page as ``password`` / ``qr`` / ``logged_in`` / ``loading``."""
-    value = await _evaluate(window, _PAGE_STATE_EXPR)
-    if not isinstance(value, str):
-        return "loading"
-    try:
-        info = json.loads(value)
-    except ValueError:
-        return "loading"
-    body = info.get("b", "")
-    if info.get("inp") or "enter your password" in body or "additional password" in body:
-        return "password"
-    if "qr code" in body or "scan with telegram" in body:
-        return "qr"
-    if len(body) > _MIN_LOGGED_IN_BODY:
-        return "logged_in"
-    return "loading"
-
-
-async def _dispatch_key(window: WebWindow, event: dict[str, object]) -> None:
-    await window.session.send_command("Input.dispatchKeyEvent", event, session_id=window.page)
-
-
-async def _click_center(window: WebWindow, rect_expr: str) -> bool:
-    """Real-mouse-click the centre of the element ``rect_expr`` locates; False if none."""
-    value = await _evaluate(window, rect_expr)
-    if not isinstance(value, str) or not value:
-        return False
-    point = json.loads(value)
-    for kind in ("mousePressed", "mouseReleased"):
-        await window.session.send_command(
-            "Input.dispatchMouseEvent",
-            {
-                "type": kind,
-                "x": point["x"],
-                "y": point["y"],
-                "button": "left",
-                "clickCount": 1,
-                "buttons": 1,
-            },
-            session_id=window.page,
-        )
-    return True
-
-
-async def type_2fa_password(window: WebWindow, password: str) -> None:
-    """Type the account's 2FA password into WebK's field and submit. Never logged.
-
-    Real-mouse-clicks the visible password input to focus it (a JS focus leaves WebK's
-    controlled input empty), clears it (Ctrl+A, Delete), types each character with real
-    CDP key events, then real-mouse-clicks the Next button.
-    """
-    if not await _click_center(window, _INPUT_RECT_EXPR):
-        return
-    await asyncio.sleep(_CLICK_SETTLE_SECONDS)
-    for kind in ("keyDown", "keyUp"):
-        await _dispatch_key(
-            window, {"type": kind, "key": "a", "code": "KeyA", "modifiers": _CTRL_MODIFIER}
-        )
-    for kind in ("keyDown", "keyUp"):
-        await _dispatch_key(window, {"type": kind, "key": "Delete", "code": "Delete"})
-    for char in password:
-        await _dispatch_key(window, {"type": "keyDown", "text": char, "key": char})
-        await _dispatch_key(window, {"type": "keyUp", "key": char})
-        await asyncio.sleep(_KEY_GAP_SECONDS)
-    await _click_center(window, _SUBMIT_RECT_EXPR)

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 
-from core.web_login._cdp import CdpSession
+from core.web_login._cdp import CdpError, CdpSession
 from tests.core.test_web_login_browser import attached
 
 _TIMEOUT = 5.0
@@ -98,3 +98,85 @@ async def test_cdp_session_round_trip_over_loopback() -> None:
     # The event was queued for the driver instead of being taken for a reply.
     assert event is not None
     assert event["params"]["targetInfo"]["type"] == "worker"
+
+
+def _spy_on_connections(monkeypatch: pytest.MonkeyPatch) -> list[asyncio.StreamWriter]:
+    """Capture every socket ``connect`` opens, so a leaked one is visible."""
+    opened: list[asyncio.StreamWriter] = []
+    real = asyncio.open_connection
+
+    async def _spy(*args: Any, **kwargs: Any) -> Any:
+        reader, writer = await real(*args, **kwargs)
+        opened.append(writer)
+        return reader, writer
+
+    monkeypatch.setattr(asyncio, "open_connection", _spy)
+    return opened
+
+
+async def _connect_against(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: Any,
+) -> list[asyncio.StreamWriter]:
+    opened = _spy_on_connections(monkeypatch)
+    server = await asyncio.start_server(handler, host="127.0.0.1", port=0)
+    port = int(server.sockets[0].getsockname()[1])
+    try:
+        with pytest.raises(CdpError):
+            await CdpSession.connect(f"ws://127.0.0.1:{port}/devtools/browser/ABC")
+    finally:
+        server.close()
+        await server.wait_closed()
+    assert opened, "the spy never saw a connection"
+    return opened
+
+
+@pytest.mark.asyncio
+async def test_a_browser_that_closes_mid_handshake_is_a_cdp_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Chrome accepts the TCP connection, then closes: shutting down, or port stolen.
+
+    ``readuntil`` raises ``IncompleteReadError``, which subclasses ``EOFError`` and so
+    slipped past the launcher's ``(BrowserStartError, CdpError, TimeoutError, OSError)``
+    net as a bare 500 with a traceback — defeating the fixed-wording guarantee the
+    refusal constants exist for — while leaking one file descriptor per attempt.
+    """
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await reader.readline()
+        writer.close()
+        with suppress(OSError):
+            await writer.wait_closed()
+
+    opened = await _connect_against(monkeypatch, handle)
+
+    assert all(writer.is_closing() for writer in opened)
+
+
+@pytest.mark.asyncio
+async def test_a_refused_upgrade_closes_the_socket_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused upgrade must not leak the socket the way an unhandled one did.
+
+    What this pins is that the non-101 branch closes the writer at all — the FD leak
+    that matters. It does NOT distinguish "closed" from "closed and awaited": a bare
+    ``close()`` already flips ``is_closing()``, so the ``wait_closed`` the production
+    code also does is not observable from here. Said plainly so the next reader does
+    not take this test for more than it proves.
+    """
+
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        await reader.readuntil(_HANDSHAKE_END)
+        writer.write(b"HTTP/1.1 403 Forbidden\r\n\r\n")
+        await writer.drain()
+        # The server does NOT wait for the client to hang up: a handler that did would
+        # deadlock the teardown against exactly the leak this test is looking for.
+        writer.close()
+        with suppress(OSError):
+            await writer.wait_closed()
+
+    opened = await _connect_against(monkeypatch, handle)
+
+    assert all(writer.is_closing() for writer in opened)

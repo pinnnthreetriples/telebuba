@@ -14,12 +14,19 @@ import pytest
 from telethon.client.telegrambaseclient import TelegramBaseClient
 
 from core.config import settings
+from core.web_login.fingerprint import note_installed_browser
 from services import _account_owner, _join_lock, pacing
 from services.neuroshilling import _state as neuroshilling_state
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
+
+# The web-login identity reads the INSTALLED browser — its build AND its brand — the
+# first time one is resolved, and two test helper modules resolve one at import time.
+# Pinning it here (conftest is imported before any test module) keeps the suite off
+# whatever Chrome or Edge happens to sit on the machine running it.
+note_installed_browser("148.0.7778.217", is_edge=False)
 
 
 @pytest.fixture(autouse=True)

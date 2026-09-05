@@ -10,10 +10,12 @@ that never loads for the operator.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import Any
 
 import pytest
 
+from core.web_login import _cdp, _targets
 from core.web_login._cdp import CdpError
 from core.web_login._targets import TargetDriver
 from core.web_login.fingerprint import fingerprint_for, worker_init_script
@@ -38,10 +40,12 @@ class _Session:
         self,
         events: list[dict[str, Any]] | None = None,
         fail_methods: frozenset[str] = frozenset(),
+        hang_methods: frozenset[str] = frozenset(),
     ) -> None:
         self.commands: list[tuple[str, dict[str, object], str | None]] = []
         self._events = list(events or [])
         self._fail = fail_methods
+        self._hang = hang_methods
         self.closed = False
 
     async def send_command(
@@ -51,6 +55,10 @@ class _Session:
         *,
         session_id: str | None = None,
     ) -> dict[str, object]:
+        if method in self._hang:
+            # A real target that never answers: the reply future is simply never
+            # resolved, exactly as a paused service worker leaves it.
+            await asyncio.Event().wait()
         if method in self._fail:
             msg = f"{method} refused"
             raise CdpError(msg)
@@ -100,6 +108,67 @@ async def test_a_worker_is_injected_on_its_own_session_then_resumed() -> None:
     # Injected BEFORE the worker was let go, or its script would already have run.
     methods = [m for m, _p, s in session.commands if s == "W1"]
     assert methods.index("Runtime.evaluate") < methods.index(_RESUME)
+
+
+@pytest.mark.asyncio
+async def test_a_worker_is_dressed_by_the_script_alone_and_no_other_cdp_command() -> None:
+    """The client hints reach a worker in script, never over ``Network``.
+
+    Measured on a real browser: a target that is PAUSED on start does not have to answer
+    anything. A service worker answers neither ``Network.setUserAgentOverride`` nor
+    ``Runtime.evaluate`` — so every extra command on this path is another full transport
+    timeout of a paused target inside the login budget, and the round that added the
+    ``Network`` one turned a 30 s stall into a 60 s one and cost a live login its session.
+    """
+    session = _Session(events=[attached("W1", "shared_worker"), attached("P1", "page")])
+
+    await _driver(session).first_page_session()
+
+    worker_methods = [method for method, _p, s in session.commands if s == "W1"]
+    assert worker_methods == ["Runtime.evaluate", _RESUME]
+    assert session.sent("Network.setUserAgentOverride") == []
+    # The hints are in the script instead, so removing the command loses nothing.
+    assert "userAgentData" in worker_init_script(_FINGERPRINT)
+
+
+@pytest.mark.asyncio
+async def test_a_target_that_never_answers_is_resumed_within_the_dressing_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A paused target we cannot dress must cost a moment, not half the login budget.
+
+    Live, one command that never returned held a paused worker for the transport's whole
+    30 s while every later attach queued behind it — the page reached its QR screen 33 s
+    late and the 90 s drive deadline fired with no login. The bound is what makes that
+    structurally impossible, whatever a future command turns out not to support.
+    """
+    monkeypatch.setattr(_targets, "_DRESS_TIMEOUT", 0.05)
+    session = _Session(
+        events=[attached("W1", "service_worker"), attached("P1", "page")],
+        hang_methods=frozenset({"Runtime.evaluate"}),
+    )
+
+    started = time.monotonic()
+    # Bounded here too: without the fix this call simply never returns, and a hung test
+    # is a worse regression signal than a red one.
+    page = await asyncio.wait_for(_driver(session).first_page_session(), 5.0)
+    elapsed = time.monotonic() - started
+
+    assert page == "P1"  # the page behind the stalled worker still got through
+    assert elapsed < 1.0
+    # The undressable target is LET GO rather than held: a paused target is a frozen tab.
+    assert ({}, "W1") in [(p, s) for p, s in session.sent(_RESUME)]
+
+
+def test_the_dressing_bound_is_far_below_the_transports_command_timeout() -> None:
+    """``_cdp._COMMAND_TIMEOUT`` bounds a dead browser; it is the wrong clock here.
+
+    Dressing runs only against a target that is paused on loopback, where a round trip
+    is milliseconds — so the bound can be orders of magnitude tighter than the transport's
+    without ever cutting a healthy command short.
+    """
+    assert _targets._DRESS_TIMEOUT <= 5.0
+    assert _targets._DRESS_TIMEOUT * 5 < _cdp._COMMAND_TIMEOUT
 
 
 @pytest.mark.asyncio

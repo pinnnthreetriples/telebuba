@@ -125,9 +125,13 @@ async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     responses=SERVICE_ERRORS,
 )
 async def open_account_web(account_id: AccountIdPath) -> OpenWebResult:
-    """Open a signed-in web.telegram.org window for the account through its proxy."""
+    """Open a web.telegram.org window for the account through its proxy.
+
+    The body reports the window AND the login separately: a launched window whose
+    login never completed is not a success the caller may show as one.
+    """
     # 404 on a missing row like every sibling route; the service's own refusals
-    # (no proxy, missing 2FA, browser/relay launch failure) are bounded
+    # (no proxy, browser/relay launch failure) are bounded
     # credential-free ``ValueError``s the mapper bills as 400.
     with service_errors_to_http():
         await accounts.require_account(account_id)

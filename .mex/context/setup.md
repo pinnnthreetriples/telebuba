@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-27
+last_updated: 2026-09-05
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -16,10 +16,10 @@ uv sync --frozen
 cp .env.example .env
 uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 cd frontend && npm ci && cd ..
-uv run uvicorn main:app --reload
+uv run uvicorn main:app
 ```
 
-`.env.example` is the configuration reference. Login needs admin credentials and a 32+ byte `AUTH__SECRET`; provider keys are needed only for enabled features.
+No `--reload` (and no `--workers N`): both force a Windows SelectorEventLoop, which cannot start the web-login browser. `.env.example` is the configuration reference. Login needs admin credentials and a 32+ byte `AUTH__SECRET`; provider keys are needed only for enabled features.
 
 ## Verify
 ```bash

@@ -10,7 +10,7 @@ import {
   invalidateAccountViews,
   openAccountWebMutation,
 } from '@/entities/account';
-import { Button, Card } from '@/shared/ui';
+import { Button, Card, toastError } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -123,13 +123,21 @@ export function AccountsPage() {
     setDeletingId(accountId);
   };
   // Not runOnRow: opening web changes no account data, so there is nothing to
-  // invalidate, and its busy flag lives in its own set. Failures (no proxy,
-  // missing 2FA) surface through the global MutationCache toast; the .catch only
-  // keeps the rejection from escaping as unhandled.
+  // invalidate, and its busy flag lives in its own set. Refusals (no proxy, no
+  // browser, relay or launch failure) surface through the global MutationCache
+  // toast; the .catch only keeps the rejection from escaping as unhandled. A
+  // window that opened without completing the login is NOT a refusal — that is
+  // the signed_in toast below.
   const onOpenWeb = (accountId: string) => {
     setOpenWebBusyIds((ids) => new Set(ids).add(accountId));
     void openWeb
       .mutateAsync({ path: { account_id: accountId } })
+      .then((result) => {
+        // A 200 is not a login: every QR token can be refused for 90s, or the 2FA
+        // screen can be left standing, and the window still opens. Ignoring the body
+        // showed that as a silent success while the browser sat on a login screen.
+        if (!result.signed_in) toastError(t('accounts.openWeb.notSignedIn'));
+      })
       .catch(() => undefined)
       .finally(() => {
         setOpenWebBusyIds((ids) => {
