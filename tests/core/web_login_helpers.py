@@ -8,12 +8,17 @@ two doubles, so they live here rather than being copied into each file.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
+from core.web_login import browser
 from core.web_login._cdp import CdpError
 from core.web_login._targets import TargetDriver
 from core.web_login.browser import WebWindow
 from core.web_login.fingerprint import fingerprint_for
+
+if TYPE_CHECKING:
+    import pytest
 
 PAGE = "PAGE-1"
 FINGERPRINT = fingerprint_for("acct-1", "DE")
@@ -115,3 +120,38 @@ def window_for(session: RecordingSession) -> WebWindow:
         page=PAGE,
         process=FakeProc({}),  # ty: ignore[invalid-argument-type]
     )
+
+
+class FakeCdpFactory:
+    """Hands out the scripted session, or raises when the test wants a failed attach."""
+
+    def __init__(self, session: RecordingSession, recorder: dict[str, Any]) -> None:
+        self._session = session
+        self._recorder = recorder
+
+    async def connect(self, ws_url: str) -> RecordingSession:
+        self._recorder["ws_url"] = ws_url
+        return self._session
+
+
+def wire_launch(
+    monkeypatch: pytest.MonkeyPatch,
+    recorder: dict[str, Any],
+    session: RecordingSession,
+    *,
+    proc: FakeProc | None = None,
+) -> None:
+    async def _fake_exec(program: str, *args: str, **kwargs: object) -> FakeProc:
+        recorder["exec"] = (program, args, kwargs)
+        return proc if proc is not None else FakeProc(recorder)
+
+    async def _fake_ws(_debug_port: int, _process: object, _profile: Path) -> str:
+        return "ws://127.0.0.1:5555/devtools/browser/ABC"
+
+    monkeypatch.setattr(browser, "find_browser", lambda: Path(r"C:\fake\chrome.exe"))
+    monkeypatch.setattr(browser, "_free_port", lambda: 5555)
+    monkeypatch.setattr(browser, "_browser_ws", _fake_ws)
+    monkeypatch.setattr(browser, "CdpSession", FakeCdpFactory(session, recorder))
+    monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _fake_exec)
+    # Process-global, so a leaked reservation from one test would starve the next.
+    monkeypatch.setattr(browser, "_ports_in_flight", set())
