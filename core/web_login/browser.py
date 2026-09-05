@@ -66,7 +66,6 @@ _ACTIVE_PORT_LINES = 2
 # by up to that long. What the wait actually needs is that nobody else is handed the
 # same port meanwhile, and ``_ports_in_flight`` gives exactly that: a port stays
 # reserved until its launch has finished waiting, and a collision re-rolls.
-_launch_lock = asyncio.Lock()
 _ports_in_flight: set[int] = set()
 # ``_free_port`` asks the OS for an unused port, so a collision means a port picked by
 # a launch that is still waiting; a handful of re-rolls is far more than enough.
@@ -233,8 +232,10 @@ def _free_port() -> int:
 def _pick_port() -> int:
     """Reserve a debug port no launch that is still waiting has been handed.
 
-    Caller holds ``_launch_lock``; the reservation is released by ``launch_account_web``
-    once its DevTools wait is over (by which point Chrome owns the port for real).
+    Reserving is synchronous on purpose: with no ``await`` between the check and the
+    add, one event loop cannot interleave two callers here, so no lock is needed. The
+    reservation is released by ``launch_account_web`` once its DevTools wait is over,
+    by which point Chrome owns the port for real.
     """
     for _ in range(_PORT_PICK_TRIES):
         port = _free_port()
@@ -334,30 +335,34 @@ async def launch_account_web(
     """
     make_private_dir(profile_dir)
     browser = find_browser()
-    async with _launch_lock:
-        debug_port = _pick_port()
-        args = build_launch_args(
-            user_data_dir=profile_dir,
-            relay_port=relay_port,
-            debug_port=debug_port,
-            url=_LAUNCH_URL,
-            fingerprint=fingerprint,
+    # No lock around the spawn: ``_pick_port`` reserves synchronously, so on one event
+    # loop nothing can interleave between its check and its add, and the reservation
+    # already covers the window until Chrome binds the port. Serialising the spawn as
+    # well cost every later account a full Chrome start — measured on this machine,
+    # three simultaneous opens went from 0.7 s each to 2.0-2.4 s each for no guarantee.
+    debug_port = _pick_port()
+    args = build_launch_args(
+        user_data_dir=profile_dir,
+        relay_port=relay_port,
+        debug_port=debug_port,
+        url=_LAUNCH_URL,
+        fingerprint=fingerprint,
+    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            str(browser),
+            *args,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                str(browser),
-                *args,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-        except BaseException:
-            # The reservation is released by the wait below, which a spawn that never
-            # returned does not reach: NotImplementedError on a Windows
-            # SelectorEventLoop (``uvicorn --reload``, where EVERY click fails here),
-            # FileNotFoundError, an OSError under handle pressure. Leaked, the port is
-            # off the pool for the life of the process.
-            _ports_in_flight.discard(debug_port)
-            raise
+    except BaseException:
+        # The reservation is released by the wait below, which a spawn that never
+        # returned does not reach: NotImplementedError on a Windows
+        # SelectorEventLoop (``uvicorn --reload``, where EVERY click fails here),
+        # FileNotFoundError, an OSError under handle pressure. Leaked, the port is
+        # off the pool for the life of the process.
+        _ports_in_flight.discard(debug_port)
+        raise
     try:
         ws_url = await _browser_ws(debug_port, proc, profile_dir)
     except BaseException:

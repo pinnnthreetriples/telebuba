@@ -290,7 +290,6 @@ def _wire_launch(
     monkeypatch.setattr(browser, "_browser_ws", _fake_ws)
     monkeypatch.setattr(browser, "CdpSession", _FakeCdpFactory(session, recorder))
     monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(browser, "_launch_lock", asyncio.Lock())
     # Process-global, so a leaked reservation from one test would starve the next.
     monkeypatch.setattr(browser, "_ports_in_flight", set())
 
@@ -557,14 +556,66 @@ async def test_a_spawn_that_never_returns_releases_its_port_reservation(
 
 
 @pytest.mark.asyncio
+async def test_the_spawns_themselves_are_not_serialized_across_accounts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Starting Chrome is the slow part, and no lock may hold it one at a time.
+
+    ``_pick_port`` reserves synchronously, so on one event loop nothing can interleave
+    between its check and its add and no lock is needed to keep two launches off one
+    port. A lock around the spawn as well bought no guarantee and charged every later
+    account a full Chrome start: measured on a real browser, three simultaneous opens
+    went from 0.7 s each to 2.0-2.4 s each.
+    """
+    recorder: dict[str, Any] = {}
+    _wire_launch(monkeypatch, recorder, RecordingSession())
+    ports = iter(range(5555, 5600))
+    monkeypatch.setattr(browser, "_free_port", lambda: next(ports))
+    overlap = {"live": 0, "max": 0}
+
+    class _FreshCdp:
+        @staticmethod
+        async def connect(_ws_url: str) -> RecordingSession:
+            return RecordingSession(events=[attached(PAGE, "page")])
+
+    monkeypatch.setattr(browser, "CdpSession", _FreshCdp)
+
+    async def _slow_spawn(_program: str, *_args: str, **_kwargs: object) -> FakeProc:
+        overlap["live"] += 1
+        overlap["max"] = max(overlap["max"], overlap["live"])
+        await asyncio.sleep(0.02)
+        overlap["live"] -= 1
+        return FakeProc(recorder)
+
+    monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _slow_spawn)
+
+    windows = await asyncio.gather(
+        *(
+            launch_account_web(
+                41000 + n,
+                profile_dir=tmp_path / f"acct-{n}",
+                fingerprint=_FINGERPRINT,
+                capture_tokens=False,
+            )
+            for n in range(3)
+        )
+    )
+    for window in windows:
+        await window.driver.aclose()
+
+    assert overlap["max"] == 3  # all three Chromes started at once, not in a queue
+
+
+@pytest.mark.asyncio
 async def test_the_devtools_wait_is_not_serialized_across_accounts(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     """One slow Chrome start must not delay every other account's open by up to 20 s.
 
-    The launch lock only has to make the port pick and the spawn atomic; holding it
-    across the wait for the DevTools endpoint turns a single wedged browser into a
+    The port reservation is what keeps two launches off one port; waiting for the
+    DevTools endpoint under a lock would turn a single wedged browser into a
     process-wide stall.
     """
     recorder: dict[str, Any] = {}
