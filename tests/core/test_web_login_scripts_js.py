@@ -11,6 +11,12 @@ whose ``TZ`` really is the claimed zone. A shimmed worker on a Moscow machine ha
 answer exactly what a real engine in New York answers — every formatter, every reader,
 every writer, the component constructor and ``Date.parse`` — which is a stronger and far
 less brittle claim than any literal string this file could spell out.
+
+V8 still is not a browser: it has no workers, so it cannot show whether the identity
+actually reaches a dedicated worker and a SHARED worker as well as the page — the one
+thing that broke here twice behind a fully green suite. ``tools/web_login_browser_check``
+answers that against a real Chrome on a local page; run it after changing anything under
+``core/web_login/``. It is deliberately not a test: CI has no browser.
 """
 
 from __future__ import annotations

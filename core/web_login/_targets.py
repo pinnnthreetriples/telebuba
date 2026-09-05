@@ -34,7 +34,15 @@ if TYPE_CHECKING:
     from core.web_login.fingerprint import Fingerprint
 
 _PAGE = "page"
-_WORKER_TYPES = frozenset({"worker", "shared_worker", "service_worker"})
+# WebK's own service worker is deliberately NOT dressed. Measured on Chrome 148: a
+# service_worker target paused on start answers no CDP command at all — not
+# Runtime.evaluate, not Network.setUserAgentOverride — so every attempt spent the whole
+# dressing deadline and resumed it undressed anyway, ~3 s on every window launch, and
+# logged a warning that read like a fault. It serves WebK's media/background cache and
+# its own logs; it sends no initConnection, so it is absent from Telegram's session
+# record, and its requests still leave through the account's proxy. Resuming it at once
+# costs nothing real. If a future Chrome starts answering, put the type back.
+_WORKER_TYPES = frozenset({"worker", "shared_worker"})
 _ATTACHED = "Target.attachedToTarget"
 _AUTO_ATTACH: dict[str, object] = {
     "autoAttach": True,

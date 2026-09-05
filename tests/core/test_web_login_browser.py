@@ -10,7 +10,6 @@ concurrent open. The primitives that drive an open page live in ``test_web_login
 
 from __future__ import annotations
 
-import asyncio
 import base64
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -35,6 +34,7 @@ from tests.core.web_login_helpers import (
     RecordingSession,
     attached,
     window_for,
+    wire_launch,
 )
 
 if TYPE_CHECKING:
@@ -259,42 +259,6 @@ def test_a_missing_active_port_file_never_rejects_an_endpoint(tmp_path: Path) ->
 # ------------------------------------------------------------------- launch_account_web
 
 
-class _FakeCdpFactory:
-    """Hands out the scripted session, or raises when the test wants a failed attach."""
-
-    def __init__(self, session: RecordingSession, recorder: dict[str, Any]) -> None:
-        self._session = session
-        self._recorder = recorder
-
-    async def connect(self, ws_url: str) -> RecordingSession:
-        self._recorder["ws_url"] = ws_url
-        return self._session
-
-
-def _wire_launch(
-    monkeypatch: pytest.MonkeyPatch,
-    recorder: dict[str, Any],
-    session: RecordingSession,
-    *,
-    proc: FakeProc | None = None,
-) -> None:
-    async def _fake_exec(program: str, *args: str, **kwargs: object) -> FakeProc:
-        recorder["exec"] = (program, args, kwargs)
-        return proc if proc is not None else FakeProc(recorder)
-
-    async def _fake_ws(_debug_port: int, _process: object, _profile: Path) -> str:
-        return "ws://127.0.0.1:5555/devtools/browser/ABC"
-
-    monkeypatch.setattr(browser, "find_browser", lambda: Path(r"C:\fake\chrome.exe"))
-    monkeypatch.setattr(browser, "_free_port", lambda: 5555)
-    monkeypatch.setattr(browser, "_browser_ws", _fake_ws)
-    monkeypatch.setattr(browser, "CdpSession", _FakeCdpFactory(session, recorder))
-    monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _fake_exec)
-    monkeypatch.setattr(browser, "_launch_lock", asyncio.Lock())
-    # Process-global, so a leaked reservation from one test would starve the next.
-    monkeypatch.setattr(browser, "_ports_in_flight", set())
-
-
 async def _launch(
     monkeypatch: pytest.MonkeyPatch,
     profile_dir: Path,
@@ -303,7 +267,7 @@ async def _launch(
 ) -> tuple[RecordingSession, dict[str, Any], WebWindow]:
     recorder: dict[str, Any] = {}
     session = RecordingSession(events=[attached(PAGE, "page")])
-    _wire_launch(monkeypatch, recorder, session)
+    wire_launch(monkeypatch, recorder, session)
 
     window = await launch_account_web(
         41000,
@@ -460,7 +424,7 @@ async def test_a_failure_after_the_spawn_kills_the_browser(
         fail_on="Page.navigate" if failing == "navigate" else None,
     )
     proc = FakeProc(recorder)
-    _wire_launch(monkeypatch, recorder, session, proc=proc)
+    wire_launch(monkeypatch, recorder, session, proc=proc)
 
     boom = RuntimeError("boom")
     if failing == "ws":
@@ -497,120 +461,6 @@ async def test_a_failure_after_the_spawn_kills_the_browser(
     # Whatever we had attached is dropped too, so no socket outlives the process.
     if failing in {"first_page", "navigate"}:
         assert session.closed is True
-
-
-def test_the_port_pick_re_rolls_off_a_port_another_launch_holds(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Two accounts opening at once must not be handed the same debug port.
-
-    ``_free_port`` binds :0 and closes again, so the OS is free to hand the same port
-    to the next caller until Chrome has actually claimed it. The loser then attaches to
-    the OTHER account's browser, re-dresses its page with the wrong fingerprint and
-    navigates its window. Serialising the whole 20 s DevTools wait would prevent that
-    too, at the price of every other account's open; the in-flight set does not.
-    """
-    monkeypatch.setattr(browser, "_ports_in_flight", set())
-    handed = iter([5555, 5555, 5556])
-    monkeypatch.setattr(browser, "_free_port", lambda: next(handed))
-
-    first = browser._pick_port()
-    second = browser._pick_port()
-
-    assert (first, second) == (5555, 5556)
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("boom", [NotImplementedError, FileNotFoundError, OSError])
-async def test_a_spawn_that_never_returns_releases_its_port_reservation(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    boom: type[BaseException],
-) -> None:
-    """The reservation was released in a ``finally`` attached to the wait, not the spawn.
-
-    A spawn that raises never reaches that wait, so its port stayed reserved for the
-    life of the process — and ``NotImplementedError`` is not a rare case: on a Windows
-    SelectorEventLoop (``uvicorn --reload``) EVERY click fails exactly here, burning a
-    port each time until ``_pick_port`` runs out of re-rolls. ``FileNotFoundError`` (a
-    browser removed between the lookup and the spawn) and an ``OSError`` under handle
-    pressure leak the same way. The existing ``--reload`` test patches
-    ``launch_account_web`` wholesale, so it never enters this path at all.
-    """
-    recorder: dict[str, Any] = {}
-    _wire_launch(monkeypatch, recorder, RecordingSession())
-
-    async def _dead_exec(*_args: object, **_kwargs: object) -> None:
-        raise boom
-
-    monkeypatch.setattr(browser.asyncio, "create_subprocess_exec", _dead_exec)
-
-    with pytest.raises(boom):
-        await launch_account_web(
-            41000,
-            profile_dir=tmp_path / "acct-1",
-            fingerprint=_FINGERPRINT,
-            capture_tokens=True,
-        )
-
-    assert browser._ports_in_flight == set()
-
-
-@pytest.mark.asyncio
-async def test_the_devtools_wait_is_not_serialized_across_accounts(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """One slow Chrome start must not delay every other account's open by up to 20 s.
-
-    The launch lock only has to make the port pick and the spawn atomic; holding it
-    across the wait for the DevTools endpoint turns a single wedged browser into a
-    process-wide stall.
-    """
-    recorder: dict[str, Any] = {}
-    _wire_launch(monkeypatch, recorder, RecordingSession())
-    ports = iter(range(5555, 5600))
-    monkeypatch.setattr(browser, "_free_port", lambda: next(ports))
-    overlap = {"live": 0, "max": 0}
-
-    class _FreshCdp:
-        """One socket per launch — two concurrent opens are two separate browsers."""
-
-        @staticmethod
-        async def connect(_ws_url: str) -> RecordingSession:
-            return RecordingSession(events=[attached(PAGE, "page")])
-
-    monkeypatch.setattr(browser, "CdpSession", _FreshCdp)
-
-    ws_ports: list[int] = []
-
-    async def _slow_ws(port: int, _process: object, _profile: Path) -> str:
-        ws_ports.append(port)
-        overlap["live"] += 1
-        overlap["max"] = max(overlap["max"], overlap["live"])
-        await asyncio.sleep(0.02)
-        overlap["live"] -= 1
-        return "ws://127.0.0.1:5555/devtools/browser/ABC"
-
-    monkeypatch.setattr(browser, "_browser_ws", _slow_ws)
-
-    windows = await asyncio.gather(
-        *(
-            launch_account_web(
-                41000 + n,
-                profile_dir=tmp_path / f"acct-{n}",
-                fingerprint=_FINGERPRINT,
-                capture_tokens=False,
-            )
-            for n in range(2)
-        )
-    )
-    for window in windows:
-        await window.driver.aclose()
-
-    assert overlap["max"] == 2  # both waits ran at once
-    # ...and they were still handed different ports, which is what the lock is for.
-    assert len({int(port) for port in ws_ports}) == 2
 
 
 # --------------------------------------------------------------------------- kill
