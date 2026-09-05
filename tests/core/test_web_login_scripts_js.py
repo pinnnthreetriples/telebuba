@@ -153,6 +153,9 @@ _CLOCK_PROBES = {
     # HOST's offset, and the summer/winter pair below names the operator's real zone.
     "parse_paren_summer": "Date.parse('Jul 1 2026 00:00:00 (x)')",
     "parse_paren_winter": "Date.parse('Jan 1 2026 00:00:00 (x)')",
+    # V8 also accepts several comments in a row after a zone. Anchoring only one would
+    # double-unwind these, leaking the host offset from the opposite side.
+    "parse_zone_two_parens": "Date.parse('Jul 1 2026 00:00:00 GMT-0400 (a) (b)')",
     "set_hours": "(() => { const d = new Date(Date.UTC(2026, 6, 15, 10));"
     " d.setHours(0, 0, 0, 0); return [d.toISOString(), d.getHours()]; })()",
     "set_full_year": "(() => { const d = new Date(Date.UTC(2026, 6, 15, 10));"

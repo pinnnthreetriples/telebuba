@@ -195,14 +195,16 @@ CLOCK = r"""
   // already fixes an offset, so unwinding one a second time would answer a number that
   // depends on the HOST's offset. Defensive, like the Temporal block: in the browser
   // configuration measured, the abbreviated and the numeric forms already agreed.
-  // The parenthetical is a SUFFIX of a real zone token, never a token of its own:
-  // V8 reads parentheses as a comment, so treating them as a zone would classify any
-  // zone-less local string merely ending in one ("Jul 1 2026 00:00:00 (x)") as an
-  // instant, skip the unwind, and answer a number built from the HOST's offset —
-  // evaluated in January and in July that names the operator's real zone outright.
-  // It has to be here at all so ``new Date(d.toString())`` round-trips, since our own
-  // toString ends in "GMT-0500 (Eastern Standard Time)".
-  const ZONE_TAIL = /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC|UT|[CEMP][SD]T)\s*(?:\([^)]*\))?\s*$/i;
+  // Parentheses are a SUFFIX of a real zone token, never a token of their own: V8
+  // reads them as a comment, so treating them as a zone would classify any zone-less
+  // local string merely ending in one ("Jul 1 2026 00:00:00 (x)") as an instant, skip
+  // the unwind, and answer a number built from the HOST's offset — read in January and
+  // in July, that pair names the operator's real zone outright. The suffix has to be
+  // accepted at all so ``new Date(d.toString())`` round-trips, since our own toString
+  // ends in "GMT-0500 (Eastern Standard Time)"; and it REPEATS, because V8 accepts
+  // several comments in a row and anchoring just one would double-unwind those with
+  // the very same leak signature, only from the other side.
+  const ZONE_TAIL = /(?:Z|[+-]\d{2}:?\d{2}|GMT|UTC|UT|[CEMP][SD]T)(?:\s*\([^)]*\))*\s*$/i;
   const DATE_ONLY = /^[+-]?\d{4,6}(-\d{2}(-\d{2})?)?$/;
   RealDate.parse = F({ f(text) {
     const s = String(text);
