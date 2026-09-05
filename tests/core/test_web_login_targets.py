@@ -144,7 +144,7 @@ async def test_a_target_that_never_answers_is_resumed_within_the_dressing_bound(
     """
     monkeypatch.setattr(_targets, "_DRESS_TIMEOUT", 0.05)
     session = _Session(
-        events=[attached("W1", "service_worker"), attached("P1", "page")],
+        events=[attached("W1", "shared_worker"), attached("P1", "page")],
         hang_methods=frozenset({"Runtime.evaluate"}),
     )
 
@@ -172,13 +172,47 @@ def test_the_dressing_bound_is_far_below_the_transports_command_timeout() -> Non
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["worker", "shared_worker", "service_worker"])
+@pytest.mark.parametrize("kind", ["worker", "shared_worker"])
 async def test_every_worker_flavour_is_dressed(kind: str) -> None:
     session = _Session(events=[attached("W1", kind), attached("P1", "page")])
 
     await _driver(session).first_page_session()
 
     assert any(target == "W1" for _p, target in session.sent("Runtime.evaluate"))
+
+
+@pytest.mark.asyncio
+async def test_a_service_worker_is_let_go_without_being_dressed() -> None:
+    """WebK's own service worker is skipped outright, not attempted and timed out.
+
+    Measured on Chrome 148: a service_worker paused on start answers no CDP command at
+    all, so every attempt burned the whole dressing deadline — seconds on each window
+    launch — and resumed it undressed regardless. It sends no ``initConnection``, so it
+    is absent from Telegram's session record, and its requests still leave through the
+    account's proxy. Trying is pure cost, so the attempt is gone; only the resume stays.
+    """
+    # Two independent hooks, because either one alone passes when the other is broken.
+    # The fake blocks a hung method BEFORE recording it, so the command list cannot see
+    # an attempt that stalls — only the clock can — while a dressing call that ANSWERS
+    # is invisible to the clock and shows up only in the list.
+    hung = _Session(
+        events=[attached("SW", "service_worker"), attached("P1", "page")],
+        hang_methods=frozenset({"Runtime.evaluate", "Network.setUserAgentOverride"}),
+    )
+    started = time.monotonic()
+    page = await asyncio.wait_for(_driver(hung).first_page_session(), 10.0)
+    elapsed = time.monotonic() - started
+
+    assert page == "P1"
+    # Attempting it would burn the whole dressing deadline here, as it does live.
+    assert elapsed < 1.0
+    assert [target for _p, target in hung.sent(_RESUME)] == ["SW", "P1"]
+
+    answering = _Session(events=[attached("SW", "service_worker"), attached("P1", "page")])
+    await _driver(answering).first_page_session()
+
+    # Nothing at all is addressed to the service worker except letting it go.
+    assert [m for m, _p, s in answering.commands if s == "SW"] == [_RESUME]
 
 
 @pytest.mark.asyncio
