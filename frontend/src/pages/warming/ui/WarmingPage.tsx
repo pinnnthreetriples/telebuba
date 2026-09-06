@@ -594,27 +594,30 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <WarmingBoard
-          warming={warming}
-          onStop={(id) => {
-            runOnAccount(stop, id);
-          }}
-          onPromote={(id) => {
-            runGraduation(promote, id);
-          }}
-          busyIds={busyIds}
-          feedback={accountFeedback.feedback}
-          logLimit={data.card_log_limit}
-          channelLabels={channelLabels}
-        />
-      </div>
+        <div className="flex flex-col gap-lg">
+          <WarmingBoard
+            warming={warming}
+            onStop={(id) => {
+              runOnAccount(stop, id);
+            }}
+            onPromote={(id) => {
+              runGraduation(promote, id);
+            }}
+            busyIds={busyIds}
+            feedback={accountFeedback.feedback}
+            logLimit={data.card_log_limit}
+            channelLabels={channelLabels}
+          />
 
-      {/* Настройки прогрева ОБЩИЕ, а не по аккаунту, поэтому карточка одна и стоит
-          ПОД сеткой во всю ширину: три колонки тумблеров не встают в 340px левой
-          колонки, а шестерёнка на карточке аккаунта обещала «настройку этого
-          аккаунта» и писала всем (#194-#196 оставили те же четыре поля глобальными). */}
-      <div className="mt-lg">
-        <ActionTuningCard />
+          {/* Настройки прогрева ОБЩИЕ, а не по аккаунту, поэтому карточка одна:
+              шестерёнка на карточке аккаунта обещала «настройку этого аккаунта» и
+              писала всем (#194-#196 оставили те же четыре поля глобальными).
+              Стоит она ПОД доской, в её же колонке, а не во всю ширину под сеткой:
+              полосой она оставляла под левой колонкой пустое поле в рост складных
+              карточек, а тумблерам левая колонка мала — 340px не держат и двух
+              столбцов. */}
+          <ActionTuningCard />
+        </div>
       </div>
 
       {warmDaysFor ? (
