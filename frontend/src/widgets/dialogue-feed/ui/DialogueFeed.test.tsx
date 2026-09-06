@@ -117,8 +117,8 @@ test('a pair opens its replies on click and closes them again', async () => {
 
   await userEvent.click(row);
   expect(screen.getByRole('button', { expanded: true })).toBe(row);
-  // Twice now: the row's subtitle is gone, and the reply is a bubble.
-  expect(screen.getByText('Скинь ту ссылку')).toBeInTheDocument();
+  // Still exactly once: the row's subtitle is gone and the reply is a bubble.
+  expect(screen.getAllByText('Скинь ту ссылку')).toHaveLength(1);
 
   await userEvent.click(row);
   expect(screen.getByRole('button', { expanded: false })).toBe(row);

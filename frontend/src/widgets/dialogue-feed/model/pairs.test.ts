@@ -42,6 +42,8 @@ test('the left-hand side is the same account whichever direction arrived last', 
   const forward = groupIntoPairs([message({ from_account: 'a1', to_account: 'a2' })]);
   const backward = groupIntoPairs([message({ from_account: 'a2', to_account: 'a1' })]);
   expect(forward[0]?.leftAccount).toBe(backward[0]?.leftAccount);
+  // And WHICH one it is: the sorted head, the backend's own `pair_key` order.
+  expect(forward[0]?.leftAccount).toBe('a1');
 });
 
 // Both sides keep their own fallback: the API resolves a label per side (name →

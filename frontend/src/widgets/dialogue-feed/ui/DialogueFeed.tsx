@@ -84,8 +84,11 @@ export function DialogueTranscript({
 
   return (
     <div className="flex flex-col gap-tight border-t border-line-row pt-md">
-      {/* When the exchange started. The only timestamp in the transcript: at
-          308px of content width a per-reply time costs a line each. */}
+      {/* The oldest line ON THIS PAGE — not the exchange's start: the feed is a
+          sliding window of the last 30 messages app-wide, which is the same
+          reason `pairs.ts` refuses to derive the sides from it. The only
+          timestamp in the transcript: at 308px of content width a per-reply
+          time costs a line each. */}
       <span className="self-center tabular-nums type-caption">
         <Age iso={oldest.created_at} />
       </span>

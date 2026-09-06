@@ -71,6 +71,13 @@ function sideName(message: DialogueFeedMessage, account: string): string {
 // for. The key is UNORDERED (`a|b`, sorted): «Анна→Мия» and «Мия→Анна» are one
 // conversation, and keying it by direction split a single exchange across two
 // rows of the list.
+//
+// Same shape the backend already calls canonical — `pair_key` in
+// core/repositories/dialogues.py is `"|".join(sorted(...))`, and its schema
+// documents the pair as `account_a < account_b`. That column is deliberately not
+// on the `DialogueFeedMessage` wire, so this is a re-derivation rather than a
+// second source of truth: here the key is only a React key and the open-state
+// handle, and the sorted head is what makes the left-hand side stable.
 export interface DialoguePair {
   key: string;
   // Which of the two writes on the LEFT. The sorted key's head, not the first
