@@ -2361,7 +2361,11 @@
     "dialogues": {
       "title": "Account conversation",
       "empty": "No conversation yet",
-      "typing": "typing…"
+      "typing": "typing…",
+      "pairs_one": "{{count}} pair",
+      "pairs_other": "{{count}} pairs",
+      "yesterday": "yesterday",
+      "daysAgo": "{{n}}d ago"
     }
   },
   "auth": {

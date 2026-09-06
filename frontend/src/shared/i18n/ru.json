@@ -2380,7 +2380,12 @@
     "dialogues": {
       "title": "Переписка аккаунтов",
       "empty": "Пока нет переписки",
-      "typing": "печатает…"
+      "typing": "печатает…",
+      "pairs_one": "{{count}} пара",
+      "pairs_few": "{{count}} пары",
+      "pairs_many": "{{count}} пар",
+      "yesterday": "вчера",
+      "daysAgo": "{{n}} дн."
     }
   },
   "auth": {
