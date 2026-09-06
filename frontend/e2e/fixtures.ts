@@ -181,6 +181,51 @@ export const warmingBoard = {
   warmed: [warmingState(4, { state: 'idle', promoted_to_nc: true })],
 };
 
+// Переписка аккаунтов: две пары, потому что карточка теперь СПИСОК пар, и на
+// пустом ответе снимок показывал бы «Пока нет переписки» — то есть гейт стерёг бы
+// экран, на котором виджета фактически нет.
+//
+// Единственная фикстура в этом файле, которая НЕ берёт `NOW`, и это не небрежность:
+// строка пары печатает срок («вчера», «3 дн.»), а он считается от текущих суток.
+// С замороженной датой снимок расходился бы с эталоном каждые сутки — гейт краснел бы
+// сам по себе. Относительные метки дают тот же текст в любой день.
+const MINUTES_AGO = new Date(Date.now() - 10_000).toISOString();
+const THREE_DAYS_AGO = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+
+function dialogue(from: number, to: number, text: string, createdAt: string) {
+  const side = (i: number) => ({
+    account: `acc-${String(i)}`,
+    label: `+7 900 ${String(100 + i)}-22-33`,
+    first: ['Иван', 'Мария', 'Пётр', 'Анна', 'Сергей'][i % 5],
+    last: ['Петров', 'Смирнова', 'Кузнецов', 'Волкова', 'Орлов'][i % 5],
+  });
+  const a = side(from);
+  const b = side(to);
+  return {
+    from_account: a.account,
+    from_label: a.label,
+    from_first_name: a.first,
+    from_last_name: a.last,
+    to_account: b.account,
+    to_label: b.label,
+    to_first_name: b.first,
+    to_last_name: b.last,
+    text,
+    created_at: createdAt,
+  };
+}
+
+// Порядок — как у API: свежие первыми.
+export const warmingDialogues = {
+  messages: [
+    dialogue(1, 0, 'Да, с утра. Скинь повестку, если есть', MINUTES_AGO),
+    dialogue(0, 1, 'Ты завтра на созвоне?', MINUTES_AGO),
+    dialogue(0, 1, 't.me/joinchat/AAAAAE7f2kQwertyuiop', MINUTES_AGO),
+    dialogue(2, 1, 'Ок, вечером посмотрю', THREE_DAYS_AGO),
+    dialogue(1, 2, 'Глянь последний пост в канале', THREE_DAYS_AGO),
+  ],
+};
+
 export const neurocommentCampaigns = {
   campaigns: [0, 1].map((i) => ({
     campaign_id: `nc-${String(i)}`,

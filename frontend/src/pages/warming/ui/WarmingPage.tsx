@@ -263,11 +263,12 @@ export function WarmingPage() {
       </div>
 
       {/* `minmax(0,1fr)`, not a bare `1fr`: an `fr` track keeps an automatic minimum
-          (index.css says the same of `.tb-subrow` in the row direction). The board is
-          capped by its own 320px track, but the dialogue feed prints whatever the
-          accounts wrote — one unwrappable line measured the track open to 1227px and the
-          page to scrollWidth 1607 against clientWidth 1024, a scroll the viewport-wide
-          sticky header can't follow. With minmax the feed scrolls in its own card. */}
+          (index.css says the same of `.tb-subrow` in the row direction), so a track
+          holding text the accounts wrote can be measured open past the viewport — one
+          unwrappable line took it to 1227px and the page to scrollWidth 1607 against
+          clientWidth 1024, a scroll the viewport-wide sticky header can't follow. The
+          feed that proved it has since moved to the left column; the floor stays,
+          because the board's own log prints the same kind of line. */}
       <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="flex flex-col gap-lg">
           <Card className="p-lg">
@@ -359,6 +360,10 @@ export function WarmingPage() {
               )}
             </div>
           </Card>
+
+          {/* Второй сверху, а не под складными карточками: живая лента не должна
+              отодвигать «Прогреть» вниз, но и стоять ниже закрытого чрома ей нечего. */}
+          <DialogueFeed />
 
           <CollapsibleCard
             wrapperClassName="rounded-lg border border-line bg-surface-card"
@@ -589,22 +594,19 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <div className="flex flex-col gap-lg">
-          <WarmingBoard
-            warming={warming}
-            onStop={(id) => {
-              runOnAccount(stop, id);
-            }}
-            onPromote={(id) => {
-              runGraduation(promote, id);
-            }}
-            busyIds={busyIds}
-            feedback={accountFeedback.feedback}
-            logLimit={data.card_log_limit}
-            channelLabels={channelLabels}
-          />
-          <DialogueFeed />
-        </div>
+        <WarmingBoard
+          warming={warming}
+          onStop={(id) => {
+            runOnAccount(stop, id);
+          }}
+          onPromote={(id) => {
+            runGraduation(promote, id);
+          }}
+          busyIds={busyIds}
+          feedback={accountFeedback.feedback}
+          logLimit={data.card_log_limit}
+          channelLabels={channelLabels}
+        />
       </div>
 
       {/* Настройки прогрева ОБЩИЕ, а не по аккаунту, поэтому карточка одна и стоит
