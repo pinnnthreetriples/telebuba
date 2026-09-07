@@ -1200,7 +1200,12 @@
       "resolve_chat": "Resolve chat",
       "read_chat_messages": "Read chat messages",
       "react_to_message": "React to message",
-      "copy_message_media": "Copy media"
+      "copy_message_media": "Copy media",
+      "warm_get_dialogs": "Browse dialogs",
+      "warm_read_contacts": "Read contacts",
+      "warm_read_notify_settings": "Notification settings",
+      "warm_check_settings": "Check settings",
+      "warm_view_profile": "View profile"
     },
     "status": {
       "failed": "failed",
@@ -2272,7 +2277,8 @@
       },
       "state": {
         "always": "always",
-        "soon": "soon"
+        "soon": "soon",
+        "external": "in Accounts"
       },
       "gate": {
         "title": "Readiness gate",
@@ -2317,6 +2323,128 @@
         "updateProfile": "Update profile",
         "emojiStatus": "Emoji status",
         "drafts": "Drafts"
+      },
+      "hint": {
+        "scroll": {
+          "text": "The account scrolls the channels it follows.",
+          "example": "For example: skimming the morning news in a channel."
+        },
+        "markRead": {
+          "text": "The account marks the posts it scrolled as read.",
+          "example": "For example: the channel's unread counter disappears."
+        },
+        "dialogs": {
+          "text": "The account opens its chat list.",
+          "example": "For example: glancing at the chats in the morning without opening any."
+        },
+        "searchMessages": {
+          "text": "The account searches for a word in a chat or across Telegram.",
+          "example": "For example: typing “weather” into search and looking at the results."
+        },
+        "online": {
+          "text": "The account goes online for the cycle and leaves at the end.",
+          "example": "For example: the account shows “online”."
+        },
+        "reactions": {
+          "text": "The account reacts to a post in a channel.",
+          "example": "For example: a heart under a photo post."
+        },
+        "polls": {
+          "text": "The account votes in anonymous polls in channels.",
+          "example": "For example: picking an option in “Which season is best?”."
+        },
+        "video": {
+          "text": "The account opens a video from a channel and downloads part of it.",
+          "example": "For example: watching the first seconds of a clip. Uses proxy traffic."
+        },
+        "voice": {
+          "text": "The account opens a voice note from a channel and downloads part of it.",
+          "example": "For example: listening to the start of a voice note. Uses proxy traffic."
+        },
+        "stories": {
+          "text": "The account watches stories from the channels it follows.",
+          "example": "For example: flipping through stories in the evening."
+        },
+        "gif": {
+          "text": "The account opens its GIFs and searches for new ones through a bot.",
+          "example": "For example: typing “cat” into GIF search without sending anything."
+        },
+        "stickers": {
+          "text": "The account browses sticker packs without installing them.",
+          "example": "For example: opening a popular pack and flipping through it."
+        },
+        "inlineBots": {
+          "text": "The account asks an inline bot like @pic or @wiki and never sends the result.",
+          "example": "For example: typing “@wiki Moscow” and looking at the suggestions."
+        },
+        "linkPreview": {
+          "text": "The account opens the preview of a link from a post.",
+          "example": "For example: the article card under a link in a channel."
+        },
+        "interAccountChat": {
+          "text": "Your accounts have short chats with each other.",
+          "example": "For example: two accounts exchange a couple of messages."
+        },
+        "typing": {
+          "text": "Before a message the account shows “typing…”.",
+          "example": "For example: the other side sees “typing…” for a few seconds."
+        },
+        "forward": {
+          "text": "The account forwards a channel post to its own Saved Messages.",
+          "example": "For example: saving a recipe from a channel for later."
+        },
+        "saved": {
+          "text": "The account writes a short note to its own Saved Messages.",
+          "example": "For example: “buy milk”."
+        },
+        "contacts": {
+          "text": "The account looks through its contact list without adding anyone.",
+          "example": "For example: opening the Contacts tab to see who is online."
+        },
+        "scheduled": {
+          "text": "The account schedules a message to its own Saved Messages.",
+          "example": "For example: a reminder for tomorrow, “call mom”."
+        },
+        "join": {
+          "text": "The account joins new channels.",
+          "example": "For example: subscribing to a channel about movies."
+        },
+        "leave": {
+          "text": "The account rarely leaves channels it joined long ago.",
+          "example": "For example: unsubscribing from a channel it has not read in a month."
+        },
+        "archive": {
+          "text": "The account moves a chat to the archive or back.",
+          "example": "For example: hiding a discounts channel in the archive."
+        },
+        "mute": {
+          "text": "The account mutes or unmutes a chat for a while.",
+          "example": "For example: muting a chatty group for 8 hours."
+        },
+        "notifications": {
+          "text": "The account opens its notification settings without changing anything.",
+          "example": "For example: checking whether sound is on for channels."
+        },
+        "viewProfiles": {
+          "text": "The account opens its own profile or a channel page.",
+          "example": "For example: looking at a channel's description and photo."
+        },
+        "checkSettings": {
+          "text": "The account looks into its own settings: privacy, devices.",
+          "example": "For example: opening Privacy and Devices."
+        },
+        "updateProfile": {
+          "text": "Warming never edits the profile. You change the name, photo and bio in the Accounts section.",
+          "example": "For example: changing the avatar — in the account card."
+        },
+        "emojiStatus": {
+          "text": "The account sets an emoji status next to its name for a few hours. Premium accounts only.",
+          "example": "For example: a coffee cup next to the name until the evening."
+        },
+        "drafts": {
+          "text": "The account saves a message draft in its own Saved Messages.",
+          "example": "For example: starting to type “don't forget…” and not sending it."
+        }
       }
     },
     "days": {

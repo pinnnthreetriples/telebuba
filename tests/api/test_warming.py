@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS
 from schemas.dialogues import DialogueFeed, DialogueFeedMessage
 from schemas.warming import (
     StartWarmingRequest,
@@ -221,6 +222,39 @@ async def test_update_settings(app: FastAPI, monkeypatch: pytest.MonkeyPatch) ->
     # what the repository reads as "keep the stored value".
     assert seen[0].gemini_max_retries is None
     assert seen[0].gemini_min_interval_seconds is None
+    assert seen[0].extra_toggles is None
+
+
+# The three extras cases run against the real service + the test DB: the merge they
+# pin lives in the repository, and a mocked ``save_settings`` would prove nothing.
+
+
+@pytest.mark.asyncio
+async def test_update_settings_merges_partial_extra_toggles(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.put("/api/v1/warming/settings", json={"extra_toggles": {"polls": True}})
+        assert resp.status_code == 200
+        assert resp.json()["extra_toggles"] == {**EXTRA_TOGGLE_DEFAULTS, "polls": True}
+        # The settings page's PUT never mentions the extras — it must not reset them.
+        resp = await client.put("/api/v1/warming/settings", json={"reactions_enabled": False})
+    assert resp.status_code == 200
+    assert resp.json()["extra_toggles"]["polls"] is True
+    assert resp.json()["reactions_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_settings_rejects_an_unknown_extra_toggle(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.put("/api/v1/warming/settings", json={"extra_toggles": {"nope": True}})
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_get_settings_returns_every_extra_toggle(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/warming/settings")
+    assert resp.status_code == 200
+    assert resp.json()["extra_toggles"] == EXTRA_TOGGLE_DEFAULTS
 
 
 @pytest.mark.asyncio

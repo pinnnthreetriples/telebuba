@@ -97,6 +97,9 @@ const ACTION_STAGE: Record<string, number> = {
   // No DM step on the rail; the brief, gated send_dm (runs after stories) folds
   // onto its neighbour rather than adding a step dark for most accounts.
   send_dm: 3,
+  // Same for the extras step (runs last): a sixth step would sit dark for accounts
+  // with every extra off and would move the rail geometry under the visual baselines.
+  extras: 3,
 };
 
 function activeStage(account: WarmingAccountState): number {

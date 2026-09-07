@@ -13,7 +13,7 @@ tests patch them in one place.
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -76,6 +76,8 @@ class _ReadReactOutcome:
     reactions: int = 0
     flood: ActionResult | None = None
     failures: int = 0
+    # The post ids the read fetched — reused by the react here and by the extras step.
+    recent_ids: list[int] = field(default_factory=list)
 
 
 async def _read_and_react(  # noqa: PLR0913
@@ -107,6 +109,7 @@ async def _read_and_react(  # noqa: PLR0913
     )
     if read_result.status == "ok":
         out.reads = 1
+        out.recent_ids = [int(x) for x in read_result.recent_message_ids or []]
     elif read_result.status in _FAILURE_STATUSES:
         out.failures += 1
     elif read_result.status in _HALT_STATUSES:
@@ -128,7 +131,7 @@ async def _read_and_react(  # noqa: PLR0913
                 channel=channel,
                 reactions=warm.default_reactions,
                 message_limit=warm.reaction_message_limit,
-                message_ids=[int(x) for x in read_result.recent_message_ids or []] or None,
+                message_ids=out.recent_ids or None,
             ),
         )
         if react_result.status in _HALT_STATUSES:
@@ -168,6 +171,9 @@ class _ChannelTally:
     last_failed_channel: str | None = None
     flooded: bool = False
     peer_flooded: bool = False
+    # Landed extras (``_extras.run_extras_step``); log-only — ``WarmingCycleResult``
+    # stays as it is (file-size budget of ``schemas.warming``).
+    extras: int = 0
 
 
 def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str) -> bool:
@@ -223,17 +229,20 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     secret: WarmingSettingsSecret,
     reaction_probability: float,
     on_step: _OnStep | None = None,
-) -> None:
+) -> dict[str, list[int]]:
     """Walk the chosen channels, folding every outcome into the caller's ``tally``.
 
     The tally belongs to the caller (rather than being built here and merged on
     return) so the running ``attempts`` count is readable while the walk is still
     in flight: the loop reconciles its daily-budget reservation from it when a
     cycle is cancelled or raises mid-channel (#208).
+
+    Returns channel → the post ids its read fetched, for the extras step.
     """
     warm = settings.warming
     account_id = data.account_id
     remaining_actions = data.remaining_actions
+    recent_ids: dict[str, list[int]] = {}
 
     def _can_attempt() -> bool:
         if remaining_actions is None:
@@ -262,6 +271,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             reaction_probability=reaction_probability,
             remaining_actions=remaining_actions,
         )
+        recent_ids[channel.channel] = outcome.recent_ids
         if outcome.reads:
             await _emit_step(on_step, "read")
         if outcome.reactions:
@@ -269,3 +279,4 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if _apply_read_result(tally, outcome, channel.channel):
             break
         await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
+    return recent_ids

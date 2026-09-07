@@ -10,6 +10,7 @@ from telethon.tl.functions.channels import LeaveChannelRequest
 
 from core.db import fetch_account
 from core.logging import log_event
+from core.telegram_client._action_families import prefix_family
 from core.telegram_client._action_results import (
     _applied_privacy_keys,
     _DispatchResult,
@@ -20,7 +21,6 @@ from core.telegram_client._action_results import (
     _too_fresh_result,
     _unavailable_result,
 )
-from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
 from core.telegram_client._copy_media import dispatch_copy_message_media
 from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
 from core.telegram_client._groups import (
@@ -266,10 +266,10 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case MarkDirectMessageRead():
             # send_read_acknowledge on a user peer marks the DM conversation read.
             await client.send_read_acknowledge(await _resolve_dm_peer(client, action))
-        case _ if action.action_type.startswith("channel_"):
-            # Channel management (create/edit/post/delete) — its own dispatcher
-            # builds the full result (channel_create carries the new id).
-            return await _dispatch_channel_action(client, action)
+        case _ if (family := prefix_family(action.action_type)) is not None:
+            # Prefix-routed families (channel_*, warm_*): each has its own dispatcher
+            # building the full result, and this function is at its complexity cap.
+            return await family.dispatch(client, action)
         case _:
             # Everything else is a profile-media write (photo / story / music);
             # its own dispatcher raises for anything genuinely unhandled.
@@ -418,8 +418,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"story_id": action.story_id}
         case ToggleStoryPinned():
             extra = {"story_id": action.story_id, "pinned": action.pinned}
-        case _ if action.action_type.startswith("channel_"):
-            extra = _channel_log_extra(action)
+        case _ if (family := prefix_family(action.action_type)) is not None:
+            extra = family.log_extra(action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             extra = {}
     return extra

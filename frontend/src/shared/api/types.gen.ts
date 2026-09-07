@@ -1867,6 +1867,98 @@ export type ErrorEnvelope = {
 };
 
 /**
+ * ExtraToggles
+ *
+ * Which extras the operator allows. A missing key means "keep the stored value".
+ */
+export type ExtraToggles = {
+  /**
+   * Dialogs
+   */
+  dialogs?: boolean;
+  /**
+   * Search Messages
+   */
+  search_messages?: boolean;
+  /**
+   * Polls
+   */
+  polls?: boolean;
+  /**
+   * Video
+   */
+  video?: boolean;
+  /**
+   * Voice
+   */
+  voice?: boolean;
+  /**
+   * Gif
+   */
+  gif?: boolean;
+  /**
+   * Stickers
+   */
+  stickers?: boolean;
+  /**
+   * Inline Bots
+   */
+  inline_bots?: boolean;
+  /**
+   * Link Preview
+   */
+  link_preview?: boolean;
+  /**
+   * Forward
+   */
+  forward?: boolean;
+  /**
+   * Saved
+   */
+  saved?: boolean;
+  /**
+   * Contacts
+   */
+  contacts?: boolean;
+  /**
+   * Scheduled
+   */
+  scheduled?: boolean;
+  /**
+   * Leave
+   */
+  leave?: boolean;
+  /**
+   * Archive
+   */
+  archive?: boolean;
+  /**
+   * Mute
+   */
+  mute?: boolean;
+  /**
+   * Notifications
+   */
+  notifications?: boolean;
+  /**
+   * View Profiles
+   */
+  view_profiles?: boolean;
+  /**
+   * Check Settings
+   */
+  check_settings?: boolean;
+  /**
+   * Emoji Status
+   */
+  emoji_status?: boolean;
+  /**
+   * Drafts
+   */
+  drafts?: boolean;
+};
+
+/**
  * HealthStatus
  */
 export type HealthStatus = {
@@ -4034,6 +4126,7 @@ export type WarmingSettings = {
    * Captcha Llm Provider
    */
   captcha_llm_provider?: 'gemini' | 'openai';
+  extra_toggles?: ExtraToggles;
   /**
    * Updated At
    */
@@ -4104,6 +4197,7 @@ export type WarmingSettingsUpdate = {
    * Captcha Llm Provider
    */
   captcha_llm_provider?: 'gemini' | 'openai' | null;
+  extra_toggles?: ExtraToggles | null;
 };
 
 /**

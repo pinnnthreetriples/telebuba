@@ -38,7 +38,7 @@ def _columns(connection: Connection, table: str) -> set[str]:
 
 
 def test_registered_after_premium_as_sixty_and_sixty_one() -> None:
-    versions = [(version, name) for version, name, _fn in MIGRATIONS if version >= 58]
+    versions = [(version, name) for version, name, _fn in MIGRATIONS if 58 <= version <= 61]
     assert versions == [
         (58, "add_neurocomment_account_limits"),
         (59, "add_account_premium"),
