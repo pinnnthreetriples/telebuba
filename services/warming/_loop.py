@@ -49,7 +49,16 @@ _MIN_CYCLE_ACTIONS = 2
 # maps a token to its position here to keep the rail advancing forward only —
 # the channel loop revisits join/read/react per channel, so a raw write would
 # bounce the rail backward.
-_PROGRESS_STEPS: tuple[str, ...] = ("set_online", "join", "read", "react", "stories", "send_dm")
+_PROGRESS_STEPS: tuple[str, ...] = (
+    "set_online",
+    "join",
+    "read",
+    "react",
+    "stories",
+    "send_dm",
+    # Appended LAST: ``_ProgressReporter`` is monotonic by index and extras run last.
+    "extras",
+)
 
 # Fleet-wide ceiling on concurrently-running Telegram-heavy cycles (see
 # ``warming.cycle_concurrency``). Module-level and loop-bound like the runtime's

@@ -88,6 +88,16 @@ from schemas.telegram_actions_twofa import (
     SetTwoFactorPassword,
 )
 
+# Warming extras (``warm_*``) are a sibling module too; the write union below carries
+# every member, and the gateway routes the whole family through one prefix arm.
+from schemas.telegram_actions_warming import (
+    WarmCheckSettings,
+    WarmGetDialogs,
+    WarmReadContacts,
+    WarmReadNotifySettings,
+    WarmViewProfile,
+)
+
 ActionResult = _telegram_results.ActionResult
 ActionStatus = _telegram_results.ActionStatus
 BanCheckResult = _telegram_results.BanCheckResult
@@ -327,7 +337,12 @@ TelegramAction = Annotated[
     | DeleteChannel
     | PublishChannelPost
     | EditChannelPost
-    | DeleteChannelPost,
+    | DeleteChannelPost
+    | WarmGetDialogs
+    | WarmReadContacts
+    | WarmReadNotifySettings
+    | WarmCheckSettings
+    | WarmViewProfile,
     Field(discriminator="action_type"),
 ]
 

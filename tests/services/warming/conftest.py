@@ -38,6 +38,13 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # acts on its affinity slice deterministically (the dedicated tests re-enable
     # it). Without this the pinned rng.random→0.0 would fire exploration every cycle.
     monkeypatch.setattr(settings.warming, "channel_exploration_probability", 0.0)
+    # Extras are a per-cycle RNG draw too; zero them so the exact-dispatch-sequence
+    # tests stay exact (test_extras_step.py re-enables them).
+    monkeypatch.setattr(
+        settings.warming,
+        "persona_extras",
+        dict.fromkeys(settings.warming.persona_extras, (0, 0)),
+    )
     # Calendar-dependent quiet days are tested explicitly. Disable them for all
     # other scenarios so the same behavioral path is exercised every date.
     monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)

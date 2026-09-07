@@ -155,6 +155,9 @@ _warming_settings = Table(
     # column and nothing drops it — the operator's stored key stays where it is, simply
     # unread. Declared so the model still matches the live schema.
     Column("telemetr_api_key", String, nullable=True),
+    # JSON object of the operator's extras toggles (``schemas._warming_extras``);
+    # NULL = every key at its default.
+    Column("extra_toggles", String, nullable=True),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(

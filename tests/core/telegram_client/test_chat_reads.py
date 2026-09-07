@@ -218,7 +218,7 @@ async def test_a_peek_at_an_invite_is_not_a_resolution(monkeypatch: pytest.Monke
     the class answered a valid chat id for a chat this account is not in. Presence was
     never written, the target counted as usable, and every send into it failed.
     """
-    peek = ChatInvitePeek(chat=_channel(megagroup=True), expires=None)  # ty: ignore[invalid-argument-type]
+    peek = ChatInvitePeek(chat=_channel(megagroup=True), expires=None)
     _patch_client(monkeypatch, _InviteClient(peek))
 
     with pytest.raises(TelegramReadError) as refusal:

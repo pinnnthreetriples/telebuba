@@ -12,8 +12,14 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
+
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
 CaptchaLlmProvider = Literal["gemini", "openai"]
+
+
+def _default_extra_toggles() -> ExtraToggles:
+    return EXTRA_TOGGLE_DEFAULTS.copy()
 
 
 class WarmingSettings(BaseModel):
@@ -33,6 +39,8 @@ class WarmingSettings(BaseModel):
     has_openai_key: bool = False
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    # Always the full key set — the repository merges the stored JSON over the defaults.
+    extra_toggles: ExtraToggles = Field(default_factory=_default_extra_toggles)
     updated_at: str = Field(min_length=1)
 
 
@@ -50,6 +58,7 @@ class WarmingSettingsSecret(BaseModel):
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    extra_toggles: ExtraToggles = Field(default_factory=_default_extra_toggles)
     updated_at: str = Field(min_length=1)
 
 
@@ -87,3 +96,8 @@ class WarmingSettingsUpdate(BaseModel):
     openai_model: str | None = None
     clear_openai_key: bool = False
     captcha_llm_provider: CaptchaLlmProvider | None = None
+    # Keep-semantics once more, per key this time: ``None`` keeps every stored toggle,
+    # a partial dict merges only the keys it names. The settings page PUTs this
+    # endpoint without ever seeing the extras, so a full-replacement default would
+    # reset the tuning card's toggles on every unrelated save. Unknown keys are a 422.
+    extra_toggles: ExtraToggles | None = None

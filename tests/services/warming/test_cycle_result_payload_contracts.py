@@ -39,6 +39,7 @@ async def test_cycle_result_reports_all_outcomes_and_status_priority(
         joined=3,
         reads=5,
         reactions=2,
+        extras=1,
         attempts=12,
         flood_seconds=75,
         flood_until="2026-07-17T12:01:15+00:00",
@@ -76,6 +77,8 @@ async def test_cycle_result_reports_all_outcomes_and_status_priority(
                     "reads": 5,
                     "reactions": 2,
                     "messages": 2,
+                    # Log-only: ``WarmingCycleResult`` above deliberately has no such field.
+                    "extras": 1,
                     "failures": flags.get("failures", 0),
                     "flood_wait_seconds": 75,
                 },

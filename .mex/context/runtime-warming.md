@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-17
+last_updated: 2026-09-07
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -18,6 +18,8 @@ grounds_to:
 - Persona controls cadence while phase/trust/readiness remain safety ceilings. Timing and caps come from config; persisted `next_run_at` survives restart, while an explicit stop/start may re-roll startup timing.
 - Daily action budget is reserved before a cycle and reconciled afterward. The reservation is guarded by a per-booking token, not only generation or booked value, so a cancelled old cycle cannot release a newer booking. Each Telegram attempt is booked immediately before dispatch; cancellation or lease loss after dispatch is an unknown outcome and remains spent. Hard process death remains fail-closed because actual spend is unknown.
 - Cycle work spends one shared budget across online/join/read/react/story/DM actions. When tuning caps or cadence, verify later steps remain reachable rather than reasoning from a single action in isolation.
+- Extras (the tuning card's side actions) are the last cycle step, drawn per persona from a registry of toggled-on eligible specs. Read extras never book the daily budget; write extras book it immediately before dispatch like every other step, and are skipped (never queued) once it is spent.
+- Self-scoped extras (notes, forwards, drafts, reminders) carry no destination in their action models; `InputPeerSelf` is hardcoded in core so no caller can aim them at another account.
 - Inter-account DMs resolve cold peers by phone through `contacts.resolvePhone`, never by saving them as contacts. A permanently unaddressable peer skips the turn without parking the healthy sender, but the attempt still consumes budget.
 - Quarantine releases only on a confirmed clean spam check. An unreadable/unknown check does not release the account and still advances the bounded recovery attempt counter. Recovery, extension and exhaustion publish their outcome only after the final generation-guarded write applies, so a concurrent stop/restart cannot emit a stale result.
 - Scheduling/de-correlation lives in pacing/fleet modules; cycle modules own one session; runtime modules own task state, sleep, bounded cancellation and recovery. A generation lease is checked around Telegram dispatch so a retired cycle cannot begin a later action. Keep injectable collaborators behind the warming seam.

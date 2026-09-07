@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -281,3 +281,21 @@ class WarmingSettings(BaseSettings):
     persona_dm_probability: dict[str, float] = Field(
         default_factory=lambda: {"calm": 0.10, "normal": 0.30, "active": 0.55},
     )
+    # How many *extras* (the side actions of the tuning card — chat-list open,
+    # contacts read, settings glance...) one cycle draws, as a per-persona range.
+    # Reads never book the daily budget, so this range is their only per-cycle cap.
+    persona_extras: dict[str, tuple[int, int]] = Field(
+        default_factory=lambda: {"calm": (0, 1), "normal": (1, 3), "active": (2, 4)},
+    )
+
+    @model_validator(mode="after")
+    def _check_persona_extras(self) -> WarmingSettings:
+        # ``rng.randint(lo, hi)`` raises on lo > hi and a missing persona is a KeyError
+        # mid-cycle; both are .env typos that should fail at boot, not on the account.
+        if self.persona_extras.keys() != self.persona_dm_probability.keys():
+            msg = "persona_extras must name exactly the personas of persona_dm_probability"
+            raise ValueError(msg)
+        if any(lo > hi for lo, hi in self.persona_extras.values()):
+            msg = "persona_extras ranges must satisfy lo <= hi"
+            raise ValueError(msg)
+        return self

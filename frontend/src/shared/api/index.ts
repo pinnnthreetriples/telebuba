@@ -337,6 +337,7 @@ export type {
   ExpandDiscoveryKeywordsErrors,
   ExpandDiscoveryKeywordsResponse,
   ExpandDiscoveryKeywordsResponses,
+  ExtraToggles,
   GenerateNeuroshillingScenarioData,
   GenerateNeuroshillingScenarioError,
   GenerateNeuroshillingScenarioErrors,

@@ -14283,6 +14283,98 @@
         ],
         "title": "ErrorEnvelope"
       },
+      "ExtraToggles": {
+        "properties": {
+          "dialogs": {
+            "type": "boolean",
+            "title": "Dialogs"
+          },
+          "search_messages": {
+            "type": "boolean",
+            "title": "Search Messages"
+          },
+          "polls": {
+            "type": "boolean",
+            "title": "Polls"
+          },
+          "video": {
+            "type": "boolean",
+            "title": "Video"
+          },
+          "voice": {
+            "type": "boolean",
+            "title": "Voice"
+          },
+          "gif": {
+            "type": "boolean",
+            "title": "Gif"
+          },
+          "stickers": {
+            "type": "boolean",
+            "title": "Stickers"
+          },
+          "inline_bots": {
+            "type": "boolean",
+            "title": "Inline Bots"
+          },
+          "link_preview": {
+            "type": "boolean",
+            "title": "Link Preview"
+          },
+          "forward": {
+            "type": "boolean",
+            "title": "Forward"
+          },
+          "saved": {
+            "type": "boolean",
+            "title": "Saved"
+          },
+          "contacts": {
+            "type": "boolean",
+            "title": "Contacts"
+          },
+          "scheduled": {
+            "type": "boolean",
+            "title": "Scheduled"
+          },
+          "leave": {
+            "type": "boolean",
+            "title": "Leave"
+          },
+          "archive": {
+            "type": "boolean",
+            "title": "Archive"
+          },
+          "mute": {
+            "type": "boolean",
+            "title": "Mute"
+          },
+          "notifications": {
+            "type": "boolean",
+            "title": "Notifications"
+          },
+          "view_profiles": {
+            "type": "boolean",
+            "title": "View Profiles"
+          },
+          "check_settings": {
+            "type": "boolean",
+            "title": "Check Settings"
+          },
+          "emoji_status": {
+            "type": "boolean",
+            "title": "Emoji Status"
+          },
+          "drafts": {
+            "type": "boolean",
+            "title": "Drafts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ExtraToggles",
+        "description": "Which extras the operator allows. A missing key means \"keep the stored value\"."
+      },
       "HealthStatus": {
         "properties": {
           "status": {
@@ -17924,6 +18016,9 @@
             "title": "Captcha Llm Provider",
             "default": "gemini"
           },
+          "extra_toggles": {
+            "$ref": "#/components/schemas/ExtraToggles"
+          },
           "updated_at": {
             "type": "string",
             "minLength": 1,
@@ -18078,6 +18173,16 @@
               }
             ],
             "title": "Captcha Llm Provider"
+          },
+          "extra_toggles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtraToggles"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,

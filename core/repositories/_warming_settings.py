@@ -10,18 +10,34 @@ functions are re-exported by ``core.repositories.warming`` (and thence by
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import insert, select, update
 
 from core.config import settings
 from core.db import _get_engine, _now_iso, _warming_settings
+from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
 from schemas.warming import CaptchaLlmProvider, WarmingSettingsSecret
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 _WARMING_SETTINGS_ID = 1
+
+
+def _stored_extra_toggles(raw: object) -> dict[str, bool]:
+    """The JSON column as written — unknown keys included, NULL or non-object as ``{}``."""
+    loaded = json.loads(str(raw or "{}"))
+    if not isinstance(loaded, dict):
+        return {}
+    return {str(k): bool(v) for k, v in loaded.items()}
+
+
+def _extra_toggles(raw: object) -> ExtraToggles:
+    """Stored toggles merged over the defaults; a key this build no longer knows is dropped."""
+    known = {k: v for k, v in _stored_extra_toggles(raw).items() if k in EXTRA_TOGGLE_DEFAULTS}
+    return cast("ExtraToggles", {**EXTRA_TOGGLE_DEFAULTS, **known})
 
 
 def _bool_or(value: object, default: bool) -> bool:  # noqa: FBT001
@@ -84,6 +100,7 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         openai_api_key=_str_or(mapping.get("openai_api_key"), settings.openai.api_key),
         openai_model=_str_or(mapping.get("openai_model"), settings.openai.model),
         captcha_llm_provider=_captcha_provider(mapping.get("captcha_llm_provider")),
+        extra_toggles=_extra_toggles(mapping.get("extra_toggles")),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -103,6 +120,7 @@ def _default_warming_settings_values() -> dict[str, object]:
         "openai_api_key": "",
         "openai_model": settings.openai.model,
         "captcha_llm_provider": settings.neurocomment.captcha_llm_provider,
+        "extra_toggles": None,
         "updated_at": _now_iso(),
     }
 
@@ -155,6 +173,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
+    extra_toggles: ExtraToggles | None = None,
 ) -> WarmingSettingsSecret:
     # Ensure the singleton row exists, then read it so a ``None`` key/model/provider
     # argument keeps the stored value (keep/clear/replace). Keys ARE persisted now
@@ -216,6 +235,12 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
             ),
             "updated_at": _now_iso(),
         }
+        if extra_toggles is not None:
+            # Per-key keep-semantics: merge over what is stored (unknown keys and all,
+            # so a downgrade/upgrade round-trip loses nothing), ``None`` leaves the
+            # column untouched. Sorted keys so equal states are byte-equal in the DB.
+            merged = {**_stored_extra_toggles(cur.get("extra_toggles")), **extra_toggles}
+            values["extra_toggles"] = json.dumps(merged, sort_keys=True)
         connection.execute(
             update(_warming_settings)
             .where(_warming_settings.c.id == _WARMING_SETTINGS_ID)
@@ -238,12 +263,14 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
+    extra_toggles: ExtraToggles | None = None,
 ) -> WarmingSettingsSecret:
     """Persist warming settings.
 
     LLM keys/models + the captcha provider use keep/clear/replace semantics:
     ``None`` keeps the stored value, ``""`` clears a key, any other value replaces.
-    The two Gemini rate-limit knobs and the four toggles keep on ``None`` the same way.
+    The two Gemini rate-limit knobs and the four toggles keep on ``None`` the same way;
+    ``extra_toggles`` keeps per key (a partial dict merges into the stored JSON).
     """
     return await asyncio.to_thread(
         _save_warming_settings,
@@ -258,4 +285,5 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         openai_api_key=openai_api_key,
         openai_model=openai_model,
         captcha_llm_provider=captcha_llm_provider,
+        extra_toggles=extra_toggles,
     )

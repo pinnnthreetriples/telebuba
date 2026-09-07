@@ -9,28 +9,33 @@ import {
 } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
 import { mutationErrorText } from '@/shared/lib';
-import { Badge, Button, CollapsibleCard, FeedbackMark, Icon, Switch } from '@/shared/ui';
+import { Badge, Button, CollapsibleCard, FeedbackMark, HelpHint, Icon, Switch } from '@/shared/ui';
 import type { IconName } from '@/shared/ui';
 
 // Каждое действие прогрева одной строкой, сгруппированное так, как оператор их
 // ищет. Состояние — не украшение, а то, что тумблер РЕАЛЬНО может: `live` пишется
 // в настройки, `always` работает и выключить его нельзя (ядро цикла или ключ в
-// конфиге сервера), `soon` ещё не написан в `core/telegram_client`. Тумблер, который
-// двигается и ничего не меняет, хуже тумблера, который честно отказывает — поэтому
-// у последних двух он `disabled`, а плашка рядом говорит, почему.
-type ActionState = 'live' | 'always' | 'soon';
+// конфиге сервера), `soon` ещё не написан в `core/telegram_client`, `external`
+// прогрев не делает вовсе — оператор правит это сам в другом разделе. Тумблер,
+// который двигается и ничего не меняет, хуже тумблера, который честно отказывает —
+// поэтому у последних трёх он `disabled`, а плашка рядом говорит, почему.
+type ActionState = 'live' | 'always' | 'soon' | 'external';
 
-// Три настройки, которые бэкенд действительно хранит (`WarmingSettingsUpdate`).
-// Гейт готовности сюда не входит: он не действие, а допуск в прогрев, и стоит
-// отдельной строкой под сеткой.
-type LiveKey = 'reactions_enabled' | 'join_enabled' | 'inter_account_chat';
+// Три исторические колонки настроек (`WarmingSettingsUpdate`). Гейт готовности сюда
+// не входит: он не действие, а допуск в прогрев, и стоит отдельной строкой под сеткой.
+const LEGACY_KEYS = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
+type LiveKey = (typeof LEGACY_KEYS)[number];
+// Остальные тумблеры бэкенд хранит одним объектом `extra_toggles`; ключ там —
+// snake_case ключа строки, чтобы не заводить таблицу соответствия.
+type ExtraKey = keyof NonNullable<WarmingSettings['extra_toggles']>;
+type ToggleKey = LiveKey | ExtraKey;
 
 interface Action {
-  // Ключ строки в `warming.tune.action.*`, он же ключ React.
+  // Ключ строки в `warming.tune.action.*` и `warming.tune.hint.*`, он же ключ React.
   key: string;
   state: ActionState;
   // Есть только у `live`: поле настроек, которым эта строка управляет.
-  field?: LiveKey;
+  field?: ToggleKey;
 }
 
 interface Group {
@@ -48,7 +53,7 @@ const GROUPS: Group[] = [
     actions: [
       { key: 'scroll', state: 'always' },
       { key: 'markRead', state: 'always' },
-      { key: 'dialogs', state: 'soon' },
+      { key: 'dialogs', state: 'live', field: 'dialogs' },
       { key: 'searchMessages', state: 'soon' },
     ],
   },
@@ -83,7 +88,7 @@ const GROUPS: Group[] = [
       { key: 'typing', state: 'always' },
       { key: 'forward', state: 'soon' },
       { key: 'saved', state: 'soon' },
-      { key: 'contacts', state: 'soon' },
+      { key: 'contacts', state: 'live', field: 'contacts' },
       { key: 'scheduled', state: 'soon' },
     ],
   },
@@ -95,16 +100,16 @@ const GROUPS: Group[] = [
       { key: 'leave', state: 'soon' },
       { key: 'archive', state: 'soon' },
       { key: 'mute', state: 'soon' },
-      { key: 'notifications', state: 'soon' },
+      { key: 'notifications', state: 'live', field: 'notifications' },
     ],
   },
   {
     key: 'profile',
     icon: 'user-round',
     actions: [
-      { key: 'viewProfiles', state: 'soon' },
-      { key: 'checkSettings', state: 'soon' },
-      { key: 'updateProfile', state: 'soon' },
+      { key: 'viewProfiles', state: 'live', field: 'view_profiles' },
+      { key: 'checkSettings', state: 'live', field: 'check_settings' },
+      { key: 'updateProfile', state: 'external' },
       { key: 'emojiStatus', state: 'soon' },
       { key: 'drafts', state: 'soon' },
     ],
@@ -113,17 +118,17 @@ const GROUPS: Group[] = [
 
 const ACTIONS = GROUPS.flatMap((group) => group.actions);
 // Счётчики в легенде считаются по таблице, а не вписаны числом: подключение
-// одного действия не должно требовать правки надписи рядом.
-const WORKING_COUNT = ACTIONS.filter((a) => a.state !== 'soon').length;
+// одного действия не должно требовать правки надписи рядом. «Работает» — то, что
+// прогрев реально выполняет: `external` живёт в другом разделе и сюда не входит.
+const WORKING_COUNT = ACTIONS.filter((a) => a.state === 'live' || a.state === 'always').length;
 const SOON_COUNT = ACTIONS.filter((a) => a.state === 'soon').length;
-const LIVE_FIELDS = ACTIONS.map((a) => a.field).filter((f): f is LiveKey => f != null);
+const LIVE_FIELDS = ACTIONS.map((a) => a.field).filter((f): f is ToggleKey => f != null);
+// Только подключённые extra-ключи: ещё-`soon` строки поля не имеют и в PUT не попадают.
+const EXTRA_KEYS = LIVE_FIELDS.filter(
+  (f): f is ExtraKey => !(LEGACY_KEYS as readonly string[]).includes(f),
+);
 
-interface Toggles {
-  reactions_enabled: boolean;
-  join_enabled: boolean;
-  inter_account_chat: boolean;
-  enforce_readiness: boolean;
-}
+type Toggles = Record<LiveKey | 'enforce_readiness', boolean> & Partial<Record<ExtraKey, boolean>>;
 
 function initialToggles(settings?: WarmingSettings): Toggles {
   return {
@@ -131,35 +136,41 @@ function initialToggles(settings?: WarmingSettings): Toggles {
     join_enabled: settings?.join_enabled ?? true,
     inter_account_chat: settings?.inter_account_chat ?? false,
     enforce_readiness: settings?.enforce_readiness ?? true,
+    ...Object.fromEntries(EXTRA_KEYS.map((k) => [k, settings?.extra_toggles?.[k] ?? true])),
   };
 }
 
 function ActionRow({
+  actionKey,
   title,
   state,
   on,
   onToggle,
 }: {
+  actionKey: string;
   title: string;
   state: ActionState;
   on: boolean;
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
+  const working = state === 'live' || state === 'always';
   return (
     <div className="flex items-center gap-md">
       <Switch checked={on} disabled={state !== 'live'} label={title} onChange={onToggle} />
-      <span
-        className={`min-w-0 flex-1 type-label ${state === 'soon' ? 'text-content-subtle' : ''}`}
-      >
+      <span className={`min-w-0 flex-1 type-label ${working ? '' : 'text-content-subtle'}`}>
         {title}
       </span>
+      <HelpHint
+        text={t(`warming.tune.hint.${actionKey}.text`)}
+        example={t(`warming.tune.hint.${actionKey}.example`)}
+      />
       {state === 'always' ? <Badge tone="info">{t('warming.tune.state.always')}</Badge> : null}
-      {state === 'soon' ? (
+      {working ? null : (
         // С рамкой: заливка `neutral` — это `canvas`, а панель под ней `surface`, и
         // три единицы между ними плашкой не читаются. Тот же приём, что у пилюль каналов.
-        <Badge className="border border-line">{t('warming.tune.state.soon')}</Badge>
-      ) : null}
+        <Badge className="border border-line">{t(`warming.tune.state.${state}`)}</Badge>
+      )}
     </div>
   );
 }
@@ -205,6 +216,9 @@ export function ActionTuningCard() {
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
+          // Частичный объект: путь записи мержит по ключам, так что ещё не
+          // подключённые действия хранимого значения не теряют.
+          extra_toggles: Object.fromEntries(EXTRA_KEYS.map((k) => [k, toggles[k] ?? true])),
           // Модель Gemini и два её ограничителя ОТСУТСТВУЮТ намеренно, а не
           // повторены: путь записи сохраняет каждое опущенное поле, а эхо читало
           // кэш, который эта карточка не перезапрашивает по фокусу — и сохранение
@@ -283,9 +297,10 @@ export function ActionTuningCard() {
               {group.actions.map((action) => (
                 <ActionRow
                   key={action.key}
+                  actionKey={action.key}
                   title={t(`warming.tune.action.${action.key}`)}
                   state={action.state}
-                  on={action.field ? toggles[action.field] : action.state === 'always'}
+                  on={action.field ? (toggles[action.field] ?? true) : action.state === 'always'}
                   onToggle={() => {
                     if (action.field) flip(action.field);
                   }}

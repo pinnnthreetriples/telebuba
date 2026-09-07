@@ -23,6 +23,8 @@ from schemas.telegram_actions import SetOnline
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
 from services.warming._chat import _run_chat_step
+from services.warming._extras import run_extras_step
+from services.warming._extras_ctx import _ExtraContext
 from services.warming._fleet import _account_channel_affinity, _affinity_epoch, _maybe_explore
 from services.warming._steps import (
     _ChannelTally,
@@ -58,6 +60,12 @@ async def _watch_stories_step(
     """Glance at a peer's stories and advance the rail only if the view landed."""
     if await maybe_watch_stories(account_id, chosen, tally, can_attempt=can_attempt):
         await _emit_step(on_step, "stories")
+
+
+async def _extras_step(ctx: _ExtraContext, on_step: _OnStep | None) -> None:
+    """Run the drawn extras and advance the rail only if at least one landed."""
+    if await run_extras_step(ctx):
+        await _emit_step(on_step, "extras")
 
 
 async def _set_offline(account_id: str) -> None:
@@ -118,6 +126,7 @@ async def _build_cycle_result(
             "reads": tally.reads,
             "reactions": tally.reactions,
             "messages": messages_sent,
+            "extras": tally.extras,
             "failures": tally.failures,
             "flood_wait_seconds": tally.flood_seconds,
         },
@@ -200,7 +209,7 @@ async def run_one_cycle(
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
         chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
-        await _run_channel_loop(
+        recent_ids = await _run_channel_loop(
             data,
             tally,
             chosen,
@@ -218,6 +227,21 @@ async def run_one_cycle(
         )
         if messages_sent:
             await _emit_step(on_step, "send_dm")
+
+        # Extras go last so the budget-booking steps above never starve behind them.
+        await _extras_step(
+            _ExtraContext(
+                account_id=account_id,
+                account=account,
+                secret=secret,
+                persona=data.activity_persona,
+                chosen=chosen,
+                recent_ids=recent_ids,
+                tally=tally,
+                remaining_actions=data.remaining_actions,
+            ),
+            on_step,
+        )
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the
         # account does not stay online forever.

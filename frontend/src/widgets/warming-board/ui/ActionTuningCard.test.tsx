@@ -20,14 +20,25 @@ const SETTINGS = {
   // is reset to the schema defaults (1 and 0.0).
   gemini_max_retries: 4,
   gemini_min_interval_seconds: 2.5,
+  // The five extras wired up so far; the rest of the 21 keys stay server-side
+  // defaults until their rows leave "скоро".
+  extra_toggles: {
+    dialogs: true,
+    contacts: true,
+    notifications: true,
+    view_profiles: true,
+    check_settings: true,
+  },
   updated_at: 'now',
 };
 
 // The card's own counts, derived the same way the legend derives them. Written out
 // so a row that changes state has to change this number too — that is the point of
 // the states being data rather than markup.
-const SOON_ROWS = 22;
+const SOON_ROWS = 16;
 const ALWAYS_ROWS = 5;
+// Profile editing lives in the Accounts section: one row that warming never runs.
+const EXTERNAL_ROWS = 1;
 // Thirty actions plus the readiness gate, which is not one.
 const ALL_SWITCHES = 31;
 
@@ -155,15 +166,63 @@ test('a core-cycle action reads as on and cannot be moved', async () => {
   expect(screen.getAllByText('всегда')).toHaveLength(ALWAYS_ROWS);
 });
 
+test('the profile row points at the Accounts section instead of promising "скоро"', async () => {
+  routeApi();
+  renderWithClient(<ActionTuningCard />);
+  await openCard();
+
+  const row = screen.getByRole('switch', { name: 'Обновление профиля' });
+  expect(row).toHaveAttribute('aria-checked', 'false');
+  expect(row).toBeDisabled();
+  expect(screen.getAllByText('в разделе Аккаунты')).toHaveLength(EXTERNAL_ROWS);
+});
+
+test('every row carries a plain-language hint with an example', async () => {
+  routeApi();
+  renderWithClient(<ActionTuningCard />);
+  await openCard();
+
+  expect(screen.getAllByRole('tooltip')).toHaveLength(ALL_SWITCHES - 1);
+  const hint = screen
+    .getByText('Аккаунт открывает список своих чатов.')
+    .closest('[role="tooltip"]');
+  expect(hint).toHaveTextContent('Например: заглянуть в чаты утром, ничего не открывая.');
+});
+
 test('the legend counts the table, so a connected action needs no copy change', async () => {
   routeApi();
   renderWithClient(<ActionTuningCard />);
   await openCard();
 
+  // "Working" is what warming actually runs: live and always-on rows. The external
+  // row is edited elsewhere and the soon rows are not written yet.
   expect(
-    screen.getByText(`работает · ${String(ALL_SWITCHES - 1 - SOON_ROWS)}`),
+    screen.getByText(`работает · ${String(ALL_SWITCHES - 1 - SOON_ROWS - EXTERNAL_ROWS)}`),
   ).toBeInTheDocument();
   expect(screen.getByText(`скоро · ${String(SOON_ROWS)}`)).toBeInTheDocument();
+});
+
+test('a new extra toggle writes into extra_toggles beside the legacy columns', async () => {
+  routeApi();
+  renderWithClient(<ActionTuningCard />);
+  await openCard();
+
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByRole('switch', { name: 'Просмотр диалогов' }));
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  const body = await savedBody();
+  const extras = body.extra_toggles as Record<string, boolean>;
+  expect(extras.dialogs).toBe(false);
+  expect(extras.contacts).toBe(true);
+  // Still-"скоро" keys are never sent: a partial object lets the write path keep
+  // whatever the server stores for them.
+  expect(extras).not.toHaveProperty('polls');
+  expect(body.reactions_enabled).toBe(true);
+  expect(body).not.toHaveProperty('gemini_max_retries');
+  expect(body).not.toHaveProperty('gemini_min_interval_seconds');
 });
 
 test('save writes the three stored toggles and the readiness gate', async () => {
@@ -197,8 +256,14 @@ test('"Выключить все" reaches only the actions the backend can store
   });
   await userEvent.click(screen.getByText('Выключить все'));
 
-  // The three live rows go off…
-  for (const name of ['Реакции на посты', 'Вступление в каналы', 'Переписка между аккаунтами']) {
+  // The live rows go off, extras included…
+  for (const name of [
+    'Реакции на посты',
+    'Вступление в каналы',
+    'Переписка между аккаунтами',
+    'Просмотр диалогов',
+    'Проверка настроек',
+  ]) {
     expect(screen.getByRole('switch', { name })).toHaveAttribute('aria-checked', 'false');
   }
   // …the locked ones do not move, and the gate is not an action.
@@ -217,15 +282,29 @@ test('"Выключить все" reaches only the actions the backend can store
   expect(body.join_enabled).toBe(false);
   expect(body.inter_account_chat).toBe(false);
   expect(body.enforce_readiness).toBe(true);
+  expect(body.extra_toggles).toEqual({
+    dialogs: false,
+    contacts: false,
+    notifications: false,
+    view_profiles: false,
+    check_settings: false,
+  });
 });
 
 test('"Включить все" turns the stored actions back on', async () => {
-  routeApi({ ...SETTINGS, reactions_enabled: false, join_enabled: false });
+  routeApi({
+    ...SETTINGS,
+    reactions_enabled: false,
+    join_enabled: false,
+    extra_toggles: { ...SETTINGS.extra_toggles, dialogs: false },
+  });
   renderWithClient(<ActionTuningCard />);
   await openCard();
 
+  // A cold cache renders the fallbacks (on); the stored row must win before the
+  // click, or "on" here would prove nothing.
   await waitFor(() => {
-    expect(screen.getByRole('switch', { name: 'Реакции на посты' })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: 'Просмотр диалогов' })).toHaveAttribute(
       'aria-checked',
       'false',
     );
@@ -237,6 +316,7 @@ test('"Включить все" turns the stored actions back on', async () => {
   expect(body.reactions_enabled).toBe(true);
   expect(body.join_enabled).toBe(true);
   expect(body.inter_account_chat).toBe(true);
+  expect((body.extra_toggles as Record<string, boolean>).dialogs).toBe(true);
 });
 
 test('the readiness gate keeps its own switch and its own value', async () => {

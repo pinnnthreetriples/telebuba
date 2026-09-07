@@ -640,7 +640,18 @@ test('folds the DM-send action onto its neighbour step (no DM label on the rail)
   renderWithClient(
     <WarmingBoard warming={[dm]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
   );
-  expect(screen.getByText('Просмотр сторис')).toBeInTheDocument();
+  expect(screen.getByText('Просмотр сторис')).toHaveClass('text-info-strong');
+});
+
+test('folds extras onto the stories step', () => {
+  // The extras step runs last, after send_dm, and folds the same way: no sixth
+  // step that stays dark for accounts with every extra switched off.
+  const extras: WarmingAccountState = { ...account('a1', 'active'), last_action: 'extras' };
+  renderWithClient(
+    <WarmingBoard warming={[extras]} onStop={vi.fn()} onPromote={vi.fn()} busyIds={NONE_BUSY} />,
+  );
+  // Every stage label always renders; only the active one carries this class.
+  expect(screen.getByText('Просмотр сторис')).toHaveClass('text-info-strong');
 });
 
 test('an errored account shows where the engine last was, not a cycle-count guess', () => {

@@ -33,6 +33,7 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         has_openai_key=bool(secret.openai_api_key),
         openai_model=secret.openai_model,
         captcha_llm_provider=secret.captcha_llm_provider,
+        extra_toggles=secret.extra_toggles,
         updated_at=secret.updated_at,
     )
 
@@ -60,6 +61,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         openai_api_key=openai_key,
         openai_model=data.openai_model,
         captcha_llm_provider=data.captcha_llm_provider,
+        extra_toggles=data.extra_toggles,
     )
     await log_event(
         "INFO",
@@ -75,6 +77,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
             "gemini_min_interval_seconds": secret.gemini_min_interval_seconds,
             "has_openai_key": bool(secret.openai_api_key),
             "captcha_llm_provider": secret.captcha_llm_provider,
+            "extras_enabled": sum(secret.extra_toggles.values()),
         },
     )
     return _mask_settings(secret)
