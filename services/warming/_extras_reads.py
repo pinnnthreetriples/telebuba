@@ -1,6 +1,6 @@
 """Read-only extras runners — the free, "what a client does on open" half of the step.
 
-Each runner builds one ``Warm*`` action and hands it to ``_read`` (no budget booked).
+Each runner builds one ``Warm*`` action and dispatches it; reads book no budget.
 Randomness goes through ``_seams.rng`` like everywhere else in warming so tests pin
 one generator. Nothing here inspects what Telegram returned: warming only cares
 that the request looked like a real client's.
@@ -18,7 +18,6 @@ from schemas.telegram_actions_warming import (
     WarmViewProfile,
 )
 from services.warming import _seams
-from services.warming._extras_ctx import _read
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
@@ -35,15 +34,17 @@ _CHANNEL_PROFILE_PROBABILITY = 0.5
 
 
 async def dialogs(ctx: _ExtraContext) -> ActionResult:
-    return await _read(ctx, WarmGetDialogs(limit=_seams.rng.randint(*_DIALOGS_LIMIT)))
+    return await _seams.execute(
+        ctx.account_id, WarmGetDialogs(limit=_seams.rng.randint(*_DIALOGS_LIMIT))
+    )
 
 
 async def contacts(ctx: _ExtraContext) -> ActionResult:
-    return await _read(ctx, WarmReadContacts())
+    return await _seams.execute(ctx.account_id, WarmReadContacts())
 
 
 async def notifications(ctx: _ExtraContext) -> ActionResult:
-    return await _read(ctx, WarmReadNotifySettings())
+    return await _seams.execute(ctx.account_id, WarmReadNotifySettings())
 
 
 async def check_settings(ctx: _ExtraContext) -> ActionResult:
@@ -51,7 +52,7 @@ async def check_settings(ctx: _ExtraContext) -> ActionResult:
         calls=_seams.rng.randint(*_CHECK_SETTINGS_CALLS),
         offset=_seams.rng.randrange(_CHECK_SETTINGS_OFFSETS),
     )
-    return await _read(ctx, action)
+    return await _seams.execute(ctx.account_id, action)
 
 
 async def view_profiles(ctx: _ExtraContext) -> ActionResult:
@@ -59,4 +60,4 @@ async def view_profiles(ctx: _ExtraContext) -> ActionResult:
         action = WarmViewProfile(kind="channel", channel=_seams.rng.choice(ctx.chosen).channel)
     else:
         action = WarmViewProfile(kind="self")
-    return await _read(ctx, action)
+    return await _seams.execute(ctx.account_id, action)

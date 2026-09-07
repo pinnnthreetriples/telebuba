@@ -86,13 +86,6 @@ async def test_unknown_stored_key_is_dropped_on_read_and_kept_on_write() -> None
 
 
 @pytest.mark.asyncio
-async def test_non_object_json_in_the_column_reads_as_the_defaults() -> None:
-    await load_warming_settings()  # seed the singleton row
-    _write_raw_column("[]")
-    assert (await load_warming_settings()).extra_toggles == EXTRA_TOGGLE_DEFAULTS
-
-
-@pytest.mark.asyncio
 async def test_cache_is_invalidated_after_a_save() -> None:
     cached = await load_warming_settings()
     assert cached.extra_toggles["polls"] is False

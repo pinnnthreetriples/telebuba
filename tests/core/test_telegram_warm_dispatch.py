@@ -75,9 +75,9 @@ def test_warm_modules_never_import_contact_writes(path: Path) -> None:
 
 def test_warm_log_extra_carries_only_counts_kinds_and_handles() -> None:
     assert warm_log_extra(WarmGetDialogs(limit=5)) == {"limit": 5}
-    assert warm_log_extra(WarmCheckSettings(calls=2)) == {"calls": 2}
+    assert warm_log_extra(WarmCheckSettings(calls=2)) == {}  # the dispatcher logs ``calls``
     assert warm_log_extra(WarmReadContacts()) == {}
-    assert warm_log_extra(WarmViewProfile()) == {"kind": "self"}
+    assert warm_log_extra(WarmViewProfile()) == {"kind": "self", "channel": None}
     assert warm_log_extra(WarmViewProfile(kind="channel", channel="@x")) == {
         "kind": "channel",
         "channel": "@x",

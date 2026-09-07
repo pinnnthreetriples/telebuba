@@ -27,11 +27,8 @@ _WARMING_SETTINGS_ID = 1
 
 
 def _stored_extra_toggles(raw: object) -> dict[str, bool]:
-    """The JSON column as written — unknown keys included, NULL or non-object as ``{}``."""
-    loaded = json.loads(str(raw or "{}"))
-    if not isinstance(loaded, dict):
-        return {}
-    return {str(k): bool(v) for k, v in loaded.items()}
+    """The JSON column as written — unknown keys included, NULL as ``{}``."""
+    return {str(k): bool(v) for k, v in json.loads(str(raw or "{}")).items()}
 
 
 def _extra_toggles(raw: object) -> ExtraToggles:

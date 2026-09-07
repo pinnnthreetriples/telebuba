@@ -2,7 +2,7 @@
 
 Runs last in ``run_one_cycle`` (after stories and the DM) so the budget-booking steps
 never starve behind it. Registry-driven: ``EXTRAS`` lists one spec per toggle the
-backend implements; ``_pick_extras`` keeps the toggled-on, eligible ones and samples
+backend implements; ``_pick_extras`` keeps the toggled-on ones and samples
 without replacement (so "at most once per cycle per key" is free), uniformly — a
 weight would be one more tunable and the heavy actions are already gated by their
 toggles. Timing and randomness reach the outside only via ``_seams``; no blanket
@@ -38,25 +38,10 @@ EXTRAS: tuple[_ExtraSpec, ...] = (
 )
 
 
-def _is_eligible(spec: _ExtraSpec, ctx: _ExtraContext) -> bool:
-    """Whether the cycle has every fact ``spec.needs`` — data-driven, one function."""
-    facts = {
-        "recent_ids": any(ctx.recent_ids.values()),
-        # ponytail: becomes the joined-channel list when PR4 lands (leave/archive/mute).
-        "joined": False,
-        # ``None`` = unknown → don't try; a premium-only write on a free account is a
-        # guaranteed refusal.
-        "premium": ctx.account is not None and ctx.account.premium is True,
-        # ponytail: becomes ``ctx.media_bytes_left >= floor`` when PR5 lands (video/voice).
-        "media_bytes": False,
-    }
-    return all(facts[need] for need in spec.needs)
-
-
 def _pick_extras(
     ctx: _ExtraContext, toggles: Mapping[str, object], rng: Random
 ) -> list[_ExtraSpec]:
-    eligible = [s for s in EXTRAS if toggles.get(s.key, False) and _is_eligible(s, ctx)]
+    eligible = [s for s in EXTRAS if toggles.get(s.key, False)]
     lo, hi = settings.warming.persona_extras[ctx.persona]
     return rng.sample(eligible, min(rng.randint(lo, hi), len(eligible)))
 

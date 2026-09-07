@@ -18,10 +18,6 @@ from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
 CaptchaLlmProvider = Literal["gemini", "openai"]
 
 
-def _default_extra_toggles() -> ExtraToggles:
-    return EXTRA_TOGGLE_DEFAULTS.copy()
-
-
 class WarmingSettings(BaseModel):
     """Masked, UI-facing warming settings — never carries the raw Gemini key."""
 
@@ -40,7 +36,7 @@ class WarmingSettings(BaseModel):
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
     # Always the full key set — the repository merges the stored JSON over the defaults.
-    extra_toggles: ExtraToggles = Field(default_factory=_default_extra_toggles)
+    extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     updated_at: str = Field(min_length=1)
 
 
@@ -58,7 +54,7 @@ class WarmingSettingsSecret(BaseModel):
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
-    extra_toggles: ExtraToggles = Field(default_factory=_default_extra_toggles)
+    extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     updated_at: str = Field(min_length=1)
 
 

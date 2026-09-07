@@ -23,18 +23,16 @@ from services.warming import _extras, _extras_reads, _seams
 from services.warming._extras import (
     EXTRAS,
     _fold_extra,
-    _is_eligible,
     _pick_extras,
     run_extras_step,
 )
 from services.warming._extras_ctx import _ExtraContext, _ExtraSpec, _write
 from services.warming._steps import _ChannelTally
-from tests.services.warming._support import _account, _Recorder, _seed_ready_account, _set_settings
+from tests.services.warming._support import _Recorder, _seed_ready_account, _set_settings
 
 if TYPE_CHECKING:
     from schemas._warming_extras import ExtraToggles
     from schemas.telegram_actions import TelegramAction
-    from services.warming._extras_ctx import _Need
 
 _ALL_ON = cast("ExtraToggles", dict.fromkeys(EXTRA_TOGGLE_DEFAULTS, True))
 _KEYS = [spec.key for spec in EXTRAS]
@@ -52,18 +50,15 @@ def _secret() -> WarmingSettingsSecret:
     )
 
 
-def _ctx(  # noqa: PLR0913 - one keyword per context fact reads clearer in the tests.
+def _ctx(
     *,
     chosen: list[WarmingChannel] | None = None,
     recent_ids: dict[str, list[int]] | None = None,
     remaining: int | None = None,
     tally: _ChannelTally | None = None,
-    premium: bool | None = None,
-    no_account: bool = False,
 ) -> _ExtraContext:
     return _ExtraContext(
         account_id="acc-1",
-        account=None if no_account else _account(premium=premium),
         secret=_secret(),
         persona="normal",
         chosen=[] if chosen is None else chosen,
@@ -120,38 +115,6 @@ def test_toggled_off_or_missing_key_is_never_picked(monkeypatch: pytest.MonkeyPa
     assert picked == set(_KEYS) - {"dialogs"}
     # A key absent from the mapping is off, not on.
     assert _pick_extras(_ctx(), {}, random.Random(7)) == []  # noqa: S311
-
-
-# --- eligibility -------------------------------------------------------------
-
-
-def _spec(*needs: _Need) -> _ExtraSpec:
-    return _ExtraSpec("synthetic", "read", _extras_reads.contacts, frozenset(needs))
-
-
-@pytest.mark.parametrize(
-    ("needs", "ctx", "expected"),
-    [
-        ((), _ctx(), True),
-        (("recent_ids",), _ctx(), False),
-        (("recent_ids",), _ctx(recent_ids={"c1": []}), False),
-        (("recent_ids",), _ctx(recent_ids={"c1": [7]}), True),
-        (("joined",), _ctx(), False),
-        (("premium",), _ctx(premium=True), True),
-        (("premium",), _ctx(premium=False), False),
-        (("premium",), _ctx(premium=None), False),
-        (("premium",), _ctx(no_account=True), False),
-        (("media_bytes",), _ctx(), False),
-        (("recent_ids", "premium"), _ctx(recent_ids={"c1": [7]}), False),
-        (("recent_ids", "premium"), _ctx(recent_ids={"c1": [7]}, premium=True), True),
-    ],
-)
-def test_is_eligible_needs_matrix(
-    needs: tuple[_Need, ...],
-    ctx: _ExtraContext,
-    expected: bool,  # noqa: FBT001 - table input.
-) -> None:
-    assert _is_eligible(_spec(*needs), ctx) is expected
 
 
 # --- budget tiers ------------------------------------------------------------

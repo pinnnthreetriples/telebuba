@@ -336,7 +336,7 @@ async def test_view_profile_self_reads_full_user(monkeypatch: pytest.MonkeyPatch
     assert client.entities == []
     extra = await _extra("telegram_warm_view_profile")
     assert extra["kind"] == "self"
-    assert "channel" not in extra
+    assert extra["channel"] is None
 
 
 @pytest.mark.asyncio

@@ -232,7 +232,6 @@ async def run_one_cycle(
         await _extras_step(
             _ExtraContext(
                 account_id=account_id,
-                account=account,
                 secret=secret,
                 persona=data.activity_persona,
                 chosen=chosen,

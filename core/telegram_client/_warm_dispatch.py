@@ -55,12 +55,7 @@ def warm_log_extra(action: TelegramAction) -> dict[str, object]:
     match action:
         case WarmGetDialogs():
             return {"limit": action.limit}
-        case WarmCheckSettings():
-            return {"calls": action.calls}
         case WarmViewProfile():
-            extra: dict[str, object] = {"kind": action.kind}
-            if action.channel is not None:
-                extra["channel"] = action.channel
-            return extra
+            return {"kind": action.kind, "channel": action.channel}
         case _:
             return {}
