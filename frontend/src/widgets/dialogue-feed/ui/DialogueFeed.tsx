@@ -125,17 +125,24 @@ function PairRow({
   pair,
   open,
   onToggle,
+  entering,
 }: {
   pair: DialoguePair;
   open: boolean;
   onToggle: () => void;
+  entering: boolean;
 }) {
   const live = isFresh(pair.newestAt);
   return (
     <div
-      className={`tb-row overflow-hidden rounded-lg border ${
+      // `shrink-0` — не косметика: список пар это flex-колонка с потолком, а
+      // `overflow-hidden` снимает с элемента его АВТОМИНИМУМ (правило действует
+      // только при `overflow: visible`). Без запрета сжатия восемь пар не
+      // прокручивали список, а жались в 420px, обрезая себе вторую строку —
+      // подпись с последней репликой и сроком пропадала совсем.
+      className={`tb-row shrink-0 overflow-hidden rounded-lg border ${
         open ? 'border-line-strong bg-surface' : 'border-line bg-surface-card'
-      }`}
+      } ${entering ? 'tb-swapin' : ''}`}
     >
       <button
         type="button"
@@ -223,6 +230,21 @@ export function DialogueFeed() {
   // One pair open at a time: several open transcripts stretch the column past
   // the board beside it.
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Живой приход, который список пар иначе потерял: пузыри уехали внутрь пары,
+  // и на свёрнутой карточке анимировать стало нечего — до этого каждое новое
+  // сообщение вплывало прямо на странице. Теперь вплывает СТРОКА: на первой
+  // отрисовке и каждый раз, когда у пары появляется новая реплика (заодно она
+  // уезжает наверх, потому что список отсортирован по свежести).
+  //
+  // Ключ — метка последней реплики, а не флаг: опрос раз в четыре секунды
+  // возвращает ту же строку, и по метке «то же самое» отличается от «новое»
+  // без второго запроса и без состояния, которое надо чистить.
+  const seenAt = useRef<Map<string, string>>(new Map());
+  const isEntering = (pair: DialoguePair): boolean => {
+    const seen = seenAt.current.get(pair.key);
+    seenAt.current.set(pair.key, pair.newestAt);
+    return seen !== pair.newestAt;
+  };
   // The freshest pair sorts first, so the card's own dot is that pair's — read
   // from the clock on every render, not from the memoised page.
   const live = isFresh(pairs[0]?.newestAt ?? '');
@@ -255,6 +277,7 @@ export function DialogueFeed() {
             <PairRow
               key={pair.key}
               pair={pair}
+              entering={isEntering(pair)}
               open={openKey === pair.key}
               onToggle={() => {
                 setOpenKey(openKey === pair.key ? null : pair.key);
