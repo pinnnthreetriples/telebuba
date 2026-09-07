@@ -18,7 +18,13 @@ from core.config import (
     WarmingSettings,
     settings,
 )
-from schemas.telegram_actions_warming import WarmInlineQuery, WarmSearchMessages, WarmSelfNote
+from schemas.telegram_actions_warming import (
+    WarmConsumeMedia,
+    WarmEmojiStatus,
+    WarmInlineQuery,
+    WarmSearchMessages,
+    WarmSelfNote,
+)
 
 if TYPE_CHECKING:
     from typing import Any
@@ -199,6 +205,60 @@ def test_extras_scheduled_delay_window_is_ordered_and_within_the_schedule_cap(
         WarmingSettings(extras_scheduled_delay_hours=window)
     edge = (1.0, 720.0)
     assert WarmingSettings(extras_scheduled_delay_hours=edge).extras_scheduled_delay_hours == edge
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"extras_media_bytes_per_cycle": -1},
+        {"extras_media_bytes_per_item": 65_535},
+        {"extras_media_bytes_per_item": 50_000_001},
+        {"extras_media_pause_seconds": (-1.0, 5.0)},
+        {"extras_media_pause_seconds": (10.0, 5.0)},
+        {"extras_media_pause_seconds": (5.0, 301.0)},
+        {"extras_emoji_until_hours": (0.0, 1.0)},
+        {"extras_emoji_until_hours": (0.001, 1.0)},
+        {"extras_emoji_until_hours": (5.0, 2.0)},
+        {"extras_emoji_until_hours": (1.0, 169.0)},
+        {"extras_emoji_clear_probability": 1.1},
+    ],
+    ids=[
+        "negative_cycle_bytes",
+        "item_below_floor",
+        "item_above_cap",
+        "negative_pause",
+        "pause_lo_above_hi",
+        "pause_past_five_minutes",
+        "zero_lo",
+        "sub_minute_lo",
+        "lo_above_hi",
+        "past_week",
+        "probability_above_one",
+    ],
+)
+def test_extras_media_and_emoji_settings_are_bounded(bad: dict[str, Any]) -> None:
+    """Per-item bytes mirror ``WarmConsumeMedia.max_bytes``; the windows, ``rng.uniform``'s.
+
+    The emoji floor is a minute: core floors ``until`` to the minute, so a shorter lifetime
+    could resolve to a time at or before now.
+    """
+    with pytest.raises(ValidationError):
+        WarmingSettings(**bad)
+
+
+def test_extras_media_and_emoji_edges_match_their_action_schemas() -> None:
+    edge = WarmingSettings(
+        extras_media_bytes_per_cycle=0,
+        extras_media_bytes_per_item=65_536,
+        extras_media_pause_seconds=(0.0, 300.0),
+        extras_emoji_until_hours=(1 / 60, 168.0),
+    )
+    assert edge.extras_media_bytes_per_cycle == 0  # 0 = video/voice disabled, still valid
+    assert edge.extras_media_pause_seconds == (0.0, 300.0)
+    WarmConsumeMedia(
+        channel="c", message_ids=[1], kind="video", max_bytes=edge.extras_media_bytes_per_item
+    )
+    WarmEmojiStatus(until_hours=edge.extras_emoji_until_hours[1])
 
 
 @pytest.mark.parametrize("texts", [[], ["a"], ["x" * 61]], ids=["empty", "one_char", "sixty_one"])

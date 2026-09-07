@@ -1039,7 +1039,7 @@
     "media_no_caption": "media without text",
     "media_no_image": "video or file — no picture",
     "media_album_item": "album item — an album is commented once",
-    "media_unavailable": "could not fetch the photo",
+    "media_unavailable": "could not fetch the media",
     "media_too_large": "photo too large to look at",
     "empty": "empty post",
     "link_only": "link only",
@@ -1079,6 +1079,27 @@
     "flood_wait": "Telegram asks us to wait",
     "slow_mode_wait": "slow mode",
     "premium_wait": "Premium required",
+    "no_url": "no link in the posts",
+    "webpage_unavailable": "link preview unavailable",
+    "set_gone": "sticker set is gone",
+    "bot_timeout": "the bot did not answer",
+    "bot_invalid": "the bot does not take inline queries",
+    "no_poll": "no open poll in the posts",
+    "poll_closed": "the poll is closed",
+    "already_voted": "already voted",
+    "post_gone": "the post is gone",
+    "schedule_full": "the scheduled queue is full",
+    "forwards_restricted": "the channel forbids forwarding",
+    "media_empty": "the post has no media",
+    "bad_schedule": "Telegram rejected the send time",
+    "bad_folder": "Telegram rejected the archive folder",
+    "bad_settings": "Telegram rejected the notification settings",
+    "no_media": "no video or voice note in the posts",
+    "stale_reference": "the file reference has expired",
+    "download_stalled": "the download stalled",
+    "bad_chunk": "Telegram rejected the download chunk size",
+    "no_statuses": "no emoji statuses available",
+    "status_unavailable": "the emoji status is unavailable",
     "peer_flood": "spam limit",
     "write_blocked": "the channel will not let us write",
     "captcha_unsolved": "no account got past the captcha",
@@ -1216,7 +1237,9 @@
       "warm_forward_to_saved": "Forward to Saved Messages",
       "warm_vote_in_poll": "Poll vote",
       "warm_toggle_archive": "Chat archive",
-      "warm_mute_peer": "Chat mute"
+      "warm_mute_peer": "Chat mute",
+      "warm_consume_media": "Media playback",
+      "warm_emoji_status": "Emoji status"
     },
     "status": {
       "failed": "failed",
@@ -2235,7 +2258,8 @@
       "cycleTip_one": "Cycle {{count}}",
       "cycleTip_other": "Cycle {{count}}",
       "dmAllowed": "DMs: allowed",
-      "dmClosed": "DMs: closed"
+      "dmClosed": "DMs: closed",
+      "mediaBytes": "downloaded {{kb}} KB"
     },
     "actions": {
       "stopShort": "Stop"
@@ -2283,12 +2307,10 @@
       "trafficHeavy": "heavy traffic",
       "save": "Save",
       "legend": {
-        "working": "working · {{n}}",
-        "soon": "soon · {{n}}"
+        "working": "working · {{n}}"
       },
       "state": {
         "always": "always",
-        "soon": "soon",
         "external": "in Accounts"
       },
       "gate": {

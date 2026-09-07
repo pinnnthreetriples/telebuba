@@ -15,11 +15,12 @@ import type { IconName } from '@/shared/ui';
 // Каждое действие прогрева одной строкой, сгруппированное так, как оператор их
 // ищет. Состояние — не украшение, а то, что тумблер РЕАЛЬНО может: `live` пишется
 // в настройки, `always` работает и выключить его нельзя (ядро цикла или ключ в
-// конфиге сервера), `soon` ещё не написан в `core/telegram_client`, `external`
-// прогрев не делает вовсе — оператор правит это сам в другом разделе. Тумблер,
-// который двигается и ничего не меняет, хуже тумблера, который честно отказывает —
-// поэтому у последних трёх он `disabled`, а плашка рядом говорит, почему.
-type ActionState = 'live' | 'always' | 'soon' | 'external';
+// конфиге сервера), `external` прогрев не делает вовсе — оператор правит это сам в
+// другом разделе. Тумблер, который двигается и ничего не меняет, хуже тумблера,
+// который честно отказывает — поэтому у последних двух он `disabled`, а плашка
+// рядом говорит, почему. Состояния «скоро» больше нет: всё, что здесь перечислено,
+// `core/telegram_client` умеет.
+type ActionState = 'live' | 'always' | 'external';
 
 // Три исторические колонки настроек (`WarmingSettingsUpdate`). Гейт готовности сюда
 // не входит: он не действие, а допуск в прогрев, и стоит отдельной строкой под сеткой.
@@ -64,8 +65,8 @@ const GROUPS: Group[] = [
       { key: 'online', state: 'always' },
       { key: 'reactions', state: 'live', field: 'reactions_enabled' },
       { key: 'polls', state: 'live', field: 'polls' },
-      { key: 'video', state: 'soon' },
-      { key: 'voice', state: 'soon' },
+      { key: 'video', state: 'live', field: 'video' },
+      { key: 'voice', state: 'live', field: 'voice' },
     ],
   },
   {
@@ -110,20 +111,18 @@ const GROUPS: Group[] = [
       { key: 'viewProfiles', state: 'live', field: 'view_profiles' },
       { key: 'checkSettings', state: 'live', field: 'check_settings' },
       { key: 'updateProfile', state: 'external' },
-      { key: 'emojiStatus', state: 'soon' },
+      { key: 'emojiStatus', state: 'live', field: 'emoji_status' },
       { key: 'drafts', state: 'live', field: 'drafts' },
     ],
   },
 ];
 
 const ACTIONS = GROUPS.flatMap((group) => group.actions);
-// Счётчики в легенде считаются по таблице, а не вписаны числом: подключение
-// одного действия не должно требовать правки надписи рядом. «Работает» — то, что
+// Счётчик в легенде считается по таблице, а не вписан числом: смена состояния
+// одного действия не должна требовать правки надписи рядом. «Работает» — то, что
 // прогрев реально выполняет: `external` живёт в другом разделе и сюда не входит.
 const WORKING_COUNT = ACTIONS.filter((a) => a.state === 'live' || a.state === 'always').length;
-const SOON_COUNT = ACTIONS.filter((a) => a.state === 'soon').length;
 const LIVE_FIELDS = ACTIONS.map((a) => a.field).filter((f): f is ToggleKey => f != null);
-// Только подключённые extra-ключи: ещё-`soon` строки поля не имеют и в PUT не попадают.
 const EXTRA_KEYS = LIVE_FIELDS.filter(
   (f): f is ExtraKey => !(LEGACY_KEYS as readonly string[]).includes(f),
 );
@@ -216,8 +215,8 @@ export function ActionTuningCard() {
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
-          // Частичный объект: путь записи мержит по ключам, так что ещё не
-          // подключённые действия хранимого значения не теряют.
+          // Путь записи мержит по ключам, так что и частичный объект был бы безопасен;
+          // сейчас подключены все ключи, и объект полный.
           extra_toggles: Object.fromEntries(EXTRA_KEYS.map((k) => [k, toggles[k] ?? true])),
           // Модель Gemini и два её ограничителя ОТСУТСТВУЮТ намеренно, а не
           // повторены: путь записи сохраняет каждое опущенное поле, а эхо читало
@@ -278,10 +277,6 @@ export function ActionTuningCard() {
         <span className="ml-auto flex items-center gap-tight type-caption">
           <span className="size-dot shrink-0 rounded-full bg-action-primary" />
           {t('warming.tune.legend.working', { n: WORKING_COUNT })}
-        </span>
-        <span className="flex items-center gap-tight type-caption">
-          <span className="size-dot shrink-0 rounded-full bg-line-strong" />
-          {t('warming.tune.legend.soon', { n: SOON_COUNT })}
         </span>
       </div>
 

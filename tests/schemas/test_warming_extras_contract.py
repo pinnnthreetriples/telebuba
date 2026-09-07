@@ -13,14 +13,12 @@ from services.warming._extras import EXTRAS
 def test_registry_keys_are_toggle_keys_with_a_default_each() -> None:
     toggle_keys = set(ExtraToggles.__annotations__)
     assert toggle_keys == EXTRA_TOGGLE_DEFAULTS.keys()
-    # ponytail: becomes == when PR5 lands and every toggle has a registered spec.
-    assert {spec.key for spec in EXTRAS} <= toggle_keys
-    assert len({spec.key for spec in EXTRAS}) == len(EXTRAS)
+    assert {spec.key for spec in EXTRAS} == toggle_keys
+    assert len({spec.key for spec in EXTRAS}) == len(EXTRAS) == 21
 
 
-def test_write_specs_are_exactly_the_self_scoped_and_chat_keys() -> None:
-    # ponytail: grows with PR5 (video, voice, emoji_status).
-    assert {spec.key for spec in EXTRAS if spec.kind == "write"} <= {
+def test_write_specs_are_exactly_the_self_scoped_chat_media_and_premium_keys() -> None:
+    assert {spec.key for spec in EXTRAS if spec.kind == "write"} == {
         "saved",
         "scheduled",
         "drafts",
@@ -29,6 +27,9 @@ def test_write_specs_are_exactly_the_self_scoped_and_chat_keys() -> None:
         "leave",
         "archive",
         "mute",
+        "video",
+        "voice",
+        "emoji_status",
     }
 
 
