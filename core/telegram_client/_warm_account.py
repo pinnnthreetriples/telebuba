@@ -1,28 +1,35 @@
 """Warming reads of the account's own state: contacts, notifications, settings, profiles.
 
 Every request here is a read a mobile client issues when its owner opens a settings
-screen. Nothing is written and no contact is ever imported — the operator's decision.
+screen. No contact is ever imported — the operator's decision. The one write is the
+Premium emoji status, and it expires by itself.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from typing import TYPE_CHECKING
 
+from telethon import errors
 from telethon.tl.functions.account import (
     GetAccountTTLRequest,
     GetAuthorizationsRequest,
     GetAutoDownloadSettingsRequest,
     GetContentSettingsRequest,
+    GetDefaultEmojiStatusesRequest,
     GetGlobalPrivacySettingsRequest,
     GetNotifySettingsRequest,
     GetPrivacyRequest,
+    UpdateEmojiStatusRequest,
 )
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.contacts import GetContactsRequest, GetStatusesRequest
 from telethon.tl.functions.help import GetAppConfigRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
+    EmojiStatus,
+    EmojiStatusEmpty,
     InputNotifyBroadcasts,
     InputNotifyChats,
     InputNotifyUsers,
@@ -44,7 +51,13 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.tl.tlobject import TLObject, TLRequest
 
-    from schemas.telegram_actions import WarmCheckSettings, WarmViewProfile
+    from schemas.telegram_actions import WarmCheckSettings, WarmEmojiStatus, WarmViewProfile
+
+# Not Premium, or the default set moved on under us — nothing to set this cycle.
+_STATUS_SKIPS: dict[type[Exception], str] = {
+    errors.PremiumAccountRequiredError: "premium_required",
+    errors.DocumentInvalidError: "status_unavailable",
+}
 
 # The three global notification scopes a client shows under Notifications and Sounds.
 _NOTIFY_SCOPES: tuple[type[TLObject], ...] = (
@@ -122,3 +135,35 @@ async def view_profile(client: TelegramClient, action: WarmViewProfile) -> _Disp
     else:
         await client(GetFullUserRequest(id=InputUserSelf()))
     return _DispatchResult()
+
+
+async def emoji_status(client: TelegramClient, action: WarmEmojiStatus) -> _DispatchResult:
+    """Set one of Telegram's default emoji statuses for ``until_hours``, or clear it.
+
+    Deterministic on purpose — ``status_index`` wraps modulo the list; the service draws
+    it. ``until`` makes the write reversible without a second one.
+    """
+    log_extra: dict[str, object] = {"clear": action.clear, "until_hours": action.until_hours}
+    status: EmojiStatus | EmojiStatusEmpty = EmojiStatusEmpty()
+    try:
+        if not action.clear:
+            # ``EmojiStatusesNotModified`` (hash matched) carries no list — nothing to pick.
+            defaults = await client(GetDefaultEmojiStatusesRequest(hash=0))
+            ids = [
+                s.document_id
+                for s in getattr(defaults, "statuses", ())
+                if isinstance(s, EmojiStatus)
+            ]
+            if not ids:
+                return _DispatchResult(log_extra={"warm_skip": "no_statuses"})
+            # Whole minutes: the client's picker only offers those, so seconds would fingerprint.
+            until = (datetime.now(UTC) + timedelta(hours=action.until_hours)).replace(
+                second=0, microsecond=0
+            )
+            status = EmojiStatus(document_id=ids[action.status_index % len(ids)], until=until)
+        await client(UpdateEmojiStatusRequest(emoji_status=status))
+    except tuple(_STATUS_SKIPS) as exc:
+        return _DispatchResult(log_extra={"warm_skip": _STATUS_SKIPS[type(exc)]})
+    except errors.EmojiNotModifiedError:
+        pass  # already wearing it — the state we wanted
+    return _DispatchResult(log_extra=log_extra)

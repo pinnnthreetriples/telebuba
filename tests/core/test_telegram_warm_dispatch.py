@@ -19,6 +19,8 @@ from core.telegram_client._warm_dispatch import dispatch_warming_action, warm_lo
 from schemas.telegram_actions import TelegramAction
 from schemas.telegram_actions_warming import (
     WarmCheckSettings,
+    WarmConsumeMedia,
+    WarmEmojiStatus,
     WarmForwardToSaved,
     WarmGetDialogs,
     WarmingAction,
@@ -68,6 +70,7 @@ _REQUIRED_FIELDS: dict[type[BaseModel], dict[str, object]] = {
     WarmVoteInPoll: {"channel": "@c", "message_ids": [1]},
     WarmToggleArchive: {"channel": "@c", "archived": True},
     WarmMutePeer: {"channel": "@c", "mute_hours": 8},
+    WarmConsumeMedia: {"channel": "@c", "message_ids": [1], "kind": "video", "max_bytes": 65_536},
 }
 _WRITE_ACTION_TYPES = (
     "warm_self_note",
@@ -76,6 +79,8 @@ _WRITE_ACTION_TYPES = (
     "warm_vote_in_poll",
     "warm_toggle_archive",
     "warm_mute_peer",
+    "warm_consume_media",
+    "warm_emoji_status",
 )
 
 
@@ -187,3 +192,12 @@ def test_warm_log_extra_for_chat_writes_carries_the_handle_and_the_setting_only(
         "channel": "@x",
         "mute_hours": 48,
     }
+
+
+def test_warm_log_extra_for_media_and_status_carries_the_budget_and_the_flag_only() -> None:
+    media = WarmConsumeMedia(channel="@x", message_ids=[1, 2], kind="voice", max_bytes=200_000)
+    assert warm_log_extra(media) == {"channel": "@x", "kind": "voice", "max_bytes": 200_000}
+    # No ``status_index``: it says nothing without the list, and no ``until_hours``: the
+    # dispatcher logs it only when a status was actually set.
+    assert warm_log_extra(WarmEmojiStatus(status_index=3, until_hours=2)) == {"clear": False}
+    assert warm_log_extra(WarmEmojiStatus(clear=True)) == {"clear": True}

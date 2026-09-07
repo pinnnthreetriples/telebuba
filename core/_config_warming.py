@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import Field, StringConstraints, field_validator, model_validator
+from pydantic import Field, StringConstraints, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from schemas.telegram_actions_warming import INLINE_BOT_WHITELIST
@@ -20,6 +20,15 @@ _NoteText = Annotated[str, StringConstraints(min_length=2, max_length=60)]
 _SCHEDULE_MAX_HOURS = 24 * 30
 # ``WarmMutePeer.mute_hours`` bounds — a year; "forever" is deliberately not offered.
 _MuteHours = Annotated[float, Field(ge=0.0, le=24 * 365)]
+# ``(lo floor, hi ceiling)`` of the uniform-draw windows. Emoji: a minute (core floors
+# ``until`` to the minute, so anything shorter could land at or before now) to a week.
+_WINDOW_BOUNDS = {
+    # ≥1h: the gateway floors the date to the minute, so a sub-minute window could land
+    # in the past; and nobody sets a reminder for "in a few seconds".
+    "extras_scheduled_delay_hours": (1.0, _SCHEDULE_MAX_HOURS),
+    "extras_emoji_until_hours": (1 / 60, 24 * 7),
+    "extras_media_pause_seconds": (0.0, 300.0),
+}
 
 
 class WarmingSettings(BaseSettings):
@@ -356,17 +365,29 @@ class WarmingSettings(BaseSettings):
     )
     # Share of archive toggles that archive rather than unarchive — stateless, self-balancing.
     extras_archive_probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Media extras: the per-cycle byte allowance video / voice partial downloads draw
+    # from (0 disables them) and the cap per item. Debited before dispatch, so a
+    # cancelled download stays spent. Per-item bounds mirror ``WarmConsumeMedia.max_bytes``.
+    extras_media_bytes_per_cycle: int = Field(default=8_000_000, ge=0)
+    extras_media_bytes_per_item: int = Field(default=3_000_000, ge=65_536, le=50_000_000)
+    # Pause after a video / voice played — a viewer lingers before the next tap.
+    extras_media_pause_seconds: tuple[float, float] = (5.0, 30.0)
+    # Emoji status (Premium only): how long a status lives, drawn uniformly in hours, and
+    # the share of draws that clear the status instead of setting one.
+    extras_emoji_until_hours: tuple[float, float] = (1.0, 24.0)
+    extras_emoji_clear_probability: float = Field(default=0.3, ge=0.0, le=1.0)
 
-    @field_validator("extras_scheduled_delay_hours")
+    @field_validator(
+        "extras_scheduled_delay_hours", "extras_emoji_until_hours", "extras_media_pause_seconds"
+    )
     @classmethod
-    def _check_scheduled_delay(cls, window: tuple[float, float]) -> tuple[float, float]:
+    def _check_window(
+        cls, window: tuple[float, float], info: ValidationInfo
+    ) -> tuple[float, float]:
+        lo_min, hi_max = _WINDOW_BOUNDS[str(info.field_name)]
         lo, hi = window
-        # ≥1h: the gateway floors the date to the minute, so a sub-minute window could land
-        # in the past; and nobody sets a reminder for "in a few seconds".
-        if not 1 <= lo <= hi <= _SCHEDULE_MAX_HOURS:
-            msg = (
-                f"extras_scheduled_delay_hours must satisfy 1 <= lo <= hi <= {_SCHEDULE_MAX_HOURS}"
-            )
+        if not lo_min <= lo <= hi <= hi_max:
+            msg = f"{info.field_name} must satisfy {lo_min} <= lo <= hi <= {hi_max}"
             raise ValueError(msg)
         return window
 

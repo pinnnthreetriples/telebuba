@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from core.telegram_client._warm_account import (
     check_settings,
+    emoji_status,
     read_contacts,
     read_notify_settings,
     view_profile,
@@ -23,11 +24,13 @@ from core.telegram_client._warm_browse import (
     search_messages,
 )
 from core.telegram_client._warm_chats import mute_peer, toggle_archive
-from core.telegram_client._warm_media import vote_in_poll
+from core.telegram_client._warm_media import consume_media, vote_in_poll
 from core.telegram_client._warm_saved import forward_to_saved, save_draft, self_note
 from schemas.telegram_actions import (
     WarmBrowseStickers,
     WarmCheckSettings,
+    WarmConsumeMedia,
+    WarmEmojiStatus,
     WarmForwardToSaved,
     WarmGetDialogs,
     WarmInlineQuery,
@@ -88,12 +91,16 @@ async def dispatch_warming_action(  # noqa: C901, PLR0911, PLR0912 - one arm per
             return await toggle_archive(client, action)
         case WarmMutePeer():
             return await mute_peer(client, action)
+        case WarmConsumeMedia():
+            return await consume_media(client, action)
+        case WarmEmojiStatus():
+            return await emoji_status(client, action)
         case _:
             msg = f"Unsupported warming action_type: {action.action_type}"
             raise ValueError(msg)
 
 
-def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901, PLR0911 - one arm per model
+def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901, PLR0911, PLR0912 - one arm per model
     """Static log fields — counts, kinds, channel handles and bot names; never text or URLs."""
     match action:
         case WarmGetDialogs():
@@ -118,5 +125,9 @@ def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901, 
             return {"channel": action.channel, "archived": action.archived}
         case WarmMutePeer():
             return {"channel": action.channel, "mute_hours": action.mute_hours}
+        case WarmConsumeMedia():
+            return {"channel": action.channel, "kind": action.kind, "max_bytes": action.max_bytes}
+        case WarmEmojiStatus():
+            return {"clear": action.clear}
         case _:
             return {}

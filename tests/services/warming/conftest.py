@@ -32,6 +32,7 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     monkeypatch.setattr(settings.gemini, "api_key", "test-key")
     for field in _ZERO_DELAY_FIELDS:
         monkeypatch.setattr(settings.warming, field, 0.0)
+    monkeypatch.setattr(settings.warming, "extras_media_pause_seconds", (0.0, 0.0))
     monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_max", 1)
     # Off-affinity exploration is a per-cycle RNG gate; neutralise it so a cycle

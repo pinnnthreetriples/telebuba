@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from schemas._warming_extras import JoinedChannel
+    from schemas.accounts import AccountRead
     from schemas.telegram_actions import ActionResult, TelegramAction
     from schemas.warming import ActivityPersona, WarmingChannel, WarmingSettingsSecret
     from services.warming._steps import _ChannelTally
@@ -31,11 +32,13 @@ if TYPE_CHECKING:
 
 # The "look at posts just read" actions take at most this many ids (schema cap).
 _POST_IDS_MAX = 5
+# ``WarmConsumeMedia.max_bytes`` floor: below it a media extra cannot be built at all.
+MEDIA_MIN_BYTES = 65_536
 
 _ExtraKind = Literal["read", "write"]
 # Cycle facts an extra cannot run without (``_extras._is_eligible``). Data, not
-# lambdas, so the registry stays a table. Grows per PR: PR5 ``premium``.
-_Need = Literal["recent_ids", "joined"]
+# lambdas, so the registry stays a table.
+_Need = Literal["recent_ids", "joined", "premium", "media_bytes"]
 
 
 @dataclass
@@ -54,6 +57,12 @@ class _ExtraContext:
     # Every channel warming joined for this account, left ones included (the chat
     # extras pick among the not-left ones; the cycle reads ``left_at`` for cooldown).
     joined: list[JoinedChannel] = field(default_factory=list)
+    # The account row, for facts only a session check knows (``premium``; ``None`` =
+    # unknown, and an unknown Premium is never probed by writing).
+    account: AccountRead | None = None
+    # Second budget beside ``tally.attempts``: bytes the media extras may still pull this
+    # cycle. Debited before dispatch like attempts; ``0`` (the default) disables them.
+    media_bytes_left: int = 0
 
     def can_attempt(self) -> bool:
         """The cycle's own daily-budget predicate (``_cycle._can_attempt``), verbatim."""

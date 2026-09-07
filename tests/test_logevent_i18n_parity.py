@@ -51,7 +51,10 @@ _ACTION_TYPE = re.compile(r'action_type:\s*Literal\["([a-z_]+)"\]')
 # ``logEventReason.*``. See :func:`_module_reason_codes` for what a literal scan can and
 # cannot see of it.
 _REASON_KEY = "reason"
-_EXTRA_KEY = "extra"
+# The warming gateway's skip codes ride ``_DispatchResult(log_extra={"warm_skip": ...})``
+# and reach the same ``logEventReason`` map through ``eventReason``'s second hop.
+_REASON_KEYS = frozenset({_REASON_KEY, "warm_skip"})
+_EXTRA_KEYS = frozenset({"extra", "log_extra"})
 _TELEGRAM_STATUSES = frozenset(
     {
         "failed",
@@ -281,6 +284,8 @@ def _module_reason_codes(source: str, path: Path) -> set[str]:
     * a reason name imported from another module (``_generate`` returns ``_outcomes``'
       ``_RATE_LIMITED_REASON``) — bindings are per-module, so it is caught where it is
       DEFINED, and would be missed entirely if its owning module ever stopped logging;
+    * a ``warm_skip`` code looked up from an error→code table (``_FORWARD_SKIPS[type(exc)]``)
+      rather than written as a literal in the dict;
     * ``extra["status"]``, which the same card resolves through the same ``logEventReason``
       map as a fallback. Its values come from the gateway's ``ActionResult.status``, not
       from a reason name, and are not enumerated here.
@@ -303,13 +308,13 @@ def _module_reason_codes(source: str, path: Path) -> set[str]:
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.keyword)
-            and node.arg == _EXTRA_KEY
+            and node.arg in _EXTRA_KEYS
             and isinstance(node.value, ast.Dict)
         ):
             reasons |= {
                 literal
                 for key, value in zip(node.value.keys, node.value.values, strict=True)
-                if isinstance(key, ast.Constant) and key.value == _REASON_KEY
+                if isinstance(key, ast.Constant) and key.value in _REASON_KEYS
                 for literal in _literals(value)
             }
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and _is_reason_name(

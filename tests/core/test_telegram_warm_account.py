@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -12,15 +13,19 @@ from telethon.tl.functions.account import (
     GetAuthorizationsRequest,
     GetAutoDownloadSettingsRequest,
     GetContentSettingsRequest,
+    GetDefaultEmojiStatusesRequest,
     GetGlobalPrivacySettingsRequest,
     GetNotifySettingsRequest,
     GetPrivacyRequest,
+    UpdateEmojiStatusRequest,
 )
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.contacts import GetContactsRequest, GetStatusesRequest
 from telethon.tl.functions.help import GetAppConfigRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
+    EmojiStatus,
+    EmojiStatusEmpty,
     InputNotifyBroadcasts,
     InputNotifyChats,
     InputNotifyUsers,
@@ -33,6 +38,7 @@ from telethon.tl.types import (
     UserStatusOffline,
     UserStatusOnline,
 )
+from telethon.tl.types.account import EmojiStatuses, EmojiStatusesNotModified
 from telethon.tl.types.contacts import ContactsNotModified
 
 from core.config import settings
@@ -42,6 +48,7 @@ from core.repositories.logs import list_recent_logs
 from core.telegram_client import execute
 from schemas.telegram_actions import (
     WarmCheckSettings,
+    WarmEmojiStatus,
     WarmReadContacts,
     WarmReadNotifySettings,
     WarmViewProfile,
@@ -426,6 +433,176 @@ async def test_view_profile_generic_failure(monkeypatch: pytest.MonkeyPatch) -> 
     _patch_client(monkeypatch, _FakeClient({GetFullUserRequest: RuntimeError("x")}))
 
     result = await execute("acc-p5", WarmViewProfile())
+
+    assert result.status == "failed"
+    assert result.error_type == "RuntimeError"
+
+
+# --- emoji status -------------------------------------------------------------------
+
+
+_DEFAULT_STATUSES = EmojiStatuses(
+    hash=1,
+    statuses=[EmojiStatus(document_id=111), EmojiStatus(document_id=222)],
+)
+
+
+def _status_client() -> _FakeClient:
+    return _FakeClient({GetDefaultEmojiStatusesRequest: _DEFAULT_STATUSES})
+
+
+@pytest.mark.asyncio
+async def test_emoji_status_sets_a_default_status_that_expires_by_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _status_client()
+    _patch_client(monkeypatch, client)
+    before = datetime.now(UTC)
+
+    result = await execute("acc-e1", WarmEmojiStatus(status_index=1, until_hours=6))
+
+    assert result.status == "ok"
+    defaults, update = client.captured
+    assert isinstance(defaults, GetDefaultEmojiStatusesRequest)
+    assert defaults.hash == 0
+    assert isinstance(update, UpdateEmojiStatusRequest)
+    status = update.emoji_status
+    assert isinstance(status, EmojiStatus)
+    assert status.document_id == 222
+    until = status.until
+    assert until is not None
+    assert until.tzinfo is UTC
+    assert until.second == 0
+    assert until.microsecond == 0
+    assert before + timedelta(hours=6, minutes=-1) <= until <= before + timedelta(hours=6)
+    extra = await _extra("telegram_warm_emoji_status")
+    assert extra["clear"] is False
+    assert extra["until_hours"] == 6
+    assert "warm_skip" not in extra
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("index", "expected"), [(0, 111), (2, 111), (5, 222)])
+async def test_emoji_status_index_wraps_modulo_the_default_list(
+    monkeypatch: pytest.MonkeyPatch, index: int, expected: int
+) -> None:
+    client = _status_client()
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-e2", WarmEmojiStatus(status_index=index))
+
+    assert result.status == "ok"
+    (_, update) = client.captured
+    assert isinstance(update, UpdateEmojiStatusRequest)
+    assert update.emoji_status.document_id == expected  # ty: ignore[unresolved-attribute]
+
+
+@pytest.mark.asyncio
+async def test_emoji_status_clear_writes_the_empty_status_without_reading_defaults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _status_client()
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-e3", WarmEmojiStatus(clear=True))
+
+    assert result.status == "ok"
+    (update,) = client.captured
+    assert isinstance(update, UpdateEmojiStatusRequest)
+    assert isinstance(update.emoji_status, EmojiStatusEmpty)
+    extra = await _extra("telegram_warm_emoji_status")
+    assert extra["clear"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "defaults",
+    [
+        EmojiStatusesNotModified(),
+        EmojiStatuses(hash=1, statuses=[]),
+        EmojiStatuses(hash=1, statuses=[EmojiStatusEmpty()]),
+    ],
+    ids=["not_modified", "empty", "no_document_ids"],
+)
+async def test_emoji_status_skips_when_there_is_nothing_to_pick(
+    monkeypatch: pytest.MonkeyPatch, defaults: object
+) -> None:
+    client = _FakeClient({GetDefaultEmojiStatusesRequest: defaults})
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-e4", WarmEmojiStatus())
+
+    assert result.status == "ok"
+    assert [type(r) for r in client.captured] == [GetDefaultEmojiStatusesRequest]
+    assert (await _extra("telegram_warm_emoji_status"))["warm_skip"] == "no_statuses"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (errors.PremiumAccountRequiredError(request=None), "premium_required"),
+        (errors.DocumentInvalidError(request=None), "status_unavailable"),
+    ],
+    ids=["premium", "document"],
+)
+async def test_emoji_status_refusals_are_skips(
+    monkeypatch: pytest.MonkeyPatch, error: Exception, code: str
+) -> None:
+    client = _FakeClient(
+        {GetDefaultEmojiStatusesRequest: _DEFAULT_STATUSES, UpdateEmojiStatusRequest: error},
+    )
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-e5", WarmEmojiStatus())
+
+    assert result.status == "ok"
+    assert [type(r) for r in client.captured] == [
+        GetDefaultEmojiStatusesRequest,
+        UpdateEmojiStatusRequest,
+    ]
+    extra = await _extra("telegram_warm_emoji_status")
+    assert extra["warm_skip"] == code
+    assert extra["clear"] is False
+
+
+@pytest.mark.asyncio
+async def test_emoji_status_already_worn_is_ok(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient(
+        {
+            GetDefaultEmojiStatusesRequest: _DEFAULT_STATUSES,
+            UpdateEmojiStatusRequest: errors.EmojiNotModifiedError(request=None),
+        },
+    )
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-e6", WarmEmojiStatus())
+
+    assert result.status == "ok"
+    assert "warm_skip" not in await _extra("telegram_warm_emoji_status")
+
+
+@pytest.mark.asyncio
+async def test_emoji_status_flood_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = _FakeClient(
+        {
+            GetDefaultEmojiStatusesRequest: _DEFAULT_STATUSES,
+            UpdateEmojiStatusRequest: errors.FloodWaitError(request=None, capture=17),
+        },
+    )
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-e7", WarmEmojiStatus())
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 17
+
+
+@pytest.mark.asyncio
+async def test_emoji_status_generic_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_client(monkeypatch, _FakeClient({GetDefaultEmojiStatusesRequest: RuntimeError("x")}))
+
+    result = await execute("acc-e8", WarmEmojiStatus())
 
     assert result.status == "failed"
     assert result.error_type == "RuntimeError"

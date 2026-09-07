@@ -177,6 +177,33 @@ class WarmMutePeer(BaseModel):
     mute_hours: float = Field(ge=0, le=24 * 365)
 
 
+class WarmConsumeMedia(BaseModel):
+    """Write-ish: "watch" a video or "listen" to a voice note among posts just read.
+
+    Core registers the view (``messages.getMessagesViews`` with ``increment``) and
+    downloads at most ``max_bytes`` of the file — a bounded partial download is what
+    a phone does when a video starts playing. The service debits the per-cycle byte
+    budget BEFORE dispatch, so a cancelled download stays spent.
+    """
+
+    action_type: Literal["warm_consume_media"] = "warm_consume_media"
+    channel: str
+    message_ids: list[int] = Field(min_length=1, max_length=5)
+    kind: Literal["video", "voice"]
+    max_bytes: int = Field(ge=65_536, le=50_000_000)
+
+
+class WarmEmojiStatus(BaseModel):
+    """Write (Premium only): set a default emoji status that expires by itself, or clear it."""
+
+    action_type: Literal["warm_emoji_status"] = "warm_emoji_status"
+    # Which of the default statuses to use (modulo the list length); randomness is the
+    # service's. ``until_hours`` makes it self-expiring, so no second write is needed.
+    status_index: int = Field(default=0, ge=0)
+    until_hours: float = Field(default=6.0, gt=0, le=24 * 7)
+    clear: bool = False
+
+
 WarmingAction = Annotated[
     WarmGetDialogs
     | WarmReadContacts
@@ -193,6 +220,8 @@ WarmingAction = Annotated[
     | WarmForwardToSaved
     | WarmVoteInPoll
     | WarmToggleArchive
-    | WarmMutePeer,
+    | WarmMutePeer
+    | WarmConsumeMedia
+    | WarmEmojiStatus,
     Field(discriminator="action_type"),
 ]

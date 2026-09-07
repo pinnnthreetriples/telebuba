@@ -151,6 +151,19 @@ test('reason and error type sit side by side, not one behind the other', () => {
   );
 });
 
+test('a warming extra that ran and found nothing to do explains itself from warm_skip', () => {
+  // The gateway logs such a row with `status: "ok"` — the status alone would stay silent
+  // and the operator would read "Голос в опросе" as a vote that happened.
+  expect(eventReason(t, entry({ status: 'ok', warm_skip: 'no_poll' }))).toBe(
+    'в постах нет открытого опроса',
+  );
+  // A code from the gateway's own toast vocabulary reaches the same ladder.
+  expect(eventReason(t, entry({ status: 'ok', warm_skip: 'premium_required' }))).toBe(
+    'Для этого действия нужен Telegram Premium на аккаунте',
+  );
+  expect(eventReason(t, entry({ reason: 'quota', warm_skip: 'no_poll' }))).toBe('лимит исчерпан');
+});
+
 test('a non-string extra value is ignored rather than stringified', () => {
   // `extra` is free-form JSON: a numeric or object value under one of these keys must not
   // become the operator's explanation.

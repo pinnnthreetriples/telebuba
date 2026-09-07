@@ -63,8 +63,10 @@ function label(t: TFunction, code: string): string {
  * Localize WHY a log row turned out the way it did — the half of a failure that the
  * event label alone never says. Built from two `extra` fields and joined with ' · ':
  *
- * 1. `extra.reason`, falling back to a FAILING `extra.status`. Most negative outcomes
- *    carry a `reason`; a failed post carries the Telegram `status`.
+ * 1. `extra.reason`, then the warming gateway's `extra.warm_skip` (an action that ran and
+ *    found nothing to do — the row's `status` is `ok`), falling back to a FAILING
+ *    `extra.status`. Most negative outcomes carry a `reason`; a failed post carries the
+ *    Telegram `status`.
  * 2. `extra.error_type` — what Telegram refused, an exception class or a gateway stable
  *    code.
  *
@@ -85,6 +87,7 @@ export function eventReason(t: TFunction, entry: LogEntry): string {
   const status = extraStr(entry.extra, 'status');
   const reasonCode =
     extraStr(entry.extra, 'reason') ??
+    extraStr(entry.extra, 'warm_skip') ??
     (status && !NON_FAILURE_STATUSES.includes(status) ? status : undefined);
   const errorType = extraStr(entry.extra, 'error_type');
   return [reasonCode, errorType]

@@ -14,8 +14,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from services.warming import _extras_chats, _extras_reads, _extras_writes, _seams
-from services.warming._extras_ctx import _ExtraSpec
+from services.warming import _extras_chats, _extras_media, _extras_reads, _extras_writes, _seams
+from services.warming._extras_ctx import MEDIA_MIN_BYTES, _ExtraSpec
 from services.warming._steps import _human_pause
 from services.warming.pacing import _FAILURE_STATUSES, _WAIT_STATUSES, _classify_flood
 
@@ -27,10 +27,11 @@ if TYPE_CHECKING:
     from services.warming._extras_ctx import _ExtraContext, _Need
     from services.warming._steps import _ChannelTally
 
-# PR1 account reads + PR2 browse reads + PR3 Saved-Messages writes + PR4 chats and polls.
-# The remaining ``ExtraToggles`` keys land in PR5 and the contract test is ``⊆`` until then.
+# One spec per ``ExtraToggles`` key (the contract test pins the two sets equal).
 _RECENT: frozenset[_Need] = frozenset({"recent_ids"})
 _JOINED: frozenset[_Need] = frozenset({"joined"})
+_MEDIA: frozenset[_Need] = frozenset({"recent_ids", "media_bytes"})
+_PREMIUM: frozenset[_Need] = frozenset({"premium"})
 EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("dialogs", "read", _extras_reads.dialogs),
     _ExtraSpec("contacts", "read", _extras_reads.contacts),
@@ -50,6 +51,9 @@ EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("leave", "write", _extras_chats.leave, _JOINED),
     _ExtraSpec("archive", "write", _extras_chats.archive, _JOINED),
     _ExtraSpec("mute", "write", _extras_chats.mute, _JOINED),
+    _ExtraSpec("video", "write", _extras_media.video, _MEDIA),
+    _ExtraSpec("voice", "write", _extras_media.voice, _MEDIA),
+    _ExtraSpec("emoji_status", "write", _extras_media.emoji_status, _PREMIUM),
 )
 
 
@@ -58,6 +62,9 @@ def _is_eligible(spec: _ExtraSpec, ctx: _ExtraContext) -> bool:
     facts = {
         "recent_ids": any(ctx.recent_ids.values()),
         "joined": bool(_extras_chats.joined_now(ctx)),
+        # ``None`` = no session check answered yet: never probe Premium by writing.
+        "premium": ctx.account is not None and ctx.account.premium is True,
+        "media_bytes": ctx.media_bytes_left >= MEDIA_MIN_BYTES,
     }
     return all(facts[need] for need in spec.needs)
 

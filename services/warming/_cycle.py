@@ -265,6 +265,8 @@ async def run_one_cycle(
                 tally=tally,
                 remaining_actions=data.remaining_actions,
                 joined=joined,
+                account=account,
+                media_bytes_left=warm.extras_media_bytes_per_cycle,
             ),
             on_step,
         )

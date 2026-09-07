@@ -77,10 +77,17 @@ function lineDetail(t: TFunction, line: LogEntry): string {
       ? t('warming.card.storiesSeen', { count: seen })
       : t('warming.card.storiesNone');
   }
+  // How much of the video/voice the account actually pulled — the gateway's bounded
+  // partial download, which is also what the proxy paid for.
+  const bytes = line.extra?.bytes;
+  if (line.event.endsWith('telegram_warm_consume_media') && typeof bytes === 'number') {
+    return t('warming.card.mediaBytes', { kb: Math.round(bytes / 1024) });
+  }
   // Everything else used to end here saying nothing, so a warming failure named the
   // action and never the cause. `reaction_skipped`'s own `extra.reason` is covered by
   // eventReason too — it was the only `reason` warming wrote when this was written,
-  // which is why gating on that event name excluded nothing and hid the rest.
+  // which is why gating on that event name excluded nothing and hid the rest. The
+  // extras' `warm_skip` ("ran, nothing to do") goes through the same ladder.
   return eventReason(t, line);
 }
 

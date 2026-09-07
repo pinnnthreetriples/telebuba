@@ -93,6 +93,8 @@ from schemas.telegram_actions_twofa import (
 from schemas.telegram_actions_warming import (
     WarmBrowseStickers,
     WarmCheckSettings,
+    WarmConsumeMedia,
+    WarmEmojiStatus,
     WarmForwardToSaved,
     WarmGetDialogs,
     WarmInlineQuery,
@@ -364,7 +366,9 @@ TelegramAction = Annotated[
     | WarmForwardToSaved
     | WarmVoteInPoll
     | WarmToggleArchive
-    | WarmMutePeer,
+    | WarmMutePeer
+    | WarmConsumeMedia
+    | WarmEmojiStatus,
     Field(discriminator="action_type"),
 ]
 

@@ -20,8 +20,7 @@ const SETTINGS = {
   // is reset to the schema defaults (1 and 0.0).
   gemini_max_retries: 4,
   gemini_min_interval_seconds: 2.5,
-  // The eighteen extras wired up so far; the rest of the 21 keys stay server-side
-  // defaults until their rows leave "скоро".
+  // All 21 extras, as the backend stores them.
   extra_toggles: {
     dialogs: true,
     contacts: true,
@@ -41,6 +40,9 @@ const SETTINGS = {
     leave: true,
     archive: true,
     mute: true,
+    video: true,
+    voice: true,
+    emoji_status: true,
   },
   updated_at: 'now',
 };
@@ -48,7 +50,6 @@ const SETTINGS = {
 // The card's own counts, derived the same way the legend derives them. Written out
 // so a row that changes state has to change this number too — that is the point of
 // the states being data rather than markup.
-const SOON_ROWS = 3;
 const ALWAYS_ROWS = 5;
 // Profile editing lives in the Accounts section: one row that warming never runs.
 const EXTERNAL_ROWS = 1;
@@ -148,20 +149,9 @@ test('every group and every action row is on the card once it is open', async ()
   // One row out of each state, named as the operator reads it.
   expect(screen.getByRole('switch', { name: 'Реакции на посты' })).toBeInTheDocument();
   expect(screen.getByRole('switch', { name: 'Прокрутка каналов' })).toBeInTheDocument();
-  expect(screen.getByRole('switch', { name: 'Просмотр видео' })).toBeInTheDocument();
+  expect(screen.getByRole('switch', { name: 'Обновление профиля' })).toBeInTheDocument();
   // The traffic warning sits on the group, not on its rows.
   expect(screen.getByText('много трафика')).toBeInTheDocument();
-});
-
-test('an action with no gateway refuses instead of pretending: off, locked, "скоро"', async () => {
-  routeApi();
-  renderWithClient(<ActionTuningCard />);
-  await openCard();
-
-  const soon = screen.getByRole('switch', { name: 'Просмотр видео' });
-  expect(soon).toHaveAttribute('aria-checked', 'false');
-  expect(soon).toBeDisabled();
-  expect(screen.getAllByText('скоро')).toHaveLength(SOON_ROWS);
 });
 
 test('a core-cycle action reads as on and cannot be moved', async () => {
@@ -208,11 +198,11 @@ test('the legend counts the table, so a connected action needs no copy change', 
   await openCard();
 
   // "Working" is what warming actually runs: live and always-on rows. The external
-  // row is edited elsewhere and the soon rows are not written yet.
+  // row is edited elsewhere. Nothing is "скоро" any more, so no chip promises it.
   expect(
-    screen.getByText(`работает · ${String(ALL_SWITCHES - 1 - SOON_ROWS - EXTERNAL_ROWS)}`),
+    screen.getByText(`работает · ${String(ALL_SWITCHES - 1 - EXTERNAL_ROWS)}`),
   ).toBeInTheDocument();
-  expect(screen.getByText(`скоро · ${String(SOON_ROWS)}`)).toBeInTheDocument();
+  expect(screen.queryByText(/скоро/)).not.toBeInTheDocument();
 });
 
 test('a new extra toggle writes into extra_toggles beside the legacy columns', async () => {
@@ -227,6 +217,7 @@ test('a new extra toggle writes into extra_toggles beside the legacy columns', a
   await userEvent.click(screen.getByRole('switch', { name: 'Поиск GIF' }));
   await userEvent.click(screen.getByRole('switch', { name: 'Заметки в Избранном' }));
   await userEvent.click(screen.getByRole('switch', { name: 'Выход из каналов' }));
+  await userEvent.click(screen.getByRole('switch', { name: 'Просмотр видео' }));
   await userEvent.click(screen.getByText('Сохранить'));
 
   const body = await savedBody();
@@ -235,12 +226,13 @@ test('a new extra toggle writes into extra_toggles beside the legacy columns', a
   expect(extras.gif).toBe(false);
   expect(extras.saved).toBe(false);
   expect(extras.leave).toBe(false);
+  expect(extras.video).toBe(false);
   expect(extras.contacts).toBe(true);
   expect(extras.inline_bots).toBe(true);
   expect(extras.polls).toBe(true);
-  // Still-"скоро" keys are never sent: a partial object lets the write path keep
-  // whatever the server stores for them.
-  expect(extras).not.toHaveProperty('video');
+  expect(extras.emoji_status).toBe(true);
+  // All 21 stored keys, and only those: a row without a field would drop out here.
+  expect(Object.keys(extras)).toHaveLength(21);
   expect(body.reactions_enabled).toBe(true);
   expect(body).not.toHaveProperty('gemini_max_retries');
   expect(body).not.toHaveProperty('gemini_min_interval_seconds');
@@ -322,6 +314,9 @@ test('"Выключить все" reaches only the actions the backend can store
     leave: false,
     archive: false,
     mute: false,
+    video: false,
+    voice: false,
+    emoji_status: false,
   });
 });
 

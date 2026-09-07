@@ -1045,7 +1045,7 @@
     "media_no_caption": "медиа без текста",
     "media_no_image": "видео или файл — картинки нет",
     "media_album_item": "часть альбома — комментируем альбом один раз",
-    "media_unavailable": "не удалось скачать фото",
+    "media_unavailable": "не удалось скачать медиа",
     "media_too_large": "фото слишком большое",
     "empty": "пустой пост",
     "link_only": "только ссылка",
@@ -1085,6 +1085,27 @@
     "flood_wait": "Telegram просит подождать",
     "slow_mode_wait": "медленный режим",
     "premium_wait": "нужен Premium",
+    "no_url": "в постах нет ссылки",
+    "webpage_unavailable": "превью ссылки недоступно",
+    "set_gone": "набор стикеров удалён",
+    "bot_timeout": "бот не ответил",
+    "bot_invalid": "бот не отвечает на inline-запросы",
+    "no_poll": "в постах нет открытого опроса",
+    "poll_closed": "опрос уже закрыт",
+    "already_voted": "голос уже отдан",
+    "post_gone": "пост удалён",
+    "schedule_full": "очередь отложенных заполнена",
+    "forwards_restricted": "канал запретил пересылку",
+    "media_empty": "в посте нет медиа",
+    "bad_schedule": "Telegram отклонил время отправки",
+    "bad_folder": "Telegram отклонил папку архива",
+    "bad_settings": "Telegram отклонил настройки уведомлений",
+    "no_media": "в постах нет видео или голосового",
+    "stale_reference": "ссылка на файл устарела",
+    "download_stalled": "скачивание не пошло",
+    "bad_chunk": "Telegram отклонил размер части загрузки",
+    "no_statuses": "нет доступных эмодзи-статусов",
+    "status_unavailable": "эмодзи-статус недоступен",
     "peer_flood": "ограничение по спаму",
     "write_blocked": "канал не даёт писать",
     "captcha_unsolved": "капчу не прошёл ни один аккаунт",
@@ -1222,7 +1243,9 @@
       "warm_forward_to_saved": "Пересылка в Избранное",
       "warm_vote_in_poll": "Голос в опросе",
       "warm_toggle_archive": "Архив чата",
-      "warm_mute_peer": "Звук чата"
+      "warm_mute_peer": "Звук чата",
+      "warm_consume_media": "Просмотр медиа",
+      "warm_emoji_status": "Эмодзи-статус"
     },
     "status": {
       "failed": "ошибка",
@@ -2253,7 +2276,8 @@
       "cycleTip_few": "Цикл {{count}}",
       "cycleTip_many": "Цикл {{count}}",
       "dmAllowed": "ЛС: разрешены",
-      "dmClosed": "ЛС: закрыты"
+      "dmClosed": "ЛС: закрыты",
+      "mediaBytes": "скачано {{kb}} КБ"
     },
     "actions": {
       "stopShort": "Стоп"
@@ -2301,12 +2325,10 @@
       "trafficHeavy": "много трафика",
       "save": "Сохранить",
       "legend": {
-        "working": "работает · {{n}}",
-        "soon": "скоро · {{n}}"
+        "working": "работает · {{n}}"
       },
       "state": {
         "always": "всегда",
-        "soon": "скоро",
         "external": "в разделе Аккаунты"
       },
       "gate": {

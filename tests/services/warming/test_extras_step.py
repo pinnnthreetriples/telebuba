@@ -10,6 +10,7 @@ import pytest
 from core.config import settings
 from core.db import save_warming_settings
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, JoinedChannel
+from schemas.accounts import AccountRead
 from schemas.telegram_actions import ActionResult
 from schemas.telegram_actions_warming import (
     INLINE_BOT_WHITELIST,
@@ -41,17 +42,26 @@ if TYPE_CHECKING:
 
 _ALL_ON = cast("ExtraToggles", dict.fromkeys(EXTRA_TOGGLE_DEFAULTS, True))
 _KEYS = [spec.key for spec in EXTRAS]
-# The specs with ``needs={"recent_ids"}`` / ``needs={"joined"}``.
-_POST_BOUND = {"search_messages", "link_preview", "forward", "polls"}
+_ALL = len(EXTRAS)  # a per-cycle draw count that cannot cap the registry
+# The specs with ``recent_ids`` / ``joined`` / ``premium`` among their ``needs``.
+_POST_BOUND = {"search_messages", "link_preview", "forward", "polls", "video", "voice"}
 _CHAT_BOUND = {"leave", "archive", "mute"}
+_PREMIUM_BOUND = {"emoji_status"}
 # Specs that dispatch twice per extra (a second RPC after a pause).
 _TWO_RPC = {"gif", "drafts"}
 _CHANNEL = WarmingChannel(channel="c1", created_at="2026-01-01T00:00:00+00:00")
-# One channel whose read fetched posts, plus one joined long ago and not chosen this
-# cycle (a leave candidate); together they make every registered spec eligible.
+# One channel whose read fetched posts, one joined long ago and not chosen this cycle
+# (a leave candidate), a Premium account and a byte budget for two media draws;
+# together (``_full_ctx``) they make every registered spec eligible.
 _RECENT_IDS = {"c1": [101, 102]}
 _JOINED = [JoinedChannel(channel="old", created_at="2026-01-01T00:00:00+00:00")]
+_PREMIUM = AccountRead(
+    account_id="acc-1", status="alive", premium=True, created_at="now", updated_at="now"
+)
+_MEDIA_BYTES = 10_000_000
 _WARM_TYPES = {
+    "warm_consume_media",
+    "warm_emoji_status",
     "warm_vote_in_poll",
     "leave_channel",
     "warm_toggle_archive",
@@ -84,13 +94,15 @@ def _secret() -> WarmingSettingsSecret:
     )
 
 
-def _ctx(
+def _ctx(  # noqa: PLR0913 - one keyword per context field
     *,
     chosen: list[WarmingChannel] | None = None,
     recent_ids: dict[str, list[int]] | None = None,
     remaining: int | None = None,
     tally: _ChannelTally | None = None,
     joined: list[JoinedChannel] | None = None,
+    account: AccountRead | None = None,
+    media_bytes_left: int = 0,
 ) -> _ExtraContext:
     return _ExtraContext(
         account_id="acc-1",
@@ -101,6 +113,21 @@ def _ctx(
         tally=tally or _ChannelTally(),
         remaining_actions=remaining,
         joined=[] if joined is None else joined,
+        account=account,
+        media_bytes_left=media_bytes_left,
+    )
+
+
+def _full_ctx(
+    *, recent_ids: dict[str, list[int]] | None = None, tally: _ChannelTally | None = None
+) -> _ExtraContext:
+    """A context in which every registered spec is eligible."""
+    return _ctx(
+        recent_ids=_RECENT_IDS if recent_ids is None else recent_ids,
+        joined=_JOINED,
+        account=_PREMIUM,
+        media_bytes_left=_MEDIA_BYTES,
+        tally=tally,
     )
 
 
@@ -145,9 +172,9 @@ def test_pick_extras_draws_nothing_for_a_zero_range(monkeypatch: pytest.MonkeyPa
 
 
 def test_toggled_off_or_missing_key_is_never_picked(monkeypatch: pytest.MonkeyPatch) -> None:
-    _extras_range(monkeypatch, 20, 20)
+    _extras_range(monkeypatch, _ALL, _ALL)
     rng = random.Random(7)  # noqa: S311
-    ctx = _ctx(recent_ids=_RECENT_IDS, joined=_JOINED)
+    ctx = _full_ctx()
     picked = {s.key for s in _pick_extras(ctx, {**_ALL_ON, "dialogs": False}, rng)}
     assert picked == set(_KEYS) - {"dialogs"}
     # A key absent from the mapping is off, not on.
@@ -161,9 +188,9 @@ def test_toggled_off_or_missing_key_is_never_picked(monkeypatch: pytest.MonkeyPa
 def test_post_bound_extras_are_never_picked_without_a_recent_post(
     monkeypatch: pytest.MonkeyPatch, recent_ids: dict[str, list[int]]
 ) -> None:
-    _extras_range(monkeypatch, 20, 20)
+    _extras_range(monkeypatch, _ALL, _ALL)
     rng = random.Random(7)  # noqa: S311
-    ctx = _ctx(recent_ids=recent_ids, joined=_JOINED)
+    ctx = _full_ctx(recent_ids=recent_ids)
     picked = {s.key for s in _pick_extras(ctx, _ALL_ON, rng)}
     assert picked == set(_KEYS) - _POST_BOUND
 
@@ -171,9 +198,9 @@ def test_post_bound_extras_are_never_picked_without_a_recent_post(
 def test_post_bound_extras_are_picked_once_any_channel_has_ids(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _extras_range(monkeypatch, 20, 20)
+    _extras_range(monkeypatch, _ALL, _ALL)
     rng = random.Random(7)  # noqa: S311
-    ctx = _ctx(recent_ids={"c1": [], "c2": [7]}, joined=_JOINED)
+    ctx = _full_ctx(recent_ids={"c1": [], "c2": [7]})
     picked = {s.key for s in _pick_extras(ctx, _ALL_ON, rng)}
     assert picked == set(_KEYS)
 
@@ -184,7 +211,7 @@ def test_is_eligible_checks_only_the_needs_a_spec_names() -> None:
     assert _is_eligible(bound, _ctx()) is False
     assert _is_eligible(bound, _ctx(recent_ids=_RECENT_IDS)) is True
     assert _is_eligible(free, _ctx()) is True
-    assert {s.key for s in EXTRAS if s.needs} == _POST_BOUND | _CHAT_BOUND
+    assert {s.key for s in EXTRAS if s.needs} == _POST_BOUND | _CHAT_BOUND | _PREMIUM_BOUND
 
 
 # --- budget tiers ------------------------------------------------------------
@@ -277,7 +304,7 @@ async def test_flood_on_the_nth_extra_halts_the_rest(
 async def test_a_plain_failure_counts_and_the_rest_still_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _extras_range(monkeypatch, 20, 20)
+    _extras_range(monkeypatch, _ALL, _ALL)
     recorder = _Recorder()
 
     async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
@@ -289,7 +316,7 @@ async def test_a_plain_failure_counts_and_the_rest_still_run(
     monkeypatch.setattr(_seams, "execute", _execute)
     tally = _ChannelTally()
 
-    landed = await run_extras_step(_ctx(tally=tally, recent_ids=_RECENT_IDS, joined=_JOINED))
+    landed = await run_extras_step(_full_ctx(tally=tally))
 
     # Every registered spec ran; ``gif`` and ``drafts`` are one extra but two RPCs each
     # (the pinned ``rng.random → 0.0`` makes the draft clear fire).
