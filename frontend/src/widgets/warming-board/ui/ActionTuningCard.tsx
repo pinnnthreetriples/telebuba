@@ -54,7 +54,7 @@ const GROUPS: Group[] = [
       { key: 'scroll', state: 'always' },
       { key: 'markRead', state: 'always' },
       { key: 'dialogs', state: 'live', field: 'dialogs' },
-      { key: 'searchMessages', state: 'soon' },
+      { key: 'searchMessages', state: 'live', field: 'search_messages' },
     ],
   },
   {
@@ -74,10 +74,10 @@ const GROUPS: Group[] = [
     heavy: true,
     actions: [
       { key: 'stories', state: 'always' },
-      { key: 'gif', state: 'soon' },
-      { key: 'stickers', state: 'soon' },
-      { key: 'inlineBots', state: 'soon' },
-      { key: 'linkPreview', state: 'soon' },
+      { key: 'gif', state: 'live', field: 'gif' },
+      { key: 'stickers', state: 'live', field: 'stickers' },
+      { key: 'inlineBots', state: 'live', field: 'inline_bots' },
+      { key: 'linkPreview', state: 'live', field: 'link_preview' },
     ],
   },
   {

@@ -371,6 +371,43 @@ async def test_view_profile_channel_without_handle_fails_before_any_rpc(
     assert result.error_type == "ValueError"
     assert client.captured == []
     assert client.entities == []
+    assert client.entities == []
+
+
+@pytest.mark.asyncio
+async def test_view_profile_bot_resolves_a_whitelisted_bot_then_reads_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _FakeClient()
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-p6", WarmViewProfile(kind="bot", bot="wiki"))
+
+    assert result.status == "ok"
+    # The bot comes off the session entity cache — no raw ``contacts.resolveUsername``.
+    assert client.entities == ["wiki"]
+    (full,) = client.captured
+    assert isinstance(full, GetFullUserRequest)
+    assert full.id == "peer:wiki"
+    extra = await _extra("telegram_warm_view_profile")
+    assert extra["kind"] == "bot"
+    assert extra["bot"] == "wiki"
+
+
+@pytest.mark.parametrize("bot", [None, "evilbot"], ids=["missing", "not_whitelisted"])
+@pytest.mark.asyncio
+async def test_view_profile_bot_outside_the_whitelist_fails_before_any_rpc(
+    monkeypatch: pytest.MonkeyPatch,
+    bot: str | None,
+) -> None:
+    client = _FakeClient()
+    _patch_client(monkeypatch, client)
+
+    result = await execute("acc-p7", WarmViewProfile(kind="bot", bot=bot))
+
+    assert result.status == "failed"
+    assert result.error_type == "ValueError"
+    assert client.captured == []
 
 
 @pytest.mark.asyncio

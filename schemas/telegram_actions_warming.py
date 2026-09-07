@@ -60,8 +60,61 @@ class WarmViewProfile(BaseModel):
     """
 
     action_type: Literal["warm_view_profile"] = "warm_view_profile"
-    kind: Literal["self", "channel"] = "self"
+    kind: Literal["self", "channel", "bot"] = "self"
     channel: str | None = None
+    # ``kind="bot"``: username of a whitelisted official inline bot (see ``WarmInlineQuery``).
+    bot: str | None = None
+
+
+# Official Telegram inline bots a warming account may query. Anything else is refused
+# before any RPC: an arbitrary bot is a third party that sees the query.
+INLINE_BOT_WHITELIST: frozenset[str] = frozenset(
+    {"gif", "pic", "vid", "wiki", "bing", "youtube", "bold"}
+)
+
+
+class WarmSearchMessages(BaseModel):
+    """Read: search inside a channel for a word taken from a post the account just read.
+
+    Core fetches ``message_ids`` (own read), picks one alphabetic word of four or more
+    letters, and issues ``messages.search``; with no usable word it falls back to
+    ``fallback_query``. ``global_search`` adds one ``messages.searchGlobal`` — the
+    flood-sensitive half, so the service enables it rarely.
+    """
+
+    action_type: Literal["warm_search_messages"] = "warm_search_messages"
+    channel: str
+    message_ids: list[int] = Field(min_length=1, max_length=5)
+    fallback_query: str = Field(min_length=2, max_length=32)
+    global_search: bool = False
+
+
+class WarmLinkPreview(BaseModel):
+    """Read: open the web-page preview of the first http(s) link in a post just read."""
+
+    action_type: Literal["warm_link_preview"] = "warm_link_preview"
+    channel: str
+    message_ids: list[int] = Field(min_length=1, max_length=5)
+
+
+class WarmBrowseStickers(BaseModel):
+    """Read: open the sticker panel (installed, recent, featured) and one featured set."""
+
+    action_type: Literal["warm_browse_stickers"] = "warm_browse_stickers"
+
+
+class WarmSavedGifs(BaseModel):
+    """Read: open the GIF tab (``messages.getSavedGifs``)."""
+
+    action_type: Literal["warm_saved_gifs"] = "warm_saved_gifs"
+
+
+class WarmInlineQuery(BaseModel):
+    """Read: ask a whitelisted inline bot for results; the result is never sent anywhere."""
+
+    action_type: Literal["warm_inline_query"] = "warm_inline_query"
+    bot: str = Field(min_length=1, max_length=32)
+    query: str = Field(min_length=1, max_length=64)
 
 
 WarmingAction = Annotated[
@@ -69,6 +122,11 @@ WarmingAction = Annotated[
     | WarmReadContacts
     | WarmReadNotifySettings
     | WarmCheckSettings
-    | WarmViewProfile,
+    | WarmViewProfile
+    | WarmSearchMessages
+    | WarmLinkPreview
+    | WarmBrowseStickers
+    | WarmSavedGifs
+    | WarmInlineQuery,
     Field(discriminator="action_type"),
 ]

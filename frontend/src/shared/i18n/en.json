@@ -1205,7 +1205,12 @@
       "warm_read_contacts": "Read contacts",
       "warm_read_notify_settings": "Notification settings",
       "warm_check_settings": "Check settings",
-      "warm_view_profile": "View profile"
+      "warm_view_profile": "View profile",
+      "warm_search_messages": "Message search",
+      "warm_link_preview": "Link preview",
+      "warm_browse_stickers": "Sticker browsing",
+      "warm_saved_gifs": "Saved GIFs",
+      "warm_inline_query": "Inline bot query"
     },
     "status": {
       "failed": "failed",

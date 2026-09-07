@@ -10,14 +10,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from core.config import settings
 from schemas.telegram_actions_warming import (
+    WarmBrowseStickers,
     WarmCheckSettings,
     WarmGetDialogs,
+    WarmInlineQuery,
+    WarmLinkPreview,
     WarmReadContacts,
     WarmReadNotifySettings,
+    WarmSavedGifs,
+    WarmSearchMessages,
     WarmViewProfile,
 )
 from services.warming import _seams
+from services.warming._steps import _human_pause
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
@@ -29,8 +36,12 @@ _DIALOGS_LIMIT = (20, 40)
 _CHECK_SETTINGS_CALLS = (2, 4)
 # Which screen it opens first: one of the 11 reads in core's table (schema ``le=10``).
 _CHECK_SETTINGS_OFFSETS = 11
-# Half the time look at a channel we just read, else at our own profile.
+# Whom one profile glance opens: a quarter of the time an official inline bot, half a
+# channel we just read (our own profile when none was), the rest our own profile.
+_BOT_PROFILE_PROBABILITY = 0.25
 _CHANNEL_PROFILE_PROBABILITY = 0.5
+# The two "look at posts just read" actions take at most this many ids (schema cap).
+_POST_IDS_MAX = 5
 
 
 async def dialogs(ctx: _ExtraContext) -> ActionResult:
@@ -56,8 +67,58 @@ async def check_settings(ctx: _ExtraContext) -> ActionResult:
 
 
 async def view_profiles(ctx: _ExtraContext) -> ActionResult:
-    if ctx.chosen and _seams.rng.random() < _CHANNEL_PROFILE_PROBABILITY:
+    draw = _seams.rng.random()
+    if draw < _BOT_PROFILE_PROBABILITY:
+        action = WarmViewProfile(
+            kind="bot", bot=_seams.rng.choice(settings.warming.extras_inline_bots)
+        )
+    elif draw < _BOT_PROFILE_PROBABILITY + _CHANNEL_PROFILE_PROBABILITY and ctx.chosen:
         action = WarmViewProfile(kind="channel", channel=_seams.rng.choice(ctx.chosen).channel)
     else:
         action = WarmViewProfile(kind="self")
     return await _seams.execute(ctx.account_id, action)
+
+
+def _recent_posts(ctx: _ExtraContext) -> tuple[str, list[int]]:
+    """A channel whose read fetched posts, plus up to five of them (``needs`` guarantees one)."""
+    channel = _seams.rng.choice([c for c, ids in ctx.recent_ids.items() if ids])
+    return channel, ctx.recent_ids[channel][:_POST_IDS_MAX]
+
+
+def _query() -> str:
+    return _seams.rng.choice(settings.warming.extras_search_queries)
+
+
+async def search_messages(ctx: _ExtraContext) -> ActionResult:
+    channel, ids = _recent_posts(ctx)
+    action = WarmSearchMessages(
+        channel=channel,
+        message_ids=ids,
+        fallback_query=_query(),
+        global_search=_seams.rng.random() < settings.warming.extras_global_search_probability,
+    )
+    return await _seams.execute(ctx.account_id, action)
+
+
+async def link_preview(ctx: _ExtraContext) -> ActionResult:
+    channel, ids = _recent_posts(ctx)
+    return await _seams.execute(ctx.account_id, WarmLinkPreview(channel=channel, message_ids=ids))
+
+
+async def stickers(ctx: _ExtraContext) -> ActionResult:
+    return await _seams.execute(ctx.account_id, WarmBrowseStickers())
+
+
+async def gif(ctx: _ExtraContext) -> ActionResult:
+    """Open the GIF tab, then type into it — two RPCs, one extra; a failed open stops here."""
+    result = await _seams.execute(ctx.account_id, WarmSavedGifs())
+    if result.status != "ok":
+        return result
+    warm = settings.warming
+    await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
+    return await _seams.execute(ctx.account_id, WarmInlineQuery(bot="gif", query=_query()))
+
+
+async def inline_bots(ctx: _ExtraContext) -> ActionResult:
+    bot = _seams.rng.choice(settings.warming.extras_inline_bots)
+    return await _seams.execute(ctx.account_id, WarmInlineQuery(bot=bot, query=_query()))

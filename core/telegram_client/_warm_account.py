@@ -36,6 +36,7 @@ from telethon.tl.types import (
 )
 
 from core.telegram_client._action_results import _DispatchResult
+from core.telegram_client._warm_browse import resolve_inline_bot
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -108,13 +109,16 @@ async def check_settings(client: TelegramClient, action: WarmCheckSettings) -> _
 
 
 async def view_profile(client: TelegramClient, action: WarmViewProfile) -> _DispatchResult:
-    """Open our own profile, or a channel's info page; DM peers are not addressable."""
+    """Open our own profile, a channel's info page or a whitelisted bot's; DM peers never."""
     if action.kind == "channel":
         if action.channel is None:
             msg = "warm_view_profile with kind='channel' needs a channel"
             raise ValueError(msg)
         entity = await client.get_input_entity(action.channel)
         await client(GetFullChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
+    elif action.kind == "bot":
+        bot = await resolve_inline_bot(client, action.bot)
+        await client(GetFullUserRequest(id=bot))  # ty: ignore[invalid-argument-type]
     else:
         await client(GetFullUserRequest(id=InputUserSelf()))
     return _DispatchResult()
