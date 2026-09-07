@@ -91,10 +91,15 @@ from schemas.telegram_actions_twofa import (
 # Warming extras (``warm_*``) are a sibling module too; the write union below carries
 # every member, and the gateway routes the whole family through one prefix arm.
 from schemas.telegram_actions_warming import (
+    WarmBrowseStickers,
     WarmCheckSettings,
     WarmGetDialogs,
+    WarmInlineQuery,
+    WarmLinkPreview,
     WarmReadContacts,
     WarmReadNotifySettings,
+    WarmSavedGifs,
+    WarmSearchMessages,
     WarmViewProfile,
 )
 
@@ -342,7 +347,12 @@ TelegramAction = Annotated[
     | WarmReadContacts
     | WarmReadNotifySettings
     | WarmCheckSettings
-    | WarmViewProfile,
+    | WarmViewProfile
+    | WarmSearchMessages
+    | WarmLinkPreview
+    | WarmBrowseStickers
+    | WarmSavedGifs
+    | WarmInlineQuery,
     Field(discriminator="action_type"),
 ]
 

@@ -12,9 +12,13 @@ from core.db import save_warming_settings
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS
 from schemas.telegram_actions import ActionResult
 from schemas.telegram_actions_warming import (
+    INLINE_BOT_WHITELIST,
     WarmCheckSettings,
     WarmGetDialogs,
+    WarmInlineQuery,
+    WarmLinkPreview,
     WarmReadContacts,
+    WarmSearchMessages,
     WarmViewProfile,
 )
 from schemas.warming import WarmingChannel, WarmingCycleRequest, WarmingSettingsSecret
@@ -23,6 +27,7 @@ from services.warming import _extras, _extras_reads, _seams
 from services.warming._extras import (
     EXTRAS,
     _fold_extra,
+    _is_eligible,
     _pick_extras,
     run_extras_step,
 )
@@ -36,7 +41,22 @@ if TYPE_CHECKING:
 
 _ALL_ON = cast("ExtraToggles", dict.fromkeys(EXTRA_TOGGLE_DEFAULTS, True))
 _KEYS = [spec.key for spec in EXTRAS]
+_POST_BOUND = {"search_messages", "link_preview"}  # the specs with ``needs={"recent_ids"}``
 _CHANNEL = WarmingChannel(channel="c1", created_at="2026-01-01T00:00:00+00:00")
+# One channel whose read fetched posts; enough to make every registered spec eligible.
+_RECENT_IDS = {"c1": [101, 102]}
+_WARM_TYPES = {
+    "warm_get_dialogs",
+    "warm_read_contacts",
+    "warm_read_notify_settings",
+    "warm_check_settings",
+    "warm_view_profile",
+    "warm_search_messages",
+    "warm_link_preview",
+    "warm_saved_gifs",
+    "warm_inline_query",
+    "warm_browse_stickers",
+}
 
 
 def _secret() -> WarmingSettingsSecret:
@@ -109,12 +129,44 @@ def test_pick_extras_draws_nothing_for_a_zero_range(monkeypatch: pytest.MonkeyPa
 
 
 def test_toggled_off_or_missing_key_is_never_picked(monkeypatch: pytest.MonkeyPatch) -> None:
-    _extras_range(monkeypatch, 9, 9)
+    _extras_range(monkeypatch, 20, 20)
     rng = random.Random(7)  # noqa: S311
-    picked = {s.key for s in _pick_extras(_ctx(), {**_ALL_ON, "dialogs": False}, rng)}
+    ctx = _ctx(recent_ids=_RECENT_IDS)
+    picked = {s.key for s in _pick_extras(ctx, {**_ALL_ON, "dialogs": False}, rng)}
     assert picked == set(_KEYS) - {"dialogs"}
     # A key absent from the mapping is off, not on.
-    assert _pick_extras(_ctx(), {}, random.Random(7)) == []  # noqa: S311
+    assert _pick_extras(ctx, {}, random.Random(7)) == []  # noqa: S311
+
+
+# --- eligibility -------------------------------------------------------------
+
+
+@pytest.mark.parametrize("recent_ids", [{}, {"c1": []}, {"c1": [], "c2": []}])
+def test_post_bound_extras_are_never_picked_without_a_recent_post(
+    monkeypatch: pytest.MonkeyPatch, recent_ids: dict[str, list[int]]
+) -> None:
+    _extras_range(monkeypatch, 20, 20)
+    rng = random.Random(7)  # noqa: S311
+    picked = {s.key for s in _pick_extras(_ctx(recent_ids=recent_ids), _ALL_ON, rng)}
+    assert picked == set(_KEYS) - _POST_BOUND
+
+
+def test_post_bound_extras_are_picked_once_any_channel_has_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _extras_range(monkeypatch, 20, 20)
+    rng = random.Random(7)  # noqa: S311
+    picked = {s.key for s in _pick_extras(_ctx(recent_ids={"c1": [], "c2": [7]}), _ALL_ON, rng)}
+    assert picked == set(_KEYS)
+
+
+def test_is_eligible_checks_only_the_needs_a_spec_names() -> None:
+    bound = _ExtraSpec("polls", "write", _synthetic_write, frozenset({"recent_ids"}))
+    free = _ExtraSpec("polls", "write", _synthetic_write)
+    assert _is_eligible(bound, _ctx()) is False
+    assert _is_eligible(bound, _ctx(recent_ids=_RECENT_IDS)) is True
+    assert _is_eligible(free, _ctx()) is True
+    assert {s.key for s in EXTRAS if s.needs} == _POST_BOUND
 
 
 # --- budget tiers ------------------------------------------------------------
@@ -185,6 +237,8 @@ async def test_flood_on_the_nth_extra_halts_the_rest(
     monkeypatch: pytest.MonkeyPatch, status: str, flag: str
 ) -> None:
     _extras_range(monkeypatch, 5, 5)
+    # ``gif`` dispatches twice per spec; the N-th-call dispatcher wants one call per spec.
+    monkeypatch.setattr(_extras, "EXTRAS", tuple(s for s in EXTRAS if s.key != "gif"))
     dispatcher = _StatusAt(2, status)
     monkeypatch.setattr(_seams, "execute", dispatcher.execute)
     tally = _ChannelTally()
@@ -205,14 +259,23 @@ async def test_flood_on_the_nth_extra_halts_the_rest(
 async def test_a_plain_failure_counts_and_the_rest_still_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _extras_range(monkeypatch, 5, 5)
-    dispatcher = _StatusAt(1, "failed")
-    monkeypatch.setattr(_seams, "execute", dispatcher.execute)
+    _extras_range(monkeypatch, 20, 20)
+    recorder = _Recorder()
+
+    async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
+        result = await recorder.execute(account_id, action)
+        if action.action_type == "warm_get_dialogs":
+            return result.model_copy(update={"status": "failed"})
+        return result
+
+    monkeypatch.setattr(_seams, "execute", _execute)
     tally = _ChannelTally()
 
-    landed = await run_extras_step(_ctx(tally=tally))
+    landed = await run_extras_step(_ctx(tally=tally, recent_ids=_RECENT_IDS))
 
-    assert len(dispatcher.actions) == len(EXTRAS)
+    # Every registered spec ran; ``gif`` is one extra but two RPCs.
+    assert len(recorder.actions) == len(EXTRAS) + 1
+    assert set(recorder.types()) == _WARM_TYPES
     assert tally.failures == 1
     assert tally.extras == len(EXTRAS) - 1
     assert tally.attempts == 0
@@ -244,16 +307,10 @@ async def test_step_is_skipped_when_the_cycle_is_already_flooded(
 async def test_nothing_landed_means_no_rail_step(monkeypatch: pytest.MonkeyPatch) -> None:
     _extras_range(monkeypatch, 1, 1)
     recorder = _Recorder()
-    recorder.flood_on = {
-        "warm_get_dialogs",
-        "warm_read_contacts",
-        "warm_read_notify_settings",
-        "warm_check_settings",
-        "warm_view_profile",
-    }
+    recorder.flood_on = _WARM_TYPES
     monkeypatch.setattr(_seams, "execute", recorder.execute)
 
-    assert await run_extras_step(_ctx()) is False
+    assert await run_extras_step(_ctx(recent_ids=_RECENT_IDS)) is False
     assert len(recorder.actions) == 1
 
 
@@ -284,16 +341,20 @@ async def test_view_profiles_looks_at_a_chosen_channel_or_at_self(
     monkeypatch.setattr(_seams, "execute", recorder.execute)
 
     await _extras_reads.view_profiles(_ctx(chosen=[_CHANNEL]))  # rng.random pinned → 0.0
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.5)
+    await _extras_reads.view_profiles(_ctx(chosen=[_CHANNEL]))
     await _extras_reads.view_profiles(_ctx(chosen=[]))
     monkeypatch.setattr(_seams.rng, "random", lambda: 0.9)
     await _extras_reads.view_profiles(_ctx(chosen=[_CHANNEL]))
 
     profiles = [a for _id, a in recorder.actions if isinstance(a, WarmViewProfile)]
     assert [(a.kind, a.channel) for a in profiles] == [
+        ("bot", None),
         ("channel", "c1"),
         ("self", None),
         ("self", None),
     ]
+    assert profiles[0].bot in set(settings.warming.extras_inline_bots) & INLINE_BOT_WHITELIST
 
 
 @pytest.mark.asyncio
@@ -328,6 +389,103 @@ async def test_check_settings_draws_its_offset_from_the_rng(
     ((_id, check),) = recorder.actions
     assert isinstance(check, WarmCheckSettings)
     assert check.offset == 10  # the schema's ``le``: the last read is reachable
+
+
+# --- browse runners ----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("draw", "probability", "expected"), [(0.0, 0.1, True), (0.5, 0.1, False), (0.0, 0.0, False)]
+)
+@pytest.mark.asyncio
+async def test_search_messages_targets_read_posts_and_draws_global_by_probability(
+    monkeypatch: pytest.MonkeyPatch, draw: float, probability: float, *, expected: bool
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: draw)
+    monkeypatch.setattr(settings.warming, "extras_global_search_probability", probability)
+
+    # The id-bearing channel comes first: the seeded ``choice`` over two items picks
+    # index 1, so an unfiltered draw would land on the empty one and fail the schema.
+    await _extras_reads.search_messages(_ctx(recent_ids={"full": list(range(1, 9)), "empty": []}))
+
+    ((_id, action),) = recorder.actions
+    assert isinstance(action, WarmSearchMessages)
+    # Only a channel whose read fetched posts, and at most the schema's five of them.
+    assert (action.channel, action.message_ids) == ("full", [1, 2, 3, 4, 5])
+    assert action.fallback_query in settings.warming.extras_search_queries
+    assert action.global_search is expected
+
+
+@pytest.mark.asyncio
+async def test_link_preview_targets_posts_the_account_just_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+
+    await _extras_reads.link_preview(_ctx(recent_ids={"c2": [5, 6], "c1": []}))
+
+    ((_id, action),) = recorder.actions
+    assert isinstance(action, WarmLinkPreview)
+    assert (action.channel, action.message_ids) == ("c2", [5, 6])
+
+
+@pytest.mark.asyncio
+async def test_gif_opens_the_tab_then_queries_the_gif_bot(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    order: list[str] = []
+
+    async def execute(account_id: str, action: TelegramAction) -> ActionResult:
+        order.append(action.action_type)
+        return await recorder.execute(account_id, action)
+
+    async def pause(_lo: float, _hi: float) -> None:
+        order.append("pause")
+
+    monkeypatch.setattr(_seams, "execute", execute)
+    monkeypatch.setattr(_extras_reads, "_human_pause", pause)
+
+    result = await _extras_reads.gif(_ctx())
+
+    # The two RPCs are paced like any other pair of extras.
+    assert order == ["warm_saved_gifs", "pause", "warm_inline_query"]
+    query = recorder.actions[1][1]
+    assert isinstance(query, WarmInlineQuery)
+    assert query.bot == "gif"
+    assert query.query in settings.warming.extras_search_queries
+    assert result.action_type == "warm_inline_query"
+
+
+@pytest.mark.asyncio
+async def test_gif_stops_after_a_failed_tab_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.flood_on = {"warm_saved_gifs"}
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+
+    result = await _extras_reads.gif(_ctx())
+
+    assert recorder.types() == ["warm_saved_gifs"]
+    assert result.status == "flood_wait"
+
+
+@pytest.mark.asyncio
+async def test_inline_bots_and_stickers_open_only_configured_official_bots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "extras_inline_bots", ["wiki"])
+
+    await _extras_reads.inline_bots(_ctx())
+    await _extras_reads.stickers(_ctx())
+
+    query, stickers = (a for _id, a in recorder.actions)
+    assert isinstance(query, WarmInlineQuery)
+    assert query.bot == "wiki"
+    assert query.query in settings.warming.extras_search_queries
+    assert stickers.action_type == "warm_browse_stickers"
 
 
 # --- whole cycle -------------------------------------------------------------

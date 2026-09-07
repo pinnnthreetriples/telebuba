@@ -146,6 +146,22 @@ def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:
         WarmingSettings(phase_daily_cap={"intro": 0})
 
 
+def test_extras_inline_bots_must_stay_within_the_whitelist() -> None:
+    """Any bot outside the schema whitelist is a third party that would see the query."""
+    with pytest.raises(ValidationError):
+        WarmingSettings(extras_inline_bots=["gif", "somebot"])
+    with pytest.raises(ValidationError):
+        WarmingSettings(extras_inline_bots=[])
+    assert WarmingSettings(extras_inline_bots=["gif"]).extras_inline_bots == ["gif"]
+
+
+@pytest.mark.parametrize("word", ["a", "x" * 33], ids=["one_char", "thirty_three_chars"])
+def test_extras_search_queries_fit_the_action_schemas_they_are_typed_into(word: str) -> None:
+    """A word outside 2..32 chars would fail the search-fallback / inline-query schema at draw."""
+    with pytest.raises(ValidationError):
+        WarmingSettings(extras_search_queries=[word])
+
+
 # --- repr secrecy -----------------------------------------------------------
 # pytest's assertion rewriting dumps a model repr whenever an assertion touches a
 # ``settings`` attribute chain. The values come from the developer's own ``.env``

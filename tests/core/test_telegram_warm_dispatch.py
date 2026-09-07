@@ -21,14 +21,32 @@ from schemas.telegram_actions_warming import (
     WarmCheckSettings,
     WarmGetDialogs,
     WarmingAction,
+    WarmInlineQuery,
+    WarmLinkPreview,
     WarmReadContacts,
+    WarmSearchMessages,
     WarmViewProfile,
 )
 
 _GATEWAY_DIR = Path(__file__).resolve().parents[2] / "core" / "telegram_client"
-# Contact-import verbs the operator ruled out for warming; the sync is read-only.
-_FORBIDDEN_REQUESTS = ("ImportContactsRequest", "AddContactRequest", "ResolvePhoneRequest")
+# Writes the plan rules out for warming: contact import (operator's decision) and the
+# browse family's "act on what you saw" verbs — every warm read stays a read.
+_FORBIDDEN_REQUESTS = (
+    "ImportContactsRequest",
+    "AddContactRequest",
+    "ResolvePhoneRequest",
+    "InstallStickerSetRequest",
+    "UninstallStickerSetRequest",
+    "SaveGifRequest",
+    "SendInlineBotResultRequest",
+)
 _WARMING_MODELS = get_args(get_args(WarmingAction)[0])
+# Minimal required fields for the models that cannot be default-constructed.
+_REQUIRED_FIELDS: dict[type[BaseModel], dict[str, object]] = {
+    WarmSearchMessages: {"channel": "@c", "message_ids": [1], "fallback_query": "news"},
+    WarmLinkPreview: {"channel": "@c", "message_ids": [1]},
+    WarmInlineQuery: {"bot": "pic", "query": "cats"},
+}
 
 
 class _WarmNope(BaseModel):
@@ -58,7 +76,8 @@ def test_no_warm_type_is_a_sticky_profile_edit() -> None:
 
 @pytest.mark.parametrize("model", _WARMING_MODELS, ids=lambda m: m.__name__)
 def test_every_warming_model_is_a_telegram_action(model: type[BaseModel]) -> None:
-    validated = TypeAdapter(TelegramAction).validate_python(model().model_dump())
+    action = model(**_REQUIRED_FIELDS.get(model, {}))
+    validated = TypeAdapter(TelegramAction).validate_python(action.model_dump())
     assert type(validated) is model
     assert validated.action_type.startswith("warm_")
 
@@ -68,7 +87,7 @@ def test_every_warming_model_is_a_telegram_action(model: type[BaseModel]) -> Non
     sorted(_GATEWAY_DIR.glob("_warm_*.py")),
     ids=lambda p: p.name,
 )
-def test_warm_modules_never_import_contact_writes(path: Path) -> None:
+def test_warm_modules_never_import_write_verbs(path: Path) -> None:
     source = path.read_text(encoding="utf-8")
     assert not [name for name in _FORBIDDEN_REQUESTS if name in source]
 
@@ -77,8 +96,23 @@ def test_warm_log_extra_carries_only_counts_kinds_and_handles() -> None:
     assert warm_log_extra(WarmGetDialogs(limit=5)) == {"limit": 5}
     assert warm_log_extra(WarmCheckSettings(calls=2)) == {}  # the dispatcher logs ``calls``
     assert warm_log_extra(WarmReadContacts()) == {}
-    assert warm_log_extra(WarmViewProfile()) == {"kind": "self", "channel": None}
+    assert warm_log_extra(WarmViewProfile()) == {"kind": "self", "channel": None, "bot": None}
     assert warm_log_extra(WarmViewProfile(kind="channel", channel="@x")) == {
         "kind": "channel",
         "channel": "@x",
+        "bot": None,
     }
+    assert warm_log_extra(WarmViewProfile(kind="bot", bot="pic")) == {
+        "kind": "bot",
+        "channel": None,
+        "bot": "pic",
+    }
+
+
+def test_warm_log_extra_never_carries_query_text_or_urls() -> None:
+    search = WarmSearchMessages(
+        channel="@x", message_ids=[1], fallback_query="secretword", global_search=True
+    )
+    assert warm_log_extra(search) == {"channel": "@x", "global": True}
+    assert warm_log_extra(WarmLinkPreview(channel="@x", message_ids=[1])) == {"channel": "@x"}
+    assert warm_log_extra(WarmInlineQuery(bot="pic", query="secret cats")) == {"bot": "pic"}

@@ -8,8 +8,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from schemas.telegram_actions_warming import INLINE_BOT_WHITELIST
+
+_SearchQuery = Annotated[str, StringConstraints(min_length=2, max_length=32)]
 
 
 class WarmingSettings(BaseSettings):
@@ -287,6 +291,39 @@ class WarmingSettings(BaseSettings):
     persona_extras: dict[str, tuple[int, int]] = Field(
         default_factory=lambda: {"calm": (0, 1), "normal": (1, 3), "active": (2, 4)},
     )
+    # Neutral everyday words the browse extras type: the in-channel search fallback
+    # when a post yields no usable word, and every inline-bot query. Never logged.
+    # 2..32 chars: the tightest of the two action schemas each word is typed into.
+    extras_search_queries: list[_SearchQuery] = Field(
+        min_length=1,
+        default_factory=lambda: [
+            "погода",
+            "новости",
+            "рецепт",
+            "музыка",
+            "кино",
+            "спорт",
+            "путешествия",
+            "книги",
+        ],
+    )
+    # Official inline bots the ``inline_bots`` / ``view_profiles`` extras may open.
+    # Must stay within ``INLINE_BOT_WHITELIST``: any other bot is a third party that
+    # would see the query, and core refuses it before the RPC anyway.
+    extras_inline_bots: list[str] = Field(
+        min_length=1, default_factory=lambda: ["pic", "vid", "wiki"]
+    )
+    # Share of in-channel searches that also issue one global search — the
+    # flood-sensitive half of ``warm_search_messages``, hence rare.
+    extras_global_search_probability: float = Field(default=0.1, ge=0.0, le=1.0)
+
+    @field_validator("extras_inline_bots")
+    @classmethod
+    def _check_inline_bots(cls, bots: list[str]) -> list[str]:
+        if unknown := set(bots) - INLINE_BOT_WHITELIST:
+            msg = f"extras_inline_bots outside INLINE_BOT_WHITELIST: {sorted(unknown)}"
+            raise ValueError(msg)
+        return bots
 
     @model_validator(mode="after")
     def _check_persona_extras(self) -> WarmingSettings:

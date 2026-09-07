@@ -14,12 +14,24 @@ from core.telegram_client._warm_account import (
     read_notify_settings,
     view_profile,
 )
-from core.telegram_client._warm_browse import get_dialogs
+from core.telegram_client._warm_browse import (
+    browse_stickers,
+    get_dialogs,
+    inline_query,
+    link_preview,
+    saved_gifs,
+    search_messages,
+)
 from schemas.telegram_actions import (
+    WarmBrowseStickers,
     WarmCheckSettings,
     WarmGetDialogs,
+    WarmInlineQuery,
+    WarmLinkPreview,
     WarmReadContacts,
     WarmReadNotifySettings,
+    WarmSavedGifs,
+    WarmSearchMessages,
     WarmViewProfile,
 )
 
@@ -30,7 +42,7 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import TelegramAction
 
 
-async def dispatch_warming_action(
+async def dispatch_warming_action(  # noqa: C901, PLR0911 - one arm per model, as _dispatch_action
     client: TelegramClient,
     action: TelegramAction,
 ) -> _DispatchResult:
@@ -45,17 +57,33 @@ async def dispatch_warming_action(
             return await check_settings(client, action)
         case WarmViewProfile():
             return await view_profile(client, action)
+        case WarmSearchMessages():
+            return await search_messages(client, action)
+        case WarmLinkPreview():
+            return await link_preview(client, action)
+        case WarmBrowseStickers():
+            return await browse_stickers(client)
+        case WarmSavedGifs():
+            return await saved_gifs(client)
+        case WarmInlineQuery():
+            return await inline_query(client, action)
         case _:
             msg = f"Unsupported warming action_type: {action.action_type}"
             raise ValueError(msg)
 
 
 def warm_log_extra(action: TelegramAction) -> dict[str, object]:
-    """Static log fields — counts, kinds and channel handles only; never text or URLs."""
+    """Static log fields — counts, kinds, channel handles and bot names; never text or URLs."""
     match action:
         case WarmGetDialogs():
             return {"limit": action.limit}
         case WarmViewProfile():
-            return {"kind": action.kind, "channel": action.channel}
+            return {"kind": action.kind, "channel": action.channel, "bot": action.bot}
+        case WarmSearchMessages():
+            return {"channel": action.channel, "global": action.global_search}
+        case WarmLinkPreview():
+            return {"channel": action.channel}
+        case WarmInlineQuery():
+            return {"bot": action.bot}
         case _:
             return {}

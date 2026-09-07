@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     _Runner = Callable[["_ExtraContext"], Awaitable[ActionResult | None]]
 
 _ExtraKind = Literal["read", "write"]
+# Cycle facts an extra cannot run without (``_extras._is_eligible``). Data, not
+# lambdas, so the registry stays a table. Grows per PR: PR4 ``joined``, PR5 ``premium``.
+_Need = Literal["recent_ids"]
 
 
 @dataclass
@@ -57,6 +60,7 @@ class _ExtraSpec:
     key: str  # the ``ExtraToggles`` key — snake_case of the tuning-card row
     kind: _ExtraKind
     run: _Runner
+    needs: frozenset[_Need] = frozenset()
 
 
 async def _write(ctx: _ExtraContext, action: TelegramAction) -> ActionResult:

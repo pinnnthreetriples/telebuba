@@ -1211,7 +1211,12 @@
       "warm_read_contacts": "Чтение контактов",
       "warm_read_notify_settings": "Настройки уведомлений",
       "warm_check_settings": "Проверка настроек",
-      "warm_view_profile": "Просмотр профиля"
+      "warm_view_profile": "Просмотр профиля",
+      "warm_search_messages": "Поиск сообщений",
+      "warm_link_preview": "Предпросмотр ссылки",
+      "warm_browse_stickers": "Просмотр стикеров",
+      "warm_saved_gifs": "Сохранённые GIF",
+      "warm_inline_query": "Запрос инлайн-боту"
     },
     "status": {
       "failed": "ошибка",

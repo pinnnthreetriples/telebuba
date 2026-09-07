@@ -24,24 +24,36 @@ if TYPE_CHECKING:
     from random import Random
 
     from schemas.telegram_actions import ActionResult
-    from services.warming._extras_ctx import _ExtraContext
+    from services.warming._extras_ctx import _ExtraContext, _Need
     from services.warming._steps import _ChannelTally
 
-# PR1: the account-read family. The remaining ``ExtraToggles`` keys land per PR and
-# the contract test is ``⊆`` until then.
+# PR1 account reads + PR2 browse reads. The remaining ``ExtraToggles`` keys land per
+# PR and the contract test is ``⊆`` until then.
+_RECENT: frozenset[_Need] = frozenset({"recent_ids"})
 EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("dialogs", "read", _extras_reads.dialogs),
     _ExtraSpec("contacts", "read", _extras_reads.contacts),
     _ExtraSpec("notifications", "read", _extras_reads.notifications),
     _ExtraSpec("check_settings", "read", _extras_reads.check_settings),
     _ExtraSpec("view_profiles", "read", _extras_reads.view_profiles),
+    _ExtraSpec("search_messages", "read", _extras_reads.search_messages, _RECENT),
+    _ExtraSpec("link_preview", "read", _extras_reads.link_preview, _RECENT),
+    _ExtraSpec("gif", "read", _extras_reads.gif),
+    _ExtraSpec("stickers", "read", _extras_reads.stickers),
+    _ExtraSpec("inline_bots", "read", _extras_reads.inline_bots),
 )
+
+
+def _is_eligible(spec: _ExtraSpec, ctx: _ExtraContext) -> bool:
+    # One fact per ``_Need``; a spec runs only when every fact it names holds.
+    facts = {"recent_ids": any(ctx.recent_ids.values())}
+    return all(facts[need] for need in spec.needs)
 
 
 def _pick_extras(
     ctx: _ExtraContext, toggles: Mapping[str, object], rng: Random
 ) -> list[_ExtraSpec]:
-    eligible = [s for s in EXTRAS if toggles.get(s.key, False)]
+    eligible = [s for s in EXTRAS if toggles.get(s.key, False) and _is_eligible(s, ctx)]
     lo, hi = settings.warming.persona_extras[ctx.persona]
     return rng.sample(eligible, min(rng.randint(lo, hi), len(eligible)))
 
