@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactElement } from 'react';
+import { StrictMode, type ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
@@ -254,6 +254,57 @@ test('polls the dialogue feed with the limit and renders the fetched messages', 
   expect(withLimit).toBe(true);
 });
 
+// Анимация прихода в СВЁРНУТОМ списке: пузыри уехали внутрь пары, поэтому
+// вплывает строка. Проверяется под `StrictMode` — с записью во время рендера
+// (первая версия) второй проход гасил признак, и в разработке не вплывало ничего.
+test('a pair row animates in on arrival, stays put on an unchanged poll', async () => {
+  vi.useFakeTimers();
+  try {
+    const first = message({ text: 'первое', created_at: '2026-07-01T14:00:00Z' });
+    vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse({ messages: [first] })));
+    const { container } = render(
+      <StrictMode>
+        <QueryClientProvider
+          client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+        >
+          <DialogueFeed />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    const row = () => container.querySelector('[aria-expanded]')?.parentElement;
+    expect(row()?.className).toContain('tb-swapin');
+
+    // Тот же ответ на следующих опросах: строка не должна вплывать заново.
+    // Восемь секунд, а не четыре: обещание опроса завершается такт спустя после
+    // самого таймера, поэтому первый `+4000` перерисовки ещё не даёт — класс на
+    // экране остаётся с прихода. Анимация к этому времени давно отыграла (280мс),
+    // так что видимого следа у этого такта нет.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000);
+    });
+    expect(row()?.className).not.toContain('tb-swapin');
+
+    // Новая реплика в той же паре — вплывает.
+    vi.mocked(fetch).mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          messages: [message({ text: 'второе', created_at: '2026-07-01T14:05:00Z' }), first],
+        }),
+      ),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(8000);
+    });
+    expect(row()?.className).toContain('tb-swapin');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 // ── One pair's transcript ──────────────────────────────────────────────────
 
 test('the left account writes on the left, the other one on the right', () => {
@@ -270,15 +321,26 @@ test('the left account writes on the left, the other one on the right', () => {
   expect(screen.getByText('справа').className).toContain('self-end');
 });
 
+// Под `StrictMode`, и это не украшение теста: пока отметка «виденное» ставилась
+// во время рендера, второй проход гасил её, и в разработке не вплывал ни один
+// пузырь. С прежней версией этот тест падает на первом же утверждении.
 test('newly-arrived messages animate in; already-seen ones do not re-animate', () => {
   const first = message({ text: 'first', created_at: '2026-07-01T14:00:00Z' });
-  const { rerender } = render(<DialogueTranscript leftAccount="a1" messages={[first]} />);
+  const { rerender } = render(
+    <StrictMode>
+      <DialogueTranscript leftAccount="a1" messages={[first]} />
+    </StrictMode>,
+  );
   // On first render the message is new → it carries the enter-animation class.
   expect(screen.getByText('first').closest('.tb-swapin')).not.toBeNull();
 
   // A newer message arrives (the pair's transcript is oldest-first).
   const second = message({ text: 'second', created_at: '2026-07-01T14:05:00Z' });
-  rerender(<DialogueTranscript leftAccount="a1" messages={[first, second]} />);
+  rerender(
+    <StrictMode>
+      <DialogueTranscript leftAccount="a1" messages={[first, second]} />
+    </StrictMode>,
+  );
   // Only the genuinely-new message animates; the previously-seen one is static.
   expect(screen.getByText('second').closest('.tb-swapin')).not.toBeNull();
   expect(screen.getByText('first').closest('.tb-swapin')).toBeNull();

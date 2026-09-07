@@ -68,14 +68,26 @@ export function DialogueTranscript({
 
   // A message animates only the first time we render its key; later polls that
   // still contain it must stay put (no re-animation on every 4s tick).
-  const isNew = (key: string): boolean => {
-    if (seenKeys.current.has(key)) return false;
-    seenKeys.current.add(key);
-    return true;
-  };
+  //
+  // Read during render, WRITTEN in an effect — the same rule as the pair rows in
+  // `DialogueFeed`, and for the same reason: under `StrictMode` (see `main.tsx`)
+  // development renders twice, so a key marked seen while rendering put out its
+  // own signal — the second pass already found it seen, and that is the pass on
+  // screen. An effect runs once per commit, so dev and production animate alike.
+  const entering = new Set(messages.map(messageKey).filter((key) => !seenKeys.current.has(key)));
+
+  useEffect(() => {
+    for (const message of messages) seenKeys.current.add(messageKey(message));
+  }, [messages]);
 
   useEffect(() => {
     // jsdom has no scrollIntoView; guard so tests (and any host without it) pass.
+    //
+    // Доводит до вида список, а НЕ страницу, и это проверено замером, а не
+    // выведено из спецификации: раскрытие последней пары из семи оставляет
+    // `window.scrollY` на месте (в браузере до щелчка 470, после 470). Первый
+    // замер говорил обратное — там страницу уводил сам Playwright, который
+    // доводит элемент до вида перед щелчком.
     endRef.current?.scrollIntoView?.({ block: 'end' });
   }, [messages]);
 
@@ -105,7 +117,7 @@ export function DialogueTranscript({
               left
                 ? 'self-start rounded-tl-[3px] border border-line bg-surface-card'
                 : 'self-end rounded-tr-[3px] bg-info-tint'
-            } ${isNew(key) ? 'tb-swapin' : ''}`}
+            } ${entering.has(key) ? 'tb-swapin' : ''}`}
           >
             {message.text}
           </div>
@@ -125,17 +137,28 @@ function PairRow({
   pair,
   open,
   onToggle,
+  entering,
 }: {
   pair: DialoguePair;
   open: boolean;
   onToggle: () => void;
+  entering: boolean;
 }) {
   const live = isFresh(pair.newestAt);
   return (
     <div
-      className={`tb-row overflow-hidden rounded-lg border ${
+      // Вплывает только ЗАКРЫТАЯ строка: у раскрытой новая реплика заставляла
+      // подпрыгивать всю панель вместе с перепиской, хотя вплыть должен один
+      // пузырь внутри — он это и делает сам.
+      //
+      // `shrink-0` — не косметика: список пар это flex-колонка с потолком, а
+      // `overflow-hidden` снимает с элемента его АВТОМИНИМУМ (правило действует
+      // только при `overflow: visible`). Без запрета сжатия восемь пар не
+      // прокручивали список, а жались в 420px, обрезая себе вторую строку —
+      // подпись с последней репликой и сроком пропадала совсем.
+      className={`tb-row shrink-0 overflow-hidden rounded-lg border ${
         open ? 'border-line-strong bg-surface' : 'border-line bg-surface-card'
-      }`}
+      } ${entering && !open ? 'tb-swapin' : ''}`}
     >
       <button
         type="button"
@@ -223,6 +246,29 @@ export function DialogueFeed() {
   // One pair open at a time: several open transcripts stretch the column past
   // the board beside it.
   const [openKey, setOpenKey] = useState<string | null>(null);
+  // Живой приход, который список пар иначе потерял: пузыри уехали внутрь пары,
+  // и на свёрнутой карточке анимировать стало нечего — до этого каждое новое
+  // сообщение вплывало прямо на странице. Теперь вплывает СТРОКА: на первой
+  // отрисовке и каждый раз, когда у пары появляется новая реплика (заодно она
+  // уезжает наверх, потому что список отсортирован по свежести).
+  //
+  // Признак — метка последней реплики, а не флаг: опрос раз в четыре секунды
+  // возвращает ту же строку, и по метке «то же самое» отличается от «новое»
+  // без второго запроса и без состояния, которое надо чистить.
+  //
+  // Запись — в ЭФФЕКТЕ, а рендер её только читает, и это не стиль: под
+  // `StrictMode` (см. `main.tsx`) в разработке рендер выполняется дважды, и
+  // отметка, поставленная во время рендера, гасила бы собственный признак —
+  // второй проход уже видел строку «виденной», а на экран попадает именно он.
+  // Эффект выполняется один раз на коммит, поэтому dev и прод ведут себя
+  // одинаково.
+  const seenAt = useRef<Map<string, string>>(new Map());
+  const entering = new Set(
+    pairs.filter((pair) => seenAt.current.get(pair.key) !== pair.newestAt).map((pair) => pair.key),
+  );
+  useEffect(() => {
+    for (const pair of pairs) seenAt.current.set(pair.key, pair.newestAt);
+  }, [pairs]);
   // The freshest pair sorts first, so the card's own dot is that pair's — read
   // from the clock on every render, not from the memoised page.
   const live = isFresh(pairs[0]?.newestAt ?? '');
@@ -255,6 +301,7 @@ export function DialogueFeed() {
             <PairRow
               key={pair.key}
               pair={pair}
+              entering={entering.has(pair.key)}
               open={openKey === pair.key}
               onToggle={() => {
                 setOpenKey(openKey === pair.key ? null : pair.key);
