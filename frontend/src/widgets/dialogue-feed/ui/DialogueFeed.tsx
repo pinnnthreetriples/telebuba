@@ -236,15 +236,23 @@ export function DialogueFeed() {
   // отрисовке и каждый раз, когда у пары появляется новая реплика (заодно она
   // уезжает наверх, потому что список отсортирован по свежести).
   //
-  // Ключ — метка последней реплики, а не флаг: опрос раз в четыре секунды
+  // Признак — метка последней реплики, а не флаг: опрос раз в четыре секунды
   // возвращает ту же строку, и по метке «то же самое» отличается от «новое»
   // без второго запроса и без состояния, которое надо чистить.
+  //
+  // Запись — в ЭФФЕКТЕ, а рендер её только читает, и это не стиль: под
+  // `StrictMode` (см. `main.tsx`) в разработке рендер выполняется дважды, и
+  // отметка, поставленная во время рендера, гасила бы собственный признак —
+  // второй проход уже видел строку «виденной», а на экран попадает именно он.
+  // Эффект выполняется один раз на коммит, поэтому dev и прод ведут себя
+  // одинаково.
   const seenAt = useRef<Map<string, string>>(new Map());
-  const isEntering = (pair: DialoguePair): boolean => {
-    const seen = seenAt.current.get(pair.key);
-    seenAt.current.set(pair.key, pair.newestAt);
-    return seen !== pair.newestAt;
-  };
+  const entering = new Set(
+    pairs.filter((pair) => seenAt.current.get(pair.key) !== pair.newestAt).map((pair) => pair.key),
+  );
+  useEffect(() => {
+    for (const pair of pairs) seenAt.current.set(pair.key, pair.newestAt);
+  }, [pairs]);
   // The freshest pair sorts first, so the card's own dot is that pair's — read
   // from the clock on every render, not from the memoised page.
   const live = isFresh(pairs[0]?.newestAt ?? '');
@@ -277,7 +285,7 @@ export function DialogueFeed() {
             <PairRow
               key={pair.key}
               pair={pair}
-              entering={isEntering(pair)}
+              entering={entering.has(pair.key)}
               open={openKey === pair.key}
               onToggle={() => {
                 setOpenKey(openKey === pair.key ? null : pair.key);
