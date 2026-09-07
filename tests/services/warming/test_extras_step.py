@@ -41,7 +41,10 @@ if TYPE_CHECKING:
 
 _ALL_ON = cast("ExtraToggles", dict.fromkeys(EXTRA_TOGGLE_DEFAULTS, True))
 _KEYS = [spec.key for spec in EXTRAS]
-_POST_BOUND = {"search_messages", "link_preview"}  # the specs with ``needs={"recent_ids"}``
+# The specs with ``needs={"recent_ids"}``.
+_POST_BOUND = {"search_messages", "link_preview", "forward"}
+# Specs that dispatch twice per extra (a second RPC after a pause).
+_TWO_RPC = {"gif", "drafts"}
 _CHANNEL = WarmingChannel(channel="c1", created_at="2026-01-01T00:00:00+00:00")
 # One channel whose read fetched posts; enough to make every registered spec eligible.
 _RECENT_IDS = {"c1": [101, 102]}
@@ -56,7 +59,11 @@ _WARM_TYPES = {
     "warm_saved_gifs",
     "warm_inline_query",
     "warm_browse_stickers",
+    "warm_self_note",
+    "warm_save_draft",
+    "warm_forward_to_saved",
 }
+_WRITES = sum(spec.kind == "write" for spec in EXTRAS)
 
 
 def _secret() -> WarmingSettingsSecret:
@@ -237,8 +244,8 @@ async def test_flood_on_the_nth_extra_halts_the_rest(
     monkeypatch: pytest.MonkeyPatch, status: str, flag: str
 ) -> None:
     _extras_range(monkeypatch, 5, 5)
-    # ``gif`` dispatches twice per spec; the N-th-call dispatcher wants one call per spec.
-    monkeypatch.setattr(_extras, "EXTRAS", tuple(s for s in EXTRAS if s.key != "gif"))
+    # Two-RPC specs would misalign the N-th-call dispatcher, which wants one call per spec.
+    monkeypatch.setattr(_extras, "EXTRAS", tuple(s for s in EXTRAS if s.key not in _TWO_RPC))
     dispatcher = _StatusAt(2, status)
     monkeypatch.setattr(_seams, "execute", dispatcher.execute)
     tally = _ChannelTally()
@@ -273,12 +280,14 @@ async def test_a_plain_failure_counts_and_the_rest_still_run(
 
     landed = await run_extras_step(_ctx(tally=tally, recent_ids=_RECENT_IDS))
 
-    # Every registered spec ran; ``gif`` is one extra but two RPCs.
-    assert len(recorder.actions) == len(EXTRAS) + 1
+    # Every registered spec ran; ``gif`` and ``drafts`` are one extra but two RPCs each
+    # (the pinned ``rng.random → 0.0`` makes the draft clear fire).
+    assert len(recorder.actions) == len(EXTRAS) + len(_TWO_RPC)
     assert set(recorder.types()) == _WARM_TYPES
     assert tally.failures == 1
     assert tally.extras == len(EXTRAS) - 1
-    assert tally.attempts == 0
+    # Only the writes booked budget: one each, plus the draft clear.
+    assert tally.attempts == _WRITES + 1
     assert landed is True
 
 

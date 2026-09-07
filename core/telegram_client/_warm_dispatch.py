@@ -22,16 +22,20 @@ from core.telegram_client._warm_browse import (
     saved_gifs,
     search_messages,
 )
+from core.telegram_client._warm_saved import forward_to_saved, save_draft, self_note
 from schemas.telegram_actions import (
     WarmBrowseStickers,
     WarmCheckSettings,
+    WarmForwardToSaved,
     WarmGetDialogs,
     WarmInlineQuery,
     WarmLinkPreview,
     WarmReadContacts,
     WarmReadNotifySettings,
     WarmSavedGifs,
+    WarmSaveDraft,
     WarmSearchMessages,
+    WarmSelfNote,
     WarmViewProfile,
 )
 
@@ -42,7 +46,7 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import TelegramAction
 
 
-async def dispatch_warming_action(  # noqa: C901, PLR0911 - one arm per model, as _dispatch_action
+async def dispatch_warming_action(  # noqa: C901, PLR0911, PLR0912 - one arm per model, as _dispatch_action
     client: TelegramClient,
     action: TelegramAction,
 ) -> _DispatchResult:
@@ -67,12 +71,18 @@ async def dispatch_warming_action(  # noqa: C901, PLR0911 - one arm per model, a
             return await saved_gifs(client)
         case WarmInlineQuery():
             return await inline_query(client, action)
+        case WarmSelfNote():
+            return await self_note(client, action)
+        case WarmSaveDraft():
+            return await save_draft(client, action)
+        case WarmForwardToSaved():
+            return await forward_to_saved(client, action)
         case _:
             msg = f"Unsupported warming action_type: {action.action_type}"
             raise ValueError(msg)
 
 
-def warm_log_extra(action: TelegramAction) -> dict[str, object]:
+def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: PLR0911 - one arm per model
     """Static log fields — counts, kinds, channel handles and bot names; never text or URLs."""
     match action:
         case WarmGetDialogs():
@@ -85,5 +95,11 @@ def warm_log_extra(action: TelegramAction) -> dict[str, object]:
             return {"channel": action.channel}
         case WarmInlineQuery():
             return {"bot": action.bot}
+        case WarmSelfNote():
+            return {"scheduled": action.schedule_in_hours is not None}
+        case WarmSaveDraft():
+            return {"clear": action.text == ""}
+        case WarmForwardToSaved():
+            return {"channel": action.channel, "source_id": action.message_id}
         case _:
             return {}

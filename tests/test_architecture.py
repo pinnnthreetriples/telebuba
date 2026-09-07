@@ -134,7 +134,7 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
             return float(raw) == float(default)
         except ValueError:
             return False
-    if isinstance(default, (list, dict)):
+    if isinstance(default, (list, dict, tuple)):
         try:
             # json.dumps then loads normalises the default to JSON-native types
             # (tuples → arrays) so a dict of tuples compares equal to its template.

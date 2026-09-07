@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from services.warming import _extras_reads, _seams
+from services.warming import _extras_reads, _extras_writes, _seams
 from services.warming._extras_ctx import _ExtraSpec
 from services.warming._steps import _human_pause
 from services.warming.pacing import _FAILURE_STATUSES, _WAIT_STATUSES, _classify_flood
@@ -27,8 +27,8 @@ if TYPE_CHECKING:
     from services.warming._extras_ctx import _ExtraContext, _Need
     from services.warming._steps import _ChannelTally
 
-# PR1 account reads + PR2 browse reads. The remaining ``ExtraToggles`` keys land per
-# PR and the contract test is ``⊆`` until then.
+# PR1 account reads + PR2 browse reads + PR3 Saved-Messages writes. The remaining
+# ``ExtraToggles`` keys land per PR and the contract test is ``⊆`` until then.
 _RECENT: frozenset[_Need] = frozenset({"recent_ids"})
 EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("dialogs", "read", _extras_reads.dialogs),
@@ -41,6 +41,10 @@ EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("gif", "read", _extras_reads.gif),
     _ExtraSpec("stickers", "read", _extras_reads.stickers),
     _ExtraSpec("inline_bots", "read", _extras_reads.inline_bots),
+    _ExtraSpec("saved", "write", _extras_writes.saved),
+    _ExtraSpec("scheduled", "write", _extras_writes.scheduled),
+    _ExtraSpec("drafts", "write", _extras_writes.drafts),
+    _ExtraSpec("forward", "write", _extras_writes.forward, _RECENT),
 )
 
 
