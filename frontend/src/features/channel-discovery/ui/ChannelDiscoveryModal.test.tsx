@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '@/shared/i18n';
@@ -14,6 +15,7 @@ import {
   candidate,
   jsonResponse,
   type MockEventSourceCtor,
+  newQueryClient,
   renderModal,
   route,
   startSearch,
@@ -391,6 +393,23 @@ describe('ChannelDiscoveryModal', () => {
       setTimeout(resolve, 1000);
     });
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  // Обратная половина того же требования: на ОТКРЫТИИ фокус принадлежит самому
+  // диалогу (там живёт ловушка Tab у Modal), и содержимое его забирать не должно.
+  // Под `StrictMode` — потому что дефект был только там: эффект монтирования
+  // выполняется дважды, и флаг «уже открывались» второй проход читал как переход.
+  it('leaves the opening focus on the dialog itself, even under StrictMode', () => {
+    route();
+    render(
+      <StrictMode>
+        <QueryClientProvider client={newQueryClient()}>
+          <ChannelDiscoveryModal campaignId="c1" campaignName="Promo" onClose={vi.fn()} />
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+
+    expect(document.activeElement).toBe(screen.getByRole('dialog'));
   });
 
   it('keeps focus inside the dialog when the form gives way to the results', async () => {

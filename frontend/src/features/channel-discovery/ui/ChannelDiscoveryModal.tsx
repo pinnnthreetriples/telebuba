@@ -199,12 +199,19 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   // параметры"), which drops focus onto <body>. Modal's Tab trap is a keydown
   // handler on the dialog, so from there the next Tab walks into the page behind it.
   const contentRef = useRef<HTMLDivElement>(null);
-  const opened = useRef(false);
+  // Сравнивается ЗНАЧЕНИЕ перехода, а не «выполнялся ли эффект раньше». Флаг
+  // «уже открывались» здесь стоял и под `StrictMode` (см. `main.tsx`) работал
+  // наоборот: в разработке React выполняет эффект монтирования дважды, второй
+  // проход читал флаг первого как переход и ставил фокус ровно там, где строка
+  // ниже просит его НЕ ставить. Начальное значение совпадает с текущим, поэтому
+  // на монтировании молчат оба прохода, а любой настоящий переход виден.
+  const seenSubmitted = useRef(submitted);
   useEffect(() => {
     // Not on open: Modal focuses the dialog itself, and that is where its Tab trap
     // can still wrap backwards.
-    if (opened.current) contentRef.current?.focus();
-    opened.current = true;
+    if (seenSubmitted.current === submitted) return;
+    seenSubmitted.current = submitted;
+    contentRef.current?.focus();
   }, [submitted]);
 
   // Width only, no max-h/overflow-y: per Modal's contract a tall card scrolls via the
