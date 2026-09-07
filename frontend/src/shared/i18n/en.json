@@ -1213,7 +1213,10 @@
       "warm_inline_query": "Inline bot query",
       "warm_self_note": "Saved Messages note",
       "warm_save_draft": "Draft",
-      "warm_forward_to_saved": "Forward to Saved Messages"
+      "warm_forward_to_saved": "Forward to Saved Messages",
+      "warm_vote_in_poll": "Poll vote",
+      "warm_toggle_archive": "Chat archive",
+      "warm_mute_peer": "Chat mute"
     },
     "status": {
       "failed": "failed",
@@ -2419,7 +2422,7 @@
         },
         "leave": {
           "text": "The account rarely leaves channels it joined long ago.",
-          "example": "For example: unsubscribing from a channel it has not read in a month."
+          "example": "For example: unsubscribing from a channel it joined a week ago and staying away for a month."
         },
         "archive": {
           "text": "The account moves a chat to the archive or back.",

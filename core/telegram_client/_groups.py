@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import (
         JoinChannel,
         JoinDiscussionGroup,
+        LeaveChannel,
         LeaveDiscussionGroup,
     )
 
@@ -79,22 +80,31 @@ async def dispatch_join_discussion_group(
     await client(JoinChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
 
 
+async def _leave(client: TelegramClient, peer: object) -> _DispatchResult:
+    """``LeaveChannelRequest`` on ``peer`` with "already out" folded into the ok result.
+
+    Already being out is the state the caller asked for, not a failure: Telegram
+    reports it as ``UserNotParticipantError``, which would otherwise reach
+    ``_generic_error`` and cost the operator an ERROR row plus a stderr traceback
+    for a no-op — the same noise ``already_participant`` and ``join_by_request``
+    were special-cased to stop. It rides back in the log extra instead, so a no-op
+    is still distinguishable from a real leave.
+    """
+    try:
+        await client(LeaveChannelRequest(channel=peer))  # ty: ignore[invalid-argument-type]
+    except errors.UserNotParticipantError:
+        return _DispatchResult(log_extra={"already_left": True})
+    return _DispatchResult()
+
+
+async def dispatch_leave_channel(client: TelegramClient, action: LeaveChannel) -> _DispatchResult:
+    """Leave a channel by handle; warming treats ``already_left`` as the leave having landed."""
+    return await _leave(client, action.channel)
+
+
 async def dispatch_leave_discussion_group(
     client: TelegramClient,
     action: LeaveDiscussionGroup,
 ) -> _DispatchResult:
-    """Leave ``channel``'s linked discussion group — the mirror of the join.
-
-    Already being out of the group is the state the caller asked for, not a
-    failure: Telegram reports it as ``UserNotParticipantError``, which would
-    otherwise reach ``_generic_error`` and cost the operator an ERROR row plus a
-    stderr traceback for a no-op — the same noise ``already_participant`` and
-    ``join_by_request`` were special-cased to stop. It rides back in the log
-    extra instead, so a no-op is still distinguishable from a real leave.
-    """
-    entity = await _resolve_linked_group(client, action.channel)
-    try:
-        await client(LeaveChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
-    except errors.UserNotParticipantError:
-        return _DispatchResult(log_extra={"already_left": True})
-    return _DispatchResult()
+    """Leave ``channel``'s linked discussion group — the mirror of the join."""
+    return await _leave(client, await _resolve_linked_group(client, action.channel))

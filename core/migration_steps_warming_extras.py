@@ -24,3 +24,14 @@ def _add_warming_settings_extra_toggles(connection: Connection) -> None:
         connection.exec_driver_sql(
             "ALTER TABLE warming_settings ADD COLUMN extra_toggles VARCHAR",
         )
+
+
+def _add_warming_joined_left_at(connection: Connection) -> None:
+    # A left channel keeps its row: NULL (every existing row) means still joined, a
+    # timestamp keeps the channel out of the cycle until the re-join cooldown lapses.
+    if not _sqlite_table_exists(connection, "warming_joined_channels"):
+        return
+    if "left_at" not in _sqlite_columns(connection, "warming_joined_channels"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_joined_channels ADD COLUMN left_at VARCHAR",
+        )

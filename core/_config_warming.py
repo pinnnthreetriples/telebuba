@@ -18,6 +18,8 @@ _SearchQuery = Annotated[str, StringConstraints(min_length=2, max_length=32)]
 _NoteText = Annotated[str, StringConstraints(min_length=2, max_length=60)]
 # ``WarmSelfNote.schedule_in_hours`` ceiling (Telegram refuses a later ``schedule_date``).
 _SCHEDULE_MAX_HOURS = 24 * 30
+# ``WarmMutePeer.mute_hours`` bounds — a year; "forever" is deliberately not offered.
+_MuteHours = Annotated[float, Field(ge=0.0, le=24 * 365)]
 
 
 class WarmingSettings(BaseSettings):
@@ -342,6 +344,18 @@ class WarmingSettings(BaseSettings):
     extras_reminder_cancel_probability: float = Field(default=0.5, ge=0.0, le=1.0)
     # Share of drafts cleared again after a pause (typed, thought better of it).
     extras_draft_clear_probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Chats extras. A channel warming joined may be left once it is this old, at most
+    # one leave per interval ("изредка"), and a left channel stays out of the cycle
+    # (no read, no re-join) for the cooldown.
+    extras_leave_min_age_days: int = Field(default=7, ge=1)
+    extras_leave_min_interval_days: int = Field(default=7, ge=1)
+    extras_rejoin_cooldown_days: int = Field(default=30, ge=1)
+    # Mute durations the mute extra draws from; ``0`` unmutes.
+    extras_mute_hours: list[_MuteHours] = Field(
+        min_length=1, default_factory=lambda: [0.0, 8.0, 48.0]
+    )
+    # Share of archive toggles that archive rather than unarchive — stateless, self-balancing.
+    extras_archive_probability: float = Field(default=0.5, ge=0.0, le=1.0)
 
     @field_validator("extras_scheduled_delay_hours")
     @classmethod

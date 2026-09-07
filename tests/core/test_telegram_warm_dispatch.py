@@ -24,11 +24,14 @@ from schemas.telegram_actions_warming import (
     WarmingAction,
     WarmInlineQuery,
     WarmLinkPreview,
+    WarmMutePeer,
     WarmReadContacts,
     WarmSaveDraft,
     WarmSearchMessages,
     WarmSelfNote,
+    WarmToggleArchive,
     WarmViewProfile,
+    WarmVoteInPoll,
 )
 
 _GATEWAY_DIR = Path(__file__).resolve().parents[2] / "core" / "telegram_client"
@@ -62,8 +65,18 @@ _REQUIRED_FIELDS: dict[type[BaseModel], dict[str, object]] = {
     WarmSelfNote: {"text": "hi"},
     WarmSaveDraft: {"text": ""},
     WarmForwardToSaved: {"channel": "@c", "message_id": 1},
+    WarmVoteInPoll: {"channel": "@c", "message_ids": [1]},
+    WarmToggleArchive: {"channel": "@c", "archived": True},
+    WarmMutePeer: {"channel": "@c", "mute_hours": 8},
 }
-_SAVED_ACTION_TYPES = ("warm_self_note", "warm_save_draft", "warm_forward_to_saved")
+_WRITE_ACTION_TYPES = (
+    "warm_self_note",
+    "warm_save_draft",
+    "warm_forward_to_saved",
+    "warm_vote_in_poll",
+    "warm_toggle_archive",
+    "warm_mute_peer",
+)
 
 
 class _WarmNope(BaseModel):
@@ -91,9 +104,9 @@ def test_no_warm_type_is_a_sticky_profile_edit() -> None:
     assert not {t for t in _PROFILE_EDIT_ACTION_TYPES if t.startswith("warm_")}
 
 
-@pytest.mark.parametrize("action_type", _SAVED_ACTION_TYPES)
-def test_saved_writes_never_mark_the_account_flooded(action_type: str) -> None:
-    # A flood on a Saved-Messages write is a warming pace problem, never a sticky status.
+@pytest.mark.parametrize("action_type", _WRITE_ACTION_TYPES)
+def test_warm_writes_never_mark_the_account_flooded(action_type: str) -> None:
+    # A flood on a warming write is a warming pace problem, never a sticky status.
     assert action_type not in _PROFILE_EDIT_ACTION_TYPES
 
 
@@ -158,4 +171,19 @@ def test_warm_log_extra_never_carries_note_or_draft_text() -> None:
     assert warm_log_extra(WarmForwardToSaved(channel="@x", message_id=7)) == {
         "channel": "@x",
         "source_id": 7,
+    }
+
+
+def test_warm_log_extra_for_chat_writes_carries_the_handle_and_the_setting_only() -> None:
+    # No ``option_index``: it says nothing without the answers and those never reach a log.
+    assert warm_log_extra(WarmVoteInPoll(channel="@x", message_ids=[1, 2], option_index=3)) == {
+        "channel": "@x"
+    }
+    assert warm_log_extra(WarmToggleArchive(channel="@x", archived=False)) == {
+        "channel": "@x",
+        "archived": False,
+    }
+    assert warm_log_extra(WarmMutePeer(channel="@x", mute_hours=48)) == {
+        "channel": "@x",
+        "mute_hours": 48,
     }

@@ -146,6 +146,37 @@ class WarmForwardToSaved(BaseModel):
     message_id: int = Field(ge=1)
 
 
+class WarmVoteInPoll(BaseModel):
+    """Write: vote once in an open, anonymous, non-quiz poll among posts just read.
+
+    Core fetches ``message_ids``, keeps polls with ``closed``/``public_voters``/``quiz``
+    unset and no ``chosen`` answer, and votes for exactly one option (``option_index``
+    modulo the answer count) — a public poll would list this account among voters
+    next to its pool-mates, a quiz cannot be retracted. No poll → skip ``no_poll``.
+    """
+
+    action_type: Literal["warm_vote_in_poll"] = "warm_vote_in_poll"
+    channel: str
+    message_ids: list[int] = Field(min_length=1, max_length=5)
+    option_index: int = Field(default=0, ge=0)
+
+
+class WarmToggleArchive(BaseModel):
+    """Write: move a joined channel into the archive folder (or back)."""
+
+    action_type: Literal["warm_toggle_archive"] = "warm_toggle_archive"
+    channel: str
+    archived: bool
+
+
+class WarmMutePeer(BaseModel):
+    """Write: mute a joined channel for ``mute_hours`` (``0`` unmutes)."""
+
+    action_type: Literal["warm_mute_peer"] = "warm_mute_peer"
+    channel: str
+    mute_hours: float = Field(ge=0, le=24 * 365)
+
+
 WarmingAction = Annotated[
     WarmGetDialogs
     | WarmReadContacts
@@ -159,6 +190,9 @@ WarmingAction = Annotated[
     | WarmInlineQuery
     | WarmSelfNote
     | WarmSaveDraft
-    | WarmForwardToSaved,
+    | WarmForwardToSaved
+    | WarmVoteInPoll
+    | WarmToggleArchive
+    | WarmMutePeer,
     Field(discriminator="action_type"),
 ]

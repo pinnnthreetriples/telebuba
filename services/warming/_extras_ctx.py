@@ -13,7 +13,7 @@ outcome is ambiguous and must count spent.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from services.warming import _seams
@@ -21,6 +21,7 @@ from services.warming import _seams
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from schemas._warming_extras import JoinedChannel
     from schemas.telegram_actions import ActionResult, TelegramAction
     from schemas.warming import ActivityPersona, WarmingChannel, WarmingSettingsSecret
     from services.warming._steps import _ChannelTally
@@ -33,8 +34,8 @@ _POST_IDS_MAX = 5
 
 _ExtraKind = Literal["read", "write"]
 # Cycle facts an extra cannot run without (``_extras._is_eligible``). Data, not
-# lambdas, so the registry stays a table. Grows per PR: PR4 ``joined``, PR5 ``premium``.
-_Need = Literal["recent_ids"]
+# lambdas, so the registry stays a table. Grows per PR: PR5 ``premium``.
+_Need = Literal["recent_ids", "joined"]
 
 
 @dataclass
@@ -50,6 +51,9 @@ class _ExtraContext:
     recent_ids: dict[str, list[int]]
     tally: _ChannelTally
     remaining_actions: int | None
+    # Every channel warming joined for this account, left ones included (the chat
+    # extras pick among the not-left ones; the cycle reads ``left_at`` for cooldown).
+    joined: list[JoinedChannel] = field(default_factory=list)
 
     def can_attempt(self) -> bool:
         """The cycle's own daily-budget predicate (``_cycle._can_attempt``), verbatim."""

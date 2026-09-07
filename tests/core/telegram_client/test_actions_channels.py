@@ -156,6 +156,29 @@ async def test_execute_leave_channel_dispatches_request(
     assert any(isinstance(req, LeaveChannelRequest) for req in captured)
 
 
+@pytest.mark.asyncio
+async def test_leave_channel_not_participant_is_ok_not_an_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Already out is the requested state: ok + ``already_left``, so warming records the leave."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.UserNotParticipantError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-out", LeaveChannel(channel="@gone"))
+
+    assert result.status == "ok"
+    logged = [e for e in await list_recent_logs(limit=50) if "leave_channel" in e.event]
+    assert [e.level for e in logged] == ["INFO"]
+    assert [e.extra.get("already_left") for e in logged] == [True]
+
+
 def _chat_full(linked_chat_id: int | None, *, chat_ids: tuple[int, ...]) -> MagicMock:
     """Build a fake ``messages.ChatFull`` with a ``full_chat`` + ``chats`` list."""
     full = MagicMock()

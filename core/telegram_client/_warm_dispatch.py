@@ -22,6 +22,8 @@ from core.telegram_client._warm_browse import (
     saved_gifs,
     search_messages,
 )
+from core.telegram_client._warm_chats import mute_peer, toggle_archive
+from core.telegram_client._warm_media import vote_in_poll
 from core.telegram_client._warm_saved import forward_to_saved, save_draft, self_note
 from schemas.telegram_actions import (
     WarmBrowseStickers,
@@ -30,13 +32,16 @@ from schemas.telegram_actions import (
     WarmGetDialogs,
     WarmInlineQuery,
     WarmLinkPreview,
+    WarmMutePeer,
     WarmReadContacts,
     WarmReadNotifySettings,
     WarmSavedGifs,
     WarmSaveDraft,
     WarmSearchMessages,
     WarmSelfNote,
+    WarmToggleArchive,
     WarmViewProfile,
+    WarmVoteInPoll,
 )
 
 if TYPE_CHECKING:
@@ -77,12 +82,18 @@ async def dispatch_warming_action(  # noqa: C901, PLR0911, PLR0912 - one arm per
             return await save_draft(client, action)
         case WarmForwardToSaved():
             return await forward_to_saved(client, action)
+        case WarmVoteInPoll():
+            return await vote_in_poll(client, action)
+        case WarmToggleArchive():
+            return await toggle_archive(client, action)
+        case WarmMutePeer():
+            return await mute_peer(client, action)
         case _:
             msg = f"Unsupported warming action_type: {action.action_type}"
             raise ValueError(msg)
 
 
-def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: PLR0911 - one arm per model
+def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901, PLR0911 - one arm per model
     """Static log fields — counts, kinds, channel handles and bot names; never text or URLs."""
     match action:
         case WarmGetDialogs():
@@ -101,5 +112,11 @@ def warm_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: PLR091
             return {"clear": action.text == ""}
         case WarmForwardToSaved():
             return {"channel": action.channel, "source_id": action.message_id}
+        case WarmVoteInPoll():
+            return {"channel": action.channel}
+        case WarmToggleArchive():
+            return {"channel": action.channel, "archived": action.archived}
+        case WarmMutePeer():
+            return {"channel": action.channel, "mute_hours": action.mute_hours}
         case _:
             return {}

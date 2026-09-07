@@ -9,7 +9,7 @@ import pytest
 
 from core.config import settings
 from core.db import save_warming_settings
-from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS
+from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, JoinedChannel
 from schemas.telegram_actions import ActionResult
 from schemas.telegram_actions_warming import (
     INLINE_BOT_WHITELIST,
@@ -41,14 +41,21 @@ if TYPE_CHECKING:
 
 _ALL_ON = cast("ExtraToggles", dict.fromkeys(EXTRA_TOGGLE_DEFAULTS, True))
 _KEYS = [spec.key for spec in EXTRAS]
-# The specs with ``needs={"recent_ids"}``.
-_POST_BOUND = {"search_messages", "link_preview", "forward"}
+# The specs with ``needs={"recent_ids"}`` / ``needs={"joined"}``.
+_POST_BOUND = {"search_messages", "link_preview", "forward", "polls"}
+_CHAT_BOUND = {"leave", "archive", "mute"}
 # Specs that dispatch twice per extra (a second RPC after a pause).
 _TWO_RPC = {"gif", "drafts"}
 _CHANNEL = WarmingChannel(channel="c1", created_at="2026-01-01T00:00:00+00:00")
-# One channel whose read fetched posts; enough to make every registered spec eligible.
+# One channel whose read fetched posts, plus one joined long ago and not chosen this
+# cycle (a leave candidate); together they make every registered spec eligible.
 _RECENT_IDS = {"c1": [101, 102]}
+_JOINED = [JoinedChannel(channel="old", created_at="2026-01-01T00:00:00+00:00")]
 _WARM_TYPES = {
+    "warm_vote_in_poll",
+    "leave_channel",
+    "warm_toggle_archive",
+    "warm_mute_peer",
     "warm_get_dialogs",
     "warm_read_contacts",
     "warm_read_notify_settings",
@@ -83,6 +90,7 @@ def _ctx(
     recent_ids: dict[str, list[int]] | None = None,
     remaining: int | None = None,
     tally: _ChannelTally | None = None,
+    joined: list[JoinedChannel] | None = None,
 ) -> _ExtraContext:
     return _ExtraContext(
         account_id="acc-1",
@@ -92,6 +100,7 @@ def _ctx(
         recent_ids={} if recent_ids is None else recent_ids,
         tally=tally or _ChannelTally(),
         remaining_actions=remaining,
+        joined=[] if joined is None else joined,
     )
 
 
@@ -138,7 +147,7 @@ def test_pick_extras_draws_nothing_for_a_zero_range(monkeypatch: pytest.MonkeyPa
 def test_toggled_off_or_missing_key_is_never_picked(monkeypatch: pytest.MonkeyPatch) -> None:
     _extras_range(monkeypatch, 20, 20)
     rng = random.Random(7)  # noqa: S311
-    ctx = _ctx(recent_ids=_RECENT_IDS)
+    ctx = _ctx(recent_ids=_RECENT_IDS, joined=_JOINED)
     picked = {s.key for s in _pick_extras(ctx, {**_ALL_ON, "dialogs": False}, rng)}
     assert picked == set(_KEYS) - {"dialogs"}
     # A key absent from the mapping is off, not on.
@@ -154,7 +163,8 @@ def test_post_bound_extras_are_never_picked_without_a_recent_post(
 ) -> None:
     _extras_range(monkeypatch, 20, 20)
     rng = random.Random(7)  # noqa: S311
-    picked = {s.key for s in _pick_extras(_ctx(recent_ids=recent_ids), _ALL_ON, rng)}
+    ctx = _ctx(recent_ids=recent_ids, joined=_JOINED)
+    picked = {s.key for s in _pick_extras(ctx, _ALL_ON, rng)}
     assert picked == set(_KEYS) - _POST_BOUND
 
 
@@ -163,7 +173,8 @@ def test_post_bound_extras_are_picked_once_any_channel_has_ids(
 ) -> None:
     _extras_range(monkeypatch, 20, 20)
     rng = random.Random(7)  # noqa: S311
-    picked = {s.key for s in _pick_extras(_ctx(recent_ids={"c1": [], "c2": [7]}), _ALL_ON, rng)}
+    ctx = _ctx(recent_ids={"c1": [], "c2": [7]}, joined=_JOINED)
+    picked = {s.key for s in _pick_extras(ctx, _ALL_ON, rng)}
     assert picked == set(_KEYS)
 
 
@@ -173,7 +184,7 @@ def test_is_eligible_checks_only_the_needs_a_spec_names() -> None:
     assert _is_eligible(bound, _ctx()) is False
     assert _is_eligible(bound, _ctx(recent_ids=_RECENT_IDS)) is True
     assert _is_eligible(free, _ctx()) is True
-    assert {s.key for s in EXTRAS if s.needs} == _POST_BOUND
+    assert {s.key for s in EXTRAS if s.needs} == _POST_BOUND | _CHAT_BOUND
 
 
 # --- budget tiers ------------------------------------------------------------
@@ -278,7 +289,7 @@ async def test_a_plain_failure_counts_and_the_rest_still_run(
     monkeypatch.setattr(_seams, "execute", _execute)
     tally = _ChannelTally()
 
-    landed = await run_extras_step(_ctx(tally=tally, recent_ids=_RECENT_IDS))
+    landed = await run_extras_step(_ctx(tally=tally, recent_ids=_RECENT_IDS, joined=_JOINED))
 
     # Every registered spec ran; ``gif`` and ``drafts`` are one extra but two RPCs each
     # (the pinned ``rng.random → 0.0`` makes the draft clear fire).

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.tl.functions.account import UpdateStatusRequest
-from telethon.tl.functions.channels import LeaveChannelRequest
 
 from core.db import fetch_account
 from core.logging import log_event
@@ -26,6 +25,7 @@ from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
 from core.telegram_client._groups import (
     dispatch_join_channel,
     dispatch_join_discussion_group,
+    dispatch_leave_channel,
     dispatch_leave_discussion_group,
 )
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
@@ -229,7 +229,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case JoinDiscussionGroup():
             await dispatch_join_discussion_group(client, action)
         case LeaveChannel():
-            await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+            return await dispatch_leave_channel(client, action)
         case LeaveDiscussionGroup():
             return await dispatch_leave_discussion_group(client, action)
         case PostComment():

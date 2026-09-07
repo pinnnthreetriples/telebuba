@@ -13,11 +13,16 @@ file-size budget; the dependency runs one way (this module imports from
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account, list_warming_channels, load_warming_settings
+from core.db import (
+    fetch_account,
+    list_joined_channels,
+    list_warming_channels,
+    load_warming_settings,
+)
 from core.logging import log_event
 from schemas.telegram_actions import SetOnline
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
@@ -42,11 +47,30 @@ from services.warming.pacing import (
 )
 
 if TYPE_CHECKING:
+    from schemas._warming_extras import JoinedChannel
     from schemas.warming import WarmingChannel
     from services.warming._steps import _OnStep
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
+
+
+def _without_cooling_down(
+    chosen: list[WarmingChannel], joined: list[JoinedChannel], now: datetime
+) -> list[WarmingChannel]:
+    """Drop channels the account left less than the re-join cooldown ago.
+
+    A left channel is neither read nor re-joined until then; once the cooldown lapses
+    ``is_channel_joined`` is False (``left_at`` set), so the join step re-joins it and
+    its upsert clears ``left_at``.
+    """
+    cutoff = now - timedelta(days=settings.warming.extras_rejoin_cooldown_days)
+    cooling = {
+        j.channel
+        for j in joined
+        if j.left_at is not None and datetime.fromisoformat(j.left_at) > cutoff
+    }
+    return [c for c in chosen if c.channel not in cooling]
 
 
 async def _watch_stories_step(
@@ -209,6 +233,8 @@ async def run_one_cycle(
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
         chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
+        joined = await list_joined_channels(account_id)
+        chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
         recent_ids = await _run_channel_loop(
             data,
             tally,
@@ -238,6 +264,7 @@ async def run_one_cycle(
                 recent_ids=recent_ids,
                 tally=tally,
                 remaining_actions=data.remaining_actions,
+                joined=joined,
             ),
             on_step,
         )
