@@ -63,7 +63,7 @@ const GROUPS: Group[] = [
     actions: [
       { key: 'online', state: 'always' },
       { key: 'reactions', state: 'live', field: 'reactions_enabled' },
-      { key: 'polls', state: 'soon' },
+      { key: 'polls', state: 'live', field: 'polls' },
       { key: 'video', state: 'soon' },
       { key: 'voice', state: 'soon' },
     ],
@@ -97,9 +97,9 @@ const GROUPS: Group[] = [
     icon: 'users',
     actions: [
       { key: 'join', state: 'live', field: 'join_enabled' },
-      { key: 'leave', state: 'soon' },
-      { key: 'archive', state: 'soon' },
-      { key: 'mute', state: 'soon' },
+      { key: 'leave', state: 'live', field: 'leave' },
+      { key: 'archive', state: 'live', field: 'archive' },
+      { key: 'mute', state: 'live', field: 'mute' },
       { key: 'notifications', state: 'live', field: 'notifications' },
     ],
   },

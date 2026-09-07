@@ -97,13 +97,16 @@ from schemas.telegram_actions_warming import (
     WarmGetDialogs,
     WarmInlineQuery,
     WarmLinkPreview,
+    WarmMutePeer,
     WarmReadContacts,
     WarmReadNotifySettings,
     WarmSavedGifs,
     WarmSaveDraft,
     WarmSearchMessages,
     WarmSelfNote,
+    WarmToggleArchive,
     WarmViewProfile,
+    WarmVoteInPoll,
 )
 
 ActionResult = _telegram_results.ActionResult
@@ -358,7 +361,10 @@ TelegramAction = Annotated[
     | WarmInlineQuery
     | WarmSelfNote
     | WarmSaveDraft
-    | WarmForwardToSaved,
+    | WarmForwardToSaved
+    | WarmVoteInPoll
+    | WarmToggleArchive
+    | WarmMutePeer,
     Field(discriminator="action_type"),
 ]
 

@@ -79,7 +79,10 @@ from core.migration_steps_pool import (
 from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
-from core.migration_steps_warming_extras import _add_warming_settings_extra_toggles
+from core.migration_steps_warming_extras import (
+    _add_warming_joined_left_at,
+    _add_warming_settings_extra_toggles,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -182,6 +185,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (60, "add_discovery_kind_and_seen", _add_discovery_kind_and_seen),
     (61, "add_linked_group_about", _add_linked_group_about),
     (62, "add_warming_settings_extra_toggles", _add_warming_settings_extra_toggles),
+    (63, "add_warming_joined_left_at", _add_warming_joined_left_at),
 )
 
 

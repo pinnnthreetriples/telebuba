@@ -131,6 +131,7 @@ _warming_joined_channels = Table(
     Column("account_id", String, primary_key=True),
     Column("channel", String, primary_key=True),
     Column("created_at", String, nullable=False),
+    Column("left_at", String, nullable=True),
 )
 _warming_settings = Table(
     "warming_settings",

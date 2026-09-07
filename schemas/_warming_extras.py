@@ -12,7 +12,15 @@ from __future__ import annotations
 
 from typing import TypedDict
 
-from pydantic import ConfigDict, with_config
+from pydantic import BaseModel, ConfigDict, with_config
+
+
+class JoinedChannel(BaseModel):
+    """One ``warming_joined_channels`` row; ``left_at`` set = left, in the re-join cooldown."""
+
+    channel: str
+    created_at: str
+    left_at: str | None = None
 
 
 # ``extra="forbid"``: an unknown key is a 422 at the API, never a silently stored typo.

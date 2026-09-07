@@ -17,7 +17,8 @@ from tests.services.warming.test_extras_step import _RECENT_IDS, _ctx, _extras_r
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult, TelegramAction
 
-_WRITE_SPECS = tuple(spec for spec in EXTRAS if spec.kind == "write")
+# This module's own runners only — the chat writes have ``test_extras_chats.py``.
+_WRITE_SPECS = tuple(spec for spec in EXTRAS if spec.run.__module__ == _extras_writes.__name__)
 # The id-bearing channel comes first: the seeded ``choice`` over two items picks index
 # 1, so an unfiltered draw would land on the empty one and fail the schema.
 _MIXED_IDS = {"full": list(range(1, 9)), "empty": []}

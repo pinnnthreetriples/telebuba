@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from services.warming import _extras_reads, _extras_writes, _seams
+from services.warming import _extras_chats, _extras_reads, _extras_writes, _seams
 from services.warming._extras_ctx import _ExtraSpec
 from services.warming._steps import _human_pause
 from services.warming.pacing import _FAILURE_STATUSES, _WAIT_STATUSES, _classify_flood
@@ -27,9 +27,10 @@ if TYPE_CHECKING:
     from services.warming._extras_ctx import _ExtraContext, _Need
     from services.warming._steps import _ChannelTally
 
-# PR1 account reads + PR2 browse reads + PR3 Saved-Messages writes. The remaining
-# ``ExtraToggles`` keys land per PR and the contract test is ``⊆`` until then.
+# PR1 account reads + PR2 browse reads + PR3 Saved-Messages writes + PR4 chats and polls.
+# The remaining ``ExtraToggles`` keys land in PR5 and the contract test is ``⊆`` until then.
 _RECENT: frozenset[_Need] = frozenset({"recent_ids"})
+_JOINED: frozenset[_Need] = frozenset({"joined"})
 EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("dialogs", "read", _extras_reads.dialogs),
     _ExtraSpec("contacts", "read", _extras_reads.contacts),
@@ -45,12 +46,19 @@ EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("scheduled", "write", _extras_writes.scheduled),
     _ExtraSpec("drafts", "write", _extras_writes.drafts),
     _ExtraSpec("forward", "write", _extras_writes.forward, _RECENT),
+    _ExtraSpec("polls", "write", _extras_chats.polls, _RECENT),
+    _ExtraSpec("leave", "write", _extras_chats.leave, _JOINED),
+    _ExtraSpec("archive", "write", _extras_chats.archive, _JOINED),
+    _ExtraSpec("mute", "write", _extras_chats.mute, _JOINED),
 )
 
 
 def _is_eligible(spec: _ExtraSpec, ctx: _ExtraContext) -> bool:
     # One fact per ``_Need``; a spec runs only when every fact it names holds.
-    facts = {"recent_ids": any(ctx.recent_ids.values())}
+    facts = {
+        "recent_ids": any(ctx.recent_ids.values()),
+        "joined": bool(_extras_chats.joined_now(ctx)),
+    }
     return all(facts[need] for need in spec.needs)
 
 

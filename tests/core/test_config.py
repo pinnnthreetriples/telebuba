@@ -21,6 +21,8 @@ from core.config import (
 from schemas.telegram_actions_warming import WarmInlineQuery, WarmSearchMessages, WarmSelfNote
 
 if TYPE_CHECKING:
+    from typing import Any
+
     from pydantic_settings import BaseSettings
 
 
@@ -154,6 +156,27 @@ def test_extras_inline_bots_must_stay_within_the_whitelist() -> None:
     with pytest.raises(ValidationError):
         WarmingSettings(extras_inline_bots=[])
     assert WarmingSettings(extras_inline_bots=["gif"]).extras_inline_bots == ["gif"]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"extras_leave_min_age_days": 0},
+        {"extras_leave_min_interval_days": 0},
+        {"extras_rejoin_cooldown_days": 0},
+        {"extras_mute_hours": []},
+        {"extras_mute_hours": [-1.0]},
+        {"extras_mute_hours": [24 * 365 + 1]},
+        {"extras_archive_probability": 1.5},
+    ],
+)
+def test_extras_chat_settings_are_bounded(bad: dict[str, Any]) -> None:
+    with pytest.raises(ValidationError):
+        WarmingSettings(**bad)
+
+
+def test_extras_mute_hours_edges_match_the_mute_action_schema() -> None:
+    assert WarmingSettings(extras_mute_hours=[0, 24 * 365]).extras_mute_hours == [0.0, 8760.0]
 
 
 @pytest.mark.parametrize("word", ["a", "x" * 33], ids=["one_char", "thirty_three_chars"])
