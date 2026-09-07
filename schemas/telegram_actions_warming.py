@@ -117,6 +117,35 @@ class WarmInlineQuery(BaseModel):
     query: str = Field(min_length=1, max_length=64)
 
 
+class WarmSelfNote(BaseModel):
+    """Write: a short note to Saved Messages, optionally as a reminder (``schedule_date``).
+
+    ``schedule_in_hours`` set → a scheduled message ("reminder"); ``cancel_reminder``
+    then deletes it again in the same dispatch (humans do cancel reminders), so the
+    reminder never fires.
+    """
+
+    action_type: Literal["warm_self_note"] = "warm_self_note"
+    text: str = Field(min_length=2, max_length=60)
+    schedule_in_hours: float | None = Field(default=None, gt=0, le=24 * 30)
+    cancel_reminder: bool = False
+
+
+class WarmSaveDraft(BaseModel):
+    """Write (server-side only): save a draft to Saved Messages; empty ``text`` clears it."""
+
+    action_type: Literal["warm_save_draft"] = "warm_save_draft"
+    text: str = Field(max_length=256)
+
+
+class WarmForwardToSaved(BaseModel):
+    """Write: forward one post the account just read into Saved Messages."""
+
+    action_type: Literal["warm_forward_to_saved"] = "warm_forward_to_saved"
+    channel: str
+    message_id: int = Field(ge=1)
+
+
 WarmingAction = Annotated[
     WarmGetDialogs
     | WarmReadContacts
@@ -127,6 +156,9 @@ WarmingAction = Annotated[
     | WarmLinkPreview
     | WarmBrowseStickers
     | WarmSavedGifs
-    | WarmInlineQuery,
+    | WarmInlineQuery
+    | WarmSelfNote
+    | WarmSaveDraft
+    | WarmForwardToSaved,
     Field(discriminator="action_type"),
 ]

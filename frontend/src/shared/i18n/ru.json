@@ -1216,7 +1216,10 @@
       "warm_link_preview": "Предпросмотр ссылки",
       "warm_browse_stickers": "Просмотр стикеров",
       "warm_saved_gifs": "Сохранённые GIF",
-      "warm_inline_query": "Запрос инлайн-боту"
+      "warm_inline_query": "Запрос инлайн-боту",
+      "warm_self_note": "Заметка в Избранном",
+      "warm_save_draft": "Черновик",
+      "warm_forward_to_saved": "Пересылка в Избранное"
     },
     "status": {
       "failed": "ошибка",

@@ -19,18 +19,22 @@ from core.telegram_client._warm_dispatch import dispatch_warming_action, warm_lo
 from schemas.telegram_actions import TelegramAction
 from schemas.telegram_actions_warming import (
     WarmCheckSettings,
+    WarmForwardToSaved,
     WarmGetDialogs,
     WarmingAction,
     WarmInlineQuery,
     WarmLinkPreview,
     WarmReadContacts,
+    WarmSaveDraft,
     WarmSearchMessages,
+    WarmSelfNote,
     WarmViewProfile,
 )
 
 _GATEWAY_DIR = Path(__file__).resolve().parents[2] / "core" / "telegram_client"
-# Writes the plan rules out for warming: contact import (operator's decision) and the
-# browse family's "act on what you saw" verbs — every warm read stays a read.
+# Writes the plan rules out for warming: contact import (operator's decision), the
+# browse family's "act on what you saw" verbs — every warm read stays a read — and the
+# one draft verb that would wipe the operator's drafts in every chat, not just Saved.
 _FORBIDDEN_REQUESTS = (
     "ImportContactsRequest",
     "AddContactRequest",
@@ -39,6 +43,15 @@ _FORBIDDEN_REQUESTS = (
     "UninstallStickerSetRequest",
     "SaveGifRequest",
     "SendInlineBotResultRequest",
+    "ClearAllDraftsRequest",
+)
+# The self-scoped writes must not be able to reach any other peer.
+_SAVED_MODULE = _GATEWAY_DIR / "_warm_saved.py"
+_NON_SELF_PEER_MARKERS = (
+    "_resolve_dm_peer",
+    "resolve_dm_peer",
+    "InputPeerUser",
+    "InputPeerChannel",
 )
 _WARMING_MODELS = get_args(get_args(WarmingAction)[0])
 # Minimal required fields for the models that cannot be default-constructed.
@@ -46,7 +59,11 @@ _REQUIRED_FIELDS: dict[type[BaseModel], dict[str, object]] = {
     WarmSearchMessages: {"channel": "@c", "message_ids": [1], "fallback_query": "news"},
     WarmLinkPreview: {"channel": "@c", "message_ids": [1]},
     WarmInlineQuery: {"bot": "pic", "query": "cats"},
+    WarmSelfNote: {"text": "hi"},
+    WarmSaveDraft: {"text": ""},
+    WarmForwardToSaved: {"channel": "@c", "message_id": 1},
 }
+_SAVED_ACTION_TYPES = ("warm_self_note", "warm_save_draft", "warm_forward_to_saved")
 
 
 class _WarmNope(BaseModel):
@@ -72,6 +89,19 @@ async def test_unhandled_warm_model_raises_instead_of_falling_through() -> None:
 
 def test_no_warm_type_is_a_sticky_profile_edit() -> None:
     assert not {t for t in _PROFILE_EDIT_ACTION_TYPES if t.startswith("warm_")}
+
+
+@pytest.mark.parametrize("action_type", _SAVED_ACTION_TYPES)
+def test_saved_writes_never_mark_the_account_flooded(action_type: str) -> None:
+    # A flood on a Saved-Messages write is a warming pace problem, never a sticky status.
+    assert action_type not in _PROFILE_EDIT_ACTION_TYPES
+
+
+def test_saved_module_addresses_self_only() -> None:
+    source = _SAVED_MODULE.read_text(encoding="utf-8")
+    assert "InputPeerSelf" in source
+    assert "to_peer=InputPeerSelf()" in source
+    assert not [marker for marker in _NON_SELF_PEER_MARKERS if marker in source]
 
 
 @pytest.mark.parametrize("model", _WARMING_MODELS, ids=lambda m: m.__name__)
@@ -116,3 +146,16 @@ def test_warm_log_extra_never_carries_query_text_or_urls() -> None:
     assert warm_log_extra(search) == {"channel": "@x", "global": True}
     assert warm_log_extra(WarmLinkPreview(channel="@x", message_ids=[1])) == {"channel": "@x"}
     assert warm_log_extra(WarmInlineQuery(bot="pic", query="secret cats")) == {"bot": "pic"}
+
+
+def test_warm_log_extra_never_carries_note_or_draft_text() -> None:
+    assert warm_log_extra(WarmSelfNote(text="secret note")) == {"scheduled": False}
+    assert warm_log_extra(WarmSelfNote(text="secret note", schedule_in_hours=2)) == {
+        "scheduled": True
+    }
+    assert warm_log_extra(WarmSaveDraft(text="secret draft")) == {"clear": False}
+    assert warm_log_extra(WarmSaveDraft(text="")) == {"clear": True}
+    assert warm_log_extra(WarmForwardToSaved(channel="@x", message_id=7)) == {
+        "channel": "@x",
+        "source_id": 7,
+    }

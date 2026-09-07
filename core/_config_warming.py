@@ -14,6 +14,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from schemas.telegram_actions_warming import INLINE_BOT_WHITELIST
 
 _SearchQuery = Annotated[str, StringConstraints(min_length=2, max_length=32)]
+# ``WarmSelfNote.text`` bounds — a draft reuses the same texts, so one list fits both.
+_NoteText = Annotated[str, StringConstraints(min_length=2, max_length=60)]
+# ``WarmSelfNote.schedule_in_hours`` ceiling (Telegram refuses a later ``schedule_date``).
+_SCHEDULE_MAX_HOURS = 24 * 30
 
 
 class WarmingSettings(BaseSettings):
@@ -316,6 +320,41 @@ class WarmingSettings(BaseSettings):
     # Share of in-channel searches that also issue one global search — the
     # flood-sensitive half of ``warm_search_messages``, hence rare.
     extras_global_search_probability: float = Field(default=0.1, ge=0.0, le=1.0)
+    # Neutral everyday notes the Saved-Messages extras write: a self note, a scheduled
+    # reminder, a draft. Only ever addressed to the account itself; never logged.
+    extras_note_texts: list[_NoteText] = Field(
+        min_length=1,
+        default_factory=lambda: [
+            "купить молоко",
+            "позвонить маме",
+            "не забыть зарядку",
+            "почитать вечером",
+            "записаться к врачу",
+            "оплатить интернет",
+            "список на неделю",
+            "идея для подарка",
+        ],
+    )
+    # How far ahead a scheduled reminder lands, drawn uniformly in hours (a day to a week).
+    extras_scheduled_delay_hours: tuple[float, float] = (24.0, 168.0)
+    # Share of reminders the account cancels again in the same sitting — humans do,
+    # and a cancelled reminder never fires into Saved Messages later.
+    extras_reminder_cancel_probability: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Share of drafts cleared again after a pause (typed, thought better of it).
+    extras_draft_clear_probability: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    @field_validator("extras_scheduled_delay_hours")
+    @classmethod
+    def _check_scheduled_delay(cls, window: tuple[float, float]) -> tuple[float, float]:
+        lo, hi = window
+        # ≥1h: the gateway floors the date to the minute, so a sub-minute window could land
+        # in the past; and nobody sets a reminder for "in a few seconds".
+        if not 1 <= lo <= hi <= _SCHEDULE_MAX_HOURS:
+            msg = (
+                f"extras_scheduled_delay_hours must satisfy 1 <= lo <= hi <= {_SCHEDULE_MAX_HOURS}"
+            )
+            raise ValueError(msg)
+        return window
 
     @field_validator("extras_inline_bots")
     @classmethod

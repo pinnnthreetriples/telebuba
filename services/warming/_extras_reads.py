@@ -24,6 +24,7 @@ from schemas.telegram_actions_warming import (
     WarmViewProfile,
 )
 from services.warming import _seams
+from services.warming._extras_ctx import _recent_posts
 from services.warming._steps import _human_pause
 
 if TYPE_CHECKING:
@@ -40,8 +41,6 @@ _CHECK_SETTINGS_OFFSETS = 11
 # channel we just read (our own profile when none was), the rest our own profile.
 _BOT_PROFILE_PROBABILITY = 0.25
 _CHANNEL_PROFILE_PROBABILITY = 0.5
-# The two "look at posts just read" actions take at most this many ids (schema cap).
-_POST_IDS_MAX = 5
 
 
 async def dialogs(ctx: _ExtraContext) -> ActionResult:
@@ -77,12 +76,6 @@ async def view_profiles(ctx: _ExtraContext) -> ActionResult:
     else:
         action = WarmViewProfile(kind="self")
     return await _seams.execute(ctx.account_id, action)
-
-
-def _recent_posts(ctx: _ExtraContext) -> tuple[str, list[int]]:
-    """A channel whose read fetched posts, plus up to five of them (``needs`` guarantees one)."""
-    channel = _seams.rng.choice([c for c, ids in ctx.recent_ids.items() if ids])
-    return channel, ctx.recent_ids[channel][:_POST_IDS_MAX]
 
 
 def _query() -> str:

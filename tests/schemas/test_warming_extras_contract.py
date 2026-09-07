@@ -18,6 +18,16 @@ def test_registry_keys_are_toggle_keys_with_a_default_each() -> None:
     assert len({spec.key for spec in EXTRAS}) == len(EXTRAS)
 
 
+def test_write_specs_are_exactly_the_self_scoped_saved_messages_keys() -> None:
+    # ponytail: grows with PR4 (polls, leave, archive, mute) and PR5 (video, voice, emoji_status).
+    assert {spec.key for spec in EXTRAS if spec.kind == "write"} <= {
+        "saved",
+        "scheduled",
+        "drafts",
+        "forward",
+    }
+
+
 def test_update_rejects_an_unknown_toggle_and_accepts_none() -> None:
     with pytest.raises(ValidationError):
         WarmingSettingsUpdate.model_validate({"extra_toggles": {"nope": True}})

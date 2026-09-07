@@ -86,10 +86,10 @@ const GROUPS: Group[] = [
     actions: [
       { key: 'interAccountChat', state: 'live', field: 'inter_account_chat' },
       { key: 'typing', state: 'always' },
-      { key: 'forward', state: 'soon' },
-      { key: 'saved', state: 'soon' },
+      { key: 'forward', state: 'live', field: 'forward' },
+      { key: 'saved', state: 'live', field: 'saved' },
       { key: 'contacts', state: 'live', field: 'contacts' },
-      { key: 'scheduled', state: 'soon' },
+      { key: 'scheduled', state: 'live', field: 'scheduled' },
     ],
   },
   {
@@ -111,7 +111,7 @@ const GROUPS: Group[] = [
       { key: 'checkSettings', state: 'live', field: 'check_settings' },
       { key: 'updateProfile', state: 'external' },
       { key: 'emojiStatus', state: 'soon' },
-      { key: 'drafts', state: 'soon' },
+      { key: 'drafts', state: 'live', field: 'drafts' },
     ],
   },
 ];

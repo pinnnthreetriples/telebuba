@@ -1210,7 +1210,10 @@
       "warm_link_preview": "Link preview",
       "warm_browse_stickers": "Sticker browsing",
       "warm_saved_gifs": "Saved GIFs",
-      "warm_inline_query": "Inline bot query"
+      "warm_inline_query": "Inline bot query",
+      "warm_self_note": "Saved Messages note",
+      "warm_save_draft": "Draft",
+      "warm_forward_to_saved": "Forward to Saved Messages"
     },
     "status": {
       "failed": "failed",

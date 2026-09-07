@@ -18,6 +18,7 @@ from core.config import (
     WarmingSettings,
     settings,
 )
+from schemas.telegram_actions_warming import WarmInlineQuery, WarmSearchMessages, WarmSelfNote
 
 if TYPE_CHECKING:
     from pydantic_settings import BaseSettings
@@ -160,6 +161,38 @@ def test_extras_search_queries_fit_the_action_schemas_they_are_typed_into(word: 
     """A word outside 2..32 chars would fail the search-fallback / inline-query schema at draw."""
     with pytest.raises(ValidationError):
         WarmingSettings(extras_search_queries=[word])
+
+
+@pytest.mark.parametrize(
+    "window",
+    [(0.5, 10.0), (10.0, 5.0), (1.0, 721.0)],
+    ids=["sub_hour_lo", "lo_above_hi", "past_cap"],
+)
+def test_extras_scheduled_delay_window_is_ordered_and_within_the_schedule_cap(
+    window: tuple[float, float],
+) -> None:
+    """``rng.uniform`` would silently invert lo > hi; a delay past 720h fails the note schema."""
+    with pytest.raises(ValidationError):
+        WarmingSettings(extras_scheduled_delay_hours=window)
+    edge = (1.0, 720.0)
+    assert WarmingSettings(extras_scheduled_delay_hours=edge).extras_scheduled_delay_hours == edge
+
+
+@pytest.mark.parametrize("texts", [[], ["a"], ["x" * 61]], ids=["empty", "one_char", "sixty_one"])
+def test_extras_note_texts_fit_the_self_note_schema(texts: list[str]) -> None:
+    """A note outside 2..60 chars would fail ``WarmSelfNote`` at draw, not at boot."""
+    with pytest.raises(ValidationError):
+        WarmingSettings(extras_note_texts=texts)
+
+
+def test_default_note_texts_and_search_queries_are_accepted_by_their_action_models() -> None:
+    """The config bounds mirror the schemas; this pins them together so neither drifts alone."""
+    defaults = WarmingSettings()
+    for text in defaults.extras_note_texts:
+        WarmSelfNote(text=text)
+    for word in defaults.extras_search_queries:
+        WarmSearchMessages(channel="c", message_ids=[1], fallback_query=word)
+        WarmInlineQuery(bot="gif", query=word)
 
 
 # --- repr secrecy -----------------------------------------------------------

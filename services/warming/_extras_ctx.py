@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     # ``None`` = not applicable this cycle: nothing was dispatched, nothing booked.
     _Runner = Callable[["_ExtraContext"], Awaitable[ActionResult | None]]
 
+# The "look at posts just read" actions take at most this many ids (schema cap).
+_POST_IDS_MAX = 5
+
 _ExtraKind = Literal["read", "write"]
 # Cycle facts an extra cannot run without (``_extras._is_eligible``). Data, not
 # lambdas, so the registry stays a table. Grows per PR: PR4 ``joined``, PR5 ``premium``.
@@ -67,3 +70,9 @@ async def _write(ctx: _ExtraContext, action: TelegramAction) -> ActionResult:
     """Dispatch a budget-booking extra. Book first — hard invariant, see module doc."""
     ctx.tally.attempts += 1
     return await _seams.execute(ctx.account_id, action)
+
+
+def _recent_posts(ctx: _ExtraContext) -> tuple[str, list[int]]:
+    """A channel whose read fetched posts, plus up to five of them (``needs`` guarantees one)."""
+    channel = _seams.rng.choice([c for c, ids in ctx.recent_ids.items() if ids])
+    return channel, ctx.recent_ids[channel][:_POST_IDS_MAX]

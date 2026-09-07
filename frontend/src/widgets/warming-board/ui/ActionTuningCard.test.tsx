@@ -20,7 +20,7 @@ const SETTINGS = {
   // is reset to the schema defaults (1 and 0.0).
   gemini_max_retries: 4,
   gemini_min_interval_seconds: 2.5,
-  // The ten extras wired up so far; the rest of the 21 keys stay server-side
+  // The fourteen extras wired up so far; the rest of the 21 keys stay server-side
   // defaults until their rows leave "скоро".
   extra_toggles: {
     dialogs: true,
@@ -33,6 +33,10 @@ const SETTINGS = {
     stickers: true,
     gif: true,
     inline_bots: true,
+    forward: true,
+    saved: true,
+    scheduled: true,
+    drafts: true,
   },
   updated_at: 'now',
 };
@@ -40,7 +44,7 @@ const SETTINGS = {
 // The card's own counts, derived the same way the legend derives them. Written out
 // so a row that changes state has to change this number too — that is the point of
 // the states being data rather than markup.
-const SOON_ROWS = 11;
+const SOON_ROWS = 7;
 const ALWAYS_ROWS = 5;
 // Profile editing lives in the Accounts section: one row that warming never runs.
 const EXTERNAL_ROWS = 1;
@@ -217,12 +221,14 @@ test('a new extra toggle writes into extra_toggles beside the legacy columns', a
   });
   await userEvent.click(screen.getByRole('switch', { name: 'Просмотр диалогов' }));
   await userEvent.click(screen.getByRole('switch', { name: 'Поиск GIF' }));
+  await userEvent.click(screen.getByRole('switch', { name: 'Заметки в Избранном' }));
   await userEvent.click(screen.getByText('Сохранить'));
 
   const body = await savedBody();
   const extras = body.extra_toggles as Record<string, boolean>;
   expect(extras.dialogs).toBe(false);
   expect(extras.gif).toBe(false);
+  expect(extras.saved).toBe(false);
   expect(extras.contacts).toBe(true);
   expect(extras.inline_bots).toBe(true);
   // Still-"скоро" keys are never sent: a partial object lets the write path keep
@@ -301,6 +307,10 @@ test('"Выключить все" reaches only the actions the backend can store
     stickers: false,
     gif: false,
     inline_bots: false,
+    forward: false,
+    saved: false,
+    scheduled: false,
+    drafts: false,
   });
 });
 

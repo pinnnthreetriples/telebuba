@@ -93,13 +93,16 @@ from schemas.telegram_actions_twofa import (
 from schemas.telegram_actions_warming import (
     WarmBrowseStickers,
     WarmCheckSettings,
+    WarmForwardToSaved,
     WarmGetDialogs,
     WarmInlineQuery,
     WarmLinkPreview,
     WarmReadContacts,
     WarmReadNotifySettings,
     WarmSavedGifs,
+    WarmSaveDraft,
     WarmSearchMessages,
+    WarmSelfNote,
     WarmViewProfile,
 )
 
@@ -352,7 +355,10 @@ TelegramAction = Annotated[
     | WarmLinkPreview
     | WarmBrowseStickers
     | WarmSavedGifs
-    | WarmInlineQuery,
+    | WarmInlineQuery
+    | WarmSelfNote
+    | WarmSaveDraft
+    | WarmForwardToSaved,
     Field(discriminator="action_type"),
 ]
 
