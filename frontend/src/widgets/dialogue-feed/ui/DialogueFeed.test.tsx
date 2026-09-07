@@ -321,15 +321,26 @@ test('the left account writes on the left, the other one on the right', () => {
   expect(screen.getByText('справа').className).toContain('self-end');
 });
 
+// Под `StrictMode`, и это не украшение теста: пока отметка «виденное» ставилась
+// во время рендера, второй проход гасил её, и в разработке не вплывал ни один
+// пузырь. С прежней версией этот тест падает на первом же утверждении.
 test('newly-arrived messages animate in; already-seen ones do not re-animate', () => {
   const first = message({ text: 'first', created_at: '2026-07-01T14:00:00Z' });
-  const { rerender } = render(<DialogueTranscript leftAccount="a1" messages={[first]} />);
+  const { rerender } = render(
+    <StrictMode>
+      <DialogueTranscript leftAccount="a1" messages={[first]} />
+    </StrictMode>,
+  );
   // On first render the message is new → it carries the enter-animation class.
   expect(screen.getByText('first').closest('.tb-swapin')).not.toBeNull();
 
   // A newer message arrives (the pair's transcript is oldest-first).
   const second = message({ text: 'second', created_at: '2026-07-01T14:05:00Z' });
-  rerender(<DialogueTranscript leftAccount="a1" messages={[first, second]} />);
+  rerender(
+    <StrictMode>
+      <DialogueTranscript leftAccount="a1" messages={[first, second]} />
+    </StrictMode>,
+  );
   // Only the genuinely-new message animates; the previously-seen one is static.
   expect(screen.getByText('second').closest('.tb-swapin')).not.toBeNull();
   expect(screen.getByText('first').closest('.tb-swapin')).toBeNull();
