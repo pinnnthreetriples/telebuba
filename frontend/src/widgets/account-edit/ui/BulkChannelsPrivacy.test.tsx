@@ -109,13 +109,11 @@ test('a public bulk create numbers the handle per account and carries one avatar
   });
 
   const created = calls.filter((call) => /\/channels$/.test(call.url));
-  expect(created.map((call) => call.body?.username)).toEqual([
-    'skidki_1',
-    'skidki_2',
-    'skidki_3',
-  ]);
+  expect(created.map((call) => call.body?.username)).toEqual(['skidki_1', 'skidki_2', 'skidki_3']);
   expect(created.every((call) => call.body?.title === 'Скидки')).toBe(true);
-  expect(calls.filter((call) => call.url.endsWith('/photo') && call.fileName === 'logo.jpg')).toHaveLength(3);
+  expect(
+    calls.filter((call) => call.url.endsWith('/photo') && call.fileName === 'logo.jpg'),
+  ).toHaveLength(3);
 });
 
 test('a public create without {n} stays blocked for a batch, allowed for one account', async () => {

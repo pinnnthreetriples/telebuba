@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Icon, Input, SegmentedControl, Textarea } from '@/shared/ui';
+import { Button, Icon, Input, SegmentedControl, Textarea } from '@/shared/ui';
 
 import { CHANNEL_ABOUT_MAX, CHANNEL_TITLE_MAX, PHOTO_SUFFIXES } from './_channelsShared';
 import { CheckRow } from './_CheckRow';
@@ -165,14 +165,10 @@ export function BulkChannelsTab({
             }}
           />
           <div className="flex items-center gap-md">
-            <button
-              type="button"
-              onClick={() => postFileInput.current?.click()}
-              className="inline-flex h-field shrink-0 items-center gap-tight rounded-full border border-dashed border-line-strong bg-surface-card px-xl text-body font-medium text-content-muted hover:border-action-primary hover:text-action-primary"
-            >
+            <Button size="xs" variant="dashedMuted" onClick={() => postFileInput.current?.click()}>
               <Icon name="plus" size={16} />
               {t('accounts.channel.attach')}
-            </button>
+            </Button>
             <input
               ref={postFileInput}
               type="file"
