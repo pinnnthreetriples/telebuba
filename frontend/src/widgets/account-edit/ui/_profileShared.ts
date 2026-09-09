@@ -19,6 +19,19 @@ const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
 export const PROFILE_NAME_MAX = 64;
 export const PROFILE_BIO_MAX = 70;
 
+/** The three profile-text fields a bulk save can write, and their own limits. */
+export type TextFieldKey = 'first_name' | 'last_name' | 'bio';
+export const TEXT_FIELDS = [
+  'first_name',
+  'last_name',
+  'bio',
+] as const satisfies readonly TextFieldKey[];
+export const TEXT_MAX: Record<TextFieldKey, number> = {
+  first_name: PROFILE_NAME_MAX,
+  last_name: PROFILE_NAME_MAX,
+  bio: PROFILE_BIO_MAX,
+};
+
 export function tileStyle(uri: string | null | undefined, ratio: string): CSSProperties {
   if (!uri) return { aspectRatio: ratio, background: TILE };
   return {

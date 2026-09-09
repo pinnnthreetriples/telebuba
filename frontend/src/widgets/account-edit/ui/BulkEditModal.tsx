@@ -1,60 +1,75 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   accountDisplayName,
   AccountAvatar,
+  accountProfileSnapshotQueryKey,
+  addAccountMusicMutation,
   allAccountsQueryOptions,
   invalidateAccountViews,
+  postAccountStoryMutation,
+  setAccountPhotoMutation,
+  updateAccountProfileMutation,
 } from '@/entities/account';
+import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
-import { Button, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
+import { Button, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
+import { BulkMusicTab, BulkPhotoTab, BulkStoriesTab } from './BulkMediaTabs';
 import { BulkProgress } from './BulkProgress';
-import { PROFILE_BIO_MAX, PROFILE_NAME_MAX } from './_profileShared';
-import { useBulkProfile } from './useBulkProfile';
+import { BulkTextTab } from './BulkTextTab';
+import { VIDEO_SUFFIXES } from './_channelsShared';
+import { TEXT_FIELDS, TEXT_MAX, type TextFieldKey } from './_profileShared';
+import { useBulkRun } from './useBulkRun';
 
-type FieldKey = 'first_name' | 'last_name' | 'bio';
-const FIELDS = ['first_name', 'last_name', 'bio'] as const satisfies readonly FieldKey[];
-const MAX: Record<FieldKey, number> = {
-  first_name: PROFILE_NAME_MAX,
-  last_name: PROFILE_NAME_MAX,
-  bio: PROFILE_BIO_MAX,
-};
+type Tab = 'text' | 'photo' | 'stories' | 'music';
+const TABS = ['text', 'photo', 'stories', 'music'] as const satisfies readonly Tab[];
 
-// The profile editor's bulk twin: the same text written to many accounts at once.
+type Audience = 'contacts' | 'close_friends' | 'public';
+
+// The profile editor's bulk twin: the same edit written to many accounts at once,
+// one account at a time.
 //
-// Every field carries its own checkbox, and an unticked field is OMITTED from the
-// request rather than sent empty — the backend's field contract ("" clears, absent
-// leaves unchanged) is what makes "set one bio for the fleet, touch nothing else"
-// expressible. A ticked-but-empty last name or bio therefore CLEARS it, which is
-// the only way to wipe a field across a batch; first name has no such state
-// (Telegram has no nameless user), so an empty one blocks the apply.
-//
-// The username is absent by design, not forgotten: Telegram handles are unique,
-// so one value cannot be given to a group at all.
+// Every tab is a different thing to apply, so each owns its own "is there
+// anything to apply" and its own per-account step; the shell — batch strip, tab
+// strip, run rows, footer — is the same for all of them.
 export function BulkEditModal({ account, onClose }: { account: AccountRead; onClose: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const updateProfile = useMutation(updateAccountProfileMutation());
+  const setPhoto = useMutation(setAccountPhotoMutation());
+  const postStory = useMutation(postAccountStoryMutation());
+  const addMusic = useMutation(addAccountMusicMutation());
+
   const [ids, setIds] = useState<string[]>([account.account_id]);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [on, setOn] = useState<Record<FieldKey, boolean>>({
+  const [tab, setTab] = useState<Tab>('text');
+  const [started, setStarted] = useState(false);
+
+  const [on, setOn] = useState<Record<TextFieldKey, boolean>>({
     first_name: false,
     last_name: false,
     bio: false,
   });
-  const [value, setValue] = useState<Record<FieldKey, string>>({
+  const [value, setValue] = useState<Record<TextFieldKey, string>>({
     first_name: '',
     last_name: '',
     bio: '',
   });
-  const [started, setStarted] = useState(false);
-  const bulk = useBulkProfile();
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [perAccount, setPerAccount] = useState(false);
+  const [storyFiles, setStoryFiles] = useState<File[]>([]);
+  const [caption, setCaption] = useState('');
+  const [audience, setAudience] = useState<Audience>('contacts');
+  const [track, setTrack] = useState<File | null>(null);
 
-  // The fleet is already in cache behind the picker; this is the same key, so
-  // the chips get names without a second request.
+  const bulk = useBulkRun();
+
+  // The fleet is already in cache behind the picker; this is the same key, so the
+  // chips get names without a second request.
   const fleet = useQuery(allAccountsQueryOptions());
   const byId = new Map((fleet.data?.items ?? []).map((row) => [row.account_id, row]));
   const label = (accountId: string) => {
@@ -63,24 +78,84 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   };
   const picked = ids.map((accountId) => byId.get(accountId) ?? { account_id: accountId });
 
-  const ticked = FIELDS.filter((key) => on[key]);
-  const tooLong = ticked.some((key) => value[key].trim().length > MAX[key]);
-  const noName = on.first_name && value.first_name.trim() === '';
+  const ticked = TEXT_FIELDS.filter((key) => on[key]);
+  const textReady =
+    ticked.length > 0 &&
+    !ticked.some((key) => value[key].trim().length > TEXT_MAX[key]) &&
+    !(on.first_name && value.first_name.trim() === '');
+
+  const READY: Record<Tab, boolean> = {
+    text: textReady,
+    photo: photos.length > 0,
+    stories: storyFiles.length > 0,
+    music: track !== null,
+  };
+  const NOTE: Record<Tab, string> = {
+    text: t('accounts.bulk.fieldCount', { done: ticked.length, total: TEXT_FIELDS.length }),
+    photo: perAccount
+      ? t('accounts.bulk.notePhotoEach', { n: photos.length })
+      : t('accounts.bulk.notePhotoOne'),
+    stories: t('accounts.bulk.noteStory'),
+    music: t('accounts.bulk.noteMusic'),
+  };
+
+  const step = async (accountId: string, index: number) => {
+    if (tab === 'text') {
+      const body = Object.fromEntries(ticked.map((key) => [key, value[key].trim()]));
+      await updateProfile.mutateAsync({ body: { ...body, account_id: accountId } });
+      return;
+    }
+    if (tab === 'photo') {
+      // Cycled, not clamped: a set shorter than the batch keeps handing out
+      // files instead of leaving the tail without a photo.
+      const file = perAccount ? photos[index % photos.length] : photos[0];
+      if (!file) return;
+      await setPhoto.mutateAsync({ body: { account_id: accountId, file } });
+      // Cosmetic and deliberately silent, exactly as in the single-account
+      // upload: a refused re-sync must not fail an upload that landed.
+      try {
+        await resyncAccountAvatar({ path: { account_id: accountId } });
+      } catch {
+        // the row keeps its previous thumbnail until the next session check
+      }
+      return;
+    }
+    if (tab === 'stories') {
+      const video = storyFiles.some((file) =>
+        VIDEO_SUFFIXES.some((suffix) => file.name.toLowerCase().endsWith(suffix)),
+      );
+      await postStory.mutateAsync({
+        path: { account_id: accountId },
+        body: {
+          files: storyFiles,
+          media_kind: video ? 'video' : 'image',
+          caption: caption.trim(),
+          privacy_preset: audience,
+          protect_content: false,
+          collage_layout: null,
+        },
+      });
+      return;
+    }
+    if (track)
+      await addMusic.mutateAsync({ path: { account_id: accountId }, body: { file: track } });
+  };
+
   const running = bulk.rows.some((row) => row.state === 'queued' || row.state === 'running');
-  const canApply = ids.length > 0 && ticked.length > 0 && !tooLong && !noName;
 
   const apply = () => {
     setStarted(true);
-    const body = Object.fromEntries(ticked.map((key) => [key, value[key].trim()]));
-    void bulk.run(ids, body).finally(() => {
-      // The names, usernames and avatars of every account in the batch just
-      // changed; the table behind this dialog is showing the old ones.
+    void bulk.run(ids, step).finally(() => {
+      // Names, avatars and media of every account in the batch just changed; the
+      // table behind this dialog — and any open profile snapshot — is showing
+      // what they were.
       invalidateAccountViews(queryClient);
+      for (const accountId of ids) {
+        void queryClient.invalidateQueries({
+          queryKey: accountProfileSnapshotQueryKey({ path: { account_id: accountId } }),
+        });
+      }
     });
-  };
-
-  const remove = (accountId: string) => {
-    setIds((prev) => prev.filter((id) => id !== accountId));
   };
 
   return (
@@ -137,9 +212,9 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                       type="button"
                       aria-label={t('accounts.bulk.remove', { name: label(row.account_id) })}
                       onClick={() => {
-                        remove(row.account_id);
+                        setIds((prev) => prev.filter((id) => id !== row.account_id));
                       }}
-                      className="absolute -right-hair -top-hair flex size-glyph items-center justify-center rounded-full border border-line bg-surface-card leading-none text-content-muted opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                      className="absolute -right-hair -top-hair flex size-glyph items-center justify-center rounded-full border border-line bg-surface-card leading-none text-content-muted opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                     >
                       ×
                     </button>
@@ -149,79 +224,62 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             </div>
           </div>
 
+          {!started && (
+            <div className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl">
+              {TABS.map((value_) => (
+                <button
+                  key={value_}
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === value_}
+                  onClick={() => {
+                    setTab(value_);
+                  }}
+                  className={`shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${tab === value_ ? 'border-action-primary text-content-primary' : 'border-transparent text-content-muted'}`}
+                >
+                  {t(`accounts.profile.tab.${value_}`)}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl">
             {started ? (
               <BulkProgress rows={bulk.rows} label={label} />
+            ) : tab === 'text' ? (
+              <BulkTextTab
+                on={on}
+                value={value}
+                onToggle={(key) => {
+                  setOn((prev) => ({ ...prev, [key]: !prev[key] }));
+                }}
+                onValue={(key, next) => {
+                  setValue((prev) => ({ ...prev, [key]: next }));
+                }}
+              />
+            ) : tab === 'photo' ? (
+              <BulkPhotoTab
+                files={photos}
+                spread={perAccount}
+                onFiles={setPhotos}
+                onSpread={setPerAccount}
+              />
+            ) : tab === 'stories' ? (
+              <BulkStoriesTab
+                files={storyFiles}
+                caption={caption}
+                audience={audience}
+                onFiles={setStoryFiles}
+                onCaption={setCaption}
+                onAudience={setAudience}
+              />
             ) : (
-              <>
-                <div className="rounded-lg bg-info-tint px-md py-md type-prose">
-                  {t('accounts.bulk.hint')}
-                </div>
-                {FIELDS.map((key) => (
-                  <div key={key} className="flex flex-col gap-tight">
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={on[key]}
-                      onClick={() => {
-                        setOn((prev) => ({ ...prev, [key]: !prev[key] }));
-                      }}
-                      className="flex items-center gap-md text-left"
-                    >
-                      <span
-                        className={`flex size-glyph shrink-0 items-center justify-center rounded-sm border ${on[key] ? 'border-action-primary bg-action-primary' : 'border-line bg-surface-card'}`}
-                      >
-                        {on[key] && <Icon name="check" size={14} className="stroke-on-action" />}
-                      </span>
-                      <span className="type-label">{t(`accounts.bulk.field.${key}`)}</span>
-                    </button>
-                    {key === 'bio' ? (
-                      <Textarea
-                        className="resize-none [font-family:inherit]"
-                        rows={3}
-                        disabled={!on[key]}
-                        value={value[key]}
-                        aria-label={t(`accounts.bulk.field.${key}`)}
-                        onChange={(event) => {
-                          setValue((prev) => ({ ...prev, [key]: event.target.value }));
-                        }}
-                      />
-                    ) : (
-                      <Input
-                        disabled={!on[key]}
-                        value={value[key]}
-                        aria-label={t(`accounts.bulk.field.${key}`)}
-                        onChange={(event) => {
-                          setValue((prev) => ({ ...prev, [key]: event.target.value }));
-                        }}
-                      />
-                    )}
-                    {on[key] && value[key].trim().length > MAX[key] && (
-                      <span role="alert" className="type-caption font-medium text-danger">
-                        {t('accounts.bulk.tooLong', { max: MAX[key] })}
-                      </span>
-                    )}
-                    {key === 'first_name' && noName && (
-                      <span role="alert" className="type-caption font-medium text-danger">
-                        {t('accounts.profile.errFirstName')}
-                      </span>
-                    )}
-                    {on[key] && key !== 'first_name' && value[key].trim() === '' && (
-                      <span className="type-caption">{t('accounts.bulk.clears')}</span>
-                    )}
-                  </div>
-                ))}
-                <div className="type-caption">{t('accounts.bulk.usernameNote')}</div>
-              </>
+              <BulkMusicTab file={track} onFile={setTrack} />
             )}
           </div>
 
           <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
-            {!started && (
-              <div className="mr-auto type-label">
-                {t('accounts.bulk.fieldCount', { done: ticked.length, total: FIELDS.length })}
-              </div>
-            )}
+            {!started && <div className="mr-auto type-label">{NOTE[tab]}</div>}
             {started ? (
               running ? (
                 <Button variant="danger" onClick={bulk.stop}>
@@ -235,7 +293,11 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             ) : (
               <>
                 <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
-                <Button variant="primary" disabled={!canApply} onClick={apply}>
+                <Button
+                  variant="primary"
+                  disabled={ids.length === 0 || !READY[tab]}
+                  onClick={apply}
+                >
                   {t('accounts.bulk.apply', { count: ids.length })}
                 </Button>
               </>

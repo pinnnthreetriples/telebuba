@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { mutationErrorText } from '@/shared/lib';
 import { Icon, Spinner } from '@/shared/ui';
 
-import type { BulkProfileRow } from './useBulkProfile';
+import type { BulkRow } from './useBulkRun';
 
 // The run view of a bulk edit: one line per account, in the order the batch
 // walks them. Shared by every bulk tab — the rows are the same four states
@@ -16,7 +16,7 @@ export function BulkProgress({
   rows,
   label,
 }: {
-  rows: BulkProfileRow[];
+  rows: BulkRow[];
   label: (accountId: string) => string;
 }) {
   const { t } = useTranslation();
