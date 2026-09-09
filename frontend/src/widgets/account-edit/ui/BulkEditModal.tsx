@@ -3,14 +3,20 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  accountChannelsQueryOptions,
   accountDisplayName,
   AccountAvatar,
+  accountPrivacyQueryKey,
   accountProfileSnapshotQueryKey,
   addAccountMusicMutation,
   allAccountsQueryOptions,
+  createAccountChannelMutation,
   invalidateAccountViews,
   postAccountStoryMutation,
+  publishAccountChannelPostMutation,
+  setAccountChannelPhotoMutation,
   setAccountPhotoMutation,
+  setAccountPrivacyMutation,
   updateAccountProfileMutation,
 } from '@/entities/account';
 import { resyncAccountAvatar } from '@/shared/api';
@@ -18,17 +24,46 @@ import type { AccountRead } from '@/shared/api';
 import { Button, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
+import {
+  BulkChannelsTab,
+  USERNAME_SLOT,
+  type ChannelDraft,
+  type PostDraft,
+} from './BulkChannelsTab';
 import { BulkMusicTab, BulkPhotoTab, BulkStoriesTab } from './BulkMediaTabs';
+import { BulkPrivacyTab } from './BulkPrivacyTab';
 import { BulkProgress } from './BulkProgress';
 import { BulkTextTab } from './BulkTextTab';
-import { VIDEO_SUFFIXES } from './_channelsShared';
-import { TEXT_FIELDS, TEXT_MAX, type TextFieldKey } from './_profileShared';
+import { CHANNEL_USERNAME_RE, VIDEO_SUFFIXES } from './_channelsShared';
+import {
+  TEXT_FIELDS,
+  TEXT_MAX,
+  type PrivacyKey,
+  type PrivacyLevel,
+  type TextFieldKey,
+} from './_profileShared';
 import { useBulkRun } from './useBulkRun';
 
-type Tab = 'text' | 'photo' | 'stories' | 'music';
-const TABS = ['text', 'photo', 'stories', 'music'] as const satisfies readonly Tab[];
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
+const TABS = [
+  'text',
+  'photo',
+  'stories',
+  'music',
+  'channels',
+  'privacy',
+] as const satisfies readonly Tab[];
 
 type Audience = 'contacts' | 'close_friends' | 'public';
+
+const EMPTY_CHANNEL: ChannelDraft = {
+  avatar: null,
+  title: '',
+  about: '',
+  isPublic: false,
+  username: '',
+  reactionsOff: false,
+};
 
 // The profile editor's bulk twin: the same edit written to many accounts at once,
 // one account at a time.
@@ -43,6 +78,10 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const setPhoto = useMutation(setAccountPhotoMutation());
   const postStory = useMutation(postAccountStoryMutation());
   const addMusic = useMutation(addAccountMusicMutation());
+  const setPrivacy = useMutation(setAccountPrivacyMutation());
+  const createChannel = useMutation(createAccountChannelMutation());
+  const setChannelPhoto = useMutation(setAccountChannelPhotoMutation());
+  const publishPost = useMutation(publishAccountChannelPostMutation());
 
   const [ids, setIds] = useState<string[]>([account.account_id]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -65,6 +104,10 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   const [caption, setCaption] = useState('');
   const [audience, setAudience] = useState<Audience>('contacts');
   const [track, setTrack] = useState<File | null>(null);
+  const [levels, setLevels] = useState<Partial<Record<PrivacyKey, PrivacyLevel>>>({});
+  const [channelMode, setChannelMode] = useState<'create' | 'post'>('create');
+  const [channel, setChannel] = useState<ChannelDraft>(EMPTY_CHANNEL);
+  const [post, setPost] = useState<PostDraft>({ text: '', file: null });
 
   const bulk = useBulkRun();
 
@@ -84,11 +127,24 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     !ticked.some((key) => value[key].trim().length > TEXT_MAX[key]) &&
     !(on.first_name && value.first_name.trim() === '');
 
+  // A public bulk create needs `{n}` in the handle for anything past the first
+  // account: Telegram handles are unique, so the same one twice is a refusal by
+  // construction.
+  const handle = channel.username.trim();
+  const handleReady =
+    !channel.isPublic ||
+    (CHANNEL_USERNAME_RE.test(handle.replace(USERNAME_SLOT, '1')) &&
+      (ids.length === 1 || handle.includes(USERNAME_SLOT)));
   const READY: Record<Tab, boolean> = {
     text: textReady,
     photo: photos.length > 0,
     stories: storyFiles.length > 0,
     music: track !== null,
+    channels:
+      channelMode === 'create'
+        ? channel.title.trim() !== '' && handleReady
+        : post.text.trim() !== '' || post.file !== null,
+    privacy: Object.keys(levels).length > 0,
   };
   const NOTE: Record<Tab, string> = {
     text: t('accounts.bulk.fieldCount', { done: ticked.length, total: TEXT_FIELDS.length }),
@@ -97,6 +153,14 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       : t('accounts.bulk.notePhotoOne'),
     stories: t('accounts.bulk.noteStory'),
     music: t('accounts.bulk.noteMusic'),
+    channels:
+      channelMode === 'create'
+        ? t('accounts.bulk.noteChannelCreate', { count: ids.length })
+        : t('accounts.bulk.noteChannelPost'),
+    privacy: t('accounts.bulk.noteRows', {
+      done: Object.keys(levels).length,
+      total: 3,
+    }),
   };
 
   const step = async (accountId: string, index: number) => {
@@ -137,8 +201,46 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       });
       return;
     }
-    if (track)
-      await addMusic.mutateAsync({ path: { account_id: accountId }, body: { file: track } });
+    if (tab === 'music') {
+      if (track)
+        await addMusic.mutateAsync({ path: { account_id: accountId }, body: { file: track } });
+      return;
+    }
+    if (tab === 'privacy') {
+      await setPrivacy.mutateAsync({ path: { account_id: accountId }, body: levels });
+      return;
+    }
+    if (channelMode === 'create') {
+      const result = await createChannel.mutateAsync({
+        path: { account_id: accountId },
+        body: {
+          title: channel.title.trim(),
+          about: channel.about.trim(),
+          // `{n}` is the account's position, so each channel gets its own handle.
+          username: channel.isPublic ? handle.replace(USERNAME_SLOT, String(index + 1)) : null,
+          reactions_enabled: !channel.reactionsOff,
+        },
+      });
+      const channelId = result.channel_id;
+      if (channel.avatar && channelId != null) {
+        await setChannelPhoto.mutateAsync({
+          path: { account_id: accountId, channel_id: channelId },
+          body: { file: channel.avatar },
+        });
+      }
+      return;
+    }
+    // Post mode: this account's own channels, read fresh — the list decides how
+    // many posts its turn is, and a stale one would skip a channel made since.
+    const channels = await queryClient.fetchQuery(
+      accountChannelsQueryOptions({ path: { account_id: accountId } }),
+    );
+    for (const item of channels.items) {
+      await publishPost.mutateAsync({
+        path: { account_id: accountId, channel_id: item.channel_id },
+        body: { text: post.text.trim(), ...(post.file ? { file: post.file } : {}) },
+      });
+    }
   };
 
   const running = bulk.rows.some((row) => row.state === 'queued' || row.state === 'running');
@@ -151,8 +253,11 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       // what they were.
       invalidateAccountViews(queryClient);
       for (const accountId of ids) {
+        const path = { path: { account_id: accountId } };
+        void queryClient.invalidateQueries({ queryKey: accountProfileSnapshotQueryKey(path) });
+        void queryClient.invalidateQueries({ queryKey: accountPrivacyQueryKey(path) });
         void queryClient.invalidateQueries({
-          queryKey: accountProfileSnapshotQueryKey({ path: { account_id: accountId } }),
+          queryKey: accountChannelsQueryOptions(path).queryKey,
         });
       }
     });
@@ -273,8 +378,29 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 onCaption={setCaption}
                 onAudience={setAudience}
               />
-            ) : (
+            ) : tab === 'music' ? (
               <BulkMusicTab file={track} onFile={setTrack} />
+            ) : tab === 'channels' ? (
+              <BulkChannelsTab
+                mode={channelMode}
+                channel={channel}
+                post={post}
+                onMode={setChannelMode}
+                onChannel={setChannel}
+                onPost={setPost}
+              />
+            ) : (
+              <BulkPrivacyTab
+                levels={levels}
+                onPick={(key, level) => {
+                  setLevels((prev) => {
+                    const next = { ...prev };
+                    if (level === null) delete next[key];
+                    else next[key] = level;
+                    return next;
+                  });
+                }}
+              />
             )}
           </div>
 

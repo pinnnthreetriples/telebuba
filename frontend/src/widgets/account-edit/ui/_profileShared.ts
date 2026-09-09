@@ -32,6 +32,20 @@ export const TEXT_MAX: Record<TextFieldKey, number> = {
   bio: PROFILE_BIO_MAX,
 };
 
+/** The three Telegram privacy keys the profile tab writes, and their three levels. */
+export type PrivacyKey = 'profile_photo' | 'bio' | 'last_seen';
+export type PrivacyLevel = 'everybody' | 'contacts' | 'nobody';
+export const PRIVACY_KEYS = [
+  'profile_photo',
+  'bio',
+  'last_seen',
+] as const satisfies readonly PrivacyKey[];
+export const PRIVACY_LEVELS = [
+  'everybody',
+  'contacts',
+  'nobody',
+] as const satisfies readonly PrivacyLevel[];
+
 export function tileStyle(uri: string | null | undefined, ratio: string): CSSProperties {
   if (!uri) return { aspectRatio: ratio, background: TILE };
   return {
