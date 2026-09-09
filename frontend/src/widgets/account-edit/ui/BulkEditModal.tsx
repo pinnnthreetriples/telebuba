@@ -36,6 +36,7 @@ import { BulkProgress } from './BulkProgress';
 import { BulkTextTab } from './BulkTextTab';
 import { CHANNEL_USERNAME_RE, VIDEO_SUFFIXES } from './_channelsShared';
 import {
+  PRIVACY_KEYS,
   TEXT_FIELDS,
   TEXT_MAX,
   type PrivacyKey,
@@ -159,7 +160,7 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         : t('accounts.bulk.noteChannelPost'),
     privacy: t('accounts.bulk.noteRows', {
       done: Object.keys(levels).length,
-      total: 3,
+      total: PRIVACY_KEYS.length,
     }),
   };
 
