@@ -1,10 +1,10 @@
-import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button, Icon, Input, SegmentedControl, Textarea } from '@/shared/ui';
 
 import { CHANNEL_ABOUT_MAX, CHANNEL_TITLE_MAX, PHOTO_SUFFIXES } from './_channelsShared';
 import { CheckRow } from './_CheckRow';
+import { FilePicker } from './_shared';
 
 export type ChannelDraft = {
   avatar: File | null;
@@ -40,8 +40,6 @@ export function BulkChannelsTab({
   onPost: (draft: PostDraft) => void;
 }) {
   const { t } = useTranslation();
-  const avatarInput = useRef<HTMLInputElement>(null);
-  const postFileInput = useRef<HTMLInputElement>(null);
 
   return (
     <div className="flex flex-col gap-lg">
@@ -64,32 +62,34 @@ export function BulkChannelsTab({
           <div className="flex items-center gap-lg">
             {/* The circle IS the upload: an empty one shows the plus only under
                 the cursor, so a filled avatar is never covered by a control. */}
-            <button
-              type="button"
-              aria-label={t('accounts.channel.avatarUpload')}
-              onClick={() => avatarInput.current?.click()}
-              className="group relative flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full border-[1.5px] border-dashed border-line-strong bg-surface-card text-content-muted transition-colors hover:border-action-primary hover:text-action-primary"
-            >
-              <span className={channel.avatar ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}>
-                <Icon name="plus" size={20} />
-              </span>
-              {channel.avatar && (
-                <span className="absolute inset-0 flex items-center justify-center bg-canvas type-caption">
-                  {t('accounts.bulk.channelAvatarSet')}
-                </span>
-              )}
-            </button>
-            <input
-              ref={avatarInput}
-              type="file"
+            <FilePicker
               accept={PHOTO_SUFFIXES.join(',')}
-              className="hidden"
-              onChange={(event) => {
-                const file = Array.from(event.target.files ?? [])[0] ?? null;
-                event.target.value = '';
+              multiple={false}
+              onPick={(picked) => {
+                const file = picked[0];
                 if (file) onChannel({ ...channel, avatar: file });
               }}
-            />
+            >
+              {(open) => (
+                <button
+                  type="button"
+                  aria-label={t('accounts.channel.avatarUpload')}
+                  onClick={open}
+                  className="group relative flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full border-[1.5px] border-dashed border-line-strong bg-surface-card text-content-muted transition-colors hover:border-action-primary hover:text-action-primary"
+                >
+                  <span
+                    className={channel.avatar ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}
+                  >
+                    <Icon name="plus" size={20} />
+                  </span>
+                  {channel.avatar && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-canvas type-caption">
+                      {t('accounts.bulk.channelAvatarSet')}
+                    </span>
+                  )}
+                </button>
+              )}
+            </FilePicker>
             <div className="type-caption">{t('accounts.bulk.channelAvatarNote')}</div>
           </div>
 
@@ -165,21 +165,21 @@ export function BulkChannelsTab({
             }}
           />
           <div className="flex items-center gap-md">
-            <Button size="xs" variant="dashedMuted" onClick={() => postFileInput.current?.click()}>
-              <Icon name="plus" size={16} />
-              {t('accounts.channel.attach')}
-            </Button>
-            <input
-              ref={postFileInput}
-              type="file"
+            <FilePicker
               accept={PHOTO_SUFFIXES.join(',')}
-              className="hidden"
-              onChange={(event) => {
-                const file = Array.from(event.target.files ?? [])[0] ?? null;
-                event.target.value = '';
+              multiple={false}
+              onPick={(picked) => {
+                const file = picked[0];
                 if (file) onPost({ ...post, file });
               }}
-            />
+            >
+              {(open) => (
+                <Button size="xs" variant="dashedMuted" onClick={open}>
+                  <Icon name="plus" size={16} />
+                  {t('accounts.channel.attach')}
+                </Button>
+              )}
+            </FilePicker>
             {post.file && (
               <span className="min-w-0 flex-1 truncate type-caption">{post.file.name}</span>
             )}

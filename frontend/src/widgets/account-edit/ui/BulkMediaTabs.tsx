@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Input, SegmentedControl } from '@/shared/ui';
 
 import { PHOTO_SUFFIXES, VIDEO_SUFFIXES } from './_channelsShared';
-import { DashedAdd } from './_shared';
+import { DashedAdd, FilePicker } from './_shared';
 
 // The bulk editor's three media tabs. One file rather than three: they are the
 // same tab — a picker, a grid of what was picked, one line of consequence — and
@@ -57,39 +57,6 @@ function Picked({
           </button>
         </div>
       ))}
-    </>
-  );
-}
-
-function FilePicker({
-  accept,
-  multiple,
-  onPick,
-  children,
-}: {
-  accept: string;
-  multiple: boolean;
-  onPick: (files: File[]) => void;
-  children: (open: () => void) => React.ReactNode;
-}) {
-  const input = useRef<HTMLInputElement>(null);
-  return (
-    <>
-      {children(() => input.current?.click())}
-      <input
-        ref={input}
-        type="file"
-        accept={accept}
-        multiple={multiple}
-        className="hidden"
-        onChange={(event) => {
-          const picked = Array.from(event.target.files ?? []);
-          // Cleared before the handler: re-picking the same file must fire
-          // `change` again, and a live FileList would not.
-          event.target.value = '';
-          if (picked.length > 0) onPick(picked);
-        }}
-      />
     </>
   );
 }
