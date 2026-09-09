@@ -531,3 +531,18 @@ test('the dialog keeps one accessible name across the snapshot read', async () =
   expect(await screen.findByRole('heading', { level: 2, name: 'Алиса' })).toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: 'Профиль аккаунта' })).toBeInTheDocument();
 });
+
+// The bulk twin opens from here and starts on the account whose editor opened it:
+// the operator is already looking at the form they want applied to a fleet.
+test('the footer opens the bulk editor seeded with this account', async () => {
+  routeApi();
+  const user = userEvent.setup();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+
+  await user.click(screen.getByRole('button', { name: 'Массовое редактирование' }));
+
+  expect(
+    await screen.findByRole('dialog', { name: 'Массовое редактирование' }),
+  ).toBeInTheDocument();
+  expect(screen.getByText('1 аккаунт выбран')).toBeInTheDocument();
+});
