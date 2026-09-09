@@ -222,6 +222,16 @@ export type AccountPrivacyView = {
 
 /**
  * AccountProfileUpdateRequest
+ *
+ * Field contract, all four: ``""`` clears, ``None`` leaves unchanged.
+ *
+ * ``first_name`` was the one field that could not say "leave unchanged" — it was
+ * required, so every save re-sent the current name. The single-account form
+ * always has one to send; a BULK save applying the same bio to a fleet does not,
+ * and re-sending each row's stored name would overwrite whatever Telegram holds
+ * from a stale snapshot. Optional here, ``min_length=1`` still refuses ``""``:
+ * Telegram has no nameless user, so clearing a first name is not a state the
+ * contract can offer.
  */
 export type AccountProfileUpdateRequest = {
   /**
@@ -231,7 +241,7 @@ export type AccountProfileUpdateRequest = {
   /**
    * First Name
    */
-  first_name: string;
+  first_name?: string | null;
   /**
    * Last Name
    */

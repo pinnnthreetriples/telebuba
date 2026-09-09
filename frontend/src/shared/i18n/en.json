@@ -298,6 +298,40 @@
         "failed": "Telegram refused the story — try a different file"
       }
     },
+    "bulk": {
+      "open": "Bulk edit",
+      "title": "Bulk edit",
+      "selected_one": "{{count}} account selected",
+      "selected_other": "{{count}} accounts selected",
+      "add": "Add accounts",
+      "remove": "Remove {{name}} from the batch",
+      "hint": "Only ticked fields are applied. Everything else stays as it is.",
+      "field": {
+        "first_name": "First name",
+        "last_name": "Last name",
+        "bio": "Bio"
+      },
+      "clears": "An empty field clears it on every selected account",
+      "tooLong": "No more than {{max}} characters",
+      "usernameNote": "Telegram usernames are unique, so one handle cannot be given to a group — that is why it is missing here.",
+      "fieldCount": "{{done}} of {{total}} fields",
+      "apply_one": "Apply to {{count}} account",
+      "apply_other": "Apply to {{count}} accounts",
+      "progress": "Applied {{done}} of {{total}}",
+      "failedCount": "{{n}} failed",
+      "rowQueued": "Waiting",
+      "rowRunning": "Applying",
+      "rowOk": "Done",
+      "stop": "Stop",
+      "done": "Close",
+      "pickTitle": "Add accounts",
+      "pickCount": "{{done}} of {{total}} selected",
+      "pickSearch": "Name, username or phone",
+      "pickAll": "Select all ({{n}})",
+      "pickClear": "Clear selection",
+      "pickEmpty": "Nothing found",
+      "pickApply": "Add ({{n}})"
+    },
     "profile": {
       "dialog": "Account profile",
       "close": "Close",

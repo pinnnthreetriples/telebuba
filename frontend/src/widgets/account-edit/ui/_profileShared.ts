@@ -12,6 +12,13 @@ import type { Translate } from './_channelsShared';
 // single-use roles in the canon and imply the UI means something by them.
 const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
 
+// Telegram's own profile-text limits, mirroring `PROFILE_NAME_MAX_LENGTH` and
+// `PROFILE_BIO_MAX_LENGTH` in schemas/accounts.py. Here rather than inline in the
+// single-account form because the bulk editor validates the same fields, and two
+// copies of "70" would drift the moment one side learned a new limit.
+export const PROFILE_NAME_MAX = 64;
+export const PROFILE_BIO_MAX = 70;
+
 export function tileStyle(uri: string | null | undefined, ratio: string): CSSProperties {
   if (!uri) return { aspectRatio: ratio, background: TILE };
   return {

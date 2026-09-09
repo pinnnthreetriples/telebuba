@@ -133,8 +133,19 @@ class AccountCheckRequest(BaseModel):
 
 
 class AccountProfileUpdateRequest(BaseModel):
+    """Field contract, all four: ``""`` clears, ``None`` leaves unchanged.
+
+    ``first_name`` was the one field that could not say "leave unchanged" — it was
+    required, so every save re-sent the current name. The single-account form
+    always has one to send; a BULK save applying the same bio to a fleet does not,
+    and re-sending each row's stored name would overwrite whatever Telegram holds
+    from a stale snapshot. Optional here, ``min_length=1`` still refuses ``""``:
+    Telegram has no nameless user, so clearing a first name is not a state the
+    contract can offer.
+    """
+
     account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
-    first_name: str = Field(min_length=1, max_length=PROFILE_NAME_MAX_LENGTH)
+    first_name: str | None = Field(default=None, min_length=1, max_length=PROFILE_NAME_MAX_LENGTH)
     last_name: str | None = Field(default=None, max_length=PROFILE_NAME_MAX_LENGTH)
     username: str | None = Field(default=None, pattern=PROFILE_USERNAME_PATTERN)
     bio: str | None = Field(default=None, max_length=PROFILE_BIO_MAX_LENGTH)

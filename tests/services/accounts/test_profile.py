@@ -191,6 +191,40 @@ async def test_update_account_profile_none_fields_leave_db_untouched(
 
 
 @pytest.mark.asyncio
+async def test_update_account_profile_without_first_name_keeps_the_stored_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``first_name=None`` leaves the name alone — the bio-only save of a bulk edit.
+
+    The confirmation read is refused in both halves on purpose: that is the path
+    where the REQUEST becomes the snapshot write, so a name the request never
+    carried can only survive if the write skips the column.
+    """
+    captured: list[object] = []
+    await add_account(AccountCreate(account_id="account-profile-partial"))
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(monkeypatch)
+    await update_account_profile(
+        AccountProfileUpdateRequest(account_id="account-profile-partial", first_name="Alice"),
+    )
+
+    account = await update_account_profile(
+        AccountProfileUpdateRequest(account_id="account-profile-partial", bio="Bio"),
+    )
+
+    assert account.first_name == "Alice"
+    assert account.bio == "Bio"
+    action = captured[-1]
+    assert isinstance(action, UpdateProfile)
+    assert action.first_name is None
+
+
+@pytest.mark.asyncio
 async def test_update_account_profile_flood_wait_carries_retry_seconds(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
