@@ -330,12 +330,17 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
           </div>
 
           {!started && (
-            <div className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl">
+            <div
+              role="tablist"
+              className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl"
+            >
               {TABS.map((value_) => (
                 <button
                   key={value_}
                   type="button"
                   role="tab"
+                  id={`bulk-tab-${value_}`}
+                  aria-controls="bulk-tabpanel"
                   aria-selected={tab === value_}
                   onClick={() => {
                     setTab(value_);
@@ -348,7 +353,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
             </div>
           )}
 
-          <div className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl">
+          <div
+            role={started ? undefined : 'tabpanel'}
+            id={started ? undefined : 'bulk-tabpanel'}
+            aria-labelledby={started ? undefined : `bulk-tab-${tab}`}
+            className="tb-scroll flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+          >
             {started ? (
               <BulkProgress rows={bulk.rows} label={label} />
             ) : tab === 'text' ? (
