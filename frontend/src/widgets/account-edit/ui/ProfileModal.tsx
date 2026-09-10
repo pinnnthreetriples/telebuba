@@ -35,8 +35,16 @@ import {
 } from '@/shared/ui';
 
 import { isUploadablePhoto, PHOTO_MAX_BYTES } from './_channelsShared';
-import { dedupeById, profileCodeText, profileErrorField, profileErrorText } from './_profileShared';
+import {
+  dedupeById,
+  PROFILE_BIO_MAX,
+  PROFILE_NAME_MAX,
+  profileCodeText,
+  profileErrorField,
+  profileErrorText,
+} from './_profileShared';
 import { AddStoryModal } from './AddStoryModal';
+import { BulkEditModal } from './BulkEditModal';
 import { ChannelsTab } from './ChannelsTab';
 import { MusicTab } from './MusicTab';
 import { PhotoTab } from './PhotoTab';
@@ -52,13 +60,13 @@ const profileSchema = z.object({
     .string()
     .trim()
     .min(1, 'accounts.profile.errFirstName')
-    .max(64, 'accounts.profile.errFirstNameMax'),
-  last_name: z.string().trim().max(64, 'accounts.profile.errLastNameMax'),
+    .max(PROFILE_NAME_MAX, 'accounts.profile.errFirstNameMax'),
+  last_name: z.string().trim().max(PROFILE_NAME_MAX, 'accounts.profile.errLastNameMax'),
   username: z
     .string()
     .trim()
     .refine((value) => value === '' || USERNAME_RE.test(value), 'accounts.profile.errUsername'),
-  bio: z.string().trim().max(70, 'accounts.profile.errBioMax'),
+  bio: z.string().trim().max(PROFILE_BIO_MAX, 'accounts.profile.errBioMax'),
 });
 
 // The design's profile-edit modal: hero header, a 6-tab segmented header
@@ -226,6 +234,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [tab, setTab] = useState<Tab>('text');
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   // The bio the last successful save sent, or null if nothing was saved since
   // the modal opened / the field was edited again. Compared against the live
@@ -1009,7 +1018,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
             {/* Non-field save errors (account_frozen, flood_wait, unknown)
                 live beside the global Save button, visible from any tab. */}
-            {saveErrorField === null && saveErrorText != null && (
+            {saveErrorField === null && saveErrorText != null ? (
               <div
                 role="alert"
                 title={saveErrorText}
@@ -1017,6 +1026,22 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               >
                 {saveErrorText}
               </div>
+            ) : (
+              // The way into the bulk twin, from the single-account editor it
+              // mirrors: the operator is already looking at the form they want
+              // applied to a fleet. Yields the footer's left slot to a save
+              // error — a refusal on screen outranks a way to open another dialog.
+              <Button
+                size="xs"
+                className="mr-auto"
+                disabled={uploading}
+                onClick={() => {
+                  setBulkOpen(true);
+                }}
+              >
+                <Icon name="users" size={16} />
+                {t('accounts.bulk.open')}
+              </Button>
             )}
             <Button onClick={requestClose} disabled={uploading}>
               {t('accounts.profile.cancel')}
@@ -1048,6 +1073,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
         </div>
       </Modal>
+      {bulkOpen && (
+        <BulkEditModal
+          account={account}
+          onClose={() => {
+            setBulkOpen(false);
+          }}
+        />
+      )}
       {storyOpen && (
         <AddStoryModal
           accountId={account.account_id}

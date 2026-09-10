@@ -12,6 +12,40 @@ import type { Translate } from './_channelsShared';
 // single-use roles in the canon and imply the UI means something by them.
 const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
 
+// Telegram's own profile-text limits, mirroring `PROFILE_NAME_MAX_LENGTH` and
+// `PROFILE_BIO_MAX_LENGTH` in schemas/accounts.py. Here rather than inline in the
+// single-account form because the bulk editor validates the same fields, and two
+// copies of "70" would drift the moment one side learned a new limit.
+export const PROFILE_NAME_MAX = 64;
+export const PROFILE_BIO_MAX = 70;
+
+/** The three profile-text fields a bulk save can write, and their own limits. */
+export type TextFieldKey = 'first_name' | 'last_name' | 'bio';
+export const TEXT_FIELDS = [
+  'first_name',
+  'last_name',
+  'bio',
+] as const satisfies readonly TextFieldKey[];
+export const TEXT_MAX: Record<TextFieldKey, number> = {
+  first_name: PROFILE_NAME_MAX,
+  last_name: PROFILE_NAME_MAX,
+  bio: PROFILE_BIO_MAX,
+};
+
+/** The three Telegram privacy keys the profile tab writes, and their three levels. */
+export type PrivacyKey = 'profile_photo' | 'bio' | 'last_seen';
+export type PrivacyLevel = 'everybody' | 'contacts' | 'nobody';
+export const PRIVACY_KEYS = [
+  'profile_photo',
+  'bio',
+  'last_seen',
+] as const satisfies readonly PrivacyKey[];
+export const PRIVACY_LEVELS = [
+  'everybody',
+  'contacts',
+  'nobody',
+] as const satisfies readonly PrivacyLevel[];
+
 export function tileStyle(uri: string | null | undefined, ratio: string): CSSProperties {
   if (!uri) return { aspectRatio: ratio, background: TILE };
   return {

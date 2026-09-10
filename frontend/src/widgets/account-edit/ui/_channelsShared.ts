@@ -17,6 +17,10 @@ export const PHOTO_SUFFIXES = ['.jpg', '.jpeg', '.png', '.webp'];
 export const PHOTO_MAX_BYTES = 10_000_000;
 export const VIDEO_SUFFIXES = ['.mp4', '.mov'];
 export const VIDEO_MAX_BYTES = 100_000_000;
+// Profile music: `_PROFILE_MUSIC_SUFFIXES` in services/accounts/_uploads.py takes
+// exactly these two — an `audio/*` picker advertises formats the backend refuses.
+export const MUSIC_SUFFIXES = ['.mp3', '.m4a'];
+export const MUSIC_MAX_BYTES = 30_000_000;
 
 // Field/label styling is the slice-wide one (single source in ./_styles).
 export { LABEL } from './_styles';
@@ -29,6 +33,13 @@ function hasSuffix(file: File, suffixes: string[]): boolean {
 // Profile avatars and channel avatars share the same backend gate.
 export function isUploadablePhoto(file: File): boolean {
   return file.size <= PHOTO_MAX_BYTES && hasSuffix(file, PHOTO_SUFFIXES);
+}
+
+/** Telegram's own ceiling for a post: a caption under media is a quarter of it. */
+export const postTextMax = (file: File | null): number => (file ? POST_CAPTION_MAX : POST_TEXT_MAX);
+
+export function isUploadableMusic(file: File): boolean {
+  return file.size <= MUSIC_MAX_BYTES && hasSuffix(file, MUSIC_SUFFIXES);
 }
 
 // Post media: the suffix decides photo vs video (mirrors channel_posts.py's

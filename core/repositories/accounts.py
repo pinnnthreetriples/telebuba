@@ -338,10 +338,9 @@ async def account_summary_counts() -> dict[str, int]:
 
 
 def _update_account_profile_snapshot(data: AccountProfileUpdateRequest) -> AccountRead:
-    values: dict[str, object | None] = {
-        "first_name": data.first_name,
-        "updated_at": _now_iso(),
-    }
+    values: dict[str, object | None] = {"updated_at": _now_iso()}
+    if data.first_name is not None:
+        values["first_name"] = data.first_name
     if data.last_name is not None:
         values["last_name"] = data.last_name
     if data.username is not None:
