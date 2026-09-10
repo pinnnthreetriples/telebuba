@@ -315,6 +315,8 @@
       "tooLong": "No more than {{max}} characters",
       "usernameNote": "Telegram usernames are unique, so one handle cannot be given to a group — that is why it is missing here.",
       "fieldCount": "{{done}} of {{total}} fields",
+      "fileRejected": "\"{{name}}\" skipped — {{formats}} up to {{mb}} MB",
+      "noChannels": "The account owns no channels",
       "removeFile": "Remove file",
       "photoHint": "The photo is uploaded to every selected account and becomes its main one.",
       "photoMode": "How to hand out the photos",

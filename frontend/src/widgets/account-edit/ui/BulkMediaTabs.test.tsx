@@ -6,8 +6,15 @@ import { expect, test, vi } from 'vitest';
 import '@/shared/i18n';
 
 import type { AccountRead } from '@/shared/api';
+import { toastError } from '@/shared/ui';
 
 import { BulkEditModal } from './BulkEditModal';
+
+// The modal has no <Toaster/> of its own, so the queue is what we assert on.
+vi.mock('@/shared/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/shared/ui')>()),
+  toastError: vi.fn(),
+}));
 
 const ACC1: AccountRead = {
   account_id: 'acc-1',
@@ -148,4 +155,41 @@ test('nothing to apply keeps the button disabled', async () => {
   await user.click(screen.getByRole('tab', { name: 'Музыка' }));
   expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeDisabled();
   expect(screen.getByText('1 трек')).toBeInTheDocument();
+});
+
+// The backend takes .mp3/.m4a only (`_PROFILE_MUSIC_SUFFIXES`); the picker used to
+// advertise `audio/*` and turn one bad pick into one 400 per account.
+test('a track the backend would refuse never reaches the batch', async () => {
+  const sent = routeApi();
+  const user = userEvent.setup();
+  renderModal();
+
+  await user.click(screen.getByRole('tab', { name: 'Музыка' }));
+  pick([new File(['x'], 'track.flac', { type: 'audio/flac' })]);
+
+  await waitFor(() => {
+    expect(vi.mocked(toastError)).toHaveBeenCalledWith(
+      '«track.flac» пропущен — .mp3, .m4a до 30 МБ',
+    );
+  });
+  expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeDisabled();
+  expect(sent.filter((row) => row.url.endsWith('/music'))).toHaveLength(0);
+});
+
+test('an oversized avatar is refused before a single upload', async () => {
+  const sent = routeApi();
+  const user = userEvent.setup();
+  renderModal();
+
+  await user.click(screen.getByRole('tab', { name: 'Фото' }));
+  const big = new File([new Uint8Array(11_000_000)], 'huge.jpg', { type: 'image/jpeg' });
+  pick([big]);
+
+  await waitFor(() => {
+    expect(vi.mocked(toastError)).toHaveBeenCalledWith(
+      '«huge.jpg» пропущен — .jpg, .jpeg, .png, .webp до 10 МБ',
+    );
+  });
+  expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeDisabled();
+  expect(sent.filter((row) => row.url === '/api/v1/accounts/photo')).toHaveLength(0);
 });

@@ -34,7 +34,12 @@ import { BulkMusicTab, BulkPhotoTab, BulkStoriesTab } from './BulkMediaTabs';
 import { BulkPrivacyTab } from './BulkPrivacyTab';
 import { BulkProgress } from './BulkProgress';
 import { BulkTextTab } from './BulkTextTab';
-import { CHANNEL_USERNAME_RE, VIDEO_SUFFIXES } from './_channelsShared';
+import {
+  CHANNEL_USERNAME_RE,
+  errorChannelId,
+  postTextMax,
+  VIDEO_SUFFIXES,
+} from './_channelsShared';
 import {
   PRIVACY_KEYS,
   TEXT_FIELDS,
@@ -132,9 +137,14 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
   // account: Telegram handles are unique, so the same one twice is a refusal by
   // construction.
   const handle = channel.username.trim();
+  // Checked at BOTH ends of the batch, not just at `1`: the number grows a digit
+  // at the tenth account, and a handle exactly 32 chars long with `1` is 33 with
+  // `10` — refused for accounts 10..N only, after nine had already been created.
   const handleReady =
     !channel.isPublic ||
-    (CHANNEL_USERNAME_RE.test(handle.replace(USERNAME_SLOT, '1')) &&
+    ([1, ids.length].every((n) =>
+      CHANNEL_USERNAME_RE.test(handle.replace(USERNAME_SLOT, String(n))),
+    ) &&
       (ids.length === 1 || handle.includes(USERNAME_SLOT)));
   const READY: Record<Tab, boolean> = {
     text: textReady,
@@ -144,7 +154,8 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     channels:
       channelMode === 'create'
         ? channel.title.trim() !== '' && handleReady
-        : post.text.trim() !== '' || post.file !== null,
+        : (post.text.trim() !== '' || post.file !== null) &&
+          post.text.length <= postTextMax(post.file),
     privacy: Object.keys(levels).length > 0,
   };
   const NOTE: Record<Tab, string> = {
@@ -212,17 +223,33 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
       return;
     }
     if (channelMode === 'create') {
-      const result = await createChannel.mutateAsync({
-        path: { account_id: accountId },
-        body: {
-          title: channel.title.trim(),
-          about: channel.about.trim(),
-          // `{n}` is the account's position, so each channel gets its own handle.
-          username: channel.isPublic ? handle.replace(USERNAME_SLOT, String(index + 1)) : null,
-          reactions_enabled: !channel.reactionsOff,
-        },
-      });
-      const channelId = result.channel_id;
+      let channelId: string | null = null;
+      try {
+        const result = await createChannel.mutateAsync({
+          path: { account_id: accountId },
+          body: {
+            title: channel.title.trim(),
+            about: channel.about.trim(),
+            // `{n}` is the account's position, so each channel gets its own handle.
+            username: channel.isPublic ? handle.replace(USERNAME_SLOT, String(index + 1)) : null,
+            reactions_enabled: !channel.reactionsOff,
+          },
+        });
+        channelId = result.channel_id ?? null;
+      } catch (error) {
+        // The channel can EXIST after a refusal: the gateway sends the username
+        // after creating it, so an occupied handle leaves a private channel behind
+        // and rides its id out on the error. Give that channel its avatar anyway,
+        // then re-raise so the row still reports the refusal.
+        const orphan = errorChannelId(error);
+        if (orphan != null && channel.avatar) {
+          await setChannelPhoto.mutateAsync({
+            path: { account_id: accountId, channel_id: orphan },
+            body: { file: channel.avatar },
+          });
+        }
+        throw error;
+      }
       if (channel.avatar && channelId != null) {
         await setChannelPhoto.mutateAsync({
           path: { account_id: accountId, channel_id: channelId },
@@ -236,6 +263,9 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
     const channels = await queryClient.fetchQuery(
       accountChannelsQueryOptions({ path: { account_id: accountId } }),
     );
+    // Nothing to post into is not "done": a green row would claim this account
+    // got the post, and the operator would never learn it has no channels.
+    if (channels.items.length === 0) throw new Error(t('accounts.bulk.noChannels'));
     for (const item of channels.items) {
       await publishPost.mutateAsync({
         path: { account_id: accountId, channel_id: item.channel_id },

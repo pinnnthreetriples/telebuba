@@ -1,14 +1,51 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Input, SegmentedControl } from '@/shared/ui';
+import { Input, SegmentedControl, toastError } from '@/shared/ui';
 
-import { PHOTO_SUFFIXES, VIDEO_SUFFIXES } from './_channelsShared';
+import {
+  isUploadableMusic,
+  isUploadablePhoto,
+  isUploadablePostMedia,
+  MUSIC_MAX_BYTES,
+  MUSIC_SUFFIXES,
+  PHOTO_MAX_BYTES,
+  PHOTO_SUFFIXES,
+  VIDEO_MAX_BYTES,
+  VIDEO_SUFFIXES,
+} from './_channelsShared';
 import { DashedAdd, FilePicker } from './_shared';
 
 // The bulk editor's three media tabs. One file rather than three: they are the
 // same tab — a picker, a grid of what was picked, one line of consequence — and
 // differ only in tile ratio, accepted suffixes and copy.
+
+// A file the backend would refuse is refused HERE, before a batch uploads it
+// seventeen times to learn that. The single-account tabs already prefilter by the
+// same rules (`isUploadablePhoto` in ProfileModal, `isUploadablePostMedia` in the
+// post composer); the bulk tabs went straight to the picker and would have turned
+// one bad pick into one 400 per account.
+function keepUploadable(
+  files: File[],
+  ok: (file: File) => boolean,
+  formats: string[],
+  maxBytes: number,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): File[] {
+  const kept: File[] = [];
+  for (const file of files) {
+    if (ok(file)) kept.push(file);
+    else
+      toastError(
+        t('accounts.bulk.fileRejected', {
+          name: file.name,
+          formats: formats.join(', '),
+          mb: maxBytes / 1_000_000,
+        }),
+      );
+  }
+  return kept;
+}
 
 // Previews come from object URLs, which leak unless revoked. Held in state (not a
 // memo) so the revoke runs on the LIST that made them, never on a newer one.
@@ -108,7 +145,15 @@ export function BulkPhotoTab({
           accept={PHOTO_SUFFIXES.join(',')}
           multiple={spread}
           onPick={(picked) => {
-            onFiles(spread ? [...files, ...picked] : picked.slice(0, 1));
+            const ok = keepUploadable(
+              picked,
+              isUploadablePhoto,
+              PHOTO_SUFFIXES,
+              PHOTO_MAX_BYTES,
+              t,
+            );
+            if (ok.length === 0) return;
+            onFiles(spread ? [...files, ...ok] : ok.slice(0, 1));
           }}
         >
           {(open) => <DashedAdd ratio="1" label={t('accounts.profile.upload')} onClick={open} />}
@@ -157,7 +202,16 @@ export function BulkStoriesTab({
             accept={[...PHOTO_SUFFIXES, ...VIDEO_SUFFIXES].join(',')}
             multiple={false}
             onPick={(picked) => {
-              onFiles(picked.slice(0, 1));
+              // A story takes either kind, so the cap depends on the file: the
+              // video ceiling is ten times the image one.
+              const ok = keepUploadable(
+                picked,
+                isUploadablePostMedia,
+                [...PHOTO_SUFFIXES, ...VIDEO_SUFFIXES],
+                VIDEO_MAX_BYTES,
+                t,
+              );
+              if (ok.length > 0) onFiles(ok.slice(0, 1));
             }}
           >
             {(open) => (
@@ -230,10 +284,17 @@ export function BulkMusicTab({
         </div>
       ) : (
         <FilePicker
-          accept="audio/*,.mp3,.m4a,.flac,.ogg"
+          accept={MUSIC_SUFFIXES.join(',')}
           multiple={false}
           onPick={(picked) => {
-            onFile(picked[0] ?? null);
+            const ok = keepUploadable(
+              picked,
+              isUploadableMusic,
+              MUSIC_SUFFIXES,
+              MUSIC_MAX_BYTES,
+              t,
+            );
+            if (ok.length > 0) onFile(ok[0] ?? null);
           }}
         >
           {(open) => (

@@ -55,7 +55,12 @@ export function BulkProgress({
             <span className="min-w-0 flex-1 truncate type-item-title">{label(row.accountId)}</span>
             <span className="shrink-0 truncate type-caption">
               {row.state === 'error'
-                ? mutationErrorText(row.error)
+                ? // A rejected request is the error ENVELOPE, never an Error, so an
+                  // `Error` here is one the batch raised itself (an account with no
+                  // channels to post into) and already carries its own sentence.
+                  row.error instanceof Error
+                  ? row.error.message
+                  : mutationErrorText(row.error)
                 : row.state === 'ok'
                   ? t('accounts.bulk.rowOk')
                   : row.state === 'running'

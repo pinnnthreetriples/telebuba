@@ -1,8 +1,15 @@
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Input, SegmentedControl, Textarea } from '@/shared/ui';
+import { Button, Icon, Input, SegmentedControl, Textarea, toastError } from '@/shared/ui';
 
-import { CHANNEL_ABOUT_MAX, CHANNEL_TITLE_MAX, PHOTO_SUFFIXES } from './_channelsShared';
+import {
+  CHANNEL_ABOUT_MAX,
+  CHANNEL_TITLE_MAX,
+  isUploadablePhoto,
+  PHOTO_MAX_BYTES,
+  PHOTO_SUFFIXES,
+  postTextMax,
+} from './_channelsShared';
 import { CheckRow } from './_CheckRow';
 import { FilePicker } from './_shared';
 
@@ -67,7 +74,18 @@ export function BulkChannelsTab({
               multiple={false}
               onPick={(picked) => {
                 const file = picked[0];
-                if (file) onChannel({ ...channel, avatar: file });
+                if (!file) return;
+                if (!isUploadablePhoto(file)) {
+                  toastError(
+                    t('accounts.bulk.fileRejected', {
+                      name: file.name,
+                      formats: PHOTO_SUFFIXES.join(', '),
+                      mb: PHOTO_MAX_BYTES / 1_000_000,
+                    }),
+                  );
+                  return;
+                }
+                onChannel({ ...channel, avatar: file });
               }}
             >
               {(open) => (
@@ -154,23 +172,48 @@ export function BulkChannelsTab({
       ) : (
         <>
           <div className="type-prose">{t('accounts.bulk.channelPostHint')}</div>
-          <Textarea
-            className="resize-none [font-family:inherit]"
-            rows={4}
-            value={post.text}
-            aria-label={t('accounts.channel.composerPlaceholder')}
-            placeholder={t('accounts.channel.composerPlaceholder')}
-            onChange={(event) => {
-              onPost({ ...post, text: event.target.value });
-            }}
-          />
+          <div className="flex flex-col gap-tight">
+            <Textarea
+              className="resize-none [font-family:inherit]"
+              rows={4}
+              value={post.text}
+              maxLength={postTextMax(post.file)}
+              aria-label={t('accounts.channel.composerPlaceholder')}
+              placeholder={t('accounts.channel.composerPlaceholder')}
+              onChange={(event) => {
+                onPost({ ...post, text: event.target.value });
+              }}
+            />
+            {/* Attaching media AFTER the text drops the ceiling from 4096 to 1024,
+                and `maxLength` cannot shorten what is already typed — the counter
+                turns red and the footer's Apply goes with it. */}
+            <span
+              className={`self-end type-caption ${post.text.length > postTextMax(post.file) ? 'font-medium text-danger' : ''}`}
+            >
+              {t('accounts.channel.charCount', {
+                n: post.text.length,
+                max: postTextMax(post.file),
+              })}
+            </span>
+          </div>
           <div className="flex items-center gap-md">
             <FilePicker
               accept={PHOTO_SUFFIXES.join(',')}
               multiple={false}
               onPick={(picked) => {
                 const file = picked[0];
-                if (file) onPost({ ...post, file });
+                if (!file) return;
+                if (!isUploadablePhoto(file)) {
+                  toastError(
+                    t('accounts.bulk.fileRejected', {
+                      name: file.name,
+                      formats: PHOTO_SUFFIXES.join(', '),
+                      mb: PHOTO_MAX_BYTES / 1_000_000,
+                    }),
+                  );
+                  return;
+                }
+                onPost({ ...post, file });
               }}
             >
               {(open) => (
