@@ -195,7 +195,7 @@ class UpdateProfile(BaseModel):
     """Update profile text. Field contract: ``""`` clears, ``None`` leaves unchanged."""
 
     action_type: Literal["update_profile"] = "update_profile"
-    first_name: str = Field(min_length=1, max_length=PROFILE_NAME_MAX_LENGTH)
+    first_name: str | None = Field(default=None, min_length=1, max_length=PROFILE_NAME_MAX_LENGTH)
     last_name: str | None = Field(default=None, max_length=PROFILE_NAME_MAX_LENGTH)
     username: str | None = Field(default=None, pattern=PROFILE_USERNAME_PATTERN)
     bio: str | None = Field(default=None, max_length=PROFILE_BIO_MAX_LENGTH)

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 
 import { CollapsibleCard, Icon } from '@/shared/ui';
 
@@ -29,6 +29,42 @@ export function DashedAdd({
       <Icon name="plus" size={20} />
       {label}
     </button>
+  );
+}
+
+// A hidden file input plus whatever opens it: the trigger is the child, so each
+// caller keeps its own look (a dashed tile, a pill, an avatar circle) without a
+// third copy of the ref + reset dance.
+export function FilePicker({
+  accept,
+  multiple,
+  onPick,
+  children,
+}: {
+  accept: string;
+  multiple: boolean;
+  onPick: (files: File[]) => void;
+  children: (open: () => void) => ReactNode;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      {children(() => input.current?.click())}
+      <input
+        ref={input}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        className="hidden"
+        onChange={(event) => {
+          const picked = Array.from(event.target.files ?? []);
+          // Cleared before the handler: re-picking the same file must fire
+          // `change` again, and a live FileList would not.
+          event.target.value = '';
+          if (picked.length > 0) onPick(picked);
+        }}
+      />
+    </>
   );
 }
 

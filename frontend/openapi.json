@@ -11526,9 +11526,16 @@
             "title": "Account Id"
           },
           "first_name": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "First Name"
           },
           "last_name": {
@@ -11570,10 +11577,10 @@
         },
         "type": "object",
         "required": [
-          "account_id",
-          "first_name"
+          "account_id"
         ],
-        "title": "AccountProfileUpdateRequest"
+        "title": "AccountProfileUpdateRequest",
+        "description": "Field contract, all four: ``\"\"`` clears, ``None`` leaves unchanged.\n\n``first_name`` was the one field that could not say \"leave unchanged\" \u2014 it was\nrequired, so every save re-sent the current name. The single-account form\nalways has one to send; a BULK save applying the same bio to a fleet does not,\nand re-sending each row's stored name would overwrite whatever Telegram holds\nfrom a stale snapshot. Optional here, ``min_length=1`` still refuses ``\"\"``:\nTelegram has no nameless user, so clearing a first name is not a state the\ncontract can offer."
       },
       "AccountProfileView": {
         "properties": {
