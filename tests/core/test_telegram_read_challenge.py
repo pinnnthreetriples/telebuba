@@ -14,8 +14,9 @@ from unittest.mock import MagicMock
 
 import pytest
 from telethon.tl.types import (
-    KeyboardButtonCallback,
-    KeyboardButtonRow,
+    InlineButtonTypeCallback,
+    KeyboardInlineButton,
+    KeyboardInlineButtonRow,
     MessageActionChatAddUser,
     MessageEntityMentionName,
     MessageEntityTextUrl,
@@ -38,8 +39,16 @@ _MY_USERNAME = "marina_bot_solver"
 def _markup() -> ReplyInlineMarkup:
     return ReplyInlineMarkup(
         rows=[
-            KeyboardButtonRow(buttons=[KeyboardButtonCallback(text="Я не бот", data=b"ok")]),
-            KeyboardButtonRow(buttons=[KeyboardButtonCallback(text="Я бот", data=b"no")]),
+            KeyboardInlineButtonRow(
+                buttons=[
+                    KeyboardInlineButton(text="Я не бот", type=InlineButtonTypeCallback(data=b"ok"))
+                ]
+            ),
+            KeyboardInlineButtonRow(
+                buttons=[
+                    KeyboardInlineButton(text="Я бот", type=InlineButtonTypeCallback(data=b"no"))
+                ]
+            ),
         ],
     )
 
