@@ -16,6 +16,7 @@ jobs:
   check:
     name: MEX drift, freshness and budgets
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # mex reports command name, version and OS home on every invocation and does not
     # detect CI, so this job would phone home four times per pull request. Opting out
     # here rather than in `.mex/config.json`: the config file is the scaffold's, and a
@@ -114,23 +115,8 @@ jobs:
       # rubber-stamp generator: it would train every agent to bump `last_updated` to
       # get green, which is precisely the fake freshness this scaffold is meant to
       # prevent. Kept strict (25/50 commits, 14/30 days) BECAUSE it only nags.
-      # Cache is a SPEED optimisation only, and safe to miss. The graph takes ~3min
-      # to build and its content is a pure function of the indexed sources, so the
-      # key is their hash: an exact hit restores it and the build below no-ops. The
-      # grounding baseline does NOT ride in here — it is tracked in git precisely so
-      # that an evicted cache cannot quietly disarm the drift check.
-      - name: Restore the code graph
-        id: graph-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: .mex/graph.db
-          key: mex-graph-v1-${{ hashFiles('**/*.py', 'frontend/src/**/*.ts', 'frontend/src/**/*.tsx') }}
-
-      # Without a graph the grounding checks silently do not run: mex degrades to
-      # its eleven filesystem checkers and still reports a clean score, which would
-      # leave GROUNDING_* unenforced while looking enforced.
+      # Cached graphs stalled later checks. Build from source until reuse is reliable.
       - name: Build the code graph
-        if: steps.graph-cache.outputs.cache-hit != 'true'
         run: npx --yes mex-agent@0.7.1 graph --json
 
       # A freshly built graph has no grounding baseline, and without one the drift
