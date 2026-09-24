@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingBoardAccount, NeuroshillingCampaign } from '@/shared/api';
+import { FOCUS_RING } from '@/shared/design-system';
 import { Badge, Button, HelpHint, Icon, IconButton, Input, Select, Textarea } from '@/shared/ui';
 
 import { MediaModal } from './MediaModal';
@@ -214,13 +215,37 @@ function StepRow({
           }}
         />
       ) : (
-        /* A wrapping grid of square glyph tiles, not a row of labelled options: one
-           wearer, so it stays hand-written rather than becoming a fourth
-           `SegmentedControl` variant. */
+        /* SegmentedControl has no square, wrapping option layout; keep these glyph tiles
+           local and implement the radiogroup keyboard pattern here. */
         <div
           role="radiogroup"
           aria-label={t('neuroshilling.scenario.steps.emoji', { position })}
           className="flex flex-wrap gap-tight"
+          onKeyDown={(event) => {
+            const radios = Array.from(
+              event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="radio"]'),
+            );
+            const focusedIndex = radios.indexOf(document.activeElement as HTMLButtonElement);
+            const currentIndex =
+              focusedIndex >= 0 ? focusedIndex : radios.findIndex((radio) => radio.tabIndex === 0);
+            let nextIndex: number;
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+              nextIndex = (currentIndex + 1) % radios.length;
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+              nextIndex = (currentIndex - 1 + radios.length) % radios.length;
+            } else if (event.key === 'Home') {
+              nextIndex = 0;
+            } else if (event.key === 'End') {
+              nextIndex = radios.length - 1;
+            } else {
+              return;
+            }
+            event.preventDefault();
+            const emoji = REACTIONS[nextIndex];
+            if (emoji === undefined) return;
+            onChange({ emoji });
+            radios[nextIndex]?.focus();
+          }}
         >
           {REACTIONS.map((emoji) => (
             <button
@@ -229,10 +254,11 @@ function StepRow({
               role="radio"
               aria-checked={step.emoji === emoji}
               aria-label={emoji}
+              tabIndex={(step.emoji ?? REACTIONS[0]) === emoji ? 0 : -1}
               onClick={() => {
                 onChange({ emoji });
               }}
-              className={`size-icon rounded-md border text-body ${step.emoji === emoji ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+              className={`size-icon rounded-md border text-body ${FOCUS_RING} ${step.emoji === emoji ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
             >
               {emoji}
             </button>

@@ -39,16 +39,18 @@ function Node({
   last?: boolean;
 }) {
   return (
-    <div className="flex min-w-0 flex-col items-center gap-sm text-center">
-      <div className="flex w-full items-center">
-        <span className={`h-rail flex-1 bg-line ${first ? 'invisible' : ''}`} />
+    <div className="flex min-w-0 items-center gap-md text-left sm:flex-col sm:gap-sm sm:text-center">
+      <div className="flex w-auto shrink-0 items-center sm:w-full">
+        <span className={`h-rail hidden flex-1 bg-line sm:block ${first ? 'invisible' : ''}`} />
         <span
           className={`size-node shrink-0 rounded-full border-2 ${done ? 'border-action-primary bg-action-primary' : 'border-line-strong bg-surface-card'}`}
         />
-        <span className={`h-rail flex-1 bg-line ${last ? 'invisible' : ''}`} />
+        <span className={`h-rail hidden flex-1 bg-line sm:block ${last ? 'invisible' : ''}`} />
       </div>
-      <span className={done ? 'type-item-title' : 'type-caption'}>{label}</span>
-      <span className="-mt-xs type-caption">{sub}</span>
+      <div className="flex min-w-0 flex-1 flex-col sm:flex-none">
+        <span className={done ? 'type-item-title' : 'type-caption'}>{label}</span>
+        <span className="-mt-xs type-caption">{sub}</span>
+      </div>
     </div>
   );
 }
@@ -140,7 +142,7 @@ export function PipelineCard({
       {/* Шесть колонок без зазора: зазор разорвал бы рельсу, а расстояние между
           подписями уже задано самими колонками. */}
       <div className="mb-xl">
-        <div className="grid grid-cols-6">
+        <div className="grid grid-cols-1 gap-md sm:grid-cols-6 sm:gap-0">
           <Node
             first
             label={t('neuroshilling.pipeline.node.scenario')}

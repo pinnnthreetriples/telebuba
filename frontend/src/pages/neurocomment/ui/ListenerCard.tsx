@@ -70,32 +70,40 @@ export function ListenerCard({
             open={listenerActionsOpen}
             actions={
               <>
-                <button
-                  type="button"
+                <IconButton
+                  size="touch"
+                  tone="neutral"
+                  aria-label={
+                    running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
+                  }
                   title={
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
-                  className={`flex w-action items-center justify-center border-none bg-transparent ${running ? 'text-warning-deep' : 'text-success-deep'}`}
+                  className={`w-action self-stretch ${running ? 'text-warning-deep hover:bg-warning-tint' : 'text-success-deep hover:bg-success-tint'}`}
                 >
                   {running ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
-                </button>
-                <button
-                  type="button"
+                </IconButton>
+                <IconButton
+                  size="touch"
+                  tone="primary"
+                  aria-label={t('neurocomment.listener.edit')}
                   title={t('neurocomment.listener.edit')}
                   onClick={onEdit}
-                  className="flex w-action items-center justify-center border-none bg-transparent text-action-primary"
+                  className="w-action self-stretch"
                 >
                   <Icon name="pencil" size={16} />
-                </button>
-                <button
-                  type="button"
+                </IconButton>
+                <IconButton
+                  size="touch"
+                  tone="danger"
+                  aria-label={t('neurocomment.listener.remove')}
                   title={t('neurocomment.listener.remove')}
                   onClick={onRemove}
-                  className="flex w-action items-center justify-center border-none bg-transparent text-danger"
+                  className="w-action self-stretch"
                 >
                   <Icon name="trash" size={16} />
-                </button>
+                </IconButton>
               </>
             }
             surface={

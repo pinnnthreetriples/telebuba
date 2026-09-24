@@ -82,6 +82,134 @@ async function stub(page: Page, unmatched: string[]) {
 }
 
 test.describe('экраны приложения', () => {
+  test('карточки аккаунтов на 320px сохраняют имя и touch-размер действий', async ({ page }) => {
+    const unmatched: string[] = [];
+    await stub(page, unmatched);
+    await page.setViewportSize({ width: 320, height: 812 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
+    await expect(page.getByText('@user_0')).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const card = [...document.querySelectorAll<HTMLElement>('[role="listitem"]')].find((item) =>
+        item.textContent?.includes('@user_0'),
+      );
+      const title = card?.querySelector<HTMLElement>('.type-card-title');
+      const action = card?.querySelector<HTMLElement>(
+        'button[aria-label="Открыть в Telegram Web"]',
+      );
+      if (!title || !action) return null;
+      const titleBox = title.getBoundingClientRect();
+      const actionBox = action.getBoundingClientRect();
+      return {
+        document: document.documentElement.scrollWidth,
+        viewport: document.documentElement.clientWidth,
+        actionWidth: actionBox.width,
+        actionHeight: actionBox.height,
+        titleBottom: titleBox.bottom,
+        actionTop: actionBox.top,
+      };
+    });
+
+    expect(layout).not.toBeNull();
+    expect(layout!.actionWidth).toBeGreaterThanOrEqual(44);
+    expect(layout!.actionHeight).toBeGreaterThanOrEqual(44);
+    expect(layout!.titleBottom).toBeLessThanOrEqual(layout!.actionTop);
+    expect(layout!.document).toBeLessThanOrEqual(layout!.viewport);
+    expect(unmatched).toEqual([]);
+  });
+
+  test('нейрокомментинг не расширяет страницу на ширине 320px', async ({ page }) => {
+    const unmatched: string[] = [];
+    await stub(page, unmatched);
+    await page.setViewportSize({ width: 320, height: 812 });
+    await page.goto('/neurocomment');
+    await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Решение капчи' })).toBeVisible();
+
+    const layout = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+    }));
+    expect(layout.content).toBeLessThanOrEqual(layout.viewport);
+    expect(unmatched).toEqual([]);
+  });
+
+  test('фильтры логов не расширяют страницу на ширине 320px', async ({ page }) => {
+    const unmatched: string[] = [];
+    await stub(page, unmatched);
+    await page.setViewportSize({ width: 320, height: 812 });
+    await page.goto('/logs');
+    await expect(page.getByRole('heading', { name: 'Логи' })).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Статус' })).toBeVisible();
+
+    const layout = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      content: document.documentElement.scrollWidth,
+    }));
+    expect(layout.content).toBeLessThanOrEqual(layout.viewport);
+    expect(unmatched).toEqual([]);
+  });
+
+  test('подписи конвейера не накладываются на ширине 375px', async ({ page }) => {
+    const unmatched: string[] = [];
+    await stub(page, unmatched);
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/neuroshilling');
+    await expect(page.getByRole('heading', { name: 'НейроШиллинг' })).toBeVisible();
+    await expect(page.getByText(/Загружаю|Загрузка/).first()).toBeHidden();
+
+    const labels = ['Сценарий', 'Аккаунты', 'Цели', 'Вступление', 'Диалог', 'Прослушка'];
+    const timeline = page
+      .getByRole('main')
+      .getByText('Сценарий', { exact: true })
+      .locator('xpath=../../..');
+    const boxes = await Promise.all(
+      labels.map(async (label) => {
+        const text = timeline.getByText(label, { exact: true });
+        await expect(text).toBeVisible();
+        return text.boundingBox();
+      }),
+    );
+    expect(boxes).not.toContain(null);
+
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const a = boxes[i]!;
+        const b = boxes[j]!;
+        const separated =
+          a.x + a.width <= b.x ||
+          b.x + b.width <= a.x ||
+          a.y + a.height <= b.y ||
+          b.y + b.height <= a.y;
+        expect(separated, `${labels[i]} / ${labels[j]}`).toBe(true);
+      }
+    }
+  });
+
+  test('шапка приложения помещается в viewport шириной 320px', async ({ page }) => {
+    const unmatched: string[] = [];
+    await stub(page, unmatched);
+    await page.setViewportSize({ width: 320, height: 812 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const header = document.querySelector('header');
+      return {
+        clientWidth: header?.clientWidth ?? 0,
+        scrollWidth: header?.scrollWidth ?? Number.POSITIVE_INFINITY,
+        viewport: document.documentElement.clientWidth,
+      };
+    });
+
+    expect(layout.scrollWidth, 'header should not overflow horizontally').toBeLessThanOrEqual(
+      layout.clientWidth,
+    );
+    expect(layout.clientWidth).toBeLessThanOrEqual(layout.viewport);
+    expect(unmatched).toEqual([]);
+  });
+
   for (const screen of SCREENS) {
     test(`экран «${screen.id}» выглядит как эталон`, async ({ page }) => {
       const unmatched: string[] = [];
@@ -161,3 +289,34 @@ test.describe('экраны приложения', () => {
     });
   }
 });
+
+for (const width of [375, 320]) {
+  test(`шапка прогрева помещается в мобильный viewport ${width}px`, async ({ page }) => {
+    const unmatched: string[] = [];
+    await stub(page, unmatched);
+    await page.setViewportSize({ width, height: 812 });
+    await page.goto('/warming');
+    await expect(page.getByRole('heading', { name: 'Прогрев аккаунтов' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Остановить пул' })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+      const header = document.querySelector('h1')?.parentElement;
+      const button = [...document.querySelectorAll('button')].find((node) =>
+        node.textContent?.includes('Остановить пул'),
+      );
+      const buttonRight = button?.getBoundingClientRect().right ?? Number.POSITIVE_INFINITY;
+      return {
+        viewport: document.documentElement.clientWidth,
+        document: document.documentElement.scrollWidth,
+        headerClient: header?.clientWidth ?? 0,
+        headerScroll: header?.scrollWidth ?? Number.POSITIVE_INFINITY,
+        buttonRight,
+      };
+    });
+
+    expect(layout.buttonRight).toBeLessThanOrEqual(layout.viewport);
+    expect(layout.headerScroll).toBeLessThanOrEqual(layout.headerClient);
+    expect(layout.document).toBeLessThanOrEqual(layout.viewport);
+    expect(unmatched).toEqual([]);
+  });
+}

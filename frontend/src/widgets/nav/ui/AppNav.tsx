@@ -13,9 +13,9 @@ import { NavDrawer } from './NavDrawer';
 // The design's sticky top bar (Telebuba.dc.html header): logo, nav with a
 // sliding active indicator (the GSAP layoutId slide, done here by measuring the
 // active link and CSS-transitioning a single underline), "system active" pill,
-// bell, avatar. Reproduced with Tailwind utilities to match 1:1.
+// and avatar. Reproduced with Tailwind utilities to match 1:1.
 // Below `lg` the horizontal nav is display:none and a hamburger opens NavDrawer;
-// the bell and avatar grow to 44px touch targets. ponytail: the in-card icon buttons
+// the avatar grows to a 44px touch target. ponytail: the in-card icon buttons
 // on pages and in modals stay as they are — 30px (AccountsTable's ACTION_BTN, the
 // per-row check/edit/delete) up to 38px, so up to 14px short of the 44px guideline.
 // Bumping them globally would reflow every dense card; the row actions are the ones
@@ -102,7 +102,7 @@ export function AppNav() {
 
   return (
     <header className="sticky top-0 z-sticky border-b border-line bg-white/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-header max-w-shell items-center gap-md px-lg lg:gap-page lg:px-2xl">
+      <div className="mx-auto flex h-header max-w-shell items-center gap-tight px-md sm:gap-md sm:px-lg lg:gap-page lg:px-2xl">
         <IconButton
           size="touch"
           aria-label={t('shell.menu')}
@@ -168,7 +168,7 @@ export function AppNav() {
 
         {/* ml-auto: the hidden nav no longer contributes the flex-1 that pushed
             this cluster right below `lg`. */}
-        <div className="ml-auto flex shrink-0 items-center gap-md">
+        <div className="ml-auto flex shrink-0 items-center gap-sm sm:gap-md">
           <div
             className={`flex items-center gap-sm rounded-full px-md py-md lg:px-md lg:py-tight ${systemActive ? 'bg-success-tint' : 'bg-canvas'}`}
           >
@@ -187,35 +187,19 @@ export function AppNav() {
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
           </div>
-          <button
-            type="button"
-            aria-label={t('shell.notifications')}
-            className="relative flex size-touch items-center justify-center rounded-full border border-line bg-surface-card text-content-muted lg:size-tile"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            >
-              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-            </svg>
-            <span className="absolute right-[11px] top-[9px] size-dot rounded-full border-[1.5px] border-surface-card bg-action-primary lg:right-[8px] lg:top-[6px]" />
-          </button>
           <div className="relative">
-            <button
-              type="button"
+            <IconButton
+              size="touch"
+              shape="circle"
+              tone="action"
               aria-label={t('shell.account')}
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="flex size-touch items-center justify-center rounded-full bg-action-primary text-body font-semibold text-on-action lg:size-tile"
+              className="border-action-primary text-body font-semibold lg:size-tile"
             >
               {initials}
-            </button>
+            </IconButton>
             {menuOpen ? (
               <>
                 <button

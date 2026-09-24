@@ -21,13 +21,12 @@ import { useWideContainer } from './useWideViewport';
 export interface DataTableColumnMeta {
   className?: string;
   cellClassName?: string;
-  // Card layout only: put this column in the card's header row ('title' grows and
-  // wraps, 'control' never shrinks and keeps column order so a leading checkbox
-  // stays leading) instead of the labelled label/value list beneath it.
+  // Card layout only: 'title' and 'control' go in the header row; 'actions' gets
+  // its own row below it. Title grows and wraps; controls keep their column order.
   // meta.cellClassName is deliberately NOT applied on the card path: it encodes
   // table-cell geometry — w-px would squeeze a chevron to 1px, and a nowrap ellipsis
   // would truncate a comment inside a card where wrapping is the whole point.
-  cardSlot?: 'title' | 'control';
+  cardSlot?: 'title' | 'control' | 'actions';
 }
 
 interface DataTableProps<TData> {
@@ -142,7 +141,10 @@ export function DataTable<TData>({
           const cells = row.getVisibleCells();
           const slotOf = (cell: (typeof cells)[number]) =>
             (cell.column.columnDef.meta as DataTableColumnMeta | undefined)?.cardSlot;
-          const head = cells.filter((cell) => slotOf(cell) !== undefined);
+          const head = cells.filter(
+            (cell) => slotOf(cell) === 'title' || slotOf(cell) === 'control',
+          );
+          const actions = cells.filter((cell) => slotOf(cell) === 'actions');
           const body = cells.filter((cell) => slotOf(cell) === undefined);
           return (
             // role after the spread, like className: it is part of the role="list"
@@ -165,6 +167,11 @@ export function DataTable<TData>({
                   ))}
                 </div>
               ) : null}
+              {actions.map((cell) => (
+                <div key={cell.id} className="mt-md">
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </div>
+              ))}
               {body.map((cell) => {
                 const header = headerById.get(cell.column.id);
                 return (

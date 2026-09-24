@@ -80,6 +80,48 @@ test('a paused listener still reads as paused', () => {
   expect(screen.getByText('На паузе')).toBeVisible();
 });
 
+test('listener icon actions have names, visible keyboard focus, and keep their callbacks', async () => {
+  const onToggleRuntime = vi.fn();
+  const onEdit = vi.fn();
+  const onRemove = vi.fn();
+  render(
+    <ListenerCard
+      listenerId="a1"
+      running
+      activeCampaignCount={1}
+      activeChannelCount={1}
+      unwatchedChannels={[]}
+      listenerActionsOpen
+      onToggleActions={vi.fn()}
+      onToggleRuntime={onToggleRuntime}
+      onEdit={onEdit}
+      onRemove={onRemove}
+      accountOptions={OPTIONS}
+      onPickListener={vi.fn()}
+    />,
+  );
+
+  const pause = screen.getByRole('button', { name: 'Поставить на паузу' });
+  const edit = screen.getByRole('button', { name: 'Изменить аккаунт' });
+  const remove = screen.getByRole('button', { name: 'Снять слушателя' });
+  expect(pause).toHaveAttribute('aria-label', 'Поставить на паузу');
+  expect(pause).toHaveClass('focus-visible:outline-focus', 'hover:bg-warning-tint');
+  expect(edit).toHaveClass('focus-visible:outline-focus', 'hover:bg-action-hover');
+  expect(remove).toHaveClass('focus-visible:outline-focus', 'hover:bg-danger-tint');
+
+  await userEvent.tab();
+  expect(pause).toHaveFocus();
+  await userEvent.keyboard('{Enter}');
+  expect(onToggleRuntime).toHaveBeenCalledOnce();
+  expect(onEdit).not.toHaveBeenCalled();
+  expect(onRemove).not.toHaveBeenCalled();
+
+  await userEvent.click(edit);
+  await userEvent.click(remove);
+  expect(onEdit).toHaveBeenCalledOnce();
+  expect(onRemove).toHaveBeenCalledOnce();
+});
+
 // .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so the account buttons
 // are rendered and kept their tab stops while the list was closed. `inert` is what
 // keeps a keyboard operator out; happy-dom honours it for focus, which is exactly the

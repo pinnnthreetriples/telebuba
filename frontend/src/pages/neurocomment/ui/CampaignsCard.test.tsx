@@ -75,6 +75,18 @@ test('with no verdicts the chips stay the default gray', () => {
   expect(chipFor('@a').className).toContain('bg-canvas');
 });
 
+test('campaign icon actions keep their callbacks', async () => {
+  const props = renderCard({ campaignList: [CAMPAIGN] });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Поставить на паузу' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Редактировать промт' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить кампанию' }));
+
+  expect(props.onToggleStatus).toHaveBeenCalledWith(CAMPAIGN);
+  expect(props.onEditPrompt).toHaveBeenCalledWith(CAMPAIGN);
+  expect(props.onDelete).toHaveBeenCalledWith(CAMPAIGN);
+});
+
 const CAMPAIGN = {
   campaign_id: 'c1',
   name: 'tabacum',
@@ -135,6 +147,13 @@ test('карточку кампании можно выбрать с клави�
   const select = screen.getByRole('button', { name: 'tabacum' });
   const gear = screen.getByRole('button', { name: 'Действия' });
   const pause = screen.getByRole('button', { name: 'Поставить на паузу' });
+  const edit = screen.getByRole('button', { name: 'Редактировать промт' });
+  const remove = screen.getByRole('button', { name: 'Удалить кампанию' });
+
+  expect(pause).toHaveAttribute('aria-label', 'Поставить на паузу');
+  expect(pause).toHaveClass('focus-visible:outline-focus', 'hover:bg-warning-tint');
+  expect(edit).toHaveClass('focus-visible:outline-focus', 'hover:bg-action-hover');
+  expect(remove).toHaveClass('focus-visible:outline-focus', 'hover:bg-danger-tint');
 
   // Шестерёнка не внутри кнопки выбора: вложенная кнопка — это то, что было.
   expect(select.contains(gear)).toBe(false);
@@ -150,6 +169,7 @@ test('карточку кампании можно выбрать с клави�
   await userEvent.tab();
   await userEvent.tab();
   expect(pause).toHaveFocus();
+  expect(pause).toHaveClass('focus-visible:outline-focus');
   expect(surface()?.className).toMatch(REVEALED);
 
   await userEvent.tab();

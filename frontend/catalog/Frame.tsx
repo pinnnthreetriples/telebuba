@@ -46,7 +46,7 @@ export function Row({
         <div className="type-label">{label}</div>
         {hint !== undefined && <div className="mt-hair type-caption">{hint}</div>}
       </div>
-      <div className="flex flex-wrap items-center gap-md">{children}</div>
+      <div className="flex min-w-0 flex-wrap items-center gap-md">{children}</div>
     </div>
   );
 }
@@ -63,8 +63,8 @@ export function Cell({
   children: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-start gap-hair">
-      <div data-probe={probe} data-cell={caption}>
+    <div className="flex min-w-0 flex-col items-start gap-hair">
+      <div className="sm:max-w-full sm:overflow-x-auto" data-probe={probe} data-cell={caption}>
         {children}
       </div>
       <span className="type-caption">{caption}</span>

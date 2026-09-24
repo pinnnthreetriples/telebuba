@@ -1,3 +1,5 @@
+import { FOCUS_RING } from '@/shared/design-system';
+
 // The design's pill switch (track + sliding thumb), 18px of travel.
 //
 // Lives in shared/ui rather than beside the settings form it started in: steiger's
@@ -29,7 +31,7 @@ export function Switch({
         onChange(!checked);
       }}
       // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the track is its own knob's travel (3 + size-chip + 21)
-      className={`tb-sw relative h-compact w-[46px] shrink-0 rounded-full transition-colors disabled:opacity-50 ${checked ? 'bg-action-primary' : 'bg-line-strong'}`}
+      className={`tb-sw relative h-compact w-[46px] shrink-0 rounded-full transition-colors disabled:opacity-50 ${FOCUS_RING} ${checked ? 'bg-action-primary' : 'bg-line-strong'}`}
     >
       <span
         className={`tb-sw-thumb absolute top-[3px] block size-chip rounded-full bg-surface-card shadow-thumb transition-transform ${checked ? 'translate-x-[21px]' : 'translate-x-[3px]'}`}

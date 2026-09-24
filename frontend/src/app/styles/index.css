@@ -28,14 +28,15 @@
    Design vocabulary lifted verbatim from Telebuba.dc.html (<style> block).
    Only the parts Tailwind utilities can't express inline live here: keyframes,
    custom scrollbars, the tooltip pseudo-elements, and the collapse/switch/
-   dropdown transitions. Colours, layout, and spacing are done with Tailwind
-   utilities (design tokens + arbitrary values) in the components themselves.
+   dropdown transitions. Colours, layout, and spacing use Tailwind utilities
+   backed by design tokens; one-off geometry here is marked for the CSS gate.
    ─────────────────────────────────────────────────────────────────────────── */
 @keyframes plpulse {
   0% {
     box-shadow: 0 0 0 0 rgb(theme('channel.action') / 0.3);
   }
   70% {
+    /* design-token-exception: animation ring expands around a single status dot */
     box-shadow: 0 0 0 7px rgb(theme('channel.action') / 0);
   }
   100% {
@@ -45,6 +46,7 @@
 @keyframes fadeup {
   from {
     opacity: 0;
+    /* design-token-exception: keyframe travel distance, not layout rhythm */
     transform: translateY(6px);
   }
   to {
@@ -76,6 +78,7 @@
 @keyframes swapin {
   from {
     opacity: 0;
+    /* design-token-exception: keyframe travel distance, not layout rhythm */
     transform: translateY(7px);
   }
   to {
@@ -99,6 +102,7 @@
 @keyframes blurswap {
   0% {
     opacity: 0;
+    /* design-token-exception: blur is the entry effect's local geometry */
     filter: blur(6px);
     transform: scale(0.78);
   }
@@ -132,6 +136,7 @@
     transform: scale(1);
   }
   60% {
+    /* design-token-exception: pulse ring expands around a single status dot */
     box-shadow: 0 0 0 5px rgb(theme('channel.action') / 0);
     transform: scale(1.18);
   }
@@ -146,6 +151,7 @@
     box-shadow: 0 0 0 0 rgb(theme('channel.glow') / 0);
   }
   50% {
+    /* design-token-exception: loading ring glow is a single animation effect */
     box-shadow: 0 0 7px 1px rgb(theme('channel.glow') / 0.9);
   }
 }
@@ -266,9 +272,11 @@
   *,
   *::before,
   *::after {
+    /* design-token-exception: near-zero duration preserves transitionend for reduced motion */
     animation-duration: 0.01ms !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
+    /* design-token-exception: near-zero duration preserves transitionend for reduced motion */
     transition-duration: 0.01ms !important;
     transition-delay: 0ms !important;
   }
@@ -285,6 +293,7 @@
      half of the transition below, and the rung nearest it (`xs`) means "separate two
      stacked hairlines". Naming travel with a spacing rung is how a token comes to mean
      two things. */
+  /* design-token-exception: tooltip entrance travel distance */
   transform: translateX(-50%) translateY(3px);
   background: theme('colors.term.DEFAULT');
   /* Brighter than `term.text` on purpose: that is the log terminal's body ink, this is
@@ -327,6 +336,7 @@
   transform: translateX(-50%);
   /* The arrow is a bordered box with three transparent sides; 5px is the leg of that
      triangle, which is geometry and not rhythm. */
+  /* design-token-exception: border width constructs the tooltip arrow */
   border: 5px solid theme('colors.transparent');
   border-bottom-color: theme('colors.term.DEFAULT');
 }
@@ -334,13 +344,14 @@
    (e.g. the daily-actions counter) instead of a one-word label. */
 .tb-tip-pop--wide {
   white-space: normal;
+  /* design-token-exception: wrapping tooltip width is local to this variant */
   width: 240px;
   text-align: center;
 }
 
 .tb-scroll::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: theme('spacing.sm');
+  height: theme('spacing.sm');
 }
 .tb-scroll::-webkit-scrollbar-thumb {
   background: theme('colors.line.strong');
@@ -350,7 +361,7 @@
   background: theme('colors.transparent');
 }
 .term::-webkit-scrollbar {
-  width: 6px;
+  width: theme('spacing.tight');
 }
 .term::-webkit-scrollbar-thumb {
   /* A thumb that reads on `term` without becoming `term.dim` — which is the terminal's
@@ -372,6 +383,7 @@
     opacity theme('transitionDuration.enter') theme('transitionTimingFunction.out');
 }
 .tb-collapse.tb-open {
+  /* design-token-exception: fallback lets measured content expand during transition */
   max-height: var(--mh, 600px);
   opacity: 1;
 }
@@ -446,6 +458,7 @@
   transition: transform theme('transitionDuration.state') theme('transitionTimingFunction.out');
 }
 .tb-sw:active .tb-sw-thumb {
+  /* design-token-exception: pressed switch thumb compression */
   transform: scale(0.86);
 }
 .tb-dd {
@@ -457,6 +470,7 @@
     opacity theme('transitionDuration.enter') theme('transitionTimingFunction.out');
 }
 .tb-dd.open {
+  /* design-token-exception: local cap keeps the dropdown scrollable */
   max-height: 240px;
   opacity: 1;
   overflow-y: auto;

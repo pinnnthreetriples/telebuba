@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Card, Icon, Spinner } from '@/shared/ui';
+import { Button, Card, Icon, IconButton, Spinner } from '@/shared/ui';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
@@ -234,24 +234,28 @@ function ProxyCard({
             </span>
           </div>
         </div>
-        <button
-          type="button"
+        <IconButton
+          size="touch"
+          shape="circle"
+          tone="primary"
+          className="md:size-chip"
           onClick={onCheck}
           disabled={busy}
           aria-label={t('accounts.proxyForm.detect')}
-          className="flex size-chip shrink-0 items-center justify-center rounded-full text-content-subtle disabled:opacity-50"
         >
           {busy ? <Spinner /> : <Icon name="refresh" size={14} />}
-        </button>
-        <button
-          type="button"
+        </IconButton>
+        <IconButton
+          size="touch"
+          shape="circle"
+          tone="danger"
+          className="md:size-chip"
           onClick={onDelete}
           disabled={busy}
           aria-label={t('accounts.actions.delete')}
-          className="flex size-chip shrink-0 items-center justify-center rounded-full text-content-subtle disabled:opacity-50"
         >
           <Icon name="close" size={14} />
-        </button>
+        </IconButton>
       </div>
       <div>
         <div className="mb-tight flex items-center justify-between">

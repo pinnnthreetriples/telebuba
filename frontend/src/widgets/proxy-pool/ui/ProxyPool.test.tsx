@@ -67,6 +67,23 @@ test('renders pool cards with usage', async () => {
   expect(screen.queryByText(/proxyPool\.status/)).not.toBeInTheDocument();
 });
 
+test('proxy icon actions use the shared keyboard focus ring', async () => {
+  vi.mocked(fetch).mockResolvedValue(jsonResponse({ proxies: [proxy()] }));
+  const user = userEvent.setup();
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  const check = await screen.findByRole('button', { name: 'Определить' });
+  const remove = screen.getByRole('button', { name: 'Удалить' });
+
+  expect(check).toHaveClass('size-touch', 'md:size-chip');
+  expect(remove).toHaveClass('size-touch', 'md:size-chip');
+  expect(check).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
+  expect(remove).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
+  await user.tab();
+  expect(screen.getByText('Добавить').closest('button')).toHaveFocus();
+  await user.tab();
+  expect(check).toHaveFocus();
+});
+
 test('warns clearly when a proxy check failed (flag gone, no silent card)', async () => {
   vi.mocked(fetch).mockResolvedValue(
     jsonResponse({

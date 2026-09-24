@@ -39,9 +39,6 @@ interface AccountsTableProps {
   checkResults: Readonly<Record<string, FeedbackResult>>;
 }
 
-const ACTION_BTN =
-  'flex size-icon items-center justify-center rounded-full border border-line bg-surface-card disabled:opacity-50';
-
 // The design's mono avatar tint per status (monoMap).
 const AVATAR_CLASS: Record<DesignStatus, string> = {
   active: 'bg-info-tint text-info-strong',
@@ -199,7 +196,7 @@ export function AccountsTable({
     {
       id: 'actions',
       header: () => t('accounts.table.actions'),
-      meta: { ...RIGHT_META, cardSlot: 'control' } satisfies DataTableColumnMeta,
+      meta: { ...RIGHT_META, cardSlot: 'actions' } satisfies DataTableColumnMeta,
       cell: ({ row }) => {
         const account = row.original;
         const busy = busyIds.has(account.account_id);
@@ -213,9 +210,13 @@ export function AccountsTable({
         const openingWeb = openWebBusyIds?.has(account.account_id) ?? false;
         return (
           <div className="flex items-center justify-end gap-sm">
-            <button
-              type="button"
+            <IconButton
+              size="touch"
+              shape="circle"
+              tone="primary"
               title={t('accounts.actions.web')}
+              aria-label={t('accounts.actions.web')}
+              className="md:size-icon"
               // No proxy means the backend can't reach Telegram signed-in as this
               // account, so the globe is dead until one is assigned.
               disabled={!account.proxy_id || openingWeb}
@@ -223,11 +224,11 @@ export function AccountsTable({
                 event.stopPropagation();
                 onOpenWeb?.(account.account_id);
               }}
-              className={`${ACTION_BTN} text-content-muted hover:border-info-line hover:text-action-primary`}
             >
               {openingWeb ? <Spinner /> : <Icon name="globe" size={14} />}
-            </button>
+            </IconButton>
             <IconButton
+              size="touch"
               shape="circle"
               title={t('accounts.actions.check')}
               // Named, not colour-only: the fill and the glyph say nothing to a screen
@@ -252,7 +253,7 @@ export function AccountsTable({
               // lands after `.bg-success-deep` alphabetically, and both verdicts used to
               // lose their fill while keeping their white glyph — a white check on a white
               // circle, for every check this table ever ran.
-              className={cn('duration-enter', verdictFill(verdict))}
+              className={cn('duration-enter md:size-icon', verdictFill(verdict))}
             >
               {busy ? (
                 <Spinner />
@@ -264,29 +265,35 @@ export function AccountsTable({
                 <Icon name="refresh" size={14} />
               )}
             </IconButton>
-            <button
-              type="button"
+            <IconButton
+              size="touch"
+              shape="circle"
+              tone="primary"
               title={t('accounts.actions.profile')}
+              aria-label={t('accounts.actions.profile')}
+              className="md:size-icon"
               onClick={(event) => {
                 event.stopPropagation();
                 (onProfile ?? onOpen)?.(account);
               }}
-              className={`${ACTION_BTN} text-content-muted hover:border-info-line hover:text-action-primary`}
             >
               <Icon name="pencil" size={14} />
-            </button>
-            <button
-              type="button"
+            </IconButton>
+            <IconButton
+              size="touch"
+              shape="circle"
+              tone="danger"
               title={t('accounts.actions.delete')}
+              aria-label={t('accounts.actions.delete')}
+              className="md:size-icon"
               disabled={busy}
               onClick={(event) => {
                 event.stopPropagation();
                 onDelete(account.account_id);
               }}
-              className={`${ACTION_BTN} text-content-subtle hover:border-danger-line hover:text-danger`}
             >
               <Icon name="trash" size={14} />
-            </button>
+            </IconButton>
           </div>
         );
       },

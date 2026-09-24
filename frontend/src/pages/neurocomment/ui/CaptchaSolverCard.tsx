@@ -57,7 +57,7 @@ export function CaptchaSolverCard({
                 <span
                   id={tipId}
                   role="tooltip"
-                  className="tb-tip-pop tb-tip-pop--wide"
+                  className="tb-tip-pop tb-tip-pop--wide max-sm:!-left-sm"
                   style={{ textAlign: 'left' }}
                 >
                   {t('neurocomment.captcha.tooltip')}

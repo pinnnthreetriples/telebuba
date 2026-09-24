@@ -38,6 +38,23 @@ test('disables warming for a not-ready account and shows the reason', async () =
   expect(blocked.getAttribute('title')).toBe('нет прокси');
 });
 
+test('warming row actions meet the touch target size', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [{ account_id: 'warmed-one', label: 'Warmed One', warming_days: 12, target_days: 14 }],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => expect(screen.getByText('idle-1')).toBeInTheDocument());
+
+  expect(screen.getByText('Прогреть').closest('button')).toHaveClass('min-h-touch');
+  expect(screen.getByLabelText('Обратно в прогрев')).toHaveClass('size-touch');
+});
+
 test('ready card: phone flag sits with the number, proxy flag with the proxy type', async () => {
   const board: WarmingBoardState = {
     ...BOARD,

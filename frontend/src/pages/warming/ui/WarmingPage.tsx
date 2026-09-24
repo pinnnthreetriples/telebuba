@@ -227,8 +227,8 @@ export function WarmingPage() {
     <div className="tb-fadeup">
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 type-page-title">{t('warming.titleFull')}</h1>
-        <div className="flex items-center gap-lg">
-          <div className="flex gap-lg">
+        <div className="flex w-full flex-wrap items-center justify-between gap-md sm:w-auto sm:flex-nowrap sm:gap-lg">
+          <div className="flex gap-md sm:gap-lg">
             <Counter
               value={warming.length}
               label={t('warming.counter.warming')}
@@ -269,8 +269,8 @@ export function WarmingPage() {
           clientWidth 1024, a scroll the viewport-wide sticky header can't follow. The
           feed that proved it has since moved to the left column; the floor stays,
           because the board's own log prints the same kind of line. */}
-      <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="flex flex-col gap-lg">
+      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-lg">
           <Card className="p-lg">
             <div className="mb-md flex items-center justify-between">
               <span className="type-card-title">{t('warming.ready.title')}</span>
@@ -350,7 +350,7 @@ export function WarmingPage() {
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-action-primary text-on-action' : 'cursor-not-allowed bg-canvas text-content-subtle'}`}
+                        className={`min-h-touch rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-action-primary text-on-action' : 'cursor-not-allowed bg-canvas text-content-subtle'}`}
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
@@ -554,7 +554,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
-                        className="flex size-thumbnail shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
+                        className="flex size-touch shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
                       >
                         <svg
                           width="15"
@@ -594,7 +594,7 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <div className="flex flex-col gap-lg">
+        <div className="flex min-w-0 flex-col gap-lg">
           <WarmingBoard
             warming={warming}
             onStop={(id) => {

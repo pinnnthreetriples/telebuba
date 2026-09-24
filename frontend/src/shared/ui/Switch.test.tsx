@@ -24,6 +24,15 @@ test('reports its state through role/aria and toggles to the opposite value', as
   expect(onChange).toHaveBeenLastCalledWith(false);
 });
 
+test('switch has the shared visible focus ring in its keyboard tab stop', async () => {
+  render(<Switch checked={false} onChange={vi.fn()} label="Резерв" />);
+  const control = screen.getByRole('switch', { name: 'Резерв' });
+
+  await userEvent.tab();
+  expect(control).toHaveFocus();
+  expect(control).toHaveClass('focus-visible:outline-focus');
+});
+
 test('a disabled switch is inert, so a not-yet-wired feature cannot be toggled', async () => {
   const onChange = vi.fn();
   render(<Switch disabled checked={false} onChange={onChange} label="Отвечать людям" />);

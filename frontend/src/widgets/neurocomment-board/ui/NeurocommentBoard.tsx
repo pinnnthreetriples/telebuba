@@ -16,6 +16,7 @@ import {
   DataTable,
   type DataTableColumnMeta,
   Icon,
+  IconButton,
 } from '@/shared/ui';
 
 interface BoardRow {
@@ -376,15 +377,16 @@ export function NeurocommentBoard({
             // says nothing actionable — keeping it forced the row to wrap.
             <span className="hidden type-caption sm:inline">{t('neurocomment.board.updated')}</span>
           )}
-          <button
-            type="button"
+          <IconButton
+            size="touch"
+            tone="primary"
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex size-tile items-center justify-center rounded-lg border border-line bg-surface-card text-content-muted transition-colors hover:border-info-line hover:bg-action-hover hover:text-info-strong lg:size-icon"
+            className="rounded-lg sm:size-tile lg:size-icon"
           >
             <Icon name="gear" size={16} />
-          </button>
+          </IconButton>
         </div>
       }
     >
