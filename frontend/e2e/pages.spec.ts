@@ -320,3 +320,46 @@ for (const width of [375, 320]) {
     expect(unmatched).toEqual([]);
   });
 }
+
+test('диалог остановки прогрева помещается в viewport 375px', async ({ page }) => {
+  const unmatched: string[] = [];
+  await stub(page, unmatched);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/warming');
+  await expect(page.getByRole('heading', { name: 'Прогрев аккаунтов' })).toBeVisible();
+  await page.getByRole('button', { name: 'Стоп' }).first().click();
+
+  const dialog = page.getByRole('dialog', { name: 'Остановить прогрев?' });
+  await expect(dialog).toBeVisible();
+  const geometry = await dialog.evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const buttons = [...node.querySelectorAll('button')].map((button) => {
+      const { left, right, top, bottom } = button.getBoundingClientRect();
+      return { left, right, top, bottom };
+    });
+    return {
+      viewport: {
+        width: document.documentElement.clientWidth,
+        height: document.documentElement.clientHeight,
+      },
+      dialog: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+      buttons,
+    };
+  });
+
+  expect(geometry.dialog.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.dialog.right).toBeLessThanOrEqual(geometry.viewport.width);
+  expect(geometry.dialog.top).toBeGreaterThanOrEqual(0);
+  expect(geometry.dialog.bottom).toBeLessThanOrEqual(geometry.viewport.height);
+  expect(geometry.buttons).toHaveLength(3);
+  for (const button of geometry.buttons) {
+    expect(button.left).toBeGreaterThanOrEqual(geometry.dialog.left);
+    expect(button.right).toBeLessThanOrEqual(geometry.dialog.right);
+    expect(button.top).toBeGreaterThanOrEqual(geometry.dialog.top);
+    expect(button.bottom).toBeLessThanOrEqual(geometry.dialog.bottom);
+  }
+  const [finish, keep, stop] = [...geometry.buttons].sort((a, b) => a.top - b.top);
+  expect(finish.bottom).toBeLessThanOrEqual(keep.top);
+  expect(keep.bottom).toBeLessThanOrEqual(stop.top);
+  expect(unmatched).toEqual([]);
+});
