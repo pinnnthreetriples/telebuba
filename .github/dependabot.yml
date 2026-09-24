@@ -17,15 +17,14 @@ updates:
         patterns:
           - "*"
 
-  # Auto-update Telethon (our core Telegram SDK). The "pip" ecosystem is uv-aware
-  # and reads uv.lock; scoped to telethon only via `allow` so we don't get PR
+  # Auto-update Telethon (our core Telegram SDK). The "uv" ecosystem reads
+  # uv.lock; scoped to telethon only via `allow` so we don't get PR
   # spam for the whole Python tree, and don't fight the manual CVE pins in
   # pyproject's [tool.uv] override-dependencies.
-  - package-ecosystem: "pip"
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "daily"
     open-pull-requests-limit: 5
     cooldown:
       default-days: 7
@@ -46,7 +45,7 @@ updates:
   # is what actually covers frontend/package-lock.json; the `npm audit` job in
   # ci.yml and its nightly copy are the in-repo backstop.
   #
-  # NOTE the same applies to the pip entry above: its `allow: telethon` restricts
+  # NOTE the same applies to the uv entry above: its `allow: telethon` restricts
   # security updates too, not just version updates -- so Dependabot will not raise a
   # security PR for any other Python package. Left as-is on purpose: the entry exists
   # to keep telethon current, and `pip-audit` (every PR + nightly) is the actual gate
