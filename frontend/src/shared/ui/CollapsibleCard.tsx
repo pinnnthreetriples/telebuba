@@ -1,5 +1,6 @@
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 import { Icon } from './Icon';
@@ -85,13 +86,22 @@ export function CollapsibleCard({
 
   return (
     <div className={cn('overflow-hidden', wrapperClassName)}>
-      <div className={cn('flex items-center gap-md', headerClassName)}>
+      <div
+        className={cn(
+          'flex items-center gap-md transition-colors duration-state hover:bg-action-hover',
+          headerClassName,
+        )}
+      >
         <button
           type="button"
           onClick={toggle}
           aria-expanded={open}
           aria-controls={bodyId}
-          className="flex min-w-0 flex-1 items-center gap-md text-left"
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-md text-left transition duration-state',
+            FOCUS_RING,
+            PRESS_FEEDBACK,
+          )}
         >
           {header}
         </button>
@@ -102,7 +112,11 @@ export function CollapsibleCard({
           aria-label={label}
           aria-expanded={open}
           aria-controls={bodyId}
-          className="flex shrink-0 items-center"
+          className={cn(
+            'flex shrink-0 items-center transition duration-state',
+            FOCUS_RING,
+            PRESS_FEEDBACK,
+          )}
         >
           <Chevron open={open} />
         </button>

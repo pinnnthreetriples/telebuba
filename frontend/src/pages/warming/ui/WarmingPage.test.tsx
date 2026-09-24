@@ -51,7 +51,10 @@ test('warming row actions meet the touch target size', async () => {
   renderWithClient(<WarmingPage />);
   await waitFor(() => expect(screen.getByText('idle-1')).toBeInTheDocument());
 
-  expect(screen.getByText('Прогреть').closest('button')).toHaveClass('min-h-touch');
+  expect(screen.getByText('Прогреть').closest('button')).toHaveClass(
+    'h-touch',
+    'focus-visible:outline-focus',
+  );
   expect(screen.getByLabelText('Обратно в прогрев')).toHaveClass('size-touch');
 });
 

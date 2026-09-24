@@ -456,10 +456,6 @@
 .tb-sw-thumb {
   transition: transform theme('transitionDuration.state') theme('transitionTimingFunction.out');
 }
-.tb-sw:active .tb-sw-thumb {
-  /* design-token-exception: pressed switch thumb compression */
-  transform: scale(0.86);
-}
 .tb-dd {
   max-height: 0;
   opacity: 0;

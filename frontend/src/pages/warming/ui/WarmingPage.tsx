@@ -344,17 +344,23 @@ export function WarmingPage() {
                           ) : null}
                         </div>
                       </div>
-                      <button
+                      <Button
                         type="button"
+                        variant="primary"
+                        size="lg"
                         disabled={!ready || busyIds.has(account.account_id)}
                         title={ready ? undefined : blockers}
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`min-h-touch rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-action-primary text-on-action' : 'cursor-not-allowed bg-canvas text-content-subtle'}`}
+                        className={
+                          ready
+                            ? undefined
+                            : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
+                        }
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
-                      </button>
+                      </Button>
                     </div>
                   );
                 })
