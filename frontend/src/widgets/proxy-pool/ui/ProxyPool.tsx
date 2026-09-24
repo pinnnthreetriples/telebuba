@@ -87,7 +87,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
           <span className="ml-sm type-prose">{t('accounts.proxyPool.subtitle')}</span>
         </div>
         {!empty && (
-          <Button variant="primary" size="sm" onClick={onAdd}>
+          <Button variant="primary" size="md" onClick={onAdd}>
             <Icon name="plus" size={14} />
             {t('accounts.proxyPool.add')}
           </Button>
