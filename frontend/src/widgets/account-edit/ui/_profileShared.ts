@@ -121,12 +121,13 @@ export function retryAfterSeconds(err: unknown): number | undefined {
   return Number.isFinite(seconds) ? seconds : undefined;
 }
 
-// Render one locale-neutral code. Anything with no copy shows as-is — including
-// a refused live READ, whose reason is a content-free label the gateway formats
-// ("FloodWait(300s)", "RPC: AuthKeyUnregisteredError", "unavailable: …") rather
-// than a code, so it falls through to itself instead of a generic sentence.
+// Translate stable codes embedded before gateway detail (for example
+// `unavailable: TelegramClientPoolError`) without exposing implementation names.
+// Unknown reasons such as `FloodWait(300s)` remain as-is because they carry useful
+// operator guidance and have no stable code translation.
 export function profileCodeText(message: string, t: Translate, seconds?: number): string {
-  return t(codeKeys(message), { defaultValue: message, s: seconds ?? '?' });
+  const stableCode = /^([a-z][a-z0-9_]*):\s/.exec(message)?.[1];
+  return t(codeKeys(stableCode ?? message), { defaultValue: message, s: seconds ?? '?' });
 }
 
 // A failed profile save rejects with the envelope whose `message` is a stable

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { startPhoneLoginMutation } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { Button, CloseButton, Icon, Modal } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
@@ -49,7 +50,7 @@ function ChoiceCard({
       // Background lives in both branches, never in the base: two `bg-*` utilities in
       // one class list are resolved by stylesheet order, where `bg-surface-card` comes last
       // and wins, so the picked method showed a blue border over a white row.
-      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-info-line ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
+      className={`flex cursor-pointer items-center gap-md rounded-lg border px-lg py-lg text-left transition-colors hover:border-info-line ${PRESS_FEEDBACK} ${FOCUS_RING} ${selected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
     >
       <span className="flex size-thumbnail shrink-0 items-center justify-center rounded-lg bg-info-tint">
         {icon}

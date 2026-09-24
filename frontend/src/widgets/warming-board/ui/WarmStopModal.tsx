@@ -21,10 +21,10 @@ export function WarmStopModal({
       <div className="p-2xl">
         <div className="mb-sm type-dialog-title">{t('warming.stopModal.title')}</div>
         <div className="mb-2xl type-dialog-body">{t('warming.stopModal.body', { phone })}</div>
-        <div className="flex gap-sm">
+        <div className="flex flex-col gap-sm sm:flex-row">
           <Button
             variant="primary"
-            className="flex-1"
+            className="w-full sm:flex-1"
             onClick={() => {
               onFinish();
               onClose();
@@ -33,7 +33,7 @@ export function WarmStopModal({
             <Icon name="check" size={14} />
             {t('warming.stopModal.toWarmed')}
           </Button>
-          <Button className="flex-1 hover:bg-surface" onClick={onClose}>
+          <Button className="w-full hover:bg-surface sm:flex-1" onClick={onClose}>
             {t('warming.stopModal.keep')}
           </Button>
           {/* The one destructive button in the app that is white at rest and tints
@@ -43,7 +43,7 @@ export function WarmStopModal({
               border, the ink and the states; the resting fill is the override. */}
           <Button
             variant="danger"
-            className="flex-1 bg-surface-card hover:border-danger-line hover:bg-danger-tint"
+            className="w-full bg-surface-card hover:border-danger-line hover:bg-danger-tint sm:flex-1"
             onClick={() => {
               onStop();
               onClose();

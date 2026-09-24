@@ -18,6 +18,7 @@ import {
   ConfirmModal,
   FormField,
   Icon,
+  IconButton,
   Input,
   SegmentedControl,
   Select,
@@ -306,16 +307,17 @@ export function ProxySection({ account }: { account: AccountRead }) {
                       type={showPass ? 'text' : 'password'}
                       autoComplete="new-password"
                     />
-                    <button
-                      type="button"
+                    <IconButton
+                      size="md"
+                      shape="circle"
                       onClick={() => {
                         setShowPass((value) => !value);
                       }}
                       aria-label={t('accounts.edit.password')}
-                      className="absolute right-sm top-1/2 -translate-y-1/2 text-content-subtle"
+                      className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
                     >
                       {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
-                    </button>
+                    </IconButton>
                   </div>
                 </label>
               )}

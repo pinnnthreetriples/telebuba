@@ -171,16 +171,17 @@ export function ProxyForm({
                   placeholder={t('accounts.proxyForm.passwordPlaceholder')}
                   className="pr-[36px]"
                 />
-                <button
-                  type="button"
+                <IconButton
+                  size="md"
+                  shape="circle"
                   onClick={() => {
                     setShowPass((shown) => !shown);
                   }}
                   aria-label={t('accounts.proxyForm.password')}
-                  className="absolute right-[6px] top-1/2 flex size-icon -translate-y-1/2 items-center justify-center text-content-subtle"
+                  className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
                 >
                   {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
-                </button>
+                </IconButton>
               </div>
             </label>
           )}

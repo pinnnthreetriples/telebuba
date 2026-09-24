@@ -639,7 +639,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-[50px] text-center text-body text-content-subtle">
+          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-empty text-center text-body text-content-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

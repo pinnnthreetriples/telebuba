@@ -10,7 +10,7 @@ import {
   resendAccountTwofaEmailMutation,
   setAccountTwofaEmailMutation,
 } from '@/entities/account';
-import { Button, ConfirmModal, Input, Spinner } from '@/shared/ui';
+import { Button, ConfirmModal, Input } from '@/shared/ui';
 
 import {} from './_shared';
 import { LABEL } from './_styles';
@@ -232,14 +232,16 @@ export function TwoFactorEmail({
             />
           </label>
           <div className="flex flex-wrap items-center gap-sm">
-            <button
+            <Button
               type="button"
+              size="sm"
+              variant="secondary"
               onClick={onConfirmCode}
-              disabled={confirmEmail.isPending || !code.trim()}
-              className="rounded-lg border border-line bg-surface-card px-lg py-sm text-body font-medium disabled:opacity-50"
+              disabled={!code.trim()}
+              loading={confirmEmail.isPending}
             >
-              {confirmEmail.isPending ? <Spinner /> : t('accounts.edit.twofaEmailConfirm')}
-            </button>
+              {t('accounts.edit.twofaEmailConfirm')}
+            </Button>
             <Button
               size="xs"
               className="text-content-muted"

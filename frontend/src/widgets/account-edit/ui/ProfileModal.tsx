@@ -624,7 +624,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const tabBtn = (value: Tab): string =>
-    `shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${tab === value ? 'border-action-primary text-content-primary' : 'border-transparent text-content-muted'}`;
+    `shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${FOCUS_RING} ${
+      tab === value
+        ? 'border-action-primary text-content-primary'
+        : 'border-transparent text-content-muted hover:bg-action-hover'
+    }`;
 
   // The other half of the ARIA tabs pattern (the roles landed with the tablist):
   // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
