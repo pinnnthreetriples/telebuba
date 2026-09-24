@@ -5,6 +5,7 @@
 // подсказка, тост и меню — всё это ПЛАВАЕТ над страницей, то есть одна роль, — и носили
 // четыре разных тени. Теперь роль одна (`shadow-pop`), а варианты ниже говорят, чем
 // поверхности действительно различаются: радиусом, наличием рамки и высотой.
+import { FOCUS_RING, PRESS_FEEDBACK } from './controls';
 import { cn } from '@/shared/lib/cn';
 
 export const SURFACE = {
@@ -24,6 +25,15 @@ export const SURFACE = {
 } as const;
 
 export type SurfaceVariant = keyof typeof SURFACE;
+
+export function tileAction(className?: string): string {
+  return cn(
+    'transition duration-state hover:border-info-line hover:bg-action-hover hover:text-info-strong disabled:pointer-events-none disabled:opacity-60',
+    FOCUS_RING,
+    PRESS_FEEDBACK,
+    className,
+  );
+}
 
 export function surface(variant: SurfaceVariant, className?: string): string {
   return cn(SURFACE[variant], className);

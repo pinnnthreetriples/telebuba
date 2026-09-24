@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createProxyMutation, proxyPoolQueryOptions } from '@/entities/proxy';
-import { Button, IconButton, Modal } from '@/shared/ui';
+import { Button, CloseButton, Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
@@ -46,14 +46,11 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
       <div className="p-2xl">
         <div className="mb-lg flex items-center justify-between">
           <span className="type-dialog-title">{t('accounts.proxyAdd.title')}</span>
-          <IconButton
-            size="md"
+          <CloseButton
             onClick={onClose}
             aria-label={t('accounts.proxyAdd.close')}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
         <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
         <div className="mt-xl flex justify-end gap-sm">

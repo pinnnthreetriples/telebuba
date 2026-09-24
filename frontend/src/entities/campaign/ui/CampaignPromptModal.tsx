@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, CloseButton, Icon, IconButton, Modal } from '@/shared/ui';
 
 export interface PromptAccount {
   account_id: string;
@@ -44,14 +44,11 @@ export function CampaignPromptModal({
       <div className="p-2xl">
         <div className="mb-tight flex items-center justify-between">
           <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
-          <IconButton
-            size="md"
+          <CloseButton
             aria-label={t('neurocomment.modal.close')}
             onClick={onClose}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
         <div className="mb-lg type-prose">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}

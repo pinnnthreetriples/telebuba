@@ -273,20 +273,18 @@ export function CampaignsCard({
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>
                 ) : null}
-                <button
-                  type="button"
+                <IconButton
                   aria-label={t('neurocomment.channels.remove')}
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className={cn(
-                    'flex size-chip items-center justify-center rounded-full text-body leading-none text-content-subtle transition hover:bg-danger-tint hover:text-danger-deep',
-                    FOCUS_RING,
-                    PRESS_FEEDBACK,
-                  )}
+                  size="sm"
+                  shape="circle"
+                  tone="danger"
+                  className="text-content-subtle"
                 >
-                  ×
-                </button>
+                  <Icon name="close" size={16} />
+                </IconButton>
               </span>
             ))}
             {addingChannel ? (

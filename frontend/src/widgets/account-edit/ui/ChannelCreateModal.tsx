@@ -7,7 +7,7 @@ import {
   accountChannelUsernameCheckQueryOptions,
   createAccountChannelMutation,
 } from '@/entities/account';
-import { Button, IconButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
+import { Button, CloseButton, Input, Modal, Notice, Textarea } from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -206,15 +206,12 @@ export function ChannelCreateModal({
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
           <span className="type-dialog-title">{t('accounts.channel.createTitle')}</span>
-          <IconButton
-            size="md"
+          <CloseButton
             onClick={onClose}
             disabled={busy}
             aria-label={t('accounts.channel.close')}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
 
         <label className="mb-lg block">

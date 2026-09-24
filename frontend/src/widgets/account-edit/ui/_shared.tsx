@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 
+import { tileAction } from '@/shared/design-system';
 import { CollapsibleCard, Icon } from '@/shared/ui';
 
 // The accordion preset shared by every AccountEdit section, plus the profile
@@ -24,7 +25,9 @@ export function DashedAdd({
       disabled={disabled}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
-      className="flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-surface-card text-body font-medium text-content-muted disabled:opacity-60"
+      className={tileAction(
+        'flex flex-col items-center justify-center gap-sm rounded-lg border-[1.5px] border-dashed border-line-strong bg-surface-card text-body font-medium text-content-muted',
+      )}
     >
       <Icon name="plus" size={20} />
       {label}

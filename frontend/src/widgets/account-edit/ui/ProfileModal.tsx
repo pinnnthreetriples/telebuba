@@ -26,6 +26,7 @@ import {
   ConfirmModal,
   FormField,
   Icon,
+  CloseButton,
   IconButton,
   Input,
   Modal,
@@ -718,15 +719,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   </span>
                   {t(refreshLook.labelKey)}
                 </button>
-                <IconButton
-                  size="md"
+                <CloseButton
                   onClick={requestClose}
                   disabled={uploading}
                   aria-label={t('accounts.profile.close')}
                   className="text-title"
-                >
-                  ×
-                </IconButton>
+                />
               </div>
               <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
@@ -776,7 +774,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             role="tabpanel"
             id="profile-tabpanel"
             aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+            className="tb-scroll relative flex min-h-0 flex-1 flex-col gap-lg overflow-y-auto p-xl"
           >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a

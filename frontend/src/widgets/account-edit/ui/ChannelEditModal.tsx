@@ -11,7 +11,7 @@ import {
 import {
   Button,
   ConfirmModal,
-  IconButton,
+  CloseButton,
   Input,
   Modal,
   Notice,
@@ -186,15 +186,12 @@ export function ChannelEditModal({
                 </div>
               )}
             </div>
-            <IconButton
-              size="md"
+            <CloseButton
               onClick={requestClose}
               disabled={busy}
               aria-label={t('accounts.channel.close')}
               className="text-title"
-            >
-              ×
-            </IconButton>
+            />
           </div>
 
           {detail.isError && (

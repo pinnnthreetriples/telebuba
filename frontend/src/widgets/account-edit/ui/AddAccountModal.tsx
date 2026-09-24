@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { startPhoneLoginMutation } from '@/entities/account';
 import { assignProxyMutation, createProxyMutation } from '@/entities/proxy';
-import { Button, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, CloseButton, Icon, Modal } from '@/shared/ui';
 
 import { CodeLoginStep } from './CodeLoginStep';
 import { ImportFileList } from './ImportFileList';
@@ -239,14 +239,11 @@ export function AddAccountModal({
                       t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
             </div>
           </div>
-          <IconButton
-            size="md"
+          <CloseButton
             onClick={onClose}
             aria-label={t('accounts.addWizard.close')}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
 
         {/* stepper */}

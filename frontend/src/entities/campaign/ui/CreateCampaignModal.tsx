@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge, Button, Icon, Input, Modal, Textarea } from '@/shared/ui';
+import { Badge, Button, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
 // campaign channels added as chips.
@@ -80,16 +80,16 @@ export function CreateCampaignModal({
                 key={`${channel}-${String(index)}`}
               >
                 {channel}
-                <button
-                  type="button"
+                <IconButton
+                  size="sm"
+                  shape="circle"
                   aria-label={t('neurocomment.channels.remove')}
                   onClick={() => {
                     setChannels((list) => list.filter((_, i) => i !== index));
                   }}
-                  className="cursor-pointer text-body leading-none text-content-subtle"
                 >
-                  ×
-                </button>
+                  <Icon name="close" size={16} />
+                </IconButton>
               </Badge>
             ))}
           </div>

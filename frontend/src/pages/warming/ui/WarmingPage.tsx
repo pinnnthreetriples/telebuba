@@ -24,6 +24,7 @@ import {
   ConfirmModal,
   FeedbackMark,
   Icon,
+  IconButton,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -380,16 +381,16 @@ export function WarmingPage() {
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                   {channel.channel}
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    shape="circle"
                     aria-label={t('warming.channels.remove')}
                     onClick={() => {
                       setChannelToRemove(channel.channel);
                     }}
-                    className="text-body leading-none text-content-subtle"
                   >
-                    ×
-                  </button>
+                    <Icon name="close" size={16} />
+                  </IconButton>
                 </Badge>
               ))}
               {addingChannel ? (
@@ -418,15 +419,16 @@ export function WarmingPage() {
                   >
                     <Icon name="check" size={12} />
                   </button>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    shape="circle"
                     title={t('warming.channels.cancel')}
                     aria-label={t('warming.channels.cancel')}
                     onClick={cancelAddChannel}
-                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-body leading-none text-content-muted"
+                    className="shrink-0 bg-line-row text-content-muted"
                   >
-                    ×
-                  </button>
+                    <Icon name="close" size={16} />
+                  </IconButton>
                 </span>
               ) : (
                 <Button

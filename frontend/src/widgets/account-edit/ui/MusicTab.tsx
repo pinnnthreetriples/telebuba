@@ -61,15 +61,15 @@ export function MusicTab({
                 </div>
               </div>
               <IconButton
-                size="md"
+                size="sm"
+                shape="circle"
                 disabled={!track.file_reference}
                 onClick={() => {
                   onRemove(track);
                 }}
                 aria-label={t('accounts.profile.removeMusic')}
-                className="text-title"
               >
-                ×
+                <Icon name="close" size={16} />
               </IconButton>
             </div>
           ))}

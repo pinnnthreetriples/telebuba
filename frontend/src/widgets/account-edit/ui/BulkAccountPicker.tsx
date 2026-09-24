@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountDisplayName, AccountAvatar, allAccountsQueryOptions } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { Button, Icon, IconButton, Input, Modal, Spinner } from '@/shared/ui';
+import { Button, CloseButton, Icon, Input, Modal, Spinner } from '@/shared/ui';
 
 // Everything the search box matches on, lowercased once per row rather than per
 // keystroke × row. `label` doubles as the row's rendered name.
@@ -76,14 +76,11 @@ export function BulkAccountPicker({
               {t('accounts.bulk.pickCount', { done: draft.length, total: candidates.length })}
             </div>
           </div>
-          <IconButton
-            size="md"
+          <CloseButton
             onClick={onClose}
             aria-label={t('accounts.profile.close')}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
 
         <div className="flex flex-col gap-md border-b border-line-row px-xl py-lg">

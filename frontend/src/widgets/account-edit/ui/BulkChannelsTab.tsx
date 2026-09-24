@@ -1,6 +1,14 @@
 import { useTranslation } from 'react-i18next';
 
-import { Button, Icon, Input, SegmentedControl, Textarea, toastError } from '@/shared/ui';
+import {
+  Button,
+  Icon,
+  IconButton,
+  Input,
+  SegmentedControl,
+  Textarea,
+  toastError,
+} from '@/shared/ui';
 
 import {
   CHANNEL_ABOUT_MAX,
@@ -227,16 +235,17 @@ export function BulkChannelsTab({
               <span className="min-w-0 flex-1 truncate type-caption">{post.file.name}</span>
             )}
             {post.file && (
-              <button
-                type="button"
+              <IconButton
+                size="sm"
+                shape="circle"
                 aria-label={t('accounts.channel.removeFile')}
                 onClick={() => {
                   onPost({ ...post, file: null });
                 }}
-                className="shrink-0 text-title leading-none text-content-muted"
+                className="shrink-0"
               >
-                ×
-              </button>
+                <Icon name="close" size={16} />
+              </IconButton>
             )}
           </div>
           <div className="type-caption">{t('accounts.bulk.channelPostNote')}</div>

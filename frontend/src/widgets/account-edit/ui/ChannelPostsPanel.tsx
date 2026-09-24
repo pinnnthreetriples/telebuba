@@ -229,16 +229,16 @@ export function ChannelPostsPanel({
             )}
             <span className="min-w-0 flex-1 truncate type-item-title">{file.name}</span>
             {!busy && (
-              <button
-                type="button"
+              <IconButton
+                size="sm"
+                shape="circle"
                 onClick={() => {
                   setFile(null);
                 }}
                 aria-label={t('accounts.channel.removeFile')}
-                className="inline-flex size-chip items-center justify-center rounded-full text-content-subtle"
               >
-                ×
-              </button>
+                <Icon name="close" size={16} />
+              </IconButton>
             )}
           </div>
         )}

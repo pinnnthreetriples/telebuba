@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfilePhotoView } from '@/shared/api';
+import { Icon, IconButton } from '@/shared/ui';
 
 import { PHOTO_SUFFIXES } from './_channelsShared';
 import { tileStyle } from './_profileShared';
@@ -75,16 +76,17 @@ export function PhotoTab({
               className="rounded-lg border border-black/5"
               style={tileStyle(photo.thumb_url, '1')}
             />
-            <button
-              type="button"
+            <IconButton
+              size="sm"
+              shape="circle"
               aria-label={t('accounts.profile.removePhoto')}
               onClick={() => {
                 onRemove(photo);
               }}
-              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-body leading-none text-on-inverse"
+              className="absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
             >
-              ×
-            </button>
+              <Icon name="close" size={16} />
+            </IconButton>
             {photo.is_main ? (
               <span className="mt-tight block w-full py-hair text-tiny font-medium text-action-primary">
                 {t('accounts.profile.mainPhoto')}

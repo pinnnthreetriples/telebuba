@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, HelpHint, Icon, Input, SegmentedControl, Switch } from '@/shared/ui';
+import { Button, HelpHint, Icon, IconButton, Input, SegmentedControl, Switch } from '@/shared/ui';
 
 import { AdvancedLimitsModal } from './AdvancedLimitsModal';
 import type { ScenarioDraft } from './scenarioDraft';
@@ -144,17 +144,17 @@ export function CampaignSetupSection({
             className="inline-flex items-center gap-sm rounded-full border border-line bg-canvas px-md py-tight text-body text-content-secondary"
           >
             {target}
-            <button
-              type="button"
+            <IconButton
+              size="sm"
+              shape="circle"
               disabled={live}
               aria-label={t('neuroshilling.setup.targets.remove', { name: target })}
               onClick={() => {
                 setTargets(targets.filter((_, at) => at !== index));
               }}
-              className="text-body leading-none text-content-subtle disabled:opacity-50"
             >
-              ×
-            </button>
+              <Icon name="close" size={16} />
+            </IconButton>
           </span>
         ))}
         {adding ? (

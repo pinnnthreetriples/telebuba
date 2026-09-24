@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { accountChannelsQueryOptions, deleteAccountChannelMutation } from '@/entities/account';
 import type { ChannelView } from '@/shared/api';
-import { Button, ConfirmModal, IconButton, Notice, Spinner } from '@/shared/ui';
+import { Button, ConfirmModal, Icon, IconButton, Notice, Spinner } from '@/shared/ui';
 
 import { channelErrorText } from './_channelsShared';
 import { ChannelCreateModal } from './ChannelCreateModal';
@@ -106,14 +106,14 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                 {t('accounts.channel.edit')}
               </Button>
               <IconButton
-                size="md"
+                size="sm"
+                shape="circle"
                 onClick={() => {
                   setConfirmDelete(channel);
                 }}
                 aria-label={t('accounts.channel.delete')}
-                className="text-body"
               >
-                ×
+                <Icon name="close" size={16} />
               </IconButton>
             </div>
           ))}
