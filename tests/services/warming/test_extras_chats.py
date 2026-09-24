@@ -127,10 +127,9 @@ async def test_leave_is_not_applicable_without_a_candidate(monkeypatch: pytest.M
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     tally = _ChannelTally()
+    fresh = JoinedChannel(channel="fresh", created_at=datetime.now(UTC).isoformat())
 
-    result = await _extras_chats.leave(
-        _ctx(joined=[_joined("fresh", age=timedelta(days=1))], tally=tally)
-    )
+    result = await _extras_chats.leave(_ctx(joined=[fresh], tally=tally))
 
     assert result is None
     assert recorder.actions == []
