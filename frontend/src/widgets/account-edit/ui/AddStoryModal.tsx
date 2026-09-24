@@ -83,7 +83,7 @@ function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; select
         height={h - 1}
         rx="4"
         fill="none"
-        className={selected ? 'stroke-action-primary' : 'stroke-line-strong'}
+        className={selected ? 'stroke-action-primary' : 'stroke-content-subtle'}
       />
       {cells.map(([x, y, cw, ch], i) => (
         <rect
@@ -93,7 +93,7 @@ function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; select
           width={cw * w - gap * 2}
           height={ch * h - gap * 2}
           rx="1.4"
-          className={selected ? 'fill-current' : 'fill-line-strong'}
+          className={selected ? 'fill-current' : 'fill-content-subtle'}
         />
       ))}
     </svg>

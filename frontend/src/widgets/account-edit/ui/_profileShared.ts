@@ -3,14 +3,12 @@
 import type { CSSProperties } from 'react';
 
 import type { ErrorDetail, ErrorEnvelope, ProfilePhotoView } from '@/shared/api';
+import { flatColors } from '@/shared/design-system';
 
 import type { Translate } from './_channelsShared';
 
-// Fallback tile background when a media item carries no thumbnail. The two stops are
-// decorative and exist only to differ from each other — they carry no meaning any other
-// element shares, so they are deliberately NOT tokens; naming them would put two
-// single-use roles in the canon and imply the UI means something by them.
-const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
+// Fallback tile background when a media item carries no thumbnail.
+const TILE = `linear-gradient(135deg,${flatColors.fallback.start},${flatColors.fallback.end})`;
 
 // Telegram's own profile-text limits, mirroring `PROFILE_NAME_MAX_LENGTH` and
 // `PROFILE_BIO_MAX_LENGTH` in schemas/accounts.py. Here rather than inline in the

@@ -661,12 +661,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         <div className="flex max-h-dialog flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
-            {/* The two gradient stops are decorative and exist only to differ from each
-                other behind an avatar that has not loaded — deliberately NOT tokens, for
-                the same reason as the media tiles in `_profileShared`. */}
             <div
-              // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: two decorative stops, single-use by design
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-on-inverse"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-stat font-semibold text-content-primary"
               style={
                 avatarUri
                   ? {

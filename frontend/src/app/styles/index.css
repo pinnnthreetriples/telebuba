@@ -344,8 +344,7 @@
    (e.g. the daily-actions counter) instead of a one-word label. */
 .tb-tip-pop--wide {
   white-space: normal;
-  /* design-token-exception: wrapping tooltip width is local to this variant */
-  width: 240px;
+  width: theme('width.tip');
   text-align: center;
 }
 

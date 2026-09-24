@@ -146,6 +146,29 @@ test('fires the row actions for the clicked account', async () => {
   expect(onDelete).toHaveBeenCalledWith('acc-1');
 });
 
+test('profile and delete actions use the shared primary and danger tones', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  expect(screen.getAllByRole('button', { name: 'Редактировать профиль' })[0]).toHaveClass(
+    'hover:border-info-line',
+    'hover:bg-action-hover',
+    'hover:text-info-strong',
+  );
+  expect(screen.getAllByRole('button', { name: 'Удалить' })[0]).toHaveClass(
+    'hover:border-danger-line',
+    'hover:bg-danger-tint',
+    'hover:text-danger-deep',
+  );
+});
+
 test('each row wears its own check verdict', () => {
   render(
     <AccountsTable
@@ -315,11 +338,12 @@ test('mobile account actions sit below the title instead of squeezing it', () =>
 
   const title = screen.getByText('@mainuser');
   const card = title.closest('[role="listitem"]')!;
-  const actions = card.querySelector<HTMLButtonElement>('button[aria-label="Удалить"]')!;
+  const actions = card.querySelectorAll<HTMLButtonElement>('button[aria-label]');
   expect(title).toBeInTheDocument();
-  expect(actions).toHaveClass('size-touch');
-  expect(card.firstElementChild as HTMLElement).not.toContainElement(actions);
-  expect(card.children[1] as HTMLElement).toContainElement(actions);
+  expect(actions).toHaveLength(4);
+  for (const action of actions) expect(action).toHaveClass('size-touch');
+  expect(card.firstElementChild as HTMLElement).not.toContainElement(actions[0]!);
+  expect(card.children[1] as HTMLElement).toContainElement(actions[0]!);
 });
 
 test('a row opens from the keyboard', async () => {

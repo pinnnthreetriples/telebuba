@@ -19,6 +19,8 @@
 //   background.surface → surface      content.secondary → content-secondary
 //   background.card    → surface-card  content.muted     → content-muted
 //   background.scrim   → scrim        content.subtle    → content-subtle
+//   background.fallback.start → from-fallback-start
+//   background.fallback.end   → to-fallback-end
 //   background.veil    → veil         content.onInverse → on-inverse
 //                                     content.onNeutral → on-neutral
 //
@@ -62,6 +64,11 @@ export const background = {
   scrim: wash.scrim,
   // Завеса над всей страницей: на ней ничего не пишут, она приглушает, а не контрастит.
   veil: wash.veil,
+  // Общий декоративный градиент для отсутствующих медиа: не кодирует статус или действие.
+  fallback: {
+    start: palette.blue200,
+    end: palette.warmGrey300,
+  },
 } as const;
 
 export const content = {
@@ -226,6 +233,10 @@ export const flatColors = {
   },
   scrim: background.scrim,
   veil: background.veil,
+  fallback: {
+    start: background.fallback.start,
+    end: background.fallback.end,
+  },
 
   content: {
     primary: content.primary,
