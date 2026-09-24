@@ -94,6 +94,8 @@
   --e-spring:cubic-bezier(.34,1.45,.6,1);
   --e-linear:linear;
   --e-breathe:cubic-bezier(.4,0,.6,1);
+  --scale-rest:1;
+  --scale-press:0.96;
 
   /* Высота */
   --pop:0 10px 30px rgb(11 11 12 / 0.12);
@@ -745,6 +747,7 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
         <tr><td><code>control</code> · 36px</td><td></td></tr>
         <tr><td><code>touch</code> · 44px</td><td></td></tr>
         <tr><td><code>header</code> · 56px</td><td>Шапка приложения: AppNav и NavDrawer</td></tr>
+        <tr><td><code>profileDialog</code> · min(76dvh, 44rem)</td><td></td></tr>
       </table>
       <h3>Ширины</h3>
       <p class="body">Ширины — это в основном полосы, а не размеры: колонка, обрезка, диалог. Последние четыре ступени и есть причина, по которой шкала существует: двадцать два диалога тратили одиннадцать ширин — 380, 420, 440, 460, 468, 480, 540, 560, 580, 760 и 920, — а это не шкала, а протокол того, кто с какой родился.</p>
@@ -852,6 +855,8 @@ footer { border-top:1px solid var(--line); padding:28px 0 0; font-size:11.5px; c
       <p class="intro">Четыре длительности и две кривые. Короткое — смена состояния, среднее — появление, длинное — раскрытие. Циклическое движение означает только одно: процесс идёт.</p>
       <table class="spec">
         <!-- ds:gen motion-scale -->
+        <tr><td>scale-rest · 1</td><td>Press feedback</td></tr>
+        <tr><td>scale-press · 0.96</td><td>Press feedback</td></tr>
         <tr><td><code>DEFAULT</code> · 150ms</td><td></td></tr>
         <tr><td><code>state</code> · 150ms</td><td>Смена состояния: цвет, граница, фон</td></tr>
         <tr><td><code>enter</code> · 250ms</td><td>Появление: диалог, строка, событие, тост. Одно на всю систему</td></tr>

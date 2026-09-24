@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
-import { FOCUS_RING } from '@/shared/design-system';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { type FeedbackResult } from '@/shared/lib';
 import { cn } from '@/shared/lib/cn';
 import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
@@ -252,7 +252,7 @@ export function CampaignsCard({
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-sm">
+          <div className="flex flex-wrap items-start gap-sm">
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
@@ -279,14 +279,18 @@ export function CampaignsCard({
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-body leading-none text-content-subtle"
+                  className={cn(
+                    'flex size-chip items-center justify-center rounded-full text-body leading-none text-content-subtle transition hover:bg-danger-tint hover:text-danger-deep',
+                    FOCUS_RING,
+                    PRESS_FEEDBACK,
+                  )}
                 >
                   ×
                 </button>
               </span>
             ))}
             {addingChannel ? (
-              <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
+              <span className="ml-auto inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
                 <input
                   autoFocus
                   value={channelInput}
@@ -306,7 +310,11 @@ export function CampaignsCard({
                   aria-label={t('neurocomment.modal.add')}
                   disabled={!channelInput.trim()}
                   onClick={onAddChannel}
-                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
+                  className={cn(
+                    'flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:pointer-events-none disabled:opacity-50 transition',
+                    FOCUS_RING,
+                    PRESS_FEEDBACK,
+                  )}
                 >
                   <Icon name="check" size={12} />
                 </button>
@@ -315,6 +323,7 @@ export function CampaignsCard({
               <Button
                 variant="dashedMuted"
                 size="xs"
+                className="ml-auto"
                 disabled={campaignId === null}
                 onClick={onStartAdd}
               >

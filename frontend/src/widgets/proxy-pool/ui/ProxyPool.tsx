@@ -186,7 +186,7 @@ function ProxyCard({
             : 'border-line bg-surface-card'
       }`}
     >
-      <div className="flex items-center gap-md">
+      <div className="flex items-center gap-sm">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-flag w-flag shrink-0 rounded-[3px] shadow-ring`}
@@ -211,11 +211,10 @@ function ProxyCard({
           <div className="truncate type-item-title">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px flex items-center gap-tight type-caption">
-            <span>{proxyTypeLabel(proxy.proxy_type)}</span>
-            <span className="text-content-subtle">·</span>
+          <div className="mt-px flex flex-wrap items-center gap-tight type-caption">
+            <span className="whitespace-nowrap">{proxyTypeLabel(proxy.proxy_type)}</span>
             <span
-              className={`inline-flex items-center gap-xs font-medium ${statusTone}`}
+              className={`inline-flex items-center gap-xs whitespace-nowrap font-medium ${statusTone}`}
               title={
                 [
                   proxy.last_checked_at &&
@@ -234,28 +233,32 @@ function ProxyCard({
             </span>
           </div>
         </div>
-        <IconButton
-          size="touch"
-          shape="circle"
-          tone="primary"
-          className="md:size-chip"
-          onClick={onCheck}
-          disabled={busy}
-          aria-label={t('accounts.proxyForm.detect')}
-        >
-          {busy ? <Spinner /> : <Icon name="refresh" size={14} />}
-        </IconButton>
-        <IconButton
-          size="touch"
-          shape="circle"
-          tone="danger"
-          className="md:size-chip"
-          onClick={onDelete}
-          disabled={busy}
-          aria-label={t('accounts.actions.delete')}
-        >
-          <Icon name="close" size={14} />
-        </IconButton>
+        <div className="flex shrink-0 items-center gap-tight">
+          <IconButton
+            size="touch"
+            shape="circle"
+            tone="primary"
+            className="md:size-chip"
+            onClick={onCheck}
+            disabled={busy}
+            aria-label={t('accounts.actions.check')}
+            title={t('accounts.actions.check')}
+          >
+            {busy ? <Spinner /> : <Icon name="refresh" size={14} />}
+          </IconButton>
+          <IconButton
+            size="touch"
+            shape="circle"
+            tone="danger"
+            className="md:size-chip"
+            onClick={onDelete}
+            disabled={busy}
+            aria-label={t('accounts.actions.delete')}
+            title={t('accounts.actions.delete')}
+          >
+            <Icon name="close" size={14} />
+          </IconButton>
+        </div>
       </div>
       <div>
         <div className="mb-tight flex items-center justify-between">

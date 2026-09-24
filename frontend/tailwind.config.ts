@@ -19,6 +19,7 @@ import {
   minWidth,
   radius,
   rhythm,
+  pressScale,
   shadow,
   size,
   typeRole,
@@ -73,6 +74,7 @@ export default {
     boxShadow: shadow,
     transitionDuration: duration,
     transitionTimingFunction: easing,
+    scale: pressScale,
     zIndex: layer,
     // Ритм заменяет числовую шкалу Tailwind: зазор и отбивка — одно измерение с двух
     // сторон, и держать их разными шкалами — это как `gap-md` (10px) оказался рядом с

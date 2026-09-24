@@ -230,6 +230,7 @@ export function AccountsTable({
             <IconButton
               size="touch"
               shape="circle"
+              tone="primary"
               title={t('accounts.actions.check')}
               // Named, not colour-only: the fill and the glyph say nothing to a screen
               // reader. The name sits on the BUTTON now: `IconButton` requires
@@ -253,7 +254,10 @@ export function AccountsTable({
               // lands after `.bg-success-deep` alphabetically, and both verdicts used to
               // lose their fill while keeping their white glyph — a white check on a white
               // circle, for every check this table ever ran.
-              className={cn('duration-enter md:size-icon', verdictFill(verdict))}
+              className={cn(
+                'duration-enter disabled:hover:border-line disabled:hover:bg-surface-card disabled:hover:text-content-subtle md:size-icon',
+                verdictFill(verdict),
+              )}
             >
               {busy ? (
                 <Spinner />

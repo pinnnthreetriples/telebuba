@@ -109,6 +109,9 @@ test('every button carries the same disabled and focus treatment', () => {
   for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
     expect(classesOf(name)).toContain('focus-visible:outline-focus');
+    expect(classesOf(name)).toContain('active:scale-press');
+    expect(classesOf(name)).toContain('disabled:active:scale-rest');
+    expect(classesOf(name)).toContain('motion-reduce:active:scale-rest');
   }
 });
 

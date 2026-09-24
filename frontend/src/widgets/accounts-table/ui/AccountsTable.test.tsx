@@ -311,6 +311,7 @@ test('icon actions have names, shared keyboard focus, and native disabled state'
   const remove = screen.getAllByRole('button', { name: 'Удалить' })[0]!;
   expect(web).toHaveClass('size-touch', 'md:size-icon');
   expect(check).toHaveClass('size-touch', 'md:size-icon');
+  expect(check).toHaveClass('hover:bg-action-hover', 'focus-visible:outline-focus');
   expect(profile).toHaveClass('size-touch', 'md:size-icon');
   expect(remove).toHaveClass('size-touch', 'md:size-icon');
   expect(profile).toBeEnabled();

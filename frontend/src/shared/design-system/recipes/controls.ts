@@ -102,11 +102,14 @@ const FIELD_FOCUS = 'tb-time outline-none';
 
 const DISABLED = 'disabled:pointer-events-none disabled:opacity-50';
 
+export const PRESS_FEEDBACK =
+  'active:scale-press disabled:active:scale-rest aria-busy:active:scale-rest motion-reduce:active:scale-rest';
+
 // Невалидность рисуется рамкой, и только ею: сообщение стоит рядом с полем
 // (`FieldError`), потому что красная рамка сама по себе — цвет, несущий смысл.
 const INVALID = 'border-danger';
 
-const CONTROL_TRANSITION = 'transition-colors duration-state';
+const CONTROL_TRANSITION = 'transition duration-state';
 
 export type ControlSize = keyof typeof CONTROL_HEIGHT;
 // `ControlShape` тут был и ушёл вместе с параметром `shape` у `buttonBase`: тип, который
@@ -129,6 +132,7 @@ export function buttonBase({ size, className }: { size: ControlSize; className?:
     SHAPE.pill,
     FOCUS_RING,
     DISABLED,
+    PRESS_FEEDBACK,
     CONTROL_TRANSITION,
     className,
   );

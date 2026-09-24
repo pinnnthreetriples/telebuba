@@ -242,6 +242,7 @@
       "resultOk": "Proxy is reachable",
       "resultErr": "Proxy not responding",
       "errHost": "Enter a host",
+      "errHostIpv4": "Enter an IPv4 address, for example 123.45.67.89",
       "errPort": "Port must be a number",
       "errPortRange": "Port must be between 1 and 65535"
     },
@@ -413,7 +414,7 @@
       "noMusic": "No music selected",
       "musicUnsupported": "Profile music isn't available for this account",
       "loadError": "Couldn't load the profile data from Telegram ({{reason}})",
-      "pickTrack": "Pick a track",
+      "pickTrack": "Add music",
       "cancel": "Cancel",
       "save": "Save",
       "saved": "Saved",
@@ -458,7 +459,7 @@
         "failed": "Telegram refused the action — try again"
       },
       "privacy": {
-        "hint": "When the Telegram photo or bio is limited to contacts, strangers see a letter placeholder instead of the avatar and an empty bio. The button below opens the photo and bio only. It leaves “Last seen” alone: an open status publishes the account's activity schedule, so change that in its row by hand.",
+        "hint": "If only your contacts can see your photo and bio, everyone else sees a letter instead of your photo and no bio. Make them public so, for example, customers can see your profile. Set “Last seen” separately.",
         "loading": "Loading…",
         "loadError": "Couldn't read the privacy settings from Telegram ({{reason}})",
         "retry": "Retry",

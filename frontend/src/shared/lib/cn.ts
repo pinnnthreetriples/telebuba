@@ -9,6 +9,7 @@ import {
   TRACKING_NAMES,
   TYPE_ROLE_NAMES,
 } from '@/shared/design-system/tokens/names';
+import { pressScale } from '@/shared/design-system/tokens/motion';
 
 // The shadcn/ui class-merge helper: clsx for conditional joins, tailwind-merge to
 // dedupe conflicting Tailwind utilities (last one wins).
@@ -81,6 +82,7 @@ import {
 // имеет право оказаться `undefined` у того, кто вошёл вторым. `tokens/` не импортирует
 // ничего, поэтому глубокий путь цикла не образует ни в какую сторону.
 const RHYTHM = RHYTHM_NAMES;
+const PRESS_SCALE = Object.keys(pressScale);
 
 const merge = extendTailwindMerge<'type-role'>({
   override: {
@@ -121,6 +123,7 @@ const merge = extendTailwindMerge<'type-role'>({
       'gap-y': [{ 'gap-y': RHYTHM }],
       'space-x': [{ 'space-x': RHYTHM }],
       'space-y': [{ 'space-y': RHYTHM }],
+      scale: [{ scale: PRESS_SCALE }],
       'type-role': [{ type: TYPE_ROLE_NAMES }],
     },
     conflictingClassGroups: {

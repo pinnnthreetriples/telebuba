@@ -23,7 +23,14 @@ export const EMPTY_PROXY_FORM: ProxyFormValue = {
 // the field renderer via t(); host + port are the only required fields.
 export const proxyFormSchema = z.object({
   proxy_type: z.enum(['socks5', 'https']),
-  host: z.string().trim().min(1, 'accounts.proxyForm.errHost'),
+  host: z
+    .string()
+    .trim()
+    .regex(/^(?:\d{1,3}\.){3}\d{1,3}$/, 'accounts.proxyForm.errHostIpv4')
+    .refine(
+      (value) => value.split('.').every((part) => Number(part) <= 255),
+      'accounts.proxyForm.errHostIpv4',
+    ),
   port: z
     .string()
     .regex(/^\d+$/, 'accounts.proxyForm.errPort')

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -182,7 +182,7 @@ test('runs the check action on a row', async () => {
   await waitFor(() => {
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByTitle('Проверить'));
+  await userEvent.click(within(screen.getByRole('table')).getByTitle('Проверить'));
   await waitFor(() => {
     const checked = vi
       .mocked(fetch)
@@ -200,7 +200,7 @@ test('a passing check leaves a green tick on the row button', async () => {
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
 
-  await userEvent.click(screen.getByTitle('Проверить'));
+  await userEvent.click(within(screen.getByRole('table')).getByTitle('Проверить'));
 
   await waitFor(() => {
     expect(screen.getByLabelText('Аккаунт живой')).toBeInTheDocument();
@@ -220,7 +220,7 @@ test('a check that answers with a dead status is a red cross, not a tick', async
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
 
-  await userEvent.click(screen.getByTitle('Проверить'));
+  await userEvent.click(within(screen.getByRole('table')).getByTitle('Проверить'));
 
   await waitFor(() => {
     expect(screen.getByLabelText('Аккаунт недоступен')).toBeInTheDocument();
@@ -235,7 +235,7 @@ test('a failed check leaves a red cross too', async () => {
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
 
-  await userEvent.click(screen.getByTitle('Проверить'));
+  await userEvent.click(within(screen.getByRole('table')).getByTitle('Проверить'));
 
   await waitFor(() => {
     expect(screen.getByLabelText('Аккаунт недоступен')).toBeInTheDocument();

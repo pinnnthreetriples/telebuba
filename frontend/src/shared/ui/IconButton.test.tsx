@@ -62,13 +62,21 @@ test('круг приходит только из shape', () => {
   expect(screen.getByRole('button', { name: 'a' })).toHaveClass('rounded-full');
 });
 
-test('tone paints the hover, and neutral deliberately has none', () => {
+test('all tones have a hover treatment and retain the shared press state', () => {
   const { rerender } = render(
     <IconButton aria-label="a">
       <svg />
     </IconButton>,
   );
-  expect(screen.getByRole('button', { name: 'a' }).className).not.toMatch(/hover:/);
+  const neutral = screen.getByRole('button', { name: 'a' });
+  expect(neutral).toHaveClass(
+    'hover:border-line-strong',
+    'hover:bg-canvas',
+    'hover:text-content-primary',
+    'active:scale-press',
+    'disabled:active:scale-rest',
+    'motion-reduce:active:scale-rest',
+  );
 
   rerender(
     <IconButton aria-label="a" tone="primary">
@@ -79,6 +87,7 @@ test('tone paints the hover, and neutral deliberately has none', () => {
     'hover:border-info-line',
     'hover:bg-action-hover',
     'hover:text-info-strong',
+    'active:scale-press',
   );
 
   rerender(
@@ -103,9 +112,27 @@ test('disabled is inert and dimmed, so a pending action cannot be fired twice', 
 
   const button = screen.getByRole('button', { name: 'Обновить' });
   expect(button).toBeDisabled();
-  expect(button).toHaveClass('disabled:opacity-50');
+  expect(button).toHaveClass(
+    'disabled:opacity-50',
+    'disabled:pointer-events-none',
+    'focus-visible:outline-focus',
+    'active:scale-press',
+  );
   await userEvent.click(button);
   expect(onClick).not.toHaveBeenCalled();
+});
+
+test('aria-busy icon actions cannot show press feedback', () => {
+  render(
+    <IconButton aria-label="Обновить" aria-busy="true">
+      <svg />
+    </IconButton>,
+  );
+
+  expect(screen.getByRole('button', { name: 'Обновить' })).toHaveClass(
+    'aria-busy:pointer-events-none',
+    'aria-busy:active:scale-rest',
+  );
 });
 
 test('extra classes are appended, so a caller can size the glyph it puts inside', () => {

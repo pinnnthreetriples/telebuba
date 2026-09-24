@@ -71,6 +71,12 @@ export const duration = {
 // тратили `linear`, `ease`, `ease-out` и `ease-in-out` — ключевые слова CSS, которые
 // правило линтера не отличает от забытой кривой. Теперь их четыре имени, и все четыре
 // названы жестом.
+// Press feedback stays small enough to avoid moving the control's layout.
+export const pressScale = {
+  rest: '1',
+  press: '0.96',
+} as const;
+
 export const easing = {
   // См. заметку про `duration.DEFAULT`: без этого ключа каждая утилита `transition-*`
   // теряет и кривую тоже.
