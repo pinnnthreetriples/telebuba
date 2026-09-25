@@ -66,6 +66,14 @@ class ResolveChat(BaseModel):
     target: str = Field(min_length=1)
 
 
+class SendChatMessage(BaseModel):
+    """Send operator text to one public username or chat known to this account."""
+
+    action_type: Literal["send_chat_message"] = "send_chat_message"
+    recipient: str = Field(min_length=1)
+    text: str = Field(min_length=1, max_length=4096)
+
+
 class ReadChatMessages(BaseModel):
     """Read-only: read messages of an arbitrary chat, by id or from a cursor.
 

@@ -146,6 +146,19 @@ export function BulkAccountPicker({
             <div className="flex justify-center py-empty">
               <Spinner size="lg" />
             </div>
+          ) : fleet.isError ? (
+            <div className="flex flex-col items-center gap-md px-xl py-empty text-center">
+              <p role="alert" className="type-prose text-danger">
+                {t('accounts.error')}
+              </p>
+              <Button
+                onClick={() => {
+                  void fleet.refetch();
+                }}
+              >
+                {t('accounts.bulk.pickRetry')}
+              </Button>
+            </div>
           ) : shown.length === 0 ? (
             <div className="px-xl py-empty text-center type-prose">
               {t('accounts.bulk.pickEmpty')}
@@ -193,7 +206,7 @@ export function BulkAccountPicker({
           <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
           <Button
             variant="primary"
-            disabled={draft.length === 0}
+            disabled={draft.length === 0 || fleet.isError}
             onClick={() => {
               onApply(draft);
             }}

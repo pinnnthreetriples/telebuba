@@ -3,6 +3,7 @@
 export {
   addAccountMusicMutation,
   cancelAccountTwofaEmailMutation,
+  cancelBulkMessageJobMutation,
   checkAccountMutation,
   clearAccountTwofaEmailMutation,
   confirmAccountTwofaEmailMutation,
@@ -10,6 +11,7 @@ export {
   deleteAccountChannelMutation,
   deleteAccountChannelPostMutation,
   deleteAccountMutation,
+  generateBulkMessageMutation,
   editAccountChannelPostMutation,
   importAccountSessionMutation,
   importAccountTdataMutation,
@@ -21,6 +23,7 @@ export {
   removeAccountPhotoMutation,
   removeAccountStoryMutation,
   removeAccountTwofaMutation,
+  sendBulkMessagesMutation,
   requestLoginCodeMutation,
   resendAccountTwofaEmailMutation,
   resetAccountSessionMutation,

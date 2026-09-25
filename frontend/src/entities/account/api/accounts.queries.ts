@@ -77,6 +77,7 @@ export async function fetchLiveProfileSnapshot(accountId: string): Promise<Accou
 }
 
 export {
+  getActiveBulkMessageJobOptions as activeBulkMessageJobQueryOptions,
   accountStatsOptions as accountStatsQueryOptions,
   accountStatsQueryKey,
   checkAccountChannelUsernameOptions as accountChannelUsernameCheckQueryOptions,
@@ -89,6 +90,7 @@ export {
   getAccountProfileSnapshotQueryKey as accountProfileSnapshotQueryKey,
   getAccountTwofaOptions as accountTwofaQueryOptions,
   getAccountTwofaQueryKey as accountTwofaQueryKey,
+  getBulkMessageJobOptions as getBulkMessageJobQueryOptions,
   listAccountChannelPostsOptions as accountChannelPostsQueryOptions,
   listAccountChannelPostsQueryKey as accountChannelPostsQueryKey,
   listAccountChannelsOptions as accountChannelsQueryOptions,

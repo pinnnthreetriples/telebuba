@@ -5,16 +5,25 @@ import { useTranslation } from 'react-i18next';
 import {
   accountsQueryOptions,
   accountStatsQueryOptions,
+  activeBulkMessageJobQueryOptions,
   checkAccountMutation,
   deleteAccountMutation,
   invalidateAccountViews,
   openAccountWebMutation,
 } from '@/entities/account';
+import { meQueryOptions } from '@/shared/auth';
 import { Button, Card, toastError } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
-import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
+import {
+  AccountEdit,
+  AddAccountModal,
+  BulkMessageModal,
+  type BulkMessageDraft,
+  ProfileModal,
+  ProxyAddModal,
+} from '@/widgets/account-edit';
 import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
@@ -41,6 +50,34 @@ export function AccountsPage() {
   const [editingRow, setEditingRow] = useState<AccountRead | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [messaging, setMessaging] = useState(false);
+  const [messageDraft, setMessageDraft] = useState<BulkMessageDraft | null>(null);
+  const [messageJobId, setMessageJobId] = useState<string | null>(null);
+  const [messageJobOwnerId, setMessageJobOwnerId] = useState<string | null>(null);
+  const me = useQuery(meQueryOptions());
+  const activeMessageJob = useQuery({
+    ...activeBulkMessageJobQueryOptions(),
+    enabled: Boolean(me.data?.id),
+  });
+  const activeMessageJobId = activeMessageJob.data?.job_id;
+  useEffect(() => {
+    const ownerId = me.data?.id;
+    if (!ownerId) return;
+    setMessageJobId(window.sessionStorage.getItem(`telebuba:bulk-message-job:${ownerId}`));
+    setMessageJobOwnerId(ownerId);
+    window.sessionStorage.removeItem('telebuba:bulk-message-job-id');
+  }, [me.data?.id]);
+  useEffect(() => {
+    if (!messageJobOwnerId || messageJobOwnerId !== me.data?.id) return;
+    const key = `telebuba:bulk-message-job:${messageJobOwnerId}`;
+    if (messageJobId) window.sessionStorage.setItem(key, messageJobId);
+    else window.sessionStorage.removeItem(key);
+  }, [messageJobId, messageJobOwnerId, me.data?.id]);
+  useEffect(() => {
+    if (messageJobOwnerId === me.data?.id && activeMessageJobId) {
+      setMessageJobId(activeMessageJobId);
+    }
+  }, [activeMessageJobId, messageJobOwnerId, me.data?.id]);
   const [proxyAdding, setProxyAdding] = useState(false);
   const [profilingRow, setProfilingRow] = useState<AccountRead | null>(null);
 
@@ -215,9 +252,9 @@ export function AccountsPage() {
 
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
-        <div className="flex w-full items-center gap-sm sm:w-auto">
+        <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
           {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
-          <div className="relative flex flex-1 items-center sm:flex-none">
+          <div className="relative flex min-w-col flex-1 items-center sm:flex-none">
             <svg
               className="pointer-events-none absolute left-lg text-content-subtle"
               width="15"
@@ -240,6 +277,15 @@ export function AccountsPage() {
               className="tb-time h-control w-full rounded-full border border-line bg-surface-card pl-[36px] pr-md text-body outline-none sm:w-tip"
             />
           </div>
+          <Button
+            size="md"
+            loading={me.isPending || (me.isSuccess && activeMessageJob.isPending)}
+            onClick={() => {
+              setMessaging(true);
+            }}
+          >
+            {t('accounts.messages.open')}
+          </Button>
           <Button
             variant="primary"
             size="md"
@@ -334,6 +380,23 @@ export function AccountsPage() {
             setAdding(false);
           }}
           onImported={invalidate}
+        />
+      ) : null}
+      {messaging ? (
+        <BulkMessageModal
+          jobId={messageJobId}
+          initialDraft={messageDraft}
+          onJobStarted={(id) => {
+            setMessageJobId(id);
+            setMessageDraft(null);
+          }}
+          onNewJob={() => {
+            setMessageJobId(null);
+          }}
+          onDraftSaved={setMessageDraft}
+          onClose={() => {
+            setMessaging(false);
+          }}
         />
       ) : null}
       {proxyAdding ? (

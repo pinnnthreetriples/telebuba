@@ -49,6 +49,7 @@ from schemas.telegram_actions_chat import (
     ReactToMessage,
     ReadChatMessages,
     ResolveChat,
+    SendChatMessage,
 )
 
 # The comment cluster (the write action and the thread read) is a sibling module too;
@@ -333,6 +334,7 @@ TelegramAction = Annotated[
     | ReactToPost
     | ReactToMessage
     | CopyMessageMedia
+    | SendChatMessage
     | SendDirectMessage
     | MarkDirectMessageRead
     | SetProfilePhoto
