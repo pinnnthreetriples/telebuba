@@ -186,6 +186,63 @@ test('recovers a completed batch from the server when the POST response was lost
   }
 });
 
+test('reopening on the same page finds a completed batch whose POST response was lost', async () => {
+  window.sessionStorage.clear();
+  try {
+    const finished = batch('finished-without-remount', 'completed');
+    const options: {
+      userId: string;
+      latestJob: BulkMessageJob | null;
+      jobs: Record<string, BulkMessageJob>;
+      sendDeferred: Promise<Response>;
+    } = {
+      userId: 'operator',
+      latestJob: null,
+      jobs: {},
+      sendDeferred: new Promise<Response>(() => undefined),
+    };
+    routeApi(options);
+    renderPage();
+    await openMessages();
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить аккаунты' }));
+    const picker = await screen.findByRole('dialog', { name: 'Добавить аккаунты' });
+    await userEvent.click(within(picker).getByRole('checkbox', { name: /Выбрать все/ }));
+    await userEvent.click(within(picker).getByRole('button', { name: 'Добавить (1)' }));
+    await userEvent.type(screen.getByLabelText('Получатели'), '@recipient');
+    await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+    await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+    await waitFor(() => {
+      expect(
+        vi.mocked(fetch).mock.calls.some(([input]) => {
+          const request = input as Request;
+          return (
+            request.method === 'POST' &&
+            new URL(request.url).pathname === '/api/v1/accounts/bulk-messages'
+          );
+        }),
+      ).toBe(true);
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+
+    options.latestJob = finished;
+    options.jobs[finished.job_id] = finished;
+    await openMessages();
+    expect(await screen.findByText('1 из 1 отправок')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Получатели')).not.toBeInTheDocument();
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([input]) => {
+        const request = input as Request;
+        return (
+          request.method === 'POST' &&
+          new URL(request.url).pathname === '/api/v1/accounts/bulk-messages'
+        );
+      }),
+    ).toHaveLength(1);
+  } finally {
+    window.sessionStorage.clear();
+  }
+});
+
 test('checks for another tab’s running batch again before reopening the composer', async () => {
   window.sessionStorage.clear();
   try {

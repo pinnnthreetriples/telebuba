@@ -100,15 +100,16 @@ export function AccountsPage() {
     setOpeningMessages(true);
     try {
       const current = await activeMessageJob.refetch({ throwOnError: true });
-      const restoreLatest = latestMayRestore.current;
       latestMayRestore.current = false;
       if (current.data?.job_id) setMessageJobId(current.data.job_id);
-      else if (
-        restoreLatest &&
-        latestMessageJobId &&
-        latestMessageJobId !== dismissedMessageJobId
-      ) {
-        setMessageJobId(latestMessageJobId);
+      else {
+        // A POST may have reached the server even when its response never reached
+        // this page. It may already be completed, so /active alone cannot decide
+        // whether opening a fresh composer would duplicate the send.
+        const latest = await latestMessageJob.refetch({ throwOnError: true });
+        if (latest.data?.job_id && latest.data.job_id !== dismissedMessageJobId) {
+          setMessageJobId(latest.data.job_id);
+        }
       }
       setMessaging(true);
     } catch {
