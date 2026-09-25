@@ -108,6 +108,20 @@ test('the parallel option is disabled on its own, with the reason on it', () => 
   expect(screen.getByRole('radio', { name: 'Последовательно' })).toBeEnabled();
 });
 
+test('campaign mode cards use radio arrow navigation and visible keyboard focus', async () => {
+  renderCard();
+  const campaign = screen.getByRole('radio', { name: /Кампания/ });
+  const revive = screen.getByRole('radio', { name: /Оживление/ });
+
+  expect(campaign).toHaveAttribute('tabindex', '0');
+  campaign.focus();
+  await userEvent.keyboard('{ArrowRight}');
+
+  expect(revive).toHaveAttribute('aria-checked', 'true');
+  expect(revive).toHaveFocus();
+  expect(revive).toHaveClass('focus-visible:outline-focus');
+});
+
 test('targets are chips that can be removed one at a time', async () => {
   const { onDraft } = renderCard();
   expect(screen.getByText('2 цели')).toBeInTheDocument();

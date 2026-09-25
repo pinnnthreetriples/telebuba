@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { probeProxyMutation } from '@/entities/proxy';
-import { Badge, Button, FormField, Icon, Input, SegmentedControl } from '@/shared/ui';
+import { Badge, FormField, Icon, IconButton, Input, SegmentedControl, Spinner } from '@/shared/ui';
 
 import { proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 
@@ -48,7 +48,7 @@ export function ProxyForm({
     onValidityChange?.(canSubmit);
   }, [canSubmit, onValidityChange]);
 
-  const canProbe = detect !== 'loading' && values.host.trim() !== '' && values.port !== '';
+  const canProbe = detect !== 'loading' && proxyFormSchema.safeParse(values).success;
 
   const runDetect = () => {
     setDetect('loading');
@@ -76,28 +76,71 @@ export function ProxyForm({
 
   return (
     <div className="flex flex-col gap-md">
-      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-md">
+      <div className="grid grid-cols-1 items-end gap-md md:grid-cols-[2fr_1fr_auto]">
         <form.Field name="host">
           {(field) => (
-            <FormField
-              field={field}
-              label={t('accounts.proxyForm.host')}
-              placeholder="123.45.67.89"
-              className="font-mono"
-            />
+            <FormField field={field} label={t('accounts.proxyForm.host')}>
+              <Input
+                id={field.name}
+                name={field.name}
+                value={field.state.value}
+                onChange={(event) => {
+                  field.handleChange(event.target.value.replace(/[^\d.]/g, ''));
+                }}
+                onBlur={field.handleBlur}
+                inputMode="decimal"
+                placeholder="123.45.67.89"
+                invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+                className="font-mono"
+              />
+            </FormField>
           )}
         </form.Field>
         <form.Field name="port">
           {(field) => (
-            <FormField
-              field={field}
-              label={t('accounts.proxyForm.port')}
-              inputMode="numeric"
-              placeholder="1080"
-              className="font-mono"
-            />
+            <FormField field={field} label={t('accounts.proxyForm.port')}>
+              <Input
+                id={field.name}
+                name={field.name}
+                value={field.state.value}
+                onChange={(event) => {
+                  field.handleChange(event.target.value.replace(/\D/g, ''));
+                }}
+                onBlur={field.handleBlur}
+                inputMode="numeric"
+                maxLength={5}
+                placeholder="1080"
+                invalid={field.state.meta.isTouched && field.state.meta.errors.length > 0}
+                className="font-mono"
+              />
+            </FormField>
           )}
         </form.Field>
+        <IconButton
+          size="md"
+          tone="primary"
+          className="mb-xs"
+          onClick={runDetect}
+          disabled={!canProbe}
+          aria-label={t('accounts.proxyForm.detect')}
+          title={t('accounts.proxyForm.detect')}
+        >
+          {detect === 'loading' ? (
+            <Spinner tone="onAction" />
+          ) : (
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+            >
+              <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+          )}
+        </IconButton>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
         <form.Field name="username">
@@ -128,16 +171,17 @@ export function ProxyForm({
                   placeholder={t('accounts.proxyForm.passwordPlaceholder')}
                   className="pr-[36px]"
                 />
-                <button
-                  type="button"
+                <IconButton
+                  size="md"
+                  shape="circle"
                   onClick={() => {
                     setShowPass((shown) => !shown);
                   }}
                   aria-label={t('accounts.proxyForm.password')}
-                  className="absolute right-[6px] top-1/2 flex size-icon -translate-y-1/2 items-center justify-center text-content-subtle"
+                  className="absolute right-sm top-1/2 -translate-y-1/2 border-transparent bg-transparent"
                 >
                   {showPass ? <Icon name="eye-off" size={16} /> : <Icon name="eye" size={16} />}
-                </button>
+                </IconButton>
               </div>
             </label>
           )}
@@ -161,49 +205,29 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      <div className="flex flex-wrap items-center gap-md">
-        <Button
-          size="sm"
-          className="items-center gap-sm"
-          onClick={runDetect}
-          disabled={!canProbe}
-          loading={detect === 'loading'}
-        >
-          {detect !== 'loading' && (
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
-            >
-              <path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z" />
-              <circle cx="12" cy="10" r="3" />
-            </svg>
+      {detect !== 'idle' && (
+        <div className="flex flex-wrap items-center gap-md">
+          {detect === 'loading' && (
+            <span className="type-prose">{t('accounts.proxyForm.checking')}</span>
           )}
-          {detect === 'ok' ? t('accounts.proxyForm.detected') : t('accounts.proxyForm.detect')}
-        </Button>
-        {detect === 'loading' && (
-          <span className="type-prose">{t('accounts.proxyForm.checking')}</span>
-        )}
-        {detect === 'ok' && (
-          <Badge tone="success" size="md" className="tb-pop gap-sm">
-            {country ? (
-              <span
-                className={`fi fi-${country.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}
-              />
-            ) : null}
-            {country ?? t('accounts.proxyForm.resultOk')}
-          </Badge>
-        )}
-        {detect === 'err' && (
-          <span className="inline-flex items-center gap-sm type-label text-danger">
-            <Icon name="x-circle" size={14} />
-            {t('accounts.proxyForm.resultErr')}
-          </span>
-        )}
-      </div>
+          {detect === 'ok' && (
+            <Badge tone="success" size="md" className="tb-pop gap-sm">
+              {country ? (
+                <span
+                  className={`fi fi-${country.toLowerCase()} inline-block h-flag w-flag rounded-[2px] shadow-ring`}
+                />
+              ) : null}
+              {country ?? t('accounts.proxyForm.resultOk')}
+            </Badge>
+          )}
+          {detect === 'err' && (
+            <span className="inline-flex items-center gap-sm type-label text-danger">
+              <Icon name="x-circle" size={14} />
+              {t('accounts.proxyForm.resultErr')}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

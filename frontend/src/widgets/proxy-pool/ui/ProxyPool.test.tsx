@@ -67,6 +67,26 @@ test('renders pool cards with usage', async () => {
   expect(screen.queryByText(/proxyPool\.status/)).not.toBeInTheDocument();
 });
 
+test('proxy icon actions use the shared keyboard focus ring', async () => {
+  vi.mocked(fetch).mockResolvedValue(jsonResponse({ proxies: [proxy()] }));
+  const user = userEvent.setup();
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  const check = await screen.findByRole('button', { name: 'Проверить' });
+  const remove = screen.getByRole('button', { name: 'Удалить' });
+
+  expect(check).toHaveClass('size-touch', 'md:size-chip');
+  expect(remove).toHaveClass('size-touch', 'md:size-chip');
+  expect(check).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
+  expect(remove).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
+  const add = screen.getByText('Добавить').closest('button');
+  expect(add).toHaveClass('h-control');
+  expect(add).not.toHaveClass('h-field');
+  await user.tab();
+  expect(add).toHaveFocus();
+  await user.tab();
+  expect(check).toHaveFocus();
+});
+
 test('warns clearly when a proxy check failed (flag gone, no silent card)', async () => {
   vi.mocked(fetch).mockResolvedValue(
     jsonResponse({
@@ -185,7 +205,7 @@ test('checking a second card leaves the first card busy, and settling clears onl
   await waitFor(() => {
     expect(screen.getByText('de.example:1080')).toBeInTheDocument();
   });
-  const checks = () => screen.getAllByLabelText('Определить');
+  const checks = () => screen.getAllByLabelText('Проверить');
 
   await userEvent.click(checks()[0]!);
   await userEvent.click(checks()[1]!);
@@ -220,8 +240,8 @@ test("a second check does not swallow the first card's pool refresh", async () =
         ([input]) => new URL((input as Request).url).pathname === '/api/v1/proxies',
       ).length;
 
-  await userEvent.click(screen.getAllByLabelText('Определить')[0]!);
-  await userEvent.click(screen.getAllByLabelText('Определить')[1]!);
+  await userEvent.click(screen.getAllByLabelText('Проверить')[0]!);
+  await userEvent.click(screen.getAllByLabelText('Проверить')[1]!);
   await waitFor(() => {
     expect(releases).toHaveLength(2);
   });

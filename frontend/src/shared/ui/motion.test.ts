@@ -24,6 +24,11 @@ const fixture = [
   'transition-transform',
   ...Object.keys(durations).map((rung) => `duration-${rung}`),
   ...Object.keys(curves).map((curve) => `ease-${curve}`),
+  'scale-press',
+  'active:scale-press',
+  'disabled:active:scale-rest',
+  'aria-busy:active:scale-rest',
+  'motion-reduce:active:scale-rest',
 ].join(' ');
 
 const { css } = await postcss([
@@ -52,6 +57,14 @@ describe('a bare transition utility carries a duration and a curve', () => {
 
 // The rungs themselves, so a renamed or deleted one fails here rather than silently
 // resolving to nothing at the call sites that name it.
+test('press scale utilities emit and reduced motion returns controls to rest', () => {
+  const scale = config.theme.scale as Record<string, string>;
+  expect(scale).toEqual({ rest: '1', press: '0.96' });
+  expect(css).toContain('.scale-press');
+  expect(css).toContain('prefers-reduced-motion: reduce');
+  expect(css).toContain('scale-rest');
+});
+
 describe('every motion rung emits its own value', () => {
   for (const [rung, value] of Object.entries(durations)) {
     if (rung === 'DEFAULT') continue;

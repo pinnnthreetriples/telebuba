@@ -519,9 +519,9 @@ export function NeurocommentPage() {
           `overflow-x-auto` on its card does not stop min-content propagating — and the
           page picked up a horizontal scroll the viewport-wide sticky header can't follow,
           which is every card hanging out past the top bar on the right. */}
-      <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
         {/* RIGHT column */}
-        <div className="flex flex-col gap-lg lg:col-start-2 lg:row-start-1">
+        <div className="flex min-w-0 flex-col gap-lg lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
             canStart={Boolean(listenerId) && !showWarmingBlock}
@@ -555,7 +555,7 @@ export function NeurocommentPage() {
         </div>
 
         {/* LEFT column */}
-        <div className="flex flex-col gap-lg lg:col-start-1 lg:row-start-1">
+        <div className="flex min-w-0 flex-col gap-lg lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}

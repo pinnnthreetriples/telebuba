@@ -25,6 +25,7 @@ const SCALES = {
   boxShadow: tokens.shadow,
   transitionDuration: tokens.duration,
   transitionTimingFunction: tokens.easing,
+  scale: tokens.pressScale,
   zIndex: tokens.layer,
   spacing: tokens.rhythm,
   size: tokens.size,

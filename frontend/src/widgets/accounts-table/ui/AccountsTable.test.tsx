@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
@@ -11,6 +11,14 @@ import { AccountsTable } from './AccountsTable';
 
 const NONE_BUSY = new Set<string>();
 const NO_RESULTS: Record<string, FeedbackResult> = {};
+
+function setViewport(width: number): void {
+  (
+    window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
+  ).happyDOM.setViewport({ width });
+}
+
+afterEach(() => setViewport(1024));
 
 const ACCOUNTS: AccountRead[] = [
   {
@@ -138,6 +146,29 @@ test('fires the row actions for the clicked account', async () => {
   expect(onDelete).toHaveBeenCalledWith('acc-1');
 });
 
+test('profile and delete actions use the shared primary and danger tones', () => {
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  expect(screen.getAllByRole('button', { name: 'Редактировать профиль' })[0]).toHaveClass(
+    'hover:border-info-line',
+    'hover:bg-action-hover',
+    'hover:text-info-strong',
+  );
+  expect(screen.getAllByRole('button', { name: 'Удалить' })[0]).toHaveClass(
+    'hover:border-danger-line',
+    'hover:bg-danger-tint',
+    'hover:text-danger-deep',
+  );
+});
+
 test('each row wears its own check verdict', () => {
   render(
     <AccountsTable
@@ -259,6 +290,61 @@ test('the globe is disabled without a proxy and enabled with one', () => {
   // acc-1 carries a proxy, acc-2 has none → no backend route to Telegram.
   expect(globes[0]).toBeEnabled();
   expect(globes[1]).toBeDisabled();
+});
+
+test('icon actions have names, shared keyboard focus, and native disabled state', async () => {
+  const user = userEvent.setup();
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpenWeb={vi.fn()}
+      busyIds={new Set(['acc-1'])}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  const web = screen.getAllByRole('button', { name: 'Открыть в Telegram Web' })[0]!;
+  const check = screen.getAllByRole('button', { name: 'Проверить' })[0]!;
+  const profile = screen.getAllByRole('button', { name: 'Редактировать профиль' })[0]!;
+  const remove = screen.getAllByRole('button', { name: 'Удалить' })[0]!;
+  expect(web).toHaveClass('size-touch', 'md:size-icon');
+  expect(check).toHaveClass('size-touch', 'md:size-icon');
+  expect(check).toHaveClass('hover:bg-action-hover', 'focus-visible:outline-focus');
+  expect(profile).toHaveClass('size-touch', 'md:size-icon');
+  expect(remove).toHaveClass('size-touch', 'md:size-icon');
+  expect(profile).toBeEnabled();
+  expect(remove).toBeDisabled();
+  expect(check).toBeDisabled();
+  expect(web).toHaveClass('focus-visible:outline', 'focus-visible:outline-focus');
+
+  await user.tab(); // Focus the keyboard-operable row.
+  await user.tab(); // The row's first action is the web button.
+  expect(web).toHaveFocus();
+});
+
+test('mobile account actions sit below the title instead of squeezing it', () => {
+  setViewport(320);
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpenWeb={vi.fn()}
+      busyIds={NONE_BUSY}
+      checkResults={NO_RESULTS}
+    />,
+  );
+
+  const title = screen.getByText('@mainuser');
+  const card = title.closest('[role="listitem"]')!;
+  const actions = card.querySelectorAll<HTMLButtonElement>('button[aria-label]');
+  expect(title).toBeInTheDocument();
+  expect(actions).toHaveLength(4);
+  for (const action of actions) expect(action).toHaveClass('size-touch');
+  expect(card.firstElementChild as HTMLElement).not.toContainElement(actions[0]!);
+  expect(card.children[1] as HTMLElement).toContainElement(actions[0]!);
 });
 
 test('a row opens from the keyboard', async () => {

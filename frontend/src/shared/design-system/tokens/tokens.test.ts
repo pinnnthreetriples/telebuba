@@ -165,6 +165,16 @@ test('каждая объявленная роль доходит до клас�
   expect(roles.filter((role) => !projection.includes(role))).toEqual([]);
 });
 
+test('градиент заглушки использует общую роль поверх существующей палитры', async () => {
+  const [{ background, flatColors }, { palette }] = await Promise.all([
+    import('./semantic'),
+    import('./primitives'),
+  ]);
+
+  expect(background.fallback).toEqual({ start: palette.blue200, end: palette.warmGrey300 });
+  expect(flatColors.fallback).toEqual(background.fallback);
+});
+
 test('ни один класс не обходит роль ссылкой на примитив', async () => {
   const { projection } = await semanticSource();
 

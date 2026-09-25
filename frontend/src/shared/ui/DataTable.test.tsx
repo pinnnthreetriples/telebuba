@@ -17,7 +17,7 @@ const DATA: Item[] = [
   { id: 'b', name: 'second-row', note: 'note-b' },
 ];
 
-// One fixture covering all three cardSlot states plus renderSubRow.
+// One fixture covering cardSlot states plus renderSubRow.
 const COLUMNS: ColumnDef<Item>[] = [
   {
     id: 'name',
@@ -55,6 +55,12 @@ const COLUMNS: ColumnDef<Item>[] = [
       </button>
     ),
     meta: { cardSlot: 'control', cellClassName: 'w-px' } satisfies DataTableColumnMeta,
+  },
+  {
+    id: 'actions',
+    header: 'ДЕЙСТВИЯ',
+    cell: ({ row }) => <button type="button">Действия {row.original.name}</button>,
+    meta: { cardSlot: 'actions' } satisfies DataTableColumnMeta,
   },
 ];
 
@@ -141,6 +147,18 @@ test('a narrow viewport replaces the table with one card per row', async () => {
   expect(screen.queryByLabelText('Выбрать все')).toBeNull();
   expect(screen.getAllByLabelText(/^Выбрать /)).toHaveLength(DATA.length);
   await expectNoAxeViolations(container);
+});
+
+test('actions slot renders below the card header', () => {
+  setViewport(320);
+  renderTable();
+
+  const card = screen.getByText('first-row').closest('[role="listitem"]')!;
+  const header = card.firstElementChild;
+  const actions = screen.getByRole('button', { name: 'Действия first-row' });
+  expect(header).toContainElement(screen.getByLabelText('Выбрать first-row'));
+  expect(header).not.toContainElement(actions);
+  expect(card.children[1]).toBe(actions.parentElement);
 });
 
 // Cards are anonymous divs; without list semantics a screen reader gets one flat run

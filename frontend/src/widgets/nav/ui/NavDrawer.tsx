@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 
-import { Icon, Modal } from '@/shared/ui';
+import { CloseButton, Modal } from '@/shared/ui';
 
 import { NAV_LINKS } from './links';
 
@@ -30,14 +30,12 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
               as it took to read it back. Hand-written, and staying that way. */}
           <span className="text-title font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
-        <button
-          type="button"
+        <CloseButton
+          size="touch"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-sm flex size-touch items-center justify-center rounded-full text-content-muted"
-        >
-          <Icon name="close" size={18} />
-        </button>
+          className="-mr-sm text-title"
+        />
       </div>
 
       <nav className="flex flex-col gap-tight p-sm">

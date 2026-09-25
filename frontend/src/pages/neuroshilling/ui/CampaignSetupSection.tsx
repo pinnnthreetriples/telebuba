@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, HelpHint, Icon, Input, SegmentedControl, Switch } from '@/shared/ui';
+import { Button, HelpHint, Icon, IconButton, Input, SegmentedControl, Switch } from '@/shared/ui';
 
 import { AdvancedLimitsModal } from './AdvancedLimitsModal';
 import type { ScenarioDraft } from './scenarioDraft';
@@ -144,17 +144,17 @@ export function CampaignSetupSection({
             className="inline-flex items-center gap-sm rounded-full border border-line bg-canvas px-md py-tight text-body text-content-secondary"
           >
             {target}
-            <button
-              type="button"
+            <IconButton
+              size="sm"
+              shape="circle"
               disabled={live}
               aria-label={t('neuroshilling.setup.targets.remove', { name: target })}
               onClick={() => {
                 setTargets(targets.filter((_, at) => at !== index));
               }}
-              className="text-body leading-none text-content-subtle disabled:opacity-50"
             >
-              ×
-            </button>
+              <Icon name="close" size={16} />
+            </IconButton>
           </span>
         ))}
         {adding ? (
@@ -213,37 +213,30 @@ export function CampaignSetupSection({
             caption={t('neuroshilling.setup.launch.caption')}
           />
 
-          {/* Режим кампании: две карточки-переключателя, а не сегментированный контрол —
-              у каждой есть строка объяснения, и без неё «Оживление» ничего не значит. */}
-          <div
-            role="radiogroup"
-            aria-label={t('neuroshilling.scenario.mode.label')}
+          {/* Карточки сохраняют пояснения, а общий контрол даёт им radio keyboard pattern. */}
+          <SegmentedControl
+            value={scenario.mode}
+            disabled={live}
+            ariaLabel={t('neuroshilling.scenario.mode.label')}
+            variant="outline"
             className="grid gap-sm pb-sm sm:grid-cols-2"
-          >
-            {(['campaign', 'revive'] as const).map((mode) => {
-              const picked = scenario.mode === mode;
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  role="radio"
-                  aria-checked={picked}
-                  disabled={live}
-                  onClick={() => {
-                    onScenario({ ...scenario, mode });
-                  }}
-                  className={`rounded-lg border p-md text-left disabled:opacity-60 ${picked ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
-                >
+            options={(['campaign', 'revive'] as const).map((mode) => ({
+              value: mode,
+              label: (
+                <span className="block text-left">
                   <span className="block type-item-title">
                     {t(`neuroshilling.scenario.mode.${mode}`)}
                   </span>
                   <span className="mt-xs block type-caption">
                     {t(`neuroshilling.setup.mode.${mode}.body`)}
                   </span>
-                </button>
-              );
-            })}
-          </div>
+                </span>
+              ),
+            }))}
+            onChange={(mode) => {
+              onScenario({ ...scenario, mode });
+            }}
+          />
 
           <Row label={t('neuroshilling.setup.traversal.label')}>
             <SegmentedControl

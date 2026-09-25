@@ -47,6 +47,17 @@ function chipFor(channel: string): HTMLElement {
   return chip;
 }
 
+test('the add-channel control stays at the right edge as channel chips wrap', () => {
+  renderCard();
+  const button = screen.getByRole('button', { name: '+ Канал' });
+  expect(button).toHaveClass('ml-auto');
+  expect(button.parentElement).toHaveClass('flex', 'flex-wrap', 'items-start');
+
+  renderCard({ addingChannel: true });
+  const input = screen.getByPlaceholderText(/Введите|@|канал/i);
+  expect(input.parentElement).toHaveClass('ml-auto');
+});
+
 test('clicking "Проверить каналы" fires onCheckChannels', async () => {
   const props = renderCard();
   await userEvent.click(screen.getByText('Проверить каналы'));
@@ -73,6 +84,18 @@ test('banned channels render red, ok channels render green, others gray', () => 
 test('with no verdicts the chips stay the default gray', () => {
   renderCard();
   expect(chipFor('@a').className).toContain('bg-canvas');
+});
+
+test('campaign icon actions keep their callbacks', async () => {
+  const props = renderCard({ campaignList: [CAMPAIGN] });
+
+  await userEvent.click(screen.getByRole('button', { name: 'Поставить на паузу' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Редактировать промт' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить кампанию' }));
+
+  expect(props.onToggleStatus).toHaveBeenCalledWith(CAMPAIGN);
+  expect(props.onEditPrompt).toHaveBeenCalledWith(CAMPAIGN);
+  expect(props.onDelete).toHaveBeenCalledWith(CAMPAIGN);
 });
 
 const CAMPAIGN = {
@@ -135,6 +158,13 @@ test('карточку кампании можно выбрать с клави�
   const select = screen.getByRole('button', { name: 'tabacum' });
   const gear = screen.getByRole('button', { name: 'Действия' });
   const pause = screen.getByRole('button', { name: 'Поставить на паузу' });
+  const edit = screen.getByRole('button', { name: 'Редактировать промт' });
+  const remove = screen.getByRole('button', { name: 'Удалить кампанию' });
+
+  expect(pause).toHaveAttribute('aria-label', 'Поставить на паузу');
+  expect(pause).toHaveClass('focus-visible:outline-focus', 'hover:bg-warning-tint');
+  expect(edit).toHaveClass('focus-visible:outline-focus', 'hover:bg-action-hover');
+  expect(remove).toHaveClass('focus-visible:outline-focus', 'hover:bg-danger-tint');
 
   // Шестерёнка не внутри кнопки выбора: вложенная кнопка — это то, что было.
   expect(select.contains(gear)).toBe(false);
@@ -150,6 +180,7 @@ test('карточку кампании можно выбрать с клави�
   await userEvent.tab();
   await userEvent.tab();
   expect(pause).toHaveFocus();
+  expect(pause).toHaveClass('focus-visible:outline-focus');
   expect(surface()?.className).toMatch(REVEALED);
 
   await userEvent.tab();

@@ -288,7 +288,11 @@ function WarmingCard({
                 >
                   {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
-                <span id={actionsTipId} role="tooltip" className="tb-tip-pop tb-tip-pop--wide">
+                <span
+                  id={actionsTipId}
+                  role="tooltip"
+                  className="tb-tip-pop tb-tip-pop--wide max-sm:!right-0 max-sm:!left-auto max-sm:!translate-x-0"
+                >
                   {t('warming.card.actionsTip')}
                 </span>
               </span>
@@ -621,7 +625,7 @@ export function WarmingBoard({
         ) : null}
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] items-start gap-md">
+      <div className="grid grid-cols-1 items-start gap-md sm:grid-cols-[repeat(auto-fill,minmax(320px,1fr))]">
         {warming.map((account) => (
           <WarmingCard
             key={account.account_id}
@@ -635,7 +639,7 @@ export function WarmingBoard({
           />
         ))}
         {warming.length === 0 ? (
-          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-[50px] text-center text-body text-content-subtle">
+          <div className="col-span-full rounded-lg border-[1.5px] border-dashed border-info-line px-md py-empty text-center text-body text-content-subtle">
             {t('warming.column.empty')}
           </div>
         ) : null}

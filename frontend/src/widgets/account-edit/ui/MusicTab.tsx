@@ -2,7 +2,8 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileMusicView } from '@/shared/api';
-import { Button, IconButton } from '@/shared/ui';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
+import { Icon, IconButton } from '@/shared/ui';
 
 // The profile modal's music tab: the saved-music list with remove, a picker
 // for a new track, and the "unsupported" note for older Telethon builds that
@@ -60,32 +61,45 @@ export function MusicTab({
                 </div>
               </div>
               <IconButton
-                size="md"
+                size="sm"
+                shape="circle"
                 disabled={!track.file_reference}
                 onClick={() => {
                   onRemove(track);
                 }}
                 aria-label={t('accounts.profile.removeMusic')}
-                className="text-title"
               >
-                ×
+                <Icon name="close" size={16} />
               </IconButton>
             </div>
           ))}
+          <IconButton
+            size="md"
+            aria-label={t('accounts.profile.pickTrack')}
+            disabled={busy}
+            onClick={() => musicInput.current?.click()}
+            className="self-start"
+          >
+            <Icon name="plus" size={16} aria-hidden="true" />
+          </IconButton>
         </div>
       ) : (
-        <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
-          {t('accounts.profile.noMusic')}
-        </div>
+        <button
+          type="button"
+          aria-label={t('accounts.profile.pickTrack')}
+          disabled={busy}
+          onClick={() => musicInput.current?.click()}
+          className={`group relative flex w-full items-center justify-center rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle transition duration-state hover:border-info-line hover:bg-action-hover hover:text-info-strong disabled:cursor-not-allowed disabled:opacity-50 ${PRESS_FEEDBACK} ${FOCUS_RING}`}
+        >
+          <span className="transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
+            {t('accounts.profile.noMusic')}
+          </span>
+          <span className="absolute inset-0 flex items-center justify-center gap-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <Icon name="plus" size={16} aria-hidden="true" />
+            {t('accounts.profile.pickTrack')}
+          </span>
+        </button>
       )}
-      <Button
-        size="sm"
-        className="mt-md"
-        loading={busy}
-        onClick={() => musicInput.current?.click()}
-      >
-        {t('accounts.profile.pickTrack')}
-      </Button>
       <input
         ref={musicInput}
         type="file"

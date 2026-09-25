@@ -245,6 +245,22 @@ test('the layout picker appears at 2+ photos and is hidden for a single photo', 
   expect(screen.getByLabelText('Раскладка h2')).toBeInTheDocument();
 });
 
+test('unselected collage layouts keep their preview shapes distinguishable', async () => {
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  fireEvent.change(fileInput(), { target: { files: [img('a.jpg'), img('b.jpg')] } });
+
+  const unselected = await screen.findByLabelText('Раскладка h2');
+  const [frame, ...cells] = unselected.querySelectorAll('svg rect');
+  expect(frame).toHaveClass('stroke-content-subtle');
+  expect(cells.length).toBeGreaterThan(0);
+  for (const cell of cells) expect(cell).toHaveClass('fill-content-subtle');
+
+  const selected = screen.getByLabelText('Раскладка v2');
+  const [selectedFrame, selectedCell] = selected.querySelectorAll('svg rect');
+  expect(selectedFrame).toHaveClass('stroke-action-primary');
+  expect(selectedCell).toHaveClass('fill-current');
+});
+
 test('selecting a layout sends the chosen collage_layout', async () => {
   mockStoryOk();
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);

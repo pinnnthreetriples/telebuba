@@ -52,6 +52,14 @@ interface MockSourceCtor {
 }
 const Sources = globalThis.EventSource as unknown as MockSourceCtor;
 
+test('does not render an inactive notifications bell or unread dot', () => {
+  routeApi();
+  const { container } = renderWithClient(<AppNav />);
+
+  expect(screen.queryByRole('button', { name: 'Уведомления' })).toBeNull();
+  expect(container.querySelector('header path[d^="M18 8A6 6"]')).toBeNull();
+});
+
 test('the system pill reflects the real SSE connection state', async () => {
   routeApi();
   renderWithClient(<AppNav />);
@@ -76,7 +84,9 @@ test('logs out from the avatar menu and redirects to login', async () => {
     expect(screen.getByText('AD')).toBeInTheDocument();
   });
 
-  await userEvent.click(screen.getByLabelText('Аккаунт'));
+  const account = screen.getByLabelText('Аккаунт');
+  expect(account).toHaveClass('focus-visible:outline-focus');
+  await userEvent.click(account);
   await userEvent.click(screen.getByText('Выйти'));
 
   await waitFor(() => {
@@ -141,7 +151,10 @@ test('the hamburger opens a drawer with the nav destinations', async () => {
   expect(drawer).toHaveTextContent('Аккаунты');
   expect(drawer).toHaveTextContent('Настройки');
 
-  await userEvent.click(screen.getByLabelText('Закрыть меню'));
+  const close = screen.getByLabelText('Закрыть меню');
+  expect(close).toHaveClass('focus-visible:outline-focus');
+  close.focus();
+  await userEvent.keyboard('{Enter}');
   await waitFor(() => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });

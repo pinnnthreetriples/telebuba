@@ -20,11 +20,13 @@ import {
 } from '@/entities/account';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shared/api';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import {
   Button,
   ConfirmModal,
   FormField,
   Icon,
+  CloseButton,
   IconButton,
   Input,
   Modal,
@@ -622,7 +624,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const tabBtn = (value: Tab): string =>
-    `shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${tab === value ? 'border-action-primary text-content-primary' : 'border-transparent text-content-muted'}`;
+    `shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${FOCUS_RING} ${
+      tab === value
+        ? 'border-action-primary text-content-primary'
+        : 'border-transparent text-content-muted hover:bg-action-hover'
+    }`;
 
   // The other half of the ARIA tabs pattern (the roles landed with the tablist):
   // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
@@ -658,15 +664,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         // different name, and it went stale on a renamed row's new `account` prop.
         label={t('accounts.profile.dialog')}
       >
-        <div className="flex max-h-dialog flex-col overflow-hidden">
+        <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
-            {/* The two gradient stops are decorative and exist only to differ from each
-                other behind an avatar that has not loaded — deliberately NOT tokens, for
-                the same reason as the media tiles in `_profileShared`. */}
             <div
-              // eslint-disable-next-line design-tokens/no-raw-values -- see the note above: two decorative stops, single-use by design
-              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-stat font-semibold text-on-inverse"
+              className="flex size-face shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-fallback-start to-fallback-end text-stat font-semibold text-content-primary"
               style={
                 avatarUri
                   ? {
@@ -690,47 +692,46 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-tight">
-              <button
-                type="button"
-                disabled={refreshState === 'loading' || syncing}
-                onClick={() => {
-                  void onRefresh();
-                }}
-                className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
-              >
-                <span
-                  className={`inline-flex ${
-                    refreshState === 'loading'
-                      ? 'tb-spin'
-                      : refreshState === 'idle'
-                        ? ''
-                        : 'tb-swapin'
-                  }`}
+              <div className="flex items-center gap-sm">
+                <button
+                  type="button"
+                  disabled={refreshState === 'loading' || syncing}
+                  onClick={() => {
+                    void onRefresh();
+                  }}
+                  className={`inline-flex items-center gap-sm rounded-full border bg-surface-card px-md py-tight text-body font-medium transition duration-state hover:bg-canvas disabled:pointer-events-none disabled:opacity-70 ${PRESS_FEEDBACK} ${FOCUS_RING} ${refreshLook.border}`}
                 >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={refreshLook.stroke}
+                  <span
+                    className={`inline-flex ${
+                      refreshState === 'loading'
+                        ? 'tb-spin'
+                        : refreshState === 'idle'
+                          ? ''
+                          : 'tb-swapin'
+                    }`}
                   >
-                    <path d={refreshLook.path} />
-                  </svg>
-                </span>
-                {t(refreshLook.labelKey)}
-              </button>
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={refreshLook.stroke}
+                    >
+                      <path d={refreshLook.path} />
+                    </svg>
+                  </span>
+                  {t(refreshLook.labelKey)}
+                </button>
+                <CloseButton
+                  onClick={requestClose}
+                  disabled={uploading}
+                  aria-label={t('accounts.profile.close')}
+                  className="text-title"
+                />
+              </div>
               <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
-            <IconButton
-              size="md"
-              onClick={requestClose}
-              disabled={uploading}
-              aria-label={t('accounts.profile.close')}
-              className="ml-hair text-title"
-            >
-              ×
-            </IconButton>
           </div>
 
           {/* tabs — a real tablist: the active tab was conveyed by colour and a
@@ -777,7 +778,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             role="tabpanel"
             id="profile-tabpanel"
             aria-labelledby={`profile-tab-${tab}`}
-            className="tb-scroll relative flex flex-1 flex-col gap-lg overflow-y-auto p-xl"
+            className="tb-scroll relative flex min-h-0 flex-1 flex-col gap-lg overflow-y-auto p-xl"
           >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a
@@ -1031,17 +1032,17 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               // mirrors: the operator is already looking at the form they want
               // applied to a fleet. Yields the footer's left slot to a save
               // error — a refusal on screen outranks a way to open another dialog.
-              <Button
-                size="xs"
+              <IconButton
+                size="md"
                 className="mr-auto"
+                aria-label={t('accounts.bulk.open')}
                 disabled={uploading}
                 onClick={() => {
                   setBulkOpen(true);
                 }}
               >
                 <Icon name="users" size={16} />
-                {t('accounts.bulk.open')}
-              </Button>
+              </IconButton>
             )}
             <Button onClick={requestClose} disabled={uploading}>
               {t('accounts.profile.cancel')}

@@ -4,7 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginMutation } from '@/shared/auth';
-import { Button } from '@/shared/ui';
+import { Button, Input } from '@/shared/ui';
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -27,14 +27,12 @@ export function LoginPage() {
     );
   };
 
-  const inputClass = 'w-full rounded-md border border-line bg-surface px-md py-sm text-body';
-
   return (
     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the login card, the only page in the app built as one
     <main className="mx-auto mt-[96px] max-w-[384px] p-page">
       <h1 className="mb-2xl type-page-title">{t('auth.login.title')}</h1>
       <form onSubmit={onSubmit} className="space-y-lg">
-        <input
+        <Input
           value={username}
           onChange={(event) => {
             setUsername(event.target.value);
@@ -42,9 +40,9 @@ export function LoginPage() {
           placeholder={t('auth.login.username')}
           autoComplete="username"
           aria-label={t('auth.login.username')}
-          className={inputClass}
+          className="w-full"
         />
-        <input
+        <Input
           type="password"
           value={password}
           onChange={(event) => {
@@ -53,7 +51,7 @@ export function LoginPage() {
           placeholder={t('auth.login.password')}
           autoComplete="current-password"
           aria-label={t('auth.login.password')}
-          className={inputClass}
+          className="w-full"
         />
         {login.isError ? (
           <p role="alert" className="type-dialog-body text-danger">

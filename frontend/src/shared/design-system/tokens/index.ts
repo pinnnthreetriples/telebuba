@@ -26,7 +26,7 @@ export {
   maxHeight,
   breakpoint,
 } from './spacing';
-export { duration, easing } from './motion';
+export { duration, easing, pressScale } from './motion';
 
 export type { TypeRoleName } from './names';
 export {

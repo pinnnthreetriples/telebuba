@@ -83,6 +83,30 @@ test('a failed snapshot load names WHY Telegram refused, with a retry', async ()
   ).toBeInTheDocument();
 });
 
+test('an unavailable pool reason shows localized retry copy, not the exception name', async () => {
+  const requests: string[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    requests.push(url.href);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(
+        jsonResponse({ ...VIEW, error: 'unavailable: TelegramClientPoolError' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+
+  const message = await screen.findByText(
+    'Не удалось загрузить данные профиля из Telegram (Telegram временно недоступен — попробуйте ещё раз)',
+  );
+  expect(screen.queryByText(/TelegramClientPoolError/)).not.toBeInTheDocument();
+  const retry = message.parentElement?.querySelector('button');
+  expect(retry).toHaveTextContent('Обновить');
+  await userEvent.click(retry as HTMLButtonElement);
+  await waitFor(() => expect(requests.some((url) => url.includes('refresh=true'))).toBe(true));
+});
+
 test('the refresh button is disabled while a post-action background sync runs', async () => {
   let releaseSync!: (response: Response) => void;
   vi.mocked(fetch).mockImplementation((input) => {

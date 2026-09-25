@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Input, SegmentedControl, toastError } from '@/shared/ui';
+import { Icon, IconButton, Input, SegmentedControl, toastError } from '@/shared/ui';
 
 import {
   isUploadableMusic,
@@ -82,16 +82,17 @@ function Picked({
             className="rounded-lg border border-line bg-canvas bg-cover bg-center"
             style={{ aspectRatio: ratio, backgroundImage: urls[index] && `url(${urls[index]})` }}
           />
-          <button
-            type="button"
+          <IconButton
+            size="sm"
+            shape="circle"
             aria-label={removeLabel}
             onClick={() => {
               onRemove(index);
             }}
-            className="absolute right-tight top-tight flex size-chip items-center justify-center rounded-full bg-scrim leading-none text-on-inverse"
+            className="absolute right-tight top-tight border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
           >
-            ×
-          </button>
+            <Icon name="close" size={16} />
+          </IconButton>
         </div>
       ))}
     </>
@@ -271,16 +272,17 @@ export function BulkMusicTab({
             </svg>
           </span>
           <div className="min-w-0 flex-1 truncate type-card-title">{file.name}</div>
-          <button
-            type="button"
+          <IconButton
+            size="sm"
+            shape="circle"
             aria-label={t('accounts.bulk.removeFile')}
             onClick={() => {
               onFile(null);
             }}
-            className="shrink-0 text-title leading-none text-content-muted"
+            className="shrink-0"
           >
-            ×
-          </button>
+            <Icon name="close" size={16} />
+          </IconButton>
         </div>
       ) : (
         <FilePicker

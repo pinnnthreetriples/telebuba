@@ -8,6 +8,8 @@ import type {
   NeurocommentBoard as NeurocommentBoardData,
   NeurocommentChannelRow,
 } from '@/shared/api';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
 import { formatLocalTime } from '@/shared/lib';
 import {
   Badge,
@@ -16,6 +18,7 @@ import {
   DataTable,
   type DataTableColumnMeta,
   Icon,
+  IconButton,
 } from '@/shared/ui';
 
 interface BoardRow {
@@ -329,7 +332,12 @@ export function NeurocommentBoard({
             // The row's only control, and a 16px glyph is not a thumb target — the
             // padding/negative-margin pair grows the hit box to 40px without moving the
             // chevron or widening the column it is sized to.
-            className={`-m-md flex p-md text-content-subtle transition-transform duration-reveal ease-spring ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+            className={cn(
+              '-m-md flex p-md text-content-subtle transition duration-reveal ease-spring hover:text-content-primary',
+              FOCUS_RING,
+              PRESS_FEEDBACK,
+              row.getIsExpanded() && 'rotate-180',
+            )}
           >
             <Icon name="chevron-down" size={16} />
           </button>
@@ -376,15 +384,16 @@ export function NeurocommentBoard({
             // says nothing actionable — keeping it forced the row to wrap.
             <span className="hidden type-caption sm:inline">{t('neurocomment.board.updated')}</span>
           )}
-          <button
-            type="button"
+          <IconButton
+            size="touch"
+            tone="primary"
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex size-tile items-center justify-center rounded-lg border border-line bg-surface-card text-content-muted transition-colors hover:border-info-line hover:bg-action-hover hover:text-info-strong lg:size-icon"
+            className="rounded-lg sm:size-tile lg:size-icon"
           >
             <Icon name="gear" size={16} />
-          </button>
+          </IconButton>
         </div>
       }
     >

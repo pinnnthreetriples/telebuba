@@ -24,6 +24,7 @@ import {
   ConfirmModal,
   FeedbackMark,
   Icon,
+  IconButton,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -227,8 +228,8 @@ export function WarmingPage() {
     <div className="tb-fadeup">
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 type-page-title">{t('warming.titleFull')}</h1>
-        <div className="flex items-center gap-lg">
-          <div className="flex gap-lg">
+        <div className="flex w-full flex-wrap items-center justify-between gap-md sm:w-auto sm:flex-nowrap sm:gap-lg">
+          <div className="flex gap-md sm:gap-lg">
             <Counter
               value={warming.length}
               label={t('warming.counter.warming')}
@@ -269,8 +270,8 @@ export function WarmingPage() {
           clientWidth 1024, a scroll the viewport-wide sticky header can't follow. The
           feed that proved it has since moved to the left column; the floor stays,
           because the board's own log prints the same kind of line. */}
-      <div className="grid items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="flex flex-col gap-lg">
+      <div className="grid grid-cols-1 items-start gap-lg lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-lg">
           <Card className="p-lg">
             <div className="mb-md flex items-center justify-between">
               <span className="type-card-title">{t('warming.ready.title')}</span>
@@ -343,17 +344,23 @@ export function WarmingPage() {
                           ) : null}
                         </div>
                       </div>
-                      <button
+                      <Button
                         type="button"
+                        variant="primary"
+                        size="lg"
                         disabled={!ready || busyIds.has(account.account_id)}
                         title={ready ? undefined : blockers}
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-lg py-tight text-body font-medium disabled:opacity-50 ${ready ? 'bg-action-primary text-on-action' : 'cursor-not-allowed bg-canvas text-content-subtle'}`}
+                        className={
+                          ready
+                            ? undefined
+                            : 'cursor-not-allowed bg-canvas text-content-subtle hover:bg-canvas'
+                        }
                       >
                         {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
-                      </button>
+                      </Button>
                     </div>
                   );
                 })
@@ -380,16 +387,16 @@ export function WarmingPage() {
                 >
                   <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                   {channel.channel}
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    shape="circle"
                     aria-label={t('warming.channels.remove')}
                     onClick={() => {
                       setChannelToRemove(channel.channel);
                     }}
-                    className="text-body leading-none text-content-subtle"
                   >
-                    ×
-                  </button>
+                    <Icon name="close" size={16} />
+                  </IconButton>
                 </Badge>
               ))}
               {addingChannel ? (
@@ -418,15 +425,16 @@ export function WarmingPage() {
                   >
                     <Icon name="check" size={12} />
                   </button>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="sm"
+                    shape="circle"
                     title={t('warming.channels.cancel')}
                     aria-label={t('warming.channels.cancel')}
                     onClick={cancelAddChannel}
-                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-line-row text-body leading-none text-content-muted"
+                    className="shrink-0 bg-line-row text-content-muted"
                   >
-                    ×
-                  </button>
+                    <Icon name="close" size={16} />
+                  </IconButton>
                 </span>
               ) : (
                 <Button
@@ -554,7 +562,7 @@ export function WarmingPage() {
                         onClick={() => {
                           runGraduation(unpromote, acc.account_id);
                         }}
-                        className="flex size-thumbnail shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
+                        className="flex size-touch shrink-0 items-center justify-center rounded-full border border-line bg-surface-card text-content-muted disabled:opacity-50"
                       >
                         <svg
                           width="15"
@@ -594,7 +602,7 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <div className="flex flex-col gap-lg">
+        <div className="flex min-w-0 flex-col gap-lg">
           <WarmingBoard
             warming={warming}
             onStop={(id) => {

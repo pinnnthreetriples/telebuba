@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileStoryView } from '@/shared/api';
+import { Icon, IconButton } from '@/shared/ui';
 
 import { tileStyle } from './_profileShared';
 import { DashedAdd } from './_shared';
@@ -65,16 +66,17 @@ export function StoriesTab({
                 )}
               </span>
             )}
-            <button
-              type="button"
+            <IconButton
+              size="sm"
+              shape="circle"
               aria-label={t('accounts.profile.removeStory')}
               onClick={() => {
                 onRemove(story);
               }}
-              className="absolute right-[6px] top-[6px] size-chip rounded-full bg-scrim text-body leading-none text-on-inverse"
+              className="absolute right-[6px] top-[6px] border-transparent bg-scrim text-on-inverse hover:border-transparent hover:bg-content-primary hover:text-on-inverse"
             >
-              ×
-            </button>
+              <Icon name="close" size={16} />
+            </IconButton>
             <button
               type="button"
               disabled={pinPending}

@@ -253,17 +253,18 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               className="mb-sm resize-none break-all font-mono text-content-primary"
             />
             {clipboard ? (
-              <button
+              <Button
                 type="button"
+                size="block"
+                className="mb-md text-content-muted"
                 onClick={() => {
                   copyPassword(created.password);
                 }}
-                className="mb-md w-full rounded-lg border border-line bg-surface-card px-md py-md text-body font-medium text-content-muted"
               >
                 {copyState === 'done'
                   ? t('accounts.edit.twofaCopied')
                   : t('accounts.edit.twofaCopy')}
-              </button>
+              </Button>
             ) : null}
             {clipboard ? null : (
               <div className="mb-md type-caption">{t('accounts.edit.twofaCopyManual')}</div>

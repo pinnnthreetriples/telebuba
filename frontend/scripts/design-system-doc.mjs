@@ -73,6 +73,7 @@ function readConfig() {
     boxShadow: entries(tokens.shadow),
     transitionDuration: entries(tokens.duration),
     transitionTimingFunction: entries(tokens.easing),
+    scale: entries(tokens.pressScale),
     zIndex: entries(tokens.layer),
   };
 }
@@ -654,8 +655,9 @@ function renderTrackingScale(config, indent) {
 
 function renderMotionScale(config, indent) {
   const curves = Object.fromEntries(config.transitionTimingFunction.map((e) => [e.name, e.value]));
-  return config.transitionDuration
-    .map((e) => {
+  return [
+    ...config.scale.map((e) => specRow(indent, `scale-${e.name} · ${e.value}`, 'Press feedback')),
+    ...config.transitionDuration.map((e) => {
       const note = RUNG.transitionDuration[e.name] ?? { text: '', curve: '' };
       const text = note.curve
         ? note.text.replace(
@@ -664,8 +666,8 @@ function renderMotionScale(config, indent) {
           )
         : note.text;
       return specRow(indent, `<code>${e.name}</code> · ${e.value}`, text);
-    })
-    .join('\n');
+    }),
+  ].join('\n');
 }
 
 // У сегментной группы одна ступень разложена по трём объектам: обёртка, сам сегмент и
@@ -707,6 +709,7 @@ function renderRootTokens(config) {
     '  /* Движение */',
     ...rootLines('t-', config.transitionDuration),
     ...rootLines('e-', config.transitionTimingFunction),
+    ...rootLines('scale-', config.scale),
     '',
     '  /* Высота */',
     // `none` переменной не получает: «нет тени» — это не значение, которое

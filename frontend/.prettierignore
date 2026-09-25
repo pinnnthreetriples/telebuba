@@ -16,3 +16,4 @@ docs/design-system.html
 # `--check` над ним падал бы после каждого `npm run visual`.
 e2e/.artifacts
 e2e/__screenshots__
+test-results

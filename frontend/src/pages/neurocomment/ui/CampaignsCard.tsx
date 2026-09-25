@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
-import { FOCUS_RING } from '@/shared/design-system';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { type FeedbackResult } from '@/shared/lib';
 import { cn } from '@/shared/lib/cn';
 import { Button, CollapsibleCard, FeedbackMark, Icon, IconButton, SurfHover } from '@/shared/ui';
@@ -99,40 +99,48 @@ export function CampaignsCard({
               open={openCampaignActions === campaign.campaign_id}
               actions={
                 <>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="touch"
+                    tone="neutral"
+                    aria-label={
+                      isRunning ? t('neurocomment.campaign.pause') : t('neurocomment.campaign.run')
+                    }
                     title={
                       isRunning ? t('neurocomment.campaign.pause') : t('neurocomment.campaign.run')
                     }
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`flex w-action items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
+                    className={`w-action self-stretch ${isRunning ? 'text-warning-deep hover:bg-warning-tint' : 'text-success-deep hover:bg-success-tint'}`}
                   >
                     {isRunning ? <Icon name="pause" size={18} /> : <Icon name="play" size={18} />}
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    size="touch"
+                    tone="primary"
+                    aria-label={t('neurocomment.campaign.editPrompt')}
                     title={t('neurocomment.campaign.editPrompt')}
                     onClick={() => {
                       // Selecting the campaign too keeps the board query (and thus the
                       // prompt modal's account list) on THIS campaign (finding #5).
                       onEditPrompt(campaign);
                     }}
-                    className="flex w-action items-center justify-center border-none bg-transparent text-action-primary"
+                    className="w-action self-stretch"
                   >
                     <Icon name="pencil" size={18} />
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    size="touch"
+                    tone="danger"
+                    aria-label={t('neurocomment.campaign.delete')}
                     title={t('neurocomment.campaign.delete')}
                     onClick={() => {
                       onDelete(campaign);
                     }}
-                    className="flex w-action items-center justify-center border-none bg-transparent text-danger"
+                    className="w-action self-stretch"
                   >
                     <Icon name="trash" size={18} />
-                  </button>
+                  </IconButton>
                 </>
               }
               surface={
@@ -244,7 +252,7 @@ export function CampaignsCard({
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-sm">
+          <div className="flex flex-wrap items-start gap-sm">
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
@@ -265,20 +273,22 @@ export function CampaignsCard({
                     {t('neurocomment.board.deleted', { count: channel.deleted_recent ?? 0 })}
                   </span>
                 ) : null}
-                <button
-                  type="button"
+                <IconButton
                   aria-label={t('neurocomment.channels.remove')}
                   onClick={() => {
                     onRemoveChannel(channel.channel);
                   }}
-                  className="text-body leading-none text-content-subtle"
+                  size="sm"
+                  shape="circle"
+                  tone="danger"
+                  className="text-content-subtle"
                 >
-                  ×
-                </button>
+                  <Icon name="close" size={16} />
+                </IconButton>
               </span>
             ))}
             {addingChannel ? (
-              <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
+              <span className="ml-auto inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
                 <input
                   autoFocus
                   value={channelInput}
@@ -298,7 +308,11 @@ export function CampaignsCard({
                   aria-label={t('neurocomment.modal.add')}
                   disabled={!channelInput.trim()}
                   onClick={onAddChannel}
-                  className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
+                  className={cn(
+                    'flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:pointer-events-none disabled:opacity-50 transition',
+                    FOCUS_RING,
+                    PRESS_FEEDBACK,
+                  )}
                 >
                   <Icon name="check" size={12} />
                 </button>
@@ -307,6 +321,7 @@ export function CampaignsCard({
               <Button
                 variant="dashedMuted"
                 size="xs"
+                className="ml-auto"
                 disabled={campaignId === null}
                 onClick={onStartAdd}
               >

@@ -115,7 +115,9 @@ jobs:
       # rubber-stamp generator: it would train every agent to bump `last_updated` to
       # get green, which is precisely the fake freshness this scaffold is meant to
       # prevent. Kept strict (25/50 commits, 14/30 days) BECAUSE it only nags.
-      # Cached graphs stalled later checks. Build from source until reuse is reliable.
+      # Two cache-hit CI attempts stalled in `mex check` after the graph was restored;
+      # a fresh graph build completed and checked successfully. Build the graph for
+      # each run until the cached-graph path can be made reliable.
       - name: Build the code graph
         run: npx --yes mex-agent@0.7.1 graph --json
 

@@ -12,6 +12,22 @@ import {
   routeApi,
 } from './ProfileModal.test-helpers';
 
+test('profile tabs keep the tab panel scroll position', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+
+  const tabpanel = screen.getByRole('tabpanel');
+  tabpanel.scrollTop = 120;
+
+  const textTab = screen.getByRole('tab', { name: 'Текст' });
+  textTab.focus();
+  await userEvent.keyboard('{ArrowRight}');
+
+  expect(screen.getByRole('tab', { name: 'Фото' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tabpanel')).toBe(tabpanel);
+  expect(tabpanel.scrollTop).toBe(120);
+});
+
 test('stories tab opens the add-story modal and removes a story', async () => {
   routeApi();
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
@@ -155,6 +171,27 @@ test('a selected_contacts story renders a translated privacy badge, not the raw 
   await userEvent.click(screen.getByText('Сторис'));
   expect(await screen.findByText('Выбранные контакты')).toBeInTheDocument();
   expect(screen.queryByText('accounts.addStory.selected_contacts')).not.toBeInTheDocument();
+});
+
+test('the empty music tile offers an accessible keyboard action to add music', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, music: [] }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Музыка'));
+
+  const addMusic = await screen.findByRole('button', { name: 'Добавить музыку' });
+  expect(addMusic).toHaveTextContent('Музыка не выбрана');
+  expect(addMusic).toHaveTextContent('Добавить музыку');
+  const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  const openPicker = vi.spyOn(fileInput, 'click');
+  addMusic.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(openPicker).toHaveBeenCalledOnce();
 });
 
 test('the music tab does not present an in-flight snapshot as an empty profile', async () => {

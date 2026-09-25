@@ -21,7 +21,7 @@ import {
 } from '@/entities/account';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
-import { Button, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, CloseButton, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
 import {
@@ -312,29 +312,25 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 {t('accounts.bulk.selected', { count: ids.length })}
               </div>
             </div>
-            <IconButton
-              size="md"
+            <CloseButton
               onClick={onClose}
               disabled={running}
               aria-label={t('accounts.profile.close')}
               className="text-title"
-            >
-              ×
-            </IconButton>
+            />
           </div>
 
           <div className="flex items-center gap-md border-b border-line-row px-xl py-md">
-            <Button
-              size="xs"
-              variant="dashedMuted"
+            <IconButton
+              size="sm"
               disabled={started}
               onClick={() => {
                 setPickerOpen(true);
               }}
+              aria-label={t('accounts.bulk.add')}
             >
               <Icon name="plus" size={16} />
-              {t('accounts.bulk.add')}
-            </Button>
+            </IconButton>
             <div className="tb-scroll flex flex-1 items-center gap-sm overflow-x-auto py-hair">
               {picked.map((row) => (
                 <span key={row.account_id} className="group relative shrink-0">
@@ -344,16 +340,17 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                     fallbackClassName="bg-canvas text-content-muted type-label"
                   />
                   {!started && ids.length > 1 && (
-                    <button
-                      type="button"
+                    <IconButton
+                      size="sm"
+                      shape="circle"
                       aria-label={t('accounts.bulk.remove', { name: label(row.account_id) })}
                       onClick={() => {
                         setIds((prev) => prev.filter((id) => id !== row.account_id));
                       }}
-                      className="absolute -right-hair -top-hair flex size-glyph items-center justify-center rounded-full border border-line bg-surface-card leading-none text-content-muted opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+                      className="absolute -right-hair -top-hair bg-surface-card opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
                     >
-                      ×
-                    </button>
+                      <Icon name="close" size={16} />
+                    </IconButton>
                   )}
                 </span>
               ))}

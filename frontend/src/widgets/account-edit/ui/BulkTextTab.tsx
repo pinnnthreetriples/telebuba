@@ -90,7 +90,6 @@ export function BulkTextTab({
           </div>
         );
       })}
-      <div className="type-caption">{t('accounts.bulk.usernameNote')}</div>
     </div>
   );
 }

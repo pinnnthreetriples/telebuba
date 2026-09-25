@@ -1,4 +1,4 @@
-import { Input } from '@/shared/ui';
+import { IconButton, Input } from '@/shared/ui';
 
 const FIELD_LABEL = 'mb-tight block type-label';
 
@@ -75,14 +75,15 @@ export function ApiKeyField({
           }}
           placeholder={placeholder}
         />
-        <button
-          type="button"
+        <IconButton
+          size="md"
+          tone="primary"
           aria-label={toggleLabel}
           onClick={onToggleShow}
-          className="flex w-action items-center justify-center rounded-lg border border-line bg-surface-card text-content-muted transition-colors hover:border-info-line hover:bg-action-hover hover:text-info-strong"
+          className="h-control w-action rounded-lg"
         >
           <EyeIcon off={show} />
-        </button>
+        </IconButton>
       </div>
       {keySet && (
         <button

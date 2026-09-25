@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
-import { Button, Icon, IconButton, Modal, Select, toastError } from '@/shared/ui';
+import { Button, CloseButton, Icon, Modal, Select, toastError } from '@/shared/ui';
 
 import {
   neurocommentSettingsQueryOptions,
@@ -105,14 +105,11 @@ export function ListenerEditModal({
             <div className="type-dialog-title">{t('neurocomment.listener.title')}</div>
             <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
           </div>
-          <IconButton
-            size="md"
+          <CloseButton
             aria-label={t('neurocomment.modal.close')}
             onClick={onClose}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
 
         <div className="mb-sm mt-xl type-label">{t('neurocomment.modal.listenerEdit.account')}</div>

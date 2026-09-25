@@ -18,6 +18,9 @@ test('the size sets height and padding, the variant the fill', async () => {
         Запустить
       </Button>
       <Button variant="danger">Удалить</Button>
+      <Button variant="primary" size="lg">
+        Войти
+      </Button>
     </>,
   );
 
@@ -30,6 +33,8 @@ test('the size sets height and padding, the variant the fill', async () => {
   expect(classesOf('Запустить')).toContain('text-body');
   expect(classesOf('Запустить')).toContain('bg-action-primary');
   expect(classesOf('Удалить')).toContain('bg-danger-tint');
+  expect(classesOf('Войти')).toContain('h-touch');
+  expect(classesOf('Войти')).toContain('bg-action-primary');
   await expectNoAxeViolations(container);
 });
 
@@ -56,10 +61,11 @@ test('радиус у всех ступеней один, и ступень ег
       <Button size="sm">Вторая</Button>
       <Button size="xs">Третья</Button>
       <Button size="block">Четвёртая</Button>
+      <Button size="lg">Пятая</Button>
     </>,
   );
 
-  for (const name of ['Первая', 'Вторая', 'Третья', 'Четвёртая']) {
+  for (const name of ['Первая', 'Вторая', 'Третья', 'Четвёртая', 'Пятая']) {
     const classes = classesOf(name).split(' ');
     expect(classes).toContain('rounded-full');
     // Прежние формы названы поимённо: неверная форма обычно приходит не «какой-то другой»,
@@ -109,6 +115,9 @@ test('every button carries the same disabled and focus treatment', () => {
   for (const name of ['Проверить', 'Ещё', 'Готово', 'Добавить']) {
     expect(classesOf(name)).toContain('disabled:opacity-50');
     expect(classesOf(name)).toContain('focus-visible:outline-focus');
+    expect(classesOf(name)).toContain('active:scale-press');
+    expect(classesOf(name)).toContain('disabled:active:scale-rest');
+    expect(classesOf(name)).toContain('motion-reduce:active:scale-rest');
   }
 });
 

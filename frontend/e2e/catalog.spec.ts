@@ -29,6 +29,14 @@ async function open(page: Page) {
 }
 
 test.describe('каталог дизайн-системы', () => {
+  test('не переполняет desktop viewport на ширине 1120px', async ({ page }) => {
+    await page.setViewportSize({ width: 1120, height: 780 });
+    await open(page);
+    expect(await page.evaluate(() => document.body.scrollWidth <= document.body.clientWidth)).toBe(
+      true,
+    );
+  });
+
   for (const id of SECTIONS) {
     test(`раздел «${id}» выглядит как эталон`, async ({ page }) => {
       await open(page);

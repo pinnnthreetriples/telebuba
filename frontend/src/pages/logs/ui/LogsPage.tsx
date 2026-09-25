@@ -182,6 +182,7 @@ export function LogsPage() {
             `shadow-pill`, same white label. */}
         <SegmentedControl
           variant="pill"
+          className="max-w-full overflow-x-auto"
           value={status}
           ariaLabel={t('logs.filter.status')}
           options={STATUS_FILTERS.map((value) => ({

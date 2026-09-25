@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
-import { Button, Icon, IconButton, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
+import { Button, CloseButton, Icon, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
 import { retryAfterSeconds } from './_profileShared';
@@ -83,7 +83,7 @@ function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; select
         height={h - 1}
         rx="4"
         fill="none"
-        className={selected ? 'stroke-action-primary' : 'stroke-line-strong'}
+        className={selected ? 'stroke-action-primary' : 'stroke-content-subtle'}
       />
       {cells.map(([x, y, cw, ch], i) => (
         <rect
@@ -93,7 +93,7 @@ function LayoutIcon({ cells, selected }: { cells: readonly CollageCell[]; select
           width={cw * w - gap * 2}
           height={ch * h - gap * 2}
           rx="1.4"
-          className={selected ? 'fill-current' : 'fill-line-strong'}
+          className={selected ? 'fill-current' : 'fill-content-subtle'}
         />
       ))}
     </svg>
@@ -257,8 +257,7 @@ export function AddStoryModal({
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
           <span className="type-dialog-title">{t('accounts.addStory.title')}</span>
-          <IconButton
-            size="md"
+          <CloseButton
             onClick={onClose}
             // Closing mid-publish unmounts the mutation observer, and RQ v5
             // then drops the mutate-level onSuccess — the story would land on
@@ -266,9 +265,7 @@ export function AddStoryModal({
             disabled={busy}
             aria-label={t('accounts.addStory.close')}
             className="text-title"
-          >
-            ×
-          </IconButton>
+          />
         </div>
 
         <div className="mb-tight type-label">{t('accounts.addStory.audience')}</div>

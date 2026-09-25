@@ -138,6 +138,21 @@ test('a reaction step offers the eight emoji as one radio group', async () => {
   const group = screen.getByRole('radiogroup', { name: 'Реакция шага 3' });
   expect(group.querySelectorAll('[role="radio"]')).toHaveLength(8);
   // The first one is preselected, so a reaction step is never saved emoji-less.
+  const thumbsUp = screen.getByRole('radio', { name: '👍' });
+  expect(thumbsUp).toHaveAttribute('aria-checked', 'true');
+  expect(thumbsUp).toHaveAttribute('tabindex', '0');
+  expect(screen.getByRole('radio', { name: '❤️' })).toHaveAttribute('tabindex', '-1');
+
+  thumbsUp.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  const heart = screen.getByRole('radio', { name: '❤️' });
+  expect(heart).toHaveAttribute('aria-checked', 'true');
+  expect(heart).toHaveFocus();
+  expect(heart).toHaveClass('focus-visible:outline-focus');
+
+  await userEvent.keyboard('{End}');
+  expect(screen.getByRole('radio', { name: '🙌' })).toHaveAttribute('aria-checked', 'true');
+  await userEvent.keyboard('{Home}');
   expect(screen.getByRole('radio', { name: '👍' })).toHaveAttribute('aria-checked', 'true');
 
   await userEvent.click(screen.getByRole('radio', { name: '🔥' }));

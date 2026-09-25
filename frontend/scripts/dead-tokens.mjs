@@ -51,6 +51,7 @@ const PREFIXES = {
   boxShadow: 'shadow',
   transitionDuration: 'duration',
   transitionTimingFunction: 'ease',
+  scale: 'scale',
   zIndex: 'z',
   colors:
     'bg text border border-x border-y border-t border-r border-b border-l ring ring-offset ' +

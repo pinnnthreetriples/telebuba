@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
-import { FOCUS_RING } from '@/shared/design-system';
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 // The bordered white chip that carries an icon or a single glyph, in the four
@@ -34,11 +34,10 @@ const SHAPE = {
   circle: 'rounded-full',
 } as const;
 
-// What the button MEANS, painted as the hover it takes. `neutral` deliberately
-// has no hover state: it is the close/step glyph the design leaves inert, and
-// giving it one would make every modal header twitch on the way past.
+// What the button MEANS, painted as the hover it takes. Even a neutral icon action
+// gets a quiet hover signal so pointer users can distinguish it from decoration.
 const TONE = {
-  neutral: 'text-content-muted',
+  neutral: 'text-content-muted hover:border-line-strong hover:bg-canvas hover:text-content-primary',
   // ЗАЛИТЫЙ, а не окрашенный по наведению: единственная иконочная кнопка, которая сама
   // является главным действием своего блока — генерация сценария. Остальные три тона
   // говорят, что случится при нажатии, и рисуются только наведением; эта говорит, что
@@ -87,7 +86,8 @@ export function IconButton({
       type="button"
       {...rest}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition-colors disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center border border-line bg-surface-card transition disabled:pointer-events-none disabled:opacity-50 aria-busy:pointer-events-none',
+        PRESS_FEEDBACK,
         FOCUS_RING,
         SIZE[size],
         SHAPE[shape],

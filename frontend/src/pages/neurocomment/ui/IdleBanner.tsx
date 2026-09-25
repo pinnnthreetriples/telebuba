@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
+import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
+import { cn } from '@/shared/lib/cn';
 import { Icon } from '@/shared/ui';
 
 // Amber nudge shown when graduated ("Прогреты") accounts aren't yet linked to the
@@ -10,7 +12,11 @@ export function IdleBanner({ count, onOpen }: { count: number; onOpen: () => voi
     <button
       type="button"
       onClick={onOpen}
-      className="flex items-center gap-md rounded-lg border border-warning-line bg-warning-tint px-lg py-md text-left transition-colors hover:border-warning"
+      className={cn(
+        'flex items-center gap-md rounded-lg border border-warning-line bg-warning-tint px-lg py-md text-left transition hover:border-warning',
+        FOCUS_RING,
+        PRESS_FEEDBACK,
+      )}
     >
       <span className="flex size-icon shrink-0 items-center justify-center rounded-md bg-warning-line text-warning-deep">
         <svg
