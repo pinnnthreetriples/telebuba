@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -29,7 +29,9 @@ function batch(jobId: string, status: BulkMessageJob['status']): BulkMessageJob 
 function routeApi(options: {
   userId: string;
   activeJob?: BulkMessageJob | null;
+  latestJob?: BulkMessageJob | null;
   jobs?: Record<string, BulkMessageJob>;
+  sendDeferred?: Promise<Response>;
 }) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
@@ -49,6 +51,12 @@ function routeApi(options: {
     if (path === '/api/v1/proxies') return respond({ proxies: [] });
     if (path === '/api/v1/accounts/bulk-messages/active') {
       return respond(options.activeJob ?? null);
+    }
+    if (path === '/api/v1/accounts/bulk-messages/latest') {
+      return respond(options.latestJob ?? null);
+    }
+    if (path === '/api/v1/accounts/bulk-messages' && request.method === 'POST') {
+      return options.sendDeferred ?? respond(batch('started', 'running'), 202);
     }
     if (path.startsWith('/api/v1/accounts/bulk-messages/')) {
       const jobId = path.split('/').at(-1) ?? '';
@@ -122,6 +130,102 @@ test('restores the last completed batch only for its owner', async () => {
     await openMessages();
     expect(await screen.findByText('1 из 1 отправок')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Готово' })).toBeInTheDocument();
+  } finally {
+    window.sessionStorage.clear();
+  }
+});
+
+test('recovers a completed batch from the server when the POST response was lost', async () => {
+  window.sessionStorage.clear();
+  try {
+    const latestJob = batch('finished-after-reload', 'completed');
+    const options: {
+      userId: string;
+      latestJob: BulkMessageJob | null;
+      jobs: Record<string, BulkMessageJob>;
+      sendDeferred: Promise<Response>;
+    } = {
+      userId: 'operator',
+      latestJob: null,
+      jobs: {},
+      sendDeferred: new Promise<Response>(() => undefined),
+    };
+    routeApi(options);
+    const first = renderPage();
+    await openMessages();
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить аккаунты' }));
+    const picker = await screen.findByRole('dialog', { name: 'Добавить аккаунты' });
+    await userEvent.click(within(picker).getByRole('checkbox', { name: /Выбрать все/ }));
+    await userEvent.click(within(picker).getByRole('button', { name: 'Добавить (1)' }));
+    await userEvent.type(screen.getByLabelText('Получатели'), '@recipient');
+    await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+    await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+    await waitFor(() => {
+      expect(
+        vi.mocked(fetch).mock.calls.some(([input]) => {
+          const request = input as Request;
+          return (
+            request.method === 'POST' &&
+            new URL(request.url).pathname === '/api/v1/accounts/bulk-messages'
+          );
+        }),
+      ).toBe(true);
+    });
+    first.unmount();
+
+    options.latestJob = latestJob;
+    options.jobs[latestJob.job_id] = latestJob;
+    renderPage();
+    await openMessages();
+    expect(await screen.findByText('1 из 1 отправок')).toBeInTheDocument();
+    expect(window.sessionStorage.getItem('telebuba:bulk-message-job:operator')).toBe(
+      'finished-after-reload',
+    );
+  } finally {
+    window.sessionStorage.clear();
+  }
+});
+
+test('checks for another tab’s running batch again before reopening the composer', async () => {
+  window.sessionStorage.clear();
+  try {
+    const options: {
+      userId: string;
+      activeJob: BulkMessageJob | null;
+      jobs: Record<string, BulkMessageJob>;
+    } = { userId: 'operator', activeJob: null, jobs: {} };
+    routeApi(options);
+    renderPage();
+    await openMessages();
+    expect(screen.getByLabelText('Получатели')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+
+    const running = batch('other-tab', 'running');
+    options.activeJob = running;
+    options.jobs[running.job_id] = running;
+    await openMessages();
+    expect(await screen.findByText('0 из 1 отправок')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Получатели')).not.toBeInTheDocument();
+  } finally {
+    window.sessionStorage.clear();
+  }
+});
+
+test('keeps a dismissed completed batch hidden after navigating away and back', async () => {
+  window.sessionStorage.clear();
+  try {
+    const latestJob = batch('finished-1', 'completed');
+    routeApi({ userId: 'operator', latestJob, jobs: { 'finished-1': latestJob } });
+    const first = renderPage();
+    await openMessages();
+    await userEvent.click(await screen.findByRole('button', { name: 'Новая отправка' }));
+    expect(screen.getByLabelText('Получатели')).toBeInTheDocument();
+    first.unmount();
+
+    renderPage();
+    await openMessages();
+    expect(screen.getByLabelText('Получатели')).toBeInTheDocument();
+    expect(screen.queryByText('1 из 1 отправок')).not.toBeInTheDocument();
   } finally {
     window.sessionStorage.clear();
   }

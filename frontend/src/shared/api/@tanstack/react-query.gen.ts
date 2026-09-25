@@ -51,6 +51,7 @@ import {
   getBulkMessageJob,
   getCampaignDiscovery,
   getHealth,
+  getLatestBulkMessageJob,
   getMe,
   getNeurocommentBoard,
   getNeurocommentRuntime,
@@ -260,6 +261,9 @@ import type {
   GetHealthData,
   GetHealthError,
   GetHealthResponse,
+  GetLatestBulkMessageJobData,
+  GetLatestBulkMessageJobError,
+  GetLatestBulkMessageJobResponse,
   GetMeData,
   GetMeError,
   GetMeResponse,
@@ -2146,6 +2150,31 @@ export const getActiveBulkMessageJobOptions = (options?: Options<GetActiveBulkMe
       return data;
     },
     queryKey: getActiveBulkMessageJobQueryKey(options),
+  });
+
+export const getLatestBulkMessageJobQueryKey = (options?: Options<GetLatestBulkMessageJobData>) =>
+  createQueryKey('getLatestBulkMessageJob', options);
+
+/**
+ * Get Latest Bulk Message Job
+ */
+export const getLatestBulkMessageJobOptions = (options?: Options<GetLatestBulkMessageJobData>) =>
+  queryOptions<
+    GetLatestBulkMessageJobResponse,
+    GetLatestBulkMessageJobError,
+    GetLatestBulkMessageJobResponse,
+    ReturnType<typeof getLatestBulkMessageJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getLatestBulkMessageJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getLatestBulkMessageJobQueryKey(options),
   });
 
 export const getBulkMessageJobQueryKey = (options: Options<GetBulkMessageJobData>) =>

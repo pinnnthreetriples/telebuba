@@ -83,9 +83,28 @@ def test_job_lookup_and_cancel_are_limited_to_its_owner() -> None:
     job = bulk_messages.start_bulk_message_job(_request(), "owner-1")
     assert bulk_messages.get_active_bulk_message_job("owner-1") == job
     assert bulk_messages.get_active_bulk_message_job("owner-2") is None
+    assert bulk_messages.get_latest_bulk_message_job("owner-1") == job
+    assert bulk_messages.get_latest_bulk_message_job("owner-2") is None
     assert bulk_messages.get_bulk_message_job(job.job_id, "owner-2") is None
     assert bulk_messages.cancel_bulk_message_job(job.job_id, "owner-2") is None
     assert not bulk_messages._cancel_events[job.job_id].is_set()
+
+
+def test_latest_job_includes_completed_run_and_uses_creation_order() -> None:
+    first = bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    bulk_messages._jobs[first.job_id].status = "completed"
+    assert bulk_messages.get_active_bulk_message_job("owner-1") is None
+    assert bulk_messages.get_latest_bulk_message_job("owner-1") == first.model_copy(
+        update={"status": "completed"}
+    )
+
+    other = bulk_messages.start_bulk_message_job(_request(), "owner-2")
+    bulk_messages._jobs[other.job_id].status = "completed"
+    latest = bulk_messages.start_bulk_message_job(_request(), "owner-1")
+    assert bulk_messages.get_latest_bulk_message_job("owner-1") == latest
+    assert bulk_messages.get_latest_bulk_message_job("owner-2") == other.model_copy(
+        update={"status": "completed"}
+    )
 
 
 @pytest.mark.asyncio

@@ -6955,6 +6955,43 @@ export type GetActiveBulkMessageJobResponses = {
 export type GetActiveBulkMessageJobResponse =
   GetActiveBulkMessageJobResponses[keyof GetActiveBulkMessageJobResponses];
 
+export type GetLatestBulkMessageJobData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages/latest';
+};
+
+export type GetLatestBulkMessageJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetLatestBulkMessageJobError =
+  GetLatestBulkMessageJobErrors[keyof GetLatestBulkMessageJobErrors];
+
+export type GetLatestBulkMessageJobResponses = {
+  /**
+   * Response Getlatestbulkmessagejob
+   *
+   * Successful Response
+   */
+  200: BulkMessageJob | null;
+};
+
+export type GetLatestBulkMessageJobResponse =
+  GetLatestBulkMessageJobResponses[keyof GetLatestBulkMessageJobResponses];
+
 export type GetBulkMessageJobData = {
   body?: never;
   path: {

@@ -1,11 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   accountsQueryOptions,
   accountStatsQueryOptions,
   activeBulkMessageJobQueryOptions,
+  latestBulkMessageJobQueryOptions,
   checkAccountMutation,
   deleteAccountMutation,
   invalidateAccountViews,
@@ -54,16 +55,27 @@ export function AccountsPage() {
   const [messageDraft, setMessageDraft] = useState<BulkMessageDraft | null>(null);
   const [messageJobId, setMessageJobId] = useState<string | null>(null);
   const [messageJobOwnerId, setMessageJobOwnerId] = useState<string | null>(null);
+  const [dismissedMessageJobId, setDismissedMessageJobId] = useState<string | null>(null);
+  const [openingMessages, setOpeningMessages] = useState(false);
+  const latestMayRestore = useRef(true);
   const me = useQuery(meQueryOptions());
   const activeMessageJob = useQuery({
     ...activeBulkMessageJobQueryOptions(),
-    enabled: Boolean(me.data?.id),
+    enabled: false,
   });
-  const activeMessageJobId = activeMessageJob.data?.job_id;
+  const latestMessageJob = useQuery({
+    ...latestBulkMessageJobQueryOptions(),
+    enabled: Boolean(me.data?.id),
+    refetchOnWindowFocus: false,
+  });
+  const latestMessageJobId = latestMessageJob.data?.job_id;
   useEffect(() => {
     const ownerId = me.data?.id;
     if (!ownerId) return;
-    setMessageJobId(window.sessionStorage.getItem(`telebuba:bulk-message-job:${ownerId}`));
+    const dismissed = window.sessionStorage.getItem(`telebuba:bulk-message-dismissed:${ownerId}`);
+    const stored = window.sessionStorage.getItem(`telebuba:bulk-message-job:${ownerId}`);
+    setDismissedMessageJobId(dismissed);
+    setMessageJobId(stored === dismissed ? null : stored);
     setMessageJobOwnerId(ownerId);
     window.sessionStorage.removeItem('telebuba:bulk-message-job-id');
   }, [me.data?.id]);
@@ -74,10 +86,37 @@ export function AccountsPage() {
     else window.sessionStorage.removeItem(key);
   }, [messageJobId, messageJobOwnerId, me.data?.id]);
   useEffect(() => {
-    if (messageJobOwnerId === me.data?.id && activeMessageJobId) {
-      setMessageJobId(activeMessageJobId);
+    if (
+      latestMayRestore.current &&
+      messageJobOwnerId === me.data?.id &&
+      latestMessageJobId &&
+      latestMessageJobId !== dismissedMessageJobId
+    ) {
+      setMessageJobId(latestMessageJobId);
     }
-  }, [activeMessageJobId, messageJobOwnerId, me.data?.id]);
+  }, [latestMessageJobId, dismissedMessageJobId, messageJobOwnerId, me.data?.id]);
+  const openMessages = async () => {
+    if (openingMessages) return;
+    setOpeningMessages(true);
+    try {
+      const current = await activeMessageJob.refetch({ throwOnError: true });
+      const restoreLatest = latestMayRestore.current;
+      latestMayRestore.current = false;
+      if (current.data?.job_id) setMessageJobId(current.data.job_id);
+      else if (
+        restoreLatest &&
+        latestMessageJobId &&
+        latestMessageJobId !== dismissedMessageJobId
+      ) {
+        setMessageJobId(latestMessageJobId);
+      }
+      setMessaging(true);
+    } catch {
+      toastError(t('accounts.messages.activeCheckError'));
+    } finally {
+      setOpeningMessages(false);
+    }
+  };
   const [proxyAdding, setProxyAdding] = useState(false);
   const [profilingRow, setProfilingRow] = useState<AccountRead | null>(null);
 
@@ -279,9 +318,13 @@ export function AccountsPage() {
           </div>
           <Button
             size="md"
-            loading={me.isPending || (me.isSuccess && activeMessageJob.isPending)}
+            loading={
+              me.isPending ||
+              (me.isSuccess && (latestMessageJob.isFetching || messageJobOwnerId !== me.data.id)) ||
+              openingMessages
+            }
             onClick={() => {
-              setMessaging(true);
+              void openMessages();
             }}
           >
             {t('accounts.messages.open')}
@@ -389,8 +432,21 @@ export function AccountsPage() {
           onJobStarted={(id) => {
             setMessageJobId(id);
             setMessageDraft(null);
+            setDismissedMessageJobId(null);
+            if (messageJobOwnerId) {
+              window.sessionStorage.removeItem(
+                `telebuba:bulk-message-dismissed:${messageJobOwnerId}`,
+              );
+            }
           }}
           onNewJob={() => {
+            if (messageJobId && messageJobOwnerId) {
+              setDismissedMessageJobId(messageJobId);
+              window.sessionStorage.setItem(
+                `telebuba:bulk-message-dismissed:${messageJobOwnerId}`,
+                messageJobId,
+              );
+            }
             setMessageJobId(null);
           }}
           onDraftSaved={setMessageDraft}

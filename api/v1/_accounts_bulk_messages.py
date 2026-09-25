@@ -64,6 +64,17 @@ async def get_active_bulk_message_job(
 
 
 @bulk_messages_router.get(
+    "/accounts/bulk-messages/latest",
+    response_model=BulkMessageJob | None,
+    operation_id="getLatestBulkMessageJob",
+)
+async def get_latest_bulk_message_job(
+    user: Annotated[UserRead, Depends(get_current_user)],
+) -> BulkMessageJob | None:
+    return bulk_messages.get_latest_bulk_message_job(user.id)
+
+
+@bulk_messages_router.get(
     "/accounts/bulk-messages/{job_id}",
     response_model=BulkMessageJob,
     operation_id="getBulkMessageJob",

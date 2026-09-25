@@ -16,6 +16,7 @@ export {
   accountStatsQueryKey,
   accountStatsQueryOptions,
   activeBulkMessageJobQueryOptions,
+  latestBulkMessageJobQueryOptions,
   accountTwofaQueryKey,
   accountTwofaQueryOptions,
   allAccountsQueryOptions,

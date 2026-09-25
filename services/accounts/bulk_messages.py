@@ -87,6 +87,13 @@ def get_active_bulk_message_job(owner_user_id: str) -> BulkMessageJob | None:
     return None
 
 
+def get_latest_bulk_message_job(owner_user_id: str) -> BulkMessageJob | None:
+    for job_id in reversed(_jobs):
+        if _job_owners[job_id] == owner_user_id:
+            return _jobs[job_id].model_copy(deep=True)
+    return None
+
+
 def cancel_bulk_message_job(job_id: str, owner_user_id: str) -> BulkMessageJob | None:
     """Stop after the current Telegram call; a pacing wait is interrupted at once."""
     if _job_owners.get(job_id) != owner_user_id:

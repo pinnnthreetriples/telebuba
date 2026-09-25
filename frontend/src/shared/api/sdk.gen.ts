@@ -136,6 +136,9 @@ import type {
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
+  GetLatestBulkMessageJobData,
+  GetLatestBulkMessageJobErrors,
+  GetLatestBulkMessageJobResponses,
   GetMeData,
   GetMeErrors,
   GetMeResponses,
@@ -1278,6 +1281,18 @@ export const getActiveBulkMessageJob = <ThrowOnError extends boolean = false>(
     GetActiveBulkMessageJobErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/bulk-messages/active', ...options });
+
+/**
+ * Get Latest Bulk Message Job
+ */
+export const getLatestBulkMessageJob = <ThrowOnError extends boolean = false>(
+  options?: Options<GetLatestBulkMessageJobData, ThrowOnError>,
+): RequestResult<GetLatestBulkMessageJobResponses, GetLatestBulkMessageJobErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetLatestBulkMessageJobResponses,
+    GetLatestBulkMessageJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/bulk-messages/latest', ...options });
 
 /**
  * Get Bulk Message Job

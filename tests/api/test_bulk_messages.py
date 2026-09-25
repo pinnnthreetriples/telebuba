@@ -9,6 +9,7 @@ import pytest
 from api.deps import get_current_user
 from schemas.auth import UserRead
 from schemas.bulk_messages import BulkMessageGenerated
+from schemas.telegram_actions import ActionResult, SendChatMessage
 from services.accounts import bulk_messages
 from tests.api.accounts_helpers import client as _client
 
@@ -68,6 +69,10 @@ async def test_bulk_message_routes_start_poll_and_generate(
         assert active.status_code == 200
         assert active.json() == job
 
+        latest = await client.get("/api/v1/accounts/bulk-messages/latest")
+        assert latest.status_code == 200
+        assert latest.json() == job
+
         polled = await client.get(f"/api/v1/accounts/bulk-messages/{job['job_id']}")
         assert polled.status_code == 200
         assert polled.json() == job
@@ -120,8 +125,41 @@ async def test_bulk_message_job_is_private_to_its_owner(
         other_active = await client.get("/api/v1/accounts/bulk-messages/active")
         assert other_active.status_code == 200
         assert other_active.json() is None
+        other_latest = await client.get("/api/v1/accounts/bulk-messages/latest")
+        assert other_latest.status_code == 200
+        assert other_latest.json() is None
         other_get = await client.get(f"/api/v1/accounts/bulk-messages/{job_id}")
         assert other_get.status_code == 404
         other_cancel = await client.post(f"/api/v1/accounts/bulk-messages/{job_id}/cancel")
         assert other_cancel.status_code == 404
         assert not bulk_messages._cancel_events[job_id].is_set()
+
+
+@pytest.mark.asyncio
+async def test_latest_route_returns_completed_job(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_execute(
+        account_id: str, action: SendChatMessage, *, domain: str
+    ) -> ActionResult:
+        assert domain == "bulk_messages"
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(bulk_messages, "execute", fake_execute)
+    async with _client(app) as client:
+        empty = await client.get("/api/v1/accounts/bulk-messages/latest")
+        assert empty.status_code == 200
+        assert empty.json() is None
+
+        started = await client.post(
+            "/api/v1/accounts/bulk-messages",
+            json={"account_ids": ["a1"], "recipients": ["@public_chat"], "text": "Hello"},
+        )
+        assert started.status_code == 202
+        latest = await client.get("/api/v1/accounts/bulk-messages/latest")
+        assert latest.status_code == 200
+        assert latest.json()["job_id"] == started.json()["job_id"]
+        assert latest.json()["status"] == "completed"
+        assert latest.json()["completed"] == 1
+        active = await client.get("/api/v1/accounts/bulk-messages/active")
+        assert active.json() is None
