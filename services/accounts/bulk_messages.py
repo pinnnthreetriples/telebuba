@@ -112,7 +112,69 @@ def _failure_code(result: ActionResult) -> str | None:
     return "failed"
 
 
-async def run_bulk_message_job(job_id: str) -> None:  # noqa: C901 - per-pair pacing and outcomes
+async def _run_account_messages(
+    account_id: str,
+    data: BulkMessageRequest,
+    recipients: list[tuple[str, str]],
+    job: BulkMessageJob,
+    cancel_event: asyncio.Event,
+) -> None:
+    blocked: tuple[str, int | None] | None = None
+    for recipient, peer in recipients:
+        if cancel_event.is_set():
+            break
+        if blocked is not None:
+            job.results.append(
+                BulkMessageOutcome(
+                    account_id=account_id,
+                    recipient=recipient,
+                    status="skipped",
+                    error_code=blocked[0],
+                    retry_after_seconds=blocked[1],
+                )
+            )
+            job.completed += 1
+            continue
+        if job.completed:
+            delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
+                data.min_delay_seconds, data.max_delay_seconds
+            )
+            if delay:
+                with suppress(TimeoutError):
+                    await asyncio.wait_for(cancel_event.wait(), timeout=delay)
+            if cancel_event.is_set():
+                break
+        try:
+            result = await execute(
+                account_id,
+                SendChatMessage(recipient=peer, text=data.text),
+                domain="bulk_messages",
+            )
+            status = "unconfirmed" if result.error_type == UNCONFIRMED_ERROR_TYPE else None
+            error_code = "delivery_unconfirmed" if status else _failure_code(result)
+            if result.status in _ACCOUNT_LIMIT_STATUSES:
+                blocked = (result.status, result.flood_wait_seconds)
+            retry_after_seconds = result.flood_wait_seconds
+        except Exception as exc:  # noqa: BLE001 - one pair must not stop the batch
+            logger.warning("bulk message pair failed: %s", type(exc).__name__)
+            # execute may raise after the Telegram write (for example while
+            # logging its result), so a resend is not known to be safe.
+            status = "unconfirmed"
+            error_code = "delivery_unconfirmed"
+            retry_after_seconds = None
+        job.results.append(
+            BulkMessageOutcome(
+                account_id=account_id,
+                recipient=recipient,
+                status=status or ("failed" if error_code else "ok"),
+                error_code=error_code,
+                retry_after_seconds=retry_after_seconds,
+            )
+        )
+        job.completed += 1
+
+
+async def run_bulk_message_job(job_id: str) -> None:
     """Send sequentially; each pair gets its own outcome even after a refusal."""
     data, recipients = _pending[job_id]
     job = _jobs[job_id]
@@ -121,59 +183,7 @@ async def run_bulk_message_job(job_id: str) -> None:  # noqa: C901 - per-pair pa
         for account_id in data.account_ids:
             if cancel_event.is_set():
                 break
-            blocked: tuple[str, int | None] | None = None
-            for recipient, peer in recipients:
-                if cancel_event.is_set():
-                    break
-                if blocked is not None:
-                    job.results.append(
-                        BulkMessageOutcome(
-                            account_id=account_id,
-                            recipient=recipient,
-                            status="skipped",
-                            error_code=blocked[0],
-                            retry_after_seconds=blocked[1],
-                        )
-                    )
-                    job.completed += 1
-                    continue
-                if job.completed:
-                    delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
-                        data.min_delay_seconds, data.max_delay_seconds
-                    )
-                    if delay:
-                        with suppress(TimeoutError):
-                            await asyncio.wait_for(cancel_event.wait(), timeout=delay)
-                    if cancel_event.is_set():
-                        break
-                try:
-                    result = await execute(
-                        account_id,
-                        SendChatMessage(recipient=peer, text=data.text),
-                        domain="bulk_messages",
-                    )
-                    status = "unconfirmed" if result.error_type == UNCONFIRMED_ERROR_TYPE else None
-                    error_code = "delivery_unconfirmed" if status else _failure_code(result)
-                    if result.status in _ACCOUNT_LIMIT_STATUSES:
-                        blocked = (result.status, result.flood_wait_seconds)
-                    retry_after_seconds = result.flood_wait_seconds
-                except Exception as exc:  # noqa: BLE001 - one pair must not stop the batch
-                    logger.warning("bulk message pair failed: %s", type(exc).__name__)
-                    # execute may raise after the Telegram write (for example while
-                    # logging its result), so a resend is not known to be safe.
-                    status = "unconfirmed"
-                    error_code = "delivery_unconfirmed"
-                    retry_after_seconds = None
-                job.results.append(
-                    BulkMessageOutcome(
-                        account_id=account_id,
-                        recipient=recipient,
-                        status=status or ("failed" if error_code else "ok"),
-                        error_code=error_code,
-                        retry_after_seconds=retry_after_seconds,
-                    )
-                )
-                job.completed += 1
+            await _run_account_messages(account_id, data, recipients, job, cancel_event)
     finally:
         job.status = (
             "cancelled" if cancel_event.is_set() and job.completed < job.total else "completed"
