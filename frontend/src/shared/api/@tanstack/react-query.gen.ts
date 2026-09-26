@@ -17,6 +17,7 @@ import {
   assignCampaignAccount,
   assignProxy,
   cancelAccountTwofaEmail,
+  cancelBulkMessageJob,
   checkAccount,
   checkAccountChannelUsername,
   checkCampaignChannelBans,
@@ -39,14 +40,18 @@ import {
   deleteProxy,
   editAccountChannelPost,
   expandDiscoveryKeywords,
+  generateBulkMessage,
   generateNeuroshillingScenario,
   getAccountChannel,
   getAccountLimits,
   getAccountPrivacy,
   getAccountProfileSnapshot,
   getAccountTwofa,
+  getActiveBulkMessageJob,
+  getBulkMessageJob,
   getCampaignDiscovery,
   getHealth,
+  getLatestBulkMessageJob,
   getMe,
   getNeurocommentBoard,
   getNeurocommentRuntime,
@@ -94,6 +99,7 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resyncAccountAvatar,
+  sendBulkMessages,
   setAccountChannelPhoto,
   setAccountPhoto,
   setAccountPhotoMain,
@@ -153,6 +159,9 @@ import type {
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailError,
   CancelAccountTwofaEmailResponse,
+  CancelBulkMessageJobData,
+  CancelBulkMessageJobError,
+  CancelBulkMessageJobResponse,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameError,
   CheckAccountChannelUsernameResponse,
@@ -219,6 +228,9 @@ import type {
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsError,
   ExpandDiscoveryKeywordsResponse,
+  GenerateBulkMessageData,
+  GenerateBulkMessageError,
+  GenerateBulkMessageResponse,
   GenerateNeuroshillingScenarioData,
   GenerateNeuroshillingScenarioError,
   GenerateNeuroshillingScenarioResponse,
@@ -237,12 +249,21 @@ import type {
   GetAccountTwofaData,
   GetAccountTwofaError,
   GetAccountTwofaResponse,
+  GetActiveBulkMessageJobData,
+  GetActiveBulkMessageJobError,
+  GetActiveBulkMessageJobResponse,
+  GetBulkMessageJobData,
+  GetBulkMessageJobError,
+  GetBulkMessageJobResponse,
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryError,
   GetCampaignDiscoveryResponse,
   GetHealthData,
   GetHealthError,
   GetHealthResponse,
+  GetLatestBulkMessageJobData,
+  GetLatestBulkMessageJobError,
+  GetLatestBulkMessageJobResponse,
   GetMeData,
   GetMeError,
   GetMeResponse,
@@ -381,6 +402,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  SendBulkMessagesData,
+  SendBulkMessagesError,
+  SendBulkMessagesResponse,
   SetAccountChannelPhotoData,
   SetAccountChannelPhotoError,
   SetAccountChannelPhotoResponse,
@@ -2039,6 +2063,162 @@ export const clearAccountTwofaEmailMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await clearAccountTwofaEmail({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Send Bulk Messages
+ */
+export const sendBulkMessagesMutation = (
+  options?: Partial<Options<SendBulkMessagesData>>,
+): UseMutationOptions<
+  SendBulkMessagesResponse,
+  SendBulkMessagesError,
+  Options<SendBulkMessagesData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SendBulkMessagesResponse,
+    SendBulkMessagesError,
+    Options<SendBulkMessagesData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await sendBulkMessages({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Generate Bulk Message
+ */
+export const generateBulkMessageMutation = (
+  options?: Partial<Options<GenerateBulkMessageData>>,
+): UseMutationOptions<
+  GenerateBulkMessageResponse,
+  GenerateBulkMessageError,
+  Options<GenerateBulkMessageData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    GenerateBulkMessageResponse,
+    GenerateBulkMessageError,
+    Options<GenerateBulkMessageData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await generateBulkMessage({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getActiveBulkMessageJobQueryKey = (options?: Options<GetActiveBulkMessageJobData>) =>
+  createQueryKey('getActiveBulkMessageJob', options);
+
+/**
+ * Get Active Bulk Message Job
+ */
+export const getActiveBulkMessageJobOptions = (options?: Options<GetActiveBulkMessageJobData>) =>
+  queryOptions<
+    GetActiveBulkMessageJobResponse,
+    GetActiveBulkMessageJobError,
+    GetActiveBulkMessageJobResponse,
+    ReturnType<typeof getActiveBulkMessageJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getActiveBulkMessageJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getActiveBulkMessageJobQueryKey(options),
+  });
+
+export const getLatestBulkMessageJobQueryKey = (options?: Options<GetLatestBulkMessageJobData>) =>
+  createQueryKey('getLatestBulkMessageJob', options);
+
+/**
+ * Get Latest Bulk Message Job
+ */
+export const getLatestBulkMessageJobOptions = (options?: Options<GetLatestBulkMessageJobData>) =>
+  queryOptions<
+    GetLatestBulkMessageJobResponse,
+    GetLatestBulkMessageJobError,
+    GetLatestBulkMessageJobResponse,
+    ReturnType<typeof getLatestBulkMessageJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getLatestBulkMessageJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getLatestBulkMessageJobQueryKey(options),
+  });
+
+export const getBulkMessageJobQueryKey = (options: Options<GetBulkMessageJobData>) =>
+  createQueryKey('getBulkMessageJob', options);
+
+/**
+ * Get Bulk Message Job
+ */
+export const getBulkMessageJobOptions = (options: Options<GetBulkMessageJobData>) =>
+  queryOptions<
+    GetBulkMessageJobResponse,
+    GetBulkMessageJobError,
+    GetBulkMessageJobResponse,
+    ReturnType<typeof getBulkMessageJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getBulkMessageJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getBulkMessageJobQueryKey(options),
+  });
+
+/**
+ * Cancel Bulk Message Job
+ */
+export const cancelBulkMessageJobMutation = (
+  options?: Partial<Options<CancelBulkMessageJobData>>,
+): UseMutationOptions<
+  CancelBulkMessageJobResponse,
+  CancelBulkMessageJobError,
+  Options<CancelBulkMessageJobData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CancelBulkMessageJobResponse,
+    CancelBulkMessageJobError,
+    Options<CancelBulkMessageJobData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await cancelBulkMessageJob({
         ...options,
         ...fnOptions,
         throwOnError: true,

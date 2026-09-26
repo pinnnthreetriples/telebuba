@@ -14,6 +14,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFil
 from fastapi import status as http_status
 
 from api.errors import SERVICE_ERRORS, error_responses
+from api.v1._accounts_bulk_messages import bulk_messages_router
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
@@ -316,3 +317,4 @@ router.include_router(channel_posts_router)
 router.include_router(privacy_router)
 # The account's Telegram cloud password (2FA).
 router.include_router(twofa_router)
+router.include_router(bulk_messages_router)

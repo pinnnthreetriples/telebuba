@@ -34,6 +34,9 @@ import type {
   CancelAccountTwofaEmailData,
   CancelAccountTwofaEmailErrors,
   CancelAccountTwofaEmailResponses,
+  CancelBulkMessageJobData,
+  CancelBulkMessageJobErrors,
+  CancelBulkMessageJobResponses,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameErrors,
   CheckAccountChannelUsernameResponses,
@@ -100,6 +103,9 @@ import type {
   ExpandDiscoveryKeywordsData,
   ExpandDiscoveryKeywordsErrors,
   ExpandDiscoveryKeywordsResponses,
+  GenerateBulkMessageData,
+  GenerateBulkMessageErrors,
+  GenerateBulkMessageResponses,
   GenerateNeuroshillingScenarioData,
   GenerateNeuroshillingScenarioErrors,
   GenerateNeuroshillingScenarioResponses,
@@ -118,12 +124,21 @@ import type {
   GetAccountTwofaData,
   GetAccountTwofaErrors,
   GetAccountTwofaResponses,
+  GetActiveBulkMessageJobData,
+  GetActiveBulkMessageJobErrors,
+  GetActiveBulkMessageJobResponses,
+  GetBulkMessageJobData,
+  GetBulkMessageJobErrors,
+  GetBulkMessageJobResponses,
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryErrors,
   GetCampaignDiscoveryResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
+  GetLatestBulkMessageJobData,
+  GetLatestBulkMessageJobErrors,
+  GetLatestBulkMessageJobResponses,
   GetMeData,
   GetMeErrors,
   GetMeResponses,
@@ -262,6 +277,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  SendBulkMessagesData,
+  SendBulkMessagesErrors,
+  SendBulkMessagesResponses,
   SetAccountChannelPhotoData,
   SetAccountChannelPhotoErrors,
   SetAccountChannelPhotoResponses,
@@ -1217,6 +1235,86 @@ export const clearAccountTwofaEmail = <ThrowOnError extends boolean = false>(
     ClearAccountTwofaEmailErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/{account_id}/2fa/email/recovery', ...options });
+
+/**
+ * Send Bulk Messages
+ */
+export const sendBulkMessages = <ThrowOnError extends boolean = false>(
+  options: Options<SendBulkMessagesData, ThrowOnError>,
+): RequestResult<SendBulkMessagesResponses, SendBulkMessagesErrors, ThrowOnError> =>
+  (options.client ?? client).post<SendBulkMessagesResponses, SendBulkMessagesErrors, ThrowOnError>({
+    url: '/api/v1/accounts/bulk-messages',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Generate Bulk Message
+ */
+export const generateBulkMessage = <ThrowOnError extends boolean = false>(
+  options: Options<GenerateBulkMessageData, ThrowOnError>,
+): RequestResult<GenerateBulkMessageResponses, GenerateBulkMessageErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    GenerateBulkMessageResponses,
+    GenerateBulkMessageErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/bulk-messages/generate',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Active Bulk Message Job
+ */
+export const getActiveBulkMessageJob = <ThrowOnError extends boolean = false>(
+  options?: Options<GetActiveBulkMessageJobData, ThrowOnError>,
+): RequestResult<GetActiveBulkMessageJobResponses, GetActiveBulkMessageJobErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetActiveBulkMessageJobResponses,
+    GetActiveBulkMessageJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/bulk-messages/active', ...options });
+
+/**
+ * Get Latest Bulk Message Job
+ */
+export const getLatestBulkMessageJob = <ThrowOnError extends boolean = false>(
+  options?: Options<GetLatestBulkMessageJobData, ThrowOnError>,
+): RequestResult<GetLatestBulkMessageJobResponses, GetLatestBulkMessageJobErrors, ThrowOnError> =>
+  (options?.client ?? client).get<
+    GetLatestBulkMessageJobResponses,
+    GetLatestBulkMessageJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/bulk-messages/latest', ...options });
+
+/**
+ * Get Bulk Message Job
+ */
+export const getBulkMessageJob = <ThrowOnError extends boolean = false>(
+  options: Options<GetBulkMessageJobData, ThrowOnError>,
+): RequestResult<GetBulkMessageJobResponses, GetBulkMessageJobErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetBulkMessageJobResponses, GetBulkMessageJobErrors, ThrowOnError>(
+    { url: '/api/v1/accounts/bulk-messages/{job_id}', ...options },
+  );
+
+/**
+ * Cancel Bulk Message Job
+ */
+export const cancelBulkMessageJob = <ThrowOnError extends boolean = false>(
+  options: Options<CancelBulkMessageJobData, ThrowOnError>,
+): RequestResult<CancelBulkMessageJobResponses, CancelBulkMessageJobErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CancelBulkMessageJobResponses,
+    CancelBulkMessageJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/bulk-messages/{job_id}/cancel', ...options });
 
 /**
  * List Proxies

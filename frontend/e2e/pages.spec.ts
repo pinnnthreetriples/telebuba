@@ -28,6 +28,7 @@ const SCREENS = [
 const ROUTES: [RegExp, unknown][] = [
   [/\/auth\/me$/, fx.me],
   [/\/health$/, fx.health],
+  [/\/accounts\/bulk-messages\/(active|latest)$/, null],
   [/\/accounts\/stats$/, fx.accountStats],
   [/\/accounts(\?|$)/, fx.accounts],
   [/\/proxies(\?|$)/, fx.proxies],

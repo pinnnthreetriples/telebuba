@@ -847,6 +847,108 @@ export type BodySetAccountPhoto = {
 };
 
 /**
+ * BulkMessageGenerateRequest
+ */
+export type BulkMessageGenerateRequest = {
+  /**
+   * Prompt
+   */
+  prompt: string;
+};
+
+/**
+ * BulkMessageGenerated
+ */
+export type BulkMessageGenerated = {
+  /**
+   * Text
+   */
+  text: string;
+  /**
+   * Provider
+   */
+  provider: 'deepseek' | 'gemini';
+};
+
+/**
+ * BulkMessageJob
+ */
+export type BulkMessageJob = {
+  /**
+   * Job Id
+   */
+  job_id: string;
+  /**
+   * Status
+   */
+  status: 'running' | 'completed' | 'cancelled';
+  /**
+   * Total
+   */
+  total: number;
+  /**
+   * Completed
+   */
+  completed: number;
+  /**
+   * Results
+   */
+  results: Array<BulkMessageOutcome>;
+};
+
+/**
+ * BulkMessageOutcome
+ */
+export type BulkMessageOutcome = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Recipient
+   */
+  recipient: string;
+  /**
+   * Status
+   */
+  status: 'ok' | 'failed' | 'skipped' | 'unconfirmed';
+  /**
+   * Error Code
+   */
+  error_code?: string | null;
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
+};
+
+/**
+ * BulkMessageRequest
+ */
+export type BulkMessageRequest = {
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  /**
+   * Recipients
+   */
+  recipients: Array<string>;
+  /**
+   * Text
+   */
+  text: string;
+  /**
+   * Min Delay Seconds
+   */
+  min_delay_seconds?: number;
+  /**
+   * Max Delay Seconds
+   */
+  max_delay_seconds?: number;
+};
+
+/**
  * BulkPrivacyResult
  *
  * Fleet-wide apply roll-up — per-account outcomes plus the three counts.
@@ -6724,6 +6826,258 @@ export type ClearAccountTwofaEmailResponses = {
 
 export type ClearAccountTwofaEmailResponse =
   ClearAccountTwofaEmailResponses[keyof ClearAccountTwofaEmailResponses];
+
+export type SendBulkMessagesData = {
+  body: BulkMessageRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages';
+};
+
+export type SendBulkMessagesErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SendBulkMessagesError = SendBulkMessagesErrors[keyof SendBulkMessagesErrors];
+
+export type SendBulkMessagesResponses = {
+  /**
+   * Successful Response
+   */
+  202: BulkMessageJob;
+};
+
+export type SendBulkMessagesResponse = SendBulkMessagesResponses[keyof SendBulkMessagesResponses];
+
+export type GenerateBulkMessageData = {
+  body: BulkMessageGenerateRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages/generate';
+};
+
+export type GenerateBulkMessageErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GenerateBulkMessageError = GenerateBulkMessageErrors[keyof GenerateBulkMessageErrors];
+
+export type GenerateBulkMessageResponses = {
+  /**
+   * Successful Response
+   */
+  200: BulkMessageGenerated;
+};
+
+export type GenerateBulkMessageResponse =
+  GenerateBulkMessageResponses[keyof GenerateBulkMessageResponses];
+
+export type GetActiveBulkMessageJobData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages/active';
+};
+
+export type GetActiveBulkMessageJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetActiveBulkMessageJobError =
+  GetActiveBulkMessageJobErrors[keyof GetActiveBulkMessageJobErrors];
+
+export type GetActiveBulkMessageJobResponses = {
+  /**
+   * Response Getactivebulkmessagejob
+   *
+   * Successful Response
+   */
+  200: BulkMessageJob | null;
+};
+
+export type GetActiveBulkMessageJobResponse =
+  GetActiveBulkMessageJobResponses[keyof GetActiveBulkMessageJobResponses];
+
+export type GetLatestBulkMessageJobData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages/latest';
+};
+
+export type GetLatestBulkMessageJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetLatestBulkMessageJobError =
+  GetLatestBulkMessageJobErrors[keyof GetLatestBulkMessageJobErrors];
+
+export type GetLatestBulkMessageJobResponses = {
+  /**
+   * Response Getlatestbulkmessagejob
+   *
+   * Successful Response
+   */
+  200: BulkMessageJob | null;
+};
+
+export type GetLatestBulkMessageJobResponse =
+  GetLatestBulkMessageJobResponses[keyof GetLatestBulkMessageJobResponses];
+
+export type GetBulkMessageJobData = {
+  body?: never;
+  path: {
+    /**
+     * Job Id
+     */
+    job_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages/{job_id}';
+};
+
+export type GetBulkMessageJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetBulkMessageJobError = GetBulkMessageJobErrors[keyof GetBulkMessageJobErrors];
+
+export type GetBulkMessageJobResponses = {
+  /**
+   * Successful Response
+   */
+  200: BulkMessageJob;
+};
+
+export type GetBulkMessageJobResponse =
+  GetBulkMessageJobResponses[keyof GetBulkMessageJobResponses];
+
+export type CancelBulkMessageJobData = {
+  body?: never;
+  path: {
+    /**
+     * Job Id
+     */
+    job_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/bulk-messages/{job_id}/cancel';
+};
+
+export type CancelBulkMessageJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CancelBulkMessageJobError =
+  CancelBulkMessageJobErrors[keyof CancelBulkMessageJobErrors];
+
+export type CancelBulkMessageJobResponses = {
+  /**
+   * Successful Response
+   */
+  200: BulkMessageJob;
+};
+
+export type CancelBulkMessageJobResponse =
+  CancelBulkMessageJobResponses[keyof CancelBulkMessageJobResponses];
 
 export type ListProxiesData = {
   body?: never;

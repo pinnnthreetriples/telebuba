@@ -63,6 +63,7 @@ from schemas.telegram_actions import (
     RemoveProfileMusic,
     RemoveProfilePhoto,
     RemoveStory,
+    SendChatMessage,
     SendDirectMessage,
     SetMainProfilePhoto,
     SetOnline,
@@ -261,8 +262,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             return await dispatch_react_to_message(client, action)
         case CopyMessageMedia():
             return await dispatch_copy_message_media(client, action)
-        case SendDirectMessage():
-            message_id = await _send_dm_with_typing(client, action)
+        case SendDirectMessage() | SendChatMessage():
+            message_id = await _dispatch_message_action(client, action)
         case MarkDirectMessageRead():
             # send_read_acknowledge on a user peer marks the DM conversation read.
             await client.send_read_acknowledge(await _resolve_dm_peer(client, action))
@@ -275,6 +276,15 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             # its own dispatcher raises for anything genuinely unhandled.
             message_id = await _dispatch_profile_media_action(client, action)
     return _DispatchResult(message_id=message_id, log_extra=log_extra)
+
+
+async def _dispatch_message_action(
+    client: TelegramClient, action: SendDirectMessage | SendChatMessage
+) -> int | None:
+    if isinstance(action, SendDirectMessage):
+        return await _send_dm_with_typing(client, action)
+    peer = int(action.recipient) if action.recipient.isdecimal() else action.recipient
+    return sent_message_id(await client.send_message(peer, action.text))
 
 
 async def _dispatch_comment_on_post(client: TelegramClient, action: CommentOnPost) -> int | None:
@@ -389,6 +399,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"online": action.online}
         case SendDirectMessage() | MarkDirectMessageRead():
             extra = {"user_id": action.user_id}
+        case SendChatMessage():
+            extra = {"recipient": action.recipient}
         case UpdateProfile():
             extra = {
                 "has_last_name": action.last_name is not None,
