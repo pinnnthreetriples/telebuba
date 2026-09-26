@@ -11,10 +11,11 @@ from fastapi.responses import StreamingResponse
 from api import create_app
 from api.v1.events import SESSION_REVOKED_FRAME, event_stream, stream_events
 from core import auth as core_auth
-from core import events
+from core import events, inbox_events
 from core.config import settings
 from core.repositories.users import create_user
 from schemas.auth import UserRecord
+from schemas.inbox_events import InboxMessageReceived
 from schemas.logs import LogEntry
 from services import auth as auth_service
 
@@ -73,6 +74,57 @@ async def test_stream_yields_published_entry_as_data_frame() -> None:
     assert frame.startswith("data: ")
     assert '"event":"boom"' in frame
     assert events.subscriber_count() == 0  # aclose unsubscribed
+
+
+@pytest.mark.asyncio
+async def test_stream_uses_named_frame_for_inbox_message() -> None:
+    gen = event_stream(
+        _FakeRequest(connected_calls=5),  # ty: ignore[invalid-argument-type]
+        "token",
+        validate_session=_valid,
+    )
+    pull = asyncio.create_task(gen.__anext__())
+    try:
+        for _ in range(100):
+            if inbox_events.subscriber_count() == 1:
+                break
+            await asyncio.sleep(0)
+        inbox_events.publish(
+            InboxMessageReceived(
+                account_id="account-1",
+                peer_type="chat",
+                peer_id="123",
+                message_id=45,
+            ),
+        )
+        frame = await asyncio.wait_for(pull, timeout=1)
+    finally:
+        await gen.aclose()
+    assert frame.startswith("event: inbox_message_received\n")
+    assert '"peer_type":"chat"' in frame
+    assert '"message_id":45' in frame
+    assert not frame.startswith("data: {")
+    assert inbox_events.subscriber_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_stream_disconnect_cleans_both_pending_getters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.api, "sse_keepalive_seconds", 0.001)
+    gen = event_stream(
+        _FakeRequest(connected_calls=1),  # ty: ignore[invalid-argument-type]
+        "token",
+        validate_session=_valid,
+    )
+    try:
+        assert await asyncio.wait_for(gen.__anext__(), timeout=1) == ": keepalive\n\n"
+        with pytest.raises(StopAsyncIteration):
+            await asyncio.wait_for(gen.__anext__(), timeout=1)
+    finally:
+        await gen.aclose()
+    assert events.subscriber_count() == 0
+    assert inbox_events.subscriber_count() == 0
 
 
 @pytest.mark.asyncio

@@ -18,6 +18,7 @@ from core.phone_geo import evaluate_geo
 from core.telegram_client import forget_post_listener, remove_account_session, removing_client
 from schemas.geo import GeoMatch
 from services.accounts._result import AccountNotFoundError
+from services.inbox_runtime import start_account_inbox, stop_account_inbox
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
@@ -34,6 +35,8 @@ async def add_account(data: AccountCreate) -> AccountRead:
         (item for item in saved.accounts if item.account_id == account.account_id),
         account,
     )
+    if persisted.status in {"alive", "frozen"}:
+        await start_account_inbox(persisted.account_id)
     await log_event(
         "INFO",
         "account_added",
@@ -116,6 +119,7 @@ async def remove_account(account_id: str) -> None:
                 account_id=account_id,
                 extra={"error_type": type(exc).__name__},
             )
+        await stop_account_inbox(account_id)
         if await get_listener_account_id() == account_id:
             try:
                 await nc_runtime.shutdown_neurocomment_runtime(account_id)
@@ -144,6 +148,7 @@ async def remove_account(account_id: str) -> None:
         # account id and nothing else ever drops those keys, so an app that outlives
         # many deletes accumulates one dead generation and one dead lock per account.
         await forget_post_listener(account_id)
+        await stop_account_inbox(account_id, forget=True)
         # Same reason, other registry: ``_delete_account`` purges the account's
         # ``neurocomment_cooldowns`` rows so a re-imported id is not born parked, but the
         # live map those rows only back up is a service global core cannot reach.

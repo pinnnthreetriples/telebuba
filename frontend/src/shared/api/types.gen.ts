@@ -823,6 +823,24 @@ export type BodyPublishAccountChannelPost = {
 };
 
 /**
+ * Body_sendAccountChatMessage
+ */
+export type BodySendAccountChatMessage = {
+  /**
+   * Text
+   */
+  text?: string | null;
+  /**
+   * Reply To
+   */
+  reply_to?: number | null;
+  /**
+   * Files
+   */
+  files?: Array<Blob | File> | null;
+};
+
+/**
  * Body_setAccountChannelPhoto
  */
 export type BodySetAccountChannelPhoto = {
@@ -1281,6 +1299,146 @@ export type ChannelView = {
    * Participants Count
    */
   participants_count?: number | null;
+};
+
+/**
+ * ChatDialog
+ */
+export type ChatDialog = {
+  /**
+   * Peer Type
+   */
+  peer_type: 'user' | 'chat' | 'channel';
+  /**
+   * Peer Id
+   */
+  peer_id: string;
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Is Archived
+   */
+  is_archived: boolean;
+  /**
+   * Unread Count
+   */
+  unread_count: number;
+  last_message?: ChatMessage | null;
+};
+
+/**
+ * ChatHistoryPage
+ */
+export type ChatHistoryPage = {
+  /**
+   * Items
+   */
+  items: Array<ChatMessage>;
+  /**
+   * Next Before Id
+   */
+  next_before_id?: number | null;
+};
+
+/**
+ * ChatMedia
+ */
+export type ChatMedia = {
+  /**
+   * Kind
+   */
+  kind:
+    | 'image'
+    | 'video'
+    | 'audio'
+    | 'voice'
+    | 'video_note'
+    | 'sticker'
+    | 'document'
+    | 'animation'
+    | 'unknown';
+  /**
+   * File Name
+   */
+  file_name?: string | null;
+  /**
+   * Mime Type
+   */
+  mime_type?: string | null;
+  /**
+   * Size
+   */
+  size?: number | null;
+  /**
+   * Download Url
+   */
+  download_url: string;
+};
+
+/**
+ * ChatMessage
+ */
+export type ChatMessage = {
+  /**
+   * Message Id
+   */
+  message_id: number;
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * Date
+   */
+  date: string;
+  /**
+   * Outgoing
+   */
+  outgoing: boolean;
+  /**
+   * Sender Id
+   */
+  sender_id?: number | null;
+  /**
+   * Media
+   */
+  media?: Array<ChatMedia>;
+};
+
+/**
+ * ChatReadRequest
+ */
+export type ChatReadRequest = {
+  /**
+   * Max Message Id
+   */
+  max_message_id: number;
+};
+
+/**
+ * ChatReadResult
+ */
+export type ChatReadResult = {
+  /**
+   * Acknowledged Up To
+   */
+  acknowledged_up_to: number;
+};
+
+/**
+ * ChatSendResult
+ */
+export type ChatSendResult = {
+  /**
+   * Items
+   */
+  items: Array<ChatMessage>;
 };
 
 /**
@@ -3157,6 +3315,20 @@ export type PageChannelView = {
    * Items
    */
   items: Array<ChannelView>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+};
+
+/**
+ * Page[ChatDialog]
+ */
+export type PageChatDialog = {
+  /**
+   * Items
+   */
+  items: Array<ChatDialog>;
   /**
    * Next Cursor
    */
@@ -6273,6 +6445,329 @@ export type DeleteAccountChannelPostResponses = {
 
 export type DeleteAccountChannelPostResponse =
   DeleteAccountChannelPostResponses[keyof DeleteAccountChannelPostResponses];
+
+export type ListAccountChatsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+    /**
+     * Cursor
+     */
+    cursor?: string | null;
+  };
+  url: '/api/v1/accounts/{account_id}/chats';
+};
+
+export type ListAccountChatsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ListAccountChatsError = ListAccountChatsErrors[keyof ListAccountChatsErrors];
+
+export type ListAccountChatsResponses = {
+  /**
+   * Successful Response
+   */
+  200: PageChatDialog;
+};
+
+export type ListAccountChatsResponse = ListAccountChatsResponses[keyof ListAccountChatsResponses];
+
+export type ListAccountChatMessagesData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Peer Type
+     */
+    peer_type: 'user' | 'chat' | 'channel';
+    /**
+     * Peer Id
+     */
+    peer_id: string;
+  };
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+    /**
+     * Before Id
+     */
+    before_id?: number | null;
+  };
+  url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/messages';
+};
+
+export type ListAccountChatMessagesErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ListAccountChatMessagesError =
+  ListAccountChatMessagesErrors[keyof ListAccountChatMessagesErrors];
+
+export type ListAccountChatMessagesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatHistoryPage;
+};
+
+export type ListAccountChatMessagesResponse =
+  ListAccountChatMessagesResponses[keyof ListAccountChatMessagesResponses];
+
+export type SendAccountChatMessageData = {
+  body?: BodySendAccountChatMessage;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Peer Type
+     */
+    peer_type: 'user' | 'chat' | 'channel';
+    /**
+     * Peer Id
+     */
+    peer_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/messages';
+};
+
+export type SendAccountChatMessageErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Forbidden
+   */
+  403: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Payload too large
+   */
+  413: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type SendAccountChatMessageError =
+  SendAccountChatMessageErrors[keyof SendAccountChatMessageErrors];
+
+export type SendAccountChatMessageResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatSendResult;
+};
+
+export type SendAccountChatMessageResponse =
+  SendAccountChatMessageResponses[keyof SendAccountChatMessageResponses];
+
+export type MarkAccountChatReadData = {
+  body: ChatReadRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Peer Type
+     */
+    peer_type: 'user' | 'chat' | 'channel';
+    /**
+     * Peer Id
+     */
+    peer_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/read';
+};
+
+export type MarkAccountChatReadErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type MarkAccountChatReadError = MarkAccountChatReadErrors[keyof MarkAccountChatReadErrors];
+
+export type MarkAccountChatReadResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChatReadResult;
+};
+
+export type MarkAccountChatReadResponse =
+  MarkAccountChatReadResponses[keyof MarkAccountChatReadResponses];
+
+export type GetAccountChatMediaData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Peer Type
+     */
+    peer_type: 'user' | 'chat' | 'channel';
+    /**
+     * Peer Id
+     */
+    peer_id: string;
+    /**
+     * Message Id
+     */
+    message_id: number;
+    /**
+     * Media Index
+     */
+    media_index: number;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/messages/{message_id}/media/{media_index}';
+};
+
+export type GetAccountChatMediaErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type GetAccountChatMediaError = GetAccountChatMediaErrors[keyof GetAccountChatMediaErrors];
+
+export type GetAccountChatMediaResponses = {
+  /**
+   * Successful Response
+   */
+  200: unknown;
+};
 
 export type GetAccountPrivacyData = {
   body?: never;

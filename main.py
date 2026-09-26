@@ -40,6 +40,7 @@ from core.openai import close_openai_client
 from core.telegram_client import shutdown_telegram_pool
 from services.accounts import shutdown_web_login
 from services.auth import seed_admin_if_empty
+from services.inbox_runtime import reconcile_inboxes_on_startup, shutdown_inbox_runtime
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
     shutdown_neurocomment_on_shutdown,
@@ -144,12 +145,14 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     await reconcile_warming_runtime()
     await reconcile_neurocomment_on_startup()
     await reconcile_neuroshilling_on_startup()
+    await reconcile_inboxes_on_startup()
     try:
         yield
     finally:
         await _shutdown_step("warming", shutdown_warming_runtime)
         await _shutdown_step("neurocomment", shutdown_neurocomment_on_shutdown)
         await _shutdown_step("neuroshilling", shutdown_neuroshilling_on_shutdown)
+        await _shutdown_step("inbox", shutdown_inbox_runtime)
         await _shutdown_step("telegram_pool", shutdown_telegram_pool)
         await _shutdown_step("web_login", shutdown_web_login)
         maintenance_task.cancel()

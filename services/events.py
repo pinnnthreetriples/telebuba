@@ -9,5 +9,6 @@ api layer may import only ``core.config`` + ``core.logging``).
 from __future__ import annotations
 
 from core.events import subscribe
+from core.inbox_events import subscribe as subscribe_inbox_events
 
-__all__ = ["subscribe"]
+__all__ = ["subscribe", "subscribe_inbox_events"]

@@ -43,6 +43,7 @@ import {
   generateBulkMessage,
   generateNeuroshillingScenario,
   getAccountChannel,
+  getAccountChatMedia,
   getAccountLimits,
   getAccountPrivacy,
   getAccountProfileSnapshot,
@@ -67,6 +68,8 @@ import {
   linkCampaignChannel,
   listAccountChannelPosts,
   listAccountChannels,
+  listAccountChatMessages,
+  listAccountChats,
   listAccounts,
   listCampaignChallenges,
   listCampaigns,
@@ -82,6 +85,7 @@ import {
   login,
   logout,
   logoutAccount,
+  markAccountChatRead,
   openAccountWeb,
   type Options,
   postAccountStory,
@@ -99,6 +103,7 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resyncAccountAvatar,
+  sendAccountChatMessage,
   sendBulkMessages,
   setAccountChannelPhoto,
   setAccountPhoto,
@@ -237,6 +242,8 @@ import type {
   GetAccountChannelData,
   GetAccountChannelError,
   GetAccountChannelResponse,
+  GetAccountChatMediaData,
+  GetAccountChatMediaError,
   GetAccountLimitsData,
   GetAccountLimitsError,
   GetAccountLimitsResponse,
@@ -309,6 +316,12 @@ import type {
   ListAccountChannelsData,
   ListAccountChannelsError,
   ListAccountChannelsResponse,
+  ListAccountChatMessagesData,
+  ListAccountChatMessagesError,
+  ListAccountChatMessagesResponse,
+  ListAccountChatsData,
+  ListAccountChatsError,
+  ListAccountChatsResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
@@ -354,6 +367,9 @@ import type {
   LogoutData,
   LogoutError,
   LogoutResponse,
+  MarkAccountChatReadData,
+  MarkAccountChatReadError,
+  MarkAccountChatReadResponse,
   OpenAccountWebData,
   OpenAccountWebError,
   OpenAccountWebResponse,
@@ -402,6 +418,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  SendAccountChatMessageData,
+  SendAccountChatMessageError,
+  SendAccountChatMessageResponse,
   SendBulkMessagesData,
   SendBulkMessagesError,
   SendBulkMessagesResponse,
@@ -1739,6 +1758,182 @@ export const deleteAccountChannelPostMutation = (
   };
   return mutationOptions;
 };
+
+export const listAccountChatsQueryKey = (options: Options<ListAccountChatsData>) =>
+  createQueryKey('listAccountChats', options);
+
+/**
+ * List Account Chats
+ */
+export const listAccountChatsOptions = (options: Options<ListAccountChatsData>) =>
+  queryOptions<
+    ListAccountChatsResponse,
+    ListAccountChatsError,
+    ListAccountChatsResponse,
+    ReturnType<typeof listAccountChatsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountChats({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountChatsQueryKey(options),
+  });
+
+export const listAccountChatsInfiniteQueryKey = (
+  options: Options<ListAccountChatsData>,
+): QueryKey<Options<ListAccountChatsData>> => createQueryKey('listAccountChats', options, true);
+
+/**
+ * List Account Chats
+ */
+export const listAccountChatsInfiniteOptions = (options: Options<ListAccountChatsData>) => {
+  const opts = infiniteQueryOptions<
+    ListAccountChatsResponse,
+    ListAccountChatsError,
+    InfiniteData<ListAccountChatsResponse>,
+    QueryKey<Options<ListAccountChatsData>>,
+    | string
+    | null
+    | Pick<QueryKey<Options<ListAccountChatsData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListAccountChatsData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  cursor: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listAccountChats({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listAccountChatsInfiniteQueryKey(options),
+    },
+  );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
+
+export const listAccountChatMessagesQueryKey = (options: Options<ListAccountChatMessagesData>) =>
+  createQueryKey('listAccountChatMessages', options);
+
+/**
+ * List Account Chat Messages
+ */
+export const listAccountChatMessagesOptions = (options: Options<ListAccountChatMessagesData>) =>
+  queryOptions<
+    ListAccountChatMessagesResponse,
+    ListAccountChatMessagesError,
+    ListAccountChatMessagesResponse,
+    ReturnType<typeof listAccountChatMessagesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountChatMessages({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountChatMessagesQueryKey(options),
+  });
+
+/**
+ * Send Account Chat Message
+ */
+export const sendAccountChatMessageMutation = (
+  options?: Partial<Options<SendAccountChatMessageData>>,
+): UseMutationOptions<
+  SendAccountChatMessageResponse,
+  SendAccountChatMessageError,
+  Options<SendAccountChatMessageData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SendAccountChatMessageResponse,
+    SendAccountChatMessageError,
+    Options<SendAccountChatMessageData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await sendAccountChatMessage({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Mark Account Chat Read
+ */
+export const markAccountChatReadMutation = (
+  options?: Partial<Options<MarkAccountChatReadData>>,
+): UseMutationOptions<
+  MarkAccountChatReadResponse,
+  MarkAccountChatReadError,
+  Options<MarkAccountChatReadData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    MarkAccountChatReadResponse,
+    MarkAccountChatReadError,
+    Options<MarkAccountChatReadData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await markAccountChatRead({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountChatMediaQueryKey = (options: Options<GetAccountChatMediaData>) =>
+  createQueryKey('getAccountChatMedia', options);
+
+/**
+ * Get Account Chat Media
+ */
+export const getAccountChatMediaOptions = (options: Options<GetAccountChatMediaData>) =>
+  queryOptions<
+    unknown,
+    GetAccountChatMediaError,
+    unknown,
+    ReturnType<typeof getAccountChatMediaQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountChatMedia({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountChatMediaQueryKey(options),
+  });
 
 export const getAccountPrivacyQueryKey = (options: Options<GetAccountPrivacyData>) =>
   createQueryKey('getAccountPrivacy', options);

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-06
+last_updated: 2026-09-26
 edges:
   - target: context/conventions.md
     condition: backend implementation or review conventions
@@ -27,3 +27,5 @@ edges:
 | `schemas/` | Pydantic, typing, stdlib |
 
 Single-process operation is deliberate while SQLite and in-process runtimes own coordination. `tests/test_architecture.py`, manifests and code are the executable source of truth.
+
+Account chats use the same boundary: HTTP contracts and upload admission in `api/`, read/send policy in `services/`, and pooled Telegram I/O plus inbound subscriptions in `core/`. The in-process inbox runtime follows all authorized accounts while the server runs; an authenticated SSE stream carries small invalidation events to the SPA. Chat history and media are read from Telegram on demand rather than mirrored to SQLite.

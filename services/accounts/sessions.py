@@ -34,6 +34,7 @@ from services.accounts._tdata import (
 )
 from services.accounts._uploads import _session_filename, _write_session_file
 from services.accounts.lifecycle import add_account
+from services.inbox_runtime import start_account_inbox, stop_account_inbox
 
 __all__ = [
     "SessionAlreadyExistsError",
@@ -156,7 +157,12 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
             session_name=account.session_name,
         ),
     )
-    return await update_account_from_session_check(result)
+    saved = await update_account_from_session_check(result)
+    if result.status in {"alive", "frozen"}:
+        await start_account_inbox(saved.account_id)
+    elif result.status in {"unauthorized", "session_error", "account_error"}:
+        await stop_account_inbox(saved.account_id)
+    return saved
 
 
 async def import_account_tdata(data: TdataConvertRequest) -> TdataImportResult:

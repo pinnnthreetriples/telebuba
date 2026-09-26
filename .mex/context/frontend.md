@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-27
+last_updated: 2026-09-26
 edges:
   - target: context/conventions.md
     condition: shared repository conventions
@@ -22,6 +22,7 @@ FSD order is `app → routes → pages → widgets → features → entities →
 - Vitest logic coverage stays ≥80%; Steiger, ESLint, Prettier, TypeScript, the design-system gates, tests and build must pass. CVE checks are separate CI jobs.
 - `useMutation` per-call callbacks are safe only with one structurally exclusive caller. Concurrent/per-row/loop/unmountable flows use `mutateAsync` and promise handlers; the loop case is linted.
 - Query re-seed tests must return meaningfully changed data: TanStack structural sharing can keep equal payload identity and make an effect look dead.
+- Account chats live inside the account card. Dialogs and history use paged entity queries; opening a conversation marks it read. Inbox SSE only invalidates the relevant queries, while media previews load on demand and downloads use the authenticated same-origin stream.
 
 ## The design system is a closed set
 

@@ -17,7 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from core.config import settings
 from services import auth as auth_service
-from services.events import subscribe
+from services.events import subscribe, subscribe_inbox_events
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable
@@ -39,7 +39,7 @@ async def _session_is_valid(token: str) -> bool:
     return bool(token and await auth_service.resolve_user(token) is not None)
 
 
-async def event_stream(
+async def event_stream(  # noqa: C901 - two independent SSE queues + auth lifecycle.
     request: Request,
     session_token: str,
     *,
@@ -53,26 +53,42 @@ async def event_stream(
     Every exit caused by a dead session emits ``SESSION_REVOKED_FRAME`` first, so
     the client can tell revocation from a server restart and stop reconnecting.
     """
-    async with subscribe() as queue:
+    async with subscribe() as queue, subscribe_inbox_events() as inbox_queue:
         if not await validate_session(session_token):
             yield SESSION_REVOKED_FRAME
             return
         while not await request.is_disconnected():
+            log_task = asyncio.create_task(queue.get())
+            inbox_task = asyncio.create_task(inbox_queue.get())
+            tasks = {log_task, inbox_task}
             try:
-                entry = await asyncio.wait_for(
-                    queue.get(),
+                done, _ = await asyncio.wait(
+                    tasks,
                     timeout=settings.api.sse_keepalive_seconds,
+                    return_when=asyncio.FIRST_COMPLETED,
                 )
-            except TimeoutError:
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+            done = {task for task in tasks if task.done() and not task.cancelled()}
+            if not done:
                 if not await validate_session(session_token):
                     yield SESSION_REVOKED_FRAME
                     return
                 yield ": keepalive\n\n"
                 continue
+            if await request.is_disconnected():
+                return
             if not await validate_session(session_token):
                 yield SESSION_REVOKED_FRAME
                 return
-            yield f"data: {entry.model_dump_json()}\n\n"
+            if log_task in done:
+                yield f"data: {log_task.result().model_dump_json()}\n\n"
+            if inbox_task in done:
+                event = inbox_task.result()
+                yield f"event: inbox_message_received\ndata: {event.model_dump_json()}\n\n"
 
 
 @router.get("/events", include_in_schema=False)

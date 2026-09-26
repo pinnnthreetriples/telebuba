@@ -106,17 +106,10 @@ class ApiSettings(BaseSettings):
     # (a slow client's queue fills → its live frames drop; the FE poll backstops).
     sse_keepalive_seconds: float = Field(default=15.0, gt=0)
     sse_max_queue: int = Field(default=1000, ge=1)
-    # Hard ceiling on a request body, counted as it arrives (so chunked transfer
-    # encoding cannot walk past it) BEFORE routing resolves the auth dependency.
-    # The largest legitimate body is a tdata.zip at ``tdata_max_bytes``
-    # (200,000,000); the headroom covers multipart boundaries and form fields.
+    # Hard ceiling on ordinary authenticated multipart requests, counted as it
+    # arrives before route-level auth. Chat media has a route-specific ceiling.
     max_request_bytes: int = Field(default=210_000_000, ge=1)
-    # The same ceiling for a caller that sent no session cookie at all. It has to
-    # be a separate, much smaller number: every upload route needs the 200 MB
-    # budget above, so a single limit is necessarily the largest one any route
-    # needs, and that is the budget an anonymous caller then gets too. Nothing
-    # unauthenticated posts a body worth more than this (login is a small JSON
-    # object), so the split costs a legitimate operator nothing.
+    # Small fallback for callers without a valid, non-revoked session.
     max_anonymous_request_bytes: int = Field(default=1_000_000, ge=1)
     # Hold the admission slot from the first body read through handler cleanup.
     # This bounds simultaneous multipart spooling and large in-handler buffers.
@@ -308,6 +301,14 @@ class ChannelsSettings(BaseSettings):
     dialogs_scan_limit: int = Field(default=500, ge=1)
 
 
+class ChatsSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CHATS__", extra="ignore")
+
+    # Per-file media staging cap, aligned to Telegram's standard upload ceiling.
+    # All files in one chat request share the total body cap plus API framing headroom.
+    media_max_bytes: int = Field(default=2_000_000_000, ge=1)
+
+
 class LoggingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LOGGING__", extra="ignore")
 
@@ -328,6 +329,7 @@ class Settings(BaseSettings):
     proxy: ProxySettings = Field(default_factory=ProxySettings)
     profile_media: ProfileMediaSettings = Field(default_factory=ProfileMediaSettings)
     channels: ChannelsSettings = Field(default_factory=ChannelsSettings)
+    chats: ChatsSettings = Field(default_factory=ChatsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)

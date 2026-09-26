@@ -45,7 +45,14 @@ def _large_upload_patterns() -> tuple[str, ...]:
         rf"{prefix}/accounts/photo",
         rf"{prefix}/accounts/{segment}/(?:story|music)",
         rf"{prefix}/accounts/{segment}/channels/{segment}/(?:photo|posts)",
+        rf"{prefix}/accounts/{segment}/chats/{segment}/{segment}/messages",
     )
+
+
+def _chat_upload_patterns() -> tuple[str, ...]:
+    prefix = re.escape(f"/api/{settings.api.version}")
+    segment = r"[^/]+"
+    return (rf"{prefix}/accounts/{segment}/chats/{segment}/{segment}/messages",)
 
 
 def create_app(lifespan: Lifespan | None = None) -> FastAPI:
@@ -73,6 +80,10 @@ def create_app(lifespan: Lifespan | None = None) -> FastAPI:
             cookie_name=settings.auth.cookie_name,
             max_concurrent_uploads=settings.api.max_concurrent_uploads,
             large_upload_path_patterns=_large_upload_patterns(),
+            chat_upload_path_patterns=_chat_upload_patterns(),
+            # All files share one total body cap of one per-file ceiling plus
+            # 1 MB for multipart boundaries, headers and text/reply fields.
+            max_chat_upload_bytes=settings.chats.media_max_bytes + 1_000_000,
         ),
         validate_session=_valid_session,
     )

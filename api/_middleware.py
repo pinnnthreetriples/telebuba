@@ -52,6 +52,8 @@ class BodyLimitPolicy:
     cookie_name: str
     max_concurrent_uploads: int = 1
     large_upload_path_patterns: Sequence[str] = ()
+    chat_upload_path_patterns: Sequence[str] = ()
+    max_chat_upload_bytes: int | None = None
 
 
 # Locale-neutral refusal, same envelope every other error uses. ``message`` is the
@@ -140,6 +142,10 @@ class BodySizeLimitMiddleware:
         self._upload_patterns = tuple(
             re.compile(pattern) for pattern in policy.large_upload_path_patterns
         )
+        self._chat_upload_patterns = tuple(
+            re.compile(pattern) for pattern in policy.chat_upload_path_patterns
+        )
+        self.max_chat_upload_bytes = policy.max_chat_upload_bytes or policy.max_bytes
         self._validate_session = validate_session
         self._upload_gate = asyncio.Semaphore(policy.max_concurrent_uploads)
 
@@ -148,7 +154,10 @@ class BodySizeLimitMiddleware:
             await self.app(scope, receive, send)
             return
         authenticated_upload = await self._is_authenticated_upload(scope)
-        budget = self.max_bytes if authenticated_upload else self.max_anonymous_bytes
+        if authenticated_upload and self._is_chat_upload_route(scope):
+            budget = self.max_chat_upload_bytes
+        else:
+            budget = self.max_bytes if authenticated_upload else self.max_anonymous_bytes
         admitted = False
         if authenticated_upload:
             # No await between the state check and acquire: within one event loop
@@ -212,6 +221,10 @@ class BodySizeLimitMiddleware:
             return False
         path = str(scope.get("path", ""))
         return any(pattern.fullmatch(path) for pattern in self._upload_patterns)
+
+    def _is_chat_upload_route(self, scope: Scope) -> bool:
+        path = str(scope.get("path", ""))
+        return any(pattern.fullmatch(path) for pattern in self._chat_upload_patterns)
 
 
 def _cookie_value(scope: Scope, name: bytes) -> bytes | None:

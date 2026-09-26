@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loginMutation } from '@/shared/auth';
+import { resetLogEventStreamSession } from '@/shared/lib';
 import { Button, Input } from '@/shared/ui';
 
 export function LoginPage() {
@@ -20,6 +21,7 @@ export function LoginPage() {
       { body: { username, password } },
       {
         onSuccess: async () => {
+          resetLogEventStreamSession();
           await queryClient.invalidateQueries();
           await navigate({ to: '/' });
         },

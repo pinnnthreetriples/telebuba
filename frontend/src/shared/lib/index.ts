@@ -9,8 +9,12 @@ export { formatLocalTime } from './formatTime';
 export { eventLabel } from './log/eventLabel';
 export { eventReason } from './log/eventReason';
 export { logSeverity } from './log/eventSeverity';
-export { useLogEventStream } from './log/useLogEventStream';
-export type { SseStatus } from './log/useLogEventStream';
+export {
+  resetLogEventStreamSession,
+  useInboxMessageStream,
+  useLogEventStream,
+} from './log/useLogEventStream';
+export type { InboxMessageEvent, SseStatus } from './log/useLogEventStream';
 export { isUnauthorized, mutationErrorText, queryClient } from './query-client';
 export { useClearedTimeouts, useTransientFeedback } from './useTransientFeedback';
 export type { FeedbackResult } from './useTransientFeedback';
