@@ -8,6 +8,7 @@ interface MockSource {
   readyState: number;
   OPEN: number;
   emit(data: unknown): void;
+  emitNamed(type: string, data: unknown): void;
   emitOpen(): void;
   emitError(): void;
 }
@@ -42,6 +43,32 @@ test('delivers parsed entries to the callback after the debounce', () => {
   expect(onEntry).not.toHaveBeenCalled(); // debounced, not yet delivered
   flush();
   expect(onEntry).toHaveBeenCalledWith(expect.objectContaining({ id: 1, event: 'live_x' }));
+});
+
+test('routes named inbox events separately from log entries', () => {
+  const onEntry = vi.fn();
+  const onInboxMessage = vi.fn();
+  const { unmount } = renderHook(() => useLogEventStream(onEntry, undefined, onInboxMessage));
+  const source = Sources.last();
+
+  source?.emitNamed('inbox_message_received', {
+    account_id: 'account-1',
+    peer_type: 'user',
+    peer_id: 'peer-1',
+    message_id: 42,
+  });
+
+  expect(onInboxMessage).toHaveBeenCalledWith({
+    account_id: 'account-1',
+    peer_type: 'user',
+    peer_id: 'peer-1',
+    message_id: 42,
+  });
+  expect(onEntry).not.toHaveBeenCalled();
+
+  source?.emitNamed('inbox_message_received', { account_id: 'incomplete' });
+  expect(onInboxMessage).toHaveBeenCalledOnce();
+  unmount();
 });
 
 test('shares a single EventSource across multiple hook mounts', () => {

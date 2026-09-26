@@ -12,10 +12,17 @@ const EVENTS_URL = '/api/v1/events';
 const FLUSH_MS = 400;
 
 export type SseStatus = 'connecting' | 'open' | 'error';
+export type InboxMessageEvent = {
+  account_id: string;
+  peer_type: 'user' | 'chat' | 'channel';
+  peer_id: string;
+  message_id: number;
+};
 
 interface Subscriber {
   onEntry: (entry: LogEntry) => void;
   onStatus?: (status: SseStatus) => void;
+  onInboxMessage?: (event: InboxMessageEvent) => void;
 }
 
 // One shared EventSource for the whole app, ref-counted across every hook
@@ -44,6 +51,26 @@ function flush(): void {
   }
 }
 
+function parseInboxMessage(data: string): InboxMessageEvent | null {
+  try {
+    const value: unknown = JSON.parse(data);
+    if (typeof value !== 'object' || value === null) return null;
+    const event = value as Record<string, unknown>;
+    if (
+      typeof event.account_id !== 'string' ||
+      (event.peer_type !== 'user' && event.peer_type !== 'chat' && event.peer_type !== 'channel') ||
+      typeof event.peer_id !== 'string' ||
+      typeof event.message_id !== 'number' ||
+      !Number.isSafeInteger(event.message_id)
+    ) {
+      return null;
+    }
+    return event as InboxMessageEvent;
+  } catch {
+    return null;
+  }
+}
+
 function openSource(): void {
   if (sessionRevoked) return;
   source = new EventSource(EVENTS_URL);
@@ -60,6 +87,11 @@ function openSource(): void {
     sessionRevoked = true;
     closeSource();
     announce('error');
+  });
+  source.addEventListener('inbox_message_received', (frame) => {
+    const event = parseInboxMessage(frame.data);
+    if (!event) return;
+    for (const sub of subscribers) sub.onInboxMessage?.(event);
   });
   source.onmessage = (event) => {
     let entry: LogEntry;
@@ -83,6 +115,12 @@ function closeSource(): void {
   buffer = [];
 }
 
+/** Resume shared events after a successful authentication in the same SPA. */
+export function resetLogEventStreamSession(): void {
+  sessionRevoked = false;
+  if (subscribers.size > 0 && !source) openSource();
+}
+
 /**
  * Subscribe to the live log-event stream for the lifetime of the component.
  *
@@ -95,11 +133,14 @@ function closeSource(): void {
 export function useLogEventStream(
   onEntry: (entry: LogEntry) => void,
   onStatus?: (status: SseStatus) => void,
+  onInboxMessage?: (event: InboxMessageEvent) => void,
 ): void {
   const handler = useRef(onEntry);
   handler.current = onEntry;
   const statusHandler = useRef(onStatus);
   statusHandler.current = onStatus;
+  const inboxHandler = useRef(onInboxMessage);
+  inboxHandler.current = onInboxMessage;
 
   useEffect(() => {
     const sub: Subscriber = {
@@ -109,6 +150,7 @@ export function useLogEventStream(
       onStatus: (status) => {
         statusHandler.current?.(status);
       },
+      onInboxMessage: (event) => inboxHandler.current?.(event),
     };
     subscribers.add(sub);
     if (source) {
@@ -123,4 +165,9 @@ export function useLogEventStream(
       if (subscribers.size === 0) closeSource();
     };
   }, []);
+}
+
+/** Subscribe to named inbox nudges on the same shared SSE connection as log events. */
+export function useInboxMessageStream(onMessage: (event: InboxMessageEvent) => void): void {
+  useLogEventStream(() => {}, undefined, onMessage);
 }

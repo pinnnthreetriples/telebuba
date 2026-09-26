@@ -57,6 +57,23 @@ async def test_staged_upload_enforces_actual_stream_size_when_metadata_is_missin
 
 
 @pytest.mark.asyncio
+async def test_staged_upload_uses_caller_status_for_unknown_size_overflow() -> None:
+    upload = UploadFile(file=BytesIO(b"oversized"), filename="video.mp4", size=None)
+
+    with pytest.raises(HTTPException) as caught:
+        async with staged_upload(
+            upload,
+            max_bytes=2,
+            detail="chat_media_too_large",
+            status_code=413,
+        ):
+            pass
+
+    assert caught.value.status_code == 413
+    assert caught.value.detail == "chat_media_too_large"
+
+
+@pytest.mark.asyncio
 async def test_staged_upload_retries_transient_unlink_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

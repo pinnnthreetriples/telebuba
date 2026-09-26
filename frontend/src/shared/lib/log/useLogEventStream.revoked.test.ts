@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 
-import { useLogEventStream } from './useLogEventStream';
+import { resetLogEventStreamSession, useLogEventStream } from './useLogEventStream';
 
 // Its own file on purpose: "the session is dead" is module-level state that must
 // survive an unmount (that is the whole point), so it cannot be undone between
@@ -18,7 +18,7 @@ interface MockSourceCtor {
 
 const Sources = globalThis.EventSource as unknown as MockSourceCtor;
 
-test('a revoked session closes the stream instead of reconnecting forever', () => {
+test('a revoked session stops reconnecting until successful authentication resets it', () => {
   const onStatus = vi.fn();
   const first = renderHook(() => {
     useLogEventStream(() => {}, onStatus);
@@ -40,4 +40,10 @@ test('a revoked session closes the stream instead of reconnecting forever', () =
   });
 
   expect(Sources.instances).toHaveLength(1);
+
+  resetLogEventStreamSession();
+  renderHook(() => {
+    useLogEventStream(() => {});
+  });
+  expect(Sources.instances).toHaveLength(2);
 });

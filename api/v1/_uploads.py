@@ -31,7 +31,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import HTTPException
-from fastapi import status as http_status
 
 from core.config import settings
 
@@ -62,10 +61,12 @@ def _make_private_dir(path: Path) -> None:
         path.chmod(0o700)
 
 
-def reject_oversized_upload(file: UploadFile, *, max_bytes: int, detail: str) -> None:
-    """Raise 400 with ``detail`` if the multipart part is known to exceed ``max_bytes``."""
+def reject_oversized_upload(
+    file: UploadFile, *, max_bytes: int, detail: str, status_code: int = 400
+) -> None:
+    """Reject a known oversized multipart part."""
     if file.size is not None and file.size > max_bytes:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=detail)
+        raise HTTPException(status_code=status_code, detail=detail)
 
 
 def _staging_dir() -> Path:
@@ -164,9 +165,10 @@ async def staged_upload(
     max_bytes: int,
     detail: str,
     suffix: str = "",
+    status_code: int = 400,
 ) -> AsyncIterator[Path]:
     """Stream an UploadFile into the staging directory, removing it on every exit path."""
-    reject_oversized_upload(file, max_bytes=max_bytes, detail=detail)
+    reject_oversized_upload(file, max_bytes=max_bytes, detail=detail, status_code=status_code)
     directory = await _file_io(_staging_dir)
     descriptor, raw_path = tempfile.mkstemp(
         prefix=_STAGING_PREFIX,
@@ -180,7 +182,7 @@ async def staged_upload(
         while chunk := await file.read(_STREAM_CHUNK_BYTES):
             total += len(chunk)
             if total > max_bytes:
-                raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=detail)
+                raise HTTPException(status_code=status_code, detail=detail)
             await _file_io(target.write, chunk)
         await _file_io(target.close)
         yield path

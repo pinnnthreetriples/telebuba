@@ -27,6 +27,7 @@ from services.accounts._import_locks import import_lock
 from services.accounts._login_state import forget_code, peek_code, remember_code
 from services.accounts.lifecycle import add_account
 from services.accounts.sessions import SessionAlreadyExistsError
+from services.inbox_runtime import start_account_inbox, stop_account_inbox
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -140,6 +141,7 @@ async def submit_login_code(
         raise PhoneLoginError(result.error_message or "Sign-in failed")
     forget_code(account_id)
     saved = await update_account_from_session_check(result)
+    await start_account_inbox(saved.account_id)
     await log_event("INFO", "phone_login_success", account_id=account_id)
     return saved
 
@@ -159,14 +161,19 @@ async def _end_session(account_id: str, *, wipe_session: bool, event: str) -> Ac
     if account is None:
         msg = f"Unknown account: {account_id}"
         raise PhoneLoginError(msg)
-    result = await log_out_session(
-        TelegramClientRequest(
-            account_id=account_id,
-            session_name=account.session_name,
-            receive_updates=False,
-        ),
-        wipe_session=wipe_session,
-    )
+    await stop_account_inbox(account_id)
+    try:
+        result = await log_out_session(
+            TelegramClientRequest(
+                account_id=account_id,
+                session_name=account.session_name,
+                receive_updates=False,
+            ),
+            wipe_session=wipe_session,
+        )
+    except Exception:
+        await start_account_inbox(account_id)
+        raise
     forget_code(account_id)
     saved = await update_account_from_session_check(result)
     await log_event("INFO", event, account_id=account_id)

@@ -25,6 +25,19 @@ export {
   invalidateAccountViews,
 } from './api/accounts.queries';
 export {
+  accountChatHistoryInfiniteQueryOptions,
+  accountChatHistoryQueryKey,
+  accountChatsInfiniteQueryOptions,
+  accountChatsQueryKey,
+  type AccountChatDialog,
+  type AccountChatPeerType,
+} from './api/account-chats.queries';
+export {
+  accountChatMediaFileName,
+  markAccountChatReadRequest,
+  sendAccountChatMessageRequest,
+} from './api/account-chats.mutations';
+export {
   addAccountMusicMutation,
   cancelAccountTwofaEmailMutation,
   cancelBulkMessageJobMutation,

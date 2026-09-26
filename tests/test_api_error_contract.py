@@ -461,4 +461,4 @@ def test_the_derivation_reaches_every_mapped_status() -> None:
     found: frozenset[int] = frozenset()
     for route, _ in _documented_operations():
         found |= _reachable_statuses(route)
-    assert found == {400, 401, 404, 409, 422, 429, 500, 503}
+    assert found == {400, 401, 403, 404, 409, 413, 422, 429, 500, 503}

@@ -112,6 +112,9 @@ import type {
   GetAccountChannelData,
   GetAccountChannelErrors,
   GetAccountChannelResponses,
+  GetAccountChatMediaData,
+  GetAccountChatMediaErrors,
+  GetAccountChatMediaResponses,
   GetAccountLimitsData,
   GetAccountLimitsErrors,
   GetAccountLimitsResponses,
@@ -184,6 +187,12 @@ import type {
   ListAccountChannelsData,
   ListAccountChannelsErrors,
   ListAccountChannelsResponses,
+  ListAccountChatMessagesData,
+  ListAccountChatMessagesErrors,
+  ListAccountChatMessagesResponses,
+  ListAccountChatsData,
+  ListAccountChatsErrors,
+  ListAccountChatsResponses,
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
@@ -229,6 +238,9 @@ import type {
   LogoutData,
   LogoutErrors,
   LogoutResponses,
+  MarkAccountChatReadData,
+  MarkAccountChatReadErrors,
+  MarkAccountChatReadResponses,
   OpenAccountWebData,
   OpenAccountWebErrors,
   OpenAccountWebResponses,
@@ -277,6 +289,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  SendAccountChatMessageData,
+  SendAccountChatMessageErrors,
+  SendAccountChatMessageResponses,
   SendBulkMessagesData,
   SendBulkMessagesErrors,
   SendBulkMessagesResponses,
@@ -1035,6 +1050,83 @@ export const deleteAccountChannelPost = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts/{post_id}/delete',
+    ...options,
+  });
+
+/**
+ * List Account Chats
+ */
+export const listAccountChats = <ThrowOnError extends boolean = false>(
+  options: Options<ListAccountChatsData, ThrowOnError>,
+): RequestResult<ListAccountChatsResponses, ListAccountChatsErrors, ThrowOnError> =>
+  (options.client ?? client).get<ListAccountChatsResponses, ListAccountChatsErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/chats',
+    ...options,
+  });
+
+/**
+ * List Account Chat Messages
+ */
+export const listAccountChatMessages = <ThrowOnError extends boolean = false>(
+  options: Options<ListAccountChatMessagesData, ThrowOnError>,
+): RequestResult<ListAccountChatMessagesResponses, ListAccountChatMessagesErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    ListAccountChatMessagesResponses,
+    ListAccountChatMessagesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/messages', ...options });
+
+/**
+ * Send Account Chat Message
+ */
+export const sendAccountChatMessage = <ThrowOnError extends boolean = false>(
+  options: Options<SendAccountChatMessageData, ThrowOnError>,
+): RequestResult<SendAccountChatMessageResponses, SendAccountChatMessageErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SendAccountChatMessageResponses,
+    SendAccountChatMessageErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/messages',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Mark Account Chat Read
+ */
+export const markAccountChatRead = <ThrowOnError extends boolean = false>(
+  options: Options<MarkAccountChatReadData, ThrowOnError>,
+): RequestResult<MarkAccountChatReadResponses, MarkAccountChatReadErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    MarkAccountChatReadResponses,
+    MarkAccountChatReadErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/read',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Account Chat Media
+ */
+export const getAccountChatMedia = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountChatMediaData, ThrowOnError>,
+): RequestResult<GetAccountChatMediaResponses, GetAccountChatMediaErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetAccountChatMediaResponses,
+    GetAccountChatMediaErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/chats/{peer_type}/{peer_id}/messages/{message_id}/media/{media_index}',
     ...options,
   });
 

@@ -31,6 +31,7 @@ _RECONCILE = (
     "reconcile_warming_runtime",
     "reconcile_neurocomment_on_startup",
     "reconcile_neuroshilling_on_startup",
+    "reconcile_inboxes_on_startup",
 )
 # Neuroshilling sits between neurocomment and the pool teardown: its run tasks hold
 # pooled Telethon clients, so they have to drain before the pool goes.
@@ -38,6 +39,7 @@ _STEPS = (
     "shutdown_warming_runtime",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neuroshilling_on_shutdown",
+    "shutdown_inbox_runtime",
     "shutdown_telegram_pool",
     "close_gemini_client",
     "close_openai_client",

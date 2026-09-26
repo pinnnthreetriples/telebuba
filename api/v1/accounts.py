@@ -17,6 +17,7 @@ from api.errors import SERVICE_ERRORS, error_responses
 from api.v1._accounts_bulk_messages import bulk_messages_router
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
+from api.v1._accounts_chats import chats_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._accounts_twofa import twofa_router
@@ -313,6 +314,7 @@ router.include_router(media_router)
 # Own-channel management + channel posts (same split-sibling pattern).
 router.include_router(channels_router)
 router.include_router(channel_posts_router)
+router.include_router(chats_router)
 # Telegram privacy keys (who may see the avatar / bio / last seen).
 router.include_router(privacy_router)
 # The account's Telegram cloud password (2FA).

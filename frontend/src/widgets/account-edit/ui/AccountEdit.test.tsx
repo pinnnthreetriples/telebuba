@@ -75,6 +75,7 @@ function cardWrapper(title: string): HTMLElement {
 }
 
 test('the two security cards are the page\'s last row, 2FA left of "Действия"', () => {
+  const fetchStart = vi.mocked(fetch).mock.calls.length;
   const { container } = renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
   // Both cards rendering is not the claim; being PAIRED is. The 2FA card was
   // full width and the actions card stood alone under it, and a refactor that
@@ -89,11 +90,18 @@ test('the two security cards are the page\'s last row, 2FA left of "Действ
   // of mb-[14px] — the row is last and owns the page's bottom edge, and a
   // margin re-added here is the gap the row above it already provides.
   expect(row).toHaveAttribute('class', 'grid grid-cols-1 md:grid-cols-2 gap-lg');
-  // Last child of the page root, so the row is neither wrapped in another grid
-  // nor moved above a row whose bottom margin it would then have to supply.
+  // The overview is now an explicit tab panel; its last child owns the bottom
+  // edge and the cards remain paired in the final grid row.
   const page = container.firstElementChild;
-  expect(row?.parentElement).toBe(page);
-  expect(page?.lastElementChild).toBe(row);
+  const overview = screen.getByRole('tabpanel', { name: 'Обзор' });
+  expect(row?.parentElement).toBe(overview);
+  expect(overview.lastElementChild).toBe(row);
+  expect(page?.lastElementChild?.querySelector('#account-panel-chats')).not.toBeNull();
+  const chatRequests = vi
+    .mocked(fetch)
+    .mock.calls.slice(fetchStart)
+    .filter(([input]) => String(input).includes('/chats'));
+  expect(chatRequests).toHaveLength(0);
   // Exactly these two columns, in the order the design asks for: the cloud
   // password left, the destructive actions right. A third card halves them
   // both; an extra nesting level drops one out of the grid entirely.

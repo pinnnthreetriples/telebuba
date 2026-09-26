@@ -33,6 +33,14 @@ from core.telegram_client._auth import (
     request_phone_code,
     submit_phone_code,
 )
+from core.telegram_client._chats import (
+    ChatGatewayError,
+    list_dialogs,
+    mark_read,
+    media_download,
+    read_history,
+    send_message,
+)
 from core.telegram_client._client import (
     create_telegram_client,
     prepare_session_check_profile,
@@ -48,6 +56,12 @@ from core.telegram_client._listener import (
     update_post_subscription,
 )
 from core.telegram_client._media import refresh_account_avatar
+from core.telegram_client._message_listener import (
+    ensure_incoming_message_connection,
+    forget_incoming_message_listener,
+    stop_incoming_messages,
+    subscribe_incoming_messages,
+)
 from core.telegram_client._pool import (
     TelegramClientPoolError,
     evict_client,
@@ -69,6 +83,7 @@ from core.telegram_client._web_login import accept_web_login_token
 
 __all__ = [
     "UNCONFIRMED_ERROR_TYPE",
+    "ChatGatewayError",
     "TelegramAccountNotFoundError",
     "TelegramClientPoolError",
     "TelegramReadError",
@@ -77,24 +92,33 @@ __all__ = [
     "check_telegram_session",
     "create_telegram_client",
     "download_post_image",
+    "ensure_incoming_message_connection",
     "evict_client",
     "execute",
     "execute_read",
     "execute_read_many",
     "fetch_recent_posts",
+    "forget_incoming_message_listener",
     "forget_post_listener",
     "get_client",
     "invalidate_reaction_whitelist_cache",
+    "list_dialogs",
     "log_out_session",
+    "mark_read",
+    "media_download",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
+    "read_history",
     "refresh_account_avatar",
     "remove_account_session",
     "removing_client",
     "request_phone_code",
+    "send_message",
     "shutdown_telegram_pool",
+    "stop_incoming_messages",
     "stop_post_listener",
     "submit_phone_code",
+    "subscribe_incoming_messages",
     "subscribe_posts",
     "take_lost_access_channels",
     "telegram_client",

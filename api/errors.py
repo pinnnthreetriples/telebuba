@@ -35,6 +35,7 @@ _HTTP_ERROR_CODES: dict[int, str] = {
     403: "forbidden",
     404: "not_found",
     409: "conflict",
+    413: "payload_too_large",
     429: "rate_limited",
     503: "unavailable",
 }
@@ -48,7 +49,9 @@ _ERROR_DESCRIPTIONS: dict[int, str] = {
     400: "Bad request, or Telegram refused the action",
     401: "Not authenticated",
     404: "Not found",
+    403: "Forbidden",
     409: "Conflict with the current state",
+    413: "Payload too large",
     422: "Request validation failed",
     429: "Too many requests",
     500: "Internal server error",
