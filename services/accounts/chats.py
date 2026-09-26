@@ -27,10 +27,6 @@ class ChatServiceError(ValueError):
         super().__init__(code)
 
 
-def _service_error(code: str) -> ChatServiceError:
-    return ChatServiceError(code)
-
-
 @dataclass(frozen=True)
 class ChatMediaDownload:
     filename: str | None
@@ -43,14 +39,14 @@ def _peer_id(value: str) -> int:
     try:
         peer_id = int(value)
     except ValueError as exc:
-        raise _service_error("chat_peer_invalid") from exc  # noqa: EM101
+        raise ChatServiceError("chat_peer_invalid") from exc  # noqa: EM101
     if peer_id < 1 or peer_id > 2**63 - 1:
-        raise _service_error("chat_peer_invalid")  # noqa: EM101
+        raise ChatServiceError("chat_peer_invalid")  # noqa: EM101
     return peer_id
 
 
 def _gateway_error(exc: chat_gateway.ChatGatewayError) -> ChatServiceError:
-    return _service_error(exc.code)
+    return ChatServiceError(exc.code)
 
 
 async def list_account_chats(
@@ -74,7 +70,7 @@ async def list_chat_history(
 ) -> ChatHistoryPage:
     await require_account(account_id)
     if before_id is not None and before_id < 1:
-        raise _service_error("chat_message_cursor_invalid")  # noqa: EM101
+        raise ChatServiceError("chat_message_cursor_invalid")  # noqa: EM101
     try:
         items, next_before_id = await chat_gateway.read_history(
             account_id, peer_type, _peer_id(peer_id), limit=limit, before_id=before_id
@@ -89,7 +85,7 @@ async def mark_chat_read(
 ) -> ChatReadResult:
     await require_account(account_id)
     if max_message_id < 1:
-        raise _service_error("chat_message_id_invalid")  # noqa: EM101
+        raise ChatServiceError("chat_message_id_invalid")  # noqa: EM101
     try:
         await chat_gateway.mark_read(account_id, peer_type, _peer_id(peer_id), max_message_id)
     except chat_gateway.ChatGatewayError as exc:
@@ -108,7 +104,7 @@ async def send_chat_message(  # noqa: PLR0913
 ) -> ChatSendResult:
     await require_account(account_id)
     if reply_to is not None and reply_to < 1:
-        raise _service_error("chat_message_id_invalid")  # noqa: EM101
+        raise ChatServiceError("chat_message_id_invalid")  # noqa: EM101
     try:
         items = await chat_gateway.send_message(
             account_id,
@@ -132,7 +128,7 @@ async def get_chat_media_download(
 ) -> ChatMediaDownload:
     await require_account(account_id)
     if message_id < 1 or media_index < 0:
-        raise _service_error("chat_media_not_found")  # noqa: EM101
+        raise ChatServiceError("chat_media_not_found")  # noqa: EM101
     try:
         filename, mime_type, size, chunks = await chat_gateway.media_download(
             account_id,

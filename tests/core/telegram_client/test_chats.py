@@ -18,7 +18,7 @@ from telethon.tl.types import (
     User,
 )
 
-from core.telegram_client import _chats
+from core.telegram_client import _chat_writes, _chats
 from schemas.chats import ChatUpload
 
 if TYPE_CHECKING:
@@ -158,9 +158,9 @@ async def test_media_download_stream_closes_iterator_and_sanitizes_filename(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client = _MediaClient()
-    monkeypatch.setattr(_chats, "get_client", lambda _account_id: _async_result(client))
-    monkeypatch.setattr(_chats, "_media_kind", lambda _message: "image")
-    filename, mime, size, chunks = await _chats.media_download("acc-1", "user", 7, 12, 0)
+    monkeypatch.setattr(_chat_writes, "get_client", lambda _account_id: _async_result(client))
+    monkeypatch.setattr(_chat_writes, "_media_kind", lambda _message: "image")
+    filename, mime, size, chunks = await _chat_writes.media_download("acc-1", "user", 7, 12, 0)
 
     assert filename == "photo.jpg"
     assert mime == "image/jpeg"
@@ -176,7 +176,7 @@ async def test_broadcast_admin_write_is_not_rejected_by_chat_permission_probe() 
             del entity, user
             pytest.fail("broadcast post permission is not the group send_messages bit")
 
-    await _chats._ensure_writable(
+    await _chat_writes._ensure_writable(
         Client(),
         "channel",
         cast("hints.EntityLike", SimpleNamespace(broadcast=True)),
@@ -191,7 +191,9 @@ async def test_confirmed_group_mute_is_rejected() -> None:
             return SimpleNamespace(banned_rights=SimpleNamespace(send_messages=True))
 
     with pytest.raises(_chats.ChatGatewayError, match="chat_write_forbidden"):
-        await _chats._ensure_writable(Client(), "chat", cast("hints.EntityLike", SimpleNamespace()))
+        await _chat_writes._ensure_writable(
+            Client(), "chat", cast("hints.EntityLike", SimpleNamespace())
+        )
 
 
 class _SendClient:
@@ -237,14 +239,14 @@ async def test_send_uses_parse_mode_none_and_file_backed_named_streams(
     tmp_path,
 ) -> None:
     client = _SendClient()
-    monkeypatch.setattr(_chats, "get_client", lambda _account_id: _async_result(client))
+    monkeypatch.setattr(_chat_writes, "get_client", lambda _account_id: _async_result(client))
     uploads = []
     for filename in ("photo.jpg", "clip.mp4", "notes.txt"):
         path = tmp_path / "staged.bin"
         path.write_bytes(filename.encode())
         uploads.append(ChatUpload(path=path, file_name=filename))
 
-    sent = await _chats.send_message(
+    sent = await _chat_writes.send_message(
         "acc-1",
         "user",
         3,
@@ -268,5 +270,5 @@ async def test_send_uses_parse_mode_none_and_file_backed_named_streams(
     assert any(isinstance(item, DocumentAttributeFilename) for item in document_attrs)
     assert document_mime == "text/plain"
 
-    await _chats.send_message("acc-1", "user", 3, text="[literal]", files=[])
+    await _chat_writes.send_message("acc-1", "user", 3, text="[literal]", files=[])
     assert client.text_args == {"text": "[literal]", "parse_mode": None}
