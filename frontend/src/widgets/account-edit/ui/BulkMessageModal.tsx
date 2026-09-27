@@ -373,7 +373,6 @@ export function BulkMessageModal({
                   </div>
                   <Textarea
                     id="bulk-message-recipients"
-                    rows={3}
                     value={recipients}
                     placeholder={t('accounts.messages.recipientsPlaceholder')}
                     onChange={(event) => {
@@ -433,7 +432,6 @@ export function BulkMessageModal({
                   )}
                   <Textarea
                     id="bulk-message-text"
-                    rows={5}
                     maxLength={4096}
                     value={message}
                     placeholder={t('accounts.messages.textPlaceholder')}
