@@ -120,7 +120,7 @@ export function Surfaces() {
           </div>
         </Cell>
         <Cell caption="открыт">
-          <div className="w-panel max-w-full">
+          <div className="w-panel max-w-full" data-catalog="surf-hover-open">
             <SurfHover
               open
               actions={

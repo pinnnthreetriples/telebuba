@@ -116,8 +116,8 @@ export function SurfHover({
         ref={surfaceRef}
         id={surfaceId}
         className={cn(
-          'relative rounded-lg bg-surface-card transition-transform duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)]',
-          (open || reached) && '-translate-x-[var(--shift)]',
+          'relative rounded-lg bg-surface-card transition-[transform,padding] duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)] group-hover:pl-[var(--shift)]',
+          (open || reached) && '-translate-x-[var(--shift)] pl-[var(--shift)]',
         )}
         // `--shift` ставит эффект выше; до первого замера сдвига нет, и это правильный
         // порядок: раскрыть нечего, пока не известно, на сколько.
