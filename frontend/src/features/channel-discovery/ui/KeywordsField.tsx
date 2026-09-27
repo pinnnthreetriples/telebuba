@@ -119,7 +119,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* Say why the button went dead rather than truncating a topic the operator
           wrote — a silent cut would ask the model about something else. */}
       {topicTooLong ? (
-        <p role="status" className="mt-tight type-caption text-danger">
+        <p role="status" className="mt-tight type-caption text-danger-deep">
           {t(`${P}.expandTooLong`, { max: KEYWORD_MAX_LENGTH })}
         </p>
       ) : null}
@@ -127,7 +127,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* A 200 carrying a code: nothing was expanded, and each code points at a
           different fix. Unmapped codes fall back to the raw code. */}
       {expand.data?.error != null ? (
-        <p role="status" className="mt-tight type-caption text-danger">
+        <p role="status" className="mt-tight type-caption text-danger-deep">
           {t(expandErrorKey(expand.data.error), { defaultValue: expand.data.error })}
         </p>
       ) : null}
@@ -135,7 +135,7 @@ export function KeywordsField({ form, onChange }: Props) {
       {/* The request itself never landed, so there is no code to translate — and the
           button silently re-enabling would read as "the model had nothing to say". */}
       {expand.isError ? (
-        <p role="status" className="mt-tight type-caption text-danger">
+        <p role="status" className="mt-tight type-caption text-danger-deep">
           {t(`${P}.expandFailed`)}
         </p>
       ) : null}

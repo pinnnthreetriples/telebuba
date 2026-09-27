@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { logoutMutation, meQueryOptions } from '@/shared/auth';
+import { SURFACE } from '@/shared/design-system';
 import { queryClient, useLogEventStream, type SseStatus } from '@/shared/lib';
 import { IconButton } from '@/shared/ui';
 
@@ -211,7 +212,9 @@ export function AppNav() {
                   }}
                   className="fixed inset-0 z-raised cursor-default"
                 />
-                <div className="absolute right-0 top-[48px] z-pop w-menu overflow-hidden rounded-lg border border-line bg-surface-card py-xs shadow-pop lg:top-[42px]">
+                <div
+                  className={`absolute right-0 top-[48px] z-pop w-menu overflow-hidden py-xs lg:top-[42px] ${SURFACE.panel}`}
+                >
                   {me.data ? (
                     <div className="truncate border-b border-line-row px-md py-sm text-body text-content-muted">
                       {me.data.username}

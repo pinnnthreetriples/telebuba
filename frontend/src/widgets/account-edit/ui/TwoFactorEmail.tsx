@@ -277,14 +277,15 @@ export function TwoFactorEmail({
               maxLength={MAX_EMAIL_LENGTH}
             />
             {email && !addressValid ? (
-              <span className="mt-tight block type-caption font-medium text-danger">
+              <span className="mt-tight block type-caption font-medium text-danger-deep">
                 {t('accounts.edit.twofaEmailErrShape')}
               </span>
             ) : null}
           </label>
           <div className="mb-md type-caption">{t('accounts.edit.twofaEmailWarn')}</div>
           <Button
-            size="block"
+            fullWidth
+            className="font-medium"
             onClick={onAttach}
             disabled={!addressValid || !hasStored}
             loading={setEmail.isPending}

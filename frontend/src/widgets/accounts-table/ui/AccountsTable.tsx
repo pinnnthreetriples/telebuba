@@ -10,7 +10,7 @@ import {
 } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { verdictFill } from '@/shared/design-system';
+import { BAR_FILL, BAR_TRACK, verdictFill } from '@/shared/design-system';
 import { cn, type FeedbackResult } from '@/shared/lib';
 import {
   Card,
@@ -179,10 +179,10 @@ export function AccountsTable({
           <div className="flex items-center gap-sm">
             <div
               // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: the trust bar's own length inside one cell
-              className="h-meter w-[46px] overflow-hidden rounded-full bg-canvas"
+              className={`${BAR_TRACK} w-[46px]`}
             >
               <div
-                className={`h-full rounded-full bg-current ${trustTone(trust)}`}
+                className={`${BAR_FILL} bg-current ${trustTone(trust)}`}
                 style={{ width: `${String(trust)}%` }}
               />
             </div>

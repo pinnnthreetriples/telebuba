@@ -240,11 +240,7 @@ export function AddAccountModal({
                       t('accounts.addWizard.stepTwofaLabel', { n: totalSteps })}
             </div>
           </div>
-          <CloseButton
-            onClick={onClose}
-            aria-label={t('accounts.addWizard.close')}
-            className="text-title"
-          />
+          <CloseButton onClick={onClose} aria-label={t('accounts.addWizard.close')} />
         </div>
 
         {/* stepper */}
@@ -348,7 +344,7 @@ export function AddAccountModal({
                         : t('accounts.addWizard.phoneContinue')}
                   </Button>
                   {startLogin.isError && (
-                    <div className="type-caption text-danger">
+                    <div className="type-caption text-danger-deep">
                       {t('accounts.addWizard.phoneError')}
                     </div>
                   )}

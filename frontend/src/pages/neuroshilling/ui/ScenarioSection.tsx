@@ -204,8 +204,7 @@ function StepRow({
       {step.kind === 'message' ? (
         <Textarea
           size="sm"
-          className="resize-none font-[inherit]"
-          rows={2}
+          className="font-[inherit]"
           value={step.text}
           maxLength={1000}
           placeholder={t('neuroshilling.scenario.steps.textPlaceholder')}
@@ -608,13 +607,14 @@ export function ScenarioSection({
 
       <div className="flex flex-wrap items-center gap-sm">
         {namelessRole ? (
-          <span className="mr-auto type-caption text-danger">
+          <span className="mr-auto type-caption text-danger-deep">
             {t('neuroshilling.scenario.roles.nameRequired')}
           </span>
         ) : null}
         <Button
           variant="primary"
-          size="block"
+          fullWidth
+          className="font-medium"
           disabled={busy || dirty || namelessRole || draft.steps.length === 0}
           title={dirty ? t('neuroshilling.scenario.approveHint') : undefined}
           onClick={onApprove}

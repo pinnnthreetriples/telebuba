@@ -590,7 +590,7 @@ export function NeurocommentPage() {
             onPickListener={pickListener}
           />
           {showWarmingBlock ? (
-            <p className="mt-sm type-caption font-medium text-danger">
+            <p className="mt-sm type-caption font-medium text-danger-deep">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
           ) : null}

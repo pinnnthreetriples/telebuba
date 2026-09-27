@@ -26,7 +26,7 @@ export function MusicTab({
 
   if (!supported) {
     return (
-      <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
+      <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
         {t('accounts.profile.musicUnsupported')}
       </div>
     );

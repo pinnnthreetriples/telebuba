@@ -25,7 +25,7 @@ const SEEN = ['hide', 'show'] as const;
 // to its content, not its own arrival, so one that mounts with the fault is silent. While
 // empty it is `sr-only` rather than `hidden` — display:none would drop it from the
 // accessibility tree, and out of flow it adds no line (and no gap) to the wrapping row.
-const MESSAGE = 'basis-full type-caption text-danger empty:sr-only';
+const MESSAGE = 'basis-full type-caption text-danger-deep empty:sr-only';
 
 type Setter = <K extends keyof DiscoveryFormState>(key: K, value: DiscoveryFormState[K]) => void;
 

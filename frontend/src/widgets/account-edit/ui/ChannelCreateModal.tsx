@@ -206,12 +206,7 @@ export function ChannelCreateModal({
       <div className="tb-scroll max-h-dialog overflow-y-auto px-2xl py-2xl">
         <div className="mb-lg flex items-center justify-between">
           <span className="type-dialog-title">{t('accounts.channel.createTitle')}</span>
-          <CloseButton
-            onClick={onClose}
-            disabled={busy}
-            aria-label={t('accounts.channel.close')}
-            className="text-title"
-          />
+          <CloseButton onClick={onClose} disabled={busy} aria-label={t('accounts.channel.close')} />
         </div>
 
         <label className="mb-lg block">
@@ -224,7 +219,7 @@ export function ChannelCreateModal({
             }}
           />
           {title !== '' && title.trim() === '' && (
-            <span className="mt-xs block type-caption text-danger">
+            <span className="mt-xs block type-caption text-danger-deep">
               {t('accounts.channel.errTitle')}
             </span>
           )}
@@ -233,8 +228,7 @@ export function ChannelCreateModal({
         <label className="mb-lg block">
           <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
           <Textarea
-            className="resize-none [font-family:inherit]"
-            rows={3}
+            className="[font-family:inherit]"
             value={about}
             maxLength={CHANNEL_ABOUT_MAX}
             onChange={(event) => {

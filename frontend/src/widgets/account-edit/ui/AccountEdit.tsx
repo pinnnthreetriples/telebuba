@@ -4,6 +4,7 @@ import { Card } from '@/shared/ui';
 
 import { StatusBadge } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 
 import { ActionsSection } from './ActionsSection';
 import { AccountChats } from './AccountChats';
@@ -83,9 +84,9 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="type-prose">{t('accounts.edit.trust')}</span>
             <span className={`text-title font-bold ${tTone}`}>{trust}/100</span>
           </div>
-          <div className="mt-tight h-meter overflow-hidden rounded-full bg-canvas">
+          <div className={`mt-tight ${BAR_TRACK}`}>
             <div
-              className={`h-full rounded-full bg-current ${tTone}`}
+              className={`${BAR_FILL} bg-current ${tTone}`}
               style={{ width: `${String(trust)}%` }}
             />
           </div>

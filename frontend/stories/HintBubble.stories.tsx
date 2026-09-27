@@ -1,0 +1,26 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+
+import { HintBubble } from '../src/shared/ui';
+
+const meta = {
+  title: 'Shared/HintBubble',
+  component: HintBubble,
+  tags: ['autodocs'],
+  args: {
+    text: 'Сколько действий аккаунт делает за сутки.',
+    example: '20 — прогрев, 60 — рабочий режим',
+  },
+} satisfies Meta<typeof HintBubble>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+  decorators: [
+    (Story) => (
+      <div className="w-tip">
+        <Story />
+      </div>
+    ),
+  ],
+};

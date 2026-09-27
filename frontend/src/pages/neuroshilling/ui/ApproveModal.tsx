@@ -222,7 +222,7 @@ export function ApproveModal({
                         <div className="rounded-lg rounded-tl-[3px] border border-line bg-surface px-md py-sm text-body">
                           {quoted ? (
                             <span
-                              className={`mb-tight block border-l-2 pl-sm text-tiny text-content-subtle ${tone.border}`}
+                              className={`mb-tight block border-l-2 pl-sm type-caption ${tone.border}`}
                             >
                               {quoted.text}
                             </span>

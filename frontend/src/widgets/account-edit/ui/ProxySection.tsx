@@ -233,7 +233,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
         ) : null}
       </div>
       {unassignProxy.isError ? (
-        <div className="mb-md type-caption text-danger">{t('accounts.edit.proxyDetachErr')}</div>
+        <div className="mb-md type-caption text-danger-deep">
+          {t('accounts.edit.proxyDetachErr')}
+        </div>
       ) : null}
       <SegmentedControl
         className="mb-md"

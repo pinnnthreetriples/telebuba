@@ -133,8 +133,7 @@ export function BulkChannelsTab({
           <label className="flex flex-col gap-tight">
             <span className="type-label">{t('accounts.channel.aboutLabel')}</span>
             <Textarea
-              className="resize-none [font-family:inherit]"
-              rows={2}
+              className="[font-family:inherit]"
               value={channel.about}
               maxLength={CHANNEL_ABOUT_MAX}
               onChange={(event) => {
@@ -182,8 +181,7 @@ export function BulkChannelsTab({
           <div className="type-prose">{t('accounts.bulk.channelPostHint')}</div>
           <div className="flex flex-col gap-tight">
             <Textarea
-              className="resize-none [font-family:inherit]"
-              rows={4}
+              className="[font-family:inherit]"
               value={post.text}
               maxLength={postTextMax(post.file)}
               aria-label={t('accounts.channel.composerPlaceholder')}
@@ -196,7 +194,7 @@ export function BulkChannelsTab({
                 and `maxLength` cannot shorten what is already typed — the counter
                 turns red and the footer's Apply goes with it. */}
             <span
-              className={`self-end type-caption ${post.text.length > postTextMax(post.file) ? 'font-medium text-danger' : ''}`}
+              className={`self-end type-caption ${post.text.length > postTextMax(post.file) ? 'font-medium text-danger-deep' : ''}`}
             >
               {t('accounts.channel.charCount', {
                 n: post.text.length,

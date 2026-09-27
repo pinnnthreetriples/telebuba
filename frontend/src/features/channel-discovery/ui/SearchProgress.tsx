@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryStream, DiscoveryWork } from '@/shared/api';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { Badge } from '@/shared/ui';
 import { cn } from '@/shared/lib/cn';
 
@@ -79,14 +80,11 @@ export function SearchProgress({ work, phase }: Props) {
         aria-valuemin={0}
         aria-valuemax={planned}
         aria-valuenow={indeterminate ? undefined : clampedDone}
-        className={cn(
-          'h-meter w-full overflow-hidden rounded-full bg-canvas',
-          indeterminate && 'tb-pulse',
-        )}
+        className={cn(BAR_TRACK, 'w-full', indeterminate && 'tb-pulse')}
       >
         {indeterminate ? null : (
           <div
-            className="h-full rounded-full bg-action-primary transition-[width] duration-reveal"
+            className={`${BAR_FILL} bg-action-primary transition-[width] duration-reveal`}
             style={{ width: `${String(percent)}%` }}
           />
         )}

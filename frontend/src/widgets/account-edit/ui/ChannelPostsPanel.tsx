@@ -205,8 +205,7 @@ export function ChannelPostsPanel({
           побайтово, а уведомление перестаёт решать расстояние до соседа. */}
       <div className="flex flex-col gap-sm rounded-lg border border-line bg-surface-card p-md">
         <Textarea
-          className="resize-none [font-family:inherit]"
-          rows={3}
+          className="[font-family:inherit]"
           value={text}
           maxLength={textMax}
           placeholder={t('accounts.channel.composerPlaceholder')}
@@ -315,7 +314,7 @@ export function ChannelPostsPanel({
         </Notice>
       )}
       {posts.isSuccess && items.length === 0 && (
-        <div className="mt-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-xl text-center text-body text-content-subtle">
+        <div className="mt-md rounded-lg border border-dashed border-line bg-surface-card px-lg py-xl text-center type-prose">
           {t('accounts.channel.postsEmpty')}
         </div>
       )}
@@ -362,8 +361,7 @@ export function ChannelPostsPanel({
               {editingId === post.post_id ? (
                 <div className="mt-sm flex flex-col gap-sm">
                   <Textarea
-                    className="resize-none [font-family:inherit]"
-                    rows={3}
+                    className="[font-family:inherit]"
                     value={editText}
                     maxLength={editMax}
                     aria-label={t('accounts.channel.postEdit')}

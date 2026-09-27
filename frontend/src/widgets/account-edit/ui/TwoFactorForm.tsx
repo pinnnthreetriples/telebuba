@@ -150,7 +150,8 @@ export function TwoFactorForm({
       </div>
       <div className="mb-lg type-caption">{t('accounts.edit.twofaHintWarn')}</div>
       <Button
-        size="block"
+        fullWidth
+        className="font-medium"
         onClick={() => {
           void twofaForm.handleSubmit();
         }}

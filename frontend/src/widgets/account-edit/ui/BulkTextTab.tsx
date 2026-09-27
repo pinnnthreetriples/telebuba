@@ -55,8 +55,7 @@ export function BulkTextTab({
             </button>
             {key === 'bio' ? (
               <Textarea
-                className="resize-none [font-family:inherit]"
-                rows={3}
+                className="[font-family:inherit]"
                 disabled={!on[key]}
                 value={value[key]}
                 aria-label={label}
@@ -75,12 +74,12 @@ export function BulkTextTab({
               />
             )}
             {on[key] && value[key].trim().length > TEXT_MAX[key] && (
-              <span role="alert" className="type-caption font-medium text-danger">
+              <span role="alert" className="type-caption font-medium text-danger-deep">
                 {t('accounts.bulk.tooLong', { max: TEXT_MAX[key] })}
               </span>
             )}
             {on[key] && empty && key === 'first_name' && (
-              <span role="alert" className="type-caption font-medium text-danger">
+              <span role="alert" className="type-caption font-medium text-danger-deep">
                 {t('accounts.profile.errFirstName')}
               </span>
             )}

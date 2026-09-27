@@ -213,7 +213,13 @@ export function SessionSection({ account }: { account: AccountRead }) {
           />
         </label>
       </div>
-      <Button size="block" onClick={onConfirmLogin} disabled={!code} loading={submitCode.isPending}>
+      <Button
+        fullWidth
+        className="font-medium"
+        onClick={onConfirmLogin}
+        disabled={!code}
+        loading={submitCode.isPending}
+      >
         {t('accounts.edit.confirmLogin')}
       </Button>
       {loginNote ? <div className="mt-sm type-caption">{loginNote}</div> : null}

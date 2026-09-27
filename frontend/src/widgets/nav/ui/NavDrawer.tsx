@@ -34,7 +34,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
           size="touch"
           onClick={onClose}
           aria-label={t('shell.closeMenu')}
-          className="-mr-sm text-title"
+          className="-mr-sm"
         />
       </div>
 

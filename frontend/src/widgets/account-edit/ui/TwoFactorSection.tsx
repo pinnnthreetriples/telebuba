@@ -247,16 +247,15 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
             <Textarea
               tone="flat"
               readOnly
-              rows={2}
               value={created.password}
               aria-label={t('accounts.edit.twofaNewPassword')}
-              className="mb-sm resize-none break-all font-mono text-content-primary"
+              className="mb-sm break-all font-mono text-content-primary"
             />
             {clipboard ? (
               <Button
                 type="button"
-                size="block"
-                className="mb-md text-content-muted"
+                fullWidth
+                className="mb-md font-medium text-content-muted"
                 onClick={() => {
                   copyPassword(created.password);
                 }}
@@ -270,12 +269,13 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
               <div className="mb-md type-caption">{t('accounts.edit.twofaCopyManual')}</div>
             )}
             {copyState === 'failed' ? (
-              <div className="mb-md type-caption font-medium text-danger">
+              <div className="mb-md type-caption font-medium text-danger-deep">
                 {t('accounts.edit.twofaCopyFailed')}
               </div>
             ) : null}
             <Button
-              size="block"
+              fullWidth
+              className="font-medium"
               onClick={() => {
                 setCreated(null);
                 setCopyState('idle');
@@ -288,7 +288,7 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
           <>
             {/* A set, change or disable against an account whose live state we could
                 not read is a guess, so this branch offers none of them. */}
-            <div className="type-caption text-danger">
+            <div className="type-caption text-danger-deep">
               {t('accounts.edit.twofaReadErr', {
                 reason: readError
                   ? t(`shell.code.${readError}`, { defaultValue: readError })
@@ -403,7 +403,8 @@ export function TwoFactorSection({ account }: { account: AccountRead }) {
                 />
               ) : (
                 <Button
-                  size="block"
+                  fullWidth
+                  className="font-medium"
                   onClick={() => {
                     setChanging(true);
                   }}

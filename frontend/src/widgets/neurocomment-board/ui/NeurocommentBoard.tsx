@@ -162,9 +162,9 @@ function AccountComments({
         <div className="flex items-center gap-sm">
           <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
           <span className="type-item-title">{t('neurocomment.feed.title')}</span>
-          <span className="rounded-full bg-canvas px-sm py-hair text-tiny font-medium text-content-muted">
+          <Badge tone="neutral" size="xs">
             {comments.length}
-          </span>
+          </Badge>
         </div>
         {onOpenHistory ? (
           <Button

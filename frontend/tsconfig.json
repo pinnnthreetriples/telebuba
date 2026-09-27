@@ -28,6 +28,8 @@
   "include": [
     "src",
     "catalog",
+    "stories",
+    ".storybook",
     "vite.config.ts",
     "vitest.config.ts",
     "vitest.setup.ts",

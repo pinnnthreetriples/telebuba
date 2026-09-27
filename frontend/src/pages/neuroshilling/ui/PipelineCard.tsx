@@ -7,6 +7,7 @@ import type {
   NeuroshillingRunStatus,
   NeuroshillingStep,
 } from '@/shared/api';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { Badge, Button, Card, Notice } from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
@@ -228,10 +229,10 @@ export function PipelineCard({
           aria-valuemin={0}
           aria-valuemax={total}
           aria-valuenow={sent}
-          className="h-meter w-full overflow-hidden rounded-full bg-canvas"
+          className={`${BAR_TRACK} w-full`}
         >
           <div
-            className="h-full rounded-full bg-action-primary transition-[width] duration-reveal"
+            className={`${BAR_FILL} bg-action-primary transition-[width] duration-reveal`}
             style={{ width: `${String(percent)}%` }}
           />
         </div>

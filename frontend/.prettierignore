@@ -1,4 +1,5 @@
 dist
+storybook-static
 coverage
 .cov-tmp
 node_modules

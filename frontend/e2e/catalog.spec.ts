@@ -37,6 +37,16 @@ test.describe('каталог дизайн-системы', () => {
     );
   });
 
+  test('не переполняет mobile viewport на ширине 375px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  });
+
   for (const id of SECTIONS) {
     test(`раздел «${id}» выглядит как эталон`, async ({ page }) => {
       await open(page);

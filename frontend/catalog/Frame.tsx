@@ -56,15 +56,22 @@ export function Row({
 export function Cell({
   caption,
   probe,
+  scrollable = false,
   children,
 }: {
   caption: string;
   probe?: 'hover' | 'focus' | 'press' | 'open';
+  scrollable?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col items-start gap-hair">
-      <div className="sm:max-w-full sm:overflow-x-auto" data-probe={probe} data-cell={caption}>
+    <div className="flex min-w-0 max-w-full flex-col items-start gap-hair">
+      <div
+        className={scrollable ? 'max-w-full overflow-x-auto' : 'max-w-full'}
+        tabIndex={scrollable ? 0 : undefined}
+        data-probe={probe}
+        data-cell={caption}
+      >
         {children}
       </div>
       <span className="type-caption">{caption}</span>

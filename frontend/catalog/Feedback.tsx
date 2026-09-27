@@ -53,7 +53,7 @@ export function Feedback() {
       <Row label="Notice · с рамкой">
         {NOTICE_TONES.map((tone) => (
           <Cell key={tone} caption={tone}>
-            <div className="w-panel">
+            <div className="w-panel max-w-full">
               <Notice tone={tone}>
                 Прокси отвечает медленнее порога — аккаунт снят с очереди.
               </Notice>
@@ -65,7 +65,7 @@ export function Feedback() {
       <Row label="Notice · без рамки" hint="для вложенных в панель">
         {NOTICE_TONES.map((tone) => (
           <Cell key={tone} caption={tone}>
-            <div className="w-panel">
+            <div className="w-panel max-w-full">
               <Notice tone={tone} bordered={false}>
                 Прокси отвечает медленнее порога.
               </Notice>

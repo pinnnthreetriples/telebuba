@@ -12,6 +12,7 @@ import {
   proxyTypeLabel,
 } from '@/entities/proxy';
 import type { ProxyRead } from '@/shared/api';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { formatLocalTime } from '@/shared/lib';
 
 import { ProxyDeleteModal } from './ProxyDeleteModal';
@@ -269,9 +270,9 @@ function ProxyCard({
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
-        <div className="h-meter overflow-hidden rounded-full bg-canvas">
+        <div className={BAR_TRACK}>
           <div
-            className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-action-primary'}`}
+            className={`${BAR_FILL} ${full ? 'bg-danger' : 'bg-action-primary'}`}
             style={{ width: `${String(pct)}%` }}
           />
         </div>

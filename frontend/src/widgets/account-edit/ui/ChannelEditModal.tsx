@@ -30,6 +30,7 @@ import {
 } from './_channelsShared';
 import { CheckRow } from './_CheckRow';
 import { ChannelPostsPanel } from './ChannelPostsPanel';
+import { RetryNotice } from './RetryNotice';
 
 // Channel editor (opened above the profile modal, z=75): title/about edit
 // (partial update — only changed fields are sent), avatar upload, and the
@@ -190,26 +191,19 @@ export function ChannelEditModal({
               onClick={requestClose}
               disabled={busy}
               aria-label={t('accounts.channel.close')}
-              className="text-title"
             />
           </div>
 
           {detail.isError && (
             // Без `mb-lg`: ветка `detail.isSuccess` в этом состоянии не отрисована, то
             // есть под уведомлением не стоит ничего — отступ был краем диалога.
-            <Notice tone="danger" className="flex items-center justify-between gap-md">
-              <span>{channelErrorText(detail.error, t, t('accounts.channel.detailError'))}</span>
-              <Button
-                size="xs"
-                variant="danger"
-                className="bg-surface-card"
-                onClick={() => {
-                  void detail.refetch();
-                }}
-              >
-                {t('accounts.channel.retry')}
-              </Button>
-            </Notice>
+            <RetryNotice
+              message={channelErrorText(detail.error, t, t('accounts.channel.detailError'))}
+              label={t('accounts.channel.retry')}
+              onRetry={() => {
+                void detail.refetch();
+              }}
+            />
           )}
 
           {detail.isSuccess && (
@@ -224,7 +218,7 @@ export function ChannelEditModal({
                   }}
                 />
                 {titleChanged && shownTitle.trim() === '' && (
-                  <span className="mt-xs block type-caption text-danger">
+                  <span className="mt-xs block type-caption text-danger-deep">
                     {t('accounts.channel.errTitle')}
                   </span>
                 )}
@@ -232,8 +226,7 @@ export function ChannelEditModal({
               <label className="mb-lg block">
                 <span className={LABEL}>{t('accounts.channel.aboutLabel')}</span>
                 <Textarea
-                  className="resize-none [font-family:inherit]"
-                  rows={3}
+                  className="[font-family:inherit]"
                   value={shownAbout}
                   maxLength={CHANNEL_ABOUT_MAX}
                   onChange={(event) => {

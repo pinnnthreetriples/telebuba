@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge } from '@/shared/api';
+import { HEADING_ICON_TILE, SURFACE } from '@/shared/design-system';
 import { Button, ConfirmModal, FeedbackMark, Icon, IconButton, Modal } from '@/shared/ui';
 
 import { accountLimitsQueryOptions } from '../api/campaign.queries';
@@ -222,7 +223,7 @@ function AccountRow({
         // A per-pair ban is permanent — no retry, no un-ban — so the line states the
         // fact and nothing else; the operator's move is the "Добавить в кампанию"
         // button already on this screen.
-        <div className="mt-tight type-caption text-danger">
+        <div className="mt-tight type-caption text-danger-deep">
           {t('neurocomment.modal.neuroAccounts.banned', {
             channels: banned.map(shortChannel).join(', '),
           })}
@@ -241,7 +242,7 @@ function AccountRow({
           // .tb-dd collapses visually only; without this every channel option of
           // every linked row kept its tab stop while closed. See the note in LogsPage.
           inert={!open}
-          className={`tb-dd ${open ? 'open mt-sm rounded-lg border border-line bg-surface-card p-xs shadow-pop' : ''}`}
+          className={`tb-dd ${open ? `open mt-sm p-xs ${SURFACE.panel}` : ''}`}
         >
           <button
             key={ALL_CHANNELS}
@@ -336,7 +337,7 @@ export function NeuroAccountsModal({
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.neuroAccounts.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+        <span className={HEADING_ICON_TILE}>
           <svg
             width="18"
             height="18"

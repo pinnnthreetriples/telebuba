@@ -60,7 +60,13 @@ export function LoginPage() {
             {t('auth.login.error')}
           </p>
         ) : null}
-        <Button type="submit" variant="primary" size="block" disabled={login.isPending}>
+        <Button
+          type="submit"
+          variant="primary"
+          fullWidth
+          className="font-medium"
+          disabled={login.isPending}
+        >
           {t('auth.login.submit')}
         </Button>
       </form>

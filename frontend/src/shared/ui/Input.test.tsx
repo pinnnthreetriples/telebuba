@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { createRef } from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -79,18 +80,52 @@ test('a caller class wins over the tone it collides with', () => {
   expect(screen.getByLabelText('Пароль').className).toContain('text-content-primary');
 });
 
-// У области высота приходит из `rows`, поэтому она — единственный контрол, который
-// фиксированную высоту НЕ берёт: зафиксировать её значило бы обрезать написанный текст.
-test('Textarea takes the same shape but keeps padding instead of a height', async () => {
+test('Textarea starts at one row, prevents manual resize and keeps the field styling', async () => {
   const onChange = vi.fn();
   render(<Textarea aria-label="Промпт" size="sm" onChange={onChange} />);
 
-  const area = screen.getByLabelText('Промпт');
+  const area = screen.getByLabelText<HTMLTextAreaElement>('Промпт');
   expect(area.tagName).toBe('TEXTAREA');
+  expect(area.getAttribute('rows')).toBe('1');
   expect(area.className).toContain('py-tight');
+  expect(area.className).toContain('resize-none');
   expect(area.className).not.toMatch(/h-/);
   await userEvent.type(area, 'ок');
   expect(onChange).toHaveBeenCalled();
+});
+
+test('Textarea grows and shrinks with text changes while forwarding input and ref', () => {
+  const ref = createRef<HTMLTextAreaElement>();
+  const onInput = vi.fn();
+  const { rerender } = render(
+    <Textarea aria-label="Промпт" value="одна" onChange={vi.fn()} onInput={onInput} ref={ref} />,
+  );
+  const area = screen.getByLabelText<HTMLTextAreaElement>('Промпт');
+  expect(ref.current).toBe(area);
+  Object.defineProperty(area, 'scrollHeight', {
+    configurable: true,
+    get: () => 16 + area.value.split('\n').length * 20,
+  });
+
+  rerender(
+    <Textarea
+      aria-label="Промпт"
+      value={'одна\nдве\nтри'}
+      onChange={vi.fn()}
+      onInput={onInput}
+      ref={ref}
+    />,
+  );
+  expect(area.style.height).toBe('76px');
+
+  rerender(
+    <Textarea aria-label="Промпт" value="одна" onChange={vi.fn()} onInput={onInput} ref={ref} />,
+  );
+  expect(area.style.height).toBe('36px');
+
+  fireEvent.input(area);
+  expect(onInput).toHaveBeenCalledOnce();
+  expect(area.style.height).toBe('36px');
 });
 
 // The focus ring is one shared recipe (`.tb-time` in index.css) rather than a

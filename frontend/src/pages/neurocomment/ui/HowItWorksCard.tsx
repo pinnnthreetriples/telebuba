@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { CollapsibleCard } from '@/shared/ui';
+import { CollapsibleCard, NumberedStep } from '@/shared/ui';
 
 const HOW_STEPS = [0, 1, 2, 3] as const;
 
@@ -16,12 +16,9 @@ export function HowItWorksCard() {
     >
       <div className="flex flex-col gap-md">
         {HOW_STEPS.map((index) => (
-          <div key={index} className="flex items-start gap-md">
-            <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-action-primary text-tiny font-semibold text-on-action">
-              {index + 1}
-            </span>
-            <span className="type-prose">{t(`neurocomment.howto.steps.${String(index)}`)}</span>
-          </div>
+          <NumberedStep key={index} number={index + 1}>
+            {t(`neurocomment.howto.steps.${String(index)}`)}
+          </NumberedStep>
         ))}
       </div>
     </CollapsibleCard>

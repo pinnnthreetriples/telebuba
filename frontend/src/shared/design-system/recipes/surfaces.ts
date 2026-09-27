@@ -24,6 +24,9 @@ export const SURFACE = {
   inverse: 'rounded-lg bg-term text-term-text',
 } as const;
 
+export const HEADING_ICON_TILE =
+  'flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong';
+
 export type SurfaceVariant = keyof typeof SURFACE;
 
 export function tileAction(className?: string): string {

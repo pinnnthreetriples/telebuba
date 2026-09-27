@@ -100,7 +100,7 @@ export function ProxyPoolStep({
       )}
       <div className="flex flex-col gap-sm">
         {freeProxies.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
+          <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
             {t('accounts.addWizard.poolEmpty')}
           </div>
         ) : (
@@ -134,7 +134,7 @@ export function ProxyPoolStep({
           ))
         )}
         {failed && (
-          <div role="alert" className="type-caption text-danger">
+          <div role="alert" className="type-caption text-danger-deep">
             {t(
               accountIds.length > 1
                 ? 'accounts.addWizard.proxyAssignPartial'

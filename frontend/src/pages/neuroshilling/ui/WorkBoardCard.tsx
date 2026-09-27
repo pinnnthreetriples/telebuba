@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign, NeuroshillingRunStatus } from '@/shared/api';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { Badge, Card, DataTable, type DataTableColumnMeta } from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
@@ -106,9 +107,9 @@ export function WorkBoardCard({
           const percent = total === 0 ? 0 : Math.min(100, Math.round((sent / total) * 100));
           return (
             <>
-              <div className="h-meter w-full overflow-hidden rounded-full bg-canvas">
+              <div className={`${BAR_TRACK} w-full`}>
                 <div
-                  className="h-full rounded-full bg-action-primary"
+                  className={`${BAR_FILL} bg-action-primary`}
                   style={{ width: `${String(percent)}%` }}
                 />
               </div>

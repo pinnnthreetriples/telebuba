@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, CloseButton, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, CloseButton, Icon, IconButton, Modal, Textarea } from '@/shared/ui';
 
 export interface PromptAccount {
   account_id: string;
@@ -44,27 +44,22 @@ export function CampaignPromptModal({
       <div className="p-2xl">
         <div className="mb-tight flex items-center justify-between">
           <span className="type-dialog-title">{t('neurocomment.modal.campaignPrompt.title')}</span>
-          <CloseButton
-            aria-label={t('neurocomment.modal.close')}
-            onClick={onClose}
-            className="text-title"
-          />
+          <CloseButton aria-label={t('neurocomment.modal.close')} onClick={onClose} />
         </div>
         <div className="mb-lg type-prose">
           {t('neurocomment.modal.campaignPrompt.sub', { name: campaignName })}
         </div>
-        <textarea
+        <Textarea
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
           }}
-          rows={5}
           placeholder={t('neurocomment.modal.campaignPrompt.placeholder')}
           // Its own name, not the dialog's: two elements sharing one accessible
           // name is what made getByLabelText ambiguous, and "Campaign prompt"
           // announced twice tells a screen-reader user nothing about the field.
           aria-label={t('neurocomment.modal.campaignPrompt.promptLabel')}
-          className="w-full resize-none rounded-lg border border-line bg-surface-card px-lg py-md font-[inherit] text-body outline-none"
+          className="px-lg py-md font-[inherit]"
         />
 
         <div className="my-xl mb-md flex items-center justify-between">
@@ -104,7 +99,7 @@ export function CampaignPromptModal({
             ))}
           </div>
         ) : (
-          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center text-body text-content-subtle">
+          <div className="rounded-lg border border-dashed border-line-strong bg-surface p-lg text-center type-prose">
             {t('neurocomment.modal.campaignPrompt.empty')}
           </div>
         )}

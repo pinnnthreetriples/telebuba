@@ -59,7 +59,7 @@ export function PipelineCard({
         <div className="flex items-center gap-md">
           <span className="type-card-title">{t('neurocomment.pipeline.title')}</span>
           <span
-            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'tb-pulse bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
+            className={`rounded-full px-md py-xs text-tiny font-semibold ${running ? 'bg-success-tint text-success-deep' : 'bg-canvas text-content-muted'}`}
           >
             {running ? t('neurocomment.pipeline.running') : t('neurocomment.pipeline.stopped')}
           </span>
@@ -141,7 +141,7 @@ export function PipelineCard({
 
       <div className="mb-lg flex items-center gap-md rounded-lg border border-info-line bg-info-tint px-lg py-md">
         <span className="pl-pulse size-dot shrink-0 rounded-full bg-action-primary" />
-        <span className="tb-pulse type-label text-info-strong">
+        <span className="type-label text-info-strong">
           {running
             ? t('neurocomment.pipeline.descRunning')
             : t('neurocomment.pipeline.descStopped')}

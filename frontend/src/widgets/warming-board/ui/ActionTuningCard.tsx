@@ -8,6 +8,7 @@ import {
   warmingSettingsQueryOptions,
 } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
+import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { mutationErrorText } from '@/shared/lib';
 import { Badge, Button, CollapsibleCard, FeedbackMark, HelpHint, Icon, Switch } from '@/shared/ui';
 import type { IconName } from '@/shared/ui';
@@ -247,7 +248,7 @@ export function ActionTuningCard() {
       label={t('warming.tune.title')}
       header={
         <>
-          <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+          <span className={HEADING_ICON_TILE}>
             <Icon name="gear" size={18} />
           </span>
           <div className="min-w-0">
@@ -324,7 +325,7 @@ export function ActionTuningCard() {
         {save.isError ? (
           // Тот же конкретный текст, что и в общем тосте мутаций: этот сигнал —
           // отчёт по месту, и он не должен быть менее внятным из двух.
-          <div role="alert" className="mt-md type-caption text-danger">
+          <div role="alert" className="mt-md type-caption text-danger-deep">
             {mutationErrorText(save.error)}
           </div>
         ) : null}

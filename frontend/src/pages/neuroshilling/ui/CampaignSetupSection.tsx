@@ -1,7 +1,16 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Button, HelpHint, Icon, IconButton, Input, SegmentedControl, Switch } from '@/shared/ui';
+import {
+  Button,
+  HelpHint,
+  Icon,
+  IconButton,
+  InlineChipEditor,
+  Input,
+  SegmentedControl,
+  Switch,
+} from '@/shared/ui';
 
 import { AdvancedLimitsModal } from './AdvancedLimitsModal';
 import type { ScenarioDraft } from './scenarioDraft';
@@ -158,35 +167,19 @@ export function CampaignSetupSection({
           </span>
         ))}
         {adding ? (
-          <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
-            <input
-              autoFocus
-              value={entry}
-              disabled={live}
-              placeholder={t('neuroshilling.setup.targets.addPlaceholder')}
-              aria-label={t('neuroshilling.setup.targets.add')}
-              onChange={(event) => {
-                setEntry(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') commitEntry();
-                if (event.key === 'Escape') {
-                  setEntry('');
-                  setAdding(false);
-                }
-              }}
-              className="w-col border-none bg-transparent text-body outline-none"
-            />
-            <button
-              type="button"
-              aria-label={t('neuroshilling.setup.targets.confirm')}
-              disabled={!entry.trim()}
-              onClick={commitEntry}
-              className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
-            >
-              <Icon name="check" size={12} />
-            </button>
-          </span>
+          <InlineChipEditor
+            value={entry}
+            onChange={setEntry}
+            onConfirm={commitEntry}
+            onCancel={() => {
+              setEntry('');
+              setAdding(false);
+            }}
+            placeholder={t('neuroshilling.setup.targets.addPlaceholder')}
+            inputLabel={t('neuroshilling.setup.targets.add')}
+            confirmLabel={t('neuroshilling.setup.targets.confirm')}
+            disabled={live}
+          />
         ) : (
           // `dashedMuted`, а не `dashed`: приглушённый СТРОЧНЫЙ добавитель в ряду чипов,
           // тогда как блочный добавитель под списком синий. Рисовался руками, пока такой

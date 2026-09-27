@@ -1,6 +1,6 @@
 import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -46,6 +46,8 @@ function SettingsForm({
   neuroSettings: NeurocommentSettings;
 }) {
   const { t } = useTranslation();
+  const delayFromErrorId = useId();
+  const delayToErrorId = useId();
   const queryClient = useQueryClient();
   const saveWarm = useMutation(updateWarmingSettingsMutation());
   const saveNeuro = useMutation(updateNeurocommentSettingsMutation());
@@ -280,7 +282,7 @@ function SettingsForm({
       </Card>
 
       <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
-        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md text-body text-content-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md type-prose">
           {t('settings.warmLimits.engineNote')}
         </div>
       </Card>
@@ -296,41 +298,60 @@ function SettingsForm({
             <span className={FIELD_LABEL}>{t('settings.neuroLimits.delay')}</span>
             <div className="flex items-center gap-md">
               <form.Field name="delayFrom">
-                {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-surface-card px-md py-md">
-                    <span className="shrink-0 type-caption">{t('settings.range.from')}</span>
-                    <input
-                      inputMode="numeric"
-                      value={field.state.value}
-                      onChange={(event) => {
-                        field.handleChange(event.target.value);
-                      }}
-                      onBlur={field.handleBlur}
-                      aria-label={t('settings.neuroLimits.delayFrom')}
-                      className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
-                    />
-                  </label>
-                )}
+                {(field) => {
+                  const invalid = field.state.meta.isTouched && field.state.meta.errors.length > 0;
+                  return (
+                    <label
+                      className={`tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border bg-surface-card px-md py-md ${invalid ? 'border-danger' : 'border-line'}`}
+                    >
+                      <span className="shrink-0 type-caption">{t('settings.range.from')}</span>
+                      <input
+                        inputMode="numeric"
+                        value={field.state.value}
+                        onChange={(event) => {
+                          field.handleChange(event.target.value);
+                        }}
+                        onBlur={field.handleBlur}
+                        aria-label={t('settings.neuroLimits.delayFrom')}
+                        aria-invalid={invalid || undefined}
+                        aria-describedby={invalid ? delayFromErrorId : undefined}
+                        className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
+                      />
+                    </label>
+                  );
+                }}
               </form.Field>
               <form.Field name="delayTo">
-                {(field) => (
-                  <label className="tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border border-line bg-surface-card px-md py-md">
-                    <span className="shrink-0 type-caption">{t('settings.range.to')}</span>
-                    <input
-                      inputMode="numeric"
-                      value={field.state.value}
-                      onChange={(event) => {
-                        field.handleChange(event.target.value);
-                      }}
-                      onBlur={field.handleBlur}
-                      aria-label={t('settings.neuroLimits.delayTo')}
-                      className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
-                    />
-                  </label>
-                )}
+                {(field) => {
+                  const invalid = field.state.meta.isTouched && field.state.meta.errors.length > 0;
+                  return (
+                    <label
+                      className={`tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border bg-surface-card px-md py-md ${invalid ? 'border-danger' : 'border-line'}`}
+                    >
+                      <span className="shrink-0 type-caption">{t('settings.range.to')}</span>
+                      <input
+                        inputMode="numeric"
+                        value={field.state.value}
+                        onChange={(event) => {
+                          field.handleChange(event.target.value);
+                        }}
+                        onBlur={field.handleBlur}
+                        aria-label={t('settings.neuroLimits.delayTo')}
+                        aria-invalid={invalid || undefined}
+                        aria-describedby={invalid ? delayToErrorId : undefined}
+                        className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
+                      />
+                    </label>
+                  );
+                }}
               </form.Field>
             </div>
-            <form.Field name="delayTo">{(field) => <FieldError field={field} />}</form.Field>
+            <form.Field name="delayFrom">
+              {(field) => <FieldError field={field} id={delayFromErrorId} />}
+            </form.Field>
+            <form.Field name="delayTo">
+              {(field) => <FieldError field={field} id={delayToErrorId} />}
+            </form.Field>
           </div>
           <form.Field name="parallel">
             {(field) => (

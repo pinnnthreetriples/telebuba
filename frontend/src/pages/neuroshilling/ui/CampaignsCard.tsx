@@ -1,9 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { NeuroshillingCampaign } from '@/shared/api';
-import { FOCUS_RING } from '@/shared/design-system';
-import { cn } from '@/shared/lib/cn';
-import { Button, CollapsibleCard, Icon, IconButton, SurfHover } from '@/shared/ui';
+import { Button, CollapsibleCard, Icon, IconButton, Input, SelectableCard } from '@/shared/ui';
 
 import { CampaignStatusBadge } from './CampaignStatusBadge';
 import { countTargets } from './setupDraft';
@@ -71,14 +69,28 @@ export function CampaignsCard({
           const status = campaign.status ?? 'idle';
           const isRunning = status === 'running' || status === 'stopping';
           return (
-            <SurfHover
+            <SelectableCard
               key={campaign.campaign_id}
               surfaceId={`ns-camp-${campaign.campaign_id}`}
-              open={openActions === campaign.campaign_id}
+              name={campaign.name}
+              meta={t('neuroshilling.targetsCount', {
+                count: countTargets(campaign.targets_raw ?? ''),
+              })}
+              status={<CampaignStatusBadge plain status={status} />}
+              selected={isSelected}
+              actionsOpen={openActions === campaign.campaign_id}
+              actionsLabel={t('neuroshilling.campaign.actions')}
+              onSelect={() => {
+                onSelect(campaign.campaign_id);
+              }}
+              onToggleActions={() => {
+                onToggleActions(campaign.campaign_id);
+              }}
               actions={
                 <>
-                  <button
-                    type="button"
+                  <IconButton
+                    size="touch"
+                    tone="neutral"
                     title={
                       isRunning
                         ? t('neuroshilling.campaign.pause')
@@ -92,86 +104,35 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`flex w-action items-center justify-center border-none bg-transparent ${isRunning ? 'text-warning-deep' : 'text-success-deep'}`}
+                    className={`w-action self-stretch ${isRunning ? 'text-warning-deep hover:bg-warning-tint' : 'text-success-deep hover:bg-success-tint'}`}
                   >
                     <Icon name={isRunning ? 'pause' : 'play'} size={18} />
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    size="touch"
+                    tone="primary"
                     title={t('neuroshilling.campaign.settings')}
                     aria-label={t('neuroshilling.campaign.settings')}
                     onClick={() => {
                       onSettings(campaign.campaign_id);
                     }}
-                    className="flex w-action items-center justify-center border-none bg-transparent text-action-primary"
+                    className="w-action self-stretch"
                   >
                     <Icon name="pencil" size={18} />
-                  </button>
-                  <button
-                    type="button"
+                  </IconButton>
+                  <IconButton
+                    size="touch"
+                    tone="danger"
                     title={t('neuroshilling.campaign.delete')}
                     aria-label={t('neuroshilling.campaign.delete')}
                     onClick={() => {
                       onDelete(campaign);
                     }}
-                    className="flex w-action items-center justify-center border-none bg-transparent text-danger"
+                    className="w-action self-stretch"
                   >
                     <Icon name="trash" size={18} />
-                  </button>
+                  </IconButton>
                 </>
-              }
-              surface={
-                // Выбор — НАСТОЯЩАЯ кнопка во всю карточку, шестерёнка ей сосед, а не
-                // потомок: вложенная кнопка недопустима в ARIA, а `div role="button"` не
-                // получает Enter и Space бесплатно. Так же устроен ряд у неврокомментинга.
-                <div
-                  className={`relative rounded-lg border p-lg ${isSelected ? 'border-action-primary bg-info-tint' : 'border-line bg-surface-card'}`}
-                >
-                  <button
-                    type="button"
-                    aria-pressed={isSelected}
-                    onClick={() => {
-                      onSelect(campaign.campaign_id);
-                    }}
-                    aria-label={campaign.name}
-                    className={cn('absolute inset-0 cursor-pointer rounded-lg', FOCUS_RING)}
-                  />
-                  <div className="pointer-events-none flex justify-between gap-md">
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-tight truncate type-card-title">{campaign.name}</div>
-                      {/* Только цели: счётчика аккаунтов у кампании на проводе НЕТ
-                          (в отличие от неврокомментинга с его `account_count`), а ростер
-                          приходит лишь для ВЫБРАННОЙ. Строка «5 аккаунтов» у одной
-                          кампании и её отсутствие у соседних читались бы как «у тех
-                          аккаунтов нет». */}
-                      <div className="type-caption">
-                        {t('neuroshilling.targetsCount', {
-                          count: countTargets(campaign.targets_raw ?? ''),
-                        })}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-sm">
-                      <CampaignStatusBadge plain status={status} />
-                      {/* `pointer-events-auto` возвращает шестерёнке нажимаемость: слой
-                          выше по стеку, поэтому её события не идут через кнопку выбора. */}
-                      <span className="pointer-events-auto">
-                        <IconButton
-                          size="sm"
-                          tone="primary"
-                          aria-controls={`ns-camp-${campaign.campaign_id}`}
-                          aria-expanded={openActions === campaign.campaign_id}
-                          title={t('neuroshilling.campaign.actions')}
-                          aria-label={t('neuroshilling.campaign.actions')}
-                          onClick={() => {
-                            onToggleActions(campaign.campaign_id);
-                          }}
-                        >
-                          <Icon name="gear" size={14} />
-                        </IconButton>
-                      </span>
-                    </div>
-                  </div>
-                </div>
               }
             />
           );
@@ -185,7 +146,8 @@ export function CampaignsCard({
         // Строкой, а не диалогом: создание спрашивает имя и больше ничего, и приложение
         // уже пишет эту форму именно так (пилюля «добавить канал»).
         <div className="mt-sm flex items-center gap-sm">
-          <input
+          <Input
+            size="sm"
             autoFocus
             value={createName}
             onChange={(event) => {
@@ -197,7 +159,7 @@ export function CampaignsCard({
             }}
             placeholder={t('neuroshilling.campaigns.namePlaceholder')}
             aria-label={t('neuroshilling.campaigns.namePlaceholder')}
-            className="h-field min-w-0 flex-1 rounded-lg border border-action-primary bg-surface-card px-md text-body outline-none"
+            className="min-w-0 flex-1 border-action-primary"
           />
           <Button variant="primary" size="sm" disabled={!createName.trim()} onClick={onCreate}>
             {t('neuroshilling.campaigns.confirm')}
@@ -212,7 +174,7 @@ export function CampaignsCard({
           </IconButton>
         </div>
       ) : (
-        <Button variant="dashed" size="block" className="mt-sm" onClick={onStartCreate}>
+        <Button variant="dashed" fullWidth className="mt-sm font-medium" onClick={onStartCreate}>
           {t('neuroshilling.campaigns.create')}
         </Button>
       )}
