@@ -76,11 +76,7 @@ export function BulkAccountPicker({
               {t('accounts.bulk.pickCount', { done: draft.length, total: candidates.length })}
             </div>
           </div>
-          <CloseButton
-            onClick={onClose}
-            aria-label={t('accounts.profile.close')}
-            className="text-title"
-          />
+          <CloseButton onClick={onClose} aria-label={t('accounts.profile.close')} />
         </div>
 
         <div className="flex flex-col gap-md border-b border-line-row px-xl py-lg">

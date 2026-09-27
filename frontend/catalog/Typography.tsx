@@ -33,7 +33,7 @@ export function Typography() {
     <Section
       id="typography"
       title="Типографика"
-      note="Роль несёт размер, вес и краску сразу — страница называет роль, а не пересказывает три решения. Роль плюс перекраска (`type-caption text-danger`) — предусмотренный способ сказать то же другим цветом."
+      note="Роль несёт размер, вес и краску сразу — страница называет роль, а не пересказывает три решения. Роль плюс перекраска (`type-caption text-danger-deep`) — предусмотренный способ сказать то же другим цветом."
     >
       {TYPE_ROLE_NAMES.map((name) => (
         <Row key={name} label={`type-${name}`}>
@@ -42,7 +42,7 @@ export function Typography() {
       ))}
 
       <Row label="роль + перекраска" hint="утилита поверх роли выигрывает">
-        <span className="type-caption text-danger">Прокси не отвечает</span>
+        <span className="type-caption text-danger-deep">Прокси не отвечает</span>
         <span className="type-caption text-success-deep">Прокси отвечает</span>
         <span className="type-caption font-bold">Жирная подпись</span>
       </Row>

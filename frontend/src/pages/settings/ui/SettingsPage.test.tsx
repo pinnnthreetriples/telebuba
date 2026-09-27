@@ -152,6 +152,36 @@ test('invalid neuro input is blocked with a field error, not silently sent', asy
   });
 });
 
+test('both delay errors describe the field that needs correction', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  const from = screen.getByRole('textbox', { name: 'Задержка ответа, от (сек)' });
+  const to = screen.getByRole('textbox', { name: 'Задержка ответа, до (сек)' });
+
+  await userEvent.clear(from);
+  await userEvent.tab();
+  const rangeError = await screen.findByText('Введите целое число секунд (0–3600)');
+  expect(from).toHaveAttribute('aria-invalid', 'true');
+  expect(from).toHaveAttribute('aria-describedby', rangeError.id);
+  expect(to).not.toHaveAttribute('aria-describedby');
+
+  await userEvent.type(from, '3');
+  await userEvent.tab();
+  await waitFor(() => {
+    expect(screen.queryByText('Введите целое число секунд (0–3600)')).not.toBeInTheDocument();
+  });
+
+  await userEvent.clear(to);
+  await userEvent.type(to, '1');
+  await userEvent.tab();
+  const orderError = await screen.findByText('«До» должно быть не меньше «от»');
+  expect(to).toHaveAttribute('aria-invalid', 'true');
+  expect(to).toHaveAttribute('aria-describedby', orderError.id);
+  expect(from).not.toHaveAttribute('aria-invalid');
+});
+
 test('cancel resets an edited neuro field back to the loaded value', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { AccountLimitGauge, AccountLimitsView } from '@/shared/api';
+import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Modal, toastError } from '@/shared/ui';
 
 import {
@@ -200,7 +201,7 @@ export function AccountLimitsModal({
   return (
     <Modal onClose={onClose} size="confirm" label={t('neurocomment.modal.limits.title', { name })}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+        <span className={HEADING_ICON_TILE}>
           <svg
             width="18"
             height="18"

@@ -1,6 +1,6 @@
 import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
-import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
+import { FOCUS_RING, PRESS_FEEDBACK, SURFACE } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
 
 import { Icon } from './Icon';
@@ -24,14 +24,14 @@ export function CollapsibleCard({
   label,
   defaultOpen = false,
   onOpenChange,
-  wrapperClassName = 'rounded-card border border-line bg-surface-card',
+  wrapperClassName = SURFACE.card,
   headerClassName = 'px-lg py-lg',
   bodyClassName = 'px-lg pb-lg',
   children,
 }: {
   header: ReactNode;
   trailing?: ReactNode;
-  label?: string;
+  label: string;
   defaultOpen?: boolean;
   // Collapsing does NOT unmount the body (it only gets `hidden`), so a card
   // holding a one-time secret cannot rely on unmount to drop it. This tells the

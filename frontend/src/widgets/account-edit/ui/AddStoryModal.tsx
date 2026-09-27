@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
+import { BAR_FILL, BAR_TRACK } from '@/shared/design-system';
 import { Button, CloseButton, Icon, Input, Modal, SegmentedControl, Spinner } from '@/shared/ui';
 
 import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
@@ -264,7 +265,6 @@ export function AddStoryModal({
             // Telegram but the grid would never refresh. Lock the exits.
             disabled={busy}
             aria-label={t('accounts.addStory.close')}
-            className="text-title"
           />
         </div>
 
@@ -362,7 +362,7 @@ export function AddStoryModal({
           </button>
         )}
         {video === null && count >= MAX_COLLAGE_IMAGES && (
-          <div className="rounded-lg border border-line bg-surface px-lg py-md text-tiny text-content-subtle">
+          <div className="rounded-lg border border-line bg-surface px-lg py-md type-caption">
             {t('accounts.addStory.maxReached', { max: MAX_COLLAGE_IMAGES })}
           </div>
         )}
@@ -522,9 +522,9 @@ export function AddStoryModal({
             <div className="min-w-0 flex-1">
               <div className={`type-caption font-medium ${metaTone}`}>{metaText}</div>
               {(busy || done) && (
-                <div className="mt-sm h-meter overflow-hidden rounded-full bg-canvas">
+                <div className={`mt-sm ${BAR_TRACK}`}>
                   <div
-                    className={`h-full rounded-full ${done ? 'w-full bg-success' : 'tb-upbar bg-action-primary'}`}
+                    className={`${BAR_FILL} ${done ? 'w-full bg-success' : 'tb-upbar bg-action-primary'}`}
                   />
                 </div>
               )}

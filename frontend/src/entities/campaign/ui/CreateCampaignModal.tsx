@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Badge, Button, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
 
 // Design modal: create-campaign (L1424-1458) — name + LLM prompt + a list of
@@ -28,7 +29,7 @@ export function CreateCampaignModal({
   return (
     <Modal onClose={onClose} size="panel" label={t('neurocomment.modal.createCampaign.title')}>
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
-        <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+        <span className={HEADING_ICON_TILE}>
           <Icon name="plus" size={18} />
         </span>
         <div>
@@ -55,12 +56,11 @@ export function CreateCampaignModal({
           {t('neurocomment.modal.createCampaign.promptLabel')}
         </div>
         <Textarea
-          className="mb-lg resize-y font-[inherit]"
+          className="mb-lg font-[inherit]"
           value={prompt}
           onChange={(event) => {
             setPrompt(event.target.value);
           }}
-          rows={4}
           placeholder={t('neurocomment.modal.createCampaign.promptPlaceholder')}
           aria-label={t('neurocomment.modal.createCampaign.promptLabel')}
         />

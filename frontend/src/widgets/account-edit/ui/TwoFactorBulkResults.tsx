@@ -121,7 +121,9 @@ export function TwoFactorBulkResults({
         <div className="mb-md type-caption">{t('accounts.edit.twofaCopyManual')}</div>
       )}
       {copyState.all === 'failed' ? (
-        <div className="mb-md type-caption text-danger">{t('accounts.edit.twofaCopyFailed')}</div>
+        <div className="mb-md type-caption text-danger-deep">
+          {t('accounts.edit.twofaCopyFailed')}
+        </div>
       ) : null}
       <div className="overflow-hidden rounded-lg border border-line">
         {rows.map((row) =>
@@ -146,7 +148,7 @@ export function TwoFactorBulkResults({
                   </span>
                 ) : null}
                 {copyState[row.accountId] === 'failed' ? (
-                  <span className="mt-hair block type-caption text-danger">
+                  <span className="mt-hair block type-caption text-danger-deep">
                     {t('accounts.edit.twofaCopyFailed')}
                   </span>
                 ) : null}

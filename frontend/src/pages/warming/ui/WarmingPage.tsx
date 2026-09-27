@@ -25,6 +25,8 @@ import {
   FeedbackMark,
   Icon,
   IconButton,
+  InlineChipEditor,
+  NumberedStep,
 } from '@/shared/ui';
 import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { ActionTuningCard, WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
@@ -275,7 +277,7 @@ export function WarmingPage() {
           <Card className="p-lg">
             <div className="mb-md flex items-center justify-between">
               <span className="type-card-title">{t('warming.ready.title')}</span>
-              <span className="rounded-full border border-line bg-surface-card px-sm py-hair text-tiny text-content-subtle">
+              <span className="rounded-full border border-line bg-surface-card px-sm py-hair type-caption">
                 {idle.length}
               </span>
             </div>
@@ -400,42 +402,16 @@ export function WarmingPage() {
                 </Badge>
               ))}
               {addingChannel ? (
-                <span className="inline-flex items-center gap-tight rounded-full border border-action-primary bg-surface-card py-xs pl-md pr-xs">
-                  <input
-                    autoFocus
-                    value={channelInput}
-                    onChange={(event) => {
-                      setChannelInput(event.target.value);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') addChannel();
-                      if (event.key === 'Escape') cancelAddChannel();
-                    }}
-                    placeholder={t('warming.channels.placeholderSingle')}
-                    aria-label={t('warming.channels.placeholderSingle')}
-                    className="w-col border-none bg-transparent text-body outline-none"
-                  />
-                  <button
-                    type="button"
-                    title={t('warming.channels.add')}
-                    aria-label={t('warming.channels.add')}
-                    disabled={!channelInput.trim()}
-                    onClick={addChannel}
-                    className="flex size-chip shrink-0 items-center justify-center rounded-full bg-action-primary text-on-action disabled:opacity-50"
-                  >
-                    <Icon name="check" size={12} />
-                  </button>
-                  <IconButton
-                    size="sm"
-                    shape="circle"
-                    title={t('warming.channels.cancel')}
-                    aria-label={t('warming.channels.cancel')}
-                    onClick={cancelAddChannel}
-                    className="shrink-0 bg-line-row text-content-muted"
-                  >
-                    <Icon name="close" size={16} />
-                  </IconButton>
-                </span>
+                <InlineChipEditor
+                  value={channelInput}
+                  onChange={setChannelInput}
+                  onConfirm={addChannel}
+                  onCancel={cancelAddChannel}
+                  placeholder={t('warming.channels.placeholderSingle')}
+                  inputLabel={t('warming.channels.placeholderSingle')}
+                  confirmLabel={t('warming.channels.add')}
+                  cancelLabel={t('warming.channels.cancel')}
+                />
               ) : (
                 <Button
                   variant="dashedMuted"
@@ -591,12 +567,9 @@ export function WarmingPage() {
             <div className="mb-lg type-caption">{t('warming.howto.hint')}</div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-lg gap-y-md">
               {[0, 1, 2, 3, 4, 5].map((index) => (
-                <div key={index} className="flex items-start gap-md">
-                  <span className="mt-px flex size-glyph shrink-0 items-center justify-center rounded-full bg-action-primary text-tiny font-semibold text-on-action">
-                    {index + 1}
-                  </span>
-                  <span className="type-prose">{t(`warming.howto.steps.${String(index)}`)}</span>
-                </div>
+                <NumberedStep key={index} number={index + 1}>
+                  {t(`warming.howto.steps.${String(index)}`)}
+                </NumberedStep>
               ))}
             </div>
           </CollapsibleCard>

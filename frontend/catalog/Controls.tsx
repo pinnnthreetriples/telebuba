@@ -5,6 +5,7 @@
 // которые задаёт браузер — `hover`, `focus`, `active` — помечены `probe` и снимаются
 // тестом.
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 import {
   Button,
@@ -28,9 +29,9 @@ const BUTTON_VARIANTS = [
   'dashed',
   'dashedMuted',
 ] as const;
-const BUTTON_SIZES = ['md', 'sm', 'xs', 'block'] as const;
+const BUTTON_EXAMPLES = ['md', 'sm', 'xs', 'fullWidth'] as const;
 const ICON_SIZES = ['sm', 'md', 'lg', 'touch'] as const;
-const ICON_TONES = ['neutral', 'primary', 'danger'] as const;
+const ICON_TONES = ['neutral', 'primary', 'action', 'danger'] as const;
 const FIELD_SIZES = ['md', 'sm', 'xs'] as const;
 const SEG_VARIANTS = ['tray', 'pill', 'outline'] as const;
 
@@ -46,7 +47,7 @@ const SELECT_OPTIONS = [
   { value: 'mtproto', label: 'MTProto', disabled: true },
 ];
 
-export function Controls() {
+export function Controls({ intro }: { intro?: ReactNode }) {
   const [seg, setSeg] = useState<'all' | 'live' | 'off'>('live');
   const [proxy, setProxy] = useState('socks5');
   const [empty, setEmpty] = useState('');
@@ -59,12 +60,19 @@ export function Controls() {
       title="Контролы"
       note="Button, IconButton, Input, Select, Switch и SegmentedControl. Высота, радиус, типографика, фокус, disabled и invalid приходят из общего рецепта контрола — размеры sm/md/lg означают одно и то же у всех."
     >
+      {intro}
       {BUTTON_VARIANTS.map((variant) => (
         <Row key={variant} label={`Button · ${variant}`}>
-          {BUTTON_SIZES.map((size) => (
-            <Cell key={size} caption={size}>
-              <div className={size === 'block' ? 'w-menu' : undefined}>
-                <Button variant={variant} size={size}>
+          {/* Storybook показывает размеры в контексте; визуальный каталог проверяет все пары. */}
+          {(intro ? (['md'] as const) : BUTTON_EXAMPLES).map((example) => (
+            <Cell key={example} caption={example === 'fullWidth' ? 'md · fullWidth' : example}>
+              <div className={example === 'fullWidth' ? 'w-menu' : undefined}>
+                <Button
+                  variant={variant}
+                  size={example === 'fullWidth' ? 'md' : example}
+                  fullWidth={example === 'fullWidth'}
+                  className={example === 'fullWidth' ? 'font-medium' : undefined}
+                >
                   Сохранить
                 </Button>
               </div>
@@ -159,7 +167,7 @@ export function Controls() {
         {FIELD_SIZES.map((size) => (
           <Cell key={size} caption={size}>
             <div className="w-menu">
-              <Input size={size} defaultValue="ivan.petrov" />
+              <Input size={size} defaultValue="ivan.petrov" aria-label="Имя пользователя" />
             </div>
           </Cell>
         ))}
@@ -168,40 +176,50 @@ export function Controls() {
       <Row label="Input · состояния">
         <Cell caption="placeholder">
           <div className="w-menu">
-            <Input placeholder="+7 900 000-00-00" />
+            <Input placeholder="+7 900 000-00-00" aria-label="Телефон" />
           </div>
         </Cell>
         <Cell caption="flat">
           <div className="w-menu">
-            <Input tone="flat" defaultValue="Только чтение" readOnly />
+            <Input
+              tone="flat"
+              defaultValue="Только чтение"
+              readOnly
+              aria-label="Пример поля только для чтения"
+            />
           </div>
         </Cell>
         <Cell caption="invalid">
           <div className="w-menu">
-            <Input invalid defaultValue="не телефон" />
+            <Input invalid defaultValue="не телефон" aria-label="Телефон с ошибкой" />
           </div>
         </Cell>
         <Cell caption="disabled">
           <div className="w-menu">
-            <Input disabled defaultValue="Недоступно" />
+            <Input disabled defaultValue="Недоступно" aria-label="Недоступное поле" />
           </div>
         </Cell>
         <Cell caption="focus-within" probe="focus">
           <div className="w-menu">
-            <Input defaultValue="Фокус" />
+            <Input defaultValue="Фокус" aria-label="Поле в фокусе" />
           </div>
         </Cell>
       </Row>
 
       <Row label="Textarea">
         <Cell caption="md">
-          <div className="w-panel">
-            <Textarea rows={3} defaultValue="Промпт для генерации комментария." />
+          <div className="w-panel max-w-full">
+            <Textarea defaultValue="Промпт для генерации комментария." aria-label="Промпт" />
           </div>
         </Cell>
         <Cell caption="invalid">
-          <div className="w-panel">
-            <Textarea rows={3} invalid defaultValue="" placeholder="Обязательное поле" />
+          <div className="w-panel max-w-full">
+            <Textarea
+              invalid
+              defaultValue=""
+              placeholder="Обязательное поле"
+              aria-label="Обязательный промпт"
+            />
           </div>
         </Cell>
       </Row>
@@ -269,7 +287,7 @@ export function Controls() {
       {SEG_VARIANTS.map((variant) => (
         <Row key={variant} label={`SegmentedControl · ${variant}`}>
           <Cell caption="обычный">
-            <div className="w-panel">
+            <div className="w-panel max-w-full">
               <SegmentedControl
                 variant={variant}
                 value={seg}
@@ -280,7 +298,7 @@ export function Controls() {
             </div>
           </Cell>
           <Cell caption="disabled">
-            <div className="w-panel">
+            <div className="w-panel max-w-full">
               <SegmentedControl
                 variant={variant}
                 value={seg}

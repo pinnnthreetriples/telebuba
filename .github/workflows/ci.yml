@@ -465,3 +465,18 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Build Storybook
+        run: npm run storybook:build
+
+      - name: Storybook patterns smoke
+        run: npm run storybook:smoke
+
+      - name: Upload Storybook pattern screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: storybook-patterns
+          include-hidden-files: true
+          path: frontend/e2e/.artifacts/storybook/
+          retention-days: 7

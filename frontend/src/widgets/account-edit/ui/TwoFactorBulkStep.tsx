@@ -134,7 +134,7 @@ export function TwoFactorBulkStep({
                 {label(row.accountId)}
               </span>
               <span
-                className={`shrink-0 type-caption ${row.state === 'error' ? 'text-danger' : ''}`}
+                className={`shrink-0 type-caption ${row.state === 'error' ? 'text-danger-deep' : ''}`}
               >
                 {row.state === 'queued'
                   ? t('accounts.addWizard.twofaQueued')

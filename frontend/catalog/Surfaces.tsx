@@ -52,7 +52,7 @@ export function Surfaces() {
     >
       <Row label="Card">
         <Cell caption="только тело">
-          <div className="w-panel">
+          <div className="w-panel max-w-full">
             <Card>
               <p className="type-prose">
                 Карточка без шапки: белая, волосяная рамка, rounded-card.
@@ -61,7 +61,7 @@ export function Surfaces() {
           </div>
         </Cell>
         <Cell caption="с заголовком">
-          <div className="w-panel">
+          <div className="w-panel max-w-full">
             <Card title="Прокси" subtitle="12 из 40 занято">
               <p className="type-prose">Заголовок и подзаголовок — роли карточки, не размеры.</p>
             </Card>
@@ -71,16 +71,20 @@ export function Surfaces() {
 
       <Row label="CollapsibleCard">
         <Cell caption="закрыта">
-          <div className="w-panel">
-            <CollapsibleCard header={<span className="type-card-title">Ограничения</span>}>
+          <div className="w-panel max-w-full">
+            <CollapsibleCard
+              label="Ограничения"
+              header={<span className="type-card-title">Ограничения</span>}
+            >
               <p className="type-prose">Тело раскрывается по клику на шапку.</p>
             </CollapsibleCard>
           </div>
         </Cell>
         <Cell caption="открыта">
-          <div className="w-panel">
+          <div className="w-panel max-w-full">
             <CollapsibleCard
               defaultOpen
+              label="Ограничения"
               header={<span className="type-card-title">Ограничения</span>}
               trailing={<Badge tone="info">3</Badge>}
             >
@@ -94,7 +98,7 @@ export function Surfaces() {
 
       <Row label="SurfHover" hint="строка, под которой припаркованы действия">
         <Cell caption="в покое">
-          <div className="w-panel">
+          <div className="w-panel max-w-full">
             <SurfHover
               actions={
                 <>
@@ -116,7 +120,7 @@ export function Surfaces() {
           </div>
         </Cell>
         <Cell caption="открыт">
-          <div className="w-panel">
+          <div className="w-panel max-w-full" data-catalog="surf-hover-open">
             <SurfHover
               open
               actions={
@@ -141,7 +145,7 @@ export function Surfaces() {
       </Row>
 
       <Row label="DataTable" hint="ниже 880px превращается в карточки">
-        <Cell caption="таблица">
+        <Cell caption="таблица" scrollable>
           <div className="w-table max-w-full">
             <DataTable data={ROWS} columns={COLUMNS} />
           </div>

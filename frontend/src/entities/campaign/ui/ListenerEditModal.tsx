@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentSettingsUpdate } from '@/shared/api';
+import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, CloseButton, Icon, Modal, Select, toastError } from '@/shared/ui';
 
 import {
@@ -98,18 +99,14 @@ export function ListenerEditModal({
     <Modal onClose={onClose} size="confirm" label={t('neurocomment.listener.title')}>
       <div className="p-2xl">
         <div className="mb-tight flex items-center gap-md">
-          <span className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+          <span className={HEADING_ICON_TILE}>
             <Icon name="chart" size={18} />
           </span>
           <div className="flex-1">
             <div className="type-dialog-title">{t('neurocomment.listener.title')}</div>
             <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
           </div>
-          <CloseButton
-            aria-label={t('neurocomment.modal.close')}
-            onClick={onClose}
-            className="text-title"
-          />
+          <CloseButton aria-label={t('neurocomment.modal.close')} onClick={onClose} />
         </div>
 
         <div className="mb-sm mt-xl type-label">{t('neurocomment.modal.listenerEdit.account')}</div>

@@ -1,3 +1,4 @@
+import { useCallback, useLayoutEffect, useRef } from 'react';
 import type { InputHTMLAttributes, Ref, TextareaHTMLAttributes } from 'react';
 
 import { areaBase, type ControlSize, fieldBase } from '@/shared/design-system';
@@ -16,8 +17,8 @@ import { cn } from '@/shared/lib/cn';
 // `md` — собственное поле формы; `sm` — поле внутри строки карточки, где `md` задал бы
 // высоту строки; `xs` — числовой степпер, в который значение вписывают рядом с единицей.
 //
-// Textarea берёт `areaBase`: у неё высота приходит из `rows`, и фиксировать её значило бы
-// обрезать написанный текст. Всё остальное — то же самое.
+// Textarea берёт `areaBase`: её высота следует за содержимым, а не за числом строк или
+// ручным перетаскиванием. Всё остальное — то же самое.
 //
 // `lg` (цель касания) полю не предлагается: 44px — высота, которую носит мобильная
 // навигация, а не поле в форме, и ступень без носителя открыла бы шкалу обратно.
@@ -59,12 +60,58 @@ export function Input({ size, tone, invalid, className, ...rest }: Shared & Inpu
   );
 }
 
-export function Textarea({ size, tone, invalid, className, ...rest }: Shared & TextareaProps) {
+function fitTextarea(area: HTMLTextAreaElement) {
+  area.style.height = 'auto';
+  if (area.scrollHeight > 0) area.style.height = `${String(area.scrollHeight)}px`;
+}
+
+export function Textarea({
+  size,
+  tone,
+  invalid,
+  className,
+  onInput,
+  ref: forwardedRef,
+  ...rest
+}: Shared & TextareaProps) {
+  const areaRef = useRef<HTMLTextAreaElement>(null);
+  const attachRef = useCallback(
+    (node: HTMLTextAreaElement | null) => {
+      areaRef.current = node;
+      if (typeof forwardedRef === 'function') forwardedRef(node);
+      else if (forwardedRef) forwardedRef.current = node;
+    },
+    [forwardedRef],
+  );
+
+  useLayoutEffect(() => {
+    if (areaRef.current) fitTextarea(areaRef.current);
+  });
+
+  useLayoutEffect(() => {
+    const area = areaRef.current;
+    if (!area || typeof ResizeObserver === 'undefined') return;
+    let width = area.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (area.clientWidth === width) return;
+      width = area.clientWidth;
+      fitTextarea(area);
+    });
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <textarea
       aria-invalid={invalid || undefined}
-      className={shell({ size, tone, invalid, className }, true)}
       {...rest}
+      rows={1}
+      ref={attachRef}
+      className={cn(shell({ size, tone, invalid, className }, true), 'resize-none overflow-hidden')}
+      onInput={(event) => {
+        fitTextarea(event.currentTarget);
+        onInput?.(event);
+      }}
     />
   );
 }
@@ -73,6 +120,6 @@ export function Textarea({ size, tone, invalid, className, ...rest }: Shared & T
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'className'> & {
   ref?: Ref<HTMLInputElement>;
 };
-type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className'> & {
+type TextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'className' | 'rows'> & {
   ref?: Ref<HTMLTextAreaElement>;
 };

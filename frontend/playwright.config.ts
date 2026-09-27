@@ -13,6 +13,7 @@ import { defineConfig, devices } from '@playwright/test';
 // набор эталонов. `deviceScaleFactor: 1` — чтобы эталоны не зависели от DPI машины.
 export default defineConfig({
   testDir: './e2e',
+  testIgnore: 'storybook.spec.ts',
   outputDir: './e2e/.artifacts',
   // Платформа и имя проекта в пути — оба обязательны, и оба выяснились падением.
   //

@@ -30,7 +30,7 @@ export function BulkProgress({
           {t('accounts.bulk.progress', { done, total: rows.length })}
         </span>
         {failed > 0 && (
-          <span className="type-caption text-danger">
+          <span className="type-caption text-danger-deep">
             {t('accounts.bulk.failedCount', { n: failed })}
           </span>
         )}

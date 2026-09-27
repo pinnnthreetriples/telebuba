@@ -21,7 +21,7 @@ import {
 } from '@/entities/account';
 import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountRead } from '@/shared/api';
-import { Button, CloseButton, Icon, IconButton, Modal } from '@/shared/ui';
+import { Button, CloseButton, Icon, IconButton, Modal, TabList } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
 import {
@@ -316,7 +316,6 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               onClick={onClose}
               disabled={running}
               aria-label={t('accounts.profile.close')}
-              className="text-title"
             />
           </div>
 
@@ -358,27 +357,14 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
           </div>
 
           {!started && (
-            <div
-              role="tablist"
-              className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl"
-            >
-              {TABS.map((value_) => (
-                <button
-                  key={value_}
-                  type="button"
-                  role="tab"
-                  id={`bulk-tab-${value_}`}
-                  aria-controls="bulk-tabpanel"
-                  aria-selected={tab === value_}
-                  onClick={() => {
-                    setTab(value_);
-                  }}
-                  className={`shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${tab === value_ ? 'border-action-primary text-content-primary' : 'border-transparent text-content-muted'}`}
-                >
-                  {t(`accounts.profile.tab.${value_}`)}
-                </button>
-              ))}
-            </div>
+            <TabList
+              options={TABS.map((value) => ({ value, label: t(`accounts.profile.tab.${value}`) }))}
+              value={tab}
+              onChange={setTab}
+              idPrefix="bulk-tab"
+              panelId="bulk-tabpanel"
+              ariaLabel={t('accounts.bulk.title')}
+            />
           )}
 
           <div

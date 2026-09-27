@@ -8,10 +8,11 @@ import {
   setAllAccountsPrivacyMutation,
 } from '@/entities/account';
 import type { AccountPrivacyUpdateRequest, PrivacySettingsResult } from '@/shared/api';
-import { Button, ConfirmModal, Notice, Spinner } from '@/shared/ui';
+import { Button, ConfirmModal, Spinner } from '@/shared/ui';
 
 import { envelopeMessage } from './_channelsShared';
 import { PrivacyLevelRow, type PrivacyLevel, type PrivacyShown } from './PrivacyLevelRow';
+import { RetryNotice } from './RetryNotice';
 
 // The profile modal's privacy tab: the three Telegram privacy keys that decide
 // whether STRANGERS see the avatar and the bio we upload. Restricted keys are
@@ -195,19 +196,14 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
       {/* Без `mb-lg` у уведомления: `reason != null` означает, что настройки не
           прочитались, то есть `settings` пусто и под ним не стоит ничего. */}
       {reason != null && (
-        <Notice tone="danger" className="flex items-center justify-between gap-md" role="alert">
-          <span>{t('accounts.profile.privacy.loadError', { reason })}</span>
-          <Button
-            size="xs"
-            variant="danger"
-            className="bg-surface-card"
-            onClick={() => {
-              void privacy.refetch();
-            }}
-          >
-            {t('accounts.profile.privacy.retry')}
-          </Button>
-        </Notice>
+        <RetryNotice
+          role="alert"
+          message={t('accounts.profile.privacy.loadError', { reason })}
+          label={t('accounts.profile.privacy.retry')}
+          onRetry={() => {
+            void privacy.refetch();
+          }}
+        />
       )}
 
       {writeReadError != null && (
@@ -286,7 +282,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             </span>
           </div>
           {bulk.outcomes.some((outcome) => outcome.status !== 'ok') && (
-            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm text-tiny text-content-subtle">
+            <ul className="mt-sm flex flex-col gap-tight border-t border-line-row pt-sm type-caption">
               {/* Both non-ok kinds are listed with their reason: a skipped
                   account carries the status that disqualified it, and "3
                   skipped" with no names is not actionable. */}

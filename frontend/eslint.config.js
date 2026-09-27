@@ -9,7 +9,14 @@ import designTokens from './eslint-rules/design-tokens.js';
 export default tseslint.config(
   // Generated client, build output, coverage, and config files are out of scope.
   {
-    ignores: ['dist', 'coverage', 'src/shared/api/**', '*.config.{js,ts}', 'vitest.setup.ts'],
+    ignores: [
+      'dist',
+      'storybook-static',
+      'coverage',
+      'src/shared/api/**',
+      '*.config.{js,ts}',
+      'vitest.setup.ts',
+    ],
   },
   ...tseslint.configs.recommended,
   {

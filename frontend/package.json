@@ -19,6 +19,10 @@
     "gates": "npm run boundaries && npm run lint && npm run format && npm run typecheck && npm run ds:doc:check && npm run ds:dead && npm run ds:css && npm run test",
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\"",
     "catalog": "vite --port 8132 --strictPort --host 127.0.0.1",
+    "storybook": "storybook dev -p 6006 --host 127.0.0.1 --no-open",
+    "storybook:build": "storybook build",
+    "storybook:test:server": "storybook dev -p 6106 --host 127.0.0.1 --no-open",
+    "storybook:smoke": "playwright test --config=storybook.playwright.config.ts",
     "visual": "playwright test",
     "visual:update": "playwright test --update-snapshots"
   },
@@ -49,6 +53,9 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
     "@playwright/test": "1.56.1",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/addon-mcp": "^10.6.0",
+    "@storybook/react-vite": "^10.6.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
@@ -69,6 +76,7 @@
     "postcss": "^8.4.49",
     "prettier": "^3.6.2",
     "steiger": "^0.5.6",
+    "storybook": "^10.6.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.65.0",

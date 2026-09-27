@@ -41,7 +41,7 @@ export function CodeLoginStep({
     <>
       {!requestCode.isSuccess ? (
         <div className="flex flex-col gap-md">
-          <div className="rounded-lg border border-line bg-surface-card px-lg py-lg text-body text-content-subtle">
+          <div className="rounded-lg border border-line bg-surface-card px-lg py-lg type-prose">
             {phone}
           </div>
           <Button

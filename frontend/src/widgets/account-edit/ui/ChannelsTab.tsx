@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next';
 
 import { accountChannelsQueryOptions, deleteAccountChannelMutation } from '@/entities/account';
 import type { ChannelView } from '@/shared/api';
-import { Button, ConfirmModal, Icon, IconButton, Notice, Spinner } from '@/shared/ui';
+import { Button, ConfirmModal, Icon, IconButton, Spinner } from '@/shared/ui';
 
 import { channelErrorText } from './_channelsShared';
+import { RetryNotice } from './RetryNotice';
 import { ChannelCreateModal } from './ChannelCreateModal';
 import { ChannelEditModal } from './ChannelEditModal';
 
@@ -44,23 +45,17 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
       {/* Без `mb-lg` у уведомления: на ошибке `isSuccess` ложно и список пуст, то есть под
           ним не стоит ничего. */}
       {channels.isError && (
-        <Notice tone="danger" className="flex items-center justify-between gap-md">
-          <span>{channelErrorText(channels.error, t, t('accounts.channel.loadError'))}</span>
-          <Button
-            size="xs"
-            variant="danger"
-            className="bg-surface-card"
-            onClick={() => {
-              void channels.refetch();
-            }}
-          >
-            {t('accounts.channel.retry')}
-          </Button>
-        </Notice>
+        <RetryNotice
+          message={channelErrorText(channels.error, t, t('accounts.channel.loadError'))}
+          label={t('accounts.channel.retry')}
+          onRetry={() => {
+            void channels.refetch();
+          }}
+        />
       )}
 
       {channels.isSuccess && items.length === 0 && (
-        <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle">
+        <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
           {t('accounts.channel.empty')}
         </div>
       )}

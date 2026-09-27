@@ -30,8 +30,8 @@ import {
   IconButton,
   Input,
   Modal,
-  Notice,
   Spinner,
+  TabList,
   Textarea,
   toastError,
 } from '@/shared/ui';
@@ -51,6 +51,7 @@ import { ChannelsTab } from './ChannelsTab';
 import { MusicTab } from './MusicTab';
 import { PhotoTab } from './PhotoTab';
 import { PrivacyTab } from './PrivacyTab';
+import { RetryNotice } from './RetryNotice';
 import { StoriesTab } from './StoriesTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
@@ -623,29 +624,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     refresh();
   };
 
-  const tabBtn = (value: Tab): string =>
-    `shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${FOCUS_RING} ${
-      tab === value
-        ? 'border-action-primary text-content-primary'
-        : 'border-transparent text-content-muted hover:bg-action-hover'
-    }`;
-
-  // The other half of the ARIA tabs pattern (the roles landed with the tablist):
-  // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
-  // between the tabs — otherwise a keyboard user Tabs through all six.
-  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
-    let next: Tab | undefined;
-    if (step !== 0) next = TABS[(TABS.indexOf(tab) + step + TABS.length) % TABS.length];
-    else if (event.key === 'Home') next = TABS[0];
-    else if (event.key === 'End') next = TABS[TABS.length - 1];
-    if (next === undefined) return;
-    event.preventDefault();
-    setTab(next);
-    // Automatic activation: selection follows focus, so focus has to follow too.
-    document.getElementById(`profile-tab-${next}`)?.focus();
-  };
-
   const refreshLook = REFRESH_LOOK[refreshState === 'loading' ? 'idle' : refreshState];
   // An in-flight photo batch owns the modal: the exits are locked (see
   // requestClose) and must look it rather than silently ignoring the click.
@@ -727,46 +705,20 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   onClick={requestClose}
                   disabled={uploading}
                   aria-label={t('accounts.profile.close')}
-                  className="text-title"
                 />
               </div>
               <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
           </div>
 
-          {/* tabs — a real tablist: the active tab was conveyed by colour and a
-              bottom border only, so a screen reader announced six plain buttons
-              with no way to tell which one is showing. */}
-          {/* Not `shared/ui`'s `SegmentedControl`: that one is a radiogroup, and these
-              six really do switch a panel — they own the `aria-controls`/`tabpanel`
-              pair below. They are also the app's only underline tab strip, with no
-              tray and no filled option, so there is nothing here for a fill variant to
-              carry. One wearer, hand-written. */}
-          {/* Six labels overflow a phone-width modal; scroll them rather than wrap,
-              so the roving-tabindex row stays a single line. */}
-          <div
-            role="tablist"
-            className="tb-scroll flex gap-xl overflow-x-auto border-b border-line-row px-xl"
-          >
-            {TABS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                id={`profile-tab-${value}`}
-                aria-selected={tab === value}
-                aria-controls="profile-tabpanel"
-                tabIndex={tab === value ? 0 : -1}
-                onKeyDown={onTabKeyDown}
-                onClick={() => {
-                  setTab(value);
-                }}
-                className={tabBtn(value)}
-              >
-                {t(`accounts.profile.tab.${value}`)}
-              </button>
-            ))}
-          </div>
+          <TabList
+            options={TABS.map((value) => ({ value, label: t(`accounts.profile.tab.${value}`) }))}
+            value={tab}
+            onChange={setTab}
+            idPrefix="profile-tab"
+            panelId="profile-tabpanel"
+            ariaLabel={t('accounts.profile.dialog')}
+          />
 
           {/* content */}
           {/* `gap-lg` вместо `mb-lg` на уведомлении об ошибке загрузки: расстояние до
@@ -806,20 +758,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
-              <Notice tone="danger" className="flex items-center justify-between gap-md">
-                <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
-                <Button
-                  size="xs"
-                  variant="danger"
-                  className="bg-surface-card"
-                  disabled={refreshState === 'loading' || syncing}
-                  onClick={() => {
-                    void onRefresh();
-                  }}
-                >
-                  {t('accounts.profile.refresh')}
-                </Button>
-              </Notice>
+              <RetryNotice
+                message={t('accounts.profile.loadError', { reason: loadErrorReason })}
+                label={t('accounts.profile.refresh')}
+                disabled={refreshState === 'loading' || syncing}
+                onRetry={() => {
+                  void onRefresh();
+                }}
+              />
             )}
             {tab === 'text' && (
               <div className="flex flex-col gap-lg">
@@ -848,7 +794,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'username' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block type-caption font-medium text-danger"
+                          className="mt-tight block type-caption font-medium text-danger-deep"
                         >
                           {saveErrorText}
                         </span>
@@ -860,9 +806,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.bio')}>
                       <Textarea
-                        className="resize-none [font-family:inherit]"
+                        className="[font-family:inherit]"
                         data-testid="profile-bio"
-                        rows={3}
                         value={field.state.value}
                         onChange={(event) => {
                           // A new edit supersedes the verdict on the last save.
@@ -879,7 +824,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span
                           role="alert"
-                          className="mt-tight block type-caption font-medium text-danger"
+                          className="mt-tight block type-caption font-medium text-danger-deep"
                         >
                           {saveErrorText}
                         </span>

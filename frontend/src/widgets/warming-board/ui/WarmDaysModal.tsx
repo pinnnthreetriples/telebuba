@@ -3,6 +3,7 @@ import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { spamCheckAccountMutation } from '@/entities/account';
+import { HEADING_ICON_TILE } from '@/shared/design-system';
 import { Button, Icon, Modal, SegmentedControl } from '@/shared/ui';
 
 const MIN = 1;
@@ -66,7 +67,7 @@ export function WarmDaysModal({
     <Modal onClose={onClose} size="confirm" label={t('warming.days.title')}>
       <div className="p-2xl">
         <div className="mb-xs flex items-start gap-md">
-          <div className="flex size-tile shrink-0 items-center justify-center rounded-lg bg-info-tint text-info-strong">
+          <div className={HEADING_ICON_TILE}>
             <svg
               width="17"
               height="17"

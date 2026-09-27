@@ -37,6 +37,35 @@ test.describe('каталог дизайн-системы', () => {
     );
   });
 
+  test('не переполняет mobile viewport на ширине 375px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  });
+
+  test('открытый SurfHover и действия помещаются в mobile образец', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await open(page);
+    const sample = page.locator('[data-catalog="surf-hover-open"]');
+    const clip = await sample.locator(':scope > div').boundingBox();
+    if (clip === null) throw new Error('образец SurfHover не имеет рамки');
+
+    for (const target of [
+      sample.getByText('Кампания «Крипта»'),
+      sample.getByRole('button', { name: 'Изменить' }),
+      sample.getByRole('button', { name: 'Удалить' }),
+    ]) {
+      const box = await target.boundingBox();
+      if (box === null) throw new Error('элемент SurfHover не имеет рамки');
+      expect(box.x).toBeGreaterThanOrEqual(clip.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(clip.x + clip.width);
+    }
+  });
+
   for (const id of SECTIONS) {
     test(`раздел «${id}» выглядит как эталон`, async ({ page }) => {
       await open(page);

@@ -173,7 +173,7 @@ export function ListenerCard({
           paints that channel `ready` — so this strip is the only place an operator can
           see that no post from it will ever arrive. Same note style as warmingBlocked. */}
       {unwatchedChannels.length > 0 ? (
-        <p className="mt-sm type-caption font-medium text-danger">
+        <p className="mt-sm type-caption font-medium text-danger-deep">
           {t('neurocomment.listener.unwatched', {
             count: unwatchedChannels.length,
             channels: unwatchedChannels.join(', '),

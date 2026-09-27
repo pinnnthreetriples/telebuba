@@ -38,20 +38,24 @@ test('the size sets height and padding, the variant the fill', async () => {
   await expectNoAxeViolations(container);
 });
 
-// `block` is the only rung that sets its own width, and the only one that is not
-// inline: a `w-full` inline-level button still sits on a line and collects that
-// line's leading underneath it, which is the gap six of its wearers used to carry.
-test('the block rung spans its form and is not inline', () => {
-  render(<Button size="block">Подтвердить</Button>);
+// Width is independent of height. A `w-full` inline-level button still sits on
+// a line and collects that line's leading underneath it.
+test('fullWidth spans its form without changing the size', () => {
+  render(
+    <Button size="sm" fullWidth>
+      Подтвердить
+    </Button>,
+  );
 
   const classes = classesOf('Подтвердить').split(' ');
   expect(classes).toContain('w-full');
   expect(classes).toContain('flex');
+  expect(classes).toContain('h-field');
   expect(classes).not.toContain('inline-flex');
 });
 
 // Форма — не ступень размера, и это утверждение о ВСЕХ ступенях, поэтому они перебираются,
-// а не выбираются. Ступень решала форму: `md`/`sm` — пилюля, `xs` — `rounded-md`, `block` —
+// а не выбираются. Ступень решала форму: `md`/`sm` — пилюля, `xs` — `rounded-md`, полная ширина —
 // `rounded-lg`, — то есть «сделать кнопку меньше» означало «сделать её другой формы».
 // Утверждать это одной ступенью нельзя: следующая пришла бы со своим радиусом ровно так же.
 test('радиус у всех ступеней один, и ступень его не выбирает', () => {
@@ -60,7 +64,7 @@ test('радиус у всех ступеней один, и ступень ег
       <Button size="md">Первая</Button>
       <Button size="sm">Вторая</Button>
       <Button size="xs">Третья</Button>
-      <Button size="block">Четвёртая</Button>
+      <Button fullWidth>Четвёртая</Button>
       <Button size="lg">Пятая</Button>
     </>,
   );
@@ -77,12 +81,12 @@ test('радиус у всех ступеней один, и ступень ег
 });
 
 // `dashed` is a fill, so it has to compose with the rung rather than replace it —
-// the three add-one-more buttons in the app are all `block`, but `block` is worn by
-// three different fills and the two must not fuse into one name.
+// the add-one-more buttons in the app are full-width, but width is worn by
+// different fills and the two must not fuse into one name.
 test('dashed is a fill that keeps whatever rung it is given', () => {
   render(
     <>
-      <Button variant="dashed" size="block">
+      <Button variant="dashed" fullWidth>
         Добавить кампанию
       </Button>
       <Button variant="dashed" size="sm">
@@ -107,7 +111,7 @@ test('every button carries the same disabled and focus treatment', () => {
     <>
       <Button size="xs">Проверить</Button>
       <Button variant="ghost">Ещё</Button>
-      <Button size="block">Готово</Button>
+      <Button fullWidth>Готово</Button>
       <Button variant="dashed">Добавить</Button>
     </>,
   );
