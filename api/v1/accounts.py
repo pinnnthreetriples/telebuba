@@ -18,6 +18,7 @@ from api.v1._accounts_bulk_messages import bulk_messages_router
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_chats import chats_router
+from api.v1._accounts_contact_lookup import contact_lookup_router
 from api.v1._accounts_media import media_router
 from api.v1._accounts_privacy import privacy_router
 from api.v1._accounts_twofa import twofa_router
@@ -320,3 +321,4 @@ router.include_router(privacy_router)
 # The account's Telegram cloud password (2FA).
 router.include_router(twofa_router)
 router.include_router(bulk_messages_router)
+router.include_router(contact_lookup_router)

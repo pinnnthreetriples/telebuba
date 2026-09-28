@@ -103,7 +103,11 @@
         "hidePreview": "Скрыть",
         "download": "Скачать",
         "mediaError": "Не удалось открыть вложение",
-        "kind": { "user": "Личный чат", "chat": "Группа", "channel": "Канал" }
+        "kind": {
+          "user": "Личный чат",
+          "chat": "Группа",
+          "channel": "Канал"
+        }
       },
       "session": "Сессия",
       "sessionOk": "Сессия активна",
@@ -399,6 +403,37 @@
       "unconfirmed": "Доставка не подтверждена. Проверьте чат перед повторной отправкой.",
       "skipped": "Пропущено: {{reason}}.",
       "retryAfter": "Telegram указал паузу {{seconds}} с.",
+      "lookup": {
+        "toggle": "Найти по номерам",
+        "title": "Поиск контактов по номерам",
+        "phones": "Номера телефонов",
+        "phonesPlaceholder": "+15551234567\n+447700900000",
+        "phonesHint": "По одному номеру в строке, с кодом страны. Найдутся только те, у кого в приватности разрешён поиск по номеру.",
+        "needAccounts": "Сначала выберите аккаунты выше — поиск идёт с них.",
+        "find": "Найти",
+        "running": "Идёт поиск…",
+        "progress": "{{done}} из {{total}} проверено",
+        "found_one": "{{count}} найден",
+        "found_few": "{{count}} найдено",
+        "found_many": "{{count}} найдено",
+        "notFound_one": "{{count}} не найден",
+        "notFound_few": "{{count}} не найдено",
+        "notFound_many": "{{count}} не найдено",
+        "skipped_one": "{{count}} пропущен",
+        "skipped_few": "{{count}} пропущено",
+        "skipped_many": "{{count}} пропущено",
+        "addFound_one": "Добавить {{count}} в получатели",
+        "addFound_few": "Добавить {{count}} в получатели",
+        "addFound_many": "Добавить {{count}} в получатели",
+        "added_one": "Добавлен {{count}} получатель",
+        "added_few": "Добавлено {{count}} получателя",
+        "added_many": "Добавлено {{count}} получателей",
+        "noneToAdd": "Некого добавить в получатели.",
+        "newSearch": "Новый поиск",
+        "startError": "Не удалось запустить поиск. Проверьте номера и попробуйте ещё раз.",
+        "startActive": "Поиск уже выполняется.",
+        "startNoValid": "Нет корректных номеров."
+      },
       "code": {
         "account_not_found": "аккаунт не найден",
         "flood_wait": "Telegram ограничил частоту отправки",
@@ -1433,7 +1468,8 @@
       "warm_toggle_archive": "Архив чата",
       "warm_mute_peer": "Звук чата",
       "warm_consume_media": "Просмотр медиа",
-      "warm_emoji_status": "Эмодзи-статус"
+      "warm_emoji_status": "Эмодзи-статус",
+      "lookup_contacts_by_phone": "Поиск контактов по номерам"
     },
     "status": {
       "failed": "ошибка",

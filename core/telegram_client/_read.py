@@ -37,6 +37,7 @@ from core.telegram_client._read_comments import (
     _resolve_linked_group_entity,
     dispatch_read_post_comments,
 )
+from core.telegram_client._read_contacts import dispatch_lookup_contacts_by_phone
 from core.telegram_client._read_profile import (
     dispatch_list_profile_music,
     dispatch_list_profile_photos,
@@ -61,6 +62,7 @@ from schemas.telegram_actions import (
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
+    LookupContactsByPhone,
     ReadChatMessages,
     ReadPostComments,
     ResolveChat,
@@ -238,6 +240,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await dispatch_list_profile_music(client, request_cls)
         case ListProfilePhotos():
             return await dispatch_list_profile_photos(client, action)
+        case LookupContactsByPhone():
+            return await dispatch_lookup_contacts_by_phone(client, action)
         case _:
             return await _dispatch_channel_read_action(client, action)
 

@@ -6755,6 +6755,445 @@
         }
       }
     },
+    "/api/v1/accounts/contact-lookup": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Start Contact Lookup",
+        "operationId": "startContactLookup",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContactLookupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactLookupJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Upstream gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/contact-lookup/active": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Active Contact Lookup Job",
+        "operationId": "getActiveContactLookupJob",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ContactLookupJob"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Getactivecontactlookupjob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/contact-lookup/latest": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Latest Contact Lookup Job",
+        "operationId": "getLatestContactLookupJob",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ContactLookupJob"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Getlatestcontactlookupjob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/contact-lookup/{job_id}": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Contact Lookup Job",
+        "operationId": "getContactLookupJob",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactLookupJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/contact-lookup/{job_id}/cancel": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Cancel Contact Lookup Job",
+        "operationId": "cancelContactLookupJob",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContactLookupJob"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -15348,6 +15787,172 @@
         ],
         "title": "CommentRecord",
         "description": "One row of ``neurocomment_comments`` \u2014 the claim + outcome for a post."
+      },
+      "ContactLookupJob": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "completed",
+              "cancelled"
+            ],
+            "title": "Status"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "completed": {
+            "type": "integer",
+            "title": "Completed"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/ContactLookupOutcome"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status",
+          "total",
+          "completed",
+          "results"
+        ],
+        "title": "ContactLookupJob"
+      },
+      "ContactLookupOutcome": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "found",
+              "not_found",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone",
+          "account_id",
+          "status"
+        ],
+        "title": "ContactLookupOutcome"
+      },
+      "ContactLookupRequest": {
+        "properties": {
+          "account_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Account Ids"
+          },
+          "phones": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Phones"
+          },
+          "min_delay_seconds": {
+            "type": "number",
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Min Delay Seconds",
+            "default": 0
+          },
+          "max_delay_seconds": {
+            "type": "number",
+            "maximum": 300.0,
+            "minimum": 0.0,
+            "title": "Max Delay Seconds",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_ids",
+          "phones"
+        ],
+        "title": "ContactLookupRequest"
       },
       "DialogueFeed": {
         "properties": {

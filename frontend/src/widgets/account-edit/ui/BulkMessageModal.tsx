@@ -14,6 +14,7 @@ import {
 import { Button, CloseButton, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
+import { ContactLookupPanel } from './ContactLookupPanel';
 
 const MAX_ACCOUNTS = 50;
 const MAX_RECIPIENTS = 50;
@@ -141,6 +142,10 @@ export function BulkMessageModal({
         onJobStarted(result.job_id);
       })
       .catch(() => undefined);
+  };
+
+  const appendRecipients = (lines: string[]) => {
+    setRecipients((prev) => [...new Set([...recipientsFrom(prev), ...lines])].join('\n'));
   };
 
   const onGenerate = () => {
@@ -380,6 +385,7 @@ export function BulkMessageModal({
                     }}
                   />
                   <p className="type-caption">{t('accounts.messages.recipientsHint')}</p>
+                  <ContactLookupPanel accountIds={ids} onAppendRecipients={appendRecipients} />
                 </section>
 
                 <section className="space-y-sm">

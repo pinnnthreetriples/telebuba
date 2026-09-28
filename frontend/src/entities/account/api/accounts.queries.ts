@@ -79,6 +79,9 @@ export async function fetchLiveProfileSnapshot(accountId: string): Promise<Accou
 export {
   getActiveBulkMessageJobOptions as activeBulkMessageJobQueryOptions,
   getLatestBulkMessageJobOptions as latestBulkMessageJobQueryOptions,
+  getActiveContactLookupJobOptions as activeContactLookupJobQueryOptions,
+  getLatestContactLookupJobOptions as latestContactLookupJobQueryOptions,
+  getContactLookupJobOptions as getContactLookupJobQueryOptions,
   accountStatsOptions as accountStatsQueryOptions,
   accountStatsQueryKey,
   checkAccountChannelUsernameOptions as accountChannelUsernameCheckQueryOptions,
