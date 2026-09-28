@@ -1451,7 +1451,8 @@
       "warm_toggle_archive": "Chat archive",
       "warm_mute_peer": "Chat mute",
       "warm_consume_media": "Media playback",
-      "warm_emoji_status": "Emoji status"
+      "warm_emoji_status": "Emoji status",
+      "lookup_contacts_by_phone": "Contact lookup by phone"
     },
     "status": {
       "failed": "failed",

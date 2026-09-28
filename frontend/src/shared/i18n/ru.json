@@ -1468,7 +1468,8 @@
       "warm_toggle_archive": "Архив чата",
       "warm_mute_peer": "Звук чата",
       "warm_consume_media": "Просмотр медиа",
-      "warm_emoji_status": "Эмодзи-статус"
+      "warm_emoji_status": "Эмодзи-статус",
+      "lookup_contacts_by_phone": "Поиск контактов по номерам"
     },
     "status": {
       "failed": "ошибка",
