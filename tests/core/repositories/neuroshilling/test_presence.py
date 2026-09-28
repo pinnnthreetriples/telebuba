@@ -8,6 +8,7 @@ from core.db import create_account
 from core.repositories.neuroshilling import (
     create_campaign,
     delete_campaign,
+    fetch_campaign,
     fetch_presence_state,
     list_halted_accounts,
     list_presence,
@@ -206,9 +207,12 @@ async def test_the_halted_roster_reads_verdicts_written_by_another_campaign() ->
     reporting = await _campaign()
     elsewhere = await _campaign()
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    current = await fetch_campaign(reporting)
+    assert current is not None
     await update_campaign(
         reporting,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
         ),

@@ -69,6 +69,7 @@ from core.repositories.neuroshilling._scenario import (
     load_scenario,
     replace_scenario,
 )
+from core.repositories.neuroshilling._settings import load_settings, save_settings
 
 __all__ = [
     "ReserveSwap",
@@ -101,12 +102,14 @@ __all__ = [
     "list_running_campaign_account_names",
     "list_sent_message_ids",
     "load_scenario",
+    "load_settings",
     "read_quota_usage",
     "record_chat_messages",
     "record_chat_reply",
     "record_presence",
     "replace_scenario",
     "retire_account_presence",
+    "save_settings",
     "set_run_state",
     "settle_message",
     "substitute_banned_account",

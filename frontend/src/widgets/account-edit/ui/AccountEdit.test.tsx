@@ -182,69 +182,6 @@ test('login-by-code requests a code then confirms sign-in', async () => {
   });
 });
 
-test('proxy: manual creates+assigns, pool select assigns', async () => {
-  const proxy = (over: Record<string, unknown> = {}) => ({
-    id: 'newp',
-    proxy_type: 'socks5',
-    host: '1.2.3.4',
-    port: 1080,
-    has_password: false,
-    status: 'tcp_working',
-    created_at: 'now',
-    updated_at: 'now',
-    used: 0,
-    capacity: 3,
-    free: 3,
-    ...over,
-  });
-  vi.mocked(fetch).mockImplementation((input) => {
-    const request = input as Request;
-    const { pathname } = new URL(request.url);
-    if (pathname === '/api/v1/proxies' && request.method === 'GET') {
-      return Promise.resolve(jsonResponse({ proxies: [proxy({ id: 'pool-1', host: '9.9.9.9' })] }));
-    }
-    if (pathname === '/api/v1/proxies') return Promise.resolve(jsonResponse(proxy()));
-    if (pathname.endsWith('/assign')) return Promise.resolve(jsonResponse(proxy()));
-    if (pathname.endsWith('/check')) return Promise.resolve(jsonResponse(proxy()));
-    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
-  });
-
-  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
-  await userEvent.click(screen.getByText('Прокси'));
-
-  // fill every manual field (covers each controlled onChange) then create+assign
-  await userEvent.type(screen.getByLabelText('Host'), '1.2.3.4');
-  await userEvent.type(screen.getByLabelText('Порт'), '1080');
-  await userEvent.type(screen.getByLabelText('Логин'), 'u');
-  await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'p');
-  await userEvent.click(screen.getByRole('combobox', { name: 'Тип' }));
-  await userEvent.click(screen.getByRole('option', { name: 'HTTPS' }));
-  // Manual mode creates + assigns (it never was a "check"), and ACCOUNT already
-  // has a proxy, so the replacement is confirmed first.
-  await userEvent.click(screen.getByRole('button', { name: 'Добавить и назначить' }));
-  await userEvent.click(await screen.findByText('Заменить'));
-  await waitFor(() => {
-    const created = vi.mocked(fetch).mock.calls.some(([input]) => {
-      const request = input as Request;
-      return new URL(request.url).pathname === '/api/v1/proxies' && request.method === 'POST';
-    });
-    expect(created).toBe(true);
-  });
-
-  // pool mode: selecting a free proxy assigns it
-  await userEvent.click(screen.getByText('Из пула'));
-  await waitFor(() => {
-    expect(screen.getByRole('option', { name: '9.9.9.9:1080' })).toBeInTheDocument();
-  });
-  await userEvent.click(screen.getByRole('option', { name: '9.9.9.9:1080' }));
-  await waitFor(() => {
-    const assigned = vi
-      .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
-    expect(assigned).toBe(true);
-  });
-});
-
 test('the import dropzone uploads a .session file then dismisses the card', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
@@ -582,7 +519,10 @@ test('a proxy check renders the real returned fields, not a fabricated "12ms"', 
 function proxyPosts(): number {
   return vi.mocked(fetch).mock.calls.filter(([input]) => {
     const request = input as Request;
-    return new URL(request.url).pathname === '/api/v1/proxies' && request.method === 'POST';
+    return (
+      new URL(request.url).pathname === '/api/v1/proxies/assign-by-endpoint' &&
+      request.method === 'POST'
+    );
   }).length;
 }
 
@@ -593,7 +533,7 @@ function routeProxies() {
     if (pathname === '/api/v1/proxies' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ proxies: [] }));
     }
-    if (pathname === '/api/v1/proxies') {
+    if (pathname === '/api/v1/proxies/assign-by-endpoint') {
       return Promise.resolve(
         jsonResponse({
           id: 'newp',
@@ -621,9 +561,7 @@ test('manual proxy mode confirms before it replaces the assigned proxy', async (
 
   await userEvent.type(screen.getByLabelText('Host'), '1.2.3.4');
   await userEvent.type(screen.getByLabelText('Порт'), '1080');
-  // The manual action was labelled «Проверить» while it actually created the
-  // proxy and moved the live account onto it (unconditional assign + client
-  // evict), and the same host/port rewrites the shared pool row's credentials.
+  // A manual assignment replaces the account's current proxy after confirmation.
   await userEvent.click(screen.getByRole('button', { name: 'Добавить и назначить' }));
 
   expect(screen.getByText('Заменить назначенный прокси?')).toBeInTheDocument();

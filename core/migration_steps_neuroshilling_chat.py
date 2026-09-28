@@ -76,10 +76,9 @@ def _ns_chat_log(connection: Connection) -> None:
 def _ns_chat_log_indexes(connection: Connection) -> None:
     """The uniqueness that makes a re-poll idempotent, plus the reply-quota lookup.
 
-    ``ux_ns_chat_log_msg`` is what stops a second poll over an overlapping window
-    recording the same message twice — and it doubles as the poll CURSOR, since
-    ``MAX(message_id)`` for a (campaign, target) is a prefix scan of it. There is
-    deliberately no separate cursor table.
+    ``ux_ns_chat_log_msg`` stops overlapping polls recording the same message twice.
+    The same index keys the reserved message_id=0 row that stores the last ID a poll
+    actually read, so an optimistic autoreply cannot skip unseen inbound messages.
     """
     connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ux_ns_chat_log_msg "

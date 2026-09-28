@@ -5,9 +5,9 @@ import { useTranslation } from 'react-i18next';
 
 import { invalidateAccountViews } from '@/entities/account';
 import {
+  assignProxyByEndpointMutation,
   assignProxyMutation,
   checkProxyMutation,
-  createProxyMutation,
   proxyPoolQueryOptions,
   unassignProxyMutation,
 } from '@/entities/proxy';
@@ -57,9 +57,14 @@ export function ProxySection({ account }: { account: AccountRead }) {
     },
   });
   const proxyFormCanSubmit = useStore(proxyForm.store, (state) => state.canSubmit);
+  const manualSignature = JSON.stringify(useStore(proxyForm.store, (state) => state.values));
   const [showPass, setShowPass] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
+  const [checkSource, setCheckSource] = useState<{
+    mode: 'pool' | 'manual';
+    signature: string | null;
+  } | null>(null);
   // Real fields returned by the last successful proxy check (country + exit IP).
   const [proxyResult, setProxyResult] = useState<{
     country_code: string | null;
@@ -68,7 +73,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   const queryClient = useQueryClient();
   const proxyMutation = useMutation(checkProxyMutation());
-  const createProxy = useMutation(createProxyMutation());
+  const assignByEndpoint = useMutation(assignProxyByEndpointMutation());
   const assignProxy = useMutation(assignProxyMutation());
   const unassignProxy = useMutation(unassignProxyMutation());
   const pool = useQuery(proxyPoolQueryOptions());
@@ -82,9 +87,19 @@ export function ProxySection({ account }: { account: AccountRead }) {
   const invalidate = () => {
     invalidateAccountViews(queryClient);
   };
-  // Every write path here is create → assign → check; without one gate a
-  // double click fires two chains that resolve out of order.
-  const proxyBusy = createProxy.isPending || assignProxy.isPending || proxyMutation.isPending;
+  // Assignment and detachment must share one gate so their responses cannot
+  // leave the account connected to whichever request finishes last.
+  const proxyBusy =
+    assignByEndpoint.isPending ||
+    assignProxy.isPending ||
+    unassignProxy.isPending ||
+    proxyMutation.isPending;
+  const visibleCheck =
+    proxyCheck === 'loading' ||
+    (checkSource?.mode === proxyMode &&
+      (proxyMode === 'pool' || checkSource.signature === manualSignature))
+      ? proxyCheck
+      : 'idle';
 
   // Record the real fields a proxy check returns (country + exit IP), so the UI
   // renders live data instead of a fabricated flag/latency.
@@ -97,6 +112,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   // Real proxy connectivity check against the assigned pool proxy.
   const runProxyCheck = () => {
+    setCheckSource({ mode: 'pool', signature: null });
     if (!account.proxy_id) {
       setProxyCheck('err');
       return;
@@ -119,7 +135,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
 
   // Pool mode: picking a free pool proxy reassigns this account immediately.
   const assignFromPool = (proxyId: string) => {
-    if (!proxyId) return;
+    if (!proxyId || proxyBusy) return;
+    setProxyCheck('idle');
+    setCheckSource(null);
     assignProxy.mutate(
       { path: { proxy_id: proxyId }, body: { account_id: account.account_id } },
       { onSuccess: invalidate },
@@ -129,7 +147,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
   // Detach the assigned proxy, leaving the account proxyless (the only path to
   // that state — pool assign only ever replaces).
   const onUnassign = () => {
-    if (!account.proxy_id) return;
+    if (!account.proxy_id || proxyBusy) return;
     unassignProxy.mutate(
       { body: { account_id: account.account_id } },
       {
@@ -142,12 +160,15 @@ export function ProxySection({ account }: { account: AccountRead }) {
     );
   };
 
-  // Manual mode: create the entered proxy (idempotent), assign it, verify it.
+  // Manual mode: atomically create or find the endpoint and assign it. An
+  // existing pool proxy keeps its saved credentials; the pool form rotates them.
   const addManualProxy = (form: ProxyFormValue) => {
+    setCheckSource({ mode: 'manual', signature: JSON.stringify(form) });
     setProxyCheck('loading');
-    createProxy.mutate(
+    assignByEndpoint.mutate(
       {
         body: {
+          account_id: account.account_id,
           proxy_type: form.proxy_type,
           host: form.host.trim(),
           port: Number(form.port),
@@ -156,27 +177,18 @@ export function ProxySection({ account }: { account: AccountRead }) {
         },
       },
       {
-        onSuccess: (created) => {
-          assignProxy.mutate(
-            { path: { proxy_id: created.id }, body: { account_id: account.account_id } },
+        onSuccess: (assigned) => {
+          proxyMutation.mutate(
+            { path: { proxy_id: assigned.id } },
             {
-              onSuccess: () => {
-                proxyMutation.mutate(
-                  { path: { proxy_id: created.id } },
-                  {
-                    onSuccess: (checked) => {
-                      applyChecked(checked);
-                      setProxyCheck(checked.status === 'tcp_working' ? 'ok' : 'err');
-                      invalidate();
-                    },
-                    onError: () => {
-                      setProxyCheck('err');
-                    },
-                  },
-                );
+              onSuccess: (checked) => {
+                applyChecked(checked);
+                setProxyCheck(checked.status === 'tcp_working' ? 'ok' : 'err');
+                invalidate();
               },
               onError: () => {
                 setProxyCheck('err');
+                invalidate();
               },
             },
           );
@@ -188,12 +200,10 @@ export function ProxySection({ account }: { account: AccountRead }) {
     );
   };
 
-  // Pool mode really is a check of the assigned proxy. Manual mode is not: it
-  // creates the entered proxy and MOVES the account onto it (the backend assign
-  // is an unconditional update + evict_client, so the live session reconnects
-  // through it), and re-adding an endpoint already in the pool rewrites that
-  // shared row's credentials. Ask first when a proxy is already assigned.
+  // Pool mode checks the assigned proxy. Manual mode moves the account onto
+  // the entered endpoint. Ask first when a proxy is already assigned.
   const onProxyAction = () => {
+    if (proxyBusy) return;
     if (proxyMode !== 'manual') {
       runProxyCheck();
       return;
@@ -226,6 +236,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
             size="xs"
             className="text-content-muted"
             onClick={onUnassign}
+            disabled={proxyBusy}
             loading={unassignProxy.isPending}
           >
             {t('accounts.edit.proxyDetach')}
@@ -284,7 +295,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-lg grid grid-cols-1 md:grid-cols-2 gap-md">
+          <div className="mb-sm grid grid-cols-1 md:grid-cols-2 gap-md">
             <proxyForm.Field name="username">
               {/* FormField emits name="username" — next to a password input that
                   is the formless login shape Chrome's password parser matches,
@@ -325,6 +336,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
+          <div className="mb-lg type-caption text-content-muted">
+            {t('accounts.edit.proxyExistingCredentials')}
+          </div>
         </>
       ) : (
         <div className="mb-lg">
@@ -348,9 +362,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
           className="items-center gap-sm"
           onClick={onProxyAction}
           disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
-          loading={proxyCheck === 'loading'}
+          loading={visibleCheck === 'loading'}
         >
-          {proxyCheck !== 'loading' && (
+          {visibleCheck !== 'loading' && (
             <svg
               width="14"
               height="14"
@@ -367,10 +381,10 @@ export function ProxySection({ account }: { account: AccountRead }) {
             ? t('accounts.edit.proxyAddAssign')
             : t('accounts.edit.proxyCheck')}
         </Button>
-        {proxyCheck === 'loading' && (
+        {visibleCheck === 'loading' && (
           <span className="type-prose">{t('accounts.edit.proxyChecking')}</span>
         )}
-        {proxyCheck === 'ok' && (
+        {visibleCheck === 'ok' && (
           <Badge tone="success" size="md" className="tb-pop gap-sm">
             {proxyResult?.country_code ? (
               <span
@@ -382,7 +396,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               .join(' · ') || t('accounts.edit.proxyReachable')}
           </Badge>
         )}
-        {proxyCheck === 'err' && (
+        {visibleCheck === 'err' && (
           <span className="inline-flex items-center gap-sm type-label text-danger">
             <Icon name="x-circle" size={14} />
             {t('accounts.edit.proxyDown')}

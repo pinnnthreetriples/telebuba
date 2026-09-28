@@ -102,6 +102,12 @@ class ProxyCreate(BaseModel):
     password: str | None = Field(default=None, min_length=1)
 
 
+class ProxyCreateAssignment(ProxyCreate):
+    """Attach an endpoint to one account without changing a shared pool proxy."""
+
+    account_id: str = Field(min_length=1)
+
+
 class ProxyRead(BaseModel):
     """A pool proxy as shown on the Accounts page (masked credentials)."""
 

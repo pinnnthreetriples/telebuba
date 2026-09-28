@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from core.db import configure_database
 from core.repositories import neuroshilling as repository
 from core.telegram_client import TelegramReadError
 from schemas.neuroshilling import NeuroshillingChatMessage, NeuroshillingStepKey
@@ -16,6 +17,8 @@ from services.neuroshilling._context import RunContext
 from tests.services.neuroshilling.helpers import seed_campaign
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from schemas.telegram_actions import TelegramReadAction
 
 _TARGET = "@alpha"
@@ -186,6 +189,94 @@ async def test_one_account_reads_a_target_and_it_is_the_same_one_every_poll(
 
     assert [account_id for account_id, _ask in reader.asks] == ["acc-1", "acc-1"]
     assert len(considered) == 2
+
+
+@pytest.mark.asyncio
+async def test_a_busy_chat_reads_all_new_pages_in_order(
+    monkeypatch: pytest.MonkeyPatch,
+    considered: list[NeuroshillingChatMessage],
+) -> None:
+    reader = _Reader([_preview(index) for index in range(2, 22)], [_preview(22), _preview(23)])
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    context = await _context()
+    await _already_arrived(context)
+
+    assert await _listen.poll_once(context, _TARGET, _CHATS) == 22
+
+    assert [action.min_id for _, action in reader.asks] == [1, 21]
+    assert [message.message_id for message in considered] == list(range(2, 24))
+    assert await repository.chat_cursor(context.campaign.campaign_id, _TARGET) == 23
+
+
+@pytest.mark.asyncio
+async def test_a_deadline_stops_before_the_next_full_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    elapsed = 0.0
+    answered: list[int] = []
+
+    async def _consider(
+        _context: RunContext,
+        _target: str,
+        _chats: dict[str, int],
+        message: NeuroshillingChatMessage,
+    ) -> None:
+        nonlocal elapsed
+        answered.append(message.message_id)
+        elapsed = 2.0
+
+    reader = _Reader([_preview(index) for index in range(2, 22)], [_preview(22)])
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(_seams, "monotonic", lambda: elapsed)
+    monkeypatch.setattr(_autoreply, "consider", _consider)
+    context = await _context()
+    await _already_arrived(context)
+
+    assert await _listen.poll_once(context, _TARGET, _CHATS, deadline=1.0) == 20
+
+    assert len(reader.asks) == 1
+    assert answered == [2]
+    assert await repository.chat_cursor(context.campaign.campaign_id, _TARGET) == 21
+
+
+@pytest.mark.asyncio
+async def test_legacy_log_keeps_an_inbound_before_our_send_across_restart(
+    monkeypatch: pytest.MonkeyPatch,
+    considered: list[NeuroshillingChatMessage],
+    tmp_path: Path,
+) -> None:
+    context = await _context()
+    campaign_id = context.campaign.campaign_id
+    # Existing installations have no marker. An optimistic autoreply at 13 must
+    # not hide the inbound at 11 which arrived after the previous poll at 10.
+    await repository.record_chat_messages(
+        campaign_id,
+        _TARGET,
+        [NeuroshillingChatMessage(message_id=10, text="old")],
+        advance_cursor=False,
+    )
+    await repository.record_chat_messages(
+        campaign_id,
+        _TARGET,
+        [NeuroshillingChatMessage(message_id=13, text="ours", is_ours=True)],
+        advance_cursor=False,
+    )
+    assert await repository.chat_cursor(campaign_id, _TARGET) == 10
+    reader = _Reader([_preview(11), _preview(13, outgoing=True)], [_preview(14)])
+    monkeypatch.setattr(_seams, "execute_read", reader)
+
+    assert await _listen.poll_once(context, _TARGET, _CHATS) == 1
+    configure_database(tmp_path / "telebuba.db")
+    restarted = context._replace(run_id="after-restart")
+    assert await _listen.poll_once(restarted, _TARGET, _CHATS) == 1
+
+    assert [action.min_id for _, action in reader.asks] == [10, 13]
+    assert [message.message_id for message in considered] == [11, 14]
+    assert await repository.chat_cursor(campaign_id, _TARGET) == 14
+    assert [
+        row.message_id for row in await repository.list_recent_chat(campaign_id, _TARGET, limit=10)
+    ] == [10, 11, 13, 14]
+    assert (await repository.count_chat_activity(campaign_id)).seen == 4
 
 
 @pytest.mark.asyncio

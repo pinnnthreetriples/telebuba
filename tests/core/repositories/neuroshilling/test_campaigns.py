@@ -30,8 +30,10 @@ async def _account(account_id: str) -> None:
     )
 
 
-def _update(**overrides: Any) -> NeuroshillingCampaignUpdate:
-    payload: dict[str, Any] = {"name": "Promo", **overrides}
+async def _update(campaign_id: str, **overrides: Any) -> NeuroshillingCampaignUpdate:
+    campaign = await fetch_campaign(campaign_id)
+    stamp = campaign.updated_at if campaign is not None else "2020-01-01T00:00:00+00:00"
+    payload: dict[str, Any] = {"name": "Promo", "expected_updated_at": stamp, **overrides}
     return NeuroshillingCampaignUpdate(**payload)
 
 
@@ -104,9 +106,15 @@ async def test_update_writes_every_editable_column() -> None:
     """
     campaign = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
 
-    assert set(_EDITED) == set(NeuroshillingCampaignUpdate.model_fields) - {"accounts"}
+    assert set(_EDITED) == set(NeuroshillingCampaignUpdate.model_fields) - {
+        "accounts",
+        "expected_updated_at",
+    }
 
-    updated = await update_campaign(campaign.campaign_id, NeuroshillingCampaignUpdate(**_EDITED))
+    updated = await update_campaign(
+        campaign.campaign_id,
+        NeuroshillingCampaignUpdate(expected_updated_at=campaign.updated_at, **_EDITED),
+    )
 
     assert updated is not None
     stored = updated.model_dump()
@@ -116,7 +124,7 @@ async def test_update_writes_every_editable_column() -> None:
 
 @pytest.mark.asyncio
 async def test_updating_an_unknown_campaign_returns_none() -> None:
-    assert await update_campaign("nope", _update()) is None
+    assert await update_campaign("nope", await _update("nope")) is None
 
 
 @pytest.mark.asyncio
@@ -133,7 +141,8 @@ async def test_the_roster_is_replaced_wholesale_but_keeps_engine_owned_state() -
 
     await update_campaign(
         campaign.campaign_id,
-        _update(
+        await _update(
+            campaign.campaign_id,
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1"),
                 NeuroshillingAccountAssignment(account_id="acc-2", is_reserve=True),
@@ -151,7 +160,9 @@ async def test_the_roster_is_replaced_wholesale_but_keeps_engine_owned_state() -
 
     await update_campaign(
         campaign.campaign_id,
-        _update(accounts=[NeuroshillingAccountAssignment(account_id="acc-2")]),
+        await _update(
+            campaign.campaign_id, accounts=[NeuroshillingAccountAssignment(account_id="acc-2")]
+        ),
     )
 
     roster = await list_campaign_accounts(campaign.campaign_id)
@@ -169,13 +180,16 @@ async def test_an_account_joining_the_roster_starts_active() -> None:
     campaign = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     await update_campaign(
         campaign.campaign_id,
-        _update(accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        await _update(
+            campaign.campaign_id, accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]
+        ),
     )
     await _force_engine_state(campaign.campaign_id, "acc-1", "banned", "acc-2")
 
     await update_campaign(
         campaign.campaign_id,
-        _update(
+        await _update(
+            campaign.campaign_id,
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1"),
                 NeuroshillingAccountAssignment(account_id="acc-2"),
@@ -197,7 +211,8 @@ async def test_a_repeated_account_in_one_roster_is_stored_once() -> None:
 
     await update_campaign(
         campaign.campaign_id,
-        _update(
+        await _update(
+            campaign.campaign_id,
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1"),
                 NeuroshillingAccountAssignment(account_id="acc-1", is_reserve=True),
@@ -218,8 +233,8 @@ async def test_one_account_serves_several_campaigns() -> None:
     second = await create_campaign(NeuroshillingCampaignCreate(name="B"))
     roster = [NeuroshillingAccountAssignment(account_id="acc-1")]
 
-    await update_campaign(first.campaign_id, _update(accounts=roster))
-    await update_campaign(second.campaign_id, _update(accounts=roster))
+    await update_campaign(first.campaign_id, await _update(first.campaign_id, accounts=roster))
+    await update_campaign(second.campaign_id, await _update(second.campaign_id, accounts=roster))
 
     assert len(await list_campaign_accounts(first.campaign_id)) == 1
     assert len(await list_campaign_accounts(second.campaign_id)) == 1
@@ -231,7 +246,9 @@ async def test_only_a_live_campaign_reports_its_accounts_as_held() -> None:
     campaign = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     await update_campaign(
         campaign.campaign_id,
-        _update(accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        await _update(
+            campaign.campaign_id, accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]
+        ),
     )
 
     assert await list_running_campaign_account_names() == {}
@@ -249,7 +266,9 @@ async def test_delete_removes_the_campaign_and_its_roster() -> None:
     campaign = await create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     await update_campaign(
         campaign.campaign_id,
-        _update(accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        await _update(
+            campaign.campaign_id, accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]
+        ),
     )
 
     await delete_campaign(campaign.campaign_id)

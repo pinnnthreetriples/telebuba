@@ -61,7 +61,15 @@ from schemas.gemini import GeminiRequest
 from schemas.neuroshilling import NeuroshillingChatMessage
 from schemas.telegram_actions import PostComment
 from services.content import is_acceptable, release_sent_text, try_reserve_sent
-from services.neuroshilling import _dispatch, _prompt, _reply_guard, _seams, _state, _telegram
+from services.neuroshilling import (
+    _dispatch,
+    _prompt,
+    _quota_ledger,
+    _reply_guard,
+    _seams,
+    _state,
+    _telegram,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -135,13 +143,11 @@ async def _over_quota(campaign: NeuroshillingCampaign, account_id: str, target: 
     """Has this account, or this chat, reached a ceiling? Counting BOTH kinds of send.
 
     An autoreply has no journal row — the journal is keyed on a scenario step and an
-    autoreply answers none — so the two counts are read separately and added. The
+    autoreply answers none — so the two durable counts and in-flight reservations
+    are read separately and added. The
     numbers in the operator's form describe the account, and the account does not
-    know which of our two code paths made it talk. All THREE are honoured, the
-    lifetime one included: an autoreply does not add to ``campaign_total`` (it is not
-    a campaign message) but it is still refused once the account's scenario steps have
-    spent that allowance, or "total per account" would be a ceiling the account went
-    on talking past for the rest of the run.
+    know which of our two code paths made it talk. All three ceilings count both
+    kinds of published message, including the campaign's lifetime ceiling.
 
     The two ATTEMPT ceilings come first and cost no query: they are about what has
     already been PAID for rather than what has been published, and the two diverge
@@ -171,14 +177,21 @@ async def _over_quota(campaign: NeuroshillingCampaign, account_id: str, target: 
         target,
         hour_since=hour_since,
         day_since=day_since,
+        campaign_id=campaign.campaign_id,
     )
-    if journal.hour + replies.hour >= campaign.messages_per_hour:
+    pending_hour, pending_day, pending_total = _quota_ledger.pending_reply_usage(
+        campaign.campaign_id, account_id, target
+    )
+    if journal.hour + replies.hour + pending_hour >= campaign.messages_per_hour:
         return True
-    chat_day = journal.chat_day + replies.chat_day
+    chat_day = journal.chat_day + replies.chat_day + pending_day
     if 0 < campaign.messages_per_chat_per_day <= chat_day:
         return True
     total = campaign.total_per_account
-    return total is not None and journal.campaign_total >= total
+    return (
+        total is not None
+        and journal.campaign_total + replies.campaign_total + pending_total >= total
+    )
 
 
 async def _refuse(account_id: str | None, target: str, reason: str) -> None:
@@ -241,10 +254,8 @@ async def _publish(
     autoreply, so without this row a sibling account reads the line back as a
     stranger's, answers it, and its answer is read back in turn. The unique index
     makes the next poll's insert of the same message a no-op, and ``list_recent_chat``
-    hands the line to the prompt labelled ``us``. It costs one thing, knowingly: the
-    poll cursor is ``MAX(message_id)``, so a message posted by somebody else between
-    the read and this send is now above the cursor and will not be read. That window
-    is one send long, and the alternative is a bot talking to itself indefinitely.
+    hands the line to the prompt labelled ``us``. The poll cursor advances only for
+    messages actually read, so an inbound between the read and this send remains visible.
     """
     account_id = speaker.account_id
     action = PostComment(chat_id=speaker.chat_id, text=text, reply_to=message.message_id)
@@ -272,14 +283,19 @@ async def _publish(
         )
         return
     campaign_id = context.campaign.campaign_id
-    await repository.record_chat_reply(
-        campaign_id, target, message.message_id, account_id=account_id
-    )
+    # Move the quota reservation to its durable sent row under the same lock that
+    # scenario steps use to re-count. A concurrent count sees one or the other.
+    async with _quota_ledger.account_lock(account_id):
+        await repository.record_chat_reply(
+            campaign_id, target, message.message_id, account_id=account_id
+        )
+        _quota_ledger.release_reply(campaign_id, account_id, target, message.message_id)
     if result.message_id:
         await repository.record_chat_messages(
             campaign_id,
             target,
             [NeuroshillingChatMessage(message_id=result.message_id, text=text, is_ours=True)],
+            advance_cursor=False,
         )
     await log_event(
         "INFO",
@@ -323,15 +339,32 @@ async def consider(
     if account_id is None:
         await _refuse(None, target, _NO_ACCOUNT)
         return
-    if await _over_quota(campaign, account_id, target):
+    async with _quota_ledger.account_lock(account_id):
+        over_quota = await _over_quota(campaign, account_id, target)
+        claimed = False
+        if not over_quota:
+            claimed = await repository.claim_chat_reply(
+                campaign.campaign_id, target, message.message_id
+            )
+            if claimed:
+                _quota_ledger.hold_reply(
+                    campaign.campaign_id, account_id, target, message.message_id
+                )
+                _state.record_reply_attempt(account_id, target)
+    if over_quota:
         await _refuse(account_id, target, _QUOTA)
         return
-    if not await repository.claim_chat_reply(campaign.campaign_id, target, message.message_id):
+    if not claimed:
         return
-    # Charged where the claim is taken and not where the request is made: everything
-    # from here on is paid for, including the drafts the gate throws away.
-    _state.record_reply_attempt(account_id, target)
-    await _answer(context, target, _Speaker(account_id, chats[account_id]), message)
+    # The model and Telegram run without the quota lock. The pending slot remains
+    # visible to scenario steps until publication moves it into the sent count.
+    try:
+        await _answer(context, target, _Speaker(account_id, chats[account_id]), message)
+    finally:
+        async with _quota_ledger.account_lock(account_id):
+            _quota_ledger.release_reply(
+                campaign.campaign_id, account_id, target, message.message_id
+            )
 
 
 async def _answer(

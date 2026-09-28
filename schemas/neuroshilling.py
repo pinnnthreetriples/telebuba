@@ -14,9 +14,10 @@ otherwise reach the operator as a raw snake_case token.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 NeuroshillingMode = Literal["campaign", "revive"]
 NeuroshillingScenarioStatus = Literal["draft", "approved"]
@@ -59,6 +60,7 @@ NeuroshillingMessageStatus = Literal["pending", "sent", "failed", "skipped"]
 
 NeuroshillingRefusalCode = Literal[
     "campaign_running",
+    "campaign_changed",
     "too_many_targets",
     "no_targets",
     "not_enough_accounts",
@@ -182,15 +184,34 @@ class NeuroshillingCampaignCreate(BaseModel):
     mode: NeuroshillingMode = "campaign"
 
 
-class NeuroshillingCampaignUpdate(BaseModel):
+class NeuroshillingVersionRequest(BaseModel):
+    """Version of the campaign and dialogue the operator actually viewed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    expected_updated_at: str = Field(min_length=1, max_length=40)
+
+    @field_validator("expected_updated_at")
+    @classmethod
+    def _valid_expected_updated_at(cls, value: str) -> str:
+        try:
+            stamp = datetime.fromisoformat(value)
+        except ValueError as exc:
+            msg = "expected_updated_at must be an ISO datetime"
+            raise ValueError(msg) from exc
+        if stamp.tzinfo is None or stamp.utcoffset() is None:
+            msg = "expected_updated_at must include a timezone"
+            raise ValueError(msg)
+        return value
+
+
+class NeuroshillingCampaignUpdate(NeuroshillingVersionRequest):
     """Whole-form replacement of everything the operator edits on the page.
 
     Targets and the account roster travel here rather than through endpoints of
     their own: both are edited as part of one card and saving them separately
     would leave windows where the roster references a role the same save removed.
     """
-
-    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=_MAX_NAME)
     mode: NeuroshillingMode = "campaign"

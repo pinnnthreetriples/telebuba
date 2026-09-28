@@ -14,6 +14,7 @@ from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
     LISTENER_BUSY_NEUROSHILLING_CODE,
+    LISTENER_BUSY_WARMING_CODE,
     AssignAccountRequest,
     CampaignCreate,
     CampaignList,
@@ -280,7 +281,7 @@ def _listener_conflicts_translated() -> Iterator[None]:
     except nc_service.ListenerBusyWarmingError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
-            detail="listener account is currently warming",
+            detail=LISTENER_BUSY_WARMING_CODE,
         ) from exc
     except nc_service.ListenerBusyDiscoveryError as exc:
         # The same stable code warming's start reports for the same condition, so one

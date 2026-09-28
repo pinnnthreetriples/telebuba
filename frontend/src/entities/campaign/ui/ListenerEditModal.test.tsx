@@ -62,7 +62,7 @@ async function putBody(): Promise<Record<string, unknown>> {
 
 function renderModal(selected: string | null = null) {
   const onClose = vi.fn();
-  const onSave = vi.fn();
+  const onSave = vi.fn(async () => true);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
@@ -94,12 +94,76 @@ test('opens the dropdown, picks an option, saves with swap and closes', async ()
 
   await userEvent.click(screen.getByText('Сохранить'));
   expect(onSave).toHaveBeenCalledWith('a2');
-  expect(screen.getByText('Сохранено')).toBeInTheDocument();
+  expect(await screen.findByText('Сохранено')).toBeInTheDocument();
   await waitFor(() => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
   // The operator touched no setting, so the settings route was never written to.
   expect(puts()).toHaveLength(0);
+});
+
+test('a rejected listener assignment stays open and never claims success', async () => {
+  routeSettings();
+  const { onClose, onSave } = renderModal();
+  onSave.mockResolvedValue(false);
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  await userEvent.click(screen.getByText('Maria Sidorova'));
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(onSave).toHaveBeenCalledWith('a2');
+  expect(screen.queryByText('Сохранено')).not.toBeInTheDocument();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(puts()).toHaveLength(0);
+});
+
+test('a listener rejection after settings save reports the partial result and retries only listener', async () => {
+  let currentMode = 'first';
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (request.method === 'PUT') {
+      currentMode = 'reply';
+      return Promise.resolve(jsonResponse({ ...SETTINGS, comment_mode: currentMode }));
+    }
+    return Promise.resolve(jsonResponse({ ...SETTINGS, comment_mode: currentMode }));
+  });
+  const { onClose, onSave } = renderModal();
+  onSave.mockImplementation(async () => {
+    expect(puts()).toHaveLength(1);
+    return false;
+  });
+  await waitFor(() => expect(screen.getByRole('radio', { name: REPLY })).toBeEnabled());
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  await userEvent.click(screen.getByText('Maria Sidorova'));
+  await userEvent.click(screen.getByRole('radio', { name: REPLY }));
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Режим комментариев сохранён');
+  expect(screen.queryByText('Сохранено')).not.toBeInTheDocument();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('radio', { name: REPLY })).toHaveAttribute('aria-checked', 'true');
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => expect(onSave).toHaveBeenCalledTimes(2));
+  expect(puts()).toHaveLength(1);
+});
+
+test('an in-flight listener save cannot be cancelled or edited', async () => {
+  routeSettings();
+  const { onClose, onSave } = renderModal();
+  let release!: (value: boolean) => void;
+  onSave.mockReturnValue(
+    new Promise<boolean>((resolve) => {
+      release = resolve;
+    }),
+  );
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  await userEvent.click(screen.getByText('Maria Sidorova'));
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => expect(screen.getByText('Отмена')).toBeDisabled());
+  expect(screen.getByRole('combobox', { name: 'Аккаунт' })).toBeDisabled();
+  await userEvent.keyboard('{Escape}');
+  expect(onClose).not.toHaveBeenCalled();
+
+  release(true);
+  expect(await screen.findByText('Сохранено')).toBeInTheDocument();
 });
 
 // .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so the options are
@@ -178,7 +242,7 @@ test('no wait field while the fleet comments first — the wait does not apply t
   expect(screen.queryByRole('spinbutton', { name: WAIT })).not.toBeInTheDocument();
 });
 
-test('a mode picked and then saved goes out with the stored limits intact', async () => {
+test('a mode picked and then saved sends only the mode', async () => {
   await openWithSettings('first');
 
   await userEvent.click(screen.getByRole('radio', { name: REPLY }));
@@ -187,16 +251,9 @@ test('a mode picked and then saved goes out with the stored limits intact', asyn
   await waitFor(() => {
     expect(puts()).toHaveLength(1);
   });
-  // The route replaces the limits wholesale, so the flip has to carry them back unchanged;
-  // an omitted `reply_wait_minutes` means "leave as stored".
-  expect(await putBody()).toEqual({
-    max_comments_per_hour: 10,
-    max_comments_per_channel_per_day: 3,
-    reply_delay_min_seconds: 3,
-    reply_delay_max_seconds: 10,
-    min_trust_score: 0,
-    comment_mode: 'reply',
-  });
+  // Every field of the route is patch-shaped. Carrying the cached limits back would roll
+  // back a limits save another tab made after this modal read them.
+  expect(await putBody()).toEqual({ comment_mode: 'reply' });
 });
 
 // The reason the mode moved into this modal at all: the choice is a draft here, so the
@@ -226,7 +283,7 @@ test('a mode returned to where it started costs no request', async () => {
   expect(puts()).toHaveLength(0);
 });
 
-test('a new wait value goes out with the stored limits intact', async () => {
+test('a new wait value is sent alone', async () => {
   await openWithSettings('reply');
   const field = screen.getByRole('spinbutton', { name: WAIT });
 
@@ -238,14 +295,7 @@ test('a new wait value goes out with the stored limits intact', async () => {
   await waitFor(() => {
     expect(puts()).toHaveLength(1);
   });
-  expect(await putBody()).toEqual({
-    max_comments_per_hour: 10,
-    max_comments_per_channel_per_day: 3,
-    reply_delay_min_seconds: 3,
-    reply_delay_max_seconds: 10,
-    min_trust_score: 0,
-    reply_wait_minutes: 45,
-  });
+  expect(await putBody()).toEqual({ reply_wait_minutes: 45 });
 });
 
 test('a wait outside the schema bounds is never sent, and the stored value returns', async () => {
@@ -280,6 +330,20 @@ test('a rejected settings write neither claims "Сохранено" nor closes',
   expect(screen.queryByText('Сохранено')).not.toBeInTheDocument();
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByText('Сохранить')).toBeEnabled();
+});
+
+test('a rejected settings write never changes the selected listener', async () => {
+  routeSettings('first', () => Promise.resolve(new Response('nope', { status: 409 })));
+  const { onClose, onSave } = renderModal();
+  await waitFor(() => expect(screen.getByRole('radio', { name: REPLY })).toBeEnabled());
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  await userEvent.click(screen.getByText('Maria Sidorova'));
+  await userEvent.click(screen.getByRole('radio', { name: REPLY }));
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => expect(puts()).toHaveLength(1));
+  expect(onSave).not.toHaveBeenCalled();
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.queryByText('Сохранено')).not.toBeInTheDocument();
 });
 
 test('each mode explains itself with a plain-language line and a worked example', async () => {

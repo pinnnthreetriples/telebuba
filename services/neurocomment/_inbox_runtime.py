@@ -26,8 +26,8 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import NewPostEvent
 
 
-async def on_post(event: NewPostEvent) -> None:
-    """Persist before returning to Telethon, then fill free worker slots."""
+async def on_post(event: NewPostEvent) -> bool:
+    """Persist before returning to Telethon; report a full queue to backfill."""
     cutoff = int(datetime.now(UTC).timestamp() - settings.neurocomment.post_backfill_ttl_seconds)
     status = await enqueue_post_bounded(
         event,
@@ -42,6 +42,7 @@ async def on_post(event: NewPostEvent) -> None:
             "neurocomment_inbox_queue_full",
             extra={"channel": event.channel, "post_id": event.post_id},
         )
+    return status != "full"
 
 
 async def start_inbox(*, recover_processing: bool = False) -> None:
@@ -277,14 +278,14 @@ async def _enqueue_backfill_page(
     floor: int,
     cutoff: int,
     owner: tuple[str, int, int],
-) -> bool:
-    """Persist one oldest-first history page; false means ownership was revoked."""
+) -> bool | None:
+    """Persist one oldest-first page; false means full, None means stale owner."""
     listener_account_id, generation, owner_generation = owner
     for post in reversed(posts):
         if not _backfill_is_current(listener_account_id, generation, owner_generation):
+            return None
+        if post.post_id > floor and post.date_unix >= cutoff and not await on_post(post):
             return False
-        if post.post_id > floor and post.date_unix >= cutoff:
-            await on_post(post)
     return True
 
 
@@ -324,14 +325,14 @@ async def _backfill_channel(
                 return None
             if not posts:
                 return True, before
-            page_owned = await _enqueue_backfill_page(
+            page_result = await _enqueue_backfill_page(
                 posts,
                 floor=floor,
                 cutoff=cutoff,
                 owner=(listener_account_id, generation, owner_generation),
             )
-            if not page_owned:
-                return None
+            if page_result is not True:
+                return None if page_result is None else (False, before)
             before = min(post.post_id for post in posts)
             if _backfill_page_is_terminal(posts, floor, cutoff):
                 return True, before

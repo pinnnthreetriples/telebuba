@@ -389,6 +389,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
 from core.repositories.proxies import (  # noqa: E402, F401
     ProxyCapacityError,
     assign_account_to_proxy,
+    create_and_assign_proxy,
     create_proxy,
     delete_proxy,
     fetch_account_proxy_country,

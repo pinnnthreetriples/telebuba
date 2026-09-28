@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import select
 
 from core.db import _get_engine, create_account, update_account_from_session_check
-from core.repositories.neuroshilling import list_recent_chat, update_campaign
+from core.repositories.neuroshilling import fetch_campaign, list_recent_chat, update_campaign
 from core.repositories.neuroshilling._tables import _neuroshilling_messages
 from schemas.accounts import AccountCreate
 from schemas.neuroshilling import (
@@ -302,9 +302,12 @@ async def test_a_cast_with_nobody_in_it_says_so_instead_of_finishing_quietly(
 
 async def _take_every_role_off_the_roster(seeded: Seeded) -> None:
     """The roster edit a run cannot see coming: same accounts, no parts to play."""
+    current = await fetch_campaign(seeded.campaign_id)
+    assert current is not None
     await update_campaign(
         seeded.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             targets_raw="@alpha",
             accounts=[
@@ -329,9 +332,12 @@ def _one_role_steps(count: int) -> list[NeuroshillingStepInput]:
 
 async def _put_both_accounts_on_one_role(seeded: Seeded) -> None:
     """Two accounts able to play the same part — the case a substitution needs."""
+    current = await fetch_campaign(seeded.campaign_id)
+    assert current is not None
     await update_campaign(
         seeded.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             targets_raw="@alpha",
             accounts=[

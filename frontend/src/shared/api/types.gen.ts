@@ -2622,23 +2622,23 @@ export type NeurocommentSettingsUpdate = {
   /**
    * Max Comments Per Hour
    */
-  max_comments_per_hour: number;
+  max_comments_per_hour?: number | null;
   /**
    * Max Comments Per Channel Per Day
    */
-  max_comments_per_channel_per_day: number;
+  max_comments_per_channel_per_day?: number | null;
   /**
    * Reply Delay Min Seconds
    */
-  reply_delay_min_seconds: number;
+  reply_delay_min_seconds?: number | null;
   /**
    * Reply Delay Max Seconds
    */
-  reply_delay_max_seconds: number;
+  reply_delay_max_seconds?: number | null;
   /**
    * Min Trust Score
    */
-  min_trust_score: number;
+  min_trust_score?: number | null;
   /**
    * Comment Mode
    */
@@ -2893,6 +2893,10 @@ export type NeuroshillingCampaignList = {
  * would leave windows where the roster references a role the same save removed.
  */
 export type NeuroshillingCampaignUpdate = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
   /**
    * Name
    */
@@ -3162,6 +3166,28 @@ export type NeuroshillingScenarioUpdate = {
 };
 
 /**
+ * NeuroshillingSettings
+ */
+export type NeuroshillingSettings = {
+  campaign: NeuroshillingCampaign;
+  scenario: NeuroshillingScenario;
+  /**
+   * Accounts
+   */
+  accounts: Array<NeuroshillingAccountAssignment>;
+};
+
+/**
+ * NeuroshillingSettingsUpdate
+ *
+ * One settings Save containing the campaign form and its edited dialogue.
+ */
+export type NeuroshillingSettingsUpdate = {
+  campaign: NeuroshillingCampaignUpdate;
+  scenario: NeuroshillingScenarioUpdate;
+};
+
+/**
  * NeuroshillingStep
  *
  * One row of ``neuroshilling_steps``.
@@ -3256,6 +3282,18 @@ export type NeuroshillingStepInput = {
    * Delay Max Seconds
    */
   delay_max_seconds?: number;
+};
+
+/**
+ * NeuroshillingVersionRequest
+ *
+ * Version of the campaign and dialogue the operator actually viewed.
+ */
+export type NeuroshillingVersionRequest = {
+  /**
+   * Expected Updated At
+   */
+  expected_updated_at: string;
 };
 
 /**
@@ -3624,6 +3662,38 @@ export type ProxyCreate = {
    * Password
    */
   password?: string | null;
+};
+
+/**
+ * ProxyCreateAssignment
+ *
+ * Attach an endpoint to one account without changing a shared pool proxy.
+ */
+export type ProxyCreateAssignment = {
+  /**
+   * Proxy Type
+   */
+  proxy_type: 'socks5' | 'https';
+  /**
+   * Host
+   */
+  host: string;
+  /**
+   * Port
+   */
+  port: number;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Password
+   */
+  password?: string | null;
+  /**
+   * Account Id
+   */
+  account_id: string;
 };
 
 /**
@@ -7640,6 +7710,49 @@ export type CreateProxyResponses = {
 
 export type CreateProxyResponse = CreateProxyResponses[keyof CreateProxyResponses];
 
+export type AssignProxyByEndpointData = {
+  body: ProxyCreateAssignment;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies/assign-by-endpoint';
+};
+
+export type AssignProxyByEndpointErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type AssignProxyByEndpointError =
+  AssignProxyByEndpointErrors[keyof AssignProxyByEndpointErrors];
+
+export type AssignProxyByEndpointResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type AssignProxyByEndpointResponse =
+  AssignProxyByEndpointResponses[keyof AssignProxyByEndpointResponses];
+
 export type ProbeProxyData = {
   body: ProxyCreate;
   path?: never;
@@ -10038,6 +10151,102 @@ export type SetNeuroshillingScenarioResponses = {
 export type SetNeuroshillingScenarioResponse =
   SetNeuroshillingScenarioResponses[keyof SetNeuroshillingScenarioResponses];
 
+export type GetNeuroshillingSettingsData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/settings';
+};
+
+export type GetNeuroshillingSettingsErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetNeuroshillingSettingsError =
+  GetNeuroshillingSettingsErrors[keyof GetNeuroshillingSettingsErrors];
+
+export type GetNeuroshillingSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingSettings;
+};
+
+export type GetNeuroshillingSettingsResponse =
+  GetNeuroshillingSettingsResponses[keyof GetNeuroshillingSettingsResponses];
+
+export type SaveNeuroshillingSettingsData = {
+  body: NeuroshillingSettingsUpdate;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neuroshilling/campaigns/{campaign_id}/settings';
+};
+
+export type SaveNeuroshillingSettingsErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Conflict with the current state
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type SaveNeuroshillingSettingsError =
+  SaveNeuroshillingSettingsErrors[keyof SaveNeuroshillingSettingsErrors];
+
+export type SaveNeuroshillingSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeuroshillingSettings;
+};
+
+export type SaveNeuroshillingSettingsResponse =
+  SaveNeuroshillingSettingsResponses[keyof SaveNeuroshillingSettingsResponses];
+
 export type GenerateNeuroshillingScenarioData = {
   body: NeuroshillingGenerateRequest;
   path: {
@@ -10095,7 +10304,7 @@ export type GenerateNeuroshillingScenarioResponse =
   GenerateNeuroshillingScenarioResponses[keyof GenerateNeuroshillingScenarioResponses];
 
 export type ApproveNeuroshillingScenarioData = {
-  body?: never;
+  body: NeuroshillingVersionRequest;
   path: {
     /**
      * Campaign Id
@@ -10151,7 +10360,7 @@ export type ApproveNeuroshillingScenarioResponse =
   ApproveNeuroshillingScenarioResponses[keyof ApproveNeuroshillingScenarioResponses];
 
 export type StartNeuroshillingCampaignData = {
-  body?: never;
+  body: NeuroshillingVersionRequest;
   path: {
     /**
      * Campaign Id

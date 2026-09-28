@@ -40,14 +40,20 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=transport, base_url="http://test")
 
 
-def _form(**overrides: Any) -> dict[str, Any]:
-    return {"name": "Promo", **overrides}
+def _form(expected_updated_at: str, **overrides: Any) -> dict[str, Any]:
+    return {"name": "Promo", "expected_updated_at": expected_updated_at, **overrides}
 
 
 async def _create(client: httpx.AsyncClient, name: str = "Promo") -> str:
     response = await client.post(_BASE, json={"name": name})
     assert response.status_code == 200
     return response.json()["campaign_id"]
+
+
+async def _stamp(client: httpx.AsyncClient, campaign_id: str) -> str:
+    response = await client.get(f"{_BASE}/{campaign_id}/board")
+    assert response.status_code == 200
+    return response.json()["campaign"]["updated_at"]
 
 
 async def _set_status(campaign_id: str, status: str) -> None:
@@ -85,6 +91,7 @@ async def test_the_form_round_trips_through_update_and_the_board(app: FastAPI) -
         saved = await client.put(
             f"{_BASE}/{campaign_id}",
             json=_form(
+                await _stamp(client, campaign_id),
                 topic="delivery",
                 targets_raw="@news https://t.me/sport",
                 messages_per_hour=5,
@@ -107,11 +114,41 @@ async def test_the_form_round_trips_through_update_and_the_board(app: FastAPI) -
 
 
 @pytest.mark.asyncio
+async def test_stale_campaign_form_does_not_overwrite_saved_fields(app: FastAPI) -> None:
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        stamp = await _stamp(client, campaign_id)
+        first = await client.put(f"{_BASE}/{campaign_id}", json=_form(stamp, name="First"))
+        stale = await client.put(f"{_BASE}/{campaign_id}", json=_form(stamp, topic="Second"))
+        board = await client.get(f"{_BASE}/{campaign_id}/board")
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
+    assert stale.json()["error"]["message"] == "campaign_changed"
+    assert board.json()["campaign"]["name"] == "First"
+    assert board.json()["campaign"]["topic"] == ""
+
+
+@pytest.mark.asyncio
+async def test_malformed_campaign_edit_stamp_is_rejected_by_the_contract(app: FastAPI) -> None:
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        response = await client.put(
+            f"{_BASE}/{campaign_id}", json=_form("not-a-date", topic="delivery")
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_parallel_run_mode_is_refused_with_its_stable_code(app: FastAPI) -> None:
     async with _client(app) as client:
         campaign_id = await _create(client)
 
-        response = await client.put(f"{_BASE}/{campaign_id}", json=_form(run_mode="parallel"))
+        response = await client.put(
+            f"{_BASE}/{campaign_id}",
+            json=_form(await _stamp(client, campaign_id), run_mode="parallel"),
+        )
 
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "run_mode_not_supported"
@@ -125,7 +162,9 @@ async def test_a_reversed_pause_range_is_rejected_by_the_contract(app: FastAPI) 
 
         response = await client.put(
             f"{_BASE}/{campaign_id}",
-            json=_form(pause_min_seconds=40, pause_max_seconds=10),
+            json=_form(
+                await _stamp(client, campaign_id), pause_min_seconds=40, pause_max_seconds=10
+            ),
         )
 
     assert response.status_code == 422
@@ -137,7 +176,9 @@ async def test_a_running_campaign_refuses_edits_and_deletion(app: FastAPI) -> No
         campaign_id = await _create(client)
         await _set_status(campaign_id, "running")
 
-        edit = await client.put(f"{_BASE}/{campaign_id}", json=_form())
+        edit = await client.put(
+            f"{_BASE}/{campaign_id}", json=_form(await _stamp(client, campaign_id))
+        )
         removal = await client.delete(f"{_BASE}/{campaign_id}")
 
     assert (edit.status_code, removal.status_code) == (409, 409)
@@ -149,7 +190,7 @@ async def test_a_running_campaign_refuses_edits_and_deletion(app: FastAPI) -> No
 async def test_unknown_campaigns_answer_404_on_every_route(app: FastAPI) -> None:
     async with _client(app) as client:
         board = await client.get(f"{_BASE}/nope/board")
-        edit = await client.put(f"{_BASE}/nope", json=_form())
+        edit = await client.put(f"{_BASE}/nope", json=_form("2026-01-01T00:00:00+00:00"))
         removal = await client.delete(f"{_BASE}/nope")
 
     assert (board.status_code, edit.status_code, removal.status_code) == (404, 404, 404)
@@ -186,7 +227,9 @@ def test_the_operation_ids_the_generated_client_is_named_after(app: FastAPI) -> 
         "delete /campaigns/{campaign_id}": "deleteNeuroshillingCampaign",
         "get /campaigns/{campaign_id}/board": "getNeuroshillingBoard",
         "get /campaigns/{campaign_id}/scenario": "getNeuroshillingScenario",
+        "get /campaigns/{campaign_id}/settings": "getNeuroshillingSettings",
         "put /campaigns/{campaign_id}/scenario": "setNeuroshillingScenario",
+        "put /campaigns/{campaign_id}/settings": "saveNeuroshillingSettings",
         "post /campaigns/{campaign_id}/generate": "generateNeuroshillingScenario",
         "post /campaigns/{campaign_id}/approve": "approveNeuroshillingScenario",
         "post /campaigns/{campaign_id}/start": "startNeuroshillingCampaign",

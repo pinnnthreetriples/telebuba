@@ -38,9 +38,22 @@ def _client(app: FastAPI) -> httpx.AsyncClient:
 async def _create(client: httpx.AsyncClient, *, topic: str = "delivery") -> str:
     response = await client.post(_BASE, json={"name": "Promo"})
     campaign_id = response.json()["campaign_id"]
-    saved = await client.put(f"{_BASE}/{campaign_id}", json={"name": "Promo", "topic": topic})
+    saved = await client.put(
+        f"{_BASE}/{campaign_id}",
+        json={
+            "name": "Promo",
+            "topic": topic,
+            "expected_updated_at": response.json()["updated_at"],
+        },
+    )
     assert saved.status_code == 200
     return campaign_id
+
+
+async def _stamp(client: httpx.AsyncClient, campaign_id: str) -> str:
+    response = await client.get(f"{_BASE}/{campaign_id}/board")
+    assert response.status_code == 200
+    return response.json()["campaign"]["updated_at"]
 
 
 def _dialogue(**overrides: Any) -> dict[str, Any]:
@@ -89,7 +102,10 @@ async def test_approval_is_a_server_verdict_and_editing_undoes_it(app: FastAPI) 
         campaign_id = await _create(client)
         await client.put(f"{_BASE}/{campaign_id}/scenario", json=_dialogue())
 
-        approved = await client.post(f"{_BASE}/{campaign_id}/approve")
+        approved = await client.post(
+            f"{_BASE}/{campaign_id}/approve",
+            json={"expected_updated_at": await _stamp(client, campaign_id)},
+        )
         edited = await client.put(f"{_BASE}/{campaign_id}/scenario", json=_dialogue())
 
     assert approved.status_code == 200
@@ -98,11 +114,118 @@ async def test_approval_is_a_server_verdict_and_editing_undoes_it(app: FastAPI) 
 
 
 @pytest.mark.asyncio
+async def test_approval_refuses_a_scenario_changed_since_preview(app: FastAPI) -> None:
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        await client.put(f"{_BASE}/{campaign_id}/scenario", json=_dialogue())
+        preview = await client.get(f"{_BASE}/{campaign_id}/settings")
+        stamp = preview.json()["campaign"]["updated_at"]
+        await client.put(
+            f"{_BASE}/{campaign_id}/scenario",
+            json=_dialogue(steps=[{"role_id": "a", "text": "unseen edit"}]),
+        )
+        refused = await client.post(
+            f"{_BASE}/{campaign_id}/approve", json={"expected_updated_at": stamp}
+        )
+        stored = await client.get(f"{_BASE}/{campaign_id}/scenario")
+
+    assert refused.status_code == 409
+    assert refused.json()["error"]["message"] == "campaign_changed"
+    assert stored.json()["scenario_status"] == "draft"
+    assert stored.json()["steps"][0]["text"] == "unseen edit"
+
+
+@pytest.mark.asyncio
+async def test_approval_requires_a_preview_token(app: FastAPI) -> None:
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        missing = await client.post(f"{_BASE}/{campaign_id}/approve")
+        malformed = await client.post(
+            f"{_BASE}/{campaign_id}/approve", json={"expected_updated_at": "yesterday"}
+        )
+    assert missing.status_code == malformed.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_settings_endpoint_commits_campaign_and_dialogue_together(app: FastAPI) -> None:
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        await client.put(f"{_BASE}/{campaign_id}/scenario", json=_dialogue())
+        approved = await client.post(
+            f"{_BASE}/{campaign_id}/approve",
+            json={"expected_updated_at": await _stamp(client, campaign_id)},
+        )
+        assert approved.status_code == 200
+        expected_updated_at = await _stamp(client, campaign_id)
+        saved = await client.put(
+            f"{_BASE}/{campaign_id}/settings",
+            json={
+                "campaign": {
+                    "name": "Changed",
+                    "topic": "new topic",
+                    "targets_raw": "@alpha",
+                    "expected_updated_at": expected_updated_at,
+                },
+                "scenario": _dialogue(steps=[{"role_id": "a", "text": "new text"}]),
+            },
+        )
+        read = await client.get(f"{_BASE}/{campaign_id}/scenario")
+        settings = await client.get(f"{_BASE}/{campaign_id}/settings")
+
+    assert saved.status_code == 200
+    assert saved.json()["campaign"]["name"] == "Changed"
+    assert saved.json()["campaign"]["topic"] == "new topic"
+    assert saved.json()["scenario"]["steps"][0]["text"] == "new text"
+    assert saved.json()["accounts"] == []
+    assert saved.json()["scenario"]["scenario_status"] == "draft"
+    assert read.json()["steps"][0]["text"] == "new text"
+    assert settings.status_code == 200
+    assert settings.json() == saved.json()
+
+
+@pytest.mark.asyncio
+async def test_settings_get_returns_404_for_missing_campaign(app: FastAPI) -> None:
+    async with _client(app) as client:
+        response = await client.get(f"{_BASE}/missing/settings")
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_stale_settings_save_preserves_the_newer_dialogue(app: FastAPI) -> None:
+    async with _client(app) as client:
+        campaign_id = await _create(client)
+        stamp = await _stamp(client, campaign_id)
+        first = await client.put(
+            f"{_BASE}/{campaign_id}/settings",
+            json={
+                "campaign": {"name": "First", "topic": "delivery", "expected_updated_at": stamp},
+                "scenario": _dialogue(steps=[{"role_id": "a", "text": "first version"}]),
+            },
+        )
+        stale = await client.put(
+            f"{_BASE}/{campaign_id}/settings",
+            json={
+                "campaign": {"name": "Second", "topic": "delivery", "expected_updated_at": stamp},
+                "scenario": _dialogue(steps=[{"role_id": "a", "text": "stale version"}]),
+            },
+        )
+        stored = await client.get(f"{_BASE}/{campaign_id}/scenario")
+
+    assert first.status_code == 200
+    assert stale.status_code == 409
+    assert stale.json()["error"]["message"] == "campaign_changed"
+    assert stored.json()["steps"][0]["text"] == "first version"
+
+
+@pytest.mark.asyncio
 async def test_an_empty_scenario_cannot_be_approved(app: FastAPI) -> None:
     async with _client(app) as client:
         campaign_id = await _create(client)
 
-        response = await client.post(f"{_BASE}/{campaign_id}/approve")
+        response = await client.post(
+            f"{_BASE}/{campaign_id}/approve",
+            json={"expected_updated_at": await _stamp(client, campaign_id)},
+        )
 
     assert response.status_code == 400
     assert response.json()["error"]["message"] == "scenario_invalid"
@@ -129,7 +252,10 @@ async def test_a_running_campaign_refuses_scenario_writes(app: FastAPI) -> None:
         await _set_status(campaign_id, "running")
 
         saved = await client.put(f"{_BASE}/{campaign_id}/scenario", json=_dialogue())
-        approved = await client.post(f"{_BASE}/{campaign_id}/approve")
+        approved = await client.post(
+            f"{_BASE}/{campaign_id}/approve",
+            json={"expected_updated_at": await _stamp(client, campaign_id)},
+        )
         generated = await client.post(f"{_BASE}/{campaign_id}/generate", json={})
 
     assert (saved.status_code, approved.status_code, generated.status_code) == (409, 409, 409)
@@ -141,7 +267,10 @@ async def test_unknown_campaigns_answer_404_on_every_scenario_route(app: FastAPI
     async with _client(app) as client:
         read = await client.get(f"{_BASE}/nope/scenario")
         saved = await client.put(f"{_BASE}/nope/scenario", json=_dialogue())
-        approved = await client.post(f"{_BASE}/nope/approve")
+        approved = await client.post(
+            f"{_BASE}/nope/approve",
+            json={"expected_updated_at": "2026-09-27T00:00:00+00:00"},
+        )
         generated = await client.post(f"{_BASE}/nope/generate", json={})
 
     assert [response.status_code for response in (read, saved, approved, generated)] == [404] * 4

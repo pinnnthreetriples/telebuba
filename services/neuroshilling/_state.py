@@ -41,6 +41,8 @@ _GENERATING: set[str] = set()
 # ``running`` is written several awaits after the check that reads it, and both halves
 # of a double click straddle that gap.
 _STARTING: set[str] = set()
+# In-flight edits may overlap each other; Start waits until every edit has left.
+_EDITING: dict[str, int] = {}
 
 # account_id -> the rolling hour of autoreply ATTEMPTS that account has paid for, and
 # target -> the rolling day one CHAT has. Both count drafts rather than published
@@ -211,17 +213,13 @@ def finish_generation(campaign_id: str) -> None:
     _GENERATING.discard(campaign_id)
 
 
-def try_claim_start(campaign_id: str) -> bool:
-    """Claim this campaign's start slot; ``False`` means a start is already in flight.
+def generation_in_flight(campaign_id: str) -> bool:
+    return campaign_id in _GENERATING
 
-    Same shape as :func:`try_start_generation` and for the same reason: the caller's
-    "is this campaign already live?" test reads a column that ``start_campaign`` only
-    writes several awaits later — the roster reads and the account claim sit in between
-    — so two requests both pass that test. Taking this claim in the SAME synchronous
-    section as the test is what makes the pair atomic. The caller must release with
-    :func:`finish_start` in a ``finally``.
-    """
-    if campaign_id in _STARTING:
+
+def try_claim_start(campaign_id: str) -> bool:
+    """Claim a launch only while no edit or launch owns the campaign."""
+    if campaign_id in _STARTING or campaign_id in _EDITING:
         return False
     _STARTING.add(campaign_id)
     return True
@@ -229,6 +227,22 @@ def try_claim_start(campaign_id: str) -> bool:
 
 def finish_start(campaign_id: str) -> None:
     _STARTING.discard(campaign_id)
+
+
+def try_claim_edit(campaign_id: str) -> bool:
+    """Count edits across awaits so Start cannot straddle any of their writes."""
+    if campaign_id in _STARTING:
+        return False
+    _EDITING[campaign_id] = _EDITING.get(campaign_id, 0) + 1
+    return True
+
+
+def finish_edit(campaign_id: str) -> None:
+    remaining = _EDITING[campaign_id] - 1
+    if remaining:
+        _EDITING[campaign_id] = remaining
+    else:
+        del _EDITING[campaign_id]
 
 
 def start_in_flight(campaign_id: str) -> bool:
@@ -250,6 +264,13 @@ def begin_run(campaign_id: str, run_id: str) -> int:
     generation = _RUN_GENERATIONS[campaign_id] = _RUN_GENERATIONS.get(campaign_id, 0) + 1
     _RUN_OWNER[campaign_id] = run_id
     return generation
+
+
+def abandon_run(campaign_id: str, run_id: str) -> None:
+    """Forget a run that never reached the database or spawned a task."""
+    if _RUN_OWNER.get(campaign_id) == run_id:
+        _RUN_OWNER.pop(campaign_id, None)
+        revoke_run(campaign_id)
 
 
 def revoke_run(campaign_id: str) -> None:
@@ -327,5 +348,6 @@ def reset_for_tests() -> None:
     _KEY_WARNED.clear()
     _GENERATING.clear()
     _STARTING.clear()
+    _EDITING.clear()
     _RUN_GENERATIONS.clear()
     _RUN_OWNER.clear()

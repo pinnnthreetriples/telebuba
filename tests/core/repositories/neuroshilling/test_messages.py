@@ -299,5 +299,7 @@ async def test_our_own_message_ids_are_read_back_across_every_run_and_campaign()
     # A claimed but unsettled row has no id in the chat, so it is not one of ours.
     await _claim(campaign_id, "beta", steps[0].step_id, "acc-1", "a")
 
-    assert await list_sent_message_ids("alpha") == {101, 102, 205}
-    assert await list_sent_message_ids("beta") == set()
+    assert await list_sent_message_ids("alpha", [101, 102, 205, 999]) == {101, 102, 205}
+    assert await list_sent_message_ids("alpha", [102]) == {102}
+    assert await list_sent_message_ids("beta", [101, 102, 205]) == set()
+    assert await list_sent_message_ids("alpha", []) == set()

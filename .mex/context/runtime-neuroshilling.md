@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-27
+last_updated: 2026-09-27
 edges:
   - target: context/runtime-warming.md
     condition: the other writer of the account-ownership registry
@@ -22,6 +22,8 @@ replays it round and round in one chat the operator owns.
 - Replies to live strangers are bounded by parsing the string that would be SENT, not by instructions in the prompt. Delimiter defences are documented to fall to adaptive attacks, so the fence is depth and the parser is the boundary. Refusals travel as stable codes because a log event's `extra` reaches an HTTP body, so no attacker-controlled text may enter one.
 - The outbound content filter is warming's, and its stock forbidden words are the vocabulary a shilling dialogue is written in. There is no neuroshilling copy of that list on purpose — the two features must not disagree about what may go out — so unblocking a campaign is an operator edit to warming's settings. The same filter is asked again at APPROVAL, not only before each send, so the operator learns at once instead of watching a run finish `done` having skipped every message step.
 - Stop bumps the run generation and cancels; a status row is not a stop, because a coroutine asleep in a step delay never reads rows. A resumed run keeps its STORED run id: a fresh one would face an empty journal and replay the whole dialogue into chats that already have it.
+- Start claims the campaign before its first read; edits hold a counted in-process claim through validation and writes, so Start cannot launch across a save. Settings reads take one DB snapshot. A settings save that changes the dialogue writes campaign, roles, steps and roster in one transaction and returns it to draft; setup-only saves keep the approval. Whole-form saves and generation results write only on an unchanged update stamp.
+- The listener cursor records the last ID actually read, not an optimistic outgoing reply. Forward pages drain bursts without skipping earlier messages. Autoreplies and scenario steps share account quota reservations so an in-flight reply occupies its slot before Telegram confirms it.
 - Parallel mode is refused on the server as a decision, not an omission — it turns joins into a volley and quota re-counts into a race for nothing a sequential pass does not already give.
 
 Caps, timings, prompt wording and the refusal-shape catalogue belong to config, code
