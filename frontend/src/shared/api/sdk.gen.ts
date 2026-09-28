@@ -28,6 +28,9 @@ import type {
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
+  AssignProxyByEndpointData,
+  AssignProxyByEndpointErrors,
+  AssignProxyByEndpointResponses,
   AssignProxyData,
   AssignProxyErrors,
   AssignProxyResponses,
@@ -160,6 +163,9 @@ import type {
   GetNeuroshillingScenarioData,
   GetNeuroshillingScenarioErrors,
   GetNeuroshillingScenarioResponses,
+  GetNeuroshillingSettingsData,
+  GetNeuroshillingSettingsErrors,
+  GetNeuroshillingSettingsResponses,
   GetReadinessData,
   GetReadinessErrors,
   GetReadinessResponses,
@@ -289,6 +295,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarErrors,
   ResyncAccountAvatarResponses,
+  SaveNeuroshillingSettingsData,
+  SaveNeuroshillingSettingsErrors,
+  SaveNeuroshillingSettingsResponses,
   SendAccountChatMessageData,
   SendAccountChatMessageErrors,
   SendAccountChatMessageResponses,
@@ -1435,6 +1444,25 @@ export const createProxy = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Assign Proxy By Endpoint
+ */
+export const assignProxyByEndpoint = <ThrowOnError extends boolean = false>(
+  options: Options<AssignProxyByEndpointData, ThrowOnError>,
+): RequestResult<AssignProxyByEndpointResponses, AssignProxyByEndpointErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    AssignProxyByEndpointResponses,
+    AssignProxyByEndpointErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/proxies/assign-by-endpoint',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * Probe Proxy
  */
 export const probeProxy = <ThrowOnError extends boolean = false>(
@@ -2464,6 +2492,43 @@ export const setNeuroshillingScenario = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Get Settings
+ */
+export const getNeuroshillingSettings = <ThrowOnError extends boolean = false>(
+  options: Options<GetNeuroshillingSettingsData, ThrowOnError>,
+): RequestResult<GetNeuroshillingSettingsResponses, GetNeuroshillingSettingsErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetNeuroshillingSettingsResponses,
+    GetNeuroshillingSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/settings', ...options });
+
+/**
+ * Save Settings
+ *
+ * Commit the campaign form, roster and edited dialogue in one transaction.
+ */
+export const saveNeuroshillingSettings = <ThrowOnError extends boolean = false>(
+  options: Options<SaveNeuroshillingSettingsData, ThrowOnError>,
+): RequestResult<
+  SaveNeuroshillingSettingsResponses,
+  SaveNeuroshillingSettingsErrors,
+  ThrowOnError
+> =>
+  (options.client ?? client).put<
+    SaveNeuroshillingSettingsResponses,
+    SaveNeuroshillingSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neuroshilling/campaigns/{campaign_id}/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * Generate Scenario
  *
  * Write a fresh dialogue with the LLM, replacing whatever the campaign had.
@@ -2513,7 +2578,14 @@ export const approveNeuroshillingScenario = <ThrowOnError extends boolean = fals
     ApproveNeuroshillingScenarioResponses,
     ApproveNeuroshillingScenarioErrors,
     ThrowOnError
-  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/approve', ...options });
+  >({
+    url: '/api/v1/neuroshilling/campaigns/{campaign_id}/approve',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Start Campaign
@@ -2537,7 +2609,14 @@ export const startNeuroshillingCampaign = <ThrowOnError extends boolean = false>
     StartNeuroshillingCampaignResponses,
     StartNeuroshillingCampaignErrors,
     ThrowOnError
-  >({ url: '/api/v1/neuroshilling/campaigns/{campaign_id}/start', ...options });
+  >({
+    url: '/api/v1/neuroshilling/campaigns/{campaign_id}/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Stop Campaign

@@ -515,6 +515,7 @@ export function ScenarioSection({
                   оператора гадать, почему аккаунта нет в списке. */}
               <Select
                 value={playing?.account_id ?? ''}
+                disabled={busy}
                 onChange={(value) => {
                   onAssignRole(role.roleId, value || null);
                 }}

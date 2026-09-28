@@ -156,3 +156,31 @@ def test_campaign_create_rejects_over_long_name_and_prompt() -> None:
 def test_update_prompt_rejects_over_long_prompt() -> None:
     with pytest.raises(ValidationError):
         UpdatePromptRequest(prompt="p" * 4001)
+
+
+@pytest.mark.asyncio
+async def test_a_mode_only_save_keeps_limits_saved_by_another_tab() -> None:
+    """The mode toggle sends only the mode, so it cannot roll back a newer limits save."""
+    await settings_store.save_settings(_mode_update())
+    # Another tab's Settings form saves new limits after this tab cached the old ones.
+    await settings_store.save_settings(
+        NeurocommentSettingsUpdate(
+            max_comments_per_hour=9,
+            max_comments_per_channel_per_day=4,
+            reply_delay_min_seconds=3.0,
+            reply_delay_max_seconds=6.0,
+            min_trust_score=70,
+        ),
+    )
+
+    saved = await settings_store.save_settings(NeurocommentSettingsUpdate(comment_mode="reply"))
+
+    assert saved.comment_mode == "reply"
+    assert saved.max_comments_per_hour == 9
+    assert saved.reply_delay_max_seconds == 6.0
+    assert saved.min_trust_score == 70
+
+
+def test_settings_update_refuses_half_a_reply_delay_range() -> None:
+    with pytest.raises(ValidationError):
+        NeurocommentSettingsUpdate(reply_delay_min_seconds=1.0)

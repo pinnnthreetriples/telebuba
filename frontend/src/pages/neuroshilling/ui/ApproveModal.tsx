@@ -260,7 +260,7 @@ export function ApproveModal({
         <Button
           variant="primary"
           size="sm"
-          disabled={busy || steps.length === 0 || (status === 'approved' && !dirty)}
+          disabled={busy || dirty || steps.length === 0 || status === 'approved'}
           onClick={onApprove}
         >
           {t('neuroshilling.scenario.approve')}

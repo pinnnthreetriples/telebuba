@@ -33,7 +33,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from schemas.neuroshilling import NeuroshillingScenarioStatus  # noqa: TC001 - runtime field type
+from schemas.neuroshilling import (  # noqa: TC001 - runtime field types
+    NeuroshillingAccountAssignment,
+    NeuroshillingCampaign,
+    NeuroshillingCampaignUpdate,
+    NeuroshillingScenarioStatus,
+)
 
 NeuroshillingStepKind = Literal["message", "reaction"]
 
@@ -181,6 +186,19 @@ class NeuroshillingScenario(BaseModel):
     scenario_status: NeuroshillingScenarioStatus = "draft"
     roles: list[NeuroshillingRole] = Field(default_factory=list)
     steps: list[NeuroshillingStep] = Field(default_factory=list)
+
+
+class NeuroshillingSettingsUpdate(BaseModel):
+    """One settings Save containing the campaign form and its edited dialogue."""
+
+    campaign: NeuroshillingCampaignUpdate
+    scenario: NeuroshillingScenarioUpdate
+
+
+class NeuroshillingSettings(BaseModel):
+    campaign: NeuroshillingCampaign
+    scenario: NeuroshillingScenario
+    accounts: list[NeuroshillingAccountAssignment]
 
 
 class NeuroshillingGenerateRequest(BaseModel):

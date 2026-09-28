@@ -31,13 +31,10 @@ from uuid import uuid4
 from core.config import settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
-from core.repositories.neurocomment import (
-    get_listener_account_id,
-    get_listener_running,
-    list_active_campaign_account_names,
-)
+from core.repositories.neurocomment import list_active_campaign_account_names
 from services import _account_owner
 from services.neuroshilling import _seams, _state, engine
+from services.neuroshilling._listener_lookup import running_listener_account_id
 from services.neuroshilling.campaigns import (
     NeuroshillingConflictError,
     parse_targets,
@@ -61,6 +58,7 @@ _LIVE_STATUSES = frozenset({"running", "stopping"})
 _ACCOUNT_BUSY: NeuroshillingRefusalCode = "account_busy"
 _ACCOUNT_IS_LISTENER: NeuroshillingRefusalCode = "account_is_listener"
 _CAMPAIGN_RUNNING: NeuroshillingRefusalCode = "campaign_running"
+_CAMPAIGN_CHANGED: NeuroshillingRefusalCode = "campaign_changed"
 _NOT_ENOUGH_ACCOUNTS: NeuroshillingRefusalCode = "not_enough_accounts"
 _NO_TARGETS: NeuroshillingRefusalCode = "no_targets"
 _ROLE_WITHOUT_ACCOUNT: NeuroshillingRefusalCode = "role_without_account"
@@ -72,33 +70,45 @@ _SCENARIO_NOT_APPROVED: NeuroshillingRefusalCode = "scenario_not_approved"
 _TASKS: dict[str, asyncio.Task[None]] = {}
 
 
-async def start_campaign(campaign_id: str) -> NeuroshillingRunStatus | None:
+async def start_campaign(
+    campaign_id: str, *, expected_updated_at: str | None = None
+) -> NeuroshillingRunStatus | None:
     """Launch a run. ``None`` means no such campaign; every refusal is a 409 code.
 
-    The live-status test, the in-memory start claim and the run id are taken in ONE
-    synchronous stretch, before the first roster read. The status column alone cannot
-    carry "one running campaign": ``running`` is written three awaits later, so two
-    requests both read an idle row, both pass, and ``_account_owner.try_claim`` cannot
-    refuse the second either — it is idempotent for the same (owner, holder) pair. The
-    result was two run tasks with ``_TASKS`` holding only the second, leaving the first
-    unreachable to Stop and to shutdown.
+    Claim before the first campaign read: an edit that commits between a read and
+    the claim would otherwise let Start launch from a stale approval or roster.
+    The claim also keeps two Starts from reaching the run task spawn together.
     """
-    campaign = await repository.fetch_campaign(campaign_id)
-    if campaign is None:
-        return None
-    if campaign.status in _LIVE_STATUSES or not _state.try_claim_start(campaign_id):
+    if not _state.try_claim_start(campaign_id):
         raise NeuroshillingConflictError(_CAMPAIGN_RUNNING)
-    run_id = uuid4().hex
     try:
+        campaign = await repository.fetch_campaign(campaign_id)
+        if campaign is None:
+            return None
+        if expected_updated_at is not None and campaign.updated_at != expected_updated_at:
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+        if campaign.status in _LIVE_STATUSES:
+            raise NeuroshillingConflictError(_CAMPAIGN_RUNNING)
+        run_id = uuid4().hex
         _refuse_unlaunchable(campaign)
         account_ids = await _check_roster(campaign)
         await _claim_accounts(campaign_id, account_ids)
         try:
             generation = _state.begin_run(campaign_id, run_id)
-            await repository.set_run_state(campaign_id, "running", run_id=run_id)
+            changed = await repository.set_run_state(
+                campaign_id,
+                "running",
+                run_id=run_id,
+                expected_updated_at=campaign.updated_at,
+            )
         except BaseException:
+            _state.abandon_run(campaign_id, run_id)
             _release_campaign(campaign_id)
             raise
+        if not changed:
+            _state.abandon_run(campaign_id, run_id)
+            _release_campaign(campaign_id)
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
         # Read BEFORE the spawn. One suspension point is all the run task needs to play
         # a short campaign to the end, and this call has three of them — so a status
         # read afterwards answered ``done`` for a run the caller was never told had
@@ -173,7 +183,7 @@ async def _claim_accounts(campaign_id: str, account_ids: list[str]) -> None:
         serving = await list_active_campaign_account_names()
         if any(account_id in serving for account_id in account_ids):
             raise NeuroshillingConflictError(_ACCOUNT_BUSY)
-        listener = await _running_listener_account_id()
+        listener = await running_listener_account_id()
         if listener is not None and listener in account_ids:
             raise NeuroshillingConflictError(_ACCOUNT_IS_LISTENER)
         taken: list[str] = []
@@ -183,24 +193,6 @@ async def _claim_accounts(campaign_id: str, account_ids: list[str]) -> None:
                     _account_owner.release(held, _OWNER, campaign_id)
                 raise NeuroshillingConflictError(_ACCOUNT_BUSY)
             taken.append(account_id)
-
-
-async def _running_listener_account_id() -> str | None:
-    """The account the neurocomment listener is subscribed with, or ``None``.
-
-    A remembered-but-PAUSED listener answers ``None``, the same reading
-    ``start_warming`` takes of the same two columns: the operator switched that runtime
-    off, so the session is free until they switch it back on — and at that moment
-    ``start_neurocomment`` is the half that refuses.
-
-    Read from the database rather than from neurocomment's in-process owner because the
-    listener is not a holder in ``services._account_owner`` (see that module's note on
-    why), so these columns are the only record of it that survives a restart and that
-    exists before neurocomment's own startup reconciliation has run.
-    """
-    if not await get_listener_running():
-        return None
-    return await get_listener_account_id()
 
 
 def _release_campaign(campaign_id: str) -> None:

@@ -20,6 +20,8 @@ from schemas.neurocomment import NeurocommentSettings, NeurocommentSettingsUpdat
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from sqlalchemy.engine import Connection
+
     from schemas.neurocomment import CommentMode
 
 _SETTINGS_ID = 1
@@ -54,15 +56,19 @@ def _row_to_settings(mapping: Mapping[str, object]) -> NeurocommentSettings:
     )
 
 
-def _load_neurocomment_settings() -> NeurocommentSettings:
+def _read_settings(connection: Connection) -> NeurocommentSettings:
     statement = select(_neurocomment_settings).where(_neurocomment_settings.c.id == _SETTINGS_ID)
-    with _get_engine().connect() as connection:
-        row = connection.execute(statement).mappings().first()
+    row = connection.execute(statement).mappings().first()
     if row is None:
         # No saved override → live config (not persisted, so a config/env change
         # takes effect immediately and the engine's prior behaviour is unchanged).
         return _row_to_settings(_config_defaults())
     return _row_to_settings(cast("Mapping[str, object]", row))
+
+
+def _load_neurocomment_settings() -> NeurocommentSettings:
+    with _get_engine().connect() as connection:
+        return _read_settings(connection)
 
 
 async def load_neurocomment_settings() -> NeurocommentSettings:
@@ -71,22 +77,16 @@ async def load_neurocomment_settings() -> NeurocommentSettings:
 
 
 def _save_neurocomment_settings(data: NeurocommentSettingsUpdate) -> NeurocommentSettings:
-    # The mode pair is patch-shaped where the limits are a full replace, so an omitted
-    # field carries over the effective value instead of the schema default — otherwise
-    # the Settings screen's limits form, which never sends the mode, would silently
-    # reset the toggle the operator set on the neurocomment page.
-    current = _load_neurocomment_settings()
-    values = {
-        "max_comments_per_hour": data.max_comments_per_hour,
-        "max_comments_per_channel_per_day": data.max_comments_per_channel_per_day,
-        "reply_delay_min_seconds": data.reply_delay_min_seconds,
-        "reply_delay_max_seconds": data.reply_delay_max_seconds,
-        "min_trust_score": data.min_trust_score,
-        "comment_mode": data.comment_mode or current.comment_mode,
-        "reply_wait_minutes": data.reply_wait_minutes or current.reply_wait_minutes,
-        "updated_at": _now_iso(),
-    }
+    # Every field is patch-shaped, so an omitted one carries over the effective value.
+    # The merge reads inside the write transaction: read outside it, a save from
+    # another tab landing in between would be rolled back by the carried-over copy.
     with _get_engine().begin() as connection:
+        current = _read_settings(connection).model_dump(exclude={"updated_at"})
+        values = {
+            **current,
+            **data.model_dump(exclude_none=True),
+            "updated_at": _now_iso(),
+        }
         updated = connection.execute(
             update(_neurocomment_settings)
             .where(_neurocomment_settings.c.id == _SETTINGS_ID)

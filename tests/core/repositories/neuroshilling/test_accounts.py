@@ -19,6 +19,7 @@ from core.db import create_account
 from core.repositories.neuroshilling import (
     count_substitutions,
     create_campaign,
+    fetch_campaign,
     list_campaign_accounts,
     load_scenario,
     replace_scenario,
@@ -42,9 +43,12 @@ async def _roster(campaign_id: str, *reserves: str) -> str:
         await create_account(
             AccountCreate(account_id=account_id, label=account_id, session_name=account_id),
         )
+    current = await fetch_campaign(campaign_id)
+    assert current is not None
     await update_campaign(
         campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1", role_id=roles[0].role_id),
@@ -129,9 +133,12 @@ async def test_a_roster_save_keeps_the_ban_and_its_replacement() -> None:
     campaign_id, role_id = await _seeded("res-1")
     await substitute_banned_account(campaign_id, "acc-1")
 
+    current = await fetch_campaign(campaign_id)
+    assert current is not None
     await update_campaign(
         campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1", role_id=role_id),

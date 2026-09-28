@@ -50,23 +50,29 @@ class NeurocommentSettingsUpdate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_comments_per_hour: int = Field(ge=1)
-    max_comments_per_channel_per_day: int = Field(ge=0)
-    reply_delay_min_seconds: float = Field(ge=0)
+    # Every field is patch-shaped: omitted (``None``) means "leave as stored". Two
+    # callers share this one body and neither knows the other's half — the Settings
+    # screen's limits form never sends the mode, and the neurocomment page's mode
+    # toggle has no limits form, so sending back its cached numbers would roll back
+    # a limits save made from another tab since that cache was read.
+    max_comments_per_hour: int | None = Field(default=None, ge=1)
+    max_comments_per_channel_per_day: int | None = Field(default=None, ge=0)
+    reply_delay_min_seconds: float | None = Field(default=None, ge=0)
     # No upper bound, deliberately — ``_generate._sleep_beating``'s docstring says why.
-    reply_delay_max_seconds: float = Field(ge=0)
-    min_trust_score: int = Field(ge=0, le=100)
-    # Omitted (``None``) means "leave as stored", unlike the limits above which are a
-    # full replace. Two callers now share this one body and neither knows the other's
-    # half: the Settings screen's limits form would reset the mode toggle to its default
-    # on every unrelated save, and the neurocomment page's toggle has no limits form to
-    # read the numbers off.
+    reply_delay_max_seconds: float | None = Field(default=None, ge=0)
+    min_trust_score: int | None = Field(default=None, ge=0, le=100)
     comment_mode: CommentMode | None = None
     reply_wait_minutes: int | None = Field(default=None, ge=1, le=120)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettingsUpdate:
-        if self.reply_delay_min_seconds > self.reply_delay_max_seconds:
+        # The pair travels together, so the bound is checked here on the wire rather
+        # than against a stored half the caller never saw.
+        low, high = self.reply_delay_min_seconds, self.reply_delay_max_seconds
+        if (low is None) != (high is None):
+            msg = "reply_delay_min_seconds and reply_delay_max_seconds are sent together"
+            raise ValueError(msg)
+        if low is not None and high is not None and low > high:
             msg = "reply_delay_min_seconds must not exceed reply_delay_max_seconds"
             raise ValueError(msg)
         return self

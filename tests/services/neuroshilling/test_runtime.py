@@ -101,6 +101,35 @@ async def test_start_runs_the_campaign_and_gives_the_accounts_back() -> None:
     assert _account_owner.owner_of("acc-1") is None
 
 
+@pytest.mark.usefixtures("no_sleep", "gateway")
+@pytest.mark.asyncio
+async def test_start_cas_miss_releases_accounts_and_unpublished_run_owner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeded = await seed_campaign()
+    campaign = await repository.fetch_campaign(seeded.campaign_id)
+    assert campaign is not None
+
+    async def stale_write(
+        _campaign_id: str,
+        _status: str,
+        *,
+        run_id: str | None,
+        expected_updated_at: str | None,
+    ) -> bool:
+        assert run_id is not None
+        assert expected_updated_at == campaign.updated_at
+        return False
+
+    monkeypatch.setattr(repository, "set_run_state", stale_write)
+    with pytest.raises(NeuroshillingConflictError, match="campaign_changed"):
+        await _runtime.start_campaign(seeded.campaign_id, expected_updated_at=campaign.updated_at)
+
+    assert _account_owner.owner_of("acc-1") is None
+    assert seeded.campaign_id not in _state._RUN_OWNER
+    assert seeded.campaign_id not in _runtime._TASKS
+
+
 @pytest.mark.asyncio
 async def test_a_running_campaign_holds_every_account_of_its_roster(
     monkeypatch: pytest.MonkeyPatch,
@@ -172,9 +201,12 @@ async def test_start_refuses_a_role_with_no_account() -> None:
     seeded = await seed_campaign(accounts=("acc-1", "acc-2", "acc-3"))
     # Drop the last account from the roster, leaving its role in the dialogue unstaffed.
     # Roster edits do not reset the approval, so the campaign is still launchable.
+    current = await repository.fetch_campaign(seeded.campaign_id)
+    assert current is not None
     await repository.update_campaign(
         seeded.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             targets_raw="@alpha",
             accounts=[

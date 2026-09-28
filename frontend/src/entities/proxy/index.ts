@@ -1,5 +1,6 @@
 export { proxyPoolQueryOptions } from './api/proxy.queries';
 export {
+  assignProxyByEndpointMutation,
   assignProxyMutation,
   checkProxyMutation,
   createProxyMutation,

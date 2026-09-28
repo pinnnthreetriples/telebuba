@@ -68,9 +68,12 @@ async def seed_campaign(
     dialogue = steps if steps is not None else _default_steps(len(accounts))
     await repository.replace_scenario(campaign_id, role_inputs, dialogue)
     stored_roles, stored_steps = await repository.load_scenario(campaign_id)
+    current = await repository.fetch_campaign(campaign_id)
+    assert current is not None
     updated = await repository.update_campaign(
         campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=current.updated_at,
             name="Promo",
             targets_raw=targets,
             accounts=[

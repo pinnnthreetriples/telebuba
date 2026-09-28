@@ -426,3 +426,13 @@ export const neuroshillingScenario = {
     delay_max_seconds: 120,
   })),
 };
+
+// The atomic snapshot the settings form opens from: campaign, dialogue and roster read
+// together, so it is composed from the same fixtures the board and scenario routes serve.
+export const neuroshillingSettings = {
+  campaign: neuroshillingBoard.campaign,
+  scenario: neuroshillingScenario,
+  accounts: neuroshillingBoard.available
+    .filter((account) => account.assigned || account.is_reserve)
+    .map(({ account_id, role_id, is_reserve }) => ({ account_id, role_id, is_reserve })),
+};

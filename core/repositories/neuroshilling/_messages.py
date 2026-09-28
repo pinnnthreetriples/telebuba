@@ -35,6 +35,8 @@ from core.db import _get_engine, _now_iso
 from core.repositories.neuroshilling._tables import _neuroshilling_messages, run_scope
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from schemas.neuroshilling import NeuroshillingMessageStatus, NeuroshillingStepKey
 
 _TABLE = _neuroshilling_messages
@@ -255,18 +257,20 @@ async def fail_pending_messages(run_id: str) -> int:
     return await asyncio.to_thread(_fail_pending_messages, run_id)
 
 
-def _list_sent_message_ids(target: str) -> set[int]:
+def _list_sent_message_ids(target: str, message_ids: Sequence[int]) -> set[int]:
+    if not message_ids:
+        return set()
     statement = select(_TABLE.c.message_id).where(
         (_TABLE.c.target == target)
         & (_TABLE.c.status == "sent")
-        & _TABLE.c.message_id.is_not(None),
+        & _TABLE.c.message_id.in_(message_ids),
     )
     with _get_engine().connect() as connection:
         return {int(row[0]) for row in connection.execute(statement)}
 
 
-async def list_sent_message_ids(target: str) -> set[int]:
-    """Every message id OUR FLEET put into ``target``, whichever campaign said it.
+async def list_sent_message_ids(target: str, message_ids: Sequence[int]) -> set[int]:
+    """Which ids on this read page OUR FLEET put into ``target``.
 
     Half of what the chat poller needs to answer "is this one of ours?" honestly.
     Telethon's ``out`` flag only answers it for the account doing the reading, so a
@@ -286,4 +290,4 @@ async def list_sent_message_ids(target: str) -> set[int]:
     Not scoped to the current run either: the earlier runs' messages are still sitting
     in that chat, and they are just as much ours.
     """
-    return await asyncio.to_thread(_list_sent_message_ids, target)
+    return await asyncio.to_thread(_list_sent_message_ids, target, list(message_ids))

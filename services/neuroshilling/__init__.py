@@ -36,6 +36,7 @@ from services.neuroshilling.scenario import (
     load_scenario,
     set_scenario,
 )
+from services.neuroshilling.settings import load_settings, save_settings
 
 __all__ = [
     "NeuroshillingConflictError",
@@ -49,9 +50,11 @@ __all__ = [
     "list_campaigns",
     "load_board",
     "load_scenario",
+    "load_settings",
     "parse_targets",
     "reconcile_neuroshilling_on_startup",
     "run_status",
+    "save_settings",
     "set_scenario",
     "shutdown_neuroshilling_on_shutdown",
     "start_campaign",

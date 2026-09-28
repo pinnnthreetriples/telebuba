@@ -89,6 +89,7 @@ test('choosing an account for a role enrols it and echoes every other field back
   // key simply going missing is what an equality over the whole body catches.
   expect(body).toEqual({
     ...ECHOED,
+    expected_updated_at: FULL_CAMPAIGN.updated_at,
     // «Алиса» уже была в ростере и роли не держала — назначение её не трогает: из
     // ростера выбывает только тот, у кого роль ЗАБРАЛИ.
     accounts: [
@@ -182,6 +183,33 @@ test('a selection the campaign list no longer carries falls back to the first ca
     );
   });
   expect(callsTo('/api/v1/neuroshilling/campaigns/c2/board', 'GET')).toHaveLength(gone);
+});
+
+test('starting another campaign first selects its settings instead of launching unseen dialogue', async () => {
+  routeApi([CAMPAIGN, SECOND_CAMPAIGN]);
+  renderPage();
+  await userEvent.click((await screen.findAllByRole('button', { name: 'Действия кампании' }))[1]!);
+  await userEvent.click(screen.getAllByRole('button', { name: 'Запустить кампанию' })[1]!);
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c2/settings', 'GET').length).toBeGreaterThan(0);
+  });
+  expect(callsTo('/api/v1/neuroshilling/campaigns/c2/start', 'POST')).toHaveLength(0);
+});
+
+test('the selected campaign row starts with its frozen settings version', async () => {
+  routeApi();
+  renderPage();
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1/settings', 'GET')).toHaveLength(1);
+  });
+  await userEvent.click((await screen.findAllByRole('button', { name: 'Действия кампании' }))[0]!);
+  await userEvent.click(screen.getByRole('button', { name: 'Запустить кампанию' }));
+  await waitFor(() => {
+    expect(callsTo('/api/v1/neuroshilling/campaigns/c1/start', 'POST')).toHaveLength(1);
+  });
+  expect(await callsTo('/api/v1/neuroshilling/campaigns/c1/start', 'POST')[0]!.json()).toEqual({
+    expected_updated_at: 'now',
+  });
 });
 
 test('deleting a campaign confirms first, then DELETEs it', async () => {

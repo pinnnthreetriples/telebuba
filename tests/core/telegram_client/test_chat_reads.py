@@ -292,13 +292,15 @@ class _CursorClient:
 
     def __init__(self, messages: list[object]) -> None:
         self.messages = messages
-        self.calls: list[tuple[object, int, int]] = []
+        self.calls: list[tuple[object, int, int, bool]] = []
 
     async def connect(self) -> None:
         return None
 
-    async def get_messages(self, peer: object, *, limit: int, min_id: int) -> list[object]:
-        self.calls.append((peer, limit, min_id))
+    async def get_messages(
+        self, peer: object, *, limit: int, min_id: int, reverse: bool
+    ) -> list[object]:
+        self.calls.append((peer, limit, min_id, reverse))
         return self.messages
 
 
@@ -312,12 +314,10 @@ def _message(
 async def test_the_cursor_form_asks_for_the_newest_page_and_answers_oldest_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Newest-first from Telegram, oldest-first to the caller.
+    """A nonzero cursor asks Telethon to start with the oldest unseen message.
 
-    The direction is not cosmetic. ``get_messages(limit=...)`` walks BACK from the
-    head of the chat, which is what makes ``min_id=0`` mean "the latest page"
-    instead of "the beginning of history"; the caller then needs the conversation
-    in the order it was said, and a cursor only advances safely by the last id.
+    Baseline reads still walk back from the head of the chat; later reads walk
+    forward from min_id so an overflow cannot skip older unseen messages.
     """
     client = _CursorClient([_message(9, "later"), _message(7, "earlier")])
     _patch_client(monkeypatch, client)
@@ -329,7 +329,7 @@ async def test_the_cursor_form_asks_for_the_newest_page_and_answers_oldest_first
 
     assert [(m.message_id, m.text) for m in result.messages] == [(7, "earlier"), (9, "later")]
     assert result.missing_ids == []
-    assert client.calls == [(1234, 20, 5)]
+    assert client.calls == [(1234, 20, 5, True)]
 
 
 @pytest.mark.asyncio
@@ -350,6 +350,18 @@ async def test_the_cursor_form_reports_the_sender_and_whether_we_wrote_it(
         (7, True, 42),
         (8, False, None),
     ]
+
+
+@pytest.mark.asyncio
+async def test_zero_cursor_reads_the_newest_page_as_a_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = _CursorClient([_message(9, "newest")])
+    _patch_client(monkeypatch, client)
+
+    await execute_read("acc-1", ReadChatMessages(chat="1234", min_id=0, limit=20))
+
+    assert client.calls == [(1234, 20, 0, False)]
 
 
 def test_a_read_names_exactly_one_mode() -> None:

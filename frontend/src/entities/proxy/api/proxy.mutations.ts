@@ -1,5 +1,4 @@
-// Proxy-pool write actions, re-exported from the generated TanStack Query
-// mutation options (data access only through shared/api, per the FSD ADR).
+// Proxy-pool write actions through the shared API client.
 export {
   assignProxyMutation,
   checkProxyMutation,
@@ -8,3 +7,4 @@ export {
   probeProxyMutation,
   unassignProxyMutation,
 } from '@/shared/api/@tanstack/react-query.gen';
+export { assignProxyByEndpointMutation } from './proxy.assignment';

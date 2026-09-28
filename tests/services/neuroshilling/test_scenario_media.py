@@ -56,7 +56,10 @@ async def _campaign_with_media(
     assert stored_scenario is not None
     # The save MINTS role ids; the form's key is only how a step names its speaker.
     role_id = stored_scenario.roles[0].role_id
+    current = await repository.fetch_campaign(campaign.campaign_id)
+    assert current is not None
     payload: dict[str, Any] = {
+        "expected_updated_at": current.updated_at,
         "name": "Promo",
         "topic": "delivery",
         "media_message_link": _LINK,
@@ -344,6 +347,7 @@ async def test_only_the_accounts_that_play_the_media_step_are_asked(
     updated = await repository.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=campaign.updated_at,
             name=campaign.name,
             media_message_link=_LINK,
             media_step_position=1,

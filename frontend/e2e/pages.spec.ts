@@ -43,6 +43,7 @@ const ROUTES: [RegExp, unknown][] = [
   [/\/neurocomment\/settings/, fx.neurocommentSettings],
   [/\/neuroshilling\/campaigns\/[^/]+\/board/, fx.neuroshillingBoard],
   [/\/neuroshilling\/campaigns\/[^/]+\/scenario/, fx.neuroshillingScenario],
+  [/\/neuroshilling\/campaigns\/[^/]+\/settings/, fx.neuroshillingSettings],
   [/\/neuroshilling\/campaigns$/, fx.neuroshillingCampaigns],
   [/\/logs/, fx.logs],
   [/\/events/, { events: [] }],

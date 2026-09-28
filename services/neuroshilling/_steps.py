@@ -7,7 +7,9 @@ replays the step into a chat that already has it — the unique index cannot hel
 it only protects rows that exist. The claim's ``False`` return is also what makes a
 resumed run walk past work it already did.
 
-**The quota re-count and the insert share one lock.** Roles belong to the campaign, so
+**The quota re-count and the insert share one lock.** Autoreplies take that lock
+while claiming an in-flight quota slot, then release it before model and Telegram
+I/O. Roles belong to the campaign, so
 the same account plays the same role in every target, and two campaigns may share an
 account outright: without the lock both read an under-cap count and both publish.
 
@@ -30,7 +32,6 @@ step_id)`` is unique and the failed row already holds it.
 
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, NamedTuple, get_args
 
@@ -41,7 +42,8 @@ from schemas.neuroshilling import NeuroshillingStepKey
 from schemas.telegram_actions import ReactToMessage
 from schemas.telegram_actions_chat import ChatReactionEmoji
 from services import pacing
-from services.neuroshilling import _dispatch, _seams, _substitution
+from services.neuroshilling import _dispatch, _quota_ledger, _seams, _substitution
+from services.neuroshilling._quota_ledger import account_lock, pending_reply_usage
 
 if TYPE_CHECKING:
     from schemas.neuroshilling import NeuroshillingCampaign
@@ -65,21 +67,8 @@ class _Ban(NamedTuple):
     verdict: str
 
 
-# One lock per account serialises its [re-count quota -> insert pending row] section.
-# A plain dict needs no lock of its own: one uvicorn worker means one event loop, and
-# ``asyncio.Lock`` binds to the running loop, so tests clear this between cases.
-_ACCOUNT_LOCKS: dict[str, asyncio.Lock] = {}
-
-
-def _account_lock(account_id: str) -> asyncio.Lock:
-    lock = _ACCOUNT_LOCKS.get(account_id)
-    if lock is None:
-        lock = _ACCOUNT_LOCKS[account_id] = asyncio.Lock()
-    return lock
-
-
 def reset_for_tests() -> None:
-    _ACCOUNT_LOCKS.clear()
+    _quota_ledger.reset_for_tests()
 
 
 class _Reserved(NamedTuple):
@@ -224,7 +213,7 @@ async def _replay(
     it unattached is the same degradation ``resolve_reply_to`` already falls back to
     when an anchor is lost, and it logs the same code.
     """
-    async with _account_lock(account_id):
+    async with account_lock(account_id):
         reason = await _quota_reason(context.campaign, account_id, target)
         handed = reason is None and await repository.hand_over_message(
             _key(context, target, step),
@@ -316,7 +305,7 @@ async def _reserve(
     other await in it, which is what makes a serialised sibling see this row and stop
     at the cap instead of stacking past it.
     """
-    async with _account_lock(account_id):
+    async with account_lock(account_id):
         reason = await _quota_reason(context.campaign, account_id, target)
         claimed = await repository.claim_message(
             _key(context, target, step),
@@ -353,12 +342,22 @@ async def _quota_reason(
         hour_since=(now - timedelta(hours=1)).isoformat(),
         day_since=(now - timedelta(days=1)).isoformat(),
     )
-    if usage.hour >= campaign.messages_per_hour:
+    replies = await repository.count_chat_reply_usage(
+        account_id,
+        target,
+        hour_since=(now - timedelta(hours=1)).isoformat(),
+        day_since=(now - timedelta(days=1)).isoformat(),
+        campaign_id=campaign.campaign_id,
+    )
+    pending_hour, pending_day, pending_total = pending_reply_usage(
+        campaign.campaign_id, account_id, target
+    )
+    if usage.hour + replies.hour + pending_hour >= campaign.messages_per_hour:
         return "quota_hour"
-    if 0 < campaign.messages_per_chat_per_day <= usage.chat_day:
+    if 0 < campaign.messages_per_chat_per_day <= usage.chat_day + replies.chat_day + pending_day:
         return "quota_day"
     total = campaign.total_per_account
-    if total is not None and usage.campaign_total >= total:
+    if total is not None and usage.campaign_total + replies.campaign_total + pending_total >= total:
         return "quota_total"
     return None
 

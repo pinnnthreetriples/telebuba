@@ -132,8 +132,9 @@
       "password": "Password",
       "proxyCheck": "Check",
       "proxyAddAssign": "Add and assign",
+      "proxyExistingCredentials": "If this endpoint is already in the pool, its saved credentials will be used. Change them through the proxy pool.",
       "proxyReplaceTitle": "Replace the assigned proxy?",
-      "proxyReplaceBody": "The account will be moved onto this proxy and its session will reconnect through it immediately. If this host and port are already in the pool, the stored login and password are overwritten for every account using them.",
+      "proxyReplaceBody": "The account will be moved onto this proxy and its session will reconnect through it immediately. If the endpoint is already in the pool, its saved credentials will be used.",
       "proxyReplaceConfirm": "Replace",
       "cancel": "Cancel",
       "device": "Device fingerprint",
@@ -788,6 +789,7 @@
       "account_cooling": "Telegram is rate-limiting this account. Wait for the limit to pass, then try again.",
       "account_busy_neuroshilling": "A neuroshilling campaign is running with this account. Stop it, then start warming.",
       "campaign_running": "The campaign is running. Stop it before changing or deleting it.",
+      "campaign_changed": "Campaign settings changed in another window. Copy unsaved edits and reload the page.",
       "too_many_targets": "Too many targets for one campaign. Remove some and save again.",
       "no_targets": "Add at least one target chat before starting.",
       "not_enough_accounts": "Not enough accounts for this campaign.",
@@ -809,6 +811,7 @@
       "media_step_not_message": "The step carrying the media is a reaction step, and a reaction sends no media. Pick a message step and approve again.",
       "media_step_missing": "Nothing is carrying the media: “Step carrying the media” is empty, or names a step the dialogue no longer has. Pick a message step and approve again.",
       "account_is_listener": "An account on this campaign is the running neurocomment listener, reading posts with the same session. Stop the listener or take that account off the campaign, then start the campaign.",
+      "listener_busy_warming": "This account is warming up. Stop warming or pick another listener account.",
       "listener_busy_neuroshilling": "A neuroshilling campaign is running with this account. Stop the campaign, or pick a different account for the listener.",
       "twofa_current_password_invalid": "Telegram rejected the current password. It was changed outside the dashboard.",
       "twofa_settings_invalid": "Telegram rejected the new password settings.",
@@ -1533,6 +1536,7 @@
       "actions": "Actions",
       "activeCampaigns": "active campaigns",
       "warmingBlocked": "This account is currently warming — it can't be the listener",
+      "saveFailed": "Could not assign the listener",
       "unwatched": "Not watched ({{count}}): {{channels}} — no post from these channels reaches the engine"
     },
     "mode": {
@@ -1629,7 +1633,8 @@
       },
       "listenerEdit": {
         "sub": "The listener watches new posts for all campaigns",
-        "account": "Account"
+        "account": "Account",
+        "partialSave": "Comment settings were saved, but the listener could not be changed. Retry the assignment or close this window."
       },
       "createCampaign": {
         "title": "New campaign",
@@ -2333,7 +2338,8 @@
       "title": "Settings — {{name}}",
       "subtitle": "Accounts, targets, roles and scenario",
       "save": "Save settings",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "conflict": "Settings changed in another window. Copy your unsaved edits, reload the page, and apply them again."
     },
     "details": {
       "column": {

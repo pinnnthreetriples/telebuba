@@ -292,6 +292,84 @@ async def test_backfill_paginates_and_resumes_from_durable_checkpoint(
 
 
 @pytest.mark.asyncio
+async def test_backfill_retries_queue_full_post_after_newer_live_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.neurocomment, "post_inbox_max_pending", 1)
+    monkeypatch.setattr(settings.neurocomment, "post_backfill_limit_per_channel", 10)
+    monkeypatch.setattr(settings.neurocomment, "post_backfill_max_pages_per_channel", 1)
+    _runtime._INBOX_ACCEPTING = False
+    await enqueue_post(_event("@other", 99))
+
+    calls = 0
+
+    async def _fetch(
+        _account: str,
+        channel: str,
+        *,
+        limit: int,
+        before_post_id: int | None = None,
+    ) -> list[NewPostEvent]:
+        del limit, before_post_id
+        nonlocal calls
+        calls += 1
+        return [_event(channel, 1)] if calls == 1 else [_event(channel, 2), _event(channel, 1)]
+
+    monkeypatch.setattr(_inbox_runtime, "fetch_recent_posts", _fetch)
+    plans = await prepare_backfill(["@news"], interval_seconds=300)
+    await _inbox_runtime.ensure_backfill("listener", ["@news"], plans)
+    assert _runtime._BACKFILL_TASK is not None
+    await _runtime._BACKFILL_TASK
+
+    with _get_engine().begin() as connection:
+        cursor = (
+            connection.execute(
+                select(_neurocomment_cursors).where(_neurocomment_cursors.c.channel == "@news"),
+            )
+            .mappings()
+            .one()
+        )
+        assert cursor["backfill_floor_post_id"] == 0
+        assert cursor["backfill_retry_at"] is not None
+        connection.execute(
+            update(_neurocomment_inbox)
+            .where(_neurocomment_inbox.c.channel == "@other")
+            .values(state="expired"),
+        )
+        connection.execute(
+            update(_neurocomment_cursors)
+            .where(_neurocomment_cursors.c.channel == "@news")
+            .values(backfill_retry_at="2000-01-01T00:00:00+00:00"),
+        )
+
+    await _runtime.on_post(_event("@news", 2))
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_inbox)
+            .where(_neurocomment_inbox.c.channel == "@news")
+            .values(state="expired"),
+        )
+
+    resumed = await prepare_backfill(["@news"], interval_seconds=300)
+    assert resumed["@news"].floor_post_id == 0
+    await _inbox_runtime.ensure_backfill("listener", ["@news"], resumed)
+    assert _runtime._BACKFILL_TASK is not None
+    await _runtime._BACKFILL_TASK
+
+    with _get_engine().connect() as connection:
+        ids = (
+            connection.execute(
+                select(_neurocomment_inbox.c.post_id).where(
+                    _neurocomment_inbox.c.channel == "@news"
+                ),
+            )
+            .scalars()
+            .all()
+        )
+    assert sorted(ids) == [1, 2]
+
+
+@pytest.mark.asyncio
 async def test_fetch_failure_records_retry_not_success(monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fail(*_args: object, **_kwargs: object) -> list[NewPostEvent]:
         raise OSError(_FETCH_FAILED)

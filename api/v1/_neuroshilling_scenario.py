@@ -3,9 +3,10 @@
 Same arrangement ``_neurocomment_discovery.py`` uses: no prefix and no tags of its
 own, so the paths and the OpenAPI grouping come from the parent.
 
-Four operations. Roles and steps share ONE ``PUT`` because they must be written in
-one transaction — two endpoints would leave a window in which a step points at a
-role the other call has already deleted. There is no preview endpoint: the client
+Settings Save adds one combined operation. Roles and steps share ONE ``PUT``
+because they must be written in one transaction — two endpoints would leave a
+window in which a step points at a role the other call has already deleted.
+There is no preview endpoint: the client
 holds the roles and the steps and draws the preview from them.
 
 A provider failure answers **503**, never 502: ``api.errors`` carries no
@@ -21,10 +22,15 @@ from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
 from api.errors import error_responses
+from schemas.neuroshilling import (
+    NeuroshillingVersionRequest,  # noqa: TC001 - FastAPI body at runtime
+)
 from schemas.neuroshilling_scenario import (
     NeuroshillingGenerateRequest,
     NeuroshillingScenario,
     NeuroshillingScenarioUpdate,
+    NeuroshillingSettings,
+    NeuroshillingSettingsUpdate,
 )
 from services import neuroshilling as ns_service
 
@@ -82,6 +88,19 @@ async def get_scenario(campaign_id: str) -> NeuroshillingScenario:
     return _found(await ns_service.load_scenario(campaign_id))
 
 
+@scenario_router.get(
+    "/campaigns/{campaign_id}/settings",
+    response_model=NeuroshillingSettings,
+    operation_id="getNeuroshillingSettings",
+    responses=error_responses(404),
+)
+async def get_settings(campaign_id: str) -> NeuroshillingSettings:
+    loaded = await ns_service.load_settings(campaign_id)
+    if loaded is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return loaded
+
+
 @scenario_router.put(
     "/campaigns/{campaign_id}/scenario",
     response_model=NeuroshillingScenario,
@@ -96,6 +115,24 @@ async def set_scenario(
     with _refusals():
         scenario = await ns_service.set_scenario(campaign_id, body)
     return _found(scenario)
+
+
+@scenario_router.put(
+    "/campaigns/{campaign_id}/settings",
+    response_model=NeuroshillingSettings,
+    operation_id="saveNeuroshillingSettings",
+    responses=error_responses(400, 404, 409),
+)
+async def save_settings(
+    campaign_id: str,
+    body: NeuroshillingSettingsUpdate,
+) -> NeuroshillingSettings:
+    """Commit the campaign form, roster and edited dialogue in one transaction."""
+    with _refusals():
+        saved = await ns_service.save_settings(campaign_id, body)
+    if saved is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=_NOT_FOUND)
+    return saved
 
 
 @scenario_router.post(
@@ -133,7 +170,9 @@ async def generate_scenario(
     operation_id="approveNeuroshillingScenario",
     responses=error_responses(400, 404, 409, 503),
 )
-async def approve_scenario(campaign_id: str) -> NeuroshillingScenario:
+async def approve_scenario(
+    campaign_id: str, body: NeuroshillingVersionRequest
+) -> NeuroshillingScenario:
     """The ONLY way ``scenario_status`` becomes ``approved``, and it validates first.
 
     503 is the media check itself failing to happen — Telegram rate-limited the read
@@ -143,7 +182,9 @@ async def approve_scenario(campaign_id: str) -> NeuroshillingScenario:
     """
     try:
         with _refusals():
-            scenario = await ns_service.approve_scenario(campaign_id)
+            scenario = await ns_service.approve_scenario(
+                campaign_id, expected_updated_at=body.expected_updated_at
+            )
     except ns_service.NeuroshillingUnavailableError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_503_SERVICE_UNAVAILABLE,

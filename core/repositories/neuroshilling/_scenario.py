@@ -32,6 +32,7 @@ from uuid import uuid4
 from sqlalchemy import delete, insert, select, update
 
 from core.db import _get_engine, _now_iso
+from core.repositories.neuroshilling._campaigns import _newer_stamp
 from core.repositories.neuroshilling._tables import (
     _neuroshilling_campaigns,
     _neuroshilling_messages,
@@ -240,7 +241,18 @@ def _set_scenario_status(
     expected_updated_at: str | None = None,
 ) -> bool:
     """Write the status; ``False`` = no row matched, so it is missing or has moved on."""
-    values: dict[str, object] = {"scenario_status": status, "updated_at": _now_iso()}
+    if expected_updated_at is None:
+        expected_updated_at = connection.execute(
+            select(_neuroshilling_campaigns.c.updated_at).where(
+                _neuroshilling_campaigns.c.campaign_id == campaign_id
+            )
+        ).scalar_one_or_none()
+        if expected_updated_at is None:
+            return False
+    values: dict[str, object] = {
+        "scenario_status": status,
+        "updated_at": _newer_stamp(expected_updated_at),
+    }
     if clear_media_step:
         values["media_step_position"] = None
     statement = update(_neuroshilling_campaigns).where(
@@ -259,16 +271,30 @@ def _replace_scenario(
     steps: Sequence[NeuroshillingStepInput],
     *,
     clear_media_step: bool,
+    expected_updated_at: str | None,
 ) -> bool:
     with _get_engine().begin() as connection:
         if not _campaign_exists(connection, campaign_id):
+            return False
+        # The version check comes FIRST: its UPDATE takes SQLite's write lock, so no
+        # save can land between the check and the rows written under it.
+        if expected_updated_at is not None and not _set_scenario_status(
+            connection,
+            campaign_id,
+            "draft",
+            clear_media_step=clear_media_step,
+            expected_updated_at=expected_updated_at,
+        ):
             return False
         now = _now_iso()
         role_ids = _write_roles(connection, campaign_id, roles, now)
         _write_steps(connection, campaign_id, steps, role_ids, now)
         # In the SAME transaction as the rows it invalidates: an approval that
         # outlived the dialogue it vouched for is exactly what the gate is for.
-        _set_scenario_status(connection, campaign_id, "draft", clear_media_step=clear_media_step)
+        if expected_updated_at is None:
+            _set_scenario_status(
+                connection, campaign_id, "draft", clear_media_step=clear_media_step
+            )
     return True
 
 
@@ -278,6 +304,7 @@ async def replace_scenario(
     steps: Sequence[NeuroshillingStepInput],
     *,
     clear_media_step: bool = False,
+    expected_updated_at: str | None = None,
 ) -> bool:
     """Write the whole scenario atomically and return it to ``draft``.
 
@@ -289,7 +316,8 @@ async def replace_scenario(
 
     ``False`` means there is no such campaign — checked inside the transaction, so
     a campaign deleted between the caller's read and this write cannot leave
-    orphan roles behind.
+    orphan roles behind. With ``expected_updated_at`` it also means the campaign has
+    moved on since that read, and nothing was written.
     """
     return await asyncio.to_thread(
         _replace_scenario,
@@ -297,6 +325,7 @@ async def replace_scenario(
         roles,
         steps,
         clear_media_step=clear_media_step,
+        expected_updated_at=expected_updated_at,
     )
 
 

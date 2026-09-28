@@ -45,11 +45,19 @@ async def _campaign(**fields: Any) -> NeuroshillingCampaign:
     if fields:
         updated = await repository.update_campaign(
             campaign.campaign_id,
-            NeuroshillingCampaignUpdate(name="Promo", **fields),
+            NeuroshillingCampaignUpdate(
+                expected_updated_at=await _stamp(campaign.campaign_id), name="Promo", **fields
+            ),
         )
         assert updated is not None
         return updated
     return campaign
+
+
+async def _stamp(campaign_id: str) -> str:
+    current = await repository.fetch_campaign(campaign_id)
+    assert current is not None
+    return current.updated_at
 
 
 def _dialogue(**overrides: Any) -> NeuroshillingScenarioUpdate:
@@ -161,6 +169,7 @@ async def test_changing_the_pause_does_not_reset_approval() -> None:
     updated = await ns_service.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name=campaign.name,
             topic=campaign.topic,
             pause_min_seconds=45,
@@ -194,7 +203,12 @@ async def test_changing_the_pause_does_not_reset_approval() -> None:
 @pytest.mark.asyncio
 async def test_changing_what_gets_said_resets_approval(edit: dict[str, Any]) -> None:
     campaign = await _approved()
-    form: dict[str, Any] = {"name": campaign.name, "topic": campaign.topic, **edit}
+    form: dict[str, Any] = {
+        "expected_updated_at": await _stamp(campaign.campaign_id),
+        "name": campaign.name,
+        "topic": campaign.topic,
+        **edit,
+    }
 
     updated = await ns_service.update_campaign(
         campaign.campaign_id,
@@ -212,6 +226,7 @@ async def test_renaming_the_campaign_or_retargeting_it_keeps_the_approval() -> N
     updated = await ns_service.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name="Renamed",
             topic=campaign.topic,
             targets_raw="@news @sport",
@@ -613,6 +628,7 @@ async def test_a_rostered_account_still_points_at_a_role_after_regeneration(
     await ns_service.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name="Promo",
             topic="delivery",
             accounts=[NeuroshillingAccountAssignment(account_id="acc-1", role_id=role_id)],

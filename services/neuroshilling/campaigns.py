@@ -7,6 +7,7 @@ which accounts the picker may still offer.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from core.channel_tokens import parse_channels
@@ -24,6 +25,7 @@ from schemas.neuroshilling import (
     NeuroshillingRunStatus,
 )
 from services import _account_owner
+from services.neuroshilling import _state
 
 # From the modules that own the answers, so the launch card and the engine cannot
 # disagree: one owns "is this account still halted?", the other owns "does this
@@ -32,6 +34,8 @@ from services.neuroshilling._listen import enabled as listening_enabled
 from services.neuroshilling._telegram import flood_since
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from schemas.neuroshilling import (
         NeuroshillingBusyOwner,
         NeuroshillingCampaign,
@@ -62,6 +66,7 @@ _APPROVAL_FIELDS = (
 # Named rather than written at the raise site so each one is greppable from the
 # locale file that translates it.
 _CAMPAIGN_RUNNING: NeuroshillingRefusalCode = "campaign_running"
+_CAMPAIGN_CHANGED: NeuroshillingRefusalCode = "campaign_changed"
 _RUN_MODE_NOT_SUPPORTED: NeuroshillingRefusalCode = "run_mode_not_supported"
 _TOO_MANY_TARGETS: NeuroshillingRefusalCode = "too_many_targets"
 _UNKNOWN_ROLE: NeuroshillingRefusalCode = "unknown_role"
@@ -112,12 +117,13 @@ async def create_campaign(data: NeuroshillingCampaignCreate) -> NeuroshillingCam
 
 async def delete_campaign(campaign_id: str) -> bool:
     """Delete a campaign. ``False`` means there was none; a live run refuses."""
-    campaign = await repository.fetch_campaign(campaign_id)
-    if campaign is None:
-        return False
-    refuse_while_live(campaign)
-    await repository.delete_campaign(campaign_id)
-    return True
+    with campaign_edit(campaign_id):
+        campaign = await repository.fetch_campaign(campaign_id)
+        if campaign is None:
+            return False
+        refuse_while_live(campaign)
+        await repository.delete_campaign(campaign_id)
+        return True
 
 
 async def update_campaign(
@@ -125,21 +131,27 @@ async def update_campaign(
     data: NeuroshillingCampaignUpdate,
 ) -> NeuroshillingCampaign | None:
     """Apply the edited form. ``None`` means no such campaign."""
-    campaign = await repository.fetch_campaign(campaign_id)
-    if campaign is None:
-        return None
-    refuse_while_live(campaign)
-    _check_shape(data)
-    # Read once, not once per roster entry: this is a thread hop and a full table
-    # read, and a twenty-account roster would otherwise pay for twenty of them.
-    existing = await _existing_account_ids()
-    data.accounts = [item for item in data.accounts if item.account_id in existing]
-    await _check_roles(campaign_id, data)
-    return await repository.update_campaign(
-        campaign_id,
-        data,
-        reset_approval=_resets_approval(campaign, data),
-    )
+    with campaign_edit(campaign_id):
+        campaign = await repository.fetch_campaign(campaign_id)
+        if campaign is None:
+            return None
+        refuse_while_live(campaign)
+        if campaign.updated_at != data.expected_updated_at:
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+        _check_shape(data)
+        # Read once, not once per roster entry: this is a thread hop and a full table
+        # read, and a twenty-account roster would otherwise pay for twenty of them.
+        existing = await _existing_account_ids()
+        data.accounts = [item for item in data.accounts if item.account_id in existing]
+        await _check_roles(campaign_id, data)
+        updated = await repository.update_campaign(
+            campaign_id,
+            data,
+            reset_approval=_resets_approval(campaign, data),
+        )
+        if updated is None and await repository.fetch_campaign(campaign_id) is not None:
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+        return updated
 
 
 def _resets_approval(campaign: NeuroshillingCampaign, data: NeuroshillingCampaignUpdate) -> bool:
@@ -178,6 +190,17 @@ def refuse_while_live(campaign: NeuroshillingCampaign) -> None:
     """
     if campaign.status in _LIVE_STATUSES:
         raise NeuroshillingConflictError(_CAMPAIGN_RUNNING)
+
+
+@contextmanager
+def campaign_edit(campaign_id: str) -> Iterator[None]:
+    """Fence edits against Start from the first read through the final write."""
+    if not _state.try_claim_edit(campaign_id):
+        raise NeuroshillingConflictError(_CAMPAIGN_RUNNING)
+    try:
+        yield
+    finally:
+        _state.finish_edit(campaign_id)
 
 
 def _check_shape(data: NeuroshillingCampaignUpdate) -> None:

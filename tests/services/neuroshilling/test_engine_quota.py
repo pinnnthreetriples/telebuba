@@ -20,10 +20,12 @@ import pytest
 from sqlalchemy import select
 
 from core.db import _get_engine
+from core.repositories import neuroshilling as repository
 from core.repositories.neuroshilling._tables import _neuroshilling_messages
+from schemas.neuroshilling import NeuroshillingChatMessage
 from schemas.neuroshilling_scenario import NeuroshillingStepInput
 from schemas.telegram_actions import ResolveChatResult
-from services.neuroshilling import _seams, _steps, _telegram, engine
+from services.neuroshilling import _quota_ledger, _seams, _steps, _telegram, engine
 from tests.services.neuroshilling.helpers import seed_campaign, sent
 
 if TYPE_CHECKING:
@@ -104,6 +106,34 @@ async def test_the_per_chat_daily_cap_skips_the_step(gateway: list[TelegramActio
 
     assert len(gateway) == 1
     assert await _statuses() == ["sent", "skipped", "skipped"]
+
+
+@pytest.mark.parametrize(
+    ("hour_cap", "day_cap"),
+    [(1, 0), (60, 1)],
+)
+@pytest.mark.usefixtures("no_sleep")
+@pytest.mark.asyncio
+async def test_scenario_step_counts_an_autoreply_against_both_windows(
+    gateway: list[TelegramAction], hour_cap: int, day_cap: int
+) -> None:
+    seeded = await seed_campaign(
+        accounts=("acc-1",),
+        steps=_solo_steps(1),
+        messages_per_hour=hour_cap,
+        messages_per_chat_per_day=day_cap,
+    )
+    await repository.record_chat_messages(
+        seeded.campaign_id,
+        "alpha",
+        [NeuroshillingChatMessage(message_id=7, text="hello")],
+    )
+    await repository.record_chat_reply(seeded.campaign_id, "alpha", 7, account_id="acc-1")
+
+    await engine.run_campaign(seeded.campaign_id, _RUN)
+
+    assert gateway == []
+    assert await _statuses() == ["skipped"]
 
 
 @pytest.mark.usefixtures("no_sleep")
@@ -196,7 +226,7 @@ async def test_the_quota_lock_is_let_go_before_the_send(
     held: list[bool] = []
 
     async def _execute(account_id: str, _action: TelegramAction) -> ActionResult:
-        held.append(_steps._account_lock(account_id).locked())
+        held.append(_quota_ledger.account_lock(account_id).locked())
         return sent(100 + len(held))
 
     async def _resolve(_account_id: str, _action: TelegramAction) -> ResolveChatResult:

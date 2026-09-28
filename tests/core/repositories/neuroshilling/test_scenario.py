@@ -15,6 +15,8 @@ from sqlalchemy import insert, select
 
 from core.db import _get_engine, _now_iso, create_account
 from core.repositories import neuroshilling as repository
+from core.repositories.neuroshilling import _campaigns as campaign_repo
+from core.repositories.neuroshilling import _scenario as scenario_repo
 from core.repositories.neuroshilling._tables import (
     _neuroshilling_accounts,
     _neuroshilling_messages,
@@ -33,6 +35,45 @@ if TYPE_CHECKING:
 
 async def _campaign(name: str = "Promo") -> NeuroshillingCampaign:
     return await repository.create_campaign(NeuroshillingCampaignCreate(name=name))
+
+
+async def _stamp(campaign_id: str) -> str:
+    current = await repository.fetch_campaign(campaign_id)
+    assert current is not None
+    return current.updated_at
+
+
+@pytest.mark.asyncio
+async def test_campaign_stamp_moves_forward_when_clock_does_not(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created = await _campaign()
+    monkeypatch.setattr(campaign_repo, "_now_iso", lambda: created.updated_at)
+    monkeypatch.setattr(scenario_repo, "_now_iso", lambda: created.updated_at)
+
+    assert await repository.replace_scenario(created.campaign_id, [], [])
+    after_scenario = await repository.fetch_campaign(created.campaign_id)
+    assert after_scenario is not None
+    assert after_scenario.updated_at > created.updated_at
+
+    assert await repository.approve_scenario(
+        created.campaign_id, expected_updated_at=after_scenario.updated_at
+    )
+    after_approval = await repository.fetch_campaign(created.campaign_id)
+    assert after_approval is not None
+    assert after_approval.updated_at > after_scenario.updated_at
+
+    after_form = await repository.update_campaign(
+        created.campaign_id,
+        NeuroshillingCampaignUpdate(expected_updated_at=after_approval.updated_at, name="Changed"),
+    )
+    assert after_form is not None
+    assert after_form.updated_at > after_approval.updated_at
+
+    await repository.set_run_state(created.campaign_id, "idle", run_id=None)
+    after_run_state = await repository.fetch_campaign(created.campaign_id)
+    assert after_run_state is not None
+    assert after_run_state.updated_at > after_form.updated_at
 
 
 def _role(name: str, key: str | None = None) -> NeuroshillingRoleInput:
@@ -104,6 +145,7 @@ async def test_reusing_a_stored_role_id_keeps_the_roster_pointing_at_it() -> Non
     await repository.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name="Promo",
             accounts=[NeuroshillingAccountAssignment(account_id="acc-1", role_id=stored_id)],
         ),
@@ -131,6 +173,7 @@ async def test_dropping_a_role_releases_the_roster_entry_that_named_it() -> None
     await repository.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name="Promo",
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1", role_id=roles[0].role_id),
@@ -227,6 +270,7 @@ async def test_the_media_slot_is_cleared_only_when_the_write_asks_for_it(
     await repository.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name="Promo",
             media_message_link="https://t.me/chan/7",
             media_step_position=2,
@@ -291,11 +335,15 @@ async def test_a_campaign_edit_can_ask_for_the_approval_to_be_dropped() -> None:
 
     kept = await repository.update_campaign(
         campaign.campaign_id,
-        NeuroshillingCampaignUpdate(name="Promo"),
+        NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id), name="Promo"
+        ),
     )
     dropped = await repository.update_campaign(
         campaign.campaign_id,
-        NeuroshillingCampaignUpdate(name="Promo", topic="new"),
+        NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id), name="Promo", topic="new"
+        ),
         reset_approval=True,
     )
 
@@ -349,6 +397,7 @@ async def test_the_roster_survives_a_scenario_write_that_touches_no_role() -> No
     await repository.update_campaign(
         campaign.campaign_id,
         NeuroshillingCampaignUpdate(
+            expected_updated_at=await _stamp(campaign.campaign_id),
             name="Promo",
             accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
         ),

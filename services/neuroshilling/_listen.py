@@ -4,9 +4,9 @@
 (``core.telegram_client._listener``) belongs to neurocomment and carries a
 subscription registry a second feature must not disturb; a campaign that
 subscribed and unsubscribed around it would change which accounts that feature
-believes it is watching with. A cursor read has no shared state at all: the
-highest ``message_id`` this campaign has stored for the pair IS the cursor, and
-the unique index on the chat log is what makes an overlapping re-poll idempotent.
+believes it is watching with. A cursor read has no shared state at all: a
+reserved chat-log row stores the last ID read, and the unique index makes an
+overlapping re-poll idempotent.
 
 **One account reads a target.** Not one per speaker: N accounts polling one chat
 every half minute is N times the rate limit for exactly the same answer, and the
@@ -70,6 +70,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SECONDS_PER_MINUTE = 60
+_MAX_PAGES_PER_POLL = 4
 
 
 def enabled(campaign: NeuroshillingCampaign) -> bool:
@@ -130,6 +131,34 @@ async def _read_page(account_id: str, chat_id: int, cursor: int) -> list[ChatMes
     return result.messages
 
 
+async def _store_page(
+    context: RunContext, target: str, account_id: str, page: list[ChatMessagePreview]
+) -> list[NeuroshillingChatMessage]:
+    ours = await repository.list_sent_message_ids(target, [item.message_id for item in page])
+    observed = [
+        NeuroshillingChatMessage(
+            message_id=preview.message_id,
+            sender_id=preview.sender_id,
+            text=preview.text,
+            is_ours=(
+                preview.outgoing
+                or preview.message_id in ours
+                or preview.sender_id in context.our_user_ids
+            ),
+        )
+        for preview in page
+    ]
+    fresh = await repository.record_chat_messages(context.campaign.campaign_id, target, observed)
+    if fresh:
+        await log_event(
+            "INFO",
+            "neuroshilling_chat_polled",
+            account_id=account_id,
+            extra={"target": target, "seen": len(fresh)},
+        )
+    return fresh
+
+
 async def poll_once(
     context: RunContext,
     target: str,
@@ -152,9 +181,8 @@ async def poll_once(
     go on publishing ten minutes after it. The rows are already stored by then, so
     what is dropped is the answering and not the observation.
 
-    A read failure is a WARNING and nothing else: a flood, a dropped socket or a
-    lost membership all mean "not this time", and the next poll asks again from the
-    same cursor. Nothing is written down, because nothing was learnt.
+    A read failure is a WARNING. Pages already read remain stored, while an unread
+    page is retried from its cursor on the next poll.
 
     The rows land BEFORE the answers are considered, so an exception escaping one
     reply abandons the rest of the page for good rather than re-offering it on the
@@ -167,54 +195,38 @@ async def poll_once(
     account_id, chat_id = reader
     campaign_id = context.campaign.campaign_id
     cursor = await repository.chat_cursor(campaign_id, target)
-    try:
-        page = await _read_page(account_id, chat_id, cursor)
-    except TelegramReadError as exc:
-        await log_event(
-            "WARNING",
-            "neuroshilling_chat_poll_failed",
-            account_id=account_id,
-            extra={"target": target, "kind": exc.kind},
-        )
-        return 0
-    ours = await repository.list_sent_message_ids(target)
-    observed = [
-        NeuroshillingChatMessage(
-            message_id=preview.message_id,
-            sender_id=preview.sender_id,
-            text=preview.text,
-            # Every third of "ours": what this reader sent, what any of our accounts
-            # journalled as a scenario step in this chat, and — for the autoreply that
-            # never got a message id back — who wrote it. Only the first is on the wire,
-            # and only the first is about the campaign doing the reading.
-            is_ours=(
-                preview.outgoing
-                or preview.message_id in ours
-                or preview.sender_id in context.our_user_ids
-            ),
-        )
-        for preview in page
-    ]
-    fresh = await repository.record_chat_messages(campaign_id, target, observed)
-    if fresh:
-        await log_event(
-            "INFO",
-            "neuroshilling_chat_polled",
-            account_id=account_id,
-            extra={"target": target, "seen": len(fresh)},
-        )
-    if not cursor:
-        # The BASELINE poll. ``min_id=0`` asks for the newest page whatever its age, and
-        # in a quiet target — which is the normal one — that page is the chat's backlog:
-        # every line of it is new to us, so answering the page would answer messages
-        # from weeks ago and buy a page of drafts in one poll. The rows are kept, which
-        # is what makes the next poll's cursor mean "since we arrived".
-        return len(fresh)
-    for message in fresh:
-        if deadline is not None and _seams.monotonic() >= deadline:
+    baseline = cursor == 0
+    total = 0
+    for page_number in range(_MAX_PAGES_PER_POLL):
+        if page_number and deadline is not None and _seams.monotonic() >= deadline:
             break
-        await _autoreply.consider(context, target, chats, message)
-    return len(fresh)
+        try:
+            page = await _read_page(account_id, chat_id, cursor)
+        except TelegramReadError as exc:
+            await log_event(
+                "WARNING",
+                "neuroshilling_chat_poll_failed",
+                account_id=account_id,
+                extra={"target": target, "kind": exc.kind},
+            )
+            break
+        if not page:
+            break
+        fresh = await _store_page(context, target, account_id, page)
+        total += len(fresh)
+        # The first read is the newest page of old history, so it establishes a
+        # baseline but never offers those rows as newly arrived people to answer.
+        if baseline:
+            break
+        for message in fresh:
+            if deadline is not None and _seams.monotonic() >= deadline:
+                break
+            await _autoreply.consider(context, target, chats, message)
+        next_cursor = max(message.message_id for message in page)
+        if len(page) < settings.neuroshilling.chat_context_messages or next_cursor <= cursor:
+            break
+        cursor = next_cursor
+    return total
 
 
 async def listen(context: RunContext, target: str, chats: dict[str, int]) -> None:

@@ -6901,6 +6901,105 @@
         }
       }
     },
+    "/api/v1/proxies/assign-by-endpoint": {
+      "post": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Assign Proxy By Endpoint",
+        "operationId": "assignProxyByEndpoint",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyCreateAssignment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyRead"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies/probe": {
       "post": {
         "tags": [
@@ -12048,6 +12147,211 @@
         }
       }
     },
+    "/api/v1/neuroshilling/campaigns/{campaign_id}/settings": {
+      "get": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Get Settings",
+        "operationId": "getNeuroshillingSettings",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "neuroshilling"
+        ],
+        "summary": "Save Settings",
+        "description": "Commit the campaign form, roster and edited dialogue in one transaction.",
+        "operationId": "saveNeuroshillingSettings",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeuroshillingSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict with the current state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neuroshilling/campaigns/{campaign_id}/generate": {
       "post": {
         "tags": [
@@ -12212,6 +12516,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingVersionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -12331,6 +12645,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeuroshillingVersionRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -16732,29 +17056,64 @@
       "NeurocommentSettingsUpdate": {
         "properties": {
           "max_comments_per_hour": {
-            "type": "integer",
-            "minimum": 1.0,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Max Comments Per Hour"
           },
           "max_comments_per_channel_per_day": {
-            "type": "integer",
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Max Comments Per Channel Per Day"
           },
           "reply_delay_min_seconds": {
-            "type": "number",
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Reply Delay Min Seconds"
           },
           "reply_delay_max_seconds": {
-            "type": "number",
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Reply Delay Max Seconds"
           },
           "min_trust_score": {
-            "type": "integer",
-            "maximum": 100.0,
-            "minimum": 0.0,
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Min Trust Score"
           },
           "comment_mode": {
@@ -16788,13 +17147,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "max_comments_per_hour",
-          "max_comments_per_channel_per_day",
-          "reply_delay_min_seconds",
-          "reply_delay_max_seconds",
-          "min_trust_score"
-        ],
         "title": "NeurocommentSettingsUpdate",
         "description": "Caller-supplied neurocomment-settings change from the Settings screen."
       },
@@ -17182,6 +17534,12 @@
       },
       "NeuroshillingCampaignUpdate": {
         "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Expected Updated At"
+          },
           "name": {
             "type": "string",
             "maxLength": 120,
@@ -17341,6 +17699,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "expected_updated_at",
           "name"
         ],
         "title": "NeuroshillingCampaignUpdate",
@@ -17580,6 +17939,47 @@
         "title": "NeuroshillingScenarioUpdate",
         "description": "Roles and steps in ONE body, because they must be written in one transaction.\n\nTwo endpoints would leave a window in which a step's ``role_id`` points at a\nrole the other call has already deleted, and no amount of client ordering\ncloses it."
       },
+      "NeuroshillingSettings": {
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/NeuroshillingCampaign"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/NeuroshillingScenario"
+          },
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/NeuroshillingAccountAssignment"
+            },
+            "type": "array",
+            "title": "Accounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign",
+          "scenario",
+          "accounts"
+        ],
+        "title": "NeuroshillingSettings"
+      },
+      "NeuroshillingSettingsUpdate": {
+        "properties": {
+          "campaign": {
+            "$ref": "#/components/schemas/NeuroshillingCampaignUpdate"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/NeuroshillingScenarioUpdate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign",
+          "scenario"
+        ],
+        "title": "NeuroshillingSettingsUpdate",
+        "description": "One settings Save containing the campaign form and its edited dialogue."
+      },
       "NeuroshillingStep": {
         "properties": {
           "step_id": {
@@ -17764,6 +18164,23 @@
         "type": "object",
         "title": "NeuroshillingStepInput",
         "description": "One dialogue step as the form declares it \u2014 no ``position``, see the module docstring.\n\nWhich of ``reply_to_position``, ``target_position`` and ``emoji`` a ``kind`` may\ncarry is NOT checked here. ``services.neuroshilling.scenario._kind_field_problem``\nholds the write to it, so that the operator gets ``scenario_invalid`` \u2014 the refusal\nthe page already has copy for \u2014 rather than the generic 422 a schema rule raises."
+      },
+      "NeuroshillingVersionRequest": {
+        "properties": {
+          "expected_updated_at": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Expected Updated At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_updated_at"
+        ],
+        "title": "NeuroshillingVersionRequest",
+        "description": "Version of the campaign and dialogue the operator actually viewed."
       },
       "OpenWebResult": {
         "properties": {
@@ -18413,6 +18830,68 @@
         ],
         "title": "ProxyCreate",
         "description": "Operator input when adding a proxy to the pool."
+      },
+      "ProxyCreateAssignment": {
+        "properties": {
+          "proxy_type": {
+            "type": "string",
+            "enum": [
+              "socks5",
+              "https"
+            ],
+            "title": "Proxy Type"
+          },
+          "host": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Host"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proxy_type",
+          "host",
+          "port",
+          "account_id"
+        ],
+        "title": "ProxyCreateAssignment",
+        "description": "Attach an endpoint to one account without changing a shared pool proxy."
       },
       "ProxyList": {
         "properties": {
