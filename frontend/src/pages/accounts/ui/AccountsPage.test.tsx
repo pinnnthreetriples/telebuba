@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
@@ -9,79 +8,13 @@ import '@/shared/i18n';
 import type { AccountRead } from '@/shared/api';
 
 import { AccountsPage } from './AccountsPage';
-
-function renderWithClient(ui: ReactElement) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
-}
-
-function account(id: string): AccountRead {
-  return { account_id: id, status: 'alive', created_at: 'now', updated_at: 'now' };
-}
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
-// Route the mocked fetch by path/method so list + stats + actions + pagination resolve.
-function routeApi(options: {
-  page1: unknown;
-  page2?: unknown;
-  listStatus?: number;
-  checkStatus?: number;
-  checked?: AccountRead;
-  stats?: unknown;
-}) {
-  vi.mocked(fetch).mockImplementation((input) => {
-    const request = input as Request;
-    const url = new URL(request.url);
-    if (url.pathname === '/api/v1/accounts/stats' && request.method === 'GET') {
-      return Promise.resolve(
-        jsonResponse(options.stats ?? { total: 0, active: 0, idle: 0, needs_code: 0, problem: 0 }),
-      );
-    }
-    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
-      if (options.listStatus && options.listStatus >= 400) {
-        return Promise.resolve(jsonResponse({ detail: 'boom' }, options.listStatus));
-      }
-      const body = url.searchParams.get('cursor')
-        ? (options.page2 ?? options.page1)
-        : options.page1;
-      return Promise.resolve(jsonResponse(body));
-    }
-    if (url.pathname === '/api/v1/proxies' && request.method === 'GET') {
-      return Promise.resolve(
-        jsonResponse({
-          proxies: [
-            {
-              id: 'p1',
-              proxy_type: 'socks5',
-              host: 'nl',
-              port: 1080,
-              has_password: false,
-              status: 'unknown',
-              used: 0,
-              capacity: 3,
-              free: 3,
-              created_at: 'now',
-              updated_at: 'now',
-            },
-          ],
-        }),
-      );
-    }
-    if (url.pathname === '/api/v1/accounts/check') {
-      if (options.checkStatus) {
-        return Promise.resolve(jsonResponse({ detail: 'boom' }, options.checkStatus));
-      }
-      if (options.checked) return Promise.resolve(jsonResponse(options.checked));
-    }
-    return Promise.resolve(jsonResponse(account('acc-1')));
-  });
-}
+import {
+  account,
+  jsonResponse,
+  listGets,
+  renderWithClient,
+  routeApi,
+} from './AccountsPage.test-helpers';
 
 test('shows the loading state first, then the table with live data', async () => {
   routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
@@ -120,34 +53,6 @@ test('paginates forward with the next cursor', async () => {
   await userEvent.click(screen.getByText('Вперёд'));
   await waitFor(() => {
     expect(screen.getByText('acc-2')).toBeInTheDocument();
-  });
-});
-
-function listGets(): number {
-  return vi.mocked(fetch).mock.calls.filter(([input]) => {
-    const request = input as Request;
-    return new URL(request.url).pathname === '/api/v1/accounts' && request.method === 'GET';
-  }).length;
-}
-
-test('typing in the search box keeps the table on screen and fires one request', async () => {
-  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
-  renderWithClient(<AccountsPage />);
-  await waitFor(() => {
-    expect(screen.getByText('acc-1')).toBeInTheDocument();
-  });
-  const before = listGets();
-
-  await userEvent.type(screen.getByPlaceholderText('Поиск по аккаунтам…'), 'abc');
-
-  // The generated key embeds `query`, so each keystroke was a fresh key with no
-  // cached data: the table AND the pagination block were replaced by the loading
-  // line on every character.
-  expect(screen.queryByText('Загрузка…')).not.toBeInTheDocument();
-  expect(screen.getByText('acc-1')).toBeInTheDocument();
-  // ...and three keystrokes cost one request, not three.
-  await waitFor(() => {
-    expect(listGets()).toBe(before + 1);
   });
 });
 
@@ -444,7 +349,7 @@ test('the add button opens the add-account wizard', async () => {
   await waitFor(() => {
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('+ Аккаунт'));
+  await userEvent.click(screen.getByLabelText('Аккаунт'));
   expect(screen.getByText('Добавить аккаунт')).toBeInTheDocument();
 });
 
