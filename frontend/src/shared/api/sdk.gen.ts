@@ -40,6 +40,9 @@ import type {
   CancelBulkMessageJobData,
   CancelBulkMessageJobErrors,
   CancelBulkMessageJobResponses,
+  CancelContactLookupJobData,
+  CancelContactLookupJobErrors,
+  CancelContactLookupJobResponses,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameErrors,
   CheckAccountChannelUsernameResponses,
@@ -133,18 +136,27 @@ import type {
   GetActiveBulkMessageJobData,
   GetActiveBulkMessageJobErrors,
   GetActiveBulkMessageJobResponses,
+  GetActiveContactLookupJobData,
+  GetActiveContactLookupJobErrors,
+  GetActiveContactLookupJobResponses,
   GetBulkMessageJobData,
   GetBulkMessageJobErrors,
   GetBulkMessageJobResponses,
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryErrors,
   GetCampaignDiscoveryResponses,
+  GetContactLookupJobData,
+  GetContactLookupJobErrors,
+  GetContactLookupJobResponses,
   GetHealthData,
   GetHealthErrors,
   GetHealthResponses,
   GetLatestBulkMessageJobData,
   GetLatestBulkMessageJobErrors,
   GetLatestBulkMessageJobResponses,
+  GetLatestContactLookupJobData,
+  GetLatestContactLookupJobErrors,
+  GetLatestContactLookupJobResponses,
   GetMeData,
   GetMeErrors,
   GetMeResponses,
@@ -352,6 +364,9 @@ import type {
   StartCampaignDiscoveryData,
   StartCampaignDiscoveryErrors,
   StartCampaignDiscoveryResponses,
+  StartContactLookupData,
+  StartContactLookupErrors,
+  StartContactLookupResponses,
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
@@ -1416,6 +1431,81 @@ export const cancelBulkMessageJob = <ThrowOnError extends boolean = false>(
     CancelBulkMessageJobErrors,
     ThrowOnError
   >({ url: '/api/v1/accounts/bulk-messages/{job_id}/cancel', ...options });
+
+/**
+ * Start Contact Lookup
+ */
+export const startContactLookup = <ThrowOnError extends boolean = false>(
+  options: Options<StartContactLookupData, ThrowOnError>,
+): RequestResult<StartContactLookupResponses, StartContactLookupErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    StartContactLookupResponses,
+    StartContactLookupErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/contact-lookup',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Active Contact Lookup Job
+ */
+export const getActiveContactLookupJob = <ThrowOnError extends boolean = false>(
+  options?: Options<GetActiveContactLookupJobData, ThrowOnError>,
+): RequestResult<
+  GetActiveContactLookupJobResponses,
+  GetActiveContactLookupJobErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetActiveContactLookupJobResponses,
+    GetActiveContactLookupJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/contact-lookup/active', ...options });
+
+/**
+ * Get Latest Contact Lookup Job
+ */
+export const getLatestContactLookupJob = <ThrowOnError extends boolean = false>(
+  options?: Options<GetLatestContactLookupJobData, ThrowOnError>,
+): RequestResult<
+  GetLatestContactLookupJobResponses,
+  GetLatestContactLookupJobErrors,
+  ThrowOnError
+> =>
+  (options?.client ?? client).get<
+    GetLatestContactLookupJobResponses,
+    GetLatestContactLookupJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/contact-lookup/latest', ...options });
+
+/**
+ * Get Contact Lookup Job
+ */
+export const getContactLookupJob = <ThrowOnError extends boolean = false>(
+  options: Options<GetContactLookupJobData, ThrowOnError>,
+): RequestResult<GetContactLookupJobResponses, GetContactLookupJobErrors, ThrowOnError> =>
+  (options.client ?? client).get<
+    GetContactLookupJobResponses,
+    GetContactLookupJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/contact-lookup/{job_id}', ...options });
+
+/**
+ * Cancel Contact Lookup Job
+ */
+export const cancelContactLookupJob = <ThrowOnError extends boolean = false>(
+  options: Options<CancelContactLookupJobData, ThrowOnError>,
+): RequestResult<CancelContactLookupJobResponses, CancelContactLookupJobErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    CancelContactLookupJobResponses,
+    CancelContactLookupJobErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/contact-lookup/{job_id}/cancel', ...options });
 
 /**
  * List Proxies

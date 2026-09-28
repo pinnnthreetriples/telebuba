@@ -102,7 +102,11 @@
         "hidePreview": "Hide",
         "download": "Download",
         "mediaError": "Could not open the attachment",
-        "kind": { "user": "Personal chat", "chat": "Group", "channel": "Channel" }
+        "kind": {
+          "user": "Personal chat",
+          "chat": "Group",
+          "channel": "Channel"
+        }
       },
       "session": "Session",
       "sessionOk": "Session active",
@@ -395,6 +399,32 @@
       "unconfirmed": "Delivery is unconfirmed. Check the chat before sending again.",
       "skipped": "Skipped: {{reason}}.",
       "retryAfter": "Telegram requested a {{seconds}} s wait.",
+      "lookup": {
+        "toggle": "Find by phone",
+        "title": "Find contacts by phone",
+        "phones": "Phone numbers",
+        "phonesPlaceholder": "+15551234567\n+447700900000",
+        "phonesHint": "One number per line, with country code. Only people whose privacy allows phone lookup will be found.",
+        "needAccounts": "Pick accounts above first — the lookup runs from them.",
+        "find": "Find",
+        "running": "Searching…",
+        "progress": "{{done}} of {{total}} checked",
+        "found_one": "{{count}} found",
+        "found_other": "{{count}} found",
+        "notFound_one": "{{count}} not found",
+        "notFound_other": "{{count}} not found",
+        "skipped_one": "{{count}} skipped",
+        "skipped_other": "{{count}} skipped",
+        "addFound_one": "Add {{count}} to recipients",
+        "addFound_other": "Add {{count}} to recipients",
+        "added_one": "Added {{count}} recipient",
+        "added_other": "Added {{count}} recipients",
+        "noneToAdd": "No one to add to recipients.",
+        "newSearch": "New search",
+        "startError": "Could not start the search. Check the numbers and try again.",
+        "startActive": "A search is already running.",
+        "startNoValid": "No valid numbers."
+      },
       "code": {
         "account_not_found": "account not found",
         "flood_wait": "Telegram rate limit",

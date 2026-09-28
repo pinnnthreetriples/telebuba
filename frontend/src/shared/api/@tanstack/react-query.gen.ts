@@ -19,6 +19,7 @@ import {
   assignProxyByEndpoint,
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
+  cancelContactLookupJob,
   checkAccount,
   checkAccountChannelUsername,
   checkCampaignChannelBans,
@@ -50,10 +51,13 @@ import {
   getAccountProfileSnapshot,
   getAccountTwofa,
   getActiveBulkMessageJob,
+  getActiveContactLookupJob,
   getBulkMessageJob,
   getCampaignDiscovery,
+  getContactLookupJob,
   getHealth,
   getLatestBulkMessageJob,
+  getLatestContactLookupJob,
   getMe,
   getNeurocommentBoard,
   getNeurocommentRuntime,
@@ -124,6 +128,7 @@ import {
   skipNeurocommentPair,
   spamCheckAccount,
   startCampaignDiscovery,
+  startContactLookup,
   startNeurocomment,
   startNeuroshillingCampaign,
   startPhoneLogin,
@@ -173,6 +178,9 @@ import type {
   CancelBulkMessageJobData,
   CancelBulkMessageJobError,
   CancelBulkMessageJobResponse,
+  CancelContactLookupJobData,
+  CancelContactLookupJobError,
+  CancelContactLookupJobResponse,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameError,
   CheckAccountChannelUsernameResponse,
@@ -265,18 +273,27 @@ import type {
   GetActiveBulkMessageJobData,
   GetActiveBulkMessageJobError,
   GetActiveBulkMessageJobResponse,
+  GetActiveContactLookupJobData,
+  GetActiveContactLookupJobError,
+  GetActiveContactLookupJobResponse,
   GetBulkMessageJobData,
   GetBulkMessageJobError,
   GetBulkMessageJobResponse,
   GetCampaignDiscoveryData,
   GetCampaignDiscoveryError,
   GetCampaignDiscoveryResponse,
+  GetContactLookupJobData,
+  GetContactLookupJobError,
+  GetContactLookupJobResponse,
   GetHealthData,
   GetHealthError,
   GetHealthResponse,
   GetLatestBulkMessageJobData,
   GetLatestBulkMessageJobError,
   GetLatestBulkMessageJobResponse,
+  GetLatestContactLookupJobData,
+  GetLatestContactLookupJobError,
+  GetLatestContactLookupJobResponse,
   GetMeData,
   GetMeError,
   GetMeResponse,
@@ -484,6 +501,9 @@ import type {
   StartCampaignDiscoveryData,
   StartCampaignDiscoveryError,
   StartCampaignDiscoveryResponse,
+  StartContactLookupData,
+  StartContactLookupError,
+  StartContactLookupResponse,
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
@@ -2426,6 +2446,141 @@ export const cancelBulkMessageJobMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await cancelBulkMessageJob({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Start Contact Lookup
+ */
+export const startContactLookupMutation = (
+  options?: Partial<Options<StartContactLookupData>>,
+): UseMutationOptions<
+  StartContactLookupResponse,
+  StartContactLookupError,
+  Options<StartContactLookupData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartContactLookupResponse,
+    StartContactLookupError,
+    Options<StartContactLookupData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startContactLookup({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getActiveContactLookupJobQueryKey = (
+  options?: Options<GetActiveContactLookupJobData>,
+) => createQueryKey('getActiveContactLookupJob', options);
+
+/**
+ * Get Active Contact Lookup Job
+ */
+export const getActiveContactLookupJobOptions = (
+  options?: Options<GetActiveContactLookupJobData>,
+) =>
+  queryOptions<
+    GetActiveContactLookupJobResponse,
+    GetActiveContactLookupJobError,
+    GetActiveContactLookupJobResponse,
+    ReturnType<typeof getActiveContactLookupJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getActiveContactLookupJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getActiveContactLookupJobQueryKey(options),
+  });
+
+export const getLatestContactLookupJobQueryKey = (
+  options?: Options<GetLatestContactLookupJobData>,
+) => createQueryKey('getLatestContactLookupJob', options);
+
+/**
+ * Get Latest Contact Lookup Job
+ */
+export const getLatestContactLookupJobOptions = (
+  options?: Options<GetLatestContactLookupJobData>,
+) =>
+  queryOptions<
+    GetLatestContactLookupJobResponse,
+    GetLatestContactLookupJobError,
+    GetLatestContactLookupJobResponse,
+    ReturnType<typeof getLatestContactLookupJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getLatestContactLookupJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getLatestContactLookupJobQueryKey(options),
+  });
+
+export const getContactLookupJobQueryKey = (options: Options<GetContactLookupJobData>) =>
+  createQueryKey('getContactLookupJob', options);
+
+/**
+ * Get Contact Lookup Job
+ */
+export const getContactLookupJobOptions = (options: Options<GetContactLookupJobData>) =>
+  queryOptions<
+    GetContactLookupJobResponse,
+    GetContactLookupJobError,
+    GetContactLookupJobResponse,
+    ReturnType<typeof getContactLookupJobQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getContactLookupJob({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getContactLookupJobQueryKey(options),
+  });
+
+/**
+ * Cancel Contact Lookup Job
+ */
+export const cancelContactLookupJobMutation = (
+  options?: Partial<Options<CancelContactLookupJobData>>,
+): UseMutationOptions<
+  CancelContactLookupJobResponse,
+  CancelContactLookupJobError,
+  Options<CancelContactLookupJobData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CancelContactLookupJobResponse,
+    CancelContactLookupJobError,
+    Options<CancelContactLookupJobData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await cancelContactLookupJob({
         ...options,
         ...fnOptions,
         throwOnError: true,

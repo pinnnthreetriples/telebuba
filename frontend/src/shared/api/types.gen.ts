@@ -1490,6 +1490,92 @@ export type CommentRecord = {
 };
 
 /**
+ * ContactLookupJob
+ */
+export type ContactLookupJob = {
+  /**
+   * Job Id
+   */
+  job_id: string;
+  /**
+   * Status
+   */
+  status: 'running' | 'completed' | 'cancelled';
+  /**
+   * Total
+   */
+  total: number;
+  /**
+   * Completed
+   */
+  completed: number;
+  /**
+   * Results
+   */
+  results: Array<ContactLookupOutcome>;
+};
+
+/**
+ * ContactLookupOutcome
+ */
+export type ContactLookupOutcome = {
+  /**
+   * Phone
+   */
+  phone: string;
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'found' | 'not_found' | 'skipped';
+  /**
+   * User Id
+   */
+  user_id?: number | null;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Display Name
+   */
+  display_name?: string | null;
+  /**
+   * Error Code
+   */
+  error_code?: string | null;
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
+};
+
+/**
+ * ContactLookupRequest
+ */
+export type ContactLookupRequest = {
+  /**
+   * Account Ids
+   */
+  account_ids: Array<string>;
+  /**
+   * Phones
+   */
+  phones: Array<string>;
+  /**
+   * Min Delay Seconds
+   */
+  min_delay_seconds?: number;
+  /**
+   * Max Delay Seconds
+   */
+  max_delay_seconds?: number;
+};
+
+/**
  * DialogueFeed
  *
  * Recent inter-account messages, newest first — the live conversation feed.
@@ -7643,6 +7729,213 @@ export type CancelBulkMessageJobResponses = {
 
 export type CancelBulkMessageJobResponse =
   CancelBulkMessageJobResponses[keyof CancelBulkMessageJobResponses];
+
+export type StartContactLookupData = {
+  body: ContactLookupRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/contact-lookup';
+};
+
+export type StartContactLookupErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Upstream gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type StartContactLookupError = StartContactLookupErrors[keyof StartContactLookupErrors];
+
+export type StartContactLookupResponses = {
+  /**
+   * Successful Response
+   */
+  202: ContactLookupJob;
+};
+
+export type StartContactLookupResponse =
+  StartContactLookupResponses[keyof StartContactLookupResponses];
+
+export type GetActiveContactLookupJobData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/contact-lookup/active';
+};
+
+export type GetActiveContactLookupJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetActiveContactLookupJobError =
+  GetActiveContactLookupJobErrors[keyof GetActiveContactLookupJobErrors];
+
+export type GetActiveContactLookupJobResponses = {
+  /**
+   * Response Getactivecontactlookupjob
+   *
+   * Successful Response
+   */
+  200: ContactLookupJob | null;
+};
+
+export type GetActiveContactLookupJobResponse =
+  GetActiveContactLookupJobResponses[keyof GetActiveContactLookupJobResponses];
+
+export type GetLatestContactLookupJobData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/contact-lookup/latest';
+};
+
+export type GetLatestContactLookupJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetLatestContactLookupJobError =
+  GetLatestContactLookupJobErrors[keyof GetLatestContactLookupJobErrors];
+
+export type GetLatestContactLookupJobResponses = {
+  /**
+   * Response Getlatestcontactlookupjob
+   *
+   * Successful Response
+   */
+  200: ContactLookupJob | null;
+};
+
+export type GetLatestContactLookupJobResponse =
+  GetLatestContactLookupJobResponses[keyof GetLatestContactLookupJobResponses];
+
+export type GetContactLookupJobData = {
+  body?: never;
+  path: {
+    /**
+     * Job Id
+     */
+    job_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/contact-lookup/{job_id}';
+};
+
+export type GetContactLookupJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type GetContactLookupJobError = GetContactLookupJobErrors[keyof GetContactLookupJobErrors];
+
+export type GetContactLookupJobResponses = {
+  /**
+   * Successful Response
+   */
+  200: ContactLookupJob;
+};
+
+export type GetContactLookupJobResponse =
+  GetContactLookupJobResponses[keyof GetContactLookupJobResponses];
+
+export type CancelContactLookupJobData = {
+  body?: never;
+  path: {
+    /**
+     * Job Id
+     */
+    job_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/contact-lookup/{job_id}/cancel';
+};
+
+export type CancelContactLookupJobErrors = {
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+};
+
+export type CancelContactLookupJobError =
+  CancelContactLookupJobErrors[keyof CancelContactLookupJobErrors];
+
+export type CancelContactLookupJobResponses = {
+  /**
+   * Successful Response
+   */
+  200: ContactLookupJob;
+};
+
+export type CancelContactLookupJobResponse =
+  CancelContactLookupJobResponses[keyof CancelContactLookupJobResponses];
 
 export type ListProxiesData = {
   body?: never;
