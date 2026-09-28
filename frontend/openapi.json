@@ -13626,6 +13626,36 @@
             ],
             "title": "Recent Message Ids"
           },
+          "recent_media_kinds": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string",
+                  "enum": [
+                    "poll",
+                    "video",
+                    "voice"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent Media Kinds"
+          },
+          "warm_skip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warm Skip"
+          },
           "flood_wait_seconds": {
             "anyOf": [
               {

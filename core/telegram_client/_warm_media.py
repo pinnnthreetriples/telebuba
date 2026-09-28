@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
     from telethon.tl.types import Poll
 
+    from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import WarmConsumeMedia, WarmVoteInPoll
 
 # The poll moved on between our read and the vote — nothing to do this cycle.
@@ -151,6 +152,17 @@ async def _stream(client: TelegramClient, document: Document, max_bytes: int) ->
         with suppress(AttributeError):
             await stream.close()
     return consumed
+
+
+def media_kind(message: object) -> RecentMediaKind | None:
+    """What a warming extra could do with this post — the same tests the actions apply."""
+    if _votable_poll(message) is not None:
+        return "poll"
+    if _consumable([message], "video") is not None:
+        return "video"
+    if _consumable([message], "voice") is not None:
+        return "voice"
+    return None
 
 
 async def _download(

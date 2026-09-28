@@ -17,11 +17,13 @@ import type { IconName } from '@/shared/ui';
 // ищет. Состояние — не украшение, а то, что тумблер РЕАЛЬНО может: `live` пишется
 // в настройки, `always` работает и выключить его нельзя (ядро цикла или ключ в
 // конфиге сервера), `external` прогрев не делает вовсе — оператор правит это сам в
-// другом разделе. Тумблер, который двигается и ничего не меняет, хуже тумблера,
-// который честно отказывает — поэтому у последних двух он `disabled`, а плашка
-// рядом говорит, почему. Состояния «скоро» больше нет: всё, что здесь перечислено,
+// другом разделе, `withChat` — часть переписки между аккаунтами («печатает…» бывает
+// только перед её сообщением), поэтому горит ровно тогда, когда горит переписка.
+// Тумблер, который двигается и ничего не меняет, хуже тумблера, который честно
+// отказывает — поэтому у всех, кроме `live`, он `disabled`, а плашка рядом говорит,
+// почему. Состояния «скоро» больше нет: всё, что здесь перечислено,
 // `core/telegram_client` умеет.
-type ActionState = 'live' | 'always' | 'external';
+type ActionState = 'live' | 'always' | 'withChat' | 'external';
 
 // Три исторические колонки настроек (`WarmingSettingsUpdate`). Гейт готовности сюда
 // не входит: он не действие, а допуск в прогрев, и стоит отдельной строкой под сеткой.
@@ -87,7 +89,7 @@ const GROUPS: Group[] = [
     icon: 'arrow-swap',
     actions: [
       { key: 'interAccountChat', state: 'live', field: 'inter_account_chat' },
-      { key: 'typing', state: 'always' },
+      { key: 'typing', state: 'withChat' },
       { key: 'forward', state: 'live', field: 'forward' },
       { key: 'saved', state: 'live', field: 'saved' },
       { key: 'contacts', state: 'live', field: 'contacts' },
@@ -122,7 +124,7 @@ const ACTIONS = GROUPS.flatMap((group) => group.actions);
 // Счётчик в легенде считается по таблице, а не вписан числом: смена состояния
 // одного действия не должна требовать правки надписи рядом. «Работает» — то, что
 // прогрев реально выполняет: `external` живёт в другом разделе и сюда не входит.
-const WORKING_COUNT = ACTIONS.filter((a) => a.state === 'live' || a.state === 'always').length;
+const WORKING_COUNT = ACTIONS.filter((a) => a.state !== 'external').length;
 const LIVE_FIELDS = ACTIONS.map((a) => a.field).filter((f): f is ToggleKey => f != null);
 const EXTRA_KEYS = LIVE_FIELDS.filter(
   (f): f is ExtraKey => !(LEGACY_KEYS as readonly string[]).includes(f),
@@ -154,7 +156,7 @@ function ActionRow({
   onToggle: () => void;
 }) {
   const { t } = useTranslation();
-  const working = state === 'live' || state === 'always';
+  const working = state !== 'external';
   return (
     <div className="flex items-center gap-md">
       <Switch checked={on} disabled={state !== 'live'} label={title} onChange={onToggle} />
@@ -165,7 +167,9 @@ function ActionRow({
         text={t(`warming.tune.hint.${actionKey}.text`)}
         example={t(`warming.tune.hint.${actionKey}.example`)}
       />
-      {state === 'always' ? <Badge tone="info">{t('warming.tune.state.always')}</Badge> : null}
+      {state === 'always' || state === 'withChat' ? (
+        <Badge tone="info">{t(`warming.tune.state.${state}`)}</Badge>
+      ) : null}
       {working ? null : (
         // С рамкой: заливка `neutral` — это `canvas`, а панель под ней `surface`, и
         // три единицы между ними плашкой не читаются. Тот же приём, что у пилюль каналов.
@@ -296,7 +300,12 @@ export function ActionTuningCard() {
                   actionKey={action.key}
                   title={t(`warming.tune.action.${action.key}`)}
                   state={action.state}
-                  on={action.field ? (toggles[action.field] ?? true) : action.state === 'always'}
+                  on={
+                    action.field
+                      ? (toggles[action.field] ?? true)
+                      : action.state === 'always' ||
+                        (action.state === 'withChat' && toggles.inter_account_chat)
+                  }
                   onToggle={() => {
                     if (action.field) flip(action.field);
                   }}

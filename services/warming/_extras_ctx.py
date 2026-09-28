@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 
     from schemas._warming_extras import JoinedChannel
     from schemas.accounts import AccountRead
+    from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import ActionResult, TelegramAction
     from schemas.warming import ActivityPersona, WarmingChannel, WarmingSettingsSecret
     from services.warming._steps import _ChannelTally
@@ -38,7 +39,7 @@ MEDIA_MIN_BYTES = 65_536
 _ExtraKind = Literal["read", "write"]
 # Cycle facts an extra cannot run without (``_extras._is_eligible``). Data, not
 # lambdas, so the registry stays a table.
-_Need = Literal["recent_ids", "joined", "premium", "media_bytes"]
+_Need = Literal["recent_ids", "joined", "premium", "media_bytes", "poll", "video", "voice"]
 
 
 @dataclass
@@ -54,6 +55,9 @@ class _ExtraContext:
     recent_ids: dict[str, list[int]]
     tally: _ChannelTally
     remaining_actions: int | None
+    # Channel → {post id: kind} for the read posts that carry a poll / video / voice
+    # (core classifies them during the read), so those extras aim at a post that has one.
+    recent_media: dict[str, dict[int, RecentMediaKind]] = field(default_factory=dict)
     # Every channel warming joined for this account, left ones included (the chat
     # extras pick among the not-left ones; the cycle reads ``left_at`` for cooldown).
     joined: list[JoinedChannel] = field(default_factory=list)
@@ -89,3 +93,10 @@ def _recent_posts(ctx: _ExtraContext) -> tuple[str, list[int]]:
     """A channel whose read fetched posts, plus up to five of them (``needs`` guarantees one)."""
     channel = _seams.rng.choice([c for c, ids in ctx.recent_ids.items() if ids])
     return channel, ctx.recent_ids[channel][:_POST_IDS_MAX]
+
+
+def _media_posts(ctx: _ExtraContext, kind: RecentMediaKind) -> tuple[str, list[int]]:
+    """A channel whose read found a ``kind`` post, plus up to five such posts (``needs``)."""
+    channel = _seams.rng.choice([c for c, m in ctx.recent_media.items() if kind in m.values()])
+    ids = [i for i, k in ctx.recent_media[channel].items() if k == kind]
+    return channel, ids[:_POST_IDS_MAX]

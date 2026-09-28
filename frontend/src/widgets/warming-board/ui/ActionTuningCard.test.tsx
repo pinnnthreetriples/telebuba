@@ -50,7 +50,7 @@ const SETTINGS = {
 // The card's own counts, derived the same way the legend derives them. Written out
 // so a row that changes state has to change this number too — that is the point of
 // the states being data rather than markup.
-const ALWAYS_ROWS = 5;
+const ALWAYS_ROWS = 4;
 // Profile editing lives in the Accounts section: one row that warming never runs.
 const EXTERNAL_ROWS = 1;
 // Thirty actions plus the readiness gate, which is not one.
@@ -161,12 +161,32 @@ test('a core-cycle action reads as on and cannot be moved', async () => {
 
   // `read_channel` is the cycle itself and `watch_peer_stories` is keyed off the
   // server config, so neither has a settings column to write. On, and locked on.
-  for (const name of ['Отметить как прочитанное', 'Просмотр историй', 'Симуляция печати']) {
+  for (const name of ['Отметить как прочитанное', 'Просмотр историй']) {
     const row = screen.getByRole('switch', { name });
     expect(row).toHaveAttribute('aria-checked', 'true');
     expect(row).toBeDisabled();
   }
   expect(screen.getAllByText('всегда')).toHaveLength(ALWAYS_ROWS);
+});
+
+test('typing lights up only with the inter-account chat it is part of', async () => {
+  // «печатает…» is sent only before an inter-account DM, so an "always" chip on it
+  // promised a signal that never went out while the chat was off.
+  routeApi();
+  renderWithClient(<ActionTuningCard />);
+  await openCard();
+
+  const typing = screen.getByRole('switch', { name: 'Симуляция печати' });
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeEnabled();
+  });
+  expect(typing).toHaveAttribute('aria-checked', 'false');
+  expect(typing).toBeDisabled();
+  expect(screen.getByText('с перепиской')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('switch', { name: 'Переписка между аккаунтами' }));
+  expect(typing).toHaveAttribute('aria-checked', 'true');
+  expect(typing).toBeDisabled();
 });
 
 test('the profile row points at the Accounts section instead of promising "скоро"', async () => {

@@ -2,9 +2,9 @@
 
 Unlike :mod:`services.warming._extras_writes` these aim at a channel, so every pick
 is confined to what the account already did on its own: a poll among the posts its
-read just fetched, a leave / archive / mute among the channels warming itself joined
-(``warming_joined_channels``). All four dispatch through ``_write`` so the daily
-budget is booked before the RPC leaves the process.
+read just fetched (and found to be one), a leave / archive / mute among the channels
+warming itself joined (``warming_joined_channels``). All four dispatch through
+``_write`` so the daily budget is booked before the RPC leaves the process.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from core.db import record_channel_left
 from schemas.telegram_actions import LeaveChannel
 from schemas.telegram_actions_warming import WarmMutePeer, WarmToggleArchive, WarmVoteInPoll
 from services.warming import _seams
-from services.warming._extras_ctx import _recent_posts, _write
+from services.warming._extras_ctx import _media_posts, _write
 
 if TYPE_CHECKING:
     from schemas._warming_extras import JoinedChannel
@@ -80,6 +80,6 @@ async def mute(ctx: _ExtraContext) -> ActionResult:
 
 
 async def polls(ctx: _ExtraContext) -> ActionResult:
-    channel, ids = _recent_posts(ctx)
+    channel, ids = _media_posts(ctx, "poll")
     option = _seams.rng.randrange(_POLL_OPTIONS_MAX)
     return await _write(ctx, WarmVoteInPoll(channel=channel, message_ids=ids, option_index=option))

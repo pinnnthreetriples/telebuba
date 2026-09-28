@@ -40,6 +40,7 @@ from core.telegram_client._profile import (
 )
 from core.telegram_client._react import dispatch_react_to_message, dispatch_react_to_post
 from core.telegram_client._read_comments import _resolve_linked_group_entity
+from core.telegram_client._read_feed import dispatch_read_channel
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._twofa import dispatch_twofa_action, twofa_log_extra
 from core.telegram_client._util import event_name, sent_message_id
@@ -253,7 +254,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
-            return await _dispatch_read_channel(client, action)
+            return await dispatch_read_channel(client, action)
         case WatchPeerStories():
             log_extra = {"stories_seen": await dispatch_watch_peer_stories(client, action)}
         case ReactToPost():
@@ -317,26 +318,6 @@ async def _dispatch_comment_on_post(client: TelegramClient, action: CommentOnPos
         return sent_message_id(message)
     message = await client.send_message(action.channel, action.text, comment_to=action.post_id)
     return sent_message_id(message)
-
-
-async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> _DispatchResult:
-    """Fetch recent posts and mark them read — the "reading a feed" emulation.
-
-    Returns the ids fetched so a following react on the same channel reuses them
-    instead of issuing a second identical ``get_messages``.
-    """
-    messages = await client.get_messages(action.channel, limit=action.message_limit)
-    # get_messages(limit=...) returns an iterable TotalList; the stub union also
-    # admits a single Message / None for the by-id form, which we never use here.
-    ids = [
-        int(getattr(message, "id", 0))
-        for message in messages  # ty: ignore[not-iterable]
-        if getattr(message, "id", None)
-    ]
-    max_id = max(ids, default=0)
-    if max_id:
-        await client.send_read_acknowledge(action.channel, max_id=max_id)
-    return _DispatchResult(recent_message_ids=ids)
 
 
 async def _dispatch_click_button(client: TelegramClient, action: ClickButton) -> None:

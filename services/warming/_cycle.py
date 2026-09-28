@@ -235,7 +235,7 @@ async def run_one_cycle(
         chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
         joined = await list_joined_channels(account_id)
         chosen = _without_cooling_down(chosen, joined, datetime.now(UTC))
-        recent_ids = await _run_channel_loop(
+        recent_ids, recent_media = await _run_channel_loop(
             data,
             tally,
             chosen,
@@ -262,6 +262,7 @@ async def run_one_cycle(
                 persona=data.activity_persona,
                 chosen=chosen,
                 recent_ids=recent_ids,
+                recent_media=recent_media,
                 tally=tally,
                 remaining_actions=data.remaining_actions,
                 joined=joined,

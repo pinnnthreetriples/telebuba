@@ -32,6 +32,7 @@ from services.warming.pacing import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import ActionResult
     from schemas.warming import WarmingChannel, WarmingCycleRequest, WarmingSettingsSecret
 
@@ -78,6 +79,8 @@ class _ReadReactOutcome:
     failures: int = 0
     # The post ids the read fetched — reused by the react here and by the extras step.
     recent_ids: list[int] = field(default_factory=list)
+    # Which of them carry a poll / video / voice — the extras step aims at those.
+    recent_media: dict[int, RecentMediaKind] = field(default_factory=dict)
 
 
 async def _read_and_react(  # noqa: PLR0913
@@ -110,6 +113,8 @@ async def _read_and_react(  # noqa: PLR0913
     if read_result.status == "ok":
         out.reads = 1
         out.recent_ids = [int(x) for x in read_result.recent_message_ids or []]
+        kinds = read_result.recent_media_kinds or {}
+        out.recent_media = {int(x): kind for x, kind in kinds.items()}
     elif read_result.status in _FAILURE_STATUSES:
         out.failures += 1
     elif read_result.status in _HALT_STATUSES:
@@ -229,7 +234,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     secret: WarmingSettingsSecret,
     reaction_probability: float,
     on_step: _OnStep | None = None,
-) -> dict[str, list[int]]:
+) -> tuple[dict[str, list[int]], dict[str, dict[int, RecentMediaKind]]]:
     """Walk the chosen channels, folding every outcome into the caller's ``tally``.
 
     The tally belongs to the caller (rather than being built here and merged on
@@ -237,12 +242,14 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     in flight: the loop reconciles its daily-budget reservation from it when a
     cycle is cancelled or raises mid-channel (#208).
 
-    Returns channel → the post ids its read fetched, for the extras step.
+    Returns channel → the post ids its read fetched, and channel → which of those
+    carry a poll / video / voice, both for the extras step.
     """
     warm = settings.warming
     account_id = data.account_id
     remaining_actions = data.remaining_actions
     recent_ids: dict[str, list[int]] = {}
+    recent_media: dict[str, dict[int, RecentMediaKind]] = {}
 
     def _can_attempt() -> bool:
         if remaining_actions is None:
@@ -272,6 +279,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             remaining_actions=remaining_actions,
         )
         recent_ids[channel.channel] = outcome.recent_ids
+        recent_media[channel.channel] = outcome.recent_media
         if outcome.reads:
             await _emit_step(on_step, "read")
         if outcome.reactions:
@@ -279,4 +287,4 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if _apply_read_result(tally, outcome, channel.channel):
             break
         await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
-    return recent_ids
+    return recent_ids, recent_media

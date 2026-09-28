@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from schemas.telegram_actions_warming import WarmConsumeMedia, WarmEmojiStatus
 from services.warming import _seams
-from services.warming._extras_ctx import MEDIA_MIN_BYTES, _recent_posts, _write
+from services.warming._extras_ctx import MEDIA_MIN_BYTES, _media_posts, _write
 from services.warming._steps import _human_pause
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ async def _consume(ctx: _ExtraContext, kind: Literal["video", "voice"]) -> Actio
     if ctx.media_bytes_left < MEDIA_MIN_BYTES:
         return None
     warm = settings.warming
-    channel, ids = _recent_posts(ctx)
+    channel, ids = _media_posts(ctx, kind)
     max_bytes = min(warm.extras_media_bytes_per_item, ctx.media_bytes_left)
     # Debit first (fail-closed): a cancelled download may already have moved the bytes.
     ctx.media_bytes_left -= max_bytes
