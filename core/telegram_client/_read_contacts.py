@@ -38,6 +38,19 @@ def _clean(value: object) -> str | None:
     return text or None
 
 
+def _deferred_client_ids(result: object, sent: dict[int, str], matched: set[int]) -> set[int]:
+    """Client ids Telegram refused to import for now (its ``retry_contacts``).
+
+    The import limit is not an error: the reply lists what it deferred instead.
+    Those phones were never checked, so they must not read as "not on Telegram".
+    """
+    return {
+        client_id
+        for client_id in getattr(result, "retry_contacts", None) or []
+        if isinstance(client_id, int) and client_id in sent and client_id not in matched
+    }
+
+
 async def dispatch_lookup_contacts_by_phone(
     client: TelegramClient,
     action: LookupContactsByPhone,
@@ -97,7 +110,11 @@ async def dispatch_lookup_contacts_by_phone(
                 last_name=_clean(getattr(user, "last_name", None)),
             )
         )
+    deferred = _deferred_client_ids(result, by_client_id, matched)
+    retry = [by_client_id[client_id] for client_id in sorted(deferred)]
     unresolved.extend(
-        phone for client_id, phone in by_client_id.items() if client_id not in matched
+        phone
+        for client_id, phone in by_client_id.items()
+        if client_id not in matched and client_id not in deferred
     )
-    return ContactLookupBatchResult(matches=matches, unresolved=unresolved)
+    return ContactLookupBatchResult(matches=matches, unresolved=unresolved, retry=retry)

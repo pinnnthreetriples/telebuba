@@ -32,11 +32,27 @@ function renderPanel(accountIds: string[]) {
   return appended;
 }
 
-function mockApi(options: { startError?: string; results?: ContactLookupOutcome[] } = {}) {
+function mockApi(
+  options: {
+    startError?: string;
+    results?: ContactLookupOutcome[];
+    active?: boolean;
+    running?: boolean;
+    sent?: unknown[];
+  } = {},
+) {
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
     const path = new URL(request.url).pathname;
+    if (path === '/api/v1/accounts/contact-lookup/active' && request.method === 'GET') {
+      return respond(
+        options.active
+          ? { job_id: 'lookup-1', status: 'running', total: 3, completed: 1, results: [] }
+          : null,
+      );
+    }
     if (path === '/api/v1/accounts/contact-lookup' && request.method === 'POST') {
+      options.sent?.push(await request.clone().json());
       if (options.startError) {
         return respond({ error: { code: 'bad_request', message: options.startError } }, 400);
       }
@@ -51,9 +67,9 @@ function mockApi(options: { startError?: string; results?: ContactLookupOutcome[
     if (path === '/api/v1/accounts/contact-lookup/lookup-1' && request.method === 'GET') {
       return respond({
         job_id: 'lookup-1',
-        status: 'completed',
+        status: options.running ? 'running' : 'completed',
         total: 3,
-        completed: 3,
+        completed: options.running ? 1 : 3,
         results: options.results ?? [],
       });
     }
@@ -109,4 +125,78 @@ test('surfaces an inline error when a run is already active', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
 
   expect(await screen.findByText('Поиск уже выполняется.')).toBeInTheDocument();
+});
+
+test('splits comma- and semicolon-separated numbers instead of fusing them', async () => {
+  const sent: unknown[] = [];
+  mockApi({ sent });
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(
+    screen.getByLabelText('Номера телефонов'),
+    '+15551110000, +15552220000;+15559990000',
+  );
+  expect(screen.getByText('3/1000')).toBeInTheDocument();
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/0 найдено/)).toBeInTheDocument();
+  expect(sent).toEqual([
+    expect.objectContaining({ phones: ['+15551110000', '+15552220000', '+15559990000'] }),
+  ]);
+});
+
+test('picks a still-running lookup back up after the modal was reopened', async () => {
+  mockApi({
+    active: true,
+    results: [{ phone: '+15551110000', account_id: 'a1', status: 'found', username: 'alice' }],
+  });
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+
+  expect(await screen.findByText(/1 найден/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Найти' })).not.toBeInTheDocument();
+});
+
+test('warns that id-only users are reachable only from the finding account', async () => {
+  mockApi({
+    results: [
+      { phone: '+15551110000', account_id: 'a1', status: 'found', user_id: 111, username: 'alice' },
+      { phone: '+15552220000', account_id: 'a2', status: 'found', user_id: 222, username: null },
+    ],
+  });
+  renderPanel(['a1', 'a2']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15551110000');
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/1 найденный пользователь без @username/)).toBeInTheDocument();
+});
+
+test('no id-only warning when the finding account is the only one selected', async () => {
+  mockApi({
+    results: [
+      { phone: '+15552220000', account_id: 'a1', status: 'found', user_id: 222, username: null },
+    ],
+  });
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(screen.getByLabelText('Номера телефонов'), '+15552220000');
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+  expect(await screen.findByText(/1 найден/)).toBeInTheDocument();
+  expect(screen.queryByText(/без @username/)).not.toBeInTheDocument();
+});
+
+test('a running search offers Stop, not a close that would orphan it', async () => {
+  mockApi({ active: true, running: true });
+  renderPanel(['a1']);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+
+  expect(await screen.findByRole('button', { name: 'Остановить' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument();
 });

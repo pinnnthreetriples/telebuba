@@ -37,10 +37,12 @@ class _FakeClient:
         imported: list[SimpleNamespace] | None = None,
         users: list[SimpleNamespace] | None = None,
         error: BaseException | None = None,
+        retry_contacts: list[int] | None = None,
     ) -> None:
         self.imported = imported or []
         self.users = users or []
         self.error = error
+        self.retry_contacts = retry_contacts or []
         self.requests: list[object] = []
 
     async def connect(self) -> None:
@@ -50,7 +52,9 @@ class _FakeClient:
         self.requests.append(request)
         if self.error is not None:
             raise self.error
-        return SimpleNamespace(imported=self.imported, users=self.users, retry_contacts=[])
+        return SimpleNamespace(
+            imported=self.imported, users=self.users, retry_contacts=self.retry_contacts
+        )
 
 
 def _sent_phones(client: _FakeClient) -> list[str]:
@@ -144,3 +148,27 @@ async def test_flood_wait_rides_the_read_ladder(monkeypatch: pytest.MonkeyPatch)
 
     assert excinfo.value.kind == "flood_wait"
     assert excinfo.value.seconds == 120
+
+
+@pytest.mark.asyncio
+async def test_retry_contacts_are_rate_limited_not_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Telegram answers an import limit with retry_contacts (client ids to retry later)
+    # instead of an error; those phones were never checked, so they are not "not found".
+    client = _FakeClient(
+        imported=[_imported(client_id=0, user_id=111)],
+        users=[_user(111)],
+        retry_contacts=[2],
+    )
+    _patch_client(monkeypatch, client)
+
+    result = await execute_read(
+        "acc-1",
+        LookupContactsByPhone(phones=["+15550000100", "+15550000200", "+15550000300"]),
+    )
+
+    assert isinstance(result, ContactLookupBatchResult)
+    assert [m.phone for m in result.matches] == ["+15550000100"]
+    assert result.retry == ["+15550000300"]
+    assert result.unresolved == ["+15550000200"]
