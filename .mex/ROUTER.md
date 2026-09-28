@@ -22,7 +22,7 @@ edges:
     condition: setup, commands, CI, hooks, Windows checkout, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-08-27
+last_updated: 2026-09-28
 ---
 
 # Telebuba Router

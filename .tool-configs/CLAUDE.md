@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Small always-loaded Telebuba anchor: hard rules, commands, and memory routing.
-last_updated: 2026-08-27
+last_updated: 2026-09-28
 ---
 
 # Telebuba

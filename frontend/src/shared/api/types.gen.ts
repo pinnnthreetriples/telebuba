@@ -679,6 +679,16 @@ export type ActionResult = {
    */
   recent_message_ids?: Array<string> | null;
   /**
+   * Recent Media Kinds
+   */
+  recent_media_kinds?: {
+    [key: string]: 'poll' | 'video' | 'voice';
+  } | null;
+  /**
+   * Warm Skip
+   */
+  warm_skip?: string | null;
+  /**
    * Flood Wait Seconds
    */
   flood_wait_seconds?: number | null;

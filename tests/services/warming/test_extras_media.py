@@ -15,12 +15,19 @@ from services.warming._extras import EXTRAS, _is_eligible, run_extras_step
 from services.warming._extras_ctx import MEDIA_MIN_BYTES
 from services.warming._steps import _ChannelTally
 from tests.services.warming._support import _Recorder, _seed_ready_account, _set_settings
-from tests.services.warming.test_extras_step import _PREMIUM, _RECENT_IDS, _ctx, _extras_range
-from tests.services.warming.test_extras_writes import _MIXED_IDS, _one
+from tests.services.warming.test_extras_step import (
+    _PREMIUM,
+    _RECENT_IDS,
+    _RECENT_MEDIA,
+    _ctx,
+    _extras_range,
+)
+from tests.services.warming.test_extras_writes import _one
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import ActionResult, TelegramAction
     from services.warming._extras_ctx import _ExtraContext
 
@@ -34,12 +41,13 @@ _PER_ITEM = 3_000_000
 def _media_ctx(
     bytes_left: int,
     *,
-    recent_ids: dict[str, list[int]] | None = None,
+    recent_media: dict[str, dict[int, RecentMediaKind]] | None = None,
     tally: _ChannelTally | None = None,
 ) -> _ExtraContext:
     """A Premium account with posts read and ``bytes_left`` of media budget."""
     return _ctx(
-        recent_ids=_RECENT_IDS if recent_ids is None else recent_ids,
+        recent_ids=_RECENT_IDS,
+        recent_media=_RECENT_MEDIA if recent_media is None else recent_media,
         account=_PREMIUM,
         media_bytes_left=bytes_left,
         tally=tally,
@@ -237,19 +245,25 @@ async def test_an_ok_row_that_played_nothing_does_not_pause(
     ("runner", "kind"), [(_extras_media.video, "video"), (_extras_media.voice, "voice")]
 )
 @pytest.mark.asyncio
-async def test_media_consumes_only_posts_the_account_read(
-    monkeypatch: pytest.MonkeyPatch, runner: _Runner, kind: str
+async def test_media_consumes_only_read_posts_of_its_own_kind(
+    monkeypatch: pytest.MonkeyPatch, runner: _Runner, kind: RecentMediaKind
 ) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
+    other: RecentMediaKind = "voice" if kind == "video" else "video"
+    media: dict[str, dict[int, RecentMediaKind]] = {
+        "polls": {1: "poll", 2: other},
+        "mine": {3: kind, 4: "poll", **dict.fromkeys(range(10, 16), kind)},
+    }
 
-    await runner(_media_ctx(10**7, recent_ids=_MIXED_IDS))
+    await runner(_media_ctx(10**7, recent_media=media))
 
     action = _one(recorder)
     assert isinstance(action, WarmConsumeMedia)
     assert action.kind == kind
-    assert action.channel == "full"
-    assert action.message_ids == _MIXED_IDS["full"][:5]
+    assert action.channel == "mine"
+    # Only posts core found to carry this kind, capped at the schema's five.
+    assert action.message_ids == [3, 10, 11, 12, 13]
 
 
 @pytest.mark.parametrize(
@@ -301,7 +315,8 @@ async def test_every_media_spec_is_a_write_that_books_before_dispatch(
 ) -> None:
     assert {s.key for s in _MEDIA_SPECS} == {"video", "voice", "emoji_status"}
     assert all(s.kind == "write" for s in _MEDIA_SPECS)
-    assert _BY_KEY["video"].needs == _BY_KEY["voice"].needs == {"recent_ids", "media_bytes"}
+    assert _BY_KEY["video"].needs == {"video", "media_bytes"}
+    assert _BY_KEY["voice"].needs == {"voice", "media_bytes"}
     assert _BY_KEY["emoji_status"].needs == {"premium"}
     monkeypatch.setattr(_extras, "EXTRAS", _MEDIA_SPECS)
     _extras_range(monkeypatch, 20, 20)
@@ -346,3 +361,32 @@ async def test_cycle_hands_the_account_row_and_the_configured_byte_budget_to_ext
     assert ctx.account is not None
     assert (ctx.account.account_id, ctx.account.premium) == ("acc-1", None)
     assert ctx.media_bytes_left == 4_321_000
+
+
+@pytest.mark.asyncio
+async def test_cycle_hands_the_media_kinds_the_read_found_to_extras(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+
+    async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
+        result = await recorder.execute(account_id, action)
+        if action.action_type == "read_channel":
+            return result.model_copy(update={"recent_media_kinds": {"102": "poll"}})
+        return result
+
+    monkeypatch.setattr(_seams, "execute", _execute)
+    await _seed_ready_account()
+    await _set_settings(chat=False, reactions=False, key="")
+    contexts: list[_ExtraContext] = []
+
+    async def _spy(ctx: _ExtraContext) -> bool:
+        contexts.append(ctx)
+        return False
+
+    monkeypatch.setattr(_cycle, "run_extras_step", _spy)
+
+    await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    (ctx,) = contexts
+    assert list(ctx.recent_media.values()) == [{102: "poll"}]

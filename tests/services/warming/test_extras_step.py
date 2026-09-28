@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import random
 from typing import TYPE_CHECKING, cast
 
@@ -38,13 +39,15 @@ from tests.services.warming._support import _Recorder, _seed_ready_account, _set
 
 if TYPE_CHECKING:
     from schemas._warming_extras import ExtraToggles
+    from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import TelegramAction
 
 _ALL_ON = cast("ExtraToggles", dict.fromkeys(EXTRA_TOGGLE_DEFAULTS, True))
 _KEYS = [spec.key for spec in EXTRAS]
 _ALL = len(EXTRAS)  # a per-cycle draw count that cannot cap the registry
-# The specs with ``recent_ids`` / ``joined`` / ``premium`` among their ``needs``.
-_POST_BOUND = {"search_messages", "link_preview", "forward", "polls", "video", "voice"}
+# The specs with ``recent_ids`` / a media kind / ``joined`` / ``premium`` among their ``needs``.
+_POST_BOUND = {"search_messages", "link_preview", "forward"}
+_MEDIA_BOUND = {"polls", "video", "voice"}
 _CHAT_BOUND = {"leave", "archive", "mute"}
 _PREMIUM_BOUND = {"emoji_status"}
 # Specs that dispatch twice per extra (a second RPC after a pause).
@@ -54,6 +57,11 @@ _CHANNEL = WarmingChannel(channel="c1", created_at="2026-01-01T00:00:00+00:00")
 # (a leave candidate), a Premium account and a byte budget for two media draws;
 # together (``_full_ctx``) they make every registered spec eligible.
 _RECENT_IDS = {"c1": [101, 102]}
+# What core found among the read posts: one of each kind the media-bound specs need.
+_RECENT_MEDIA: dict[str, dict[int, RecentMediaKind]] = {
+    "c1": {101: "poll", 102: "video"},
+    "c2": {201: "voice"},
+}
 _JOINED = [JoinedChannel(channel="old", created_at="2026-01-01T00:00:00+00:00")]
 _PREMIUM = AccountRead(
     account_id="acc-1", status="alive", premium=True, created_at="now", updated_at="now"
@@ -98,6 +106,7 @@ def _ctx(  # noqa: PLR0913 - one keyword per context field
     *,
     chosen: list[WarmingChannel] | None = None,
     recent_ids: dict[str, list[int]] | None = None,
+    recent_media: dict[str, dict[int, RecentMediaKind]] | None = None,
     remaining: int | None = None,
     tally: _ChannelTally | None = None,
     joined: list[JoinedChannel] | None = None,
@@ -110,6 +119,7 @@ def _ctx(  # noqa: PLR0913 - one keyword per context field
         persona="normal",
         chosen=[] if chosen is None else chosen,
         recent_ids={} if recent_ids is None else recent_ids,
+        recent_media={} if recent_media is None else recent_media,
         tally=tally or _ChannelTally(),
         remaining_actions=remaining,
         joined=[] if joined is None else joined,
@@ -124,6 +134,7 @@ def _full_ctx(
     """A context in which every registered spec is eligible."""
     return _ctx(
         recent_ids=_RECENT_IDS if recent_ids is None else recent_ids,
+        recent_media=_RECENT_MEDIA,
         joined=_JOINED,
         account=_PREMIUM,
         media_bytes_left=_MEDIA_BYTES,
@@ -211,7 +222,33 @@ def test_is_eligible_checks_only_the_needs_a_spec_names() -> None:
     assert _is_eligible(bound, _ctx()) is False
     assert _is_eligible(bound, _ctx(recent_ids=_RECENT_IDS)) is True
     assert _is_eligible(free, _ctx()) is True
-    assert {s.key for s in EXTRAS if s.needs} == _POST_BOUND | _CHAT_BOUND | _PREMIUM_BOUND
+    assert {s.key for s in EXTRAS if s.needs} == (
+        _POST_BOUND | _MEDIA_BOUND | _CHAT_BOUND | _PREMIUM_BOUND
+    )
+
+
+@pytest.mark.parametrize(
+    ("key", "kind"), [("polls", "poll"), ("video", "video"), ("voice", "voice")]
+)
+def test_media_bound_extras_need_a_read_post_of_their_own_kind(key: str, kind: str) -> None:
+    spec = next(s for s in EXTRAS if s.key == key)
+    others = {"c1": {i: k for i, k in enumerate(("poll", "video", "voice")) if k != kind}}
+    # Posts were read, but none of them is something this extra can act on.
+    assert _is_eligible(spec, _full_ctx(recent_ids=_RECENT_IDS)) is True
+    assert _is_eligible(spec, _ctx(recent_ids=_RECENT_IDS, media_bytes_left=_MEDIA_BYTES)) is False
+    ctx = _ctx(recent_media=cast("dict[str, dict[int, RecentMediaKind]]", others))
+    assert _is_eligible(spec, dataclasses.replace(ctx, media_bytes_left=_MEDIA_BYTES)) is False
+    mine = cast("dict[str, dict[int, RecentMediaKind]]", {"c9": {7: kind}})
+    assert _is_eligible(spec, _ctx(recent_media=mine, media_bytes_left=_MEDIA_BYTES)) is True
+
+
+def test_a_spent_budget_draws_only_reads(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A write the budget would skip must not take one of the persona's few draws.
+    _extras_range(monkeypatch, 1, 1)
+    ctx = dataclasses.replace(_full_ctx(), remaining_actions=0)
+    for seed in range(20):
+        (picked,) = _pick_extras(ctx, _ALL_ON, random.Random(seed))  # noqa: S311
+        assert picked.kind == "read"
 
 
 # --- budget tiers ------------------------------------------------------------
@@ -327,6 +364,30 @@ async def test_a_plain_failure_counts_and_the_rest_still_run(
     # Only the writes booked budget: one each, plus the draft clear.
     assert tally.attempts == _WRITES + 1
     assert landed is True
+
+
+@pytest.mark.asyncio
+async def test_an_extra_that_found_nothing_to_do_is_not_counted_as_landed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _extras_range(monkeypatch, 1, 1)
+    monkeypatch.setattr(_extras, "EXTRAS", (next(s for s in EXTRAS if s.key == "polls"),))
+    recorder = _Recorder()
+
+    async def _execute(account_id: str, action: TelegramAction) -> ActionResult:
+        result = await recorder.execute(account_id, action)
+        return result.model_copy(update={"warm_skip": "no_poll"})
+
+    monkeypatch.setattr(_seams, "execute", _execute)
+    tally = _ChannelTally()
+
+    landed = await run_extras_step(_full_ctx(tally=tally))
+
+    # The vote was dispatched (and stays booked), but nothing happened: no rail step.
+    assert recorder.types() == ["warm_vote_in_poll"]
+    assert tally.attempts == 1
+    assert tally.extras == 0
+    assert landed is False
 
 
 def test_fold_extra_ignores_a_status_outside_every_family() -> None:

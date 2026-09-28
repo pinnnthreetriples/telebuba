@@ -27,10 +27,13 @@ if TYPE_CHECKING:
     from services.warming._extras_ctx import _ExtraContext, _Need
     from services.warming._steps import _ChannelTally
 
+_MEDIA_KINDS = ("poll", "video", "voice")
 # One spec per ``ExtraToggles`` key (the contract test pins the two sets equal).
 _RECENT: frozenset[_Need] = frozenset({"recent_ids"})
 _JOINED: frozenset[_Need] = frozenset({"joined"})
-_MEDIA: frozenset[_Need] = frozenset({"recent_ids", "media_bytes"})
+_POLL: frozenset[_Need] = frozenset({"poll"})
+_VIDEO: frozenset[_Need] = frozenset({"video", "media_bytes"})
+_VOICE: frozenset[_Need] = frozenset({"voice", "media_bytes"})
 _PREMIUM: frozenset[_Need] = frozenset({"premium"})
 EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("dialogs", "read", _extras_reads.dialogs),
@@ -47,12 +50,12 @@ EXTRAS: tuple[_ExtraSpec, ...] = (
     _ExtraSpec("scheduled", "write", _extras_writes.scheduled),
     _ExtraSpec("drafts", "write", _extras_writes.drafts),
     _ExtraSpec("forward", "write", _extras_writes.forward, _RECENT),
-    _ExtraSpec("polls", "write", _extras_chats.polls, _RECENT),
+    _ExtraSpec("polls", "write", _extras_chats.polls, _POLL),
     _ExtraSpec("leave", "write", _extras_chats.leave, _JOINED),
     _ExtraSpec("archive", "write", _extras_chats.archive, _JOINED),
     _ExtraSpec("mute", "write", _extras_chats.mute, _JOINED),
-    _ExtraSpec("video", "write", _extras_media.video, _MEDIA),
-    _ExtraSpec("voice", "write", _extras_media.voice, _MEDIA),
+    _ExtraSpec("video", "write", _extras_media.video, _VIDEO),
+    _ExtraSpec("voice", "write", _extras_media.voice, _VOICE),
     _ExtraSpec("emoji_status", "write", _extras_media.emoji_status, _PREMIUM),
 )
 
@@ -65,6 +68,8 @@ def _is_eligible(spec: _ExtraSpec, ctx: _ExtraContext) -> bool:
         # ``None`` = no session check answered yet: never probe Premium by writing.
         "premium": ctx.account is not None and ctx.account.premium is True,
         "media_bytes": ctx.media_bytes_left >= MEDIA_MIN_BYTES,
+        # A read post core recognised as something this extra can act on.
+        **{k: any(k in m.values() for m in ctx.recent_media.values()) for k in _MEDIA_KINDS},
     }
     return all(facts[need] for need in spec.needs)
 
@@ -72,7 +77,14 @@ def _is_eligible(spec: _ExtraSpec, ctx: _ExtraContext) -> bool:
 def _pick_extras(
     ctx: _ExtraContext, toggles: Mapping[str, object], rng: Random
 ) -> list[_ExtraSpec]:
-    eligible = [s for s in EXTRAS if toggles.get(s.key, False) and _is_eligible(s, ctx)]
+    # A write the spent daily budget would skip must not take a draw from a free read.
+    eligible = [
+        s
+        for s in EXTRAS
+        if toggles.get(s.key, False)
+        and (s.kind == "read" or ctx.can_attempt())
+        and _is_eligible(s, ctx)
+    ]
     lo, hi = settings.warming.persona_extras[ctx.persona]
     return rng.sample(eligible, min(rng.randint(lo, hi), len(eligible)))
 
@@ -80,7 +92,9 @@ def _pick_extras(
 def _fold_extra(tally: _ChannelTally, result: ActionResult) -> bool:
     """Fold one extra's outcome into the tally. True = stop this cycle's extras."""
     if result.status == "ok":
-        tally.extras += 1
+        # Ran but found nothing to act on (``warm_skip``): not an action performed.
+        if result.warm_skip is None:
+            tally.extras += 1
         return False
     if result.status == "peer_flood":
         tally.peer_flooded = True

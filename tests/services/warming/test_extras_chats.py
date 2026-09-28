@@ -32,6 +32,7 @@ from tests.services.warming.test_extras_writes import _one
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from schemas.telegram_action_results import RecentMediaKind
     from schemas.telegram_actions import ActionResult, TelegramAction
     from services.warming._extras_ctx import _ExtraContext
 
@@ -205,15 +206,19 @@ async def test_polls_votes_only_among_posts_the_account_read(
 ) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    ids = {"full": list(range(1, 9)), "empty": []}
+    media: dict[str, dict[int, RecentMediaKind]] = {
+        "videos": {1: "video", 2: "voice"},
+        "polls": {3: "poll", 4: "video", 5: "poll"},
+    }
     tally = _ChannelTally()
 
-    await _extras_chats.polls(_ctx(recent_ids=ids, tally=tally))
+    await _extras_chats.polls(_ctx(recent_media=media, tally=tally))
 
     action = _one(recorder)
     assert isinstance(action, WarmVoteInPoll)
-    assert action.channel == "full"
-    assert action.message_ids == ids["full"][:5]
+    # The channel whose read found a poll, and only its poll posts.
+    assert action.channel == "polls"
+    assert action.message_ids == [3, 5]
     assert 0 <= action.option_index < _extras_chats._POLL_OPTIONS_MAX
     assert tally.attempts == 1
 
@@ -248,7 +253,11 @@ async def test_every_chat_spec_is_a_write_that_books_before_dispatch(
         return await _Recorder().execute(account_id, action)
 
     monkeypatch.setattr(_seams, "execute", _execute)
-    ctx = _ctx(tally=tally, recent_ids={"c1": [1]}, joined=[_joined("old", age=timedelta(days=30))])
+    ctx = _ctx(
+        tally=tally,
+        recent_media={"c1": {1: "poll"}},
+        joined=[_joined("old", age=timedelta(days=30))],
+    )
 
     landed = await run_extras_step(ctx)
 

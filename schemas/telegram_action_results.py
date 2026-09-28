@@ -10,6 +10,9 @@ from schemas.challenge import BotChallengeMessage  # noqa: TC001
 from schemas.telegram_actions_chat import ChatKind, ChatMediaKind  # noqa: TC001
 from schemas.telegram_actions_comments import PostMediaKind  # noqa: TC001
 
+# What a read channel post carries that a warming extra can act on.
+RecentMediaKind = Literal["poll", "video", "voice"]
+
 
 class LinkedDiscussionGroupResult(BaseModel):
     """Gateway output for ``GetLinkedDiscussionGroup``.
@@ -160,6 +163,13 @@ class ActionResult(BaseModel):
     # re-fetching. int64 ids cross the JSON boundary as decimal strings, same
     # rationale as ``channel_id``.
     recent_message_ids: list[str] | None = None
+    # The subset of those posts a warming extra can act on (an open anonymous poll, a
+    # video, a voice note), keyed by the same decimal-string id — so the extras step
+    # aims a vote or a playback at a post that has one instead of guessing.
+    recent_media_kinds: dict[str, RecentMediaKind] | None = None
+    # Set when the action ran but found nothing to do (``no_poll``, ``post_gone``...):
+    # status stays "ok", but the caller must not count it as an action performed.
+    warm_skip: str | None = None
     flood_wait_seconds: int | None = None
     # Privacy keys that DID apply before a ``set_privacy_settings`` was refused
     # (``account.setPrivacy`` is one call per key with no rollback). ``None`` for

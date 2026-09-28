@@ -2496,6 +2496,7 @@
       },
       "state": {
         "always": "always",
+        "withChat": "with chat",
         "external": "in Accounts"
       },
       "gate": {
@@ -2600,11 +2601,11 @@
           "example": "For example: the article card under a link in a channel."
         },
         "interAccountChat": {
-          "text": "Your accounts have short chats with each other.",
+          "text": "Your accounts have short chats with each other. Needs a Gemini key in Settings.",
           "example": "For example: two accounts exchange a couple of messages."
         },
         "typing": {
-          "text": "Before a message the account shows “typing…”.",
+          "text": "Before a message in an inter-account chat the account shows “typing…”. Works only while that chat is on.",
           "example": "For example: the other side sees “typing…” for a few seconds."
         },
         "forward": {

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-07
+last_updated: 2026-09-28
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
@@ -18,7 +18,7 @@ grounds_to:
 - Persona controls cadence while phase/trust/readiness remain safety ceilings. Timing and caps come from config; persisted `next_run_at` survives restart, while an explicit stop/start may re-roll startup timing.
 - Daily action budget is reserved before a cycle and reconciled afterward. The reservation is guarded by a per-booking token, not only generation or booked value, so a cancelled old cycle cannot release a newer booking. Each Telegram attempt is booked immediately before dispatch; cancellation or lease loss after dispatch is an unknown outcome and remains spent. Hard process death remains fail-closed because actual spend is unknown.
 - Cycle work spends one shared budget across online/join/read/react/story/DM actions. When tuning caps or cadence, verify later steps remain reachable rather than reasoning from a single action in isolation.
-- Extras (the tuning card's side actions) are the last cycle step, drawn per persona from a registry of toggled-on eligible specs. Read extras never book the daily budget; write extras book it immediately before dispatch like every other step, and are skipped (never queued) once it is spent.
+- Extras (the tuning card's side actions) are the last cycle step, drawn per persona from a registry of toggled-on eligible specs. Read extras never book the daily budget; write extras book it immediately before dispatch like every other step, and are skipped (never queued, never drawn) once it is spent. An extra that ran but found nothing to act on (`warm_skip`) stays booked yet is not a landed extra. Poll/video/voice extras aim only at posts the channel read classified as such.
 - Self-scoped extras (notes, forwards, drafts, reminders) carry no destination in their action models; `InputPeerSelf` is hardcoded in core so no caller can aim them at another account.
 - Media extras debit a per-cycle byte budget before dispatch, like attempts; Premium-only extras never probe by writing — an unknown Premium flag means "do not try".
 - A channel warming left stays out of the cycle (no read, no re-join) for the re-join cooldown; `is_channel_joined` means joined-and-not-left, and a re-join restarts the joined-age clock the leave policy reads.

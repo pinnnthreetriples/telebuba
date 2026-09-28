@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-05
+last_updated: 2026-09-28
 edges:
   - target: context/architecture.md
     condition: layer boundaries, gateways or system design
