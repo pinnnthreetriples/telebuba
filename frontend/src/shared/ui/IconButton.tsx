@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react';
 
 import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { cn } from '@/shared/lib/cn';
@@ -69,6 +69,7 @@ export function IconButton({
   tone = 'neutral',
   className = '',
   children,
+  ref,
   ...rest
 }: {
   size?: keyof typeof SIZE;
@@ -80,9 +81,14 @@ export function IconButton({
   // the content is an icon or a bare glyph, so without this a screen reader
   // announces an unnamed button and the control is unreachable by name.
   'aria-label': string;
+  // `ref` rides along as an ordinary prop (React 19), the way `Input` takes it,
+  // so a caller can move focus onto the button — e.g. Escape returning focus
+  // from a search field to the glyph that opened it.
+  ref?: Ref<HTMLButtonElement>;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className' | 'children'>) {
   return (
     <button
+      ref={ref}
       type="button"
       {...rest}
       className={cn(

@@ -13,7 +13,7 @@ import {
   openAccountWebMutation,
 } from '@/entities/account';
 import { meQueryOptions } from '@/shared/auth';
-import { Button, Card, toastError } from '@/shared/ui';
+import { Button, Card, Icon, IconButton, Spinner, toastError } from '@/shared/ui';
 
 import type { AccountRead } from '@/shared/api';
 import { useTransientFeedback } from '@/shared/lib';
@@ -39,6 +39,9 @@ export function AccountsPage() {
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
   // A Set, not one id: check and delete are per row and both can be in flight at
   // once. With a single string the second click moved the spinner off the first
@@ -293,52 +296,89 @@ export function AccountsPage() {
       <div className="mb-xl flex flex-wrap items-center justify-between gap-lg">
         <h1 className="m-0 type-page-title">{t('accounts.title')}</h1>
         <div className="flex w-full flex-wrap items-center gap-sm sm:w-auto">
-          {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
-          <div className="relative flex min-w-col flex-1 items-center sm:flex-none">
-            <svg
-              className="pointer-events-none absolute left-lg text-content-subtle"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+          {/* Collapsible search field */}
+          <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
+            <div
+              className={`tb-time overflow-hidden rounded-full border border-line bg-surface-card transition-all duration-150 ${
+                searchOpen || search !== '' ? 'w-full sm:w-tip' : 'w-0'
+              }`}
             >
-              <circle cx="11" cy="11" r="7" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
-            <input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setCursorStack([null]);
+              <input
+                ref={searchInputRef}
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCursorStack([null]);
+                }}
+                onBlur={() => {
+                  if (search === '') setSearchOpen(false);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setSearch('');
+                    setCursorStack([null]);
+                    setSearchOpen(false);
+                    // Return focus to the lupa that opened the field, rather than
+                    // dropping it on the body — focusing the button also blurs the
+                    // input, so no separate blur() call is needed.
+                    searchButtonRef.current?.focus();
+                  }
+                }}
+                placeholder={t('accounts.searchPlaceholder')}
+                className="h-control w-full border-none bg-surface-card px-md py-0 text-body outline-none"
+              />
+            </div>
+            <IconButton
+              ref={searchButtonRef}
+              size="md"
+              tone="neutral"
+              aria-label={t('accounts.searchPlaceholder')}
+              title={t('accounts.searchPlaceholder')}
+              onClick={() => {
+                setSearchOpen(true);
+                window.setTimeout(() => searchInputRef.current?.focus(), 0);
               }}
-              placeholder={t('accounts.searchPlaceholder')}
-              className="tb-time h-control w-full rounded-full border border-line bg-surface-card pl-[36px] pr-md text-body outline-none sm:w-tip"
-            />
+            >
+              <Icon name="search" size={16} />
+            </IconButton>
           </div>
-          <Button
+
+          {/* Bulk messages button */}
+          <IconButton
             size="md"
-            loading={
+            tone="neutral"
+            disabled={
               me.isPending ||
               (me.isSuccess && (latestMessageJob.isFetching || messageJobOwnerId !== me.data.id)) ||
               openingMessages
             }
+            aria-label={t('accounts.messages.open')}
+            title={t('accounts.messages.open')}
             onClick={() => {
               void openMessages();
             }}
           >
-            {t('accounts.messages.open')}
-          </Button>
-          <Button
-            variant="primary"
+            {me.isPending ||
+            (me.isSuccess && (latestMessageJob.isFetching || messageJobOwnerId !== me.data.id)) ||
+            openingMessages ? (
+              <Spinner tone="default" />
+            ) : (
+              <Icon name="send" size={16} />
+            )}
+          </IconButton>
+
+          {/* Add account button */}
+          <IconButton
             size="md"
+            tone="primary"
+            aria-label={t('accounts.actions.add')}
+            title={t('accounts.actions.add')}
             onClick={() => {
               setAdding(true);
             }}
           >
-            + {t('accounts.actions.add')}
-          </Button>
+            <Icon name="plus" size={16} />
+          </IconButton>
         </div>
       </div>
 
