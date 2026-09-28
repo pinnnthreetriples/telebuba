@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-03
+last_updated: 2026-09-28
 edges:
   - target: context/runtime-neurocomment.md
     condition: what the campaign does with a discovered channel
