@@ -18,7 +18,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
 from api.errors import error_responses
-from schemas.neuroshilling import NeuroshillingRunStatus
+from schemas.neuroshilling import NeuroshillingRunStatus, NeuroshillingVersionRequest
 from services import neuroshilling as ns_service
 
 run_router = APIRouter()
@@ -32,7 +32,9 @@ _NOT_FOUND = "campaign not found"
     operation_id="startNeuroshillingCampaign",
     responses=error_responses(404, 409),
 )
-async def start_campaign(campaign_id: str) -> NeuroshillingRunStatus:
+async def start_campaign(
+    campaign_id: str, body: NeuroshillingVersionRequest
+) -> NeuroshillingRunStatus:
     """Begin playing the approved dialogue into the campaign's targets.
 
     409 covers every reason a run cannot begin: the scenario is still a draft, the
@@ -42,7 +44,9 @@ async def start_campaign(campaign_id: str) -> NeuroshillingRunStatus:
     because the generated client types the field.
     """
     try:
-        status = await ns_service.start_campaign(campaign_id)
+        status = await ns_service.start_campaign(
+            campaign_id, expected_updated_at=body.expected_updated_at
+        )
     except ns_service.NeuroshillingConflictError as exc:
         raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=exc.code) from exc
     if status is None:

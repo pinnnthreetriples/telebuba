@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-08-23
+last_updated: 2026-09-27
 edges:
   - target: context/runtime-discovery.md
     condition: where the campaign's channels came from
@@ -32,7 +32,7 @@ grounds_to:
 - A probe is evidence only after authoritative resolution. Failed, empty or undated inactivity reads cannot retire a channel; only a dated old post can. Bound probes per tick/channel, and distinguish channel-wide rights from one account's access.
 - Log deletion is prefix-scoped and writes its audit event after deletion under a non-prefix code. Append-only comments/challenges/joins follow retention without cutting rolling windows or live cache/in-flight state.
 - Posts enter a bounded SQLite inbox before dispatch; `(channel, post_id)` deduplicates live/history overlap. Typed stages separate retryable pre-send faults, terminal decisions and ambiguous dispatch. Startup requeues only proven pre-send work; unknown delivery stays terminal.
-- Gap recovery installs live delivery first, then resumes a durable cursor through paced TTL-bounded pages. Fetch failure checkpoints retry, and a periodic pass heals reconnect gaps. Never use Telethon `catch_up()`.
+- Gap recovery installs live delivery first, then resumes a durable cursor through paced TTL-bounded pages. Fetch failure and a full inbox preserve the cursor for retry; a periodic pass heals reconnect gaps. Never use Telethon `catch_up()`.
 - Lifecycle locks only reserve/commit ownership; slow Telegram I/O stays outside. Generations fence runtime, reconcile, subscription, join, onboarding, sweep and backfill around await/RPC boundaries. Stop invalidates hung work; cancellation-resistant tasks remain owned until terminal.
 
 Discovery has its own route in `runtime-discovery.md`.

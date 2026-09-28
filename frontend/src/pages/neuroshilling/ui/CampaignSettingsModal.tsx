@@ -14,6 +14,8 @@ export function CampaignSettingsModal({
   name,
   dirty,
   busy,
+  saving,
+  conflict,
   onSave,
   onClose,
   children,
@@ -24,13 +26,21 @@ export function CampaignSettingsModal({
   // всё, что тронуто».
   dirty: boolean;
   busy: boolean;
+  saving: boolean;
+  conflict: boolean;
   onSave: () => void;
   onClose: () => void;
   children: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} size="table" label={t('neuroshilling.settings.title', { name })}>
+    <Modal
+      onClose={() => {
+        if (!saving) onClose();
+      }}
+      size="table"
+      label={t('neuroshilling.settings.title', { name })}
+    >
       <div className="flex items-center gap-md border-b border-line-row px-2xl pb-lg pt-xl">
         <div className="min-w-0">
           <div className="truncate type-dialog-title">{name}</div>
@@ -47,13 +57,29 @@ export function CampaignSettingsModal({
       {/* Своей прокрутки нет: у варианта `center` её держит оверлей (`overflow-y-auto`
           на подложке), а карточка растёт по содержимому. Второй скролл-контейнер внутри
           дал бы вложенную цепочку прокрутки — ровно то, от чего оверлей и уводит. */}
-      <div className="flex flex-col gap-2xl px-2xl py-xl">{children}</div>
+      {conflict ? (
+        <p role="alert" className="mx-2xl mt-lg type-prose text-danger">
+          {t('neuroshilling.settings.conflict')}
+        </p>
+      ) : null}
+      <fieldset
+        disabled={saving}
+        className="m-0 flex min-w-0 flex-col gap-2xl border-0 px-2xl py-xl"
+      >
+        {children}
+      </fieldset>
 
       <div className="flex flex-wrap items-center justify-end gap-sm border-t border-line-row px-2xl py-lg">
-        <Button size="sm" onClick={onClose}>
+        <Button size="sm" onClick={onClose} disabled={saving}>
           {t('neuroshilling.settings.cancel')}
         </Button>
-        <Button variant="primary" size="sm" disabled={busy || !dirty} onClick={onSave}>
+        <Button
+          variant="primary"
+          size="sm"
+          disabled={busy || !dirty || conflict}
+          loading={saving}
+          onClick={onSave}
+        >
           {t('neuroshilling.settings.save')}
         </Button>
       </div>

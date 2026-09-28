@@ -173,6 +173,40 @@ async def test_assign_over_capacity_is_409(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
+async def test_assign_by_endpoint_is_atomic_and_maps_capacity(app: FastAPI) -> None:
+    for index in range(3):
+        await create_account(AccountCreate(account_id=f"acc-{index}"))
+    await create_account(AccountCreate(account_id="overflow"))
+    body = {
+        "proxy_type": "socks5",
+        "host": "shared.example",
+        "port": 1080,
+        "username": "different",
+        "password": "different",
+        "account_id": "overflow",
+    }
+    async with _client(app) as client:
+        proxy_id = await _create_proxy(client, host="shared.example")
+        for index in range(3):
+            assigned = await client.post(
+                f"/api/v1/proxies/{proxy_id}/assign",
+                json={"account_id": f"acc-{index}"},
+            )
+            assert assigned.status_code == 200
+        full = await client.post("/api/v1/proxies/assign-by-endpoint", json=body)
+        missing = await client.post(
+            "/api/v1/proxies/assign-by-endpoint",
+            json={**body, "account_id": "missing", "host": "new.example"},
+        )
+        pool = await client.get("/api/v1/proxies")
+
+    assert full.status_code == 409
+    assert missing.status_code == 404
+    assert len(pool.json()["proxies"]) == 1
+    assert pool.json()["proxies"][0]["used"] == 3
+
+
+@pytest.mark.asyncio
 async def test_assign_unknown_account_is_404(app: FastAPI) -> None:
     async with _client(app) as client:
         proxy_id = await _create_proxy(client)

@@ -8,6 +8,7 @@ export {
   deleteNeuroshillingCampaignMutation,
   generateNeuroshillingScenarioMutation,
   getNeuroshillingBoardOptions as neuroshillingBoardQueryOptions,
+  getNeuroshillingSettingsOptions as neuroshillingSettingsQueryOptions,
   // Deliberately NOT part of the page's log-stream invalidation set — see the
   // comment on `NEUROSHILLING_QUERY_IDS`. It refreshes from its own mutations.
   getNeuroshillingScenarioOptions as neuroshillingScenarioQueryOptions,

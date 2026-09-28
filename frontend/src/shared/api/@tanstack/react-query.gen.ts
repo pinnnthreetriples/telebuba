@@ -16,6 +16,7 @@ import {
   approveNeuroshillingScenario,
   assignCampaignAccount,
   assignProxy,
+  assignProxyByEndpoint,
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
   checkAccount,
@@ -59,6 +60,7 @@ import {
   getNeurocommentSettings,
   getNeuroshillingBoard,
   getNeuroshillingScenario,
+  getNeuroshillingSettings,
   getReadiness,
   getWarmingBoard,
   getWarmingSettings,
@@ -103,6 +105,7 @@ import {
   resendAccountTwofaEmail,
   resetAccountSession,
   resyncAccountAvatar,
+  saveNeuroshillingSettings,
   sendAccountChatMessage,
   sendBulkMessages,
   setAccountChannelPhoto,
@@ -158,6 +161,9 @@ import type {
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
+  AssignProxyByEndpointData,
+  AssignProxyByEndpointError,
+  AssignProxyByEndpointResponse,
   AssignProxyData,
   AssignProxyError,
   AssignProxyResponse,
@@ -289,6 +295,9 @@ import type {
   GetNeuroshillingScenarioData,
   GetNeuroshillingScenarioError,
   GetNeuroshillingScenarioResponse,
+  GetNeuroshillingSettingsData,
+  GetNeuroshillingSettingsError,
+  GetNeuroshillingSettingsResponse,
   GetReadinessData,
   GetReadinessError,
   GetReadinessResponse,
@@ -418,6 +427,9 @@ import type {
   ResyncAccountAvatarData,
   ResyncAccountAvatarError,
   ResyncAccountAvatarResponse,
+  SaveNeuroshillingSettingsData,
+  SaveNeuroshillingSettingsError,
+  SaveNeuroshillingSettingsResponse,
   SendAccountChatMessageData,
   SendAccountChatMessageError,
   SendAccountChatMessageResponse,
@@ -2473,6 +2485,33 @@ export const createProxyMutation = (
 };
 
 /**
+ * Assign Proxy By Endpoint
+ */
+export const assignProxyByEndpointMutation = (
+  options?: Partial<Options<AssignProxyByEndpointData>>,
+): UseMutationOptions<
+  AssignProxyByEndpointResponse,
+  AssignProxyByEndpointError,
+  Options<AssignProxyByEndpointData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AssignProxyByEndpointResponse,
+    AssignProxyByEndpointError,
+    Options<AssignProxyByEndpointData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await assignProxyByEndpoint({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
  * Probe Proxy
  */
 export const probeProxyMutation = (
@@ -4204,6 +4243,60 @@ export const setNeuroshillingScenarioMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setNeuroshillingScenario({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNeuroshillingSettingsQueryKey = (options: Options<GetNeuroshillingSettingsData>) =>
+  createQueryKey('getNeuroshillingSettings', options);
+
+/**
+ * Get Settings
+ */
+export const getNeuroshillingSettingsOptions = (options: Options<GetNeuroshillingSettingsData>) =>
+  queryOptions<
+    GetNeuroshillingSettingsResponse,
+    GetNeuroshillingSettingsError,
+    GetNeuroshillingSettingsResponse,
+    ReturnType<typeof getNeuroshillingSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeuroshillingSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeuroshillingSettingsQueryKey(options),
+  });
+
+/**
+ * Save Settings
+ *
+ * Commit the campaign form, roster and edited dialogue in one transaction.
+ */
+export const saveNeuroshillingSettingsMutation = (
+  options?: Partial<Options<SaveNeuroshillingSettingsData>>,
+): UseMutationOptions<
+  SaveNeuroshillingSettingsResponse,
+  SaveNeuroshillingSettingsError,
+  Options<SaveNeuroshillingSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SaveNeuroshillingSettingsResponse,
+    SaveNeuroshillingSettingsError,
+    Options<SaveNeuroshillingSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await saveNeuroshillingSettings({
         ...options,
         ...fnOptions,
         throwOnError: true,

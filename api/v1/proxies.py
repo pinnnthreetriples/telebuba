@@ -10,7 +10,14 @@ from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
 from api.errors import error_responses
-from schemas.proxy import ProxyAssignRequest, ProxyCheckResult, ProxyCreate, ProxyList, ProxyRead
+from schemas.proxy import (
+    ProxyAssignRequest,
+    ProxyCheckResult,
+    ProxyCreate,
+    ProxyCreateAssignment,
+    ProxyList,
+    ProxyRead,
+)
 from services import proxies
 
 router = APIRouter(tags=["proxies"])
@@ -24,6 +31,27 @@ async def list_proxies() -> ProxyList:
 @router.post("/proxies", response_model=ProxyRead, operation_id="createProxy")
 async def create_proxy(body: ProxyCreate) -> ProxyRead:
     return await proxies.add_proxy(body)
+
+
+@router.post(
+    "/proxies/assign-by-endpoint",
+    response_model=ProxyRead,
+    operation_id="assignProxyByEndpoint",
+    responses=error_responses(404, 409),
+)
+async def assign_proxy_by_endpoint(body: ProxyCreateAssignment) -> ProxyRead:
+    try:
+        return await proxies.assign_proxy_by_endpoint(body)
+    except proxies.ProxyCapacityError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post("/proxies/probe", response_model=ProxyCheckResult, operation_id="probeProxy")

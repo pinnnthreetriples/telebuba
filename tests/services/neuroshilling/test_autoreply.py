@@ -8,6 +8,7 @@ model returns reaches Telegram without being parsed first.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -17,7 +18,7 @@ from core.repositories import neuroshilling as repository
 from schemas.gemini import GeminiResult
 from schemas.neuroshilling import NeuroshillingChatMessage, NeuroshillingStepKey
 from schemas.telegram_actions import PostComment
-from services.neuroshilling import _autoreply, _seams, _state
+from services.neuroshilling import _autoreply, _seams, _state, _steps
 from services.neuroshilling._context import RunContext
 from tests.services.neuroshilling.helpers import seed_campaign, sent
 
@@ -124,6 +125,127 @@ async def test_a_stranger_gets_an_answer_aimed_at_their_own_message(
     assert isinstance(action, PostComment)
     assert action.reply_to == _PROVOKING
     assert action.text == "да, беру уже полгода"
+
+
+@pytest.mark.parametrize(
+    ("limits", "step_target", "reason"),
+    [
+        ({"messages_per_hour": 1, "messages_per_chat_per_day": 0}, "@beta", "quota_hour"),
+        ({"messages_per_hour": 60, "messages_per_chat_per_day": 1}, _TARGET, "quota_day"),
+        ({"messages_per_hour": 60, "total_per_account": 1}, "@beta", "quota_total"),
+    ],
+)
+@pytest.mark.usefixtures("wired")
+@pytest.mark.asyncio
+async def test_pending_autoreply_reserves_scenario_quotas(
+    monkeypatch: pytest.MonkeyPatch,
+    limits: dict[str, int],
+    step_target: str,
+    reason: str,
+) -> None:
+    context = await _context(**limits)
+    message = await _observe(context, "а доставка быстрая?")
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def held_answer(*_args: object) -> None:
+        entered.set()
+        await release.wait()
+
+    monkeypatch.setattr(_autoreply, "_answer", held_answer)
+    replying = asyncio.create_task(_autoreply.consider(context, _TARGET, _CHATS, message))
+    await asyncio.wait_for(entered.wait(), 5)
+
+    reserved = await _steps._reserve(
+        context, step_target, context.steps[0], "acc-1", "scenario line"
+    )
+
+    assert reserved.quota_reason == reason
+    assert reserved.claimed is True
+    release.set()
+    await replying
+    assert _steps.pending_reply_usage(context.campaign.campaign_id, "acc-1", _TARGET) == (
+        0,
+        0,
+        0,
+    )
+
+
+@pytest.mark.usefixtures("wired")
+@pytest.mark.asyncio
+async def test_cancelled_autoreply_releases_its_scenario_quota_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = await _context(messages_per_hour=1)
+    message = await _observe(context, "а доставка быстрая?")
+    entered = asyncio.Event()
+
+    async def held_answer(*_args: object) -> None:
+        entered.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(_autoreply, "_answer", held_answer)
+    replying = asyncio.create_task(_autoreply.consider(context, _TARGET, _CHATS, message))
+    await asyncio.wait_for(entered.wait(), 5)
+    replying.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await replying
+
+    assert _steps.pending_reply_usage(context.campaign.campaign_id, "acc-1", _TARGET) == (
+        0,
+        0,
+        0,
+    )
+    assert await _steps._quota_reason(context.campaign, "acc-1", _TARGET) is None
+
+
+@pytest.mark.usefixtures("wired")
+@pytest.mark.asyncio
+async def test_autoreply_recounts_after_a_scenario_claim_under_the_shared_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = await _context(messages_per_hour=1)
+    message = await _observe(context, "а доставка быстрая?")
+    entered, release = asyncio.Event(), asyncio.Event()
+    original = _steps._quota_reason
+
+    async def paused_quota(*args: object) -> str | None:
+        entered.set()
+        await release.wait()
+        return await original(*args)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(_steps, "_quota_reason", paused_quota)
+    reserving = asyncio.create_task(
+        _steps._reserve(context, _TARGET, context.steps[0], "acc-1", "scenario line")
+    )
+    await asyncio.wait_for(entered.wait(), 5)
+    # One account only: with two, a reservation that lands before the pick sends the
+    # reply to the idle account, and the lock under test is never contended.
+    replying = asyncio.create_task(
+        _autoreply.consider(context, _TARGET, {"acc-1": _CHATS["acc-1"]}, message)
+    )
+    release.set()
+
+    assert (await reserving).quota_reason is None
+    await replying
+    assert await repository.claim_chat_reply(
+        context.campaign.campaign_id, _TARGET, message.message_id
+    )
+
+
+@pytest.mark.usefixtures("wired")
+@pytest.mark.asyncio
+async def test_published_reply_counts_once_after_pending_slot_transfers() -> None:
+    context = await _context(messages_per_hour=2, messages_per_chat_per_day=2)
+    message = await _observe(context, "а доставка быстрая?")
+
+    await _autoreply.consider(context, _TARGET, _CHATS, message)
+
+    assert _steps.pending_reply_usage(context.campaign.campaign_id, "acc-1", _TARGET) == (
+        0,
+        0,
+        0,
+    )
+    assert await _steps._quota_reason(context.campaign, "acc-1", _TARGET) is None
 
 
 @pytest.mark.asyncio
@@ -412,12 +534,7 @@ async def _journal_a_step(context: RunContext, account_id: str) -> None:
 async def test_the_lifetime_ceiling_stops_autoreplies_as_well(
     wired: tuple[_Model, _Gateway],
 ) -> None:
-    """An autoreply adds nothing to ``campaign_total``, but it is still refused by it.
-
-    The half that is counted is the journal's, and an account that spent its whole
-    lifetime allowance on scenario steps otherwise went on answering strangers for
-    the rest of the run under a ceiling it had already passed.
-    """
+    """A scenario send also spends the lifetime allowance for human replies."""
     _model, gateway = wired
     context = await _context(total_per_account=1)
     await _journal_a_step(context, "acc-1")
@@ -426,6 +543,22 @@ async def test_the_lifetime_ceiling_stops_autoreplies_as_well(
     await _autoreply.consider(context, _TARGET, {"acc-1": 555}, message)
 
     assert gateway.actions == []
+
+
+@pytest.mark.asyncio
+async def test_published_autoreply_spends_the_campaign_lifetime_allowance(
+    wired: tuple[_Model, _Gateway],
+) -> None:
+    _model, gateway = wired
+    context = await _context(total_per_account=1, messages_per_hour=60, messages_per_chat_per_day=0)
+    first = await _observe(context, "первый вопрос")
+    second = await _observe(context, "второй вопрос", message_id=_PROVOKING + 1)
+
+    await _autoreply.consider(context, _TARGET, {"acc-1": 555}, first)
+    await _autoreply.consider(context, _TARGET, {"acc-1": 555}, second)
+
+    assert len(gateway.actions) == 1
+    assert await _steps._quota_reason(context.campaign, "acc-1", "@beta") == "quota_total"
 
 
 @pytest.mark.asyncio

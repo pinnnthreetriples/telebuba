@@ -44,7 +44,10 @@ export const LAUNCHABLE_CAMPAIGN: NeuroshillingCampaign = {
 // arrives as its default, which a fixture holding that default could not tell from
 // a field that was sent. Typed against the request schema with nothing optional, so
 // a field added to it stops this file compiling until it is listed here as well.
-export const ECHOED: Omit<Required<NeuroshillingCampaignUpdate>, 'accounts'> = {
+export const ECHOED: Omit<
+  Required<NeuroshillingCampaignUpdate>,
+  'accounts' | 'expected_updated_at'
+> = {
   name: 'Промо',
   mode: 'revive',
   topic: 'про сервис',
@@ -152,6 +155,14 @@ export function routeApi(
   // The list the POST below adds to. The page looks its selection up in this list,
   // so a creation that never joined it would read as a campaign that is gone.
   const listed = [...campaigns];
+  let currentScenario = scenario;
+  const accounts = (board.available ?? [])
+    .filter((account) => account.assigned)
+    .map((account) => ({
+      account_id: account.account_id,
+      role_id: account.role_id ?? null,
+      is_reserve: account.is_reserve ?? false,
+    }));
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
@@ -175,19 +186,28 @@ export function routeApi(
     if (url.pathname.endsWith('/board')) {
       return Promise.resolve(jsonResponse(board));
     }
+    if (url.pathname.endsWith('/settings')) {
+      return Promise.resolve(
+        jsonResponse({
+          campaign: { ...(board.campaign ?? CAMPAIGN), scenario_status: 'draft' },
+          scenario: currentScenario,
+          accounts,
+        }),
+      );
+    }
     if (url.pathname.endsWith('/scenario')) {
       return Promise.resolve(jsonResponse(scenario));
     }
     if (url.pathname.endsWith('/generate')) {
-      return Promise.resolve(
-        jsonResponse({
-          ...SCENARIO,
-          steps: [{ ...SCENARIO.steps![0]!, step_id: 'g1', text: 'придуманная реплика' }],
-        }),
-      );
+      currentScenario = {
+        ...SCENARIO,
+        steps: [{ ...SCENARIO.steps![0]!, step_id: 'g1', text: 'придуманная реплика' }],
+      };
+      return Promise.resolve(jsonResponse(currentScenario));
     }
     if (url.pathname.endsWith('/approve')) {
-      return Promise.resolve(jsonResponse({ ...scenario, scenario_status: 'approved' }));
+      currentScenario = { ...currentScenario, scenario_status: 'approved' };
+      return Promise.resolve(jsonResponse(currentScenario));
     }
     if (request.method === 'DELETE') return Promise.resolve(new Response(null, { status: 204 }));
     // The PUT echo is the campaign under test, not the module-level default: the page

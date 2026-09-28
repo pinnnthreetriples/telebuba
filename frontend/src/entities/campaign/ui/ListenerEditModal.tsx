@@ -25,7 +25,7 @@ export function ListenerEditModal({
   options: { id: string; name: string }[];
   selected: string | null;
   onClose: () => void;
-  onSave: (id: string) => void;
+  onSave: (id: string) => Promise<boolean>;
 }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -34,6 +34,8 @@ export function ListenerEditModal({
   const stored = settings.data;
   const [pick, setPick] = useState(selected);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [partialSave, setPartialSave] = useState(false);
   // `null` means "untouched", which is also how the draft survives a read that lands after
   // the modal opened: no effect syncing query into state, and nothing to compare when the
   // operator never touched the fields.
@@ -45,44 +47,35 @@ export function ListenerEditModal({
     setTimeout(onClose, 650);
   };
 
-  const save = () => {
-    // The account goes through the page, which owns its own failure path; the settings PUT
-    // is the one that can fail here, so it — and only it — gates the "Сохранено" swap.
-    if (pick) onSave(pick);
-    // Only what actually differs from the stored settings, so a Save the operator changed
-    // nothing in — or one that ended back where it started — costs no request at all.
+  const close = () => {
+    if (!saving) onClose();
+  };
+
+  const save = async () => {
+    if (saving || saveSettings.isPending) return;
+    setSaving(true);
     const patch: Partial<NeurocommentSettingsUpdate> = {};
-    if (stored !== undefined) {
-      if (mode !== null && mode !== stored.comment_mode) patch.comment_mode = mode;
-      if (wait !== null && wait !== stored.reply_wait_minutes) patch.reply_wait_minutes = wait;
-    }
-    if (stored === undefined || Object.keys(patch).length === 0) {
-      finish();
-      return;
-    }
-    saveSettings.mutate(
-      {
-        // PUT /settings replaces the limits wholesale and forbids extra keys, so the write
-        // carries the stored numbers back unchanged — and `updated_at` cannot ride along.
-        body: {
-          max_comments_per_hour: stored.max_comments_per_hour,
-          max_comments_per_channel_per_day: stored.max_comments_per_channel_per_day,
-          reply_delay_min_seconds: stored.reply_delay_min_seconds,
-          reply_delay_max_seconds: stored.reply_delay_max_seconds,
-          min_trust_score: stored.min_trust_score,
-          ...patch,
-        },
-      },
-      {
-        onSuccess: async () => {
-          await queryClient.invalidateQueries({
+    try {
+      // Only what actually differs from the stored settings, so a Save the operator changed
+      // nothing in — or one that ended back where it started — costs no request at all.
+      if (stored !== undefined) {
+        if (mode !== null && mode !== stored.comment_mode) patch.comment_mode = mode;
+        if (wait !== null && wait !== stored.reply_wait_minutes) patch.reply_wait_minutes = wait;
+      }
+      let settingsApplied = false;
+      if (stored !== undefined && Object.keys(patch).length > 0) {
+        try {
+          // Only the mode pair: every field of PUT /settings is patch-shaped, and sending the
+          // cached limits back would roll back a limits save made from another tab.
+          const updated = await saveSettings.mutateAsync({ body: patch });
+          queryClient.setQueryData(neurocommentSettingsQueryOptions().queryKey, updated);
+          void queryClient.invalidateQueries({
             queryKey: neurocommentSettingsQueryOptions().queryKey,
           });
-          finish();
-        },
-        // Stay open and say so: a check mark over a rejected PUT would send the operator
-        // away believing the fleet had changed mode.
-        onError: () => {
+          setMode(null);
+          setWait(null);
+          settingsApplied = true;
+        } catch {
           toastError(
             t(
               patch.comment_mode === undefined
@@ -90,13 +83,30 @@ export function ListenerEditModal({
                 : 'neurocomment.mode.failed',
             ),
           );
-        },
-      },
-    );
+          return;
+        }
+      }
+      if (pick && pick !== selected) {
+        let listenerApplied = false;
+        try {
+          listenerApplied = await onSave(pick);
+        } catch {
+          // The page may report a rejected assignment by throwing or returning false.
+        }
+        if (!listenerApplied) {
+          if (settingsApplied || partialSave) setPartialSave(true);
+          else toastError(t('neurocomment.listener.saveFailed'));
+          return;
+        }
+      }
+      finish();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <Modal onClose={onClose} size="confirm" label={t('neurocomment.listener.title')}>
+    <Modal onClose={close} size="confirm" label={t('neurocomment.listener.title')}>
       <div className="p-2xl">
         <div className="mb-tight flex items-center gap-md">
           <span className={HEADING_ICON_TILE}>
@@ -106,13 +116,18 @@ export function ListenerEditModal({
             <div className="type-dialog-title">{t('neurocomment.listener.title')}</div>
             <div className="mt-px type-prose">{t('neurocomment.modal.listenerEdit.sub')}</div>
           </div>
-          <CloseButton aria-label={t('neurocomment.modal.close')} onClick={onClose} />
+          <CloseButton
+            aria-label={t('neurocomment.modal.close')}
+            onClick={close}
+            disabled={saving}
+          />
         </div>
 
         <div className="mb-sm mt-xl type-label">{t('neurocomment.modal.listenerEdit.account')}</div>
         <Select
           value={pick ?? ''}
           onChange={setPick}
+          disabled={saving}
           options={options.map((o) => ({ value: o.id, label: o.name }))}
           placeholder={t('neurocomment.listener.choose')}
           ariaLabel={t('neurocomment.modal.listenerEdit.account')}
@@ -123,18 +138,26 @@ export function ListenerEditModal({
         <CommentModeFields
           mode={mode ?? stored?.comment_mode ?? 'first'}
           waitMinutes={wait ?? stored?.reply_wait_minutes ?? 10}
-          disabled={stored === undefined || saveSettings.isPending}
+          disabled={stored === undefined || saving}
           onModeChange={setMode}
           onWaitChange={setWait}
         />
 
+        {partialSave ? (
+          <p role="alert" className="mt-sm type-caption text-danger">
+            {t('neurocomment.modal.listenerEdit.partialSave')}
+          </p>
+        ) : null}
+
         <div className="mt-2xl flex justify-end gap-sm">
-          <Button onClick={onClose}>{t('neurocomment.modal.cancel')}</Button>
+          <Button onClick={close} disabled={saving}>
+            {t('neurocomment.modal.cancel')}
+          </Button>
           <Button
             variant="primary"
             onClick={save}
             // A second click while the PUT is open would send the same body again.
-            loading={saveSettings.isPending}
+            loading={saving}
             className={saved ? 'border-success-deep bg-success-deep hover:bg-success-deep' : ''}
           >
             {saved ? (

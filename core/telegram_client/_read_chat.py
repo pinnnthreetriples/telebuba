@@ -184,13 +184,11 @@ async def _read_since(
     client: TelegramClient,
     action: ReadChatMessages,
 ) -> ReadChatMessagesResult:
-    """The newest ``limit`` messages above the cursor, handed back oldest-first.
+    """A cursor page, handed back oldest-first.
 
-    ``get_messages(limit=...)`` walks BACKWARDS from the head of the chat, which is
-    what makes ``min_id=0`` mean "the newest ``limit`` messages" instead of "the
-    oldest ones". A forward walk would start a first poll at the beginning of the
-    chat's history and grind through it a page per poll, replying to years-old
-    messages on the way.
+    ``min_id=0`` reads the newest page for the first poll's baseline. Once there is
+    a cursor, reverse mode walks FORWARD from it, so a busy chat cannot skip older
+    unseen messages when more than one page arrived since the previous poll.
 
     Sorted ascending before returning, because a cursor is only advanced safely by
     the LAST element and the caller reads the conversation in order.
@@ -202,6 +200,7 @@ async def _read_since(
                 peer_reference(action.chat),
                 limit=action.limit,
                 min_id=action.min_id,
+                reverse=action.min_id is not None and action.min_id > 0,
             ),
         )
     except ValueError as exc:

@@ -45,6 +45,7 @@ import { HowItWorksCard } from './HowItWorksCard';
 import { IdleBanner } from './IdleBanner';
 import { ListenerCard } from './ListenerCard';
 import { PipelineCard } from './PipelineCard';
+import { isWarmingConflict } from './listenerConflict';
 
 // SSE drives live runtime/board updates (onboarding now emits a transient bus
 // frame per progress step, so the board refreshes live during it too); this poll
@@ -74,18 +75,6 @@ const NEURO_QUERY_IDS = new Set([
   'listCampaignChallenges',
   'listLogs',
 ]);
-
-// True when a failed start is the backend's warming-listener rejection, so the UI
-// can show the warming banner rather than swallowing it. The generated client
-// throws the parsed error envelope ({ error: { code, message } }) on non-2xx, and
-// a 409 maps to code "conflict"; any other error (network, validation) is left alone.
-function isWarmingConflict(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { error?: { code?: string } }).error?.code === 'conflict'
-  );
-}
 
 export function NeurocommentPage() {
   const { t } = useTranslation();
@@ -367,39 +356,41 @@ export function NeurocommentPage() {
   // Start the listener, surfacing the authoritative backend rejection: if the
   // account began warming after the picker was populated (stale board), the client
   // pre-check misses it and the server returns 409 — reflect that in the banner.
-  const startListener = (id: string) => {
-    start.mutate(
-      { body: { listener_account_id: id } },
-      {
-        onSuccess: () => {
-          setStartRejectedWarming(false);
-        },
-        onError: (error) => {
-          setStartRejectedWarming(isWarmingConflict(error));
-        },
-        onSettled: invalidateNeuro,
-      },
-    );
+  const startListener = async (id: string): Promise<boolean> => {
+    try {
+      await start.mutateAsync({ body: { listener_account_id: id } });
+      setStartRejectedWarming(false);
+      return true;
+    } catch (error) {
+      setStartRejectedWarming(isWarmingConflict(error));
+      return false;
+    } finally {
+      void invalidateNeuro();
+    }
   };
 
   // Both doors onto the listener account — the card's picker and the edit modal's
   // "Сохранить" — go through here. A running engine is re-pointed live by /start; a
   // stopped one still has to persist the pick, which is what used to be dropped.
-  const pickListener = (id: string) => {
+  const pickListener = async (id: string): Promise<boolean> => {
     setStartRejectedWarming(false);
     if (running) {
-      setListener(id);
-      startListener(id);
-      return;
+      const ok = await startListener(id);
+      if (ok) setListener(id);
+      return ok;
     }
     // The local id is set only once the write lands: `listenerId` falls back to it when
     // nothing is persisted, so an optimistic set would paint an unsaved account as the
     // listener — the same lie this whole path exists to stop telling.
-    afterSettle(saveListener.mutateAsync({ body: { listener_account_id: id } }), (ok) => {
-      if (ok) {
-        setListener(id);
-      }
-    });
+    try {
+      await saveListener.mutateAsync({ body: { listener_account_id: id } });
+      setListener(id);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      void invalidateNeuro();
+    }
   };
 
   // GLOBAL listener start/stop (the whole engine). Kept distinct from the
@@ -408,7 +399,7 @@ export function NeurocommentPage() {
     if (running) {
       stop.mutate({}, { onSettled: invalidateNeuro });
     } else if (listenerId && !warmingIds.has(listenerId)) {
-      startListener(listenerId);
+      void startListener(listenerId);
     }
     // A warming listenerId is not started; showWarmingBlock already renders the banner.
   };

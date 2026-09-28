@@ -13,6 +13,7 @@ from core.config import settings
 from core.db import _get_engine, _now_iso, create_account, upsert_warming_state
 from core.repositories.neuroshilling import (
     claim_chat_reply,
+    fetch_campaign,
     record_chat_messages,
     record_chat_reply,
     record_presence,
@@ -110,6 +111,7 @@ async def test_update_persists_the_form_and_its_roster() -> None:
     updated = await campaigns.update_campaign(
         campaign.campaign_id,
         _update(
+            expected_updated_at=campaign.updated_at,
             topic="delivery",
             targets_raw="@news @sport",
             accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
@@ -125,6 +127,22 @@ async def test_update_persists_the_form_and_its_roster() -> None:
 
 
 @pytest.mark.asyncio
+async def test_stale_campaign_form_cannot_replace_another_edit() -> None:
+    campaign = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
+    first = _update(expected_updated_at=campaign.updated_at, name="First editor")
+    stale = _update(expected_updated_at=campaign.updated_at, name="Second editor")
+
+    saved = await campaigns.update_campaign(campaign.campaign_id, first)
+    assert saved is not None
+    with pytest.raises(campaigns.NeuroshillingConflictError, match="campaign_changed"):
+        await campaigns.update_campaign(campaign.campaign_id, stale)
+
+    current = await fetch_campaign(campaign.campaign_id)
+    assert current is not None
+    assert current.name == "First editor"
+
+
+@pytest.mark.asyncio
 async def test_an_account_that_no_longer_exists_is_dropped_from_the_roster() -> None:
     """The picker only offers real accounts, so a ghost id means a lost race.
 
@@ -136,6 +154,7 @@ async def test_an_account_that_no_longer_exists_is_dropped_from_the_roster() -> 
     updated = await campaigns.update_campaign(
         campaign.campaign_id,
         _update(
+            expected_updated_at=campaign.updated_at,
             accounts=[
                 NeuroshillingAccountAssignment(account_id="acc-1"),
                 NeuroshillingAccountAssignment(account_id="ghost"),
@@ -168,6 +187,7 @@ async def test_the_account_pool_is_read_once_however_long_the_roster_is() -> Non
         await campaigns.update_campaign(
             campaign.campaign_id,
             _update(
+                expected_updated_at=campaign.updated_at,
                 accounts=[
                     NeuroshillingAccountAssignment(account_id=f"acc-{index:02d}")
                     for index in range(20)
@@ -190,6 +210,7 @@ async def test_a_role_the_campaign_does_not_own_is_refused() -> None:
         await campaigns.update_campaign(
             campaign.campaign_id,
             _update(
+                expected_updated_at=campaign.updated_at,
                 accounts=[
                     NeuroshillingAccountAssignment(
                         account_id="acc-1",
@@ -211,6 +232,7 @@ async def test_the_campaigns_own_role_is_accepted() -> None:
     await campaigns.update_campaign(
         campaign.campaign_id,
         _update(
+            expected_updated_at=campaign.updated_at,
             accounts=[NeuroshillingAccountAssignment(account_id="acc-1", role_id="role-1")],
         ),
     )
@@ -226,7 +248,10 @@ async def test_parallel_run_mode_is_refused_by_the_server() -> None:
     campaign = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
 
     with pytest.raises(campaigns.NeuroshillingInvalidError) as refusal:
-        await campaigns.update_campaign(campaign.campaign_id, _update(run_mode="parallel"))
+        await campaigns.update_campaign(
+            campaign.campaign_id,
+            _update(expected_updated_at=campaign.updated_at, run_mode="parallel"),
+        )
 
     assert refusal.value.code == "run_mode_not_supported"
 
@@ -239,7 +264,7 @@ async def test_too_many_targets_is_refused(monkeypatch: pytest.MonkeyPatch) -> N
     with pytest.raises(campaigns.NeuroshillingInvalidError) as refusal:
         await campaigns.update_campaign(
             campaign.campaign_id,
-            _update(targets_raw="@one @two @three"),
+            _update(expected_updated_at=campaign.updated_at, targets_raw="@one @two @three"),
         )
 
     assert refusal.value.code == "too_many_targets"
@@ -247,7 +272,9 @@ async def test_too_many_targets_is_refused(monkeypatch: pytest.MonkeyPatch) -> N
     assert (
         await campaigns.update_campaign(
             campaign.campaign_id,
-            _update(targets_raw="@one @one rubbish/… @two"),
+            _update(
+                expected_updated_at=campaign.updated_at, targets_raw="@one @one rubbish/… @two"
+            ),
         )
         is not None
     )
@@ -260,7 +287,12 @@ async def test_a_live_campaign_refuses_edits_and_deletion(status: str) -> None:
     await _set_status(campaign.campaign_id, status)
 
     with pytest.raises(campaigns.NeuroshillingConflictError) as edit:
-        await campaigns.update_campaign(campaign.campaign_id, _update())
+        await campaigns.update_campaign(
+            campaign.campaign_id,
+            _update(
+                expected_updated_at=campaign.updated_at,
+            ),
+        )
     with pytest.raises(campaigns.NeuroshillingConflictError) as removal:
         await campaigns.delete_campaign(campaign.campaign_id)
 
@@ -270,7 +302,12 @@ async def test_a_live_campaign_refuses_edits_and_deletion(status: str) -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_campaigns_report_absence_rather_than_refusal() -> None:
-    assert await campaigns.update_campaign("nope", _update()) is None
+    assert (
+        await campaigns.update_campaign(
+            "nope", _update(expected_updated_at="2020-01-01T00:00:00+00:00")
+        )
+        is None
+    )
     assert await campaigns.delete_campaign("nope") is False
     assert await campaigns.load_board("nope") is None
 
@@ -290,7 +327,10 @@ async def test_the_board_carries_the_whole_account_pool_and_the_run_state() -> N
     campaign = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     await campaigns.update_campaign(
         campaign.campaign_id,
-        _update(accounts=[NeuroshillingAccountAssignment(account_id="acc-1", is_reserve=True)]),
+        _update(
+            expected_updated_at=campaign.updated_at,
+            accounts=[NeuroshillingAccountAssignment(account_id="acc-1", is_reserve=True)],
+        ),
     )
 
     board = await campaigns.load_board(campaign.campaign_id)
@@ -331,7 +371,11 @@ async def test_the_board_marks_an_account_another_running_campaign_holds() -> No
     other = await repo_create_campaign(NeuroshillingCampaignCreate(name="Other"))
     await campaigns.update_campaign(
         other.campaign_id,
-        _update(name="Other", accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        _update(
+            expected_updated_at=other.updated_at,
+            name="Other",
+            accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
+        ),
     )
     await _set_status(other.campaign_id, "running")
     mine = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
@@ -351,7 +395,10 @@ async def test_a_campaign_does_not_report_its_own_running_roster_as_busy() -> No
     campaign = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Promo"))
     await campaigns.update_campaign(
         campaign.campaign_id,
-        _update(accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        _update(
+            expected_updated_at=campaign.updated_at,
+            accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
+        ),
     )
     await _set_status(campaign.campaign_id, "running")
     _account_owner.try_claim("acc-1", "neuroshilling", campaign.campaign_id)
@@ -383,7 +430,11 @@ async def test_a_warming_hold_is_never_labelled_with_a_campaign_name() -> None:
     other = await repo_create_campaign(NeuroshillingCampaignCreate(name="Other"))
     await campaigns.update_campaign(
         other.campaign_id,
-        _update(name="Other", accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        _update(
+            expected_updated_at=other.updated_at,
+            name="Other",
+            accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
+        ),
     )
     await _set_status(other.campaign_id, "running")
     mine = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
@@ -426,7 +477,11 @@ async def test_the_launch_card_reports_a_halt_another_campaign_recorded(
     mine = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
     await campaigns.update_campaign(
         mine.campaign_id,
-        _update(name="Mine", accounts=[NeuroshillingAccountAssignment(account_id="acc-1")]),
+        _update(
+            expected_updated_at=mine.updated_at,
+            name="Mine",
+            accounts=[NeuroshillingAccountAssignment(account_id="acc-1")],
+        ),
     )
     await record_presence(elsewhere.campaign_id, "acc-1", "@a", "flooded")
 
@@ -461,7 +516,10 @@ async def test_listening_needs_both_a_switch_and_a_live_run(
     expected: bool,
 ) -> None:
     created = await campaigns.create_campaign(NeuroshillingCampaignCreate(name="Mine"))
-    await campaigns.update_campaign(created.campaign_id, _update(name="Mine", **switches))
+    await campaigns.update_campaign(
+        created.campaign_id,
+        _update(expected_updated_at=created.updated_at, name="Mine", **switches),
+    )
     await _set_status(created.campaign_id, status)
 
     run = await campaigns.run_status(created.campaign_id)

@@ -10,6 +10,7 @@ from __future__ import annotations
 from core.db import (
     ProxyCapacityError,
     assign_account_to_proxy,
+    create_and_assign_proxy,
     create_proxy,
     delete_proxy,
     fetch_proxy_settings,
@@ -25,6 +26,7 @@ from schemas.proxy import (
     ProxyCheckResult,
     ProxyCheckUpdate,
     ProxyCreate,
+    ProxyCreateAssignment,
     ProxyList,
     ProxyRead,
     ProxySettings,
@@ -34,6 +36,7 @@ __all__ = [
     "ProxyCapacityError",
     "add_proxy",
     "assign_proxy",
+    "assign_proxy_by_endpoint",
     "check_proxy",
     "list_pool",
     "probe_proxy",
@@ -84,6 +87,18 @@ async def assign_proxy(proxy_id: str, account_id: str) -> ProxyRead:
     # Rebuild the pooled client with the new proxy on next use (no-op if none cached).
     await evict_client(account_id)
     await log_event("INFO", "proxy_assigned", account_id=account_id, extra={"proxy_id": proxy_id})
+    return proxy
+
+
+async def assign_proxy_by_endpoint(data: ProxyCreateAssignment) -> ProxyRead:
+    proxy = await create_and_assign_proxy(data)
+    await evict_client(data.account_id)
+    await log_event(
+        "INFO",
+        "proxy_assigned",
+        account_id=data.account_id,
+        extra={"proxy_id": proxy.id},
+    )
     return proxy
 
 

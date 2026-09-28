@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -56,6 +57,12 @@ _EDITABLE_COLUMNS = (
     "reply_activity",
     "listen_minutes",
 )
+
+
+def _newer_stamp(previous: str) -> str:
+    """Keep the edit token increasing even if two writes share a clock tick."""
+    now = datetime.fromisoformat(_now_iso())
+    return max(now, datetime.fromisoformat(previous) + timedelta(microseconds=1)).isoformat()
 
 
 def _row_to_campaign(row: RowMapping) -> NeuroshillingCampaign:
@@ -172,8 +179,19 @@ def _set_run_state(
     status: str,
     run_id: str | None,
     last_error: str | None,
-) -> None:
+    expected_updated_at: str | None = None,
+) -> bool:
     with _get_engine().begin() as connection:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        previous = connection.execute(
+            select(_neuroshilling_campaigns.c.updated_at).where(
+                _neuroshilling_campaigns.c.campaign_id == campaign_id
+            )
+        ).scalar_one_or_none()
+        if previous is None or (
+            expected_updated_at is not None and previous != expected_updated_at
+        ):
+            return False
         connection.execute(
             update(_neuroshilling_campaigns)
             .where(_neuroshilling_campaigns.c.campaign_id == campaign_id)
@@ -181,9 +199,10 @@ def _set_run_state(
                 status=status,
                 run_id=run_id,
                 last_error=last_error,
-                updated_at=_now_iso(),
+                updated_at=_newer_stamp(previous),
             ),
         )
+        return True
 
 
 async def set_run_state(
@@ -192,7 +211,8 @@ async def set_run_state(
     *,
     run_id: str | None,
     last_error: str | None = None,
-) -> None:
+    expected_updated_at: str | None = None,
+) -> bool:
     """Write the engine-owned half of the campaign row: status, run id, last error.
 
     ``run_id`` is written on EVERY call rather than left alone, so the caller has to
@@ -205,7 +225,9 @@ async def set_run_state(
     served back by ``GET /neuroshilling/campaigns``, and a third-party ``str(exc)``
     carries proxy credentials and session paths.
     """
-    await asyncio.to_thread(_set_run_state, campaign_id, status, run_id, last_error)
+    return await asyncio.to_thread(
+        _set_run_state, campaign_id, status, run_id, last_error, expected_updated_at
+    )
 
 
 def _update_campaign(
@@ -215,7 +237,7 @@ def _update_campaign(
     reset_approval: bool,
 ) -> NeuroshillingCampaign | None:
     values: dict[str, object] = {name: getattr(data, name) for name in _EDITABLE_COLUMNS}
-    values["updated_at"] = _now_iso()
+    values["updated_at"] = _newer_stamp(data.expected_updated_at)
     if reset_approval:
         # Not an editable column — the CALLER decides, from which fields moved, and
         # the only value it can ask for is ``draft``. Nothing outside
@@ -224,7 +246,10 @@ def _update_campaign(
     with _get_engine().begin() as connection:
         result = connection.execute(
             update(_neuroshilling_campaigns)
-            .where(_neuroshilling_campaigns.c.campaign_id == campaign_id)
+            .where(
+                _neuroshilling_campaigns.c.campaign_id == campaign_id,
+                _neuroshilling_campaigns.c.updated_at == data.expected_updated_at,
+            )
             .values(**values),
         )
         if result.rowcount == 0:

@@ -83,14 +83,13 @@ async def test_a_save_landing_mid_approval_leaves_the_campaign_a_draft(
         finally:
             saved.set()
 
-    approved, _saved = await asyncio.gather(
-        ns_service.approve_scenario(campaign.campaign_id),
-        _save_inside_the_window(),
-    )
+    with pytest.raises(ns_service.NeuroshillingConflictError, match="campaign_changed"):
+        await asyncio.gather(
+            ns_service.approve_scenario(campaign.campaign_id),
+            _save_inside_the_window(),
+        )
 
-    assert approved is not None
-    # Answered with what is stored, which is the draft the other request wrote.
-    assert approved.scenario_status == "draft"
+    # The contested approval reports a conflict and leaves the newer draft stored.
     stored = await repository.fetch_campaign(campaign.campaign_id)
     assert stored is not None
     assert stored.scenario_status == "draft"
@@ -111,3 +110,18 @@ async def test_an_undisturbed_approval_still_lands() -> None:
 
     assert approved is not None
     assert approved.scenario_status == "approved"
+
+
+@pytest.mark.asyncio
+async def test_approval_reports_a_stamp_that_changed_during_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign = await _campaign()
+    await ns_service.set_scenario(campaign.campaign_id, _approvable())
+
+    async def lost_cas(*_args: object, **_kwargs: object) -> bool:
+        return False
+
+    monkeypatch.setattr(repository, "approve_scenario", lost_cas)
+    with pytest.raises(ns_service.NeuroshillingConflictError, match="campaign_changed"):
+        await ns_service.approve_scenario(campaign.campaign_id)

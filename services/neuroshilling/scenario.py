@@ -20,7 +20,6 @@ anyway.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 from core.channel_tokens import parse_message_link
@@ -32,12 +31,15 @@ from schemas.neuroshilling_scenario import NeuroshillingScenario
 from schemas.telegram_actions import ReadChatMessages, ReadChatMessagesResult
 from schemas.telegram_actions_chat import COPYABLE_MEDIA_KINDS
 from services.content import has_link, is_acceptable
-from services.neuroshilling import _generate, _seams, _state
-from services.neuroshilling._prompt import DialogueAsk
+from services.neuroshilling import _seams, _state
+from services.neuroshilling._scenario_ask import ask as _ask
+from services.neuroshilling._scenario_ask import check_ask as _check_ask
 from services.neuroshilling.campaigns import (
+    _CAMPAIGN_CHANGED,
     NeuroshillingConflictError,
     NeuroshillingInvalidError,
     NeuroshillingUnavailableError,
+    campaign_edit,
     refuse_while_live,
 )
 
@@ -156,16 +158,17 @@ async def set_scenario(
     Always returns the campaign to ``draft`` — that is the repository's doing, in
     the same transaction, so it cannot be skipped by any caller.
     """
-    campaign = await repository.fetch_campaign(campaign_id)
-    if campaign is None:
-        return None
-    refuse_while_live(campaign)
-    _check_size(data)
-    if _backward_link_problem(data.steps) or _kind_field_problem(data.steps):
-        raise NeuroshillingInvalidError(_SCENARIO_INVALID)
-    if not await repository.replace_scenario(campaign_id, data.roles, data.steps):
-        return None
-    return await load_scenario(campaign_id)
+    with campaign_edit(campaign_id):
+        campaign = await repository.fetch_campaign(campaign_id)
+        if campaign is None:
+            return None
+        refuse_while_live(campaign)
+        _check_size(data)
+        if _backward_link_problem(data.steps) or _kind_field_problem(data.steps):
+            raise NeuroshillingInvalidError(_SCENARIO_INVALID)
+        if not await repository.replace_scenario(campaign_id, data.roles, data.steps):
+            return None
+        return await load_scenario(campaign_id)
 
 
 def _approval_problem(
@@ -319,7 +322,9 @@ async def _refuse_unreachable_media(
     raise NeuroshillingInvalidError(_MEDIA_UNREACHABLE)
 
 
-async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
+async def approve_scenario(
+    campaign_id: str, *, expected_updated_at: str | None = None
+) -> NeuroshillingScenario | None:
     """Validate the stored scenario and mark it approved. ``None`` = no such campaign.
 
     Validates what is STORED rather than what a body claims: approval is a verdict
@@ -329,20 +334,29 @@ async def approve_scenario(campaign_id: str) -> NeuroshillingScenario | None:
     The write is conditional on the ``updated_at`` this verdict read — a save landing in
     the media-read window must not be stamped ``approved`` — so the row is read back.
     """
-    campaign = await repository.fetch_campaign(campaign_id)
-    if campaign is None:
-        return None
-    refuse_while_live(campaign)
-    roles, steps = await repository.load_scenario(campaign_id)
-    problem = _approval_problem(campaign, roles, steps)
-    if problem is not None:
-        raise NeuroshillingInvalidError(_PROBLEM_CODES.get(problem, _SCENARIO_INVALID))
-    # After the row-only checks and never before them: this one talks to Telegram,
-    # and a scenario that is broken on its own terms should not cost N live reads to
-    # find out.
-    await _refuse_unreachable_media(campaign, steps)
-    await repository.approve_scenario(campaign_id, expected_updated_at=campaign.updated_at)
-    return await load_scenario(campaign_id)
+    with campaign_edit(campaign_id):
+        campaign = await repository.fetch_campaign(campaign_id)
+        if campaign is None:
+            return None
+        if expected_updated_at is not None and campaign.updated_at != expected_updated_at:
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+        refuse_while_live(campaign)
+        roles, steps = await repository.load_scenario(campaign_id)
+        problem = _approval_problem(campaign, roles, steps)
+        if problem is not None:
+            raise NeuroshillingInvalidError(_PROBLEM_CODES.get(problem, _SCENARIO_INVALID))
+        # After the row-only checks and never before them: this one talks to Telegram,
+        # and a scenario that is broken on its own terms should not cost N live reads to
+        # find out.
+        await _refuse_unreachable_media(campaign, steps)
+        approved = await repository.approve_scenario(
+            campaign_id, expected_updated_at=campaign.updated_at
+        )
+        if not approved:
+            if await repository.fetch_campaign(campaign_id) is None:
+                return None
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+        return await load_scenario(campaign_id)
 
 
 async def generate_scenario(
@@ -359,82 +373,47 @@ async def generate_scenario(
     second click could start while the first was still storing its answer and the
     two would race over the same rows.
     """
-    campaign = await repository.fetch_campaign(campaign_id)
-    if campaign is None:
-        return None
-    refuse_while_live(campaign)
-    _check_ask(request, campaign)
-    refusal = _state.try_start_generation(campaign_id)
-    if refusal is not None:
+    if _state.generation_in_flight(campaign_id):
+        refusal: NeuroshillingRefusalCode = "generation_in_progress"
         raise NeuroshillingConflictError(refusal)
-    try:
-        draft = await _ask(campaign, request)
-        if draft is None:
-            raise NeuroshillingUnavailableError(_LLM_UNAVAILABLE)
-        # The ASK is bounded, the answer is not: a model that returns more steps
-        # than the operator's ceiling would otherwise be written straight past the
-        # check the PUT makes, and the form could never save the campaign again.
-        _check_size(draft)
-        # The media slot is cleared by the same write. Every line is replaced, so
-        # the position the operator picked now names text they have never read, and
-        # :func:`_media_problem` cannot notice: it reads the KIND of the step there,
-        # and a slot left on a step that is still a message passes.
-        await repository.replace_scenario(
-            campaign_id,
-            draft.roles,
-            draft.steps,
-            clear_media_step=True,
-        )
-        # Re-read rather than composing from the row above: the write just moved
-        # ``scenario_status`` back to ``draft`` and the stale copy still says
-        # whatever it said before.
-        return await load_scenario(campaign_id)
-    finally:
-        _state.finish_generation(campaign_id)
-
-
-async def _ask(
-    campaign: NeuroshillingCampaign,
-    request: NeuroshillingGenerateRequest,
-) -> NeuroshillingScenarioUpdate | None:
-    """One generation under a wall-clock deadline. ``None`` is nothing usable.
-
-    The deadline is what bounds the single-flight claim. Attempts times the
-    gateway's own retries times its sixty-second timeout is half an hour in which
-    every click on this campaign answers 409, and one hung socket must not be able
-    to buy that.
-
-    The stored role ids travel INTO the generation: the model knows nothing about
-    the roles a campaign already has, so without them every generated role would
-    be a new one, the old ones would be deleted, and the account roster's
-    ``role_id`` — ``ON DELETE SET NULL`` — would come back empty.
-    """
-    roles, _steps = await repository.load_scenario(campaign.campaign_id)
-    try:
-        async with asyncio.timeout(settings.neuroshilling.llm_deadline_seconds):
-            return await _generate.generate_dialogue(
-                campaign.topic,
-                DialogueAsk(
-                    persona_count=request.persona_count,
-                    step_count=request.step_count,
-                    unique_messages=campaign.unique_messages,
-                    # A revive campaign is briefed on the same topic but must
-                    # sell nothing in it, so the mode reaches the prompt rather
-                    # than only the engine.
-                    revive=campaign.mode == "revive",
-                ),
-                role_ids=[role.role_id for role in roles],
+    with campaign_edit(campaign_id):
+        campaign = await repository.fetch_campaign(campaign_id)
+        if campaign is None:
+            return None
+        refuse_while_live(campaign)
+        _check_ask(request, campaign)
+        refusal = _state.try_start_generation(campaign_id)
+        if refusal is not None:
+            raise NeuroshillingConflictError(refusal)
+        try:
+            draft = await _ask(campaign, request)
+            if draft is None:
+                raise NeuroshillingUnavailableError(_LLM_UNAVAILABLE)
+            # The ASK is bounded, the answer is not: a model that returns more steps
+            # than the operator's ceiling would otherwise be written straight past the
+            # check the PUT makes, and the form could never save the campaign again.
+            _check_size(draft)
+            # The media slot is cleared by the same write. Every line is replaced, so
+            # the position the operator picked now names text they have never read, and
+            # :func:`_media_problem` cannot notice: it reads the KIND of the step there,
+            # and a slot left on a step that is still a message passes.
+            # Conditional on the version read before the ask: a save from another
+            # tab during the LLM wait is newer than this answer and must not be
+            # overwritten by it.
+            replaced = await repository.replace_scenario(
+                campaign_id,
+                draft.roles,
+                draft.steps,
+                clear_media_step=True,
+                expected_updated_at=campaign.updated_at,
             )
-    except TimeoutError:
-        return None
-
-
-def _check_ask(request: NeuroshillingGenerateRequest, campaign: NeuroshillingCampaign) -> None:
-    """Refuse an ask that could only produce something unusable — before it is paid for."""
-    limits = settings.neuroshilling
-    if request.persona_count > limits.max_roles or request.step_count > limits.max_steps:
-        raise NeuroshillingInvalidError(_SCENARIO_INVALID)
-    if not campaign.topic.strip():
-        # A dialogue about nothing costs exactly as much as a dialogue about
-        # something, and the operator's fix is one field away.
-        raise NeuroshillingInvalidError(_SCENARIO_INVALID)
+            if not replaced:
+                if await repository.fetch_campaign(campaign_id) is None:
+                    return None
+                raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+            # Re-read rather than composing from the row above: the write just moved
+            # ``scenario_status`` back to ``draft`` and the stale copy still says
+            # whatever it said before.
+            return await load_scenario(campaign_id)
+        finally:
+            _state.finish_generation(campaign_id)

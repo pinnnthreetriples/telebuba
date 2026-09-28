@@ -372,6 +372,7 @@ async def test_start_runtime_warming_listener_is_409(
         )
     assert resp.status_code == 409
     assert resp.json()["error"]["code"] == "conflict"
+    assert resp.json()["error"]["message"] == "listener_busy_warming"
 
 
 @pytest.mark.asyncio

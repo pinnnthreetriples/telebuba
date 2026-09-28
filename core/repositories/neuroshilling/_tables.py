@@ -238,8 +238,8 @@ _neuroshilling_chat_log = Table(
     Column("reply_account_id", String, nullable=True),
     Column("replied_at", String, nullable=True),
     Column("seen_at", String, nullable=False),
-    # Idempotent re-polling AND the poll cursor: ``MAX(message_id)`` for a
-    # (campaign, target) is a prefix scan of this index, so there is no cursor table.
+    # Idempotent re-polling and a reserved message_id=0 row holding the last ID
+    # actually read by a poll; optimistic own sends do not advance that cursor.
     Index("ux_ns_chat_log_msg", "campaign_id", "target", "message_id", unique=True),
     Index("ix_ns_chat_log_reply", "reply_account_id", "replied_at"),
 )

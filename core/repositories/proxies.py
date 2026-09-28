@@ -21,6 +21,7 @@ from schemas.proxy import (
     GeoStatus,
     ProxyCheckUpdate,
     ProxyCreate,
+    ProxyCreateAssignment,
     ProxyList,
     ProxyRead,
     ProxySettings,
@@ -221,6 +222,8 @@ def _create_proxy(data: ProxyCreate) -> ProxyRead:
     now = _now_iso()
     username = data.username.strip() if data.username else None
     with _get_engine().begin() as connection:
+        # Serialize endpoint lookup with assign-by-endpoint and other creates.
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
         existing = connection.execute(
             select(_proxies.c.id).where(
                 _proxies.c.host == host,
@@ -263,8 +266,68 @@ async def create_proxy(data: ProxyCreate) -> ProxyRead:
     return await asyncio.to_thread(_create_proxy, data)
 
 
+def _create_and_assign_proxy(data: ProxyCreateAssignment) -> ProxyRead:
+    host = canonicalize_proxy_host(data.host)
+    now = _now_iso()
+    with _get_engine().begin() as connection:
+        # Lock before reading identity and capacity so concurrent assignments
+        # cannot insert the same endpoint or claim the same final slot.
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+        account_row = connection.execute(
+            select(_accounts.c.proxy_id).where(_accounts.c.account_id == data.account_id),
+        ).first()
+        if account_row is None:
+            msg = f"Account not found: {data.account_id}"
+            raise ValueError(msg)
+        existing = connection.execute(
+            select(_proxies.c.id).where(
+                _proxies.c.host == host,
+                _proxies.c.port == data.port,
+                _proxies.c.proxy_type == data.proxy_type,
+            ),
+        ).first()
+        if existing is None:
+            proxy_id = uuid.uuid4().hex
+            connection.execute(
+                insert(_proxies).values(
+                    id=proxy_id,
+                    proxy_type=data.proxy_type,
+                    host=host,
+                    port=data.port,
+                    username=data.username.strip() if data.username else None,
+                    password=data.password,
+                    status="unknown",
+                    created_at=now,
+                    updated_at=now,
+                ),
+            )
+        else:
+            # This operation only assigns. Pool credential rotation uses create_proxy.
+            proxy_id = str(existing[0])
+        already_here = account_row[0] == proxy_id
+        if not already_here and _count_for_proxy(connection, proxy_id) >= _capacity():
+            msg = f"Proxy {proxy_id} is at capacity ({_capacity()})"
+            raise ProxyCapacityError(msg)
+        connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == data.account_id)
+            .values(proxy_id=proxy_id),
+        )
+    proxy = _fetch_proxy(proxy_id)
+    if proxy is None:  # pragma: no cover - existence checked above
+        msg = f"Proxy not found: {proxy_id}"
+        raise ValueError(msg)
+    return proxy
+
+
+async def create_and_assign_proxy(data: ProxyCreateAssignment) -> ProxyRead:
+    return await asyncio.to_thread(_create_and_assign_proxy, data)
+
+
 def _assign_account_to_proxy(proxy_id: str, account_id: str) -> ProxyRead:
     with _get_engine().begin() as connection:
+        # Serialize the capacity check with other writers claiming this slot.
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
         if (
             connection.execute(
                 select(_proxies.c.id).where(_proxies.c.id == proxy_id),

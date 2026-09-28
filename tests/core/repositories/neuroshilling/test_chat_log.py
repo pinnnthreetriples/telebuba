@@ -46,6 +46,25 @@ async def test_a_re_poll_of_the_same_page_records_nothing_twice() -> None:
 
     assert [item.message_id for item in first] == [7, 8]
     assert [item.message_id for item in second] == [9]
+    assert await record_chat_messages(campaign_id, _TARGET, [_message(7)]) == []
+    assert await chat_cursor(campaign_id, _TARGET) == 9
+
+
+@pytest.mark.asyncio
+async def test_an_optimistic_reply_does_not_advance_the_read_cursor() -> None:
+    campaign_id = await _campaign()
+    await record_chat_messages(campaign_id, _TARGET, [_message(7)])
+
+    await record_chat_messages(
+        campaign_id, _TARGET, [_message(9, is_ours=True)], advance_cursor=False
+    )
+
+    assert await chat_cursor(campaign_id, _TARGET) == 7
+    assert [item.message_id for item in await list_recent_chat(campaign_id, _TARGET, limit=10)] == [
+        7,
+        9,
+    ]
+    assert (await count_chat_activity(campaign_id)).seen == 2
 
 
 @pytest.mark.asyncio
@@ -194,6 +213,8 @@ async def test_the_reply_count_follows_the_account_into_a_second_campaign() -> N
     await record_chat_reply(first, _TARGET, 7, account_id="acc-1")
     await record_chat_reply(second, _TARGET, 8, account_id="acc-1")
 
-    usage = await count_chat_reply_usage("acc-1", _TARGET, hour_since=_PAST, day_since=_PAST)
+    usage = await count_chat_reply_usage(
+        "acc-1", _TARGET, hour_since=_PAST, day_since=_PAST, campaign_id=first
+    )
 
-    assert (usage.hour, usage.chat_day) == (2, 2)
+    assert (usage.hour, usage.chat_day, usage.campaign_total) == (2, 2, 1)

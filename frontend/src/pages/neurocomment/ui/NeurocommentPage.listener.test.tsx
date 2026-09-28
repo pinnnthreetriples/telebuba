@@ -247,10 +247,13 @@ test('surfaces the backend 409 when a picked listener turns out to be warming', 
     }
     if (url.pathname === '/api/v1/neurocomment/start') {
       return Promise.resolve(
-        new Response(JSON.stringify({ error: { code: 'conflict', message: 'warming' } }), {
-          status: 409,
-          headers: { 'Content-Type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({ error: { code: 'conflict', message: 'listener_busy_warming' } }),
+          {
+            status: 409,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        ),
       );
     }
     if (url.pathname === '/api/v1/accounts') {
