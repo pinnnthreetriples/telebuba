@@ -606,7 +606,6 @@
         "failed": "Telegram refused the action — try again"
       },
       "privacy": {
-        "hint": "If only your contacts can see your photo and bio, everyone else sees a letter instead of your photo and no bio. Make them public so, for example, customers can see your profile. Set “Last seen” separately.",
         "loading": "Loading…",
         "loadError": "Couldn't read the privacy settings from Telegram ({{reason}})",
         "retry": "Retry",
@@ -623,11 +622,11 @@
           "unknown": "Unknown"
         },
         "unknownNote": "Telegram returned a rule the dashboard doesn't recognise — it was not set from here; set a level explicitly",
-        "openAll": "Open photo and bio (this account)",
-        "applyAll": "Apply to every account in the fleet",
-        "applyAllPending": "Applying to the fleet…",
-        "applyAllTitle": "Apply to every account in the fleet?",
-        "applyAllBody": "Every account in the fleet will get: {{levels}}.",
+        "openAll": "Apply",
+        "applyAll": "Apply to all accounts",
+        "applyAllPending": "Applying to all accounts…",
+        "applyAllTitle": "Apply to all accounts?",
+        "applyAllBody": "All accounts will get: {{levels}}.",
         "applyAllWarn": "Warning: one of these levels is restrictive — it will also be applied to accounts that are fine right now.",
         "applyAllIrreversible": "This cannot be undone: each key's rule is replaced as a whole, so per-user exceptions (the “except” and “only” lists) are removed. Accounts that are beyond recovery are skipped — the result names the reason for each.",
         "applyAllConfirm": "Apply",

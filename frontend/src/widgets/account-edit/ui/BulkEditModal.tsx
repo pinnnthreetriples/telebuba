@@ -301,13 +301,13 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
         size="panel"
         label={t('accounts.bulk.title')}
       >
-        <div className="flex max-h-dialog flex-col overflow-hidden">
+        <div className="flex h-profileDialog max-h-dialog flex-col overflow-hidden">
           <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="truncate type-dialog-title">{t('accounts.bulk.title')}</h2>
+              <h2 className="type-dialog-title">{t('accounts.bulk.title')}</h2>
               <div className="truncate type-prose">
                 {t('accounts.bulk.selected', { count: ids.length })}
               </div>
@@ -426,10 +426,11 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
                 }}
               />
             )}
+            {!started && <div className="type-caption sm:hidden">{NOTE[tab]}</div>}
           </div>
 
           <div className="flex items-center justify-end gap-sm border-t border-line-row px-xl py-lg">
-            {!started && <div className="mr-auto type-label">{NOTE[tab]}</div>}
+            {!started && <div className="mr-auto hidden type-label sm:block">{NOTE[tab]}</div>}
             {started ? (
               running ? (
                 <Button variant="danger" onClick={bulk.stop}>
@@ -442,9 +443,12 @@ export function BulkEditModal({ account, onClose }: { account: AccountRead; onCl
               )
             ) : (
               <>
-                <Button onClick={onClose}>{t('accounts.profile.cancel')}</Button>
+                <Button onClick={onClose} className="px-md sm:px-2xl">
+                  {t('accounts.profile.cancel')}
+                </Button>
                 <Button
                   variant="primary"
+                  className="px-md sm:px-2xl"
                   disabled={ids.length === 0 || !READY[tab]}
                   onClick={apply}
                 >
