@@ -78,6 +78,28 @@ function mockApi(
         next_cursor: null,
       });
     }
+    if (path === '/api/v1/accounts/contact-lookup/active') return respond(null);
+    if (path === '/api/v1/accounts/contact-lookup' && request.method === 'POST') {
+      return respond({
+        job_id: 'lookup-1',
+        status: 'running',
+        total: 2,
+        completed: 0,
+        results: [],
+      });
+    }
+    if (path === '/api/v1/accounts/contact-lookup/lookup-1') {
+      return respond({
+        job_id: 'lookup-1',
+        status: 'completed',
+        total: 2,
+        completed: 2,
+        results: [
+          { phone: '+15552220000', account_id: 'a1', status: 'found', user_id: 222 },
+          { phone: '+15553330000', account_id: 'a2', status: 'found', user_id: 333 },
+        ],
+      });
+    }
     if (path === '/api/v1/accounts/bulk-messages' && request.method === 'POST') {
       if (options.sendError) {
         return respond({ error: { code: 'bad_request', message: options.sendError } }, 400);
@@ -152,6 +174,7 @@ test('sends every selected account to every distinct recipient and shows progres
     text: 'Hello',
     min_delay_seconds: 3,
     max_delay_seconds: 8,
+    mode: 'each',
   });
   expect(await screen.findByText('4 из 4 отправок')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Готово' }));
@@ -316,25 +339,7 @@ test('header shows only the title, with hints moved into help bubbles', () => {
   expect(screen.getByRole('note', { name: 'По одному чату или @username в строке' })).toBeVisible();
 });
 
-test('send mode defaults to each account and the distribute option is disabled', async () => {
-  mockApi();
-  renderModal();
-  const each = screen.getByRole('radio', { name: 'Каждый аккаунт' });
-  const split = screen.getByRole('radio', { name: /Распределить/ });
-  expect(each).toBeChecked();
-  expect(split).toBeDisabled();
-  expect(split).toHaveTextContent('скоро');
-  await userEvent.click(split);
-  expect(each).toBeChecked();
-});
-
-test('the mode control adds no field to the request body', async () => {
-  mockApi();
-  renderModal();
-  await pickBothAccounts();
-  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
-  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
-  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+async function sentBody(): Promise<Record<string, unknown>> {
   const request = await waitFor(() => {
     const match = vi.mocked(fetch).mock.calls.find(([input]) => {
       const value = input as Request;
@@ -345,11 +350,92 @@ test('the mode control adds no field to the request body', async () => {
     expect(match).toBeDefined();
     return match?.[0] as Request;
   });
-  expect(Object.keys((await request.clone().json()) as object).sort()).toEqual([
-    'account_ids',
-    'max_delay_seconds',
-    'min_delay_seconds',
-    'recipients',
-    'text',
-  ]);
+  return (await request.clone().json()) as Record<string, unknown>;
+}
+
+test('distribute sends one message per recipient and allows up to 500 recipients', async () => {
+  mockApi();
+  renderModal();
+  const each = screen.getByRole('radio', { name: 'Каждый аккаунт' });
+  const split = screen.getByRole('radio', { name: 'Распределить' });
+  expect(each).toBeChecked();
+  await pickBothAccounts();
+  const many = Array.from({ length: 60 }, (_, index) => `@user${String(index)}`);
+  await userEvent.click(screen.getByLabelText('Получатели'));
+  await userEvent.paste(many.join('\n'));
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  const start = screen.getByRole('button', { name: 'Начать отправку' });
+  expect(screen.getByText('60/50')).toBeInTheDocument();
+  expect(start).toBeDisabled();
+
+  await userEvent.click(split);
+  expect(split).toBeChecked();
+  expect(screen.getByText('60/500')).toBeInTheDocument();
+  expect(screen.getByText('60 отправок')).toBeInTheDocument();
+  expect(start).toBeEnabled();
+  await userEvent.click(start);
+  const body = await sentBody();
+  expect(body.mode).toBe('split');
+  expect(body.recipients).toHaveLength(60);
+  expect(body.recipient_accounts).toEqual({});
+});
+
+test('each mode sends no pins', async () => {
+  mockApi();
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+  const body = await sentBody();
+  expect(body.mode).toBe('each');
+  expect(body).not.toHaveProperty('recipient_accounts');
+});
+
+test('handed-over attempts are reported apart from results that need attention', async () => {
+  mockApi({
+    results: [
+      {
+        account_id: 'a1',
+        recipient: '@first',
+        status: 'failed',
+        error_code: 'flood_wait',
+        handed_over: true,
+      },
+      { account_id: 'a2', recipient: '@first', status: 'ok' },
+      { account_id: 'a2', recipient: '@second', status: 'failed', error_code: 'session_dead' },
+    ],
+  });
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.click(screen.getByRole('radio', { name: 'Распределить' }));
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first{enter}@second');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+  expect(await screen.findByText('1 результат требует внимания')).toBeInTheDocument();
+  expect(screen.getByText(/сессия аккаунта недействительна/)).toBeInTheDocument();
+  expect(screen.getByText('1 получатель передан другому аккаунту')).toBeInTheDocument();
+  expect(screen.getByText(/@first: .*передано другому аккаунту/)).toBeInTheDocument();
+});
+
+test('distribute pins id-only recipients to the account that found them', async () => {
+  mockApi();
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.click(screen.getByRole('button', { name: 'Найти по номерам' }));
+  await userEvent.type(
+    screen.getByLabelText('Номера телефонов'),
+    '+15552220000{enter}+15553330000',
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Добавить 2 в получатели' }));
+  expect(screen.getByLabelText('Получатели')).toHaveValue('222\n333');
+  // a2 leaves the batch, so its pin must not reach the request.
+  await userEvent.click(screen.getByRole('button', { name: /Убрать a2/ }));
+  await userEvent.click(screen.getByRole('radio', { name: 'Распределить' }));
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+  const body = await sentBody();
+  expect(body.account_ids).toEqual(['a1']);
+  expect(body.recipient_accounts).toEqual({ '222': 'a1' });
 });

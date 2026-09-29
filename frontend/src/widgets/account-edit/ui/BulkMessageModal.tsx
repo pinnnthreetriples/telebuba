@@ -12,7 +12,6 @@ import {
   sendBulkMessagesMutation,
 } from '@/entities/account';
 import {
-  Badge,
   Button,
   CloseButton,
   HelpHint,
@@ -28,13 +27,17 @@ import { BulkAccountPicker } from './BulkAccountPicker';
 import { ContactLookupPanel } from './ContactLookupPanel';
 
 const MAX_ACCOUNTS = 50;
-const MAX_RECIPIENTS = 50;
+const MAX_EACH_RECIPIENTS = 50;
 const MAX_SENDS = 500;
 const MAX_DELAY_SECONDS = 300;
 
+type SendMode = 'each' | 'split';
+
 export type BulkMessageDraft = {
   ids: string[];
+  mode: SendMode;
   recipients: string;
+  pins: Record<string, string>;
   message: string;
   minDelay: string;
   maxDelay: string;
@@ -86,7 +89,10 @@ export function BulkMessageModal({
   const { t } = useTranslation();
   const [ids, setIds] = useState<string[]>(initialDraft?.ids ?? []);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [mode, setMode] = useState<SendMode>(initialDraft?.mode ?? 'each');
   const [recipients, setRecipients] = useState(initialDraft?.recipients ?? '');
+  // A raw user_id found by phone lookup is addressable only by the account that found it.
+  const [pins, setPins] = useState<Record<string, string>>(initialDraft?.pins ?? {});
   const [message, setMessage] = useState(initialDraft?.message ?? '');
   const [minDelay, setMinDelay] = useState(initialDraft?.minDelay ?? '0');
   const [maxDelay, setMaxDelay] = useState(initialDraft?.maxDelay ?? '0');
@@ -116,6 +122,8 @@ export function BulkMessageModal({
 
   const byId = new Map((fleet.data?.items ?? []).map((row) => [row.account_id, row]));
   const recipientList = recipientsFrom(recipients);
+  const maxRecipients = mode === 'each' ? MAX_EACH_RECIPIENTS : MAX_SENDS;
+  const sendCount = mode === 'each' ? ids.length * recipientList.length : recipientList.length;
   const minSeconds = Number(minDelay);
   const maxSeconds = Number(maxDelay);
   const delayReady =
@@ -127,15 +135,17 @@ export function BulkMessageModal({
     ids.length > 0 &&
     ids.length <= MAX_ACCOUNTS &&
     recipientList.length > 0 &&
-    recipientList.length <= MAX_RECIPIENTS &&
-    ids.length * recipientList.length <= MAX_SENDS &&
+    recipientList.length <= maxRecipients &&
+    sendCount <= MAX_SENDS &&
     message.trim() !== '' &&
     message.length <= 4096 &&
     delayReady;
   const started = jobId !== null;
   const complete = job.data?.status === 'completed' || job.data?.status === 'cancelled';
   const stale = job.isError && errorCode(job.error) === 'not_found';
-  const attention = job.data?.results.filter((result) => result.status !== 'ok') ?? [];
+  const results = job.data?.results ?? [];
+  const attention = results.filter((result) => result.status !== 'ok' && !result.handed_over);
+  const handedOver = results.filter((result) => result.handed_over);
 
   const onSend = () => {
     if (!batchReady) return;
@@ -147,6 +157,15 @@ export function BulkMessageModal({
           text: message.trim(),
           min_delay_seconds: minSeconds,
           max_delay_seconds: maxSeconds,
+          mode,
+          ...(mode === 'split' && {
+            recipient_accounts: Object.fromEntries(
+              Object.entries(pins).filter(
+                ([recipient, accountId]) =>
+                  recipientList.includes(recipient) && ids.includes(accountId),
+              ),
+            ),
+          }),
         },
       })
       .then((result) => {
@@ -155,8 +174,9 @@ export function BulkMessageModal({
       .catch(() => undefined);
   };
 
-  const appendRecipients = (lines: string[]) => {
+  const appendRecipients = (lines: string[], found: Record<string, string>) => {
     setRecipients((prev) => [...new Set([...recipientsFrom(prev), ...lines])].join('\n'));
+    setPins((prev) => ({ ...prev, ...found }));
   };
 
   const onGenerate = () => {
@@ -200,6 +220,9 @@ export function BulkMessageModal({
   const failureText = (code: string | null | undefined) => {
     switch (code) {
       case 'account_not_found':
+      case 'session_dead':
+      case 'account_deactivated':
+      case 'account_frozen':
       case 'flood_wait':
       case 'slow_mode_wait':
       case 'premium_wait':
@@ -215,7 +238,9 @@ export function BulkMessageModal({
     if (!started) {
       onDraftSaved?.({
         ids,
+        mode,
         recipients,
+        pins,
         message,
         minDelay,
         maxDelay,
@@ -263,7 +288,7 @@ export function BulkMessageModal({
                     <p role="status" className="mt-sm type-prose tabular-nums">
                       {t('accounts.messages.progress', {
                         done: job.data?.completed ?? 0,
-                        total: job.data?.total ?? ids.length * recipientList.length,
+                        total: job.data?.total ?? sendCount,
                       })}
                     </p>
                   </div>
@@ -313,6 +338,29 @@ export function BulkMessageModal({
                                   })}
                                 </span>
                               )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {handedOver.length > 0 && (
+                    <div>
+                      <h3 className="type-label">
+                        {t('accounts.messages.handedOverTitle', { count: handedOver.length })}
+                      </h3>
+                      <ul className="mt-sm space-y-sm">
+                        {handedOver.map((result) => (
+                          <li
+                            key={`${result.account_id}:${result.recipient}`}
+                            className="rounded-md bg-canvas px-md py-sm type-caption"
+                          >
+                            {t('accounts.messages.handedOver', {
+                              account: accountDisplayName(
+                                byId.get(result.account_id) ?? { account_id: result.account_id },
+                              ),
+                              recipient: result.recipient,
+                              reason: failureText(result.error_code),
+                            })}
                           </li>
                         ))}
                       </ul>
@@ -380,24 +428,17 @@ export function BulkMessageModal({
                     <h3 className="type-label">{t('accounts.messages.mode')}</h3>
                     <HelpHint text={t('accounts.messages.modeHint')} />
                   </div>
-                  {/* Режим только локальный: в запрос не уходит, «Распределить» пока недоступен. */}
                   <SegmentedControl
                     variant="tray"
                     ariaLabel={t('accounts.messages.mode')}
-                    value="each"
-                    onChange={() => undefined}
+                    value={mode}
+                    onChange={setMode}
                     options={[
                       { value: 'each', label: t('accounts.messages.modeEach') },
                       {
                         value: 'split',
                         title: t('accounts.messages.modeSplitHint'),
-                        disabled: true,
-                        label: (
-                          <span className="inline-flex items-center gap-sm">
-                            {t('accounts.messages.modeSplit')}
-                            <Badge>{t('accounts.messages.soon')}</Badge>
-                          </span>
-                        ),
+                        label: t('accounts.messages.modeSplit'),
                       },
                     ]}
                   />
@@ -412,9 +453,9 @@ export function BulkMessageModal({
                       <HelpHint text={t('accounts.messages.recipientsHint')} />
                     </div>
                     <span
-                      className={`type-caption tabular-nums ${recipientList.length > MAX_RECIPIENTS ? 'text-danger' : ''}`}
+                      className={`type-caption tabular-nums ${recipientList.length > maxRecipients ? 'text-danger' : ''}`}
                     >
-                      {recipientList.length}/{MAX_RECIPIENTS}
+                      {recipientList.length}/{maxRecipients}
                     </span>
                   </div>
                   <Textarea
@@ -540,9 +581,9 @@ export function BulkMessageModal({
             {!started && (
               <div className="mr-auto min-w-0">
                 <span className="type-caption tabular-nums">
-                  {t('accounts.messages.total', { count: ids.length * recipientList.length })}
+                  {t('accounts.messages.total', { count: sendCount })}
                 </span>
-                {ids.length * recipientList.length > MAX_SENDS && (
+                {sendCount > MAX_SENDS && (
                   <p className="type-caption text-danger">{t('accounts.messages.tooManySends')}</p>
                 )}
                 {send.isError && (

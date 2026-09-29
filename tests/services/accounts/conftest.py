@@ -12,6 +12,7 @@ from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from services import warming
+from services.accounts import bulk_messages
 from services.accounts import privacy as privacy_module
 from services.accounts import twofa as twofa_module
 from services.accounts._import_locks import _IMPORT_LOCKS
@@ -116,3 +117,19 @@ def avatar_refresh_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 
     monkeypatch.setattr("services.accounts.media.refresh_account_avatar", _record)
     return calls
+
+
+@pytest.fixture
+def empty_bulk_jobs() -> Iterator[None]:
+    """Bulk-message jobs live in module-level dicts; start and end each test empty."""
+    tables = (
+        bulk_messages._jobs,
+        bulk_messages._job_owners,
+        bulk_messages._pending,
+        bulk_messages._cancel_events,
+    )
+    for table in tables:
+        table.clear()
+    yield
+    for table in tables:
+        table.clear()

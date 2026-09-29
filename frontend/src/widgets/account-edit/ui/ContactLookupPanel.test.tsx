@@ -17,14 +17,14 @@ function respond(body: unknown, status = 200): Response {
 }
 
 function renderPanel(accountIds: string[]) {
-  const appended: string[][] = [];
+  const appended: [string[], Record<string, string>][] = [];
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
       <ContactLookupPanel
         accountIds={accountIds}
-        onAppendRecipients={(lines) => {
-          appended.push(lines);
+        onAppendRecipients={(lines, pins) => {
+          appended.push([lines, pins]);
         }}
       />
     </QueryClientProvider>,
@@ -99,7 +99,8 @@ test('finds phones and appends found users (username first, id fallback)', async
   expect(screen.getByText(/1 не найден/)).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole('button', { name: 'Добавить 2 в получатели' }));
-  expect(appended).toEqual([['@alice', '222']]);
+  // The id-only user is pinned to the account that found it; @alice is not.
+  expect(appended).toEqual([[['@alice', '222'], { '222': 'a1' }]]);
   expect(screen.getByText('Добавлено 2 получателя')).toBeInTheDocument();
 });
 
