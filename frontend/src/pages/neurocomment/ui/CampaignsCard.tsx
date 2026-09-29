@@ -127,7 +127,7 @@ export function CampaignsCard({
               actions={
                 <>
                   <IconButton
-                    size="touch"
+                    size="md"
                     tone="neutral"
                     aria-label={
                       isRunning ? t('neurocomment.campaign.pause') : t('neurocomment.campaign.run')
@@ -138,12 +138,16 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`w-action self-stretch ${isRunning ? 'text-warning-deep hover:bg-warning-tint' : 'text-success-deep hover:bg-success-tint'}`}
+                    className={
+                      isRunning
+                        ? 'text-warning-deep hover:bg-warning-tint'
+                        : 'text-success-deep hover:bg-success-tint'
+                    }
                   >
-                    {isRunning ? <Icon name="pause" size={18} /> : <Icon name="play" size={18} />}
+                    {isRunning ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
                   </IconButton>
                   <IconButton
-                    size="touch"
+                    size="md"
                     tone="primary"
                     aria-label={t('neurocomment.campaign.editPrompt')}
                     title={t('neurocomment.campaign.editPrompt')}
@@ -152,21 +156,19 @@ export function CampaignsCard({
                       // prompt modal's account list) on THIS campaign (finding #5).
                       onEditPrompt(campaign);
                     }}
-                    className="w-action self-stretch"
                   >
-                    <Icon name="pencil" size={18} />
+                    <Icon name="pencil" size={16} />
                   </IconButton>
                   <IconButton
-                    size="touch"
+                    size="md"
                     tone="danger"
                     aria-label={t('neurocomment.campaign.delete')}
                     title={t('neurocomment.campaign.delete')}
                     onClick={() => {
                       onDelete(campaign);
                     }}
-                    className="w-action self-stretch"
                   >
-                    <Icon name="trash" size={18} />
+                    <Icon name="trash" size={16} />
                   </IconButton>
                 </>
               }

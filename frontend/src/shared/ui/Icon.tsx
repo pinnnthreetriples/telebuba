@@ -25,6 +25,7 @@ import {
   Sparkles,
   Trash,
   TriangleAlert,
+  UserPlus,
   UserRound,
   Users,
   Video,
@@ -88,6 +89,7 @@ const GLYPH = {
   // Two people and one person: the group and the profile sections of the warming
   // action card. Lucide's `UserRound` and not `User`, so the head matches the round
   // avatars the app already draws beside it.
+  'user-plus': UserPlus,
   'user-round': UserRound,
   users: Users,
   video: Video,

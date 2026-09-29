@@ -4,9 +4,9 @@ import { afterAll, expect, test } from 'vitest';
 import { expectNoAxeViolations } from './axe.test-helpers';
 import { SurfHover } from './SurfHover';
 
-// The unconditional class is `group-hover:-translate-x-[…]`, so a plain substring
-// check would match it too; only the un-prefixed token means "pinned open".
-const PINNED = /(^|\s)-translate-x-\[var\(--shift\)\]/;
+// The unconditional class is `group-hover:mr-[…]`, so a plain substring check would
+// match it too; only the un-prefixed token means "pinned open".
+const PINNED = /(^|\s)mr-\[var\(--shift\)\]/;
 
 // Ширину теперь МЕРЯЕТ компонент, и это единственное, что тут стоит проверять: прежний
 // тест утверждал число, которое передал вызывающий (`144px`), то есть проверял константу
@@ -56,5 +56,8 @@ test('the surface shifts by the measured width of the actions, not by a number i
 test('open pins the reveal, so the actions are reachable without a hover', () => {
   render(<SurfHover open surfaceId="surf" surface={<div>row</div>} actions={null} />);
 
-  expect(document.getElementById('surf')?.className).toMatch(PINNED);
+  const className = document.getElementById('surf')?.className ?? '';
+  expect(className).toMatch(PINNED);
+  // Сужение, а не сдвиг: `translate` уносил имя под клип, `pl` перекраивал текст.
+  expect(className).not.toMatch(/translate-x|pl-\[var/);
 });

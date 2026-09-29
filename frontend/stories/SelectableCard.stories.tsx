@@ -32,31 +32,29 @@ function Example({
         actions={
           <>
             <IconButton
-              size="touch"
+              size="md"
               tone="neutral"
               aria-label="Приостановить кампанию"
               title="Приостановить кампанию"
-              className="w-action self-stretch text-warning-deep hover:bg-warning-tint"
+              className="text-warning-deep hover:bg-warning-tint"
             >
-              <Icon name="pause" size={18} />
+              <Icon name="pause" size={16} />
             </IconButton>
             <IconButton
-              size="touch"
+              size="md"
               tone="primary"
               aria-label="Изменить кампанию"
               title="Изменить кампанию"
-              className="w-action self-stretch"
             >
-              <Icon name="pencil" size={18} />
+              <Icon name="pencil" size={16} />
             </IconButton>
             <IconButton
-              size="touch"
+              size="md"
               tone="danger"
               aria-label="Удалить кампанию"
               title="Удалить кампанию"
-              className="w-action self-stretch"
             >
-              <Icon name="trash" size={18} />
+              <Icon name="trash" size={16} />
             </IconButton>
           </>
         }
@@ -85,28 +83,18 @@ const meta = {
     actions: (
       <>
         <IconButton
-          size="touch"
+          size="md"
           tone="neutral"
           aria-label="Приостановить кампанию"
-          className="w-action self-stretch text-warning-deep hover:bg-warning-tint"
+          className="text-warning-deep hover:bg-warning-tint"
         >
-          <Icon name="pause" size={18} />
+          <Icon name="pause" size={16} />
         </IconButton>
-        <IconButton
-          size="touch"
-          tone="primary"
-          aria-label="Изменить кампанию"
-          className="w-action self-stretch"
-        >
-          <Icon name="pencil" size={18} />
+        <IconButton size="md" tone="primary" aria-label="Изменить кампанию">
+          <Icon name="pencil" size={16} />
         </IconButton>
-        <IconButton
-          size="touch"
-          tone="danger"
-          aria-label="Удалить кампанию"
-          className="w-action self-stretch"
-        >
-          <Icon name="trash" size={18} />
+        <IconButton size="md" tone="danger" aria-label="Удалить кампанию">
+          <Icon name="trash" size={16} />
         </IconButton>
       </>
     ),

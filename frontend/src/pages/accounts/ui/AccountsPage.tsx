@@ -40,6 +40,7 @@ export function AccountsPage() {
 
   const [search, setSearch] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchExpanded = searchOpen || search !== '';
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchButtonRef = useRef<HTMLButtonElement>(null);
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
@@ -299,12 +300,18 @@ export function AccountsPage() {
           {/* Collapsible search field */}
           <div className="flex w-full flex-1 items-center gap-sm sm:w-auto">
             <div
-              className={`tb-time overflow-hidden rounded-full border border-line bg-surface-card transition-all duration-150 ${
-                searchOpen || search !== '' ? 'w-full sm:w-tip' : 'w-0'
+              // Свёрнутое поле — нулевой ширины, невидимое и вне табуляции; анимацию
+              // ширины/прозрачности даёт `.tb-time` (index.css).
+              aria-hidden={!searchExpanded}
+              className={`tb-time h-tile overflow-hidden rounded-full border bg-surface-card ${
+                searchExpanded
+                  ? 'w-full border-line opacity-100 sm:w-tip'
+                  : 'invisible w-0 border-transparent opacity-0'
               }`}
             >
               <input
                 ref={searchInputRef}
+                tabIndex={searchExpanded ? 0 : -1}
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value);
@@ -325,12 +332,12 @@ export function AccountsPage() {
                   }
                 }}
                 placeholder={t('accounts.searchPlaceholder')}
-                className="h-control w-full border-none bg-surface-card px-md py-0 text-body outline-none"
+                className="h-full w-full border-none bg-surface-card px-md py-0 text-body outline-none"
               />
             </div>
             <IconButton
               ref={searchButtonRef}
-              size="md"
+              size="lg"
               tone="neutral"
               aria-label={t('accounts.searchPlaceholder')}
               title={t('accounts.searchPlaceholder')}
@@ -339,13 +346,13 @@ export function AccountsPage() {
                 window.setTimeout(() => searchInputRef.current?.focus(), 0);
               }}
             >
-              <Icon name="search" size={16} />
+              <Icon name="search" size={18} />
             </IconButton>
           </div>
 
           {/* Bulk messages button */}
           <IconButton
-            size="md"
+            size="lg"
             tone="neutral"
             disabled={
               me.isPending ||
@@ -363,13 +370,13 @@ export function AccountsPage() {
             openingMessages ? (
               <Spinner tone="default" />
             ) : (
-              <Icon name="send" size={16} />
+              <Icon name="send" size={18} />
             )}
           </IconButton>
 
           {/* Add account button */}
           <IconButton
-            size="md"
+            size="lg"
             tone="primary"
             aria-label={t('accounts.actions.add')}
             title={t('accounts.actions.add')}
@@ -377,7 +384,7 @@ export function AccountsPage() {
               setAdding(true);
             }}
           >
-            <Icon name="plus" size={16} />
+            <Icon name="user-plus" size={18} />
           </IconButton>
         </div>
       </div>

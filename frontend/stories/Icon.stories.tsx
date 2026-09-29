@@ -28,6 +28,7 @@ const names: IconName[] = [
   'sparkles',
   'trash',
   'upload-cloud',
+  'user-plus',
   'user-round',
   'users',
   'video',

@@ -479,7 +479,11 @@
 .tb-time {
   transition:
     border-color theme('transitionDuration.state') theme('transitionTimingFunction.out'),
-    box-shadow theme('transitionDuration.state') theme('transitionTimingFunction.out');
+    box-shadow theme('transitionDuration.state') theme('transitionTimingFunction.out'),
+    width theme('transitionDuration.reveal') theme('transitionTimingFunction.out'),
+    max-width theme('transitionDuration.reveal') theme('transitionTimingFunction.out'),
+    opacity theme('transitionDuration.reveal') theme('transitionTimingFunction.out'),
+    visibility theme('transitionDuration.reveal') theme('transitionTimingFunction.out');
 }
 .tb-time:focus-within {
   /* No `!important`, and the cascade is why it never needed one: `@layer base` closes at

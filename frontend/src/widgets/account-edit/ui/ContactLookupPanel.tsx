@@ -8,7 +8,7 @@ import {
   getContactLookupJobQueryOptions,
   startContactLookupMutation,
 } from '@/entities/account';
-import { Button, Icon, IconButton, Input, Textarea } from '@/shared/ui';
+import { Button, HelpHint, Icon, IconButton, Input, Textarea } from '@/shared/ui';
 
 const MAX_PHONES = 1000;
 const MAX_DELAY_SECONDS = 300;
@@ -169,10 +169,10 @@ export function ContactLookupPanel({
         : 'accounts.messages.lookup.startError';
 
   return (
-    <div className="rounded-lg border border-line bg-canvas">
+    <div className="border-t border-line-row pt-sm">
       <button
         type="button"
-        className="flex w-full items-center gap-sm px-md py-sm type-label"
+        className="flex w-full items-center gap-sm type-label text-content-muted hover:text-content-primary"
         aria-expanded={open}
         onClick={() => {
           setOpen((value) => !value);
@@ -183,14 +183,17 @@ export function ContactLookupPanel({
       </button>
 
       {open && (
-        <div className="space-y-md border-t border-line-row p-md">
+        <div className="mt-md space-y-md">
           {!started ? (
             <>
               <section className="space-y-sm">
                 <div className="flex items-center justify-between gap-md">
-                  <label htmlFor="contact-lookup-phones" className="type-label">
-                    {t('accounts.messages.lookup.phones')}
-                  </label>
+                  <div className="flex items-center gap-sm">
+                    <label htmlFor="contact-lookup-phones" className="type-label">
+                      {t('accounts.messages.lookup.phones')}
+                    </label>
+                    <HelpHint text={t('accounts.messages.lookup.phonesHint')} />
+                  </div>
                   <span
                     className={`type-caption tabular-nums ${phoneList.length > MAX_PHONES ? 'text-danger-deep' : ''}`}
                   >
@@ -205,16 +208,17 @@ export function ContactLookupPanel({
                     setPhones(event.target.value);
                   }}
                 />
-                <p className="type-caption">{t('accounts.messages.lookup.phonesHint')}</p>
               </section>
 
               <section className="space-y-sm">
                 <h4 className="type-label">{t('accounts.messages.delay')}</h4>
                 <div className="grid grid-cols-2 gap-md">
-                  <label className="space-y-sm type-caption">
-                    <span>{t('accounts.messages.minDelay')}</span>
+                  <label className="flex items-center gap-sm type-caption">
+                    <span>{t('accounts.messages.delayFrom')}</span>
                     <Input
                       type="number"
+                      size="xs"
+                      aria-label={t('accounts.messages.minDelay')}
                       min={0}
                       max={MAX_DELAY_SECONDS}
                       step={1}
@@ -223,11 +227,14 @@ export function ContactLookupPanel({
                         setMinDelay(event.target.value);
                       }}
                     />
+                    <span>{t('accounts.messages.secondsShort')}</span>
                   </label>
-                  <label className="space-y-sm type-caption">
-                    <span>{t('accounts.messages.maxDelay')}</span>
+                  <label className="flex items-center gap-sm type-caption">
+                    <span>{t('accounts.messages.delayTo')}</span>
                     <Input
                       type="number"
+                      size="xs"
+                      aria-label={t('accounts.messages.maxDelay')}
                       min={0}
                       max={MAX_DELAY_SECONDS}
                       step={1}
@@ -236,6 +243,7 @@ export function ContactLookupPanel({
                         setMaxDelay(event.target.value);
                       }}
                     />
+                    <span>{t('accounts.messages.secondsShort')}</span>
                   </label>
                 </div>
               </section>

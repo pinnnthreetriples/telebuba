@@ -174,7 +174,7 @@ test('карточку кампании можно выбрать с клави�
   // в строку попадает на них. Это и есть тот случай, из-за которого раскрытие по фокусу
   // обязательно: без него Tab уводил фокус под непрозрачную карточку.
   const surface = () => document.getElementById('camp-surf-c1');
-  const REVEALED = /(^|\s)-translate-x-\[var\(--shift\)\]/;
+  const REVEALED = /(^|\s)mr-\[var\(--shift\)\]/;
 
   await userEvent.tab();
   await userEvent.tab();
