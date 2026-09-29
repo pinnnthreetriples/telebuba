@@ -30,13 +30,23 @@ _pending: dict[str, tuple[BulkMessageRequest, list[tuple[str, str]]]] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 _MAX_RETAINED_JOBS = 20
 _ACCOUNT_LIMIT_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
+# Codes where the account provably sent nothing and cannot send for the rest of the
+# run: stop using it (split hands the recipient on). "unconfirmed" never lands here.
+_STOP_CODES = _ACCOUNT_LIMIT_STATUSES | {
+    "account_not_found",
+    "session_dead",
+    "account_deactivated",
+    "account_frozen",
+    "unavailable",
+}
 logger = logging.getLogger(__name__)
 
 
 def _recipient_peer(recipient: str) -> str:
     token = recipient.strip()
     if token.isdecimal() and int(token) > 0:
-        return token
+        # Canonical digits, so "0123" and "123" are caught as the same user.
+        return str(int(token))
     peer = normalize_channel(token, max_length=32)
     if peer is None or peer.startswith("+"):
         msg = "invalid recipient"
@@ -62,7 +72,7 @@ def start_bulk_message_job(data: BulkMessageRequest, owner_user_id: str) -> Bulk
     job = BulkMessageJob(
         job_id=uuid4().hex,
         status="running",
-        total=len(data.account_ids) * len(recipients),
+        total=len(recipients) * (1 if data.mode == "split" else len(data.account_ids)),
         completed=0,
         results=[],
     )
@@ -119,6 +129,53 @@ def _failure_code(result: ActionResult) -> str | None:
     return "failed"
 
 
+async def _pace(data: BulkMessageRequest, cancel_event: asyncio.Event) -> bool:
+    """Wait the jittered delay; False once the run is cancelled."""
+    delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
+        data.min_delay_seconds, data.max_delay_seconds
+    )
+    if delay:
+        with suppress(TimeoutError):
+            await asyncio.wait_for(cancel_event.wait(), timeout=delay)
+    return not cancel_event.is_set()
+
+
+async def _send_one(account_id: str, recipient: str, peer: str, text: str) -> BulkMessageOutcome:
+    try:
+        result = await execute(
+            account_id,
+            SendChatMessage(recipient=peer, text=text),
+            domain="bulk_messages",
+        )
+        status = "unconfirmed" if result.error_type == UNCONFIRMED_ERROR_TYPE else None
+        error_code = "delivery_unconfirmed" if status else _failure_code(result)
+        retry_after_seconds = result.flood_wait_seconds
+    except Exception as exc:  # noqa: BLE001 - one pair must not stop the batch
+        logger.warning("bulk message pair failed: %s", type(exc).__name__)
+        # execute may raise after the Telegram write (for example while
+        # logging its result), so a resend is not known to be safe.
+        status = "unconfirmed"
+        error_code = "delivery_unconfirmed"
+        retry_after_seconds = None
+    return BulkMessageOutcome(
+        account_id=account_id,
+        recipient=recipient,
+        status=status or ("failed" if error_code else "ok"),
+        error_code=error_code,
+        retry_after_seconds=retry_after_seconds,
+    )
+
+
+def _skipped(account_id: str, recipient: str, stop: BulkMessageOutcome) -> BulkMessageOutcome:
+    return BulkMessageOutcome(
+        account_id=account_id,
+        recipient=recipient,
+        status="skipped",
+        error_code=stop.error_code,
+        retry_after_seconds=stop.retry_after_seconds,
+    )
+
+
 async def _run_account_messages(
     account_id: str,
     data: BulkMessageRequest,
@@ -126,58 +183,64 @@ async def _run_account_messages(
     job: BulkMessageJob,
     cancel_event: asyncio.Event,
 ) -> None:
-    blocked: tuple[str, int | None] | None = None
+    blocked: BulkMessageOutcome | None = None
     for recipient, peer in recipients:
         if cancel_event.is_set():
             break
         if blocked is not None:
-            job.results.append(
-                BulkMessageOutcome(
-                    account_id=account_id,
-                    recipient=recipient,
-                    status="skipped",
-                    error_code=blocked[0],
-                    retry_after_seconds=blocked[1],
-                )
-            )
+            job.results.append(_skipped(account_id, recipient, blocked))
             job.completed += 1
             continue
-        if job.completed:
-            delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
-                data.min_delay_seconds, data.max_delay_seconds
-            )
-            if delay:
-                with suppress(TimeoutError):
-                    await asyncio.wait_for(cancel_event.wait(), timeout=delay)
-            if cancel_event.is_set():
+        if job.completed and not await _pace(data, cancel_event):
+            break
+        outcome = await _send_one(account_id, recipient, peer, data.text)
+        if outcome.error_code in _STOP_CODES:
+            blocked = outcome
+        job.results.append(outcome)
+        job.completed += 1
+
+
+async def _run_split_messages(
+    data: BulkMessageRequest,
+    recipients: list[tuple[str, str]],
+    job: BulkMessageJob,
+    cancel_event: asyncio.Event,
+) -> None:
+    """One message per recipient, round-robin; a stopped account hands its turn on."""
+    live = list(data.account_ids)
+    stops: dict[str, BulkMessageOutcome] = {}
+    cursor = 0
+    attempted = False
+    for index, (recipient, peer) in enumerate(recipients):
+        pinned = data.recipient_accounts.get(recipient)
+        last: BulkMessageOutcome | None = None
+        refused: list[BulkMessageOutcome] = []
+        while live and (pinned is None or pinned in live):
+            if cancel_event.is_set() or (attempted and not await _pace(data, cancel_event)):
+                # A refusal awaiting hand-over was never handed on: it is final.
+                job.results.extend(refused)
+                job.completed += len(refused)
+                return
+            job.results.extend(r.model_copy(update={"handed_over": True}) for r in refused)
+            refused = []
+            account_id = pinned or live[cursor % len(live)]
+            attempted = True
+            last = await _send_one(account_id, recipient, peer, data.text)
+            if last.error_code not in _STOP_CODES:
+                if pinned is None:
+                    cursor += 1
                 break
-        try:
-            result = await execute(
-                account_id,
-                SendChatMessage(recipient=peer, text=data.text),
-                domain="bulk_messages",
-            )
-            status = "unconfirmed" if result.error_type == UNCONFIRMED_ERROR_TYPE else None
-            error_code = "delivery_unconfirmed" if status else _failure_code(result)
-            if result.status in _ACCOUNT_LIMIT_STATUSES:
-                blocked = (result.status, result.flood_wait_seconds)
-            retry_after_seconds = result.flood_wait_seconds
-        except Exception as exc:  # noqa: BLE001 - one pair must not stop the batch
-            logger.warning("bulk message pair failed: %s", type(exc).__name__)
-            # execute may raise after the Telegram write (for example while
-            # logging its result), so a resend is not known to be safe.
-            status = "unconfirmed"
-            error_code = "delivery_unconfirmed"
-            retry_after_seconds = None
-        job.results.append(
-            BulkMessageOutcome(
-                account_id=account_id,
-                recipient=recipient,
-                status=status or ("failed" if error_code else "ok"),
-                error_code=error_code,
-                retry_after_seconds=retry_after_seconds,
-            )
-        )
+            stops[account_id] = last
+            live.remove(account_id)
+            if pinned is not None or not live:
+                break
+            refused = [last]
+            last = None
+        if last is None:
+            planned = pinned or data.account_ids[index % len(data.account_ids)]
+            stop = stops.get(planned) or list(stops.values())[-1]
+            last = _skipped(planned, recipient, stop)
+        job.results.append(last)
         job.completed += 1
 
 
@@ -187,10 +250,13 @@ async def run_bulk_message_job(job_id: str) -> None:
     job = _jobs[job_id]
     cancel_event = _cancel_events[job_id]
     try:
-        for account_id in data.account_ids:
-            if cancel_event.is_set():
-                break
-            await _run_account_messages(account_id, data, recipients, job, cancel_event)
+        if data.mode == "split":
+            await _run_split_messages(data, recipients, job, cancel_event)
+        else:
+            for account_id in data.account_ids:
+                if cancel_event.is_set():
+                    break
+                await _run_account_messages(account_id, data, recipients, job, cancel_event)
     finally:
         job.status = (
             "cancelled" if cancel_event.is_set() and job.completed < job.total else "completed"
