@@ -73,7 +73,7 @@ class OpenAISettings(BaseSettings):
 
 
 class DeepseekSettings(OpenAISettings):
-    """DeepSeek — the text generator, and the reason Gemini now only does vision.
+    """DeepSeek — the text generator, and an optional captcha solver (vision included).
 
     Subclasses the OpenAI settings because DeepSeek serves the same wire format
     (``POST {base_url}/chat/completions``, ``Bearer`` key), which is what lets
@@ -102,7 +102,8 @@ class DeepseekSettings(OpenAISettings):
     base_url: str = Field(default="https://api.deepseek.com")
     # Double the siblings': a live day lost whole posts to two 30s timeouts a round.
     timeout_seconds: float = Field(default=60.0, ge=1.0)
-    # Generation defaults, not the solver's: this provider writes comments and
-    # warming replies, so it inherits Gemini's shape rather than OpenAI's 0.0/300.
+    # Generation defaults: this provider writes comments and warming replies, so it
+    # inherits Gemini's shape rather than OpenAI's 0.0/300. The captcha solver reuses
+    # the temperature (as it does Gemini's) but brings its own output budget.
     temperature: float = Field(default=0.9, ge=0.0, le=2.0)
     max_output_tokens: int = Field(default=256, ge=1, le=2048)

@@ -213,6 +213,8 @@ class NeurocommentSettings(BaseSettings):
     # gpt-4o/Gemini and routinely runs well past 10s. The gateway's own budget is 30s, so
     # the text timeout truncated our own request and the solver gave up on a captcha the
     # provider was still answering; 45s sits above the gateway budget so its result wins.
+    # Not above DeepSeek's (60s, `DeepseekSettings.timeout_seconds`): a DeepSeek photo
+    # captcha answered after 45s is cut off here and becomes a give-up.
     challenge_vision_timeout_seconds: float = Field(default=45.0, gt=0.0)
     # Hard cutoff on the click/send dispatch (the only unbounded Telethon await in
     # the solver); a hung click times out and is treated as a failed dispatch.

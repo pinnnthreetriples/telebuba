@@ -1,4 +1,4 @@
-"""OpenAI-format text/vision gateway — the captcha-solver alternative, and DeepSeek.
+"""OpenAI-format text/vision gateway — OpenAI and DeepSeek.
 
 The only module that talks HTTP in this wire format. Mirrors ``core.gemini``:
 services pass the shared :class:`GeminiRequest` (the provider-neutral LLM
@@ -7,7 +7,8 @@ contract) and get a typed :class:`GeminiResult` back — never an exception.
 Two providers ride it, and the ONLY thing separating them is which settings block
 supplies the endpoint and the retry budget (``config``, defaulting to OpenAI's):
 the captcha solver when the operator selects the ``openai`` provider, and DeepSeek
-for every text generation (:func:`generate_text_deepseek`). One gateway rather
+for every text generation and the ``deepseek`` captcha provider
+(:func:`generate_text_deepseek`). One gateway rather
 than two because DeepSeek publishes this exact format — a second module would be
 this one with a different base URL.
 
