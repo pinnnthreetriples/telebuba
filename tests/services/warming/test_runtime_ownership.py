@@ -422,6 +422,10 @@ async def test_uncertain_dispatched_rpc_keeps_full_budget_reserved(
     from services.warming._loop import run_loop_iteration  # noqa: PLC0415
 
     _no_quiet_days(monkeypatch)
+    # start_warming is only here to mint a run_id. The real loop it spawns runs while
+    # start_warming awaits its own writes, and on a loaded worker it reached the
+    # still-unpatched gateway — a real Telegram connection — before the cancel below.
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
     await _ready_account()
     await _seed_channel()
     await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
