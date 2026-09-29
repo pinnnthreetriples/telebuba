@@ -213,3 +213,21 @@ test('a touched delay half travels with the fresh stored other half', async () =
     reply_delay_max_seconds: 20,
   });
 });
+
+// The backend puts no upper bound on the counts, so a stored value past 2^53 renders as a
+// non-safe integer. Left untouched, it is never sent, so it must not block another save.
+test('an untouched out-of-range stored limit does not block saving another field', async () => {
+  const { onClose } = await openLimitsTab({ max_comments_per_hour: 9007199254740993 });
+
+  await userEvent.clear(field('Мин. trust-score для работы'));
+  await userEvent.type(field('Мин. trust-score для работы'), '60');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(puts()).toHaveLength(1);
+  });
+  expect(await puts()[0]!.clone().json()).toEqual({ min_trust_score: 60 });
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

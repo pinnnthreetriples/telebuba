@@ -32,11 +32,13 @@ export function neuroLimitsValue(s: NeurocommentSettings): NeuroLimitsValue {
 }
 
 const INTEGER = /^\d+$/;
+// Decimal only, exponent allowed: `neuroLimitsValue` renders a stored 1e-7 or 1e21 in
+// exponent form, and an untouched field must stay valid — while bare `Number()` would
+// also read '0x10' / '0b10000' / '0o20' as 16.
+const DECIMAL = /^\s*\+?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?\s*$/i;
 
-// Parsed, not pattern-matched: `neuroLimitsValue` renders a stored 1e-7 or 1e21 in
-// exponent form, and an untouched field must stay valid.
 const nonNegative = (value: string) => {
-  if (value.trim() === '') return false;
+  if (!DECIMAL.test(value)) return false;
   const n = Number(value);
   return Number.isFinite(n) && n >= 0;
 };
@@ -53,31 +55,36 @@ const intAtLeast = (min: number, message: string, max = Infinity) =>
 
 const seconds = z.string().refine(nonNegative, 'neurocomment.limits.errDelay');
 
-export const neuroLimitsSchema = z
-  .object({
-    cpd: intAtLeast(0, 'neurocomment.limits.errCpd'),
-    delayFrom: seconds,
-    delayTo: seconds,
-    parallel: intAtLeast(1, 'neurocomment.limits.errParallel'),
-    trust: intAtLeast(0, 'neurocomment.limits.errTrust', 100),
-  })
-  .refine(
-    (v) =>
-      // Only once both are valid numbers — otherwise the per-field error already covers it.
-      !nonNegative(v.delayFrom) ||
-      !nonNegative(v.delayTo) ||
-      Number(v.delayFrom) <= Number(v.delayTo),
-    { message: 'neurocomment.limits.errDelayOrder', path: ['delayTo'] },
-  );
+const FIELDS: Record<NeuroLimitsField, z.ZodType<string>> = {
+  cpd: intAtLeast(0, 'neurocomment.limits.errCpd'),
+  delayFrom: seconds,
+  delayTo: seconds,
+  parallel: intAtLeast(1, 'neurocomment.limits.errParallel'),
+  trust: intAtLeast(0, 'neurocomment.limits.errTrust', 100),
+};
 
-// First message per field, as i18n keys — `{}` when the value is valid.
-export function neuroLimitsErrors(v: NeuroLimitsValue): Partial<Record<NeuroLimitsField, string>> {
-  const parsed = neuroLimitsSchema.safeParse(v);
-  if (parsed.success) return {};
+// First message per field, as i18n keys — `{}` when the value is valid. Only the TOUCHED
+// fields are checked (all of them by default): an untouched one is never sent, and a stored
+// count past 2^53 (the backend sets no cap) must not block saving another field. The delay
+// order is checked on the merged pair once either half is touched — the pair travels together.
+export function neuroLimitsErrors(
+  v: NeuroLimitsValue,
+  touched: Partial<NeuroLimitsValue> = v,
+): Partial<Record<NeuroLimitsField, string>> {
   const errors: Partial<Record<NeuroLimitsField, string>> = {};
-  for (const issue of parsed.error.issues) {
-    const field = issue.path[0] as NeuroLimitsField;
-    errors[field] ??= issue.message;
+  for (const field of Object.keys(FIELDS) as NeuroLimitsField[]) {
+    if (touched[field] === undefined) continue;
+    const parsed = FIELDS[field].safeParse(v[field]);
+    if (!parsed.success) errors[field] = parsed.error.issues[0]?.message;
+  }
+  if (
+    (touched.delayFrom !== undefined || touched.delayTo !== undefined) &&
+    // Only once both are valid numbers — otherwise the per-field error already covers it.
+    nonNegative(v.delayFrom) &&
+    nonNegative(v.delayTo) &&
+    Number(v.delayFrom) > Number(v.delayTo)
+  ) {
+    errors.delayTo ??= 'neurocomment.limits.errDelayOrder';
   }
   return errors;
 }

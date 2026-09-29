@@ -69,7 +69,7 @@ export function ListenerEditModal({
     ...(stored === undefined ? EMPTY_LIMITS : neuroLimitsValue(stored)),
     ...limits,
   };
-  const limitErrors = Object.keys(limits).length === 0 ? {} : neuroLimitsErrors(limitsValue);
+  const limitErrors = neuroLimitsErrors(limitsValue, limits);
 
   const finish = () => {
     setSaved(true);

@@ -13,8 +13,10 @@ import re
 
 # The key is masked piece by piece: h11 escapes a control character (``\n`` becomes
 # the two characters ``\`` ``n``), so the raw key never appears whole in the message —
-# its header-safe runs do. Shorter runs are left alone; they reveal nothing.
-_HEADER_SAFE_RUN = re.compile(r"[!-~]+")
+# its header-safe runs do. The message quotes the header as a bytes repr, which also
+# escapes ``\`` and (when both quote kinds occur) ``'``, so those two split runs as well.
+# Shorter runs are left alone; they reveal nothing.
+_HEADER_SAFE_RUN = re.compile(r"[!-&(-\[\]-~]+")
 _MIN_MASKED_RUN = 4
 
 

@@ -29,10 +29,14 @@ test.each([
   expect(neuroLimitsErrors(value)).toEqual({});
 });
 
-test.each(['', ' ', '-1', 'abc', 'Infinity', 'NaN', '1e400'])('delay %j is refused', (raw) => {
-  const value = { ...neuroLimitsValue(STORED), delayFrom: raw };
-  expect(neuroLimitsErrors(value).delayFrom).toBe('neurocomment.limits.errDelay');
-});
+// `Number()` alone reads hex/binary/octal literals, so '0x10' would be sent as 16.
+test.each(['', ' ', '-1', 'abc', 'Infinity', 'NaN', '1e400', '0x10', '0b10000', '0o20'])(
+  'delay %j is refused',
+  (raw) => {
+    const value = { ...neuroLimitsValue(STORED), delayFrom: raw };
+    expect(neuroLimitsErrors(value).delayFrom).toBe('neurocomment.limits.errDelay');
+  },
+);
 
 test('a delay order check still compares exponent-form numbers numerically', () => {
   const value = { ...neuroLimitsValue(STORED), delayFrom: '1e3', delayTo: '20' };

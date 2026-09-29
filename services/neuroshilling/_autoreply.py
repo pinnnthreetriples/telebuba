@@ -213,15 +213,16 @@ async def _refuse(account_id: str | None, target: str, reason: str) -> None:
 async def _draft(
     history: Sequence[NeuroshillingChatMessage],
     message: NeuroshillingChatMessage,
+    api_key: str,
 ) -> str | None:
     """Ask the model for one answer. ``None`` means nothing usable came back.
 
     Takes the conversation rather than reading it, because the caller needs the very
     same messages afterwards: the echo gate weighs the answer against everything that
-    went into this prompt, and a second read could return a different set.
+    went into this prompt, and a second read could return a different set. The key too:
+    it is the one ``consider`` checked, as a re-read cleared meanwhile would be ``""``.
     """
     prompt = _prompt.build_reply_prompt(history, message)
-    api_key = (await load_warming_settings()).deepseek_api_key
     # Charged at the worst case and before the call, exactly as the scenario
     # generator charges it: the gateway retries a transient failure inside one call,
     # and a cap on spend must err high rather than low.
@@ -362,7 +363,7 @@ async def consider(
     # The model and Telegram run without the quota lock. The pending slot remains
     # visible to scenario steps until publication moves it into the sent count.
     try:
-        await _answer(context, target, _Speaker(account_id, chats[account_id]), message)
+        await _answer(context, target, _Speaker(account_id, chats[account_id]), message, api_key)
     finally:
         async with _quota_ledger.account_lock(account_id):
             _quota_ledger.release_reply(
@@ -375,6 +376,7 @@ async def _answer(
     target: str,
     speaker: _Speaker,
     message: NeuroshillingChatMessage,
+    api_key: str,
 ) -> None:
     """Everything after the claim: the budget, the call, the gates, the send."""
     account_id = speaker.account_id
@@ -396,7 +398,7 @@ async def _answer(
             target,
             limit=settings.neuroshilling.chat_context_messages,
         )
-        candidate = await _draft(history, message)
+        candidate = await _draft(history, message, api_key)
     finally:
         _state.finish_generation(context.campaign.campaign_id)
     if candidate is None:
