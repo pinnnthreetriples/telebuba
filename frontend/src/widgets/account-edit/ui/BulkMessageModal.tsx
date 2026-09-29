@@ -37,7 +37,7 @@ export type BulkMessageDraft = {
   ids: string[];
   mode: SendMode;
   recipients: string;
-  pins: Record<string, string>;
+  pins: Record<string, string[]>;
   message: string;
   minDelay: string;
   maxDelay: string;
@@ -91,8 +91,8 @@ export function BulkMessageModal({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [mode, setMode] = useState<SendMode>(initialDraft?.mode ?? 'each');
   const [recipients, setRecipients] = useState(initialDraft?.recipients ?? '');
-  // A raw user_id found by phone lookup is addressable only by the account that found it.
-  const [pins, setPins] = useState<Record<string, string>>(initialDraft?.pins ?? {});
+  // A raw user_id found by phone lookup is addressable only by the accounts that found it.
+  const [pins, setPins] = useState<Record<string, string[]>>(initialDraft?.pins ?? {});
   const [message, setMessage] = useState(initialDraft?.message ?? '');
   const [minDelay, setMinDelay] = useState(initialDraft?.minDelay ?? '0');
   const [maxDelay, setMaxDelay] = useState(initialDraft?.maxDelay ?? '0');
@@ -160,10 +160,12 @@ export function BulkMessageModal({
           mode,
           ...(mode === 'split' && {
             recipient_accounts: Object.fromEntries(
-              Object.entries(pins).filter(
-                ([recipient, accountId]) =>
-                  recipientList.includes(recipient) && ids.includes(accountId),
-              ),
+              Object.entries(pins).flatMap(([recipient, finders]) => {
+                const accountId = finders.find((id) => ids.includes(id));
+                return recipientList.includes(recipient) && accountId
+                  ? [[recipient, accountId]]
+                  : [];
+              }),
             ),
           }),
         },
@@ -176,7 +178,14 @@ export function BulkMessageModal({
 
   const appendRecipients = (lines: string[], found: Record<string, string>) => {
     setRecipients((prev) => [...new Set([...recipientsFrom(prev), ...lines])].join('\n'));
-    setPins((prev) => ({ ...prev, ...found }));
+    setPins((prev) => {
+      const next = { ...prev };
+      for (const [recipient, accountId] of Object.entries(found)) {
+        const finders = next[recipient] ?? [];
+        if (!finders.includes(accountId)) next[recipient] = [...finders, accountId];
+      }
+      return next;
+    });
   };
 
   const onGenerate = () => {
