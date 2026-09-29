@@ -50,7 +50,8 @@ function stored(settings: WarmingSettings, provider: Provider): { set: boolean; 
 
 // Clear wins over a typed key, a typed key sets it, blank (`null`) keeps it.
 function keyValue(draft: KeyDraft): string | null {
-  return draft.clear || draft.value.trim() === '' ? null : draft.value;
+  const value = draft.value.trim();
+  return draft.clear || value === '' ? null : value;
 }
 
 function SettingsForm({ settings }: { settings: WarmingSettings }) {

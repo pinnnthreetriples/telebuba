@@ -220,3 +220,16 @@ test('by default the save sends clear_gemini_key: false (key preserved)', async 
     expect(body.gemini_api_key).toBeNull();
   });
 });
+
+test('a pasted key is sent trimmed', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  const [openaiField] = screen.getAllByPlaceholderText('Ключ не задан');
+  await userEvent.type(openaiField!, '  sk-openai-pasted  ');
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    expect((await warmingPutBody()).openai_api_key).toBe('sk-openai-pasted');
+  });
+});

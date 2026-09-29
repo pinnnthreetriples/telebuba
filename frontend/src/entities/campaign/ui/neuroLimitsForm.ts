@@ -32,19 +32,26 @@ export function neuroLimitsValue(s: NeurocommentSettings): NeuroLimitsValue {
 }
 
 const INTEGER = /^\d+$/;
-const NON_NEGATIVE = /^\d+(\.\d+)?$/;
+
+// Parsed, not pattern-matched: `neuroLimitsValue` renders a stored 1e-7 or 1e21 in
+// exponent form, and an untouched field must stay valid.
+const nonNegative = (value: string) => {
+  if (value.trim() === '') return false;
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0;
+};
 
 // One refine per field so it emits exactly ONE issue: the error line shows the first only.
+// Safe integers only: past 2^53 `Number()` drifts, and '9'.repeat(400) is Infinity, which
+// JSON sends as null — a "saved" that changed nothing.
 const intAtLeast = (min: number, message: string, max = Infinity) =>
   z.string().refine((value) => {
     if (!INTEGER.test(value)) return false;
     const n = Number(value);
-    return n >= min && n <= max;
+    return Number.isSafeInteger(n) && n >= min && n <= max;
   }, message);
 
-const seconds = z
-  .string()
-  .refine((value) => NON_NEGATIVE.test(value), 'neurocomment.limits.errDelay');
+const seconds = z.string().refine(nonNegative, 'neurocomment.limits.errDelay');
 
 export const neuroLimitsSchema = z
   .object({
@@ -57,8 +64,8 @@ export const neuroLimitsSchema = z
   .refine(
     (v) =>
       // Only once both are valid numbers — otherwise the per-field error already covers it.
-      !NON_NEGATIVE.test(v.delayFrom) ||
-      !NON_NEGATIVE.test(v.delayTo) ||
+      !nonNegative(v.delayFrom) ||
+      !nonNegative(v.delayTo) ||
       Number(v.delayFrom) <= Number(v.delayTo),
     { message: 'neurocomment.limits.errDelayOrder', path: ['delayTo'] },
   );
@@ -75,27 +82,37 @@ export function neuroLimitsErrors(v: NeuroLimitsValue): Partial<Record<NeuroLimi
   return errors;
 }
 
-// The patch for a VALID value: only what differs from the stored row, because every field
-// of the route is patch-shaped and a cached number sent back would roll back a save made
-// elsewhere. The delay pair travels together (the backend checks min ≤ max on the wire).
+// The patch for a VALID draft: only the fields the operator TOUCHED, and of those only
+// what differs from the stored row — every field of the route is patch-shaped, and an
+// untouched field sent back from a snapshot would roll back a save made elsewhere. The
+// delay pair travels together (the backend checks min ≤ max on the wire), its untouched
+// half read fresh from `stored`.
 export function neuroLimitsPatch(
-  v: NeuroLimitsValue,
+  touched: Partial<NeuroLimitsValue>,
   stored: NeurocommentSettings,
 ): Partial<NeurocommentSettingsUpdate> {
   const patch: Partial<NeurocommentSettingsUpdate> = {};
+  const v = { ...neuroLimitsValue(stored), ...touched };
   const cpd = Number(v.cpd);
   const from = Number(v.delayFrom);
   const to = Number(v.delayTo);
   const parallel = Number(v.parallel);
   const trust = Number(v.trust);
-  if (cpd !== stored.max_comments_per_channel_per_day) {
+  if (touched.cpd !== undefined && cpd !== stored.max_comments_per_channel_per_day) {
     patch.max_comments_per_channel_per_day = cpd;
   }
-  if (from !== stored.reply_delay_min_seconds || to !== stored.reply_delay_max_seconds) {
+  if (
+    (touched.delayFrom !== undefined || touched.delayTo !== undefined) &&
+    (from !== stored.reply_delay_min_seconds || to !== stored.reply_delay_max_seconds)
+  ) {
     patch.reply_delay_min_seconds = from;
     patch.reply_delay_max_seconds = to;
   }
-  if (parallel !== stored.max_comments_per_hour) patch.max_comments_per_hour = parallel;
-  if (trust !== stored.min_trust_score) patch.min_trust_score = trust;
+  if (touched.parallel !== undefined && parallel !== stored.max_comments_per_hour) {
+    patch.max_comments_per_hour = parallel;
+  }
+  if (touched.trust !== undefined && trust !== stored.min_trust_score) {
+    patch.min_trust_score = trust;
+  }
   return patch;
 }

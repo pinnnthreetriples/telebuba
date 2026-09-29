@@ -427,3 +427,24 @@ async def test_normal_finish_reason_still_returns_text() -> None:
 
     assert result.status == "ok"
     assert result.text == "Ого, вот это игра!"
+
+
+@pytest.mark.asyncio
+async def test_a_transport_error_quoting_the_key_is_redacted() -> None:
+    leak = httpx.LocalProtocolError("Illegal header value b'test-key\n'")
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(side_effect=leak)
+        result = await generate_text(_request())
+    assert result.status == "error"
+    assert "LocalProtocolError" in (result.error or "")
+    assert "test-key" not in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_key_that_cannot_be_encoded_is_an_error_not_an_exception() -> None:
+    request = _request().model_copy(update={"api_key": "test-kéy"})
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(return_value=httpx.Response(200, json={}))
+        result = await generate_text(request)
+    assert result.status == "error"
+    assert "test-k" not in (result.error or "")

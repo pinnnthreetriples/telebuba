@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from core.db import load_warming_settings
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS
 from schemas.dialogues import DialogueFeed, DialogueFeedMessage
 from schemas.warming import (
@@ -247,6 +248,23 @@ async def test_update_settings_rejects_an_unknown_extra_toggle(app: FastAPI) -> 
     async with _client(app) as client:
         resp = await client.put("/api/v1/warming/settings", json={"extra_toggles": {"nope": True}})
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_update_settings_rejects_a_key_that_cannot_be_a_header(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.put("/api/v1/warming/settings", json={"openai_api_key": "sk-a\nb"})
+    assert resp.status_code == 422
+    assert "sk-a" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_update_settings_stores_a_pasted_key_stripped(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.put("/api/v1/warming/settings", json={"deepseek_api_key": " sk-9x\n"})
+    assert resp.status_code == 200
+    secret = await load_warming_settings()
+    assert secret.deepseek_api_key == "sk-9x"
 
 
 @pytest.mark.asyncio

@@ -1,9 +1,8 @@
 """Ask DeepSeek for a dialogue and turn what comes back into a saveable scenario.
 
-DeepSeek only. ``services.neurocomment._llm`` falls back to Gemini when the
-deployment has no DeepSeek key, and that is right for the comment hot path — but
-the Gemini key is an operator-set secret on the warming settings row, and reaching
-for it here would drag warming state into a request that has none.
+DeepSeek only. ``services.neurocomment._llm`` falls back to Gemini when no
+DeepSeek key is set, and that is right for the comment hot path — not here. The
+warming settings row is read for the DeepSeek key alone.
 ``expand_discovery_keywords`` made the same call for the same reason: an unset
 DeepSeek key (Settings page, else ``DEEPSEEK__API_KEY``) is a fact the operator can
 act on, so it is reported rather than worked around.

@@ -42,6 +42,7 @@ from typing import cast
 
 import httpx
 
+from core._llm_redact import exception_text
 from core.config import OpenAISettings, settings
 from schemas.gemini import GeminiRequest, GeminiResult
 
@@ -200,8 +201,11 @@ async def generate_text(
                 json=_payload(request, provider),
                 timeout=provider.timeout_seconds,
             )
+        except UnicodeError as exc:
+            # A key httpx cannot encode into the header: no retry will fix that.
+            return GeminiResult(status="error", error=exception_text(exc, request.api_key))
         except httpx.HTTPError as exc:
-            result = GeminiResult(status="error", error=f"{type(exc).__name__}: {exc}")
+            result = GeminiResult(status="error", error=exception_text(exc, request.api_key))
             transient = True
         else:
             result = _classify_response(response)

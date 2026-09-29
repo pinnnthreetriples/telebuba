@@ -58,12 +58,18 @@ export function ListenerEditModal({
   const [partialSave, setPartialSave] = useState(false);
   // `null` means "untouched", which is also how the draft survives a read that lands after
   // the modal opened: no effect syncing query into state, and nothing to compare when the
-  // operator never touched the fields.
+  // operator never touched the fields. The limits draft holds the touched fields ONLY, laid
+  // over the current read, so a stored value that changes after the first keystroke still
+  // shows — and is never sent back — for every field the operator left alone.
   const [mode, setMode] = useState<CommentMode | null>(null);
   const [wait, setWait] = useState<number | null>(null);
-  const [limits, setLimits] = useState<NeuroLimitsValue | null>(null);
+  const [limits, setLimits] = useState<Partial<NeuroLimitsValue>>({});
   const [tab, setTab] = useState<Tab>('commenting');
-  const limitErrors = limits === null ? {} : neuroLimitsErrors(limits);
+  const limitsValue = {
+    ...(stored === undefined ? EMPTY_LIMITS : neuroLimitsValue(stored)),
+    ...limits,
+  };
+  const limitErrors = Object.keys(limits).length === 0 ? {} : neuroLimitsErrors(limitsValue);
 
   const finish = () => {
     setSaved(true);
@@ -89,7 +95,7 @@ export function ListenerEditModal({
       if (stored !== undefined) {
         if (mode !== null && mode !== stored.comment_mode) patch.comment_mode = mode;
         if (wait !== null && wait !== stored.reply_wait_minutes) patch.reply_wait_minutes = wait;
-        if (limits !== null) Object.assign(patch, neuroLimitsPatch(limits, stored));
+        Object.assign(patch, neuroLimitsPatch(limits, stored));
       }
       let settingsApplied = false;
       if (stored !== undefined && Object.keys(patch).length > 0) {
@@ -103,7 +109,7 @@ export function ListenerEditModal({
           });
           setMode(null);
           setWait(null);
-          setLimits(null);
+          setLimits({});
           settingsApplied = true;
         } catch {
           toastError(
@@ -193,17 +199,14 @@ export function ListenerEditModal({
         ) : (
           <>
             <p className="mb-lg mt-0 type-prose">{t('neurocomment.limits.note')}</p>
-            {/* `null` is "untouched", so a read landing after the modal opened still shows. */}
+            {/* Touched fields over the read, so a read landing after the modal opened shows. */}
             <NeuroLimitsFields
-              value={limits ?? (stored === undefined ? EMPTY_LIMITS : neuroLimitsValue(stored))}
+              value={limitsValue}
               errors={limitErrors}
               disabled={stored === undefined || saving}
               onChange={(field, raw) => {
                 if (stored === undefined) return;
-                setLimits((current) => ({
-                  ...(current ?? neuroLimitsValue(stored)),
-                  [field]: raw,
-                }));
+                setLimits((current) => ({ ...current, [field]: raw }));
               }}
             />
           </>

@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
+import { neurocommentSettingsQueryOptions } from '../api/campaign.queries';
 import { ListenerEditModal } from './ListenerEditModal';
 
 // The "Лимиты" tab: the fleet-wide limits moved here from the Settings page. Its own file
@@ -16,7 +17,7 @@ const SETTINGS = {
   reply_delay_min_seconds: 3,
   reply_delay_max_seconds: 10,
   min_trust_score: 45,
-  comment_mode: 'first',
+  comment_mode: 'first' as const,
   reply_wait_minutes: 10,
   updated_at: 'now',
 };
@@ -55,7 +56,7 @@ async function openLimitsTab(stored: Partial<typeof SETTINGS> = {}) {
   await waitFor(() => {
     expect(screen.getByRole('textbox', { name: 'Мин. trust-score для работы' })).toBeEnabled();
   });
-  return { onClose };
+  return { onClose, queryClient };
 }
 
 const field = (name: string) => screen.getByRole('textbox', { name });
@@ -162,4 +163,53 @@ test('an edited limit survives a tab switch and is thrown away by cancel', async
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(puts()).toHaveLength(0);
+});
+
+// A stored value that changes after the first keystroke (a refetch landing late, a save
+// from another browser) must not be overwritten by the modal's copy of a field the
+// operator never touched.
+test('an untouched limit is never sent back over a newer stored value', async () => {
+  const { queryClient } = await openLimitsTab();
+
+  await userEvent.clear(field('Мин. trust-score для работы'));
+  await userEvent.type(field('Мин. trust-score для работы'), '60');
+  act(() => {
+    queryClient.setQueryData(neurocommentSettingsQueryOptions().queryKey, {
+      ...SETTINGS,
+      max_comments_per_channel_per_day: 7,
+      reply_delay_min_seconds: 5,
+    });
+  });
+  // The fresh read shows through the untouched field (TanStack notifies asynchronously).
+  await waitFor(() => {
+    expect(field('Комментариев в день на канал')).toHaveValue('7');
+  });
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(puts()).toHaveLength(1);
+  });
+  expect(await puts()[0]!.clone().json()).toEqual({ min_trust_score: 60 });
+});
+
+test('a touched delay half travels with the fresh stored other half', async () => {
+  const { queryClient } = await openLimitsTab();
+
+  await userEvent.clear(field('Задержка ответа, до (сек)'));
+  await userEvent.type(field('Задержка ответа, до (сек)'), '20');
+  act(() => {
+    queryClient.setQueryData(neurocommentSettingsQueryOptions().queryKey, {
+      ...SETTINGS,
+      reply_delay_min_seconds: 5,
+    });
+  });
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(puts()).toHaveLength(1);
+  });
+  expect(await puts()[0]!.clone().json()).toEqual({
+    reply_delay_min_seconds: 5,
+    reply_delay_max_seconds: 20,
+  });
 });

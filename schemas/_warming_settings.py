@@ -8,14 +8,20 @@ working unchanged. Self-contained: depends only on pydantic + stdlib typing, so
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
 
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
 CaptchaLlmProvider = Literal["gemini", "openai", "deepseek"]
+
+# What an LLM key may be made of once the paste's surrounding whitespace is stripped:
+# printable ASCII, no spaces. The key rides an HTTP header, and anything else there
+# makes httpx raise with the whole header — key included — quoted in the message.
+_API_KEY_CHARS = re.compile(r"[!-~]*")
 
 
 class WarmingSettings(BaseModel):
@@ -111,3 +117,16 @@ class WarmingSettingsUpdate(BaseModel):
     # endpoint without ever seeing the extras, so a full-replacement default would
     # reset the tuning card's toggles on every unrelated save. Unknown keys are a 422.
     extra_toggles: ExtraToggles | None = None
+
+    @field_validator("gemini_api_key", "openai_api_key", "deepseek_api_key")
+    @classmethod
+    def _header_safe_key(cls, value: str | None) -> str | None:
+        # Strip only: ``None`` still keeps and an empty result still clears.
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not _API_KEY_CHARS.fullmatch(stripped):
+            # The message names the rule, never the value — it reaches the 422 body.
+            msg = "API key must be printable ASCII without whitespace"
+            raise ValueError(msg)
+        return stripped

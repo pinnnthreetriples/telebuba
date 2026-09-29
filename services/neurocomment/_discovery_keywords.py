@@ -4,11 +4,10 @@ A convenience over the keyword box on the discovery board, not part of a run: it
 touches no campaign, reserves no account and spends no Telegram budget, so it lives
 beside the discovery modules rather than inside ``discovery.py``'s run machinery.
 
-DeepSeek only. ``_llm._deepseek_generates`` falls back to Gemini when the deployment
-has no DeepSeek key, and that is right for the comment hot path — but the Gemini key
-is a per-campaign secret (``WarmingSettingsSecret.gemini_api_key``), and this route
-has no campaign to read one from. Reaching for a campaign's key here would drag
-campaign state into a request that deliberately has none, so an unset DeepSeek key is
+DeepSeek only. ``_llm._deepseek_generates`` falls back to Gemini when no DeepSeek
+key is set, and that is right for the comment hot path — not here. The warming
+settings row is read for the DeepSeek key alone (Settings page, else
+``DEEPSEEK__API_KEY``); an unset one is a fact the operator can act on, so it is
 simply reported (``llm_unavailable``) and nothing is called.
 
 The parser assumes the model ignores half the formatting instruction, because it
