@@ -1,34 +1,30 @@
-import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useId, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  neurocommentSettingsQueryOptions,
-  updateNeurocommentSettingsMutation,
-} from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
-import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import {
-  Button,
-  Card,
-  FieldError,
-  FormField,
-  HelpHint,
-  Icon,
-  Input,
-  SegmentedControl,
-  Switch,
-} from '@/shared/ui';
+import type { WarmingSettings } from '@/shared/api';
+import { Button, Card, HelpHint, Icon, Input, SegmentedControl } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
-import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
 
 const FIELD_LABEL = 'mb-tight block type-label';
 
-// The three real, engine-used warming toggles surfaced as the design's flag rows.
-const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
-type WarmingToggle = (typeof WARMING_TOGGLES)[number];
+// The page is only what no other screen owns: the LLM keys, Gemini's pacing and the
+// captcha provider. The warming toggles live on the warming board's action-tuning card
+// and the neurocomment limits in the listener modal — duplicated here, each save sent
+// the other page's fields back from a stale cache and could undo an edit made there.
+const PROVIDERS = ['gemini', 'openai', 'deepseek'] as const;
+type Provider = (typeof PROVIDERS)[number];
+
+// A typed key replaces the stored one, blank keeps it, `clear` wipes it on save.
+type KeyDraft = { value: string; show: boolean; clear: boolean };
+const NO_DRAFT: KeyDraft = { value: '', show: false, clear: false };
+const NO_DRAFTS: Record<Provider, KeyDraft> = {
+  gemini: NO_DRAFT,
+  openai: NO_DRAFT,
+  deepseek: NO_DRAFT,
+};
 
 // Parse a numeric field, clamping to [min, max] and falling back on empty/NaN.
 // Keeps a fat-fingered value from failing the backend's Field bounds with a 422.
@@ -38,188 +34,136 @@ function clampNumber(raw: string, min: number, max: number, fallback: number): n
   return Math.min(max, Math.max(min, n));
 }
 
-function SettingsForm({
-  settings,
-  neuroSettings,
-}: {
-  settings: WarmingSettings;
-  neuroSettings: NeurocommentSettings;
-}) {
+function stored(settings: WarmingSettings, provider: Provider): { set: boolean; hint: string } {
+  const set = {
+    gemini: settings.has_gemini_key,
+    openai: settings.has_openai_key,
+    deepseek: settings.has_deepseek_key,
+  }[provider];
+  const hint = {
+    gemini: settings.gemini_key_hint,
+    openai: settings.openai_key_hint,
+    deepseek: settings.deepseek_key_hint,
+  }[provider];
+  return { set: set ?? false, hint: hint ?? '••••' };
+}
+
+// Clear wins over a typed key, a typed key sets it, blank (`null`) keeps it.
+function keyValue(draft: KeyDraft): string | null {
+  return draft.clear || draft.value.trim() === '' ? null : draft.value;
+}
+
+function SettingsForm({ settings }: { settings: WarmingSettings }) {
   const { t } = useTranslation();
-  const delayFromErrorId = useId();
-  const delayToErrorId = useId();
   const queryClient = useQueryClient();
   const saveWarm = useMutation(updateWarmingSettingsMutation());
-  const saveNeuro = useMutation(updateNeurocommentSettingsMutation());
 
-  const [geminiKey, setGeminiKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  // Tracks a pending "clear the stored key" action (distinct from "leave blank to
-  // keep"). Sends clear_gemini_key: true on the next save.
-  const [clearKey, setClearKey] = useState(false);
-  const [openaiKey, setOpenaiKey] = useState('');
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
-  const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
+  const [keys, setKeys] = useState(NO_DRAFTS);
   // Gemini rate-limit knobs (see the "?" hints): retry count + min spacing between calls.
   const [geminiRetries, setGeminiRetries] = useState(String(settings.gemini_max_retries ?? 1));
   const [geminiInterval, setGeminiInterval] = useState(
     String(settings.gemini_min_interval_seconds ?? 0),
   );
-  const [provider, setProvider] = useState<'gemini' | 'openai'>(
-    settings.captcha_llm_provider ?? 'gemini',
-  );
-  const [toggles, setToggles] = useState<Record<WarmingToggle, boolean>>({
-    reactions_enabled: settings.reactions_enabled ?? true,
-    join_enabled: settings.join_enabled ?? true,
-    inter_account_chat: settings.inter_account_chat ?? false,
-  });
+  const [provider, setProvider] = useState<Provider>(settings.captcha_llm_provider ?? 'gemini');
   const [justSaved, setJustSaved] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
 
-  const form = useForm({
-    defaultValues: neuroFormValue(neuroSettings),
-    validators: { onChange: neuroFormSchema, onMount: neuroFormSchema },
-    onSubmit: async ({ value }) => {
-      setSaveFailed(false);
-      try {
-        await Promise.all([
-          saveWarm.mutateAsync({
-            body: {
-              reactions_enabled: toggles.reactions_enabled,
-              join_enabled: toggles.join_enabled,
-              inter_account_chat: toggles.inter_account_chat,
-              enforce_readiness: settings.enforce_readiness ?? true,
-              gemini_model: settings.gemini_model,
-              gemini_max_retries: clampNumber(geminiRetries, 0, 5, 1),
-              gemini_min_interval_seconds: clampNumber(geminiInterval, 0, 60, 0),
-              // clear wins over a typed key; a typed key sets it; blank keeps it.
-              gemini_api_key: clearKey ? null : geminiKey.trim() === '' ? null : geminiKey,
-              clear_gemini_key: clearKey,
-              openai_api_key: clearOpenaiKey ? null : openaiKey.trim() === '' ? null : openaiKey,
-              clear_openai_key: clearOpenaiKey,
-              openai_model: settings.openai_model,
-              captcha_llm_provider: provider,
-            },
-          }),
-          saveNeuro.mutateAsync({ body: neuroUpdateBody(value) }),
-        ]);
-        setGeminiKey('');
-        setClearKey(false);
-        setOpenaiKey('');
-        setClearOpenaiKey(false);
-        setJustSaved(true);
-        window.setTimeout(() => {
-          setJustSaved(false);
-        }, 1400);
-        void queryClient.invalidateQueries({
-          queryKey: warmingSettingsQueryOptions().queryKey,
-        });
-        void queryClient.invalidateQueries({
-          queryKey: neurocommentSettingsQueryOptions().queryKey,
-        });
-      } catch {
-        setSaveFailed(true);
-        window.setTimeout(() => {
-          setSaveFailed(false);
-        }, 2400);
-      }
-    },
-  });
+  const draft = (key: Provider, change: Partial<KeyDraft>) => {
+    setKeys((current) => ({ ...current, [key]: { ...current[key], ...change } }));
+  };
 
-  const canSubmit = useStore(form.store, (state) => state.canSubmit);
+  const submit = async () => {
+    setSaveFailed(false);
+    try {
+      await saveWarm.mutateAsync({
+        // Only this page's own fields: the route keeps whatever a body leaves out.
+        body: {
+          gemini_api_key: keyValue(keys.gemini),
+          clear_gemini_key: keys.gemini.clear,
+          openai_api_key: keyValue(keys.openai),
+          clear_openai_key: keys.openai.clear,
+          deepseek_api_key: keyValue(keys.deepseek),
+          clear_deepseek_key: keys.deepseek.clear,
+          gemini_max_retries: clampNumber(geminiRetries, 0, 5, 1),
+          gemini_min_interval_seconds: clampNumber(geminiInterval, 0, 60, 0),
+          captcha_llm_provider: provider,
+        },
+      });
+      setKeys(NO_DRAFTS);
+      setJustSaved(true);
+      window.setTimeout(() => {
+        setJustSaved(false);
+      }, 1400);
+      void queryClient.invalidateQueries({
+        queryKey: warmingSettingsQueryOptions().queryKey,
+      });
+    } catch {
+      setSaveFailed(true);
+      window.setTimeout(() => {
+        setSaveFailed(false);
+      }, 2400);
+    }
+  };
 
-  // Re-sync the neuro form if the server value changes (e.g. another tab saved).
-  useEffect(() => {
-    form.reset(neuroFormValue(neuroSettings));
-  }, [neuroSettings, form]);
-
-  const pending = saveWarm.isPending || saveNeuro.isPending;
-  // The stored key is present unless the operator just chose to clear it.
-  const keySet = (settings.has_gemini_key ?? false) && !clearKey;
-  const openaiKeySet = (settings.has_openai_key ?? false) && !clearOpenaiKey;
+  const pending = saveWarm.isPending;
 
   const onCancel = () => {
-    setGeminiKey('');
-    setClearKey(false);
-    setOpenaiKey('');
-    setClearOpenaiKey(false);
+    setKeys(NO_DRAFTS);
     setGeminiRetries(String(settings.gemini_max_retries ?? 1));
     setGeminiInterval(String(settings.gemini_min_interval_seconds ?? 0));
     setProvider(settings.captcha_llm_provider ?? 'gemini');
-    form.reset(neuroFormValue(neuroSettings));
-    setToggles({
-      reactions_enabled: settings.reactions_enabled ?? true,
-      join_enabled: settings.join_enabled ?? true,
-      inter_account_chat: settings.inter_account_chat ?? false,
-    });
+  };
+
+  const keyField = (key: Provider) => {
+    const current = keys[key];
+    const { set, hint } = stored(settings, key);
+    // The stored key is present unless the operator just chose to clear it.
+    const keySet = set && !current.clear;
+    return (
+      <ApiKeyField
+        key={key}
+        label={t(`settings.api.${key}Key`)}
+        value={current.value}
+        show={current.show}
+        keySet={keySet}
+        placeholder={
+          current.clear
+            ? t('settings.api.keyCleared')
+            : !keySet
+              ? t('settings.api.keyUnset')
+              : // The eye reveals the stored key's hint — never the key, which stays server-side.
+                current.show
+                ? t('settings.api.keySetHint', { hint })
+                : t('settings.api.keySet')
+        }
+        toggleLabel={t('settings.api.toggleVisibility')}
+        clearLabel={t('settings.api.clearKey')}
+        onChange={(value) => {
+          draft(key, { value, clear: false });
+        }}
+        onToggleShow={() => {
+          draft(key, { show: !current.show });
+        }}
+        onClear={() => {
+          draft(key, { clear: true, value: '' });
+        }}
+      />
+    );
   };
 
   return (
     <form
       noValidate
       // Зазор между карточками раздаёт форма, а не карточки: `mb` у `Card` больше нет.
-      // Ступень одна — `lg`; пятая карточка носила `mb-xl`, и это была drift на 4px, а не
-      // решение (четыре предыдущие говорили `lg`).
       className="flex flex-col gap-lg"
       onSubmit={(event) => {
         event.preventDefault();
-        void form.handleSubmit();
+        void submit();
       }}
     >
       <Card title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
         <div className="space-y-lg">
-          <ApiKeyField
-            label={t('settings.api.geminiKey')}
-            value={geminiKey}
-            show={showKey}
-            keySet={keySet}
-            placeholder={
-              clearKey
-                ? t('settings.api.keyCleared')
-                : keySet
-                  ? t('settings.api.keySet')
-                  : t('settings.api.keyUnset')
-            }
-            toggleLabel={t('settings.api.toggleVisibility')}
-            clearLabel={t('settings.api.clearKey')}
-            onChange={(value) => {
-              setGeminiKey(value);
-              if (clearKey) setClearKey(false);
-            }}
-            onToggleShow={() => {
-              setShowKey((value) => !value);
-            }}
-            onClear={() => {
-              setClearKey(true);
-              setGeminiKey('');
-            }}
-          />
-          <ApiKeyField
-            label={t('settings.api.openaiKey')}
-            value={openaiKey}
-            show={showOpenaiKey}
-            keySet={openaiKeySet}
-            placeholder={
-              clearOpenaiKey
-                ? t('settings.api.keyCleared')
-                : openaiKeySet
-                  ? t('settings.api.keySet')
-                  : t('settings.api.keyUnset')
-            }
-            toggleLabel={t('settings.api.toggleVisibility')}
-            clearLabel={t('settings.api.clearKey')}
-            onChange={(value) => {
-              setOpenaiKey(value);
-              if (clearOpenaiKey) setClearOpenaiKey(false);
-            }}
-            onToggleShow={() => {
-              setShowOpenaiKey((value) => !value);
-            }}
-            onClear={() => {
-              setClearOpenaiKey(true);
-              setOpenaiKey('');
-            }}
-          />
+          {PROVIDERS.map(keyField)}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             <label className="block">
               <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
@@ -271,7 +215,7 @@ function SettingsForm({
           variant="outline"
           value={provider}
           ariaLabel={t('settings.captchaLlm.title')}
-          options={(['gemini', 'openai'] as const).map((option) => ({
+          options={PROVIDERS.map((option) => ({
             value: option,
             label: t(`settings.captchaLlm.${option}`),
           }))}
@@ -281,126 +225,12 @@ function SettingsForm({
         />
       </Card>
 
-      <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
-        <div className="rounded-lg border border-dashed border-line bg-surface px-lg py-md type-prose">
-          {t('settings.warmLimits.engineNote')}
-        </div>
-      </Card>
-
-      <Card title={t('settings.neuroLimits.title')} subtitle={t('settings.neuroLimits.subtitle')}>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-          <form.Field name="cpd">
-            {(field) => (
-              <FormField field={field} label={t('settings.neuroLimits.cpd')} inputMode="numeric" />
-            )}
-          </form.Field>
-          <div className="min-w-0">
-            <span className={FIELD_LABEL}>{t('settings.neuroLimits.delay')}</span>
-            <div className="flex items-center gap-md">
-              <form.Field name="delayFrom">
-                {(field) => {
-                  const invalid = field.state.meta.isTouched && field.state.meta.errors.length > 0;
-                  return (
-                    <label
-                      className={`tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border bg-surface-card px-md py-md ${invalid ? 'border-danger' : 'border-line'}`}
-                    >
-                      <span className="shrink-0 type-caption">{t('settings.range.from')}</span>
-                      <input
-                        inputMode="numeric"
-                        value={field.state.value}
-                        onChange={(event) => {
-                          field.handleChange(event.target.value);
-                        }}
-                        onBlur={field.handleBlur}
-                        aria-label={t('settings.neuroLimits.delayFrom')}
-                        aria-invalid={invalid || undefined}
-                        aria-describedby={invalid ? delayFromErrorId : undefined}
-                        className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
-                      />
-                    </label>
-                  );
-                }}
-              </form.Field>
-              <form.Field name="delayTo">
-                {(field) => {
-                  const invalid = field.state.meta.isTouched && field.state.meta.errors.length > 0;
-                  return (
-                    <label
-                      className={`tb-time flex min-w-0 flex-1 items-center gap-sm rounded-lg border bg-surface-card px-md py-md ${invalid ? 'border-danger' : 'border-line'}`}
-                    >
-                      <span className="shrink-0 type-caption">{t('settings.range.to')}</span>
-                      <input
-                        inputMode="numeric"
-                        value={field.state.value}
-                        onChange={(event) => {
-                          field.handleChange(event.target.value);
-                        }}
-                        onBlur={field.handleBlur}
-                        aria-label={t('settings.neuroLimits.delayTo')}
-                        aria-invalid={invalid || undefined}
-                        aria-describedby={invalid ? delayToErrorId : undefined}
-                        className="min-w-0 flex-1 border-none bg-transparent text-right text-body outline-none"
-                      />
-                    </label>
-                  );
-                }}
-              </form.Field>
-            </div>
-            <form.Field name="delayFrom">
-              {(field) => <FieldError field={field} id={delayFromErrorId} />}
-            </form.Field>
-            <form.Field name="delayTo">
-              {(field) => <FieldError field={field} id={delayToErrorId} />}
-            </form.Field>
-          </div>
-          <form.Field name="parallel">
-            {(field) => (
-              <FormField
-                field={field}
-                label={t('settings.neuroLimits.parallel')}
-                inputMode="numeric"
-              />
-            )}
-          </form.Field>
-          <form.Field name="trust">
-            {(field) => (
-              <FormField
-                field={field}
-                label={t('settings.neuroLimits.trust')}
-                inputMode="numeric"
-              />
-            )}
-          </form.Field>
-        </div>
-      </Card>
-
-      <Card className="px-xl py-tight">
-        {WARMING_TOGGLES.map((flag) => (
-          <div
-            key={flag}
-            className="flex items-center justify-between gap-md border-b border-line-row py-lg"
-          >
-            <div>
-              <div className="type-card-title">{t(`settings.flag.${flag}.label`)}</div>
-              <div className="mt-px type-caption">{t(`settings.flag.${flag}.desc`)}</div>
-            </div>
-            <Switch
-              checked={toggles[flag]}
-              onChange={(v) => {
-                setToggles((f) => ({ ...f, [flag]: v }));
-              }}
-              label={t(`settings.flag.${flag}.label`)}
-            />
-          </div>
-        ))}
-      </Card>
-
       <div className="flex justify-end gap-sm">
         <Button onClick={onCancel}>{t('settings.cancel')}</Button>
         <Button
           variant="primary"
           type="submit"
-          disabled={pending || !canSubmit}
+          disabled={pending}
           className={
             justSaved
               ? 'bg-success-deep hover:bg-success-deep'
@@ -439,23 +269,19 @@ function SettingsForm({
 export function SettingsPage() {
   const { t } = useTranslation();
   const warming = useQuery(warmingSettingsQueryOptions());
-  const neuro = useQuery(neurocommentSettingsQueryOptions());
-
-  const loading = warming.isPending || neuro.isPending;
-  const failed = warming.isError || neuro.isError || !warming.data || !neuro.data;
 
   return (
     // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this page's own settings column
     <div className="tb-fadeup max-w-[760px]">
       <h1 className="m-0 mb-xl type-page-title">{t('settings.title')}</h1>
-      {loading ? (
+      {warming.isPending ? (
         <p className="text-content-muted">{t('settings.loading')}</p>
-      ) : failed ? (
+      ) : warming.isError || !warming.data ? (
         <p role="alert" className="text-danger">
           {t('settings.error')}
         </p>
       ) : (
-        <SettingsForm settings={warming.data} neuroSettings={neuro.data} />
+        <SettingsForm settings={warming.data} />
       )}
     </div>
   );

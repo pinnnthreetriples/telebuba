@@ -61,17 +61,17 @@ def _gemini_reason(result: GeminiResult) -> str:
     return "gemini_error"
 
 
-def _deepseek_generates(image_b64: str | None) -> bool:
+def _deepseek_generates(image_b64: str | None, secret: WarmingSettingsSecret) -> bool:
     """True when this comment is written by DeepSeek rather than Gemini.
 
-    Two conditions, and both are hard limits rather than preferences.
-    ``deepseek-v4-flash`` is text-only (DeepSeek publishes ``input_modalities:
-    ["text"]``), so a caption-less photo post — the one case that carries an image —
-    has nowhere to go but Gemini. And an unset ``DEEPSEEK__API_KEY`` means the
-    deployment never opted in, which must fall back rather than fail: this is the
-    hot path for every comment the campaign writes.
+    Two conditions. A caption-less photo post — the one case that carries an image —
+    stays on Gemini: ``deepseek-flash`` reads images now, but the comment path has only
+    been proven on Gemini's vision, so moving it is a separate decision. And no DeepSeek
+    key (the settings page's, else ``DEEPSEEK__API_KEY``) means the operator never opted
+    in, which must fall back rather than fail: this is the hot path for every comment
+    the campaign writes.
     """
-    return image_b64 is None and bool(settings.deepseek.api_key)
+    return image_b64 is None and bool(secret.deepseek_api_key)
 
 
 def _build_request(
@@ -91,7 +91,7 @@ def _build_request(
     )
     llm = settings.deepseek if use_deepseek else settings.gemini
     return GeminiRequest(
-        api_key=settings.deepseek.api_key if use_deepseek else secret.gemini_api_key,
+        api_key=secret.deepseek_api_key if use_deepseek else secret.gemini_api_key,
         prompt=instruction,
         model=settings.deepseek.model if use_deepseek else secret.gemini_model,
         temperature=llm.temperature,

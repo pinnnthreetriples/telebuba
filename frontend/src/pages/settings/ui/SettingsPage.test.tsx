@@ -19,18 +19,10 @@ const SETTINGS = {
   join_enabled: true,
   enforce_readiness: true,
   has_gemini_key: true,
+  gemini_key_hint: 'AIza…x7Qp',
   gemini_model: 'gemini-2.5-flash',
   gemini_max_retries: 2,
   gemini_min_interval_seconds: 1.5,
-  updated_at: 'now',
-};
-
-const NEURO_SETTINGS = {
-  max_comments_per_hour: 10,
-  max_comments_per_channel_per_day: 3,
-  reply_delay_min_seconds: 3,
-  reply_delay_max_seconds: 10,
-  min_trust_score: 45,
   updated_at: 'now',
 };
 
@@ -42,13 +34,7 @@ function jsonResponse(body: unknown): Response {
 }
 
 function routeSettings() {
-  vi.mocked(fetch).mockImplementation((input) => {
-    const url = new URL((input as Request).url);
-    if (url.pathname === '/api/v1/neurocomment/settings') {
-      return Promise.resolve(jsonResponse(NEURO_SETTINGS));
-    }
-    return Promise.resolve(jsonResponse(SETTINGS));
-  });
+  vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse(SETTINGS)));
 }
 
 async function warmingPutBody(): Promise<Record<string, unknown>> {
@@ -59,29 +45,81 @@ async function warmingPutBody(): Promise<Record<string, unknown>> {
   return JSON.parse(await put.clone().text());
 }
 
-test('saves both warming toggles and neuro limits, then confirms', async () => {
+test('saves only its own fields — never the warming toggles or cached models', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
-  await waitFor(() => {
-    expect(screen.getByText('Сохранить')).toBeInTheDocument();
-  });
-  expect(screen.getByText('Лимиты прогрева')).toBeInTheDocument();
-  expect(screen.getByText('Лимиты нейрокомментинга')).toBeInTheDocument();
-  // neuro limits are loaded from the API
-  expect(screen.getByLabelText('Мин. trust-score для работы')).toHaveValue('45');
+  await screen.findByText('Сохранить');
 
-  // a real warming toggle + save fires both the warming and neuro PUTs
-  await userEvent.click(screen.getByLabelText('Реакции в прогреве'));
   await userEvent.click(screen.getByText('Сохранить'));
-  await waitFor(() => {
-    const calls = vi.mocked(fetch).mock.calls.map(([i]) => i as Request);
-    const warmPut = calls.some((r) => r.url.endsWith('/warming/settings') && r.method === 'PUT');
-    const neuroPut = calls.some(
-      (r) => r.url.endsWith('/neurocomment/settings') && r.method === 'PUT',
-    );
-    expect(warmPut && neuroPut).toBe(true);
+  await waitFor(async () => {
+    const body = await warmingPutBody();
+    // The warming board owns these; sending the cached copy back undid its edits.
+    for (const foreign of [
+      'enforce_readiness',
+      'reactions_enabled',
+      'join_enabled',
+      'inter_account_chat',
+      'gemini_model',
+      'openai_model',
+    ]) {
+      expect(body).not.toHaveProperty(foreign);
+    }
   });
   expect(await screen.findByText('Сохранено')).toBeInTheDocument();
+  const neuroCalls = vi
+    .mocked(fetch)
+    .mock.calls.filter(([i]) => (i as Request).url.includes('/neurocomment/'));
+  expect(neuroCalls).toHaveLength(0);
+});
+
+test('the duplicated blocks are gone: warming toggles and both limit cards', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  for (const gone of [
+    'Лимиты прогрева',
+    'Лимиты нейрокомментинга',
+    'Реакции в прогреве',
+    'Вступление в каналы',
+    'Чат между аккаунтами',
+  ]) {
+    expect(screen.queryByText(gone)).not.toBeInTheDocument();
+  }
+});
+
+test('a DeepSeek key and the DeepSeek captcha provider are saved', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  // OpenAI and DeepSeek have no stored key in this fixture, in that order.
+  const [, deepseekField] = screen.getAllByPlaceholderText('Ключ не задан');
+  expect(screen.getByText('DeepSeek API key')).toBeInTheDocument();
+  await userEvent.type(deepseekField!, 'sk-deepseek-typed');
+  await userEvent.click(screen.getByRole('radio', { name: 'DeepSeek' }));
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    const body = await warmingPutBody();
+    expect(body.deepseek_api_key).toBe('sk-deepseek-typed');
+    expect(body.clear_deepseek_key).toBe(false);
+    expect(body.captcha_llm_provider).toBe('deepseek');
+  });
+});
+
+test('the eye shows the stored key hint, never the key itself', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  expect(
+    screen.getByPlaceholderText('Ключ задан — оставьте пустым, чтобы сохранить'),
+  ).toBeInTheDocument();
+  const [geminiEye] = screen.getAllByRole('button', { name: 'Показать/скрыть ключ' });
+  await userEvent.click(geminiEye!);
+  expect(
+    screen.getByPlaceholderText('Ключ задан: AIza…x7Qp — оставьте пустым, чтобы сохранить'),
+  ).toBeInTheDocument();
 });
 
 test('a failed save shows the error state instead of silently doing nothing', async () => {
@@ -96,9 +134,6 @@ test('a failed save shows the error state instead of silently doing nothing', as
         }),
       );
     }
-    if (url.pathname === '/api/v1/neurocomment/settings') {
-      return Promise.resolve(jsonResponse(NEURO_SETTINGS));
-    }
     return Promise.resolve(jsonResponse(SETTINGS));
   });
   renderWithClient(<SettingsPage />);
@@ -108,94 +143,6 @@ test('a failed save shows the error state instead of silently doing nothing', as
 
   await userEvent.click(screen.getByText('Сохранить'));
   expect(await screen.findByText('Не удалось сохранить')).toBeInTheDocument();
-});
-
-test('the warming-limits block is an engine-derived note, not editable fake constants', async () => {
-  routeSettings();
-  renderWithClient(<SettingsPage />);
-  await waitFor(() => {
-    expect(screen.getByText('Сохранить')).toBeInTheDocument();
-  });
-  // The informational note is present, and no invented constants (15/80/25) are
-  // rendered as data in disabled inputs.
-  expect(
-    screen.getByText(/подбирается движком автоматически/, { exact: false }),
-  ).toBeInTheDocument();
-  expect(screen.queryByLabelText('Подписок в день')).not.toBeInTheDocument();
-  expect(screen.queryByDisplayValue('15')).not.toBeInTheDocument();
-  expect(screen.queryByDisplayValue('80')).not.toBeInTheDocument();
-});
-
-test('invalid neuro input is blocked with a field error, not silently sent', async () => {
-  routeSettings();
-  renderWithClient(<SettingsPage />);
-  await waitFor(() => {
-    expect(screen.getByText('Сохранить')).toBeInTheDocument();
-  });
-
-  const cpd = screen.getByLabelText('Комментариев в день на канал');
-  // Type then clear → a touched, empty (invalid) field. Empty used to be sent as
-  // 0 (a real limit of zero); now it is a validation error instead.
-  await userEvent.type(cpd, '9');
-  await userEvent.clear(cpd);
-  // the field-level error surfaces
-  expect(await screen.findByText('Введите целое число от 1 до 100')).toBeInTheDocument();
-
-  await userEvent.click(screen.getByText('Сохранить'));
-  // no neuro PUT is sent for the invalid form
-  await waitFor(() => {
-    const neuroPut = vi.mocked(fetch).mock.calls.some(([i]) => {
-      const r = i as Request;
-      return r.url.endsWith('/neurocomment/settings') && r.method === 'PUT';
-    });
-    expect(neuroPut).toBe(false);
-  });
-});
-
-test('both delay errors describe the field that needs correction', async () => {
-  routeSettings();
-  renderWithClient(<SettingsPage />);
-  await screen.findByText('Сохранить');
-
-  const from = screen.getByRole('textbox', { name: 'Задержка ответа, от (сек)' });
-  const to = screen.getByRole('textbox', { name: 'Задержка ответа, до (сек)' });
-
-  await userEvent.clear(from);
-  await userEvent.tab();
-  const rangeError = await screen.findByText('Введите целое число секунд (0–3600)');
-  expect(from).toHaveAttribute('aria-invalid', 'true');
-  expect(from).toHaveAttribute('aria-describedby', rangeError.id);
-  expect(to).not.toHaveAttribute('aria-describedby');
-
-  await userEvent.type(from, '3');
-  await userEvent.tab();
-  await waitFor(() => {
-    expect(screen.queryByText('Введите целое число секунд (0–3600)')).not.toBeInTheDocument();
-  });
-
-  await userEvent.clear(to);
-  await userEvent.type(to, '1');
-  await userEvent.tab();
-  const orderError = await screen.findByText('«До» должно быть не меньше «от»');
-  expect(to).toHaveAttribute('aria-invalid', 'true');
-  expect(to).toHaveAttribute('aria-describedby', orderError.id);
-  expect(from).not.toHaveAttribute('aria-invalid');
-});
-
-test('cancel resets an edited neuro field back to the loaded value', async () => {
-  routeSettings();
-  renderWithClient(<SettingsPage />);
-  await waitFor(() => {
-    expect(screen.getByText('Сохранить')).toBeInTheDocument();
-  });
-
-  const cpd = screen.getByLabelText('Комментариев в день на канал');
-  await userEvent.clear(cpd);
-  await userEvent.type(cpd, '7');
-  expect(cpd).toHaveValue('7');
-
-  await userEvent.click(screen.getByText('Отмена'));
-  expect(screen.getByLabelText('Комментариев в день на канал')).toHaveValue('3');
 });
 
 test('the clear-key action sends clear_gemini_key: true', async () => {

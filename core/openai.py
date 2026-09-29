@@ -12,9 +12,9 @@ than two because DeepSeek publishes this exact format — a second module would 
 this one with a different base URL.
 
 Endpoint: ``POST {base_url}/chat/completions`` with a ``Bearer`` key. Images ride
-as a base64 ``image_url`` data-URI content part. DeepSeek's models are text-only,
-so the image part must never reach it — the routing that guarantees that lives in
-the callers.
+as a base64 ``image_url`` data-URI content part — for OpenAI and, since
+``deepseek-flash`` (V4.1) reads images, for DeepSeek too. Which image paths go where
+is the callers' routing.
 
 Structured output has TWO modes and they are not interchangeable. OpenAI takes
 ``response_format: json_schema`` and the solver uses it. DeepSeek does not: it

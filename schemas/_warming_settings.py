@@ -15,17 +15,23 @@ from pydantic import BaseModel, ConfigDict, Field
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
 
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
-CaptchaLlmProvider = Literal["gemini", "openai"]
+CaptchaLlmProvider = Literal["gemini", "openai", "deepseek"]
 
 
 class WarmingSettings(BaseModel):
-    """Masked, UI-facing warming settings — never carries the raw Gemini key."""
+    """Masked, UI-facing warming settings — never carries a raw LLM key.
+
+    Each ``*_key_hint`` is at most the key's first and last four characters (see
+    ``services.warming.settings_store._key_hint``), so the operator can tell which key
+    is set without the secret ever reaching the browser.
+    """
 
     inter_account_chat: bool = False
     reactions_enabled: bool = True
     join_enabled: bool = True
     enforce_readiness: bool = True
     has_gemini_key: bool = False
+    gemini_key_hint: str | None = None
     gemini_model: str = Field(min_length=1)
     # Operator-tunable Gemini rate-limit handling (not secret): retry count on a
     # 429/5xx and the minimum spacing between calls (seconds; 0 = no throttle).
@@ -33,8 +39,11 @@ class WarmingSettings(BaseModel):
     gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
     # Captcha LLM: presence flag + model + provider choice (keys never surfaced).
     has_openai_key: bool = False
+    openai_key_hint: str | None = None
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    has_deepseek_key: bool = False
+    deepseek_key_hint: str | None = None
     # Always the full key set — the repository merges the stored JSON over the defaults.
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     updated_at: str = Field(min_length=1)
@@ -54,6 +63,8 @@ class WarmingSettingsSecret(BaseModel):
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    # Resolved like the others: the stored column, else ``DEEPSEEK__API_KEY``.
+    deepseek_api_key: str = ""
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     updated_at: str = Field(min_length=1)
 
@@ -92,6 +103,9 @@ class WarmingSettingsUpdate(BaseModel):
     openai_model: str | None = None
     clear_openai_key: bool = False
     captcha_llm_provider: CaptchaLlmProvider | None = None
+    # And once more for the DeepSeek key (its model stays deployment config).
+    deepseek_api_key: str | None = None
+    clear_deepseek_key: bool = False
     # Keep-semantics once more, per key this time: ``None`` keeps every stored toggle,
     # a partial dict merges only the keys it names. The settings page PUTs this
     # endpoint without ever seeing the extras, so a full-replacement default would

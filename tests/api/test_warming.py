@@ -415,3 +415,21 @@ async def test_dialogues_rejects_out_of_range_limit(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.get("/api/v1/warming/dialogues", params={"limit": 999})
     assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_settings_round_trip_shows_key_hints_and_never_a_key(app: FastAPI) -> None:
+    """Real service + test DB: the DeepSeek key and captcha provider save, only hints return."""
+    key = "sk-deepseek-live-looking-7c1e"
+    async with _client(app) as client:
+        resp = await client.put(
+            "/api/v1/warming/settings",
+            json={"deepseek_api_key": key, "captcha_llm_provider": "deepseek"},
+        )
+        assert resp.status_code == 200
+        resp = await client.get("/api/v1/warming/settings")
+    body = resp.json()
+    assert body["has_deepseek_key"] is True
+    assert body["deepseek_key_hint"] == "sk-d…7c1e"
+    assert body["captcha_llm_provider"] == "deepseek"
+    assert key not in resp.text

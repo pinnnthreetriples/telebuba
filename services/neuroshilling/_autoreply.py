@@ -55,6 +55,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 from core.config import settings
+from core.db import load_warming_settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
 from schemas.gemini import GeminiRequest
@@ -220,13 +221,14 @@ async def _draft(
     went into this prompt, and a second read could return a different set.
     """
     prompt = _prompt.build_reply_prompt(history, message)
+    api_key = (await load_warming_settings()).deepseek_api_key
     # Charged at the worst case and before the call, exactly as the scenario
     # generator charges it: the gateway retries a transient failure inside one call,
     # and a cap on spend must err high rather than low.
     _state.record_llm_call(calls=settings.deepseek.max_retries + 1)
     result = await _seams.generate_text_deepseek(
         GeminiRequest(
-            api_key=settings.deepseek.api_key,
+            api_key=api_key,
             prompt=prompt,
             model=settings.deepseek.model,
             temperature=settings.deepseek.temperature,
@@ -328,7 +330,8 @@ async def consider(
         # with people in it. The roll is per message and deliberately before the
         # claim, so an unanswered message stays open to nothing at all.
         return
-    if not settings.deepseek.api_key:
+    api_key = (await load_warming_settings()).deepseek_api_key
+    if not api_key:
         # Behind the dice and logged once per process, because a missing key is one
         # fact about the deployment: in front of the dice it was a WARNING row per
         # observed message, which one busy chat turns into four figures an hour.

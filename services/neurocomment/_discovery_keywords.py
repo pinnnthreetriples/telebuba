@@ -23,6 +23,7 @@ from __future__ import annotations
 import re
 
 from core.config import settings
+from core.db import load_warming_settings
 from schemas.gemini import GeminiRequest
 from schemas.neurocomment_discovery import (
     KEYWORD_MAX_LENGTH,
@@ -87,7 +88,7 @@ _PROMPT = (
 )
 
 
-def _build_request(topic: str) -> GeminiRequest:
+def _build_request(topic: str, api_key: str) -> GeminiRequest:
     """Compose the DeepSeek call.
 
     Not ``_llm._build_request``: that one exists to wrap an untrusted channel post in
@@ -108,7 +109,7 @@ def _build_request(topic: str) -> GeminiRequest:
     in, and out the other side nothing but short strings that pass the keyword rules.
     """
     return GeminiRequest(
-        api_key=settings.deepseek.api_key,
+        api_key=api_key,
         prompt=_PROMPT.format(
             topic=topic,
             max_keywords=MAX_KEYWORDS,
@@ -185,12 +186,13 @@ async def expand_discovery_keywords(
     request: DiscoveryKeywordRequest,
 ) -> DiscoveryKeywordResult:
     """Ask DeepSeek to widen ``request.topic`` into a search-ready keyword list."""
-    if not settings.deepseek.api_key:
+    api_key = (await load_warming_settings()).deepseek_api_key
+    if not api_key:
         # Before any request is built, so this branch cannot be mistaken for a call
         # that failed: there is no key to call with, which is a deployment fact the
         # operator can act on rather than an upstream hiccup to retry.
         return DiscoveryKeywordResult(error="llm_unavailable")
-    result = await _seams.generate_text_deepseek(_build_request(request.topic))
+    result = await _seams.generate_text_deepseek(_build_request(request.topic, api_key))
     if result.status != "ok" or result.text is None:
         # Errors, rate limits and a 200 carrying no text are one code: all three mean
         # the model never spoke, and none of them says anything about the topic.

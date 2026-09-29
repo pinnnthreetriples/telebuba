@@ -135,7 +135,7 @@ test('a listener rejection after settings save reports the partial result and re
   await userEvent.click(screen.getByText('Maria Sidorova'));
   await userEvent.click(screen.getByRole('radio', { name: REPLY }));
   await userEvent.click(screen.getByText('Сохранить'));
-  expect(await screen.findByRole('alert')).toHaveTextContent('Режим комментариев сохранён');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Настройки сохранены');
   expect(screen.queryByText('Сохранено')).not.toBeInTheDocument();
   expect(onClose).not.toHaveBeenCalled();
   expect(screen.getByRole('radio', { name: REPLY })).toHaveAttribute('aria-checked', 'true');

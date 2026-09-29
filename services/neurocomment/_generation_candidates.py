@@ -51,7 +51,7 @@ async def generate_acceptable(
         # Reply mode: an answer that echoes the quoted comment is a ``duplicate`` of thread text.
         recent = [*recent, target.text]
     secret = await load_warming_settings()
-    use_deepseek = _deepseek_generates(image_b64)
+    use_deepseek = _deepseek_generates(image_b64, secret)
     generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text
     reason: str | None = None
     error: str | None = None

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import ValidationError
 
-from core.config import settings
 from core.telegram_client._actions import _dispatch_action
 from schemas.bulk_messages import BulkMessageJob, BulkMessageRequest
 from schemas.gemini import GeminiRequest, GeminiResult
@@ -279,18 +278,21 @@ async def test_generate_uses_deepseek_and_falls_back_to_gemini(
         assert request.api_key == "gemini-key"
         return GeminiResult(status="ok", text=" Gemini draft ")
 
+    deepseek_key = "deepseek-key"
+
     async def fake_secret() -> SimpleNamespace:
-        return SimpleNamespace(gemini_api_key="gemini-key", gemini_model="gemini-model")
+        return SimpleNamespace(
+            gemini_api_key="gemini-key", gemini_model="gemini-model", deepseek_api_key=deepseek_key
+        )
 
     monkeypatch.setattr(bulk_messages, "generate_text_deepseek", fake_deepseek)
     monkeypatch.setattr(bulk_messages, "generate_text", fake_gemini)
     monkeypatch.setattr(bulk_messages, "load_warming_settings", fake_secret)
-    monkeypatch.setattr(settings.deepseek, "api_key", "deepseek-key")
     generated = await bulk_messages.generate_bulk_message("Write a greeting")
     assert generated.text == "DeepSeek draft"
     assert generated.provider == "deepseek"
 
-    monkeypatch.setattr(settings.deepseek, "api_key", "")
+    deepseek_key = ""
     generated = await bulk_messages.generate_bulk_message("Write a greeting")
     assert generated.text == "Gemini draft"
     assert generated.provider == "gemini"

@@ -201,14 +201,14 @@ async def run_bulk_message_job(job_id: str) -> None:
 
 async def generate_bulk_message(prompt: str) -> BulkMessageGenerated:
     """Use the configured text provider; generated text remains an editable draft."""
-    use_deepseek = bool(settings.deepseek.api_key)
+    secret = await load_warming_settings()
+    use_deepseek = bool(secret.deepseek_api_key)
     if use_deepseek:
-        api_key = settings.deepseek.api_key
+        api_key = secret.deepseek_api_key
         model = settings.deepseek.model
         llm = settings.deepseek
         generate = generate_text_deepseek
     else:
-        secret = await load_warming_settings()
         api_key = secret.gemini_api_key
         model = secret.gemini_model
         llm = settings.gemini
