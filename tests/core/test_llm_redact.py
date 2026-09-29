@@ -37,3 +37,11 @@ def test_a_key_run_escaped_by_the_bytes_repr_is_masked(key: str, pieces: list[st
 
 def test_a_message_without_the_key_is_unchanged() -> None:
     assert exception_text(httpx.ConnectError("boom"), "sk-abcd1234") == "ConnectError: boom"
+
+
+def test_a_run_that_is_a_prefix_of_a_later_run_does_not_leave_its_tail_in_clear() -> None:
+    key = "sk-abcd1234\nsk-abcd1234-SECRETTAIL"
+    exc = httpx.LocalProtocolError(f"Illegal header value {f'Bearer {key}'.encode()!r}")
+    text = exception_text(exc, key)
+    assert "SECRETTAIL" not in text
+    assert "sk-abcd1234" not in text

@@ -203,6 +203,9 @@ test('a touched delay half travels with the fresh stored other half', async () =
       reply_delay_min_seconds: 5,
     });
   });
+  await waitFor(() => {
+    expect(field('Задержка ответа, от (сек)')).toHaveValue('5');
+  });
   await userEvent.click(screen.getByText('Сохранить'));
 
   await waitFor(() => {

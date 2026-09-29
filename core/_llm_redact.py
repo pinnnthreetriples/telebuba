@@ -23,7 +23,9 @@ _MIN_MASKED_RUN = 4
 def exception_text(exc: BaseException, api_key: str) -> str:
     """``"<ExcType>: <message>"`` with every sizeable run of ``api_key`` masked."""
     text = f"{type(exc).__name__}: {exc}"
-    for run in _HEADER_SAFE_RUN.findall(api_key):
-        if len(run) >= _MIN_MASKED_RUN:
-            text = text.replace(run, "***")
+    # Longest first: masking a run that is part of a longer one would break the longer
+    # run apart and leave its remainder in clear text.
+    runs = {run for run in _HEADER_SAFE_RUN.findall(api_key) if len(run) >= _MIN_MASKED_RUN}
+    for run in sorted(runs, key=len, reverse=True):
+        text = text.replace(run, "***")
     return text

@@ -197,7 +197,8 @@ async def generate_text(request: GeminiRequest) -> GeminiResult:
                 json=_payload(request),
             )
         except UnicodeError as exc:
-            # A key httpx cannot encode into the header: no retry will fix that.
+            # Request content httpx cannot encode (a key in the header, a lone surrogate in
+            # the JSON body): no retry will fix that.
             return GeminiResult(status="error", error=exception_text(exc, request.api_key))
         except httpx.HTTPError as exc:
             result = GeminiResult(status="error", error=exception_text(exc, request.api_key))
