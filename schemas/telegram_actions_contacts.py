@@ -55,11 +55,14 @@ class ContactLookupMatch(BaseModel):
 
 
 class ContactLookupBatchResult(BaseModel):
-    """Gateway output for one lookup batch: who resolved, and who did not.
+    """Gateway output for one lookup batch: who resolved, who did not, who was deferred.
 
     ``unresolved`` holds every input phone that did not resolve — unparseable, not
     registered, or hidden by the target's "who can find me by phone" privacy.
+    ``retry`` holds the phones Telegram's ``retry_contacts`` deferred: the import limit
+    answers with this list instead of a FloodWait, so those were never checked.
     """
 
     matches: list[ContactLookupMatch]
     unresolved: list[str]
+    retry: list[str] = Field(default_factory=list)

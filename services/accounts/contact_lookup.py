@@ -8,7 +8,8 @@ Optimised for the flood-sensitive ``contacts.ImportContacts`` RPC: numbers are
 normalised and de-duplicated, spread round-robin across the selected accounts (a
 phone is resolved by exactly one account, so the flood budget is not multiplied),
 and each account's slice is sent in batches with a jittered pause between them. A
-rate-limited account stops and its remaining numbers are reported skipped.
+rate-limited account (a FloodWait, or numbers Telegram deferred via
+``retry_contacts``) stops and its remaining numbers are reported skipped.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import asyncio
 import logging
 import random
 import re
+import unicodedata
 from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 from uuid import uuid4
@@ -40,26 +42,28 @@ _job_owners: dict[str, str] = {}
 _pending: dict[str, tuple[ContactLookupRequest, dict[str, list[str]]]] = {}
 _cancel_events: dict[str, asyncio.Event] = {}
 _MAX_RETAINED_JOBS = 20
-_BATCH_SIZE = CONTACT_LOOKUP_MAX_BATCH
-_MIN_PHONE_DIGITS = 5
-_MAX_PHONE_DIGITS = 15
+# Half the action's cap: a smaller ImportContacts burst keeps each account further
+# from the import limit, at the cost of one more paced RPC per 100 numbers.
+_BATCH_SIZE = CONTACT_LOOKUP_MAX_BATCH // 2
+# Formatting separators, including the Unicode dashes (U+2010..U+2015, U+2212) a copied
+# number may carry.
+_PHONE_SEPARATORS = re.compile(r"[\s().\-\u2010-\u2015\u2212]")
+# The digit bounds only reject obvious junk; parse_phone in the gateway stays the authority.
+_PHONE = re.compile(r"\+?[0-9]{5,15}")
 logger = logging.getLogger(__name__)
 
 
 def _normalize(phone: str) -> str | None:
-    """Canonicalise one phone for de-dup and matching, or ``None`` if unusable.
+    """Canonicalise one phone for matching, or ``None`` if unusable.
 
-    Strips every character Telethon's own ``parse_phone`` would drop anyway
-    (spaces, brackets, dashes) so two spellings of one number collapse to a single
-    lookup; a leading ``+`` is kept. The digit-count bounds only reject obvious
-    junk — the gateway's ``parse_phone`` remains the authority on what actually
-    reaches the RPC.
+    Strips only formatting: separators (spaces, brackets, dots, dashes) and the
+    invisible direction marks a number copied from a contacts app is wrapped in; a
+    leading ``+`` is kept. Anything else — letters, commas, a second ``+`` — rejects
+    the entry, so a comma-joined pair is never fused into one fake number.
     """
-    canon = re.sub(r"[^\d+]", "", phone.strip())
-    digits = canon.lstrip("+")
-    if not digits.isdigit() or not _MIN_PHONE_DIGITS <= len(digits) <= _MAX_PHONE_DIGITS:
-        return None
-    return canon
+    visible = "".join(char for char in phone if unicodedata.category(char) != "Cf")
+    canon = _PHONE_SEPARATORS.sub("", visible)
+    return canon if _PHONE.fullmatch(canon) else None
 
 
 def _normalize_unique(phones: Sequence[str]) -> list[str]:
@@ -67,9 +71,13 @@ def _normalize_unique(phones: Sequence[str]) -> list[str]:
     out: list[str] = []
     for raw in phones:
         canon = _normalize(raw)
-        if canon is None or canon in seen:
+        if canon is None:
             continue
-        seen.add(canon)
+        # parse_phone drops the "+", so "+7999…" and "7999…" are one lookup.
+        key = canon.removeprefix("+")
+        if key in seen:
+            continue
+        seen.add(key)
         out.append(canon)
     return out
 
@@ -203,6 +211,25 @@ def _skip_remaining(
             job.completed += 1
 
 
+def _record_batch(
+    account_id: str,
+    batch: list[str],
+    batch_result: ContactLookupBatchResult,
+    job: ContactLookupJob,
+) -> list[str]:
+    """Record every checked phone of one batch; return the ones Telegram deferred."""
+    found = {match.phone: match for match in batch_result.matches}
+    retry = set(batch_result.retry)
+    deferred: list[str] = []
+    for phone in batch:
+        if phone in retry:
+            deferred.append(phone)
+            continue
+        job.results.append(_outcome(account_id, phone, found.get(phone)))
+        job.completed += 1
+    return deferred
+
+
 async def _run_account_lookup(
     account_id: str,
     phones: list[str],
@@ -214,7 +241,8 @@ async def _run_account_lookup(
     for batch_index, batch in enumerate(batches):
         if cancel_event.is_set():
             return
-        if job.completed:
+        # Pace this account's own batches only; other accounts have their own budget.
+        if batch_index:
             delay = random.uniform(  # noqa: S311  # nosec B311 - timing jitter, not a secret
                 data.min_delay_seconds, data.max_delay_seconds
             )
@@ -251,11 +279,18 @@ async def _run_account_lookup(
                 account_id, batches[batch_index:], job, error_code="failed", retry_after=None
             )
             return
-        batch_result = cast("ContactLookupBatchResult", result)
-        found = {match.phone: match for match in batch_result.matches}
-        for phone in batch:
-            job.results.append(_outcome(account_id, phone, found.get(phone)))
-            job.completed += 1
+        deferred = _record_batch(account_id, batch, cast("ContactLookupBatchResult", result), job)
+        if deferred:
+            # Telegram's import limit: the deferred numbers were never checked, and
+            # the next batch would be deferred the same way.
+            _skip_remaining(
+                account_id,
+                [deferred, *batches[batch_index + 1 :]],
+                job,
+                error_code="flood_wait",
+                retry_after=None,
+            )
+            return
 
 
 async def run_contact_lookup_job(job_id: str) -> None:

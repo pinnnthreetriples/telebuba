@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  activeContactLookupJobQueryOptions,
   cancelContactLookupJobMutation,
   getContactLookupJobQueryOptions,
   startContactLookupMutation,
@@ -12,11 +13,13 @@ import { Button, Icon, IconButton, Input, Textarea } from '@/shared/ui';
 const MAX_PHONES = 1000;
 const MAX_DELAY_SECONDS = 300;
 
+// Pasted lists are often comma-, semicolon- or tab-separated (a spreadsheet column
+// pair); split on those too, so two numbers on one line are never sent fused.
 function phonesFrom(value: string): string[] {
   return [
     ...new Set(
       value
-        .split(/\r?\n/)
+        .split(/[\r\n\t,;]+/)
         .map((line) => line.trim())
         .filter(Boolean),
     ),
@@ -58,9 +61,23 @@ export function ContactLookupPanel({
   const [maxDelay, setMaxDelay] = useState('3');
   const [jobId, setJobId] = useState<string | null>(null);
   const [added, setAdded] = useState<number | null>(null);
+  const [resumeActive, setResumeActive] = useState(true);
 
   const start = useMutation(startContactLookupMutation());
   const cancel = useMutation(cancelContactLookupJobMutation());
+  const active = useQuery({
+    ...activeContactLookupJobQueryOptions(),
+    enabled: open && jobId === null && resumeActive,
+    refetchOnWindowFocus: false,
+  });
+  // A lookup keeps running on the server after the modal closes; pick it back up
+  // instead of offering a start the server would refuse as already active.
+  // Only a successful fetch from this mount counts: a failed refetch keeps stale data.
+  const activeJobId =
+    active.isSuccess && active.isFetchedAfterMount ? active.data?.job_id : undefined;
+  if (jobId === null && resumeActive && activeJobId) {
+    setJobId(activeJobId);
+  }
   const job = useQuery({
     ...getContactLookupJobQueryOptions({ path: { job_id: jobId ?? '' } }),
     enabled: jobId !== null,
@@ -97,10 +114,16 @@ export function ContactLookupPanel({
         .filter((token): token is string => token !== null),
     ),
   ];
+  // A user without @username is addressable only by the account that found it, so
+  // every other selected account will fail to message them.
+  const idOnly = found.filter(
+    (row) => !row.username && accountIds.some((id) => id !== row.account_id),
+  ).length;
 
   const onFind = () => {
     if (!canFind) return;
     setAdded(null);
+    setResumeActive(false);
     void start
       .mutateAsync({
         body: {
@@ -133,6 +156,7 @@ export function ContactLookupPanel({
   const onReset = () => {
     setJobId(null);
     setAdded(null);
+    setResumeActive(false);
     start.reset();
     cancel.reset();
   };
@@ -256,6 +280,11 @@ export function ContactLookupPanel({
                   {t('accounts.messages.progressError')}
                 </p>
               )}
+              {complete && idOnly > 0 && (
+                <p className="type-caption">
+                  {t('accounts.messages.lookup.idOnly', { count: idOnly })}
+                </p>
+              )}
               {added !== null && (
                 <p className="type-caption">
                   {t('accounts.messages.lookup.added', { count: added })}
@@ -277,14 +306,17 @@ export function ContactLookupPanel({
                 {complete && (
                   <Button onClick={onReset}>{t('accounts.messages.lookup.newSearch')}</Button>
                 )}
-                <IconButton
-                  size="touch"
-                  aria-label={t('accounts.messages.close')}
-                  onClick={onReset}
-                  className="ml-auto"
-                >
-                  <Icon name="close" size={16} />
-                </IconButton>
+                {/* While a search runs (even through a failed poll), Stop ends it; closing would orphan it. */}
+                {(complete || errorCode(job.error) === 'not_found') && (
+                  <IconButton
+                    size="touch"
+                    aria-label={t('accounts.messages.close')}
+                    onClick={onReset}
+                    className="ml-auto"
+                  >
+                    <Icon name="close" size={16} />
+                  </IconButton>
+                )}
               </div>
             </div>
           )}
