@@ -37,6 +37,6 @@ Dependency versions, overrides, advisories and generated-client quirks are inten
 
 Storybook documents `shared/ui` and product patterns. CI builds it and runs a desktop/mobile Patterns smoke; its screenshot is a review artifact. Vite catalog Playwright snapshots remain the pixel gate. Page-specific compositions are not exhaustive.
 
-The Storybook overview and `Patterns` section show campaign selection, activity terminal, account avatar, shared profile tabs and empty actions, inline chip editing, numbered steps, account-edit retry notices, and the distinct runtime/readiness pipeline compositions. Keep page-specific behavior in its owning slice; share only the visual shell that actually recurs. In profile and bulk editors, quiet hover signals intent while the selected tab carries the strong cue; a stable dialog footprint prevents navigation jumps. Shared bar recipes cover geometry while progress, capacity, and scores retain separate semantics.
+Account-editor empty actions share a visual shell; profile tabs signal hover lightly and selection strongly, while fixed dialog height prevents jumps. Keep page behavior in its owning slice. Shared bars share geometry while progress, capacity, and scores retain distinct meanings.
 
 Run frontend verification from `context/setup.md`.
