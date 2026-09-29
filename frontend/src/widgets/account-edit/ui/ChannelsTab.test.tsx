@@ -77,6 +77,13 @@ test('shows the empty state when the account has no channels', async () => {
   );
   renderWithClient(<ChannelsTab accountId="acc-1" />);
   expect(await screen.findByText('У аккаунта пока нет каналов')).toBeInTheDocument();
+  const create = screen.getByRole('button', { name: 'Создать канал' });
+  expect(create).toBeInTheDocument();
+  expect(
+    screen.queryByText('Создать канал', { selector: 'button:not([aria-label])' }),
+  ).not.toBeInTheDocument();
+  await userEvent.click(create);
+  expect(await screen.findByText('Новый канал')).toBeInTheDocument();
 });
 
 test('a failed list load shows the translated reason and retry recovers', async () => {
@@ -132,6 +139,6 @@ test('the create button opens the create dialog', async () => {
   routeApi();
   renderWithClient(<ChannelsTab accountId="acc-1" />);
   await screen.findByText('Мой канал');
-  await userEvent.click(screen.getByText('Создать канал'));
+  await userEvent.click(screen.getByRole('button', { name: 'Создать канал' }));
   expect(await screen.findByText('Новый канал')).toBeInTheDocument();
 });

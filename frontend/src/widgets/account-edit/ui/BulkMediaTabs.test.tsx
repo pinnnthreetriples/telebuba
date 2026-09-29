@@ -154,7 +154,7 @@ test('nothing to apply keeps the button disabled', async () => {
 
   await user.click(screen.getByRole('tab', { name: 'Музыка' }));
   expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeDisabled();
-  expect(screen.getByText('1 трек')).toBeInTheDocument();
+  expect(screen.getAllByText('1 трек')[0]).toBeInTheDocument();
 });
 
 // The backend takes .mp3/.m4a only (`_PROFILE_MUSIC_SUFFIXES`); the picker used to

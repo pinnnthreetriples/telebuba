@@ -35,6 +35,49 @@ export function DashedAdd({
   );
 }
 
+// Empty media and channel lists share the same dashed surface and hover as
+// DashedAdd. The idle description gives way to the action on pointer hover or
+// keyboard focus; the action remains the button's accessible name throughout.
+export function DashedEmptyAction({
+  idleLabel,
+  actionLabel,
+  onClick,
+  disabled = false,
+}: {
+  idleLabel?: string;
+  actionLabel: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={actionLabel}
+      disabled={disabled}
+      onClick={onClick}
+      className={tileAction(
+        'group relative flex w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-line-strong bg-surface-card px-lg py-2xl text-center text-body font-medium text-content-muted',
+      )}
+    >
+      {idleLabel && (
+        <span className="transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
+          {idleLabel}
+        </span>
+      )}
+      <span
+        className={
+          idleLabel
+            ? 'absolute inset-0 flex items-center justify-center gap-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100'
+            : 'flex items-center justify-center gap-sm'
+        }
+      >
+        <Icon name="plus" size={16} />
+        {actionLabel}
+      </span>
+    </button>
+  );
+}
+
 // A hidden file input plus whatever opens it: the trigger is the child, so each
 // caller keeps its own look (a dashed tile, a pill, an avatar circle) without a
 // third copy of the ref + reset dance.

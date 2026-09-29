@@ -10,6 +10,7 @@ import { channelErrorText } from './_channelsShared';
 import { RetryNotice } from './RetryNotice';
 import { ChannelCreateModal } from './ChannelCreateModal';
 import { ChannelEditModal } from './ChannelEditModal';
+import { DashedEmptyAction } from './_shared';
 
 // The profile modal's channels tab: the account's own channels — list, create,
 // edit (opens the channel editor with the posts panel) and confirmed delete.
@@ -52,12 +53,6 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
             void channels.refetch();
           }}
         />
-      )}
-
-      {channels.isSuccess && items.length === 0 && (
-        <div className="rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center type-prose">
-          {t('accounts.channel.empty')}
-        </div>
       )}
 
       {items.length > 0 && (
@@ -115,16 +110,16 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
         </div>
       )}
 
-      {!channels.isPending && (
-        <Button
-          size="sm"
-          className="mt-md"
-          onClick={() => {
-            setCreateOpen(true);
-          }}
-        >
-          {t('accounts.channel.create')}
-        </Button>
+      {channels.isSuccess && (
+        <div className={items.length > 0 ? 'mt-md' : undefined}>
+          <DashedEmptyAction
+            idleLabel={items.length === 0 ? t('accounts.channel.empty') : undefined}
+            actionLabel={t('accounts.channel.create')}
+            onClick={() => {
+              setCreateOpen(true);
+            }}
+          />
+        </div>
       )}
 
       {createOpen && (

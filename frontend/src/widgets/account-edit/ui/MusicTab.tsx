@@ -2,8 +2,9 @@ import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileMusicView } from '@/shared/api';
-import { FOCUS_RING, PRESS_FEEDBACK } from '@/shared/design-system';
 import { Icon, IconButton } from '@/shared/ui';
+
+import { DashedEmptyAction } from './_shared';
 
 // The profile modal's music tab: the saved-music list with remove, a picker
 // for a new track, and the "unsupported" note for older Telethon builds that
@@ -84,21 +85,12 @@ export function MusicTab({
           </IconButton>
         </div>
       ) : (
-        <button
-          type="button"
-          aria-label={t('accounts.profile.pickTrack')}
+        <DashedEmptyAction
+          idleLabel={t('accounts.profile.noMusic')}
+          actionLabel={t('accounts.profile.pickTrack')}
           disabled={busy}
           onClick={() => musicInput.current?.click()}
-          className={`group relative flex w-full items-center justify-center rounded-lg border border-dashed border-line bg-surface-card px-lg py-2xl text-center text-body text-content-subtle transition duration-state hover:border-info-line hover:bg-action-hover hover:text-info-strong disabled:cursor-not-allowed disabled:opacity-50 ${PRESS_FEEDBACK} ${FOCUS_RING}`}
-        >
-          <span className="transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0">
-            {t('accounts.profile.noMusic')}
-          </span>
-          <span className="absolute inset-0 flex items-center justify-center gap-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-            <Icon name="plus" size={16} aria-hidden="true" />
-            {t('accounts.profile.pickTrack')}
-          </span>
-        </button>
+        />
       )}
       <input
         ref={musicInput}

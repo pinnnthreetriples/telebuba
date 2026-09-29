@@ -57,7 +57,7 @@ export function TabList<T extends string>({
           className={`shrink-0 whitespace-nowrap border-b-2 py-lg text-body font-medium transition-colors ${FOCUS_RING} ${
             value === option.value
               ? 'border-action-primary text-content-primary'
-              : 'border-transparent text-content-muted hover:bg-action-hover'
+              : 'border-transparent text-content-muted hover:border-info-line'
           }`}
         >
           {option.label}
