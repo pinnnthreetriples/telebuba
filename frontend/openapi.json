@@ -14904,6 +14904,11 @@
               }
             ],
             "title": "Retry After Seconds"
+          },
+          "handed_over": {
+            "type": "boolean",
+            "title": "Handed Over",
+            "default": false
           }
         },
         "type": "object",
@@ -14930,7 +14935,7 @@
               "type": "string"
             },
             "type": "array",
-            "maxItems": 50,
+            "maxItems": 500,
             "minItems": 1,
             "title": "Recipients"
           },
@@ -14953,6 +14958,23 @@
             "minimum": 0.0,
             "title": "Max Delay Seconds",
             "default": 0
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "each",
+              "split"
+            ],
+            "title": "Mode",
+            "default": "each"
+          },
+          "recipient_accounts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "maxProperties": 500,
+            "title": "Recipient Accounts"
           }
         },
         "type": "object",

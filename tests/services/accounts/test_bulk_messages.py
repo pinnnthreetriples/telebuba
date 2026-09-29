@@ -15,20 +15,10 @@ from schemas.telegram_actions import ActionResult, SendChatMessage
 from services.accounts import bulk_messages
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine, Iterator
+    from collections.abc import Coroutine
 
 
-@pytest.fixture(autouse=True)
-def _empty_jobs() -> Iterator[None]:
-    bulk_messages._jobs.clear()
-    bulk_messages._job_owners.clear()
-    bulk_messages._pending.clear()
-    bulk_messages._cancel_events.clear()
-    yield
-    bulk_messages._jobs.clear()
-    bulk_messages._job_owners.clear()
-    bulk_messages._pending.clear()
-    bulk_messages._cancel_events.clear()
+pytestmark = pytest.mark.usefixtures("empty_bulk_jobs")
 
 
 def _request(**overrides: object) -> BulkMessageRequest:
@@ -237,6 +227,45 @@ async def test_unconfirmed_delivery_and_rate_limit_are_not_reported_as_failed_se
     assert finished.results[0].error_code == "delivery_unconfirmed"
     assert finished.results[2].retry_after_seconds == 42
     assert ("a1", "third_chat") not in calls
+
+
+@pytest.mark.asyncio
+async def test_a_dead_account_stops_instead_of_failing_every_pair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+
+    async def fake_execute(
+        account_id: str,
+        action: SendChatMessage,
+        *,
+        domain: str,  # noqa: ARG001
+    ) -> ActionResult:
+        calls.append((account_id, action.recipient))
+        if account_id == "a1":
+            return ActionResult(
+                status="failed",
+                action_type=action.action_type,
+                account_id=account_id,
+                error_type="ProfileGatewayError",
+                error_message="session_dead",
+            )
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(bulk_messages, "execute", fake_execute)
+    job = bulk_messages.start_bulk_message_job(
+        _request(min_delay_seconds=0, max_delay_seconds=0), "owner-1"
+    )
+    await bulk_messages.run_bulk_message_job(job.job_id)
+    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    assert finished is not None
+    assert [(item.status, item.error_code) for item in finished.results] == [
+        ("failed", "session_dead"),
+        ("skipped", "session_dead"),
+        ("ok", None),
+        ("ok", None),
+    ]
+    assert calls == [("a1", "first_chat"), ("a2", "first_chat"), ("a2", "second_chat")]
 
 
 @pytest.mark.asyncio

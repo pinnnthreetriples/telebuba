@@ -64,10 +64,15 @@ const BULK = {
   skipped: 2,
 } satisfies BulkPrivacyResult;
 
-const OPEN_ALL_BUTTON = 'Открыть фото и bio (этот аккаунт)';
-const FLEET_BUTTON = 'Применить ко всем аккаунтам фермы';
+const OPEN_ALL_BUTTON = 'Применить';
+const FLEET_BUTTON = 'Применить ко всем аккаунтам';
 const READ_FAILED = (reason: string) =>
   `Не удалось прочитать настройки приватности из Telegram (${reason})`;
+
+async function confirmFleetApply() {
+  const dialog = await screen.findByRole('dialog', { name: `${FLEET_BUTTON}?` });
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Применить' }));
+}
 
 // GET answers with `read`, the PUT with `written` (the backend re-reads and
 // returns the live state), the fleet POST with BULK.
@@ -111,6 +116,7 @@ test('renders the three live levels from the query response', async () => {
   renderWithClient(<PrivacyTab accountId="acc-1" />);
 
   expect(await screen.findByText('Фото профиля')).toBeInTheDocument();
+  expect(screen.queryByText(/Если фото или описание/)).not.toBeInTheDocument();
   expect(within(row('Фото профиля')).getByText('Сейчас: Контакты')).toBeInTheDocument();
   expect(within(row('Описание (bio)')).getByText('Сейчас: Никто')).toBeInTheDocument();
   expect(within(row('Был в сети')).getByText('Сейчас: Все')).toBeInTheDocument();
@@ -272,7 +278,7 @@ test('the fleet-wide apply only fires after the confirmation step', async () => 
   ).toBeInTheDocument();
   expect(requests('POST', '/accounts/privacy/all')).toHaveLength(0);
 
-  await userEvent.click(screen.getByRole('button', { name: 'Применить' }));
+  await confirmFleetApply();
   await waitFor(() => {
     expect(requests('POST', '/accounts/privacy/all')).toHaveLength(1);
   });
@@ -317,7 +323,7 @@ test('the per-account controls are locked during the sweep and the read is refre
   await screen.findByText('Фото профиля');
 
   await userEvent.click(screen.getByRole('button', { name: FLEET_BUTTON }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Применить' }));
+  await confirmFleetApply();
   await waitFor(() => {
     expect(requests('POST', '/accounts/privacy/all')).toHaveLength(1);
   });
@@ -326,10 +332,10 @@ test('the per-account controls are locked during the sweep and the read is refre
   // diverge from what the sweep is about to set.
   expect(levelButton('Фото профиля', 'Все')).toBeDisabled();
   expect(levelButton('Был в сети', 'Никто')).toBeDisabled();
-  expect(screen.getByRole('button', { name: OPEN_ALL_BUTTON })).toBeDisabled();
+  expect(screen.getAllByRole('button', { name: OPEN_ALL_BUTTON })[0]).toBeDisabled();
   // The dialog can be dismissed with Escape while the sweep runs for minutes,
   // so the button label carries the only remaining trace of it.
-  expect(screen.getByRole('button', { name: 'Применяем ко всей ферме…' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Применяем ко всем аккаунтам…' })).toBeDisabled();
 
   sweep.resolve(jsonResponse(BULK));
 
@@ -367,7 +373,7 @@ test('the fleet result shows the counts, the failures and why accounts were skip
   await screen.findByText('Фото профиля');
 
   await userEvent.click(screen.getByRole('button', { name: FLEET_BUTTON }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Применить' }));
+  await confirmFleetApply();
 
   expect(await screen.findByText('Применено: 4')).toBeInTheDocument();
   expect(screen.getByText('Ошибок: 1')).toBeInTheDocument();
@@ -423,7 +429,7 @@ test('a flooded fleet row shows the real wait, not «повторите чере
   await screen.findByText('Фото профиля');
 
   await userEvent.click(screen.getByRole('button', { name: FLEET_BUTTON }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Применить' }));
+  await confirmFleetApply();
 
   const list = await screen.findByRole('list');
   expect(
@@ -443,7 +449,7 @@ test('a new write clears the previous fleet report', async () => {
   await screen.findByText('Фото профиля');
 
   await userEvent.click(screen.getByRole('button', { name: FLEET_BUTTON }));
-  await userEvent.click(await screen.findByRole('button', { name: 'Применить' }));
+  await confirmFleetApply();
   expect(await screen.findByText('Применено: 4')).toBeInTheDocument();
 
   await userEvent.click(levelButton('Описание (bio)', 'Контакты'));

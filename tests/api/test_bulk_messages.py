@@ -33,6 +33,34 @@ def _empty_jobs() -> Iterator[None]:
 
 
 @pytest.mark.asyncio
+async def test_split_mode_and_pins_reach_the_service(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run(job_id: str) -> None:  # noqa: ARG001 - dispatch is not under test
+        return None
+
+    monkeypatch.setattr(bulk_messages, "run_bulk_message_job", fake_run)
+    async with _client(app) as client:
+        response = await client.post(
+            "/api/v1/accounts/bulk-messages",
+            json={
+                "account_ids": ["a1", "a2"],
+                "recipients": ["@public_chat", "123456"],
+                "text": "Hello",
+                "mode": "split",
+                "recipient_accounts": {"123456": "a2"},
+            },
+        )
+    assert response.status_code == 202
+    job = response.json()
+    assert job["total"] == 2
+    data, _ = bulk_messages._pending[job["job_id"]]
+    assert data.mode == "split"
+    assert data.recipient_accounts == {"123456": "a2"}
+
+
+@pytest.mark.asyncio
 async def test_bulk_message_routes_start_poll_and_generate(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,

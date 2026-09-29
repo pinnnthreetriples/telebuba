@@ -948,6 +948,10 @@ export type BulkMessageOutcome = {
    * Retry After Seconds
    */
   retry_after_seconds?: number | null;
+  /**
+   * Handed Over
+   */
+  handed_over?: boolean;
 };
 
 /**
@@ -974,6 +978,16 @@ export type BulkMessageRequest = {
    * Max Delay Seconds
    */
   max_delay_seconds?: number;
+  /**
+   * Mode
+   */
+  mode?: 'each' | 'split';
+  /**
+   * Recipient Accounts
+   */
+  recipient_accounts?: {
+    [key: string]: string;
+  };
 };
 
 /**

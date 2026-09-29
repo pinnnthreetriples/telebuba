@@ -32,9 +32,9 @@ export function PrivacyLevelRow({
     <div
       role="group"
       aria-label={label}
-      className="flex items-center gap-md rounded-lg border border-line px-lg py-md"
+      className="flex flex-col items-stretch gap-md rounded-lg border border-line px-lg py-md sm:flex-row sm:items-center"
     >
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 sm:flex-1">
         <div className="truncate type-card-title">{label}</div>
         <div className="mt-hair type-caption">
           {t('accounts.profile.privacy.current', {
@@ -47,7 +47,7 @@ export function PrivacyLevelRow({
       </div>
       <SegmentedControl
         variant="outline"
-        className="shrink-0"
+        className="w-full sm:w-auto sm:shrink-0"
         value={current}
         disabled={busy}
         ariaLabel={label}

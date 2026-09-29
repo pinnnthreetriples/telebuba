@@ -10,23 +10,38 @@ from pydantic import BaseModel, Field, model_validator
 from schemas.accounts import _ACCOUNT_ID_PATTERN
 
 _MAX_SENDS = 500
+_MAX_EACH_RECIPIENTS = 50
 _MAX_RECIPIENT_LENGTH = 200
 
 
 class BulkMessageRequest(BaseModel):
     account_ids: list[str] = Field(min_length=1, max_length=50)
-    recipients: list[str] = Field(min_length=1, max_length=50)
+    recipients: list[str] = Field(min_length=1, max_length=_MAX_SENDS)
     text: str = Field(min_length=1, max_length=4096)
     min_delay_seconds: float = Field(default=0, ge=0, le=300)
     max_delay_seconds: float = Field(default=0, ge=0, le=300)
+    # "each": every account messages every recipient; "split": one message per
+    # recipient, round-robin over the accounts.
+    mode: Literal["each", "split"] = "each"
+    # Split only: a recipient that only one account can address (a raw user_id it
+    # found) is pinned to that account instead of taking its round-robin turn.
+    recipient_accounts: dict[str, str] = Field(default_factory=dict, max_length=_MAX_SENDS)
 
     @model_validator(mode="after")
     def validate_batch(self) -> BulkMessageRequest:
         if self.max_delay_seconds < self.min_delay_seconds:
             msg = "max_delay_seconds must be at least min_delay_seconds"
             raise ValueError(msg)
-        if len(self.account_ids) * len(self.recipients) > _MAX_SENDS:
+        if self.mode == "each" and len(self.recipients) > _MAX_EACH_RECIPIENTS:
+            msg = "each mode allows at most 50 recipients"
+            raise ValueError(msg)
+        if self.mode == "each" and len(self.account_ids) * len(self.recipients) > _MAX_SENDS:
             msg = "bulk message batch exceeds 500 sends"
+            raise ValueError(msg)
+        if not set(self.recipient_accounts) <= set(self.recipients) or not set(
+            self.recipient_accounts.values()
+        ) <= set(self.account_ids):
+            msg = "recipient_accounts must map listed recipients to listed accounts"
             raise ValueError(msg)
         if len(self.account_ids) != len(set(self.account_ids)):
             msg = "duplicate account_ids"
@@ -54,6 +69,8 @@ class BulkMessageOutcome(BaseModel):
     status: Literal["ok", "failed", "skipped", "unconfirmed"]
     error_code: str | None = None
     retry_after_seconds: int | None = None
+    # Split only: this account could not send, so the recipient went to the next one.
+    handed_over: bool = False
 
 
 class BulkMessageJob(BaseModel):

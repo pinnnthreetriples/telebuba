@@ -52,7 +52,7 @@ export function ContactLookupPanel({
   onAppendRecipients,
 }: {
   accountIds: string[];
-  onAppendRecipients: (lines: string[]) => void;
+  onAppendRecipients: (lines: string[], pins: Record<string, string>) => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -119,6 +119,12 @@ export function ContactLookupPanel({
   const idOnly = found.filter(
     (row) => !row.username && accountIds.some((id) => id !== row.account_id),
   ).length;
+  // Split mode sends each raw user_id from the account that found it.
+  const pins = Object.fromEntries(
+    found
+      .filter((row) => !row.username && row.user_id != null)
+      .map((row) => [String(row.user_id), row.account_id]),
+  );
 
   const onFind = () => {
     if (!canFind) return;
@@ -149,7 +155,7 @@ export function ContactLookupPanel({
 
   const onAdd = () => {
     if (addable.length === 0) return;
-    onAppendRecipients(addable);
+    onAppendRecipients(addable, pins);
     setAdded(addable.length);
   };
 
