@@ -51,12 +51,12 @@ export function SurfHover({
 
   // Layout effect: the width is wanted before the first paint, or the first hover would
   // travel a stale distance. Measured on the INNER wrapper, not on the action layer: the
-  // layer is `inset-x-0` because its `bg-canvas` has to cover the whole row, so its own
+  // layer is `inset-x-0` because its background has to cover the whole row, so its own
   // width is the row's.
   //
   // Записывается прямо в стиль узла, а НЕ через состояние, и это не микрооптимизация.
   // Через состояние измерение вызывает второй рендер сразу после монтирования, а у
-  // поверхности стоит `will-change: transform`, то есть она живёт на своём композитном
+  // поверхности стоял `will-change: transform`, то есть она жила на своём композитном
   // слое: слой переезжает, и текст на нём перерастеризуется чуть иначе. Визуальный гейт
   // это увидел — 238 пикселей разницы на экране нейрокомментинга, устойчиво и при
   // сравнении эталона С САМИМ СОБОЙ. Ширина действий не участвует ни в одном решении
@@ -88,12 +88,14 @@ export function SurfHover({
     // this is the boundary and not a missing border.
     <div className="group relative -mb-hair overflow-hidden rounded-lg pb-hair">
       {/* `bottom-[2px]`, not `inset-0`: the padding above is behind the card, and an
-          action layer stretched into it would show a grey sliver under every row. */}
-      <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-stretch justify-end rounded-lg bg-canvas">
+          action layer stretched into it would show a grey sliver under every row.
+          Слой прозрачный, а не `bg-canvas`: карточка при раскрытии сужается и сохраняет
+          свою рамку, и серый фон вокруг компактных кнопок читался пустой дырой. */}
+      <div className="absolute inset-x-0 bottom-[2px] top-0 flex items-center justify-end">
         <div
           ref={actionsRef}
           data-measured="actions"
-          className="flex items-stretch"
+          className="flex items-center gap-xs px-sm"
           onFocus={() => {
             setReached(true);
           }}
@@ -116,8 +118,12 @@ export function SurfHover({
         ref={surfaceRef}
         id={surfaceId}
         className={cn(
-          'relative rounded-lg bg-surface-card transition-[transform,padding] duration-reveal ease-out [will-change:transform] group-hover:-translate-x-[var(--shift)] group-hover:pl-[var(--shift)]',
-          (open || reached) && '-translate-x-[var(--shift)] pl-[var(--shift)]',
+          'relative rounded-lg bg-surface-card transition-[margin] duration-reveal ease-out group-hover:mr-[var(--shift)]',
+          // Карточка СУЖАЕТСЯ справа, а не уезжает влево. Сдвиг `translate` + `pl` сужал
+          // содержимое и переносил текст на новые строки; один `translate` уносил под клип
+          // имя вместе с левой рамкой. Сужение оставляет имя и рамку на месте, а длинный
+          // текст обрезается многоточием у вызывающего (`truncate`).
+          (open || reached) && 'mr-[var(--shift)]',
         )}
         // `--shift` ставит эффект выше; до первого замера сдвига нет, и это правильный
         // порядок: раскрыть нечего, пока не известно, на сколько.

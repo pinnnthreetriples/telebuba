@@ -89,7 +89,7 @@ export function CampaignsCard({
               actions={
                 <>
                   <IconButton
-                    size="touch"
+                    size="md"
                     tone="neutral"
                     title={
                       isRunning
@@ -104,33 +104,35 @@ export function CampaignsCard({
                     onClick={() => {
                       onToggleStatus(campaign);
                     }}
-                    className={`w-action self-stretch ${isRunning ? 'text-warning-deep hover:bg-warning-tint' : 'text-success-deep hover:bg-success-tint'}`}
+                    className={
+                      isRunning
+                        ? 'text-warning-deep hover:bg-warning-tint'
+                        : 'text-success-deep hover:bg-success-tint'
+                    }
                   >
-                    <Icon name={isRunning ? 'pause' : 'play'} size={18} />
+                    <Icon name={isRunning ? 'pause' : 'play'} size={16} />
                   </IconButton>
                   <IconButton
-                    size="touch"
+                    size="md"
                     tone="primary"
                     title={t('neuroshilling.campaign.settings')}
                     aria-label={t('neuroshilling.campaign.settings')}
                     onClick={() => {
                       onSettings(campaign.campaign_id);
                     }}
-                    className="w-action self-stretch"
                   >
-                    <Icon name="pencil" size={18} />
+                    <Icon name="pencil" size={16} />
                   </IconButton>
                   <IconButton
-                    size="touch"
+                    size="md"
                     tone="danger"
                     title={t('neuroshilling.campaign.delete')}
                     aria-label={t('neuroshilling.campaign.delete')}
                     onClick={() => {
                       onDelete(campaign);
                     }}
-                    className="w-action self-stretch"
                   >
-                    <Icon name="trash" size={18} />
+                    <Icon name="trash" size={16} />
                   </IconButton>
                 </>
               }

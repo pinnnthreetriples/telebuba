@@ -74,3 +74,21 @@ test('a field with text stays open when it loses focus', async () => {
   expect(searchInput.value).toBe('abc');
   expect(searchInput.parentElement).not.toHaveClass('w-0');
 });
+
+test('a closed search field is hidden and unfocusable; opening it shows and focuses it', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => expect(screen.getByText('acc-1')).toBeInTheDocument());
+
+  const field = screen.getByPlaceholderText('Поиск по аккаунтам…', { exact: true });
+  // Closed: hidden from assistive tech, out of the tab order, zero-width and invisible.
+  expect(field.parentElement).toHaveAttribute('aria-hidden', 'true');
+  expect(field).toHaveAttribute('tabindex', '-1');
+  expect(field.parentElement).toHaveClass('w-0', 'invisible', 'opacity-0');
+
+  await userEvent.click(screen.getByLabelText('Поиск по аккаунтам…'));
+  expect(field.parentElement).toHaveAttribute('aria-hidden', 'false');
+  expect(field).toHaveAttribute('tabindex', '0');
+  expect(field.parentElement).not.toHaveClass('invisible');
+  expect(field).toHaveFocus();
+});

@@ -304,3 +304,52 @@ test('distinguishes failed, skipped, and unconfirmed results with retry waits', 
   expect(screen.getByText(/Telegram указал паузу 90 с/)).toBeInTheDocument();
   expect(screen.getByText(/Доставка не подтверждена/)).toBeInTheDocument();
 });
+
+test('header shows only the title, with hints moved into help bubbles', () => {
+  mockApi();
+  renderModal();
+  expect(screen.getByRole('heading', { name: 'Массовая отправка сообщений' })).toBeInTheDocument();
+  expect(
+    screen.queryByText('Каждый аккаунт отправит сообщение каждому получателю'),
+  ).not.toBeInTheDocument();
+  // подсказка живёт в HelpHint (role=note), а не абзацем под полем
+  expect(screen.getByRole('note', { name: 'По одному чату или @username в строке' })).toBeVisible();
+});
+
+test('send mode defaults to each account and the distribute option is disabled', async () => {
+  mockApi();
+  renderModal();
+  const each = screen.getByRole('radio', { name: 'Каждый аккаунт' });
+  const split = screen.getByRole('radio', { name: /Распределить/ });
+  expect(each).toBeChecked();
+  expect(split).toBeDisabled();
+  expect(split).toHaveTextContent('скоро');
+  await userEvent.click(split);
+  expect(each).toBeChecked();
+});
+
+test('the mode control adds no field to the request body', async () => {
+  mockApi();
+  renderModal();
+  await pickBothAccounts();
+  await userEvent.type(screen.getByLabelText('Получатели'), '@first');
+  await userEvent.type(screen.getByLabelText('Сообщение'), 'Hello');
+  await userEvent.click(screen.getByRole('button', { name: 'Начать отправку' }));
+  const request = await waitFor(() => {
+    const match = vi.mocked(fetch).mock.calls.find(([input]) => {
+      const value = input as Request;
+      return (
+        value.method === 'POST' && new URL(value.url).pathname === '/api/v1/accounts/bulk-messages'
+      );
+    });
+    expect(match).toBeDefined();
+    return match?.[0] as Request;
+  });
+  expect(Object.keys((await request.clone().json()) as object).sort()).toEqual([
+    'account_ids',
+    'max_delay_seconds',
+    'min_delay_seconds',
+    'recipients',
+    'text',
+  ]);
+});

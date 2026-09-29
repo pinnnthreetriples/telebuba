@@ -11,7 +11,18 @@ import {
   getBulkMessageJobQueryOptions,
   sendBulkMessagesMutation,
 } from '@/entities/account';
-import { Button, CloseButton, Icon, IconButton, Input, Modal, Textarea } from '@/shared/ui';
+import {
+  Badge,
+  Button,
+  CloseButton,
+  HelpHint,
+  Icon,
+  IconButton,
+  Input,
+  Modal,
+  SegmentedControl,
+  Textarea,
+} from '@/shared/ui';
 
 import { BulkAccountPicker } from './BulkAccountPicker';
 import { ContactLookupPanel } from './ContactLookupPanel';
@@ -220,18 +231,17 @@ export function BulkMessageModal({
     <>
       <Modal onClose={close} size="panel" label={t('accounts.messages.title')}>
         <div className="flex max-h-dialog flex-col overflow-hidden">
-          <div className="flex items-center gap-lg border-b border-line-row px-xl py-xl">
+          <div className="flex items-center gap-lg border-b border-line-row px-xl py-lg">
             <div className="flex size-face shrink-0 items-center justify-center rounded-full bg-info-tint text-info-strong">
               <Icon name="users" size={20} />
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="truncate type-dialog-title">{t('accounts.messages.title')}</h2>
-              <p className="type-prose">{t('accounts.messages.subtitle')}</p>
             </div>
             <CloseButton onClick={close} aria-label={t('accounts.profile.close')} />
           </div>
 
-          <div className="tb-scroll flex-1 space-y-xl overflow-y-auto p-xl">
+          <div className="tb-scroll flex-1 space-y-lg overflow-y-auto p-xl">
             {started ? (
               stale ? (
                 <div className="space-y-sm">
@@ -321,18 +331,18 @@ export function BulkMessageModal({
                       {ids.length}/{MAX_ACCOUNTS}
                     </span>
                   </div>
-                  <div className="flex min-h-control items-center gap-sm rounded-lg border border-line bg-canvas p-sm">
+                  <div className="flex min-h-control items-center gap-sm rounded-lg border border-line bg-canvas px-sm py-xs">
                     <IconButton
-                      size="touch"
+                      size="sm"
                       aria-label={t('accounts.bulk.add')}
                       onClick={() => {
                         setPickerOpen(true);
                       }}
                     >
-                      <Icon name="plus" size={18} />
+                      <Icon name="plus" size={16} />
                     </IconButton>
                     {ids.length === 0 ? (
-                      <span className="type-prose">{t('accounts.messages.pickAccounts')}</span>
+                      <span className="type-caption">{t('accounts.messages.pickAccounts')}</span>
                     ) : (
                       <div className="tb-scroll flex items-center gap-sm overflow-x-auto py-hair">
                         {ids.map((id) => {
@@ -366,10 +376,41 @@ export function BulkMessageModal({
                 </section>
 
                 <section className="space-y-sm">
+                  <div className="flex items-center gap-sm">
+                    <h3 className="type-label">{t('accounts.messages.mode')}</h3>
+                    <HelpHint text={t('accounts.messages.modeHint')} />
+                  </div>
+                  {/* Режим только локальный: в запрос не уходит, «Распределить» пока недоступен. */}
+                  <SegmentedControl
+                    variant="tray"
+                    ariaLabel={t('accounts.messages.mode')}
+                    value="each"
+                    onChange={() => undefined}
+                    options={[
+                      { value: 'each', label: t('accounts.messages.modeEach') },
+                      {
+                        value: 'split',
+                        title: t('accounts.messages.modeSplitHint'),
+                        disabled: true,
+                        label: (
+                          <span className="inline-flex items-center gap-sm">
+                            {t('accounts.messages.modeSplit')}
+                            <Badge>{t('accounts.messages.soon')}</Badge>
+                          </span>
+                        ),
+                      },
+                    ]}
+                  />
+                </section>
+
+                <section className="space-y-sm">
                   <div className="flex items-center justify-between gap-md">
-                    <label htmlFor="bulk-message-recipients" className="type-label">
-                      {t('accounts.messages.recipients')}
-                    </label>
+                    <div className="flex items-center gap-sm">
+                      <label htmlFor="bulk-message-recipients" className="type-label">
+                        {t('accounts.messages.recipients')}
+                      </label>
+                      <HelpHint text={t('accounts.messages.recipientsHint')} />
+                    </div>
                     <span
                       className={`type-caption tabular-nums ${recipientList.length > MAX_RECIPIENTS ? 'text-danger' : ''}`}
                     >
@@ -384,7 +425,6 @@ export function BulkMessageModal({
                       setRecipients(event.target.value);
                     }}
                   />
-                  <p className="type-caption">{t('accounts.messages.recipientsHint')}</p>
                   <ContactLookupPanel accountIds={ids} onAppendRecipients={appendRecipients} />
                 </section>
 
@@ -394,7 +434,7 @@ export function BulkMessageModal({
                       {t('accounts.messages.text')}
                     </label>
                     <IconButton
-                      size="touch"
+                      size="sm"
                       tone="primary"
                       aria-label={t('accounts.messages.openGenerator')}
                       aria-expanded={generatorOpen}
@@ -403,7 +443,7 @@ export function BulkMessageModal({
                         setGeneratorOpen((open) => !open);
                       }}
                     >
-                      <Icon name="sparkles" size={18} />
+                      <Icon name="sparkles" size={16} />
                     </IconButton>
                   </div>
                   {generatorOpen && (
@@ -457,38 +497,40 @@ export function BulkMessageModal({
                 </section>
 
                 <section className="space-y-sm">
-                  <h3 className="type-label">{t('accounts.messages.delay')}</h3>
-                  <div className="grid grid-cols-2 gap-md">
-                    <label className="space-y-sm type-caption">
-                      <span>{t('accounts.messages.minDelay')}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={MAX_DELAY_SECONDS}
-                        step={1}
-                        value={minDelay}
-                        onChange={(event) => {
-                          setMinDelay(event.target.value);
-                        }}
-                      />
-                    </label>
-                    <label className="space-y-sm type-caption">
-                      <span>{t('accounts.messages.maxDelay')}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={MAX_DELAY_SECONDS}
-                        step={1}
-                        value={maxDelay}
-                        onChange={(event) => {
-                          setMaxDelay(event.target.value);
-                        }}
-                      />
-                    </label>
+                  <div className="flex items-center gap-sm">
+                    <h3 className="type-label">{t('accounts.messages.delay')}</h3>
+                    <HelpHint text={t('accounts.messages.delayHint')} />
                   </div>
-                  <p className={delayReady ? 'type-caption' : 'type-caption text-danger'}>
-                    {t('accounts.messages.delayHint')}
-                  </p>
+                  <div className="grid grid-cols-2 gap-md">
+                    {(
+                      [
+                        ['delayFrom', 'minDelay', minDelay, setMinDelay],
+                        ['delayTo', 'maxDelay', maxDelay, setMaxDelay],
+                      ] as const
+                    ).map(([labelKey, ariaKey, value, setValue]) => (
+                      <label key={labelKey} className="flex items-center gap-sm type-caption">
+                        <span>{t(`accounts.messages.${labelKey}`)}</span>
+                        <Input
+                          type="number"
+                          size="xs"
+                          min={0}
+                          max={MAX_DELAY_SECONDS}
+                          step={1}
+                          aria-label={t(`accounts.messages.${ariaKey}`)}
+                          value={value}
+                          onChange={(event) => {
+                            setValue(event.target.value);
+                          }}
+                        />
+                        <span>{t('accounts.messages.secondsShort')}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {!delayReady && (
+                    <p role="alert" className="type-caption text-danger">
+                      {t('accounts.messages.delayInvalid')}
+                    </p>
+                  )}
                 </section>
               </>
             )}

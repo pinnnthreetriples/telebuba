@@ -50,7 +50,7 @@ export function SelectableCard({
           <div className="pointer-events-none flex justify-between gap-md">
             <div className="min-w-0 flex-1">
               <div className="mb-tight truncate type-card-title">{name}</div>
-              <div className="type-caption">{meta}</div>
+              <div className="truncate type-caption">{meta}</div>
             </div>
             <div className="flex shrink-0 flex-col items-end gap-sm">
               {status}

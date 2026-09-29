@@ -71,7 +71,7 @@ export function ListenerCard({
             actions={
               <>
                 <IconButton
-                  size="touch"
+                  size="md"
                   tone="neutral"
                   aria-label={
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
@@ -80,27 +80,29 @@ export function ListenerCard({
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
-                  className={`w-action self-stretch ${running ? 'text-warning-deep hover:bg-warning-tint' : 'text-success-deep hover:bg-success-tint'}`}
+                  className={
+                    running
+                      ? 'text-warning-deep hover:bg-warning-tint'
+                      : 'text-success-deep hover:bg-success-tint'
+                  }
                 >
                   {running ? <Icon name="pause" size={16} /> : <Icon name="play" size={16} />}
                 </IconButton>
                 <IconButton
-                  size="touch"
+                  size="md"
                   tone="primary"
                   aria-label={t('neurocomment.listener.edit')}
                   title={t('neurocomment.listener.edit')}
                   onClick={onEdit}
-                  className="w-action self-stretch"
                 >
                   <Icon name="pencil" size={16} />
                 </IconButton>
                 <IconButton
-                  size="touch"
+                  size="md"
                   tone="danger"
                   aria-label={t('neurocomment.listener.remove')}
                   title={t('neurocomment.listener.remove')}
                   onClick={onRemove}
-                  className="w-action self-stretch"
                 >
                   <Icon name="trash" size={16} />
                 </IconButton>
@@ -117,7 +119,7 @@ export function ListenerCard({
                     className={`size-dot shrink-0 rounded-full ${working ? 'tb-livedot bg-success' : 'bg-content-subtle'}`}
                   />
                   <span
-                    className={`type-item-title ${working ? 'tb-pulse text-success-deep' : 'text-content-muted'}`}
+                    className={`truncate type-item-title ${working ? 'tb-pulse text-success-deep' : 'text-content-muted'}`}
                   >
                     {statusLabel}
                   </span>
