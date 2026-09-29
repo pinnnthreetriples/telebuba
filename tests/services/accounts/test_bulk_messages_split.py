@@ -225,3 +225,45 @@ async def test_cancel_stops_split_before_the_next_recipient(
     assert finished.status == "cancelled"
     assert finished.completed == 1
     assert calls == ["rcpt1"]
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_a_refusal_does_not_report_a_hand_over_that_never_happened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str]] = []
+    job = bulk_messages.start_bulk_message_job(_request(), "owner-1")
+
+    async def fake_execute(
+        account_id: str,
+        action: SendChatMessage,
+        *,
+        domain: str,  # noqa: ARG001
+    ) -> ActionResult:
+        calls.append((account_id, action.recipient))
+        if account_id == "a2":
+            bulk_messages.cancel_bulk_message_job(job.job_id, "owner-1")
+            return ActionResult(
+                status="flood_wait",
+                action_type=action.action_type,
+                account_id=account_id,
+                flood_wait_seconds=30,
+            )
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(bulk_messages, "execute", fake_execute)
+    await bulk_messages.run_bulk_message_job(job.job_id)
+    finished = bulk_messages.get_bulk_message_job(job.job_id, "owner-1")
+    assert finished is not None
+    assert calls == [("a1", "rcpt1"), ("a2", "rcpt2")]
+    assert finished.status == "cancelled"
+    assert _pairs(finished) == [
+        ("a1", "@rcpt1", "ok", False),
+        ("a2", "@rcpt2", "failed", False),
+    ]
+    assert finished.completed == 2
+
+
+def test_a_user_id_with_leading_zeros_is_the_same_recipient() -> None:
+    with pytest.raises(ValueError, match="duplicate recipients"):
+        bulk_messages.start_bulk_message_job(_request(recipients=["123", "0123"]), "owner-1")

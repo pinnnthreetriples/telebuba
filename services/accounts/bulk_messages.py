@@ -45,7 +45,8 @@ logger = logging.getLogger(__name__)
 def _recipient_peer(recipient: str) -> str:
     token = recipient.strip()
     if token.isdecimal() and int(token) > 0:
-        return token
+        # Canonical digits, so "0123" and "123" are caught as the same user.
+        return str(int(token))
     peer = normalize_channel(token, max_length=32)
     if peer is None or peer.startswith("+"):
         msg = "invalid recipient"
@@ -213,9 +214,15 @@ async def _run_split_messages(
     for index, (recipient, peer) in enumerate(recipients):
         pinned = data.recipient_accounts.get(recipient)
         last: BulkMessageOutcome | None = None
+        refused: list[BulkMessageOutcome] = []
         while live and (pinned is None or pinned in live):
             if cancel_event.is_set() or (attempted and not await _pace(data, cancel_event)):
+                # A refusal awaiting hand-over was never handed on: it is final.
+                job.results.extend(refused)
+                job.completed += len(refused)
                 return
+            job.results.extend(r.model_copy(update={"handed_over": True}) for r in refused)
+            refused = []
             account_id = pinned or live[cursor % len(live)]
             attempted = True
             last = await _send_one(account_id, recipient, peer, data.text)
@@ -227,7 +234,7 @@ async def _run_split_messages(
             live.remove(account_id)
             if pinned is not None or not live:
                 break
-            job.results.append(last.model_copy(update={"handed_over": True}))
+            refused = [last]
             last = None
         if last is None:
             planned = pinned or data.account_ids[index % len(data.account_ids)]
