@@ -269,7 +269,7 @@ describe('DiscoveryForm keyword suggester', () => {
   });
 
   it.each([
-    ['llm_unavailable', /ключ DeepSeek не задан/],
+    ['llm_unavailable', /ни ключ DeepSeek, ни ключ Gemini/],
     ['llm_failed', /Модель не ответила/],
     ['llm_empty', /не нашлось подходящих слов/],
   ])('explains the %s answer', async (code, message) => {

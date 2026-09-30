@@ -11,12 +11,12 @@ key in the ``x-goog-api-key`` header.
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import cast
 
 import httpx
 
 from core._llm_redact import exception_text
+from core._llm_throttle import Throttle
 from core.config import settings
 from schemas.gemini import GeminiRequest, GeminiResult
 
@@ -25,33 +25,8 @@ _HTTP_TOO_MANY_REQUESTS = 429
 _HTTP_SERVER_ERROR_MIN = 500
 
 
-class _ThrottleState:
-    """Shared last-call clock for the inter-request spacing gate.
-
-    A single lock serialises the wait so concurrent generations queue and fire
-    ``min_interval`` apart, keeping a burst under a per-minute API quota.
-    """
-
-    lock = asyncio.Lock()
-    last_call: float = 0.0  # time.monotonic() of the previous slot
-
-
-_throttle = _ThrottleState()
-
-
-async def _await_slot(min_interval: float) -> None:
-    """Sleep until ``min_interval`` has elapsed since the previous Gemini call.
-
-    ``min_interval <= 0`` disables the gate entirely (and never touches the
-    shared clock, so callers that opt out don't perturb opted-in spacing).
-    """
-    if min_interval <= 0:
-        return
-    async with _throttle.lock:
-        wait = _throttle.last_call + min_interval - time.monotonic()
-        if wait > 0:
-            await asyncio.sleep(wait)
-        _throttle.last_call = time.monotonic()
+# Gemini's own clock: the spacing is per provider, as the quota it keeps under is.
+_throttle = Throttle()
 
 
 class _ClientHolder:
@@ -96,6 +71,10 @@ def _payload(request: GeminiRequest) -> dict[str, object]:
         # Server-side structured output: Gemini validates against the schema and
         # returns JSON, so parse-fails are effectively impossible on our side.
         generation_config["responseSchema"] = request.response_schema_json
+        generation_config["responseMimeType"] = "application/json"
+    elif request.response_json_object:
+        # Schema-less JSON mode, the counterpart of DeepSeek's ``json_object``: the
+        # callers that ask for it validate the parsed body themselves.
         generation_config["responseMimeType"] = "application/json"
     parts: list[dict[str, object]] = [{"text": request.prompt}]
     if request.image_b64 is not None:
@@ -159,8 +138,10 @@ def _classify_response(response: httpx.Response) -> GeminiResult:
     if isinstance(first, dict) and first.get("finishReason") == "MAX_TOKENS":
         # A capped generation hands back a mid-word stump (and invalid JSON under
         # responseSchema). Callers want to retry or give up cleanly — never to post
-        # half a sentence — so truncation is an error, not a short success.
-        return GeminiResult(status="error", error="Truncated: hit maxOutputTokens")
+        # half a sentence — so truncation is a failure, not a short success. Its own
+        # status, as in ``core.openai``: only a caller that can shrink its ask gains
+        # from a retry, and every other one treats any non-``ok`` status as an error.
+        return GeminiResult(status="truncated", error="Truncated: hit maxOutputTokens")
     text = _extract_text(body) if isinstance(body, dict) else None
     if text is None:
         return GeminiResult(status="error", error="No text in Gemini response")
@@ -182,7 +163,7 @@ async def generate_text(request: GeminiRequest) -> GeminiResult:
         if request.min_interval_seconds is not None
         else settings.gemini.min_interval_seconds
     )
-    await _await_slot(interval)
+    await _throttle.wait(interval)
     client = _get_client()
     max_retries = (
         request.max_retries if request.max_retries is not None else settings.gemini.max_retries

@@ -203,6 +203,7 @@ async def test_openai_provider_used_when_selected(monkeypatch: pytest.MonkeyPatc
         gemini_api_key=None,
         openai_api_key="sk-test",
         captcha_llm_provider="openai",
+        gemini_max_retries=4,
     )
     openai = _gemini(
         GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
@@ -219,6 +220,9 @@ async def test_openai_provider_used_when_selected(monkeypatch: pytest.MonkeyPatc
     assert len(openai.calls) == 1  # routed to OpenAI
     assert gemini.calls == []  # Gemini untouched
     assert openai.calls[0].model == settings.openai.model
+    # The operator's retries reach every provider; the pause does not reach the solver.
+    assert openai.calls[0].max_retries == 4
+    assert openai.calls[0].min_interval_seconds is None
 
 
 @pytest.mark.asyncio

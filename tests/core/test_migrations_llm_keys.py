@@ -1,4 +1,6 @@
-"""Migrations #64 and #65 — dead ``warming_settings`` columns out, the DeepSeek key in.
+"""Migrations #64-#66 — dead ``warming_settings`` columns out, new LLM columns in.
+
+The new columns are the DeepSeek key and the text-LLM choice.
 
 Its own module because ``tests/core/test_migrations.py`` is at the 700-line test
 source cap (``tests.test_architecture._TEST_FILE_MAX_LINES``).
@@ -14,6 +16,7 @@ from core.db import _get_engine, _warming_settings, configure_database  # type: 
 from core.migration_steps import _add_warming_user_controls
 from core.migration_steps_llm_keys import (
     _add_warming_settings_deepseek_key,
+    _add_warming_settings_text_llm_provider,
     _drop_warming_settings_dead_columns,
 )
 from core.migrations import MIGRATIONS
@@ -61,14 +64,17 @@ def test_a_legacy_row_loses_the_dead_columns_and_keeps_its_data(
     with engine.begin() as connection:
         _drop_warming_settings_dead_columns(connection)
         _add_warming_settings_deepseek_key(connection)
+        _add_warming_settings_text_llm_provider(connection)
         row = connection.exec_driver_sql(
-            "SELECT inter_account_chat, gemini_api_key, deepseek_api_key FROM warming_settings",
+            "SELECT inter_account_chat, gemini_api_key, deepseek_api_key, text_llm_provider "
+            "FROM warming_settings",
         ).one()
 
     columns = _columns(engine, "warming_settings")
     assert not _DEAD & columns
-    assert "deepseek_api_key" in columns
-    assert tuple(row) == (1, "g-key", None)
+    assert {"deepseek_api_key", "text_llm_provider"} <= columns
+    # NULL, which reads as the default provider — how an old row was always routed.
+    assert tuple(row) == (1, "g-key", None, None)
 
 
 def test_the_steps_are_idempotent_registered_and_match_create_all(
@@ -80,6 +86,7 @@ def test_the_steps_are_idempotent_registered_and_match_create_all(
         for _ in range(2):
             _drop_warming_settings_dead_columns(connection)
             _add_warming_settings_deepseek_key(connection)
+            _add_warming_settings_text_llm_provider(connection)
 
     assert (64, "drop_warming_settings_dead_columns", _drop_warming_settings_dead_columns) in (
         MIGRATIONS
@@ -87,6 +94,11 @@ def test_the_steps_are_idempotent_registered_and_match_create_all(
     assert (65, "add_warming_settings_deepseek_key", _add_warming_settings_deepseek_key) in (
         MIGRATIONS
     )
+    assert (
+        66,
+        "add_warming_settings_text_llm_provider",
+        _add_warming_settings_text_llm_provider,
+    ) in MIGRATIONS
     # ``_isolate_db`` built the fresh route (``create_all`` + the whole registry, whose
     # #5 re-adds the dead columns before #64 drops them again).
     fresh = _columns(_get_engine(), "warming_settings")
@@ -99,5 +111,6 @@ def test_the_steps_skip_a_database_without_the_table(legacy_engine: _EngineFacto
     with engine.begin() as connection:
         _drop_warming_settings_dead_columns(connection)
         _add_warming_settings_deepseek_key(connection)
+        _add_warming_settings_text_llm_provider(connection)
 
     assert _columns(engine, "warming_settings") == set()

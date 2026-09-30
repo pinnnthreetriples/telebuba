@@ -58,6 +58,7 @@ from core.migration_steps_discovery import (
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
 from core.migration_steps_llm_keys import (
     _add_warming_settings_deepseek_key,
+    _add_warming_settings_text_llm_provider,
     _drop_warming_settings_dead_columns,
 )
 from core.migration_steps_neurocomment import (
@@ -192,6 +193,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (63, "add_warming_joined_left_at", _add_warming_joined_left_at),
     (64, "drop_warming_settings_dead_columns", _drop_warming_settings_dead_columns),
     (65, "add_warming_settings_deepseek_key", _add_warming_settings_deepseek_key),
+    (66, "add_warming_settings_text_llm_provider", _add_warming_settings_text_llm_provider),
 )
 
 

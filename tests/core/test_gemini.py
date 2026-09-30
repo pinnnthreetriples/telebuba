@@ -101,6 +101,43 @@ async def test_no_response_schema_when_unset() -> None:
 
 
 @pytest.mark.asyncio
+async def test_json_object_asks_for_json_without_a_schema() -> None:
+    """The schema-less JSON mode a caller shares with DeepSeek's ``json_object``."""
+    request = _request().model_copy(update={"response_json_object": True})
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "{}"}]}}]},
+            ),
+        )
+        await generate_text(request)
+
+    generation = json.loads(route.calls.last.request.content)["generationConfig"]
+    assert generation["responseMimeType"] == "application/json"
+    assert "responseSchema" not in generation
+
+
+@pytest.mark.asyncio
+async def test_a_schema_wins_over_json_object() -> None:
+    schema: dict[str, object] = {"type": "object"}
+    request = _request().model_copy(
+        update={"response_json_object": True, "response_schema_json": schema}
+    )
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "{}"}]}}]},
+            ),
+        )
+        await generate_text(request)
+
+    generation = json.loads(route.calls.last.request.content)["generationConfig"]
+    assert generation["responseSchema"] == schema
+
+
+@pytest.mark.asyncio
 async def test_image_added_as_inline_data_part() -> None:
     with respx.mock:
         route = respx.post(url__regex=_ENDPOINT).mock(
@@ -283,7 +320,7 @@ async def test_request_max_retries_none_falls_back_to_config(
 async def test_min_interval_spaces_consecutive_calls(monkeypatch: pytest.MonkeyPatch) -> None:
     """A non-zero ``min_interval_seconds`` sleeps to space calls by the interval."""
     monkeypatch.setattr(settings.gemini, "max_retries", 0)
-    monkeypatch.setattr("core.gemini.time.monotonic", lambda: 100.0)  # frozen clock
+    monkeypatch.setattr("core._llm_throttle.time.monotonic", lambda: 100.0)  # frozen clock
     _throttle.last_call = 0.0
     slept: list[float] = []
 
@@ -401,7 +438,9 @@ async def test_max_tokens_finish_reason_is_error_not_partial_text() -> None:
         )
         result = await generate_text(_request())
 
-    assert result.status == "error"
+    # Its own failure status, as ``core.openai`` has: a caller that can shrink its ask
+    # (neuroshilling) must tell it apart; every other one sees a non-``ok`` result.
+    assert result.status == "truncated"
     assert result.text is None
     assert "maxOutputTokens" in (result.error or "")
 

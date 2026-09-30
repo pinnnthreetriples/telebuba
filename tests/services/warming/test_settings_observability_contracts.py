@@ -37,6 +37,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         openai_api_key=expected_openai_key,
         openai_model="gpt-contract",
         captcha_llm_provider="openai",
+        text_llm_provider="gemini",
         extra_toggles={**EXTRA_TOGGLE_DEFAULTS, "polls": True},
         updated_at="2026-07-17T12:00:00+00:00",
     )
@@ -60,6 +61,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
             openai_model="gpt-contract",
             clear_openai_key=clear_keys,
             captcha_llm_provider="openai",
+            text_llm_provider="gemini",
             extra_toggles={"polls": True},
         )
     )
@@ -73,6 +75,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         gemini_model="gemini-contract",
         gemini_max_retries=4,
         gemini_min_interval_seconds=2.5,
+        text_llm_provider="gemini",
         openai_api_key=expected_openai_key,
         openai_model="gpt-contract",
         captcha_llm_provider="openai",
@@ -89,6 +92,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
         "gemini_model": "gemini-contract",
         "gemini_max_retries": 4,
         "gemini_min_interval_seconds": 2.5,
+        "text_llm_provider": "gemini",
         "has_openai_key": bool(expected_openai_key),
         "openai_key_hint": "••••" if expected_openai_key else None,
         "openai_model": "gpt-contract",
@@ -112,6 +116,7 @@ async def test_save_settings_persists_controls_and_emits_masked_audit_payload(
             "gemini_min_interval_seconds": 2.5,
             "has_openai_key": bool(expected_openai_key),
             "captcha_llm_provider": "openai",
+            "text_llm_provider": "gemini",
             "has_deepseek_key": False,
             # A count, never the toggles themselves: 7 defaults on + the one flipped.
             "extras_enabled": 8,

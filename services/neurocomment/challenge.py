@@ -176,6 +176,10 @@ async def _llm_decision(
             response_json_object=use_deepseek,
             image_b64=message.image_b64 if use_image else None,
             image_mime=message.image_mime,
+            # The operator's retries apply to every provider; their pause does not: it
+            # would queue the solver behind comment generations, and the ``wait_for``
+            # below is a hard deadline.
+            max_retries=secret.gemini_max_retries,
         )
         # The vision path uploads a base64 captcha image and routinely outlives the text
         # budget; the provider gateway's own timeout is 30s, so reusing the 10s text cutoff

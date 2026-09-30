@@ -4,11 +4,10 @@ A convenience over the keyword box on the discovery board, not part of a run: it
 touches no campaign, reserves no account and spends no Telegram budget, so it lives
 beside the discovery modules rather than inside ``discovery.py``'s run machinery.
 
-DeepSeek only. ``_llm._deepseek_generates`` falls back to Gemini when no DeepSeek
-key is set, and that is right for the comment hot path — not here. The warming
-settings row is read for the DeepSeek key alone (Settings page, else
-``DEEPSEEK__API_KEY``); an unset one is a fact the operator can act on, so it is
-simply reported (``llm_unavailable``) and nothing is called.
+The operator's text LLM writes it (``services._text_llm``), as it writes every other
+text: the chosen provider, or the other one when the chosen has no key. With no key
+at all there is nothing to call — a fact the operator can act on, so it is simply
+reported (``llm_unavailable``).
 
 The parser assumes the model ignores half the formatting instruction, because it
 does. Every line is filtered by the rules ``DiscoverySearchRequest`` applies to
@@ -20,10 +19,9 @@ the operator the other nine.
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
-from core.config import settings
 from core.db import load_warming_settings
-from schemas.gemini import GeminiRequest
 from schemas.neurocomment_discovery import (
     KEYWORD_MAX_LENGTH,
     KEYWORD_MIN_LENGTH,
@@ -33,7 +31,12 @@ from schemas.neurocomment_discovery_keywords import (
     DiscoveryKeywordRequest,
     DiscoveryKeywordResult,
 )
+from services._text_llm import text_llm
 from services.neurocomment import _seams
+
+if TYPE_CHECKING:
+    from schemas.gemini import GeminiRequest
+    from services._text_llm import TextLlm
 
 # Leading list furniture: a bullet of any of the usual shapes, or "1." / "2)" —
 # stripped before the edge pass so a numbered, quoted line ends up bare. The two
@@ -87,15 +90,15 @@ _PROMPT = (
 )
 
 
-def _build_request(topic: str, api_key: str) -> GeminiRequest:
-    """Compose the DeepSeek call.
+def _build_request(topic: str, llm: TextLlm) -> GeminiRequest:
+    """Compose the call to the operator's text LLM.
 
     Not ``_llm._build_request``: that one exists to wrap an untrusted channel post in
     its fence and to pick between the two providers using a campaign's Gemini secret.
     There is no post here, and no campaign — reusing it would mean inventing a
     ``_Subject`` and a ``WarmingSettingsSecret`` for a request that wants neither.
-    What IS reused is the shape of its DeepSeek branch, and the provider-neutral
-    request type both gateways take.
+    What IS reused is the provider resolution (``services._text_llm``) and the
+    provider-neutral request type both gateways take.
 
     ``thinking_budget`` is left at its ``0`` default on purpose, which is what makes
     ``max_output_tokens`` mean "room for the answer": DeepSeek-V4 reasons by default
@@ -107,16 +110,13 @@ def _build_request(topic: str, api_key: str) -> GeminiRequest:
     to escalate to — and the blast radius is bounded twice over anyway: 64 characters
     in, and out the other side nothing but short strings that pass the keyword rules.
     """
-    return GeminiRequest(
-        api_key=api_key,
-        prompt=_PROMPT.format(
+    return llm.request(
+        _PROMPT.format(
             topic=topic,
             max_keywords=MAX_KEYWORDS,
             min_length=KEYWORD_MIN_LENGTH,
             max_length=KEYWORD_MAX_LENGTH,
         ),
-        model=settings.deepseek.model,
-        temperature=settings.deepseek.temperature,
         max_output_tokens=_MAX_OUTPUT_TOKENS,
     )
 
@@ -184,14 +184,15 @@ def parse_keywords(text: str) -> list[str]:
 async def expand_discovery_keywords(
     request: DiscoveryKeywordRequest,
 ) -> DiscoveryKeywordResult:
-    """Ask DeepSeek to widen ``request.topic`` into a search-ready keyword list."""
-    api_key = (await load_warming_settings()).deepseek_api_key
-    if not api_key:
+    """Ask the text LLM to widen ``request.topic`` into a search-ready keyword list."""
+    llm = text_llm(await load_warming_settings())
+    if not llm.api_key:
         # Before any request is built, so this branch cannot be mistaken for a call
         # that failed: there is no key to call with, which is a deployment fact the
         # operator can act on rather than an upstream hiccup to retry.
         return DiscoveryKeywordResult(error="llm_unavailable")
-    result = await _seams.generate_text_deepseek(_build_request(request.topic, api_key))
+    generate = _seams.generate_text_deepseek if llm.use_deepseek else _seams.generate_text
+    result = await generate(_build_request(request.topic, llm))
     if result.status != "ok" or result.text is None:
         # Errors, rate limits and a 200 carrying no text are one code: all three mean
         # the model never spoke, and none of them says anything about the topic.

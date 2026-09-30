@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import pair_key, recent_pair_messages
 from core.logging import log_event
-from schemas.gemini import GeminiRequest
+from services._text_llm import text_llm
 from services.content import (
     is_acceptable,
     similarity,
@@ -159,23 +159,12 @@ async def _generate_chat_text(
     recent_texts = recent_texts or []
     threshold = settings.warming.dialogue_similarity_max
     failure = "generate_chat_text"
-    # A chat line is always text, so DeepSeek can write all of them — this path never
-    # carries the image that keeps comment generation on Gemini. No DeepSeek key (the
-    # settings page's, else ``DEEPSEEK__API_KEY``) falls back rather than failing, and
-    # the choice is made once so a provider cannot change between regeneration attempts.
-    use_deepseek = bool(secret.deepseek_api_key)
-    generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text
-    llm = settings.deepseek if use_deepseek else settings.gemini
+    # The Settings page's text LLM, resolved once so a provider cannot change between
+    # regeneration attempts; a chosen one without a key hands over to the other.
+    llm = text_llm(secret)
+    generate = _seams.generate_text_deepseek if llm.use_deepseek else _seams.generate_text
     for _ in range(settings.warming.content_max_attempts):
-        generated = await generate(
-            GeminiRequest(
-                api_key=secret.deepseek_api_key if use_deepseek else secret.gemini_api_key,
-                prompt=prompt or _seams.rng.choice(_CHAT_PROMPTS),
-                model=settings.deepseek.model if use_deepseek else secret.gemini_model,
-                temperature=llm.temperature,
-                max_output_tokens=llm.max_output_tokens,
-            ),
-        )
+        generated = await generate(llm.request(prompt or _seams.rng.choice(_CHAT_PROMPTS)))
         if generated.status != "ok" or not generated.text:
             await log_event(
                 "WARNING",

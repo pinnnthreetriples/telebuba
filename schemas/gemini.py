@@ -38,18 +38,19 @@ class GeminiRequest(BaseModel):
     # instead of the schema-enforced mode. DeepSeek documents ``response_format.type``
     # as "one of ``text`` or ``json_object``" and answers a ``json_schema`` request
     # with an error, so a caller that wants JSON from it has no other way to say so.
-    # ``core.gemini`` ignores this field, exactly as it ignores nothing else here:
-    # Gemini's own structured output is ``response_schema_json`` and stays that.
-    # False by default, so no existing payload changes by a byte.
+    # ``core.gemini`` maps it to a schema-less ``application/json`` response, so a
+    # caller that may land on either provider asks the same way. A schema, when
+    # given, wins on Gemini. False by default, so no existing payload changes by a byte.
     response_json_object: bool = False
     # Optional inline image (base64) for a multimodal request — e.g. an image
     # captcha the vision model must read. ``image_mime`` is ignored when
     # ``image_b64`` is None; the model must be vision-capable (gemini-2.5-flash is).
     image_b64: str | None = None
     image_mime: str = Field(default="image/jpeg", min_length=1)
-    # Per-request overrides for the gateway's rate-limit handling. ``None`` falls
-    # back to ``settings.gemini.*`` — only callers that want to self-throttle (the
-    # neurocomment generator) set them, so captcha/warming calls are unaffected.
+    # Per-request overrides for the gateway's rate-limit handling — the operator's
+    # "retries" and "pause" from the Settings page, for every provider. ``None`` falls
+    # back to the provider's config (retries) and to no spacing (``core.openai``) or
+    # ``settings.gemini.min_interval_seconds`` (``core.gemini``).
     max_retries: int | None = Field(default=None, ge=0, le=5)
     min_interval_seconds: float | None = Field(default=None, ge=0.0)
 

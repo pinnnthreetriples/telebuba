@@ -156,7 +156,7 @@ def test_the_parsed_keywords_are_accepted_by_the_search_request_itself() -> None
 
 
 @pytest.mark.asyncio
-async def test_an_empty_deepseek_key_is_reported_without_calling_anything(
+async def test_no_llm_key_at_all_is_reported_without_calling_anything(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """No key means no call at all — not a call that fails.
@@ -166,7 +166,9 @@ async def test_an_empty_deepseek_key_is_reported_without_calling_anything(
     the 401 back. Those differ in a real HTTP round trip per keystroke.
     """
     monkeypatch.setattr(settings.deepseek, "api_key", "")
+    monkeypatch.setattr(settings.gemini, "api_key", "")
     monkeypatch.setattr(_seams, "generate_text_deepseek", _never_called)
+    monkeypatch.setattr(_seams, "generate_text", _never_called)
 
     result = await expand_discovery_keywords(DiscoveryKeywordRequest(topic="уличные драки"))
 
@@ -248,3 +250,20 @@ async def test_the_happy_path_asks_deepseek_with_thinking_off(
     assert "Russian" in request.prompt
     assert "ONE SINGLE WORD" in request.prompt
     assert "one word per line" in request.prompt
+
+
+@pytest.mark.asyncio
+async def test_without_a_deepseek_key_gemini_expands_the_topic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The text LLM hands over to the other provider, as it does for every text."""
+    monkeypatch.setattr(settings.deepseek, "api_key", "")
+    monkeypatch.setattr(settings.gemini, "api_key", "g-key")
+    gemini = _CapturingGateway(GeminiResult(status="ok", text=_MESSY_ANSWER))
+    monkeypatch.setattr(_seams, "generate_text", gemini.generate_text_deepseek)
+    monkeypatch.setattr(_seams, "generate_text_deepseek", _never_called)
+
+    result = await expand_discovery_keywords(DiscoveryKeywordRequest(topic="уличные драки"))
+
+    assert result.keywords == _CLEAN
+    assert gemini.requests[0].api_key == "g-key"

@@ -311,7 +311,12 @@ async def test_generate_uses_deepseek_and_falls_back_to_gemini(
 
     async def fake_secret() -> SimpleNamespace:
         return SimpleNamespace(
-            gemini_api_key="gemini-key", gemini_model="gemini-model", deepseek_api_key=deepseek_key
+            gemini_api_key="gemini-key",
+            gemini_model="gemini-model",
+            deepseek_api_key=deepseek_key,
+            text_llm_provider="deepseek",
+            gemini_max_retries=1,
+            gemini_min_interval_seconds=0.0,
         )
 
     monkeypatch.setattr(bulk_messages, "generate_text_deepseek", fake_deepseek)

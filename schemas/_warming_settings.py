@@ -17,6 +17,9 @@ from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
 
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
 CaptchaLlmProvider = Literal["gemini", "openai", "deepseek"]
+# Which LLM writes every text: comments, warming chat, bulk messages, neuroshilling,
+# discovery keywords. Operator-chosen too; without its key the other one stands in.
+TextLlmProvider = Literal["gemini", "deepseek"]
 
 # What an LLM key may be made of once the paste's surrounding whitespace is stripped:
 # printable ASCII, no spaces. The key rides an HTTP header, and anything else there
@@ -39,10 +42,12 @@ class WarmingSettings(BaseModel):
     has_gemini_key: bool = False
     gemini_key_hint: str | None = None
     gemini_model: str = Field(min_length=1)
-    # Operator-tunable Gemini rate-limit handling (not secret): retry count on a
-    # 429/5xx and the minimum spacing between calls (seconds; 0 = no throttle).
+    # Operator-tunable rate-limit handling (not secret): retry count on a 429/5xx and
+    # the minimum spacing between one provider's calls (seconds; 0 = no throttle).
+    # Named for Gemini, which had them first; they apply to every provider now.
     gemini_max_retries: int = Field(default=1, ge=0, le=5)
     gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
+    text_llm_provider: TextLlmProvider = "deepseek"
     # Captcha LLM: presence flag + model + provider choice (keys never surfaced).
     has_openai_key: bool = False
     openai_key_hint: str | None = None
@@ -66,6 +71,7 @@ class WarmingSettingsSecret(BaseModel):
     gemini_model: str = Field(min_length=1)
     gemini_max_retries: int = Field(default=1, ge=0, le=5)
     gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
+    text_llm_provider: TextLlmProvider = "deepseek"
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
@@ -102,6 +108,7 @@ class WarmingSettingsUpdate(BaseModel):
     # config modal does — reset these to the old defaults 1 and 0.0.
     gemini_max_retries: int | None = Field(default=None, ge=0, le=5)
     gemini_min_interval_seconds: float | None = Field(default=None, ge=0.0, le=60.0)
+    text_llm_provider: TextLlmProvider | None = None
     clear_gemini_key: bool = False
     # Same keep/clear/replace semantics for the captcha OpenAI key + model, plus
     # the provider selector (None keeps the stored value).

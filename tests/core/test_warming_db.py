@@ -197,6 +197,27 @@ async def test_save_invalidates_the_read_cache() -> None:
 
 
 @pytest.mark.asyncio
+async def test_text_llm_provider_defaults_to_deepseek_keeps_and_reads_junk_as_default() -> None:
+    assert (await load_warming_settings()).text_llm_provider == "deepseek"
+
+    await save_warming_settings(gemini_api_key=None, text_llm_provider="gemini")
+    # A save that does not name it (every other writer) keeps the choice.
+    await save_warming_settings(gemini_api_key=None, captcha_llm_provider="openai")
+    assert (await load_warming_settings()).text_llm_provider == "gemini"
+
+    # NULL (a row older than the column) and an unknown value both read as the default.
+    for stored in (None, "claude"):
+        with _get_engine().begin() as connection:
+            connection.execute(update(_warming_settings).values(text_llm_provider=stored))
+        from core.repositories._warming_settings import (  # noqa: PLC0415
+            _invalidate_warming_settings_cache,
+        )
+
+        _invalidate_warming_settings_cache()
+        assert (await load_warming_settings()).text_llm_provider == "deepseek"
+
+
+@pytest.mark.asyncio
 async def test_list_warming_states_by_ids_scopes_and_guards_empty() -> None:
     for acc in ("acc-1", "acc-2"):
         await create_account(AccountCreate(account_id=acc))

@@ -4587,6 +4587,10 @@ export type WarmingSettings = {
    */
   gemini_min_interval_seconds?: number;
   /**
+   * Text Llm Provider
+   */
+  text_llm_provider?: 'gemini' | 'deepseek';
+  /**
    * Has Openai Key
    */
   has_openai_key?: boolean;
@@ -4661,6 +4665,10 @@ export type WarmingSettingsUpdate = {
    * Gemini Min Interval Seconds
    */
   gemini_min_interval_seconds?: number | null;
+  /**
+   * Text Llm Provider
+   */
+  text_llm_provider?: 'gemini' | 'deepseek' | null;
   /**
    * Clear Gemini Key
    */

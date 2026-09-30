@@ -43,7 +43,7 @@ def _no_telegram_connection(
     real.
 
     The credentials are deliberately NOT blanked the way
-    ``_no_ambient_deepseek_key`` blanks its key. ``settings.telegram.api_id`` is
+    ``_no_ambient_llm_keys`` blanks the LLM keys. ``settings.telegram.api_id`` is
     read as configuration as well as credential — ``check_telegram_session`` and
     the session-check tests branch on ``api_id == 0`` — so emptying it suite-wide
     would change what those tests exercise. It is also what made this escape
@@ -92,20 +92,22 @@ def _isolate_session_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.fixture(autouse=True)
-def _no_ambient_deepseek_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Run every test as a deployment that has not configured DeepSeek.
+def _no_ambient_llm_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every test as a deployment that has configured no LLM key.
 
-    That key is the whole switch deciding who generates text, and it is read from the
-    operator's ``.env`` — which made the suite depend on ambient config. With a key
-    present, every test that stubs only ``_seams.generate_text`` routed to the
-    UNSTUBBED ``generate_text_deepseek`` and issued live HTTPS calls to
-    api.deepseek.com: 25 of them in one run, each waiting out a 30s timeout. CI has no
+    The keys decide who generates text — the chosen provider, else whichever one has
+    a key — and they are read from the operator's ``.env``, which made the suite
+    depend on ambient config. With a DeepSeek key present, every test that stubs only
+    ``_seams.generate_text`` routed to the UNSTUBBED ``generate_text_deepseek`` and
+    issued live HTTPS calls to api.deepseek.com: 25 of them in one run, each waiting
+    out a 30s timeout. A Gemini key does the same the other way round, now that a
+    DeepSeek-first path hands over to Gemini when its own key is missing. CI has no
     key, so CI stayed green while local runs crawled and reached the network. The
     divergence is the defect here, not the slowness.
 
     Blanked centrally rather than patched into each stub helper, so no later test can
     reopen the hole by stubbing one provider and forgetting the other. A test that
-    means to exercise DeepSeek sets the key itself and stubs both
+    means to exercise a provider sets its key itself and stubs both
     (``tests/services/neurocomment/test_llm_routing.py``).
 
     The key is now resolved INTO the cached settings row (stored column, else this
@@ -117,6 +119,8 @@ def _no_ambient_deepseek_key(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     monkeypatch.setattr(settings.deepseek, "api_key", "")
+    monkeypatch.setattr(settings.gemini, "api_key", "")
+    monkeypatch.setattr(settings.openai, "api_key", "")
     _invalidate_warming_settings_cache()
 
 

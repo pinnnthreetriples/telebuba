@@ -1,11 +1,10 @@
-"""Ask DeepSeek for a dialogue and turn what comes back into a saveable scenario.
+"""Ask the text LLM for a dialogue and turn what comes back into a saveable scenario.
 
-DeepSeek only. ``services.neurocomment._llm`` falls back to Gemini when no
-DeepSeek key is set, and that is right for the comment hot path — not here. The
-warming settings row is read for the DeepSeek key alone.
-``expand_discovery_keywords`` made the same call for the same reason: an unset
-DeepSeek key (Settings page, else ``DEEPSEEK__API_KEY``) is a fact the operator can
-act on, so it is reported rather than worked around.
+The operator's text LLM writes it (``services._text_llm``), as it writes every other
+text: the chosen provider, or the other one when the chosen has no key. With no key
+at all nothing is called — a fact the operator can act on, reported rather than
+worked around. Both providers are asked for schema-less JSON the same way
+(``response_json_object``), and the answer is validated here either way.
 
 Three properties this module is responsible for, none of which the provider gives:
 
@@ -40,21 +39,22 @@ from pydantic import ValidationError
 
 from core.config import settings
 from core.db import load_warming_settings
-from schemas.gemini import GeminiRequest
 from schemas.neuroshilling_scenario import (
     NeuroshillingDialogueDraft,
     NeuroshillingRoleInput,
     NeuroshillingScenarioUpdate,
     NeuroshillingStepInput,
 )
+from services._text_llm import text_llm
 from services.neuroshilling import _seams, _state
 from services.neuroshilling._prompt import DialogueAsk, build_prompt
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from schemas.gemini import GeminiResult
+    from schemas.gemini import GeminiRequest, GeminiResult
     from schemas.neuroshilling_scenario import NeuroshillingDraftStep
+    from services._text_llm import TextLlm
 
 # Models wrap JSON in a fence about as often as they are told not to.
 _CODE_FENCE = re.compile(r"^\s*```(?:json)?\s*|\s*```\s*$", re.IGNORECASE)
@@ -182,14 +182,12 @@ def _to_update(
     return NeuroshillingScenarioUpdate(roles=roles, steps=steps)
 
 
-def _request(prompt: str, api_key: str) -> GeminiRequest:
-    return GeminiRequest(
-        api_key=api_key,
-        prompt=prompt,
-        model=settings.deepseek.model,
-        temperature=settings.deepseek.temperature,
+def _request(prompt: str, llm: TextLlm) -> GeminiRequest:
+    return llm.request(
+        prompt,
         max_output_tokens=settings.neuroshilling.llm_max_output_tokens,
-        # DeepSeek's only JSON mode; a ``json_schema`` request is refused outright.
+        # DeepSeek's only JSON mode (a ``json_schema`` request is refused outright),
+        # and Gemini's schema-less one.
         response_json_object=True,
     )
 
@@ -210,9 +208,10 @@ async def generate_dialogue(
     and forbids the dialogue from naming any product, because that mode plays in a
     chat the operator owns to make it look alive rather than to sell anything.
     """
-    api_key = (await load_warming_settings()).deepseek_api_key
-    if not api_key:
+    llm = text_llm(await load_warming_settings())
+    if not llm.api_key:
         return None
+    generate = _seams.generate_text_deepseek if llm.use_deepseek else _seams.generate_text
     complaint: str | None = None
     for _attempt in range(settings.neuroshilling.llm_max_attempts):
         if _state.at_daily_llm_cap():
@@ -222,13 +221,13 @@ async def generate_dialogue(
             # and a long retry chain can cross the line by itself.
             break
         prompt = build_prompt(topic, ask, complaint=complaint)
-        # One attempt is ``max_retries + 1`` HTTP requests: ``core.openai`` retries a
+        # One attempt is ``max_retries + 1`` HTTP requests: the gateway retries a
         # transient failure INSIDE the call, and charging one would undercount a
         # maxed-out configuration six-fold. Charged at the worst case, before the
         # call: the cap is a ceiling on spend, so erring high is the safe direction,
         # and a crash mid-call must not leave the spend uncounted.
-        _state.record_llm_call(calls=settings.deepseek.max_retries + 1)
-        result = await _seams.generate_text_deepseek(_request(prompt, api_key))
+        _state.record_llm_call(calls=llm.max_retries + 1)
+        result = await generate(_request(prompt, llm))
         if result.status == "truncated":
             # Re-asking the identical question under the identical token cap runs
             # out of tokens in exactly the same place. Shrinking the ask is the only
