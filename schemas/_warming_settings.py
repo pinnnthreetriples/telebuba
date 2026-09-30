@@ -8,24 +8,36 @@ working unchanged. Self-contained: depends only on pydantic + stdlib typing, so
 
 from __future__ import annotations
 
+import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from schemas._warming_extras import EXTRA_TOGGLE_DEFAULTS, ExtraToggles
 
 # Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
-CaptchaLlmProvider = Literal["gemini", "openai"]
+CaptchaLlmProvider = Literal["gemini", "openai", "deepseek"]
+
+# What an LLM key may be made of once the paste's surrounding whitespace is stripped:
+# printable ASCII, no spaces. The key rides an HTTP header, and anything else there
+# makes httpx raise with the whole header — key included — quoted in the message.
+_API_KEY_CHARS = re.compile(r"[!-~]*")
 
 
 class WarmingSettings(BaseModel):
-    """Masked, UI-facing warming settings — never carries the raw Gemini key."""
+    """Masked, UI-facing warming settings — never carries a raw LLM key.
+
+    Each ``*_key_hint`` is at most the key's first and last four characters (see
+    ``services.warming.settings_store._key_hint``), so the operator can tell which key
+    is set without the secret ever reaching the browser.
+    """
 
     inter_account_chat: bool = False
     reactions_enabled: bool = True
     join_enabled: bool = True
     enforce_readiness: bool = True
     has_gemini_key: bool = False
+    gemini_key_hint: str | None = None
     gemini_model: str = Field(min_length=1)
     # Operator-tunable Gemini rate-limit handling (not secret): retry count on a
     # 429/5xx and the minimum spacing between calls (seconds; 0 = no throttle).
@@ -33,8 +45,11 @@ class WarmingSettings(BaseModel):
     gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
     # Captcha LLM: presence flag + model + provider choice (keys never surfaced).
     has_openai_key: bool = False
+    openai_key_hint: str | None = None
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    has_deepseek_key: bool = False
+    deepseek_key_hint: str | None = None
     # Always the full key set — the repository merges the stored JSON over the defaults.
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     updated_at: str = Field(min_length=1)
@@ -54,6 +69,8 @@ class WarmingSettingsSecret(BaseModel):
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    # Resolved like the others: the stored column, else ``DEEPSEEK__API_KEY``.
+    deepseek_api_key: str = ""
     extra_toggles: ExtraToggles = Field(default_factory=EXTRA_TOGGLE_DEFAULTS.copy)
     updated_at: str = Field(min_length=1)
 
@@ -92,8 +109,24 @@ class WarmingSettingsUpdate(BaseModel):
     openai_model: str | None = None
     clear_openai_key: bool = False
     captcha_llm_provider: CaptchaLlmProvider | None = None
+    # And once more for the DeepSeek key (its model stays deployment config).
+    deepseek_api_key: str | None = None
+    clear_deepseek_key: bool = False
     # Keep-semantics once more, per key this time: ``None`` keeps every stored toggle,
     # a partial dict merges only the keys it names. The settings page PUTs this
     # endpoint without ever seeing the extras, so a full-replacement default would
     # reset the tuning card's toggles on every unrelated save. Unknown keys are a 422.
     extra_toggles: ExtraToggles | None = None
+
+    @field_validator("gemini_api_key", "openai_api_key", "deepseek_api_key")
+    @classmethod
+    def _header_safe_key(cls, value: str | None) -> str | None:
+        # Strip only: ``None`` still keeps and an empty result still clears.
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not _API_KEY_CHARS.fullmatch(stripped):
+            # The message names the rule, never the value — it reaches the 422 body.
+            msg = "API key must be printable ASCII without whitespace"
+            raise ValueError(msg)
+        return stripped

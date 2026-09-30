@@ -71,6 +71,12 @@ _DECISION_SCHEMA: dict[str, object] = {
     },
     "required": ["action", "confidence", "reasoning"],
 }
+# DeepSeek takes no schema, only ``json_object`` — whose prompt must say "json" — so the
+# shape rides in the prompt instead.
+_JSON_OBJECT_SHAPE = (
+    '\n\nAnswer with one json object: {"action": ..., "button_index": int or null, '
+    '"text": string or null, "confidence": 0..1, "reasoning": string}.'
+)
 
 
 def _challenge_hash(text: str, button_labels: list[str], *, has_photo: bool = False) -> str:
@@ -117,10 +123,10 @@ def _build_vision_prompt(message: BotChallengeMessage) -> str:
 async def _llm_decision(
     message: BotChallengeMessage, *, use_image: bool = False
 ) -> ChallengeDecision | _RateLimited | None:
-    """Fresh LLM decision via the operator-selected provider (Gemini or OpenAI).
+    """Fresh LLM decision via the operator-selected provider (Gemini, OpenAI or DeepSeek).
 
     The provider + keys come from the settings row (DB, falling back to .env);
-    ``openai`` uses the OpenAI vision model when its key is set, else Gemini.
+    ``openai``/``deepseek`` use that provider when its key is set, else Gemini.
     ``use_image`` attaches the captcha photo (vision) and swaps in the image
     prompt — set only for a photo challenge; a photo with no downloaded image
     gives up rather than sending a blank vision request. Returns ``None``
@@ -131,8 +137,17 @@ async def _llm_decision(
         return None
     nc = settings.neurocomment
     secret = await load_warming_settings()
-    use_openai = secret.captcha_llm_provider == "openai" and bool(secret.openai_api_key)
-    if use_openai:
+    provider = secret.captcha_llm_provider
+    use_deepseek = provider == "deepseek" and bool(secret.deepseek_api_key)
+    if use_deepseek:
+        api_key, model = secret.deepseek_api_key, settings.deepseek.model
+        temperature = settings.deepseek.temperature
+        max_output_tokens = nc.challenge_max_output_tokens
+        # Off, like the OpenAI branch: V4 reasoning is billed to ``max_tokens`` and its
+        # pairing with ``json_object`` is undocumented; a truncated answer is a give_up.
+        thinking_budget = 0
+        generate = _seams.generate_text_deepseek
+    elif provider == "openai" and secret.openai_api_key:
         api_key, model = secret.openai_api_key, secret.openai_model
         temperature = settings.openai.temperature
         max_output_tokens = settings.openai.max_output_tokens
@@ -149,14 +164,16 @@ async def _llm_decision(
     try:
         # GeminiRequest is the provider-neutral LLM contract; a build ValidationError
         # (e.g. empty key) is treated as give_up rather than crashing onboarding.
+        prompt = _build_vision_prompt(message) if use_image else _build_prompt(message)
         request = GeminiRequest(
             api_key=api_key,
-            prompt=_build_vision_prompt(message) if use_image else _build_prompt(message),
+            prompt=prompt + _JSON_OBJECT_SHAPE if use_deepseek else prompt,
             model=model,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
             thinking_budget=thinking_budget,
             response_schema_json=_DECISION_SCHEMA,
+            response_json_object=use_deepseek,
             image_b64=message.image_b64 if use_image else None,
             image_mime=message.image_mime,
         )

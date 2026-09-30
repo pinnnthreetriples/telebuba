@@ -56,6 +56,10 @@ from core.migration_steps_discovery import (
     _add_warming_settings_telemetr_key,
 )
 from core.migration_steps_join_lost import _add_neurocomment_join_log_lost_at
+from core.migration_steps_llm_keys import (
+    _add_warming_settings_deepseek_key,
+    _drop_warming_settings_dead_columns,
+)
 from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
     _add_campaign_account_channels_table,
@@ -186,6 +190,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (61, "add_linked_group_about", _add_linked_group_about),
     (62, "add_warming_settings_extra_toggles", _add_warming_settings_extra_toggles),
     (63, "add_warming_joined_left_at", _add_warming_joined_left_at),
+    (64, "drop_warming_settings_dead_columns", _drop_warming_settings_dead_columns),
+    (65, "add_warming_settings_deepseek_key", _add_warming_settings_deepseek_key),
 )
 
 

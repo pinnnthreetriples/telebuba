@@ -73,21 +73,20 @@ class OpenAISettings(BaseSettings):
 
 
 class DeepseekSettings(OpenAISettings):
-    """DeepSeek — the text generator, and the reason Gemini now only does vision.
+    """DeepSeek — the text generator, and an optional captcha solver (vision included).
 
     Subclasses the OpenAI settings because DeepSeek serves the same wire format
     (``POST {base_url}/chat/completions``, ``Bearer`` key), which is what lets
     ``core.openai`` drive both without a second gateway. Only the defaults differ.
 
-    The key lives HERE and not in the operator's DB record, unlike every other
-    provider: the Gemini/OpenAI keys are UI-set because the operator rotates them
-    per campaign, and this one is deployment config. That is also the fallback
-    switch — an empty key sends text generation back to Gemini rather than failing,
-    so a deployment that has not set ``DEEPSEEK__API_KEY`` keeps working unchanged.
+    ``api_key`` here is only the FALLBACK: like the Gemini/OpenAI keys, the operator
+    sets it on the settings page and the stored row wins; an empty column reads this
+    value. No key at all is the fallback switch — text generation goes back to Gemini
+    rather than failing, so a deployment that never set one keeps working unchanged.
 
-    ``deepseek-v4-flash`` is TEXT-ONLY (DeepSeek publishes ``input_modalities:
-    ["text"]``), so nothing carrying an image may be routed here — ``_generate`` and
-    ``services.warming._chat_text`` both keep the image path on Gemini.
+    ``deepseek-flash`` (V4.1, 2026-09) reads images natively, which is what lets the
+    captcha solver offer it. The comment and warming-chat image paths still stay on
+    Gemini (``_llm._deepseek_generates``) — a routing choice, no longer a hard limit.
     """
 
     model_config = SettingsConfigDict(env_prefix="DEEPSEEK__", extra="ignore")
@@ -98,11 +97,13 @@ class DeepseekSettings(OpenAISettings):
     # the gateway turns into an error — every comment would simply fail. So it is sent.
     sends_thinking: ClassVar[bool] = True
 
-    model: str = Field(default="deepseek-v4-flash")
+    # The current Flash; the old ``deepseek-v4-flash`` name is only temporarily routed here.
+    model: str = Field(default="deepseek-flash")
     base_url: str = Field(default="https://api.deepseek.com")
     # Double the siblings': a live day lost whole posts to two 30s timeouts a round.
     timeout_seconds: float = Field(default=60.0, ge=1.0)
-    # Generation defaults, not the solver's: this provider writes comments and
-    # warming replies, so it inherits Gemini's shape rather than OpenAI's 0.0/300.
+    # Generation defaults: this provider writes comments and warming replies, so it
+    # inherits Gemini's shape rather than OpenAI's 0.0/300. The captcha solver reuses
+    # the temperature (as it does Gemini's) but brings its own output budget.
     temperature: float = Field(default=0.9, ge=0.0, le=2.0)
     max_output_tokens: int = Field(default=256, ge=1, le=2048)

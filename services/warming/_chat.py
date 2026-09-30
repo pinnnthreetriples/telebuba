@@ -113,7 +113,8 @@ def _should_chat(
         and not tally.peer_flooded
         and dm_allowed
         and secret.inter_account_chat
-        and bool(secret.gemini_api_key)
+        # Either text provider can write the line (``_chat_text`` prefers DeepSeek).
+        and bool(secret.gemini_api_key or secret.deepseek_api_key)
         and _seams.rng.random() < persona_dm_probability(data.activity_persona)
     )
 

@@ -1,4 +1,4 @@
-"""OpenAI-format text/vision gateway — the captcha-solver alternative, and DeepSeek.
+"""OpenAI-format text/vision gateway — OpenAI and DeepSeek.
 
 The only module that talks HTTP in this wire format. Mirrors ``core.gemini``:
 services pass the shared :class:`GeminiRequest` (the provider-neutral LLM
@@ -7,14 +7,15 @@ contract) and get a typed :class:`GeminiResult` back — never an exception.
 Two providers ride it, and the ONLY thing separating them is which settings block
 supplies the endpoint and the retry budget (``config``, defaulting to OpenAI's):
 the captcha solver when the operator selects the ``openai`` provider, and DeepSeek
-for every text generation (:func:`generate_text_deepseek`). One gateway rather
+for every text generation and the ``deepseek`` captcha provider
+(:func:`generate_text_deepseek`). One gateway rather
 than two because DeepSeek publishes this exact format — a second module would be
 this one with a different base URL.
 
 Endpoint: ``POST {base_url}/chat/completions`` with a ``Bearer`` key. Images ride
-as a base64 ``image_url`` data-URI content part. DeepSeek's models are text-only,
-so the image part must never reach it — the routing that guarantees that lives in
-the callers.
+as a base64 ``image_url`` data-URI content part — for OpenAI and, since
+``deepseek-flash`` (V4.1) reads images, for DeepSeek too. Which image paths go where
+is the callers' routing.
 
 Structured output has TWO modes and they are not interchangeable. OpenAI takes
 ``response_format: json_schema`` and the solver uses it. DeepSeek does not: it
@@ -42,6 +43,7 @@ from typing import cast
 
 import httpx
 
+from core._llm_redact import exception_text
 from core.config import OpenAISettings, settings
 from schemas.gemini import GeminiRequest, GeminiResult
 
@@ -200,8 +202,12 @@ async def generate_text(
                 json=_payload(request, provider),
                 timeout=provider.timeout_seconds,
             )
+        except UnicodeError as exc:
+            # Request content httpx cannot encode (a key in the header, a lone surrogate in
+            # the JSON body): no retry will fix that.
+            return GeminiResult(status="error", error=exception_text(exc, request.api_key))
         except httpx.HTTPError as exc:
-            result = GeminiResult(status="error", error=f"{type(exc).__name__}: {exc}")
+            result = GeminiResult(status="error", error=exception_text(exc, request.api_key))
             transient = True
         else:
             result = _classify_response(response)

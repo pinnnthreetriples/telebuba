@@ -54,8 +54,8 @@ class DiscoveryKeywordResult(BaseModel):
     ``DiscoverySourceReport.reason`` — the SPA maps it to text and renders the raw
     code when it has no copy. Three values, and each names a different thing for the
     operator to do:
-      llm_unavailable — ``settings.deepseek.api_key`` is empty, so nothing was asked
-                        at all; type the keywords by hand or set the key.
+      llm_unavailable — no DeepSeek key is set (Settings page or ``.env``), so nothing
+                        was asked at all; type the keywords by hand or set the key.
       llm_failed      — the gateway answered with an error, a rate limit, or no
                         text; retrying may work.
       llm_empty       — the model answered but nothing in it survived validation;

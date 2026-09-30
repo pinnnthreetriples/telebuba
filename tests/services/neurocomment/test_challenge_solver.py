@@ -222,6 +222,53 @@ async def test_openai_provider_used_when_selected(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+async def test_deepseek_provider_solves_an_image_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
+    # deepseek-flash reads images, so a photo captcha goes to it with the picture, in
+    # the JSON mode DeepSeek accepts (json_object + the shape in a prompt saying "json").
+    await save_warming_settings(
+        gemini_api_key=None, deepseek_api_key="ds-test", captcha_llm_provider="deepseek"
+    )
+    deepseek = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    gemini = _gemini(GeminiResult(status="error"))
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(has_photo=True, image_b64="aW1n")))
+    monkeypatch.setattr(_seams, "generate_text_deepseek", deepseek)
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", _ExecuteStub(ok=True).execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert gemini.calls == []
+    [request] = deepseek.calls
+    assert (request.api_key, request.model) == ("ds-test", settings.deepseek.model)
+    assert request.image_b64 == "aW1n"
+    assert request.response_json_object is True
+    assert "json" in request.prompt
+    assert request.thinking_budget == 0
+
+
+@pytest.mark.asyncio
+async def test_deepseek_without_a_key_falls_back_to_gemini(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await save_warming_settings(gemini_api_key="g-key", captcha_llm_provider="deepseek")
+    gemini = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    deepseek = _gemini(GeminiResult(status="error"))
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
+    monkeypatch.setattr(_seams, "generate_text_deepseek", deepseek)
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", _ExecuteStub(ok=True).execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert deepseek.calls == []
+    assert gemini.calls[0].response_json_object is False
+
+
+@pytest.mark.asyncio
 async def test_image_challenge_no_image_gives_up_without_gemini(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

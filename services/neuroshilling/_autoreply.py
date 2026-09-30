@@ -55,6 +55,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 from core.config import settings
+from core.db import load_warming_settings
 from core.logging import log_event
 from core.repositories import neuroshilling as repository
 from schemas.gemini import GeminiRequest
@@ -212,12 +213,14 @@ async def _refuse(account_id: str | None, target: str, reason: str) -> None:
 async def _draft(
     history: Sequence[NeuroshillingChatMessage],
     message: NeuroshillingChatMessage,
+    api_key: str,
 ) -> str | None:
     """Ask the model for one answer. ``None`` means nothing usable came back.
 
     Takes the conversation rather than reading it, because the caller needs the very
     same messages afterwards: the echo gate weighs the answer against everything that
-    went into this prompt, and a second read could return a different set.
+    went into this prompt, and a second read could return a different set. The key too:
+    it is the one ``consider`` checked, as a re-read cleared meanwhile would be ``""``.
     """
     prompt = _prompt.build_reply_prompt(history, message)
     # Charged at the worst case and before the call, exactly as the scenario
@@ -226,7 +229,7 @@ async def _draft(
     _state.record_llm_call(calls=settings.deepseek.max_retries + 1)
     result = await _seams.generate_text_deepseek(
         GeminiRequest(
-            api_key=settings.deepseek.api_key,
+            api_key=api_key,
             prompt=prompt,
             model=settings.deepseek.model,
             temperature=settings.deepseek.temperature,
@@ -328,7 +331,8 @@ async def consider(
         # with people in it. The roll is per message and deliberately before the
         # claim, so an unanswered message stays open to nothing at all.
         return
-    if not settings.deepseek.api_key:
+    api_key = (await load_warming_settings()).deepseek_api_key
+    if not api_key:
         # Behind the dice and logged once per process, because a missing key is one
         # fact about the deployment: in front of the dice it was a WARNING row per
         # observed message, which one busy chat turns into four figures an hour.
@@ -359,7 +363,7 @@ async def consider(
     # The model and Telegram run without the quota lock. The pending slot remains
     # visible to scenario steps until publication moves it into the sent count.
     try:
-        await _answer(context, target, _Speaker(account_id, chats[account_id]), message)
+        await _answer(context, target, _Speaker(account_id, chats[account_id]), message, api_key)
     finally:
         async with _quota_ledger.account_lock(account_id):
             _quota_ledger.release_reply(
@@ -372,6 +376,7 @@ async def _answer(
     target: str,
     speaker: _Speaker,
     message: NeuroshillingChatMessage,
+    api_key: str,
 ) -> None:
     """Everything after the claim: the budget, the call, the gates, the send."""
     account_id = speaker.account_id
@@ -393,7 +398,7 @@ async def _answer(
             target,
             limit=settings.neuroshilling.chat_context_messages,
         )
-        candidate = await _draft(history, message)
+        candidate = await _draft(history, message, api_key)
     finally:
         _state.finish_generation(context.campaign.campaign_id)
     if candidate is None:

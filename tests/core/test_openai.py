@@ -268,3 +268,26 @@ async def test_stop_finish_reason_still_returns_text() -> None:
 
     assert result.status == "ok"
     assert result.text == "decided"
+
+
+@pytest.mark.asyncio
+async def test_a_transport_error_quoting_the_key_is_redacted() -> None:
+    # h11 refuses a header with a stray newline and quotes the whole value back — the
+    # error string is logged, so the key must not survive into it.
+    leak = httpx.LocalProtocolError("Illegal header value b'Bearer sk-test\n'")
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(side_effect=leak)
+        result = await generate_text(_request())
+    assert result.status == "error"
+    assert "LocalProtocolError" in (result.error or "")
+    assert "sk-test" not in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_key_that_cannot_be_encoded_is_an_error_not_an_exception() -> None:
+    request = _request().model_copy(update={"api_key": "sk-tést"})
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("unreached"))
+        result = await generate_text(request)
+    assert result.status == "error"
+    assert "sk-t" not in (result.error or "")

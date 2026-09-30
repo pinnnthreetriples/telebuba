@@ -1,12 +1,11 @@
 """Ask DeepSeek for a dialogue and turn what comes back into a saveable scenario.
 
-DeepSeek only. ``services.neurocomment._llm`` falls back to Gemini when the
-deployment has no DeepSeek key, and that is right for the comment hot path — but
-the Gemini key is an operator-set secret on the warming settings row, and reaching
-for it here would drag warming state into a request that has none.
+DeepSeek only. ``services.neurocomment._llm`` falls back to Gemini when no
+DeepSeek key is set, and that is right for the comment hot path — not here. The
+warming settings row is read for the DeepSeek key alone.
 ``expand_discovery_keywords`` made the same call for the same reason: an unset
-``DEEPSEEK__API_KEY`` is a deployment fact the operator can act on, so it is
-reported rather than worked around.
+DeepSeek key (Settings page, else ``DEEPSEEK__API_KEY``) is a fact the operator can
+act on, so it is reported rather than worked around.
 
 Three properties this module is responsible for, none of which the provider gives:
 
@@ -40,6 +39,7 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from core.config import settings
+from core.db import load_warming_settings
 from schemas.gemini import GeminiRequest
 from schemas.neuroshilling_scenario import (
     NeuroshillingDialogueDraft,
@@ -182,9 +182,9 @@ def _to_update(
     return NeuroshillingScenarioUpdate(roles=roles, steps=steps)
 
 
-def _request(prompt: str) -> GeminiRequest:
+def _request(prompt: str, api_key: str) -> GeminiRequest:
     return GeminiRequest(
-        api_key=settings.deepseek.api_key,
+        api_key=api_key,
         prompt=prompt,
         model=settings.deepseek.model,
         temperature=settings.deepseek.temperature,
@@ -210,7 +210,8 @@ async def generate_dialogue(
     and forbids the dialogue from naming any product, because that mode plays in a
     chat the operator owns to make it look alive rather than to sell anything.
     """
-    if not settings.deepseek.api_key:
+    api_key = (await load_warming_settings()).deepseek_api_key
+    if not api_key:
         return None
     complaint: str | None = None
     for _attempt in range(settings.neuroshilling.llm_max_attempts):
@@ -227,7 +228,7 @@ async def generate_dialogue(
         # call: the cap is a ceiling on spend, so erring high is the safe direction,
         # and a crash mid-call must not leave the spend uncounted.
         _state.record_llm_call(calls=settings.deepseek.max_retries + 1)
-        result = await _seams.generate_text_deepseek(_request(prompt))
+        result = await _seams.generate_text_deepseek(_request(prompt, api_key))
         if result.status == "truncated":
             # Re-asking the identical question under the identical token cap runs
             # out of tokens in exactly the same place. Shrinking the ask is the only

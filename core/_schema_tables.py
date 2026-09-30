@@ -141,10 +141,6 @@ _warming_settings = Table(
     Column("reactions_enabled", Integer, nullable=False),
     Column("join_enabled", Integer, nullable=True),
     Column("enforce_readiness", Integer, nullable=True),
-    Column("quiet_hours_enabled", Integer, nullable=True),
-    Column("quiet_hours_start", Integer, nullable=True),
-    Column("quiet_hours_end", Integer, nullable=True),
-    Column("max_daily_actions", Integer, nullable=True),
     Column("gemini_api_key", String, nullable=False),
     Column("gemini_model", String, nullable=False),
     Column("gemini_max_retries", Integer, nullable=True),
@@ -152,6 +148,7 @@ _warming_settings = Table(
     Column("openai_api_key", String, nullable=True),
     Column("openai_model", String, nullable=True),
     Column("captcha_llm_provider", String, nullable=True),
+    Column("deepseek_api_key", String, nullable=True),
     # Retired: the Telemetr.io discovery source is gone, but migration #37 added this
     # column and nothing drops it — the operator's stored key stays where it is, simply
     # unread. Declared so the model still matches the live schema.

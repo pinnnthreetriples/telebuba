@@ -57,7 +57,7 @@ def _str_or(value: object, default: str) -> str:
 
 def _captcha_provider(value: object) -> CaptchaLlmProvider:
     text = "" if value is None else str(value)
-    if text in ("gemini", "openai"):
+    if text in ("gemini", "openai", "deepseek"):
         return cast("CaptchaLlmProvider", text)
     return settings.neurocomment.captcha_llm_provider
 
@@ -97,6 +97,7 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         openai_api_key=_str_or(mapping.get("openai_api_key"), settings.openai.api_key),
         openai_model=_str_or(mapping.get("openai_model"), settings.openai.model),
         captcha_llm_provider=_captcha_provider(mapping.get("captcha_llm_provider")),
+        deepseek_api_key=_str_or(mapping.get("deepseek_api_key"), settings.deepseek.api_key),
         extra_toggles=_extra_toggles(mapping.get("extra_toggles")),
         updated_at=str(mapping["updated_at"]),
     )
@@ -117,6 +118,7 @@ def _default_warming_settings_values() -> dict[str, object]:
         "openai_api_key": "",
         "openai_model": settings.openai.model,
         "captcha_llm_provider": settings.neurocomment.captcha_llm_provider,
+        "deepseek_api_key": "",
         "extra_toggles": None,
         "updated_at": _now_iso(),
     }
@@ -170,6 +172,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
+    deepseek_api_key: str | None = None,
     extra_toggles: ExtraToggles | None = None,
 ) -> WarmingSettingsSecret:
     # Ensure the singleton row exists, then read it so a ``None`` key/model/provider
@@ -230,6 +233,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
                 cur.get("captcha_llm_provider"),
                 settings.neurocomment.captcha_llm_provider,
             ),
+            "deepseek_api_key": _keep(deepseek_api_key, cur.get("deepseek_api_key")),
             "updated_at": _now_iso(),
         }
         if extra_toggles is not None:
@@ -260,6 +264,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
+    deepseek_api_key: str | None = None,
     extra_toggles: ExtraToggles | None = None,
 ) -> WarmingSettingsSecret:
     """Persist warming settings.
@@ -282,5 +287,6 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         openai_api_key=openai_api_key,
         openai_model=openai_model,
         captcha_llm_provider=captcha_llm_provider,
+        deepseek_api_key=deepseek_api_key,
         extra_toggles=extra_toggles,
     )

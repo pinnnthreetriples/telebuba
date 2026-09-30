@@ -891,16 +891,14 @@
     "saved": "Saved",
     "saveFailed": "Failed to save",
     "cancel": "Cancel",
-    "range": {
-      "from": "from",
-      "to": "to"
-    },
     "api": {
       "title": "API keys",
       "subtitle": "Access to the comment-generation and captcha models",
       "geminiKey": "Gemini API key",
       "openaiKey": "OpenAI API key (captcha)",
+      "deepseekKey": "DeepSeek API key",
       "keySet": "Key is set — leave blank to keep it",
+      "keySetHint": "Key is set: {{hint}} — leave blank to keep it",
       "keyUnset": "No key set",
       "clearKey": "Clear key",
       "keyCleared": "Key will be cleared on save",
@@ -916,41 +914,8 @@
       "title": "Captcha solver LLM",
       "subtitle": "Which model reads and solves channel captchas",
       "gemini": "Gemini",
-      "openai": "ChatGPT"
-    },
-    "warmLimits": {
-      "title": "Warming limits",
-      "subtitle": "Actions per day per account",
-      "engineNote": "Warming per-account activity is chosen automatically by the engine from each account's phase and trust-score — there are no fixed numeric limits to set here."
-    },
-    "neuroLimits": {
-      "title": "Neurocomment limits",
-      "subtitle": "Comment publishing pace",
-      "cpd": "Comments per day per channel",
-      "delay": "Reply delay (sec)",
-      "parallel": "Comments per hour (per account)",
-      "trust": "Min. trust-score to run",
-      "delayFrom": "Reply delay, from (sec)",
-      "delayTo": "Reply delay, to (sec)",
-      "errCpd": "Enter a whole number from 1 to 100",
-      "errDelay": "Enter a whole number of seconds (0–3600)",
-      "errDelayOrder": "“To” must be at least “from”",
-      "errParallel": "Enter a whole number from 1 to 1000",
-      "errTrust": "Enter a whole number from 0 to 100"
-    },
-    "flag": {
-      "reactions_enabled": {
-        "label": "Reactions in warming",
-        "desc": "Leave reactions during warming"
-      },
-      "join_enabled": {
-        "label": "Join channels",
-        "desc": "Subscribe to channels during warming"
-      },
-      "inter_account_chat": {
-        "label": "Inter-account chat",
-        "desc": "Allow accounts to message each other"
-      }
+      "openai": "ChatGPT",
+      "deepseek": "DeepSeek"
     }
   },
   "logTerminal": {
@@ -1680,7 +1645,11 @@
       "listenerEdit": {
         "sub": "The listener watches new posts for all campaigns",
         "account": "Account",
-        "partialSave": "Comment settings were saved, but the listener could not be changed. Retry the assignment or close this window."
+        "partialSave": "Settings saved, but the listener could not be changed. Retry the assignment or close the dialog.",
+        "tab": {
+          "commenting": "Commenting",
+          "limits": "Limits"
+        }
       },
       "createCampaign": {
         "title": "New campaign",
@@ -1988,6 +1957,21 @@
       "prev": "Previous",
       "next": "Next",
       "done": "Close"
+    },
+    "limits": {
+      "note": "Shared by every account. A single account's limits live under “Limits” in the campaign's account list.",
+      "cpd": "Comments per day per channel",
+      "delay": "Reply delay (sec)",
+      "delayFrom": "Reply delay, from (sec)",
+      "delayTo": "Reply delay, to (sec)",
+      "parallel": "Comments per hour (per account)",
+      "trust": "Min trust score to work",
+      "errCpd": "Enter a whole number from 0 (0 — no cap)",
+      "errDelay": "Enter a number of seconds, 0 or more",
+      "errDelayOrder": "“To” must not be less than “from”",
+      "errParallel": "Enter a whole number from 1",
+      "errTrust": "Enter a whole number from 0 to 100",
+      "failed": "Could not save the limits"
     }
   },
   "neuroshilling": {
