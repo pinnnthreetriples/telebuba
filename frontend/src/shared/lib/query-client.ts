@@ -82,6 +82,9 @@ export const queryClient = new QueryClient({
     },
   }),
   defaultOptions: {
-    queries: { retry: 1, refetchOnWindowFocus: false },
+    // Route loaders fetch before the page mounts. Keep that snapshot fresh long
+    // enough for useQuery to reuse it instead of immediately repeating every read.
+    // Active polling and explicit invalidation still fetch on their own schedules.
+    queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 1_000 },
   },
 });

@@ -105,6 +105,56 @@ test('switching from a scrolled page starts the next page at the top', async ({ 
   expect(await page.evaluate(() => window.scrollY)).toBe(0);
 });
 
+test('return navigation waits for an invalidated campaign list', async ({ page }) => {
+  await setup(page);
+  let changed = false;
+  await page.route('**/api/v1/neurocomment/campaigns', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(changed ? { campaigns: [] } : fx.neurocommentCampaigns),
+    });
+  });
+  await page.goto('/neurocomment');
+  await expect(page.getByText('Крипта', { exact: true }).first()).toBeVisible();
+  await goTo(page, 'Аккаунты');
+  await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
+  changed = true;
+  await page.waitForTimeout(1_100);
+  await goTo(page, 'Нейрокомментинг');
+  await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible();
+  expect(await page.getByText('Крипта', { exact: true }).count()).toBe(0);
+});
+
+test('a stalled secondary request cannot hold navigation indefinitely', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/v1/neurocomment/settings', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await route.abort();
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
+  await goTo(page, 'Нейрокомментинг');
+  await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible({
+    timeout: 3_000,
+  });
+});
+
+test('a stalled board request yields to the page loading state', async ({ page }) => {
+  await setup(page);
+  await page.route('**/api/v1/neurocomment/campaigns/*/board', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    await route.abort();
+  });
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
+  await goTo(page, 'Нейрокомментинг');
+  await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible({
+    timeout: 3_000,
+  });
+});
+
 test('neurocomment counters show their values on the first page frame', async ({ page }) => {
   await setup(page);
   await page.goto('/neurocomment');

@@ -118,7 +118,9 @@ const routeTree = rootRoute.addChildren([
   ]),
 ]);
 
-export const router = createRouter({ routeTree });
+// A cached route normally reloads in the background, showing its old data first.
+// Hold return navigation for the same bounded first-screen preload as a cold visit.
+export const router = createRouter({ routeTree, defaultStaleReloadMode: 'blocking' });
 
 declare module '@tanstack/react-router' {
   interface Register {

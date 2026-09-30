@@ -25,91 +25,100 @@ import {
   warmingSettingsQueryOptions,
 } from '@/entities/warming';
 
-// Wait for the data that determines the first screen's geometry before replacing the
-// previous route. Individual pages still own their loading/error states: a failed
-// request should not turn an ordinary page failure into a router error boundary.
-async function settle(queries: Promise<unknown>[]): Promise<void> {
-  await Promise.allSettled(queries);
+// Keep the previous page until its replacement has the data that determines its
+// first frame. A hung API request must not trap navigation forever: after the
+// budget, the destination page takes over with its own loading/error UI.
+async function waitForFirstScreen(queries: Promise<unknown>[]): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.allSettled(queries),
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, 1_500);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function preloadAccounts(client: QueryClient): Promise<void> {
-  return settle([
-    client.ensureQueryData(
-      accountsQueryOptions({ query: { query: '', status: 'all', limit: 20 } }),
-    ),
-    client.ensureQueryData(accountStatsQueryOptions()),
-    client.ensureQueryData(proxyPoolQueryOptions()),
+  return waitForFirstScreen([
+    client.fetchQuery(accountsQueryOptions({ query: { query: '', status: 'all', limit: 20 } })),
+    client.fetchQuery(accountStatsQueryOptions()),
+    client.fetchQuery(proxyPoolQueryOptions()),
   ]);
 }
 
 export function preloadWarming(client: QueryClient): Promise<void> {
-  return settle([
-    client.ensureQueryData(warmingBoardQueryOptions()),
-    client.ensureQueryData(warmingSettingsQueryOptions()),
+  return waitForFirstScreen([
+    client.fetchQuery(warmingBoardQueryOptions()),
+    client.fetchQuery(warmingSettingsQueryOptions()),
   ]);
 }
 
 export async function preloadNeurocomment(client: QueryClient): Promise<void> {
-  const campaigns = client.ensureQueryData(campaignsQueryOptions());
-  const common = [
+  const campaigns = client.fetchQuery(campaignsQueryOptions());
+  const scoped = campaigns.then(async ({ campaigns: list }) => {
+    const first = list?.[0];
+    if (!first) return;
+    await Promise.allSettled([
+      client.fetchQuery(
+        neurocommentBoardQueryOptions({ path: { campaign_id: first.campaign_id } }),
+      ),
+      client.fetchQuery(
+        campaignChallengesQueryOptions({
+          path: { campaign_id: first.campaign_id },
+          query: { limit: 20 },
+        }),
+      ),
+    ]);
+  });
+  // These queries are useful once the page appears, but must not delay its board.
+  void Promise.allSettled([
+    client.fetchQuery(allAccountsQueryOptions()),
+    client.fetchQuery(warmingBoardQueryOptions()),
+    client.fetchQuery(neurocommentSettingsQueryOptions()),
+  ]);
+  await waitForFirstScreen([
     campaigns,
-    client.ensureQueryData(allAccountsQueryOptions()),
-    client.ensureQueryData(warmedAccountsQueryOptions()),
-    client.ensureQueryData(warmingBoardQueryOptions()),
-    client.ensureQueryData(neurocommentRuntimeQueryOptions()),
-    client.ensureQueryData(neurocommentSettingsQueryOptions()),
-    client.ensureQueryData(
-      logsQueryOptions({ query: { event_prefix: 'neurocomment', limit: 80 } }),
-    ),
-  ];
-  await Promise.allSettled(common);
-  const first = (await campaigns.catch(() => null))?.campaigns?.[0];
-  if (!first) return;
-  await settle([
-    client.ensureQueryData(
-      neurocommentBoardQueryOptions({ path: { campaign_id: first.campaign_id } }),
-    ),
-    client.ensureQueryData(
-      campaignChallengesQueryOptions({
-        path: { campaign_id: first.campaign_id },
-        query: { limit: 20 },
-      }),
-    ),
+    scoped,
+    client.fetchQuery(warmedAccountsQueryOptions()),
+    client.fetchQuery(neurocommentRuntimeQueryOptions()),
+    client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'neurocomment', limit: 80 } })),
   ]);
 }
 
 export async function preloadNeuroshilling(client: QueryClient): Promise<void> {
-  const campaigns = client.ensureQueryData(neuroshillingCampaignsQueryOptions());
-  await Promise.allSettled([
-    campaigns,
-    client.ensureQueryData(
-      logsQueryOptions({ query: { event_prefix: 'neuroshilling', limit: 80 } }),
-    ),
+  const campaigns = client.fetchQuery(neuroshillingCampaignsQueryOptions());
+  const scoped = campaigns.then(async ({ campaigns: list }) => {
+    const first = list?.[0];
+    if (!first) return;
+    await Promise.allSettled([
+      client.fetchQuery(
+        neuroshillingBoardQueryOptions({ path: { campaign_id: first.campaign_id } }),
+      ),
+      client.fetchQuery(
+        neuroshillingSettingsQueryOptions({ path: { campaign_id: first.campaign_id } }),
+      ),
+    ]);
+  });
+  void Promise.allSettled([
+    client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'neuroshilling', limit: 80 } })),
   ]);
-  const first = (await campaigns.catch(() => null))?.campaigns?.[0];
-  if (!first) return;
-  await settle([
-    client.ensureQueryData(
-      neuroshillingBoardQueryOptions({ path: { campaign_id: first.campaign_id } }),
-    ),
-    client.ensureQueryData(
-      neuroshillingSettingsQueryOptions({ path: { campaign_id: first.campaign_id } }),
-    ),
-  ]);
+  await waitForFirstScreen([campaigns, scoped]);
 }
 
 export function preloadLogs(client: QueryClient): Promise<void> {
-  return settle([
-    client.ensureQueryData(
-      logsQueryOptions({ query: { status: 'all', account_id: '', limit: 50 } }),
-    ),
-    client.ensureQueryData(allAccountsQueryOptions()),
+  return waitForFirstScreen([
+    client.fetchQuery(logsQueryOptions({ query: { status: 'all', account_id: '', limit: 50 } })),
+    client.fetchQuery(allAccountsQueryOptions()),
   ]);
 }
 
 export function preloadSettings(client: QueryClient): Promise<void> {
-  return settle([
-    client.ensureQueryData(warmingSettingsQueryOptions()),
-    client.ensureQueryData(neurocommentSettingsQueryOptions()),
+  return waitForFirstScreen([
+    client.fetchQuery(warmingSettingsQueryOptions()),
+    client.fetchQuery(neurocommentSettingsQueryOptions()),
   ]);
 }
