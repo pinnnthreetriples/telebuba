@@ -85,10 +85,13 @@ async def start_campaign(
         campaign = await repository.fetch_campaign(campaign_id)
         if campaign is None:
             return None
-        if expected_updated_at is not None and campaign.updated_at != expected_updated_at:
-            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
+        # Running before the stamp: a live run moves ``updated_at`` itself, so a stale
+        # stamp on a live campaign is the norm, and "running" is the answer a reload
+        # would not change.
         if campaign.status in _LIVE_STATUSES:
             raise NeuroshillingConflictError(_CAMPAIGN_RUNNING)
+        if expected_updated_at is not None and campaign.updated_at != expected_updated_at:
+            raise NeuroshillingConflictError(_CAMPAIGN_CHANGED)
         run_id = uuid4().hex
         _refuse_unlaunchable(campaign)
         account_ids = await _check_roster(campaign)
