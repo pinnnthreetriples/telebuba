@@ -368,3 +368,22 @@ test('the hint is also reachable without hovering', async () => {
   expect(button.title).toContain('всегда первые в ветке');
   expect(button.title).toContain('Пост в 12:00');
 });
+
+// "Сохранено" stays on screen for the close delay, with the button no longer loading —
+// a second click in that window used to assign the listener again and close twice.
+test('a second click during the "Сохранено" swap saves nothing more', async () => {
+  routeSettings();
+  const { onClose, onSave } = renderModal();
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  await userEvent.click(screen.getByText('Maria Sidorova'));
+
+  await userEvent.click(screen.getByText('Сохранить'));
+  await userEvent.click(await screen.findByText('Сохранено'));
+
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(onClose).toHaveBeenCalledTimes(1);
+});

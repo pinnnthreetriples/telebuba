@@ -81,7 +81,8 @@ export function ListenerEditModal({
   };
 
   const save = async () => {
-    if (saving || saveSettings.isPending) return;
+    // `saved` too: the "Сохранено" swap outlives `saving`, and a click there would save again.
+    if (saving || saved || saveSettings.isPending) return;
     if (Object.keys(limitErrors).length > 0) {
       // The errors are already on the fields; make sure the operator is looking at them.
       setTab('limits');
