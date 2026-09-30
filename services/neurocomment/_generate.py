@@ -21,7 +21,6 @@ from services.content import release_sent_text
 from services.neurocomment import _seams
 from services.neurocomment._llm import (  # noqa: F401 - compatibility facade
     _build_request,
-    _deepseek_generates,
     _gemini_reason,
     _post_clause,
     _Subject,

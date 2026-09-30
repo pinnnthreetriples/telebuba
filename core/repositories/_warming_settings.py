@@ -23,7 +23,12 @@ from schemas.warming import CaptchaLlmProvider, WarmingSettingsSecret
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from schemas._warming_settings import TextLlmProvider
+
 _WARMING_SETTINGS_ID = 1
+# DeepSeek, because it is what wrote every text before the choice existed: with its
+# key it writes, without it Gemini stands in — the same behaviour an old row keeps.
+_DEFAULT_TEXT_LLM_PROVIDER: TextLlmProvider = "deepseek"
 
 
 def _stored_extra_toggles(raw: object) -> dict[str, bool]:
@@ -62,6 +67,13 @@ def _captcha_provider(value: object) -> CaptchaLlmProvider:
     return settings.neurocomment.captcha_llm_provider
 
 
+def _text_provider(value: object) -> TextLlmProvider:
+    text = "" if value is None else str(value)
+    if text in ("gemini", "deepseek"):
+        return cast("TextLlmProvider", text)
+    return _DEFAULT_TEXT_LLM_PROVIDER
+
+
 def _keep(new: str | None, current: object) -> str:
     """``None`` keeps the stored value; any value (incl. "" to clear) replaces it."""
     if new is None:
@@ -97,6 +109,7 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         openai_api_key=_str_or(mapping.get("openai_api_key"), settings.openai.api_key),
         openai_model=_str_or(mapping.get("openai_model"), settings.openai.model),
         captcha_llm_provider=_captcha_provider(mapping.get("captcha_llm_provider")),
+        text_llm_provider=_text_provider(mapping.get("text_llm_provider")),
         deepseek_api_key=_str_or(mapping.get("deepseek_api_key"), settings.deepseek.api_key),
         extra_toggles=_extra_toggles(mapping.get("extra_toggles")),
         updated_at=str(mapping["updated_at"]),
@@ -118,6 +131,7 @@ def _default_warming_settings_values() -> dict[str, object]:
         "openai_api_key": "",
         "openai_model": settings.openai.model,
         "captcha_llm_provider": settings.neurocomment.captcha_llm_provider,
+        "text_llm_provider": _DEFAULT_TEXT_LLM_PROVIDER,
         "deepseek_api_key": "",
         "extra_toggles": None,
         "updated_at": _now_iso(),
@@ -172,6 +186,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
+    text_llm_provider: str | None = None,
     deepseek_api_key: str | None = None,
     extra_toggles: ExtraToggles | None = None,
 ) -> WarmingSettingsSecret:
@@ -233,6 +248,9 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
                 cur.get("captcha_llm_provider"),
                 settings.neurocomment.captcha_llm_provider,
             ),
+            "text_llm_provider": _keep_nonempty(
+                text_llm_provider, cur.get("text_llm_provider"), _DEFAULT_TEXT_LLM_PROVIDER
+            ),
             "deepseek_api_key": _keep(deepseek_api_key, cur.get("deepseek_api_key")),
             "updated_at": _now_iso(),
         }
@@ -264,12 +282,13 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
+    text_llm_provider: str | None = None,
     deepseek_api_key: str | None = None,
     extra_toggles: ExtraToggles | None = None,
 ) -> WarmingSettingsSecret:
     """Persist warming settings.
 
-    LLM keys/models + the captcha provider use keep/clear/replace semantics:
+    LLM keys/models + the captcha and text providers use keep/clear/replace semantics:
     ``None`` keeps the stored value, ``""`` clears a key, any other value replaces.
     The two Gemini rate-limit knobs and the four toggles keep on ``None`` the same way;
     ``extra_toggles`` keeps per key (a partial dict merges into the stored JSON).
@@ -287,6 +306,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         openai_api_key=openai_api_key,
         openai_model=openai_model,
         captcha_llm_provider=captcha_llm_provider,
+        text_llm_provider=text_llm_provider,
         deepseek_api_key=deepseek_api_key,
         extra_toggles=extra_toggles,
     )

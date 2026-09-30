@@ -4,18 +4,27 @@ import { useTranslation } from 'react-i18next';
 
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
-import { Button, Card, HelpHint, Icon, Input, SegmentedControl } from '@/shared/ui';
+import { Button, Card, HelpHint, Icon, Input, Notice, SegmentedControl } from '@/shared/ui';
 
 import { ApiKeyField } from './ApiKeyField';
 
 const FIELD_LABEL = 'mb-tight block type-label';
 
-// The page is only what no other screen owns: the LLM keys, Gemini's pacing and the
-// captcha provider. The warming toggles live on the warming board's action-tuning card
+// The page is only what no other screen owns: the LLM keys, their pacing and the two
+// provider choices. The warming toggles live on the warming board's action-tuning card
 // and the neurocomment limits in the listener modal — duplicated here, each save sent
 // the other page's fields back from a stale cache and could undo an edit made there.
-const PROVIDERS = ['gemini', 'openai', 'deepseek'] as const;
+// OpenAI solves captchas only, so its key comes last.
+const PROVIDERS = ['gemini', 'deepseek', 'openai'] as const;
 type Provider = (typeof PROVIDERS)[number];
+const TEXT_PROVIDERS = ['gemini', 'deepseek'] as const;
+type TextProvider = (typeof TEXT_PROVIDERS)[number];
+// The names the key fields carry, for the "no key" warnings.
+const KEY_NAME: Record<Provider, string> = {
+  gemini: 'Gemini',
+  deepseek: 'DeepSeek',
+  openai: 'OpenAI',
+};
 
 // A typed key replaces the stored one, blank keeps it, `clear` wipes it on save.
 type KeyDraft = { value: string; show: boolean; clear: boolean };
@@ -54,16 +63,45 @@ function keyValue(draft: KeyDraft): string | null {
   return draft.clear || value === '' ? null : value;
 }
 
+// A "no key" warning under a provider choice, as an i18n key plus its values.
+type Warning = { key: string; values?: Record<string, string> } | null;
+
+// The backend's rule (`services/_text_llm.py`): a chosen provider without a key hands
+// over to the other one; with neither key there is nothing to hand over to.
+function textWarning(chosen: TextProvider, hasKey: (provider: Provider) => boolean): Warning {
+  if (hasKey(chosen)) return null;
+  const other: TextProvider = chosen === 'gemini' ? 'deepseek' : 'gemini';
+  return hasKey(other)
+    ? {
+        key: 'settings.textLlm.fallback',
+        values: { chosen: KEY_NAME[chosen], other: KEY_NAME[other] },
+      }
+    : { key: 'settings.textLlm.noKey' };
+}
+
+// The solver's rule (`services/neurocomment/challenge.py`): anything without its key
+// falls back to Gemini, and Gemini without one gives up.
+function captchaWarning(chosen: Provider, hasKey: (provider: Provider) => boolean): Warning {
+  if (hasKey(chosen)) return null;
+  if (chosen === 'gemini') return { key: 'settings.captchaLlm.noKey' };
+  return {
+    key: hasKey('gemini') ? 'settings.captchaLlm.fallback' : 'settings.captchaLlm.noKeys',
+    values: { chosen: KEY_NAME[chosen] },
+  };
+}
+
 function SettingsForm({ settings }: { settings: WarmingSettings }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const saveWarm = useMutation(updateWarmingSettingsMutation());
 
   const [keys, setKeys] = useState(NO_DRAFTS);
-  // Gemini rate-limit knobs (see the "?" hints): retry count + min spacing between calls.
-  const [geminiRetries, setGeminiRetries] = useState(String(settings.gemini_max_retries ?? 1));
-  const [geminiInterval, setGeminiInterval] = useState(
-    String(settings.gemini_min_interval_seconds ?? 0),
+  // Rate-limit knobs for every provider (see the "?" hints): retry count + min spacing
+  // between one provider's calls. The fields keep their Gemini-era names.
+  const [retries, setRetries] = useState(String(settings.gemini_max_retries ?? 1));
+  const [pause, setPause] = useState(String(settings.gemini_min_interval_seconds ?? 0));
+  const [textProvider, setTextProvider] = useState<TextProvider>(
+    settings.text_llm_provider ?? 'deepseek',
   );
   const [provider, setProvider] = useState<Provider>(settings.captcha_llm_provider ?? 'gemini');
   const [justSaved, setJustSaved] = useState(false);
@@ -85,8 +123,9 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
           clear_openai_key: keys.openai.clear,
           deepseek_api_key: keyValue(keys.deepseek),
           clear_deepseek_key: keys.deepseek.clear,
-          gemini_max_retries: clampNumber(geminiRetries, 0, 5, 1),
-          gemini_min_interval_seconds: clampNumber(geminiInterval, 0, 60, 0),
+          gemini_max_retries: clampNumber(retries, 0, 5, 1),
+          gemini_min_interval_seconds: clampNumber(pause, 0, 60, 0),
+          text_llm_provider: textProvider,
           captcha_llm_provider: provider,
         },
       });
@@ -110,10 +149,17 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
 
   const onCancel = () => {
     setKeys(NO_DRAFTS);
-    setGeminiRetries(String(settings.gemini_max_retries ?? 1));
-    setGeminiInterval(String(settings.gemini_min_interval_seconds ?? 0));
+    setRetries(String(settings.gemini_max_retries ?? 1));
+    setPause(String(settings.gemini_min_interval_seconds ?? 0));
+    setTextProvider(settings.text_llm_provider ?? 'deepseek');
     setProvider(settings.captcha_llm_provider ?? 'gemini');
   };
+
+  // As the save would leave it: a typed key sets one, a pending clear removes it.
+  const hasKey = (key: Provider) =>
+    keys[key].value.trim() !== '' || (stored(settings, key).set && !keys[key].clear);
+  const textNote = textWarning(textProvider, hasKey);
+  const captchaNote = captchaWarning(provider, hasKey);
 
   const keyField = (key: Provider) => {
     const current = keys[key];
@@ -168,10 +214,10 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
             <label className="block">
               <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
-                {t('settings.api.geminiRetries')}
+                {t('settings.api.retries')}
                 <HelpHint
-                  text={t('settings.api.geminiRetriesHelp')}
-                  example={t('settings.api.geminiRetriesExample')}
+                  text={t('settings.api.retriesHelp')}
+                  example={t('settings.api.retriesExample')}
                 />
               </span>
               <Input
@@ -179,19 +225,19 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
                 min={0}
                 max={5}
                 inputMode="numeric"
-                value={geminiRetries}
+                value={retries}
                 onChange={(event) => {
-                  setGeminiRetries(event.target.value);
+                  setRetries(event.target.value);
                 }}
-                aria-label={t('settings.api.geminiRetries')}
+                aria-label={t('settings.api.retries')}
               />
             </label>
             <label className="block">
               <span className={`${FIELD_LABEL} flex items-center gap-sm`}>
-                {t('settings.api.geminiInterval')}
+                {t('settings.api.interval')}
                 <HelpHint
-                  text={t('settings.api.geminiIntervalHelp')}
-                  example={t('settings.api.geminiIntervalExample')}
+                  text={t('settings.api.intervalHelp')}
+                  example={t('settings.api.intervalExample')}
                 />
               </span>
               <Input
@@ -200,30 +246,51 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
                 max={60}
                 step="0.5"
                 inputMode="decimal"
-                value={geminiInterval}
+                value={pause}
                 onChange={(event) => {
-                  setGeminiInterval(event.target.value);
+                  setPause(event.target.value);
                 }}
-                aria-label={t('settings.api.geminiInterval')}
+                aria-label={t('settings.api.interval')}
               />
             </label>
           </div>
         </div>
       </Card>
 
+      <Card title={t('settings.textLlm.title')} subtitle={t('settings.textLlm.subtitle')}>
+        <div className="flex flex-col gap-md">
+          <SegmentedControl
+            variant="outline"
+            value={textProvider}
+            ariaLabel={t('settings.textLlm.title')}
+            options={TEXT_PROVIDERS.map((option) => ({
+              value: option,
+              label: t(`settings.textLlm.${option}`),
+            }))}
+            onChange={(option) => {
+              setTextProvider(option);
+            }}
+          />
+          {textNote && <Notice tone="warning">{t(textNote.key, textNote.values)}</Notice>}
+        </div>
+      </Card>
+
       <Card title={t('settings.captchaLlm.title')} subtitle={t('settings.captchaLlm.subtitle')}>
-        <SegmentedControl
-          variant="outline"
-          value={provider}
-          ariaLabel={t('settings.captchaLlm.title')}
-          options={PROVIDERS.map((option) => ({
-            value: option,
-            label: t(`settings.captchaLlm.${option}`),
-          }))}
-          onChange={(option) => {
-            setProvider(option);
-          }}
-        />
+        <div className="flex flex-col gap-md">
+          <SegmentedControl
+            variant="outline"
+            value={provider}
+            ariaLabel={t('settings.captchaLlm.title')}
+            options={PROVIDERS.map((option) => ({
+              value: option,
+              label: t(`settings.captchaLlm.${option}`),
+            }))}
+            onChange={(option) => {
+              setProvider(option);
+            }}
+          />
+          {captchaNote && <Notice tone="warning">{t(captchaNote.key, captchaNote.values)}</Notice>}
+        </div>
       </Card>
 
       <div className="flex justify-end gap-sm">

@@ -17,11 +17,11 @@ import re
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
-from schemas.gemini import GeminiRequest
+from services._text_llm import text_llm
 from services.neurocomment._outcomes import _RATE_LIMITED_REASON
 
 if TYPE_CHECKING:
-    from schemas.gemini import GeminiResult
+    from schemas.gemini import GeminiRequest, GeminiResult
     from schemas.telegram_actions_comments import PostCommentRecord
     from schemas.warming import WarmingSettingsSecret
 
@@ -61,27 +61,15 @@ def _gemini_reason(result: GeminiResult) -> str:
     return "gemini_error"
 
 
-def _deepseek_generates(image_b64: str | None, secret: WarmingSettingsSecret) -> bool:
-    """True when this comment is written by DeepSeek rather than Gemini.
-
-    Two conditions. A caption-less photo post — the one case that carries an image —
-    stays on Gemini: ``deepseek-flash`` reads images now, but the comment path has only
-    been proven on Gemini's vision, so moving it is a separate decision. And no DeepSeek
-    key (the settings page's, else ``DEEPSEEK__API_KEY``) means the operator never opted
-    in, which must fall back rather than fail: this is the hot path for every comment
-    the campaign writes.
-    """
-    return image_b64 is None and bool(secret.deepseek_api_key)
-
-
 def _build_request(
     prompt: str,
     subject: _Subject,
     *,
     secret: WarmingSettingsSecret,
     image_b64: str | None = None,
-    use_deepseek: bool = False,
 ) -> GeminiRequest:
+    # The provider is the Settings page's text LLM (``services._text_llm``) — for a
+    # caption-less photo post too, which rides as an image to either of them.
     nc = settings.neurocomment
     instruction = (
         f"{prompt}\n\n"
@@ -89,20 +77,7 @@ def _build_request(
         f"{_post_clause(subject.post_text, image_b64=image_b64)}"
         f"{_reply_clause(subject.reply_to)}"
     )
-    llm = settings.deepseek if use_deepseek else settings.gemini
-    return GeminiRequest(
-        api_key=secret.deepseek_api_key if use_deepseek else secret.gemini_api_key,
-        prompt=instruction,
-        model=settings.deepseek.model if use_deepseek else secret.gemini_model,
-        temperature=llm.temperature,
-        max_output_tokens=llm.max_output_tokens,
-        # Gemini-gateway self-throttle knobs; ``core.openai`` ignores both, the same
-        # way it ignores ``thinking_budget``. Left set so a fallback to Gemini in a
-        # later round would still honour the operator's pacing.
-        max_retries=secret.gemini_max_retries,
-        min_interval_seconds=secret.gemini_min_interval_seconds,
-        image_b64=image_b64,
-    )
+    return text_llm(secret).request(instruction, image_b64=image_b64)
 
 
 def _strip_fence_tags(text: str) -> str:

@@ -6,7 +6,7 @@ Two things live here, both pure of any domain.
 else in the codebase is one: warming's ``pacing`` module is a pure schedule
 calculator with no state between calls, neurocomment's cooldowns are "blocked
 until T" deadlines handed down by Telegram's own flood signal, and a lease is
-ownership rather than tempo. The algorithm is :func:`core.gemini._await_slot`
+ownership rather than tempo. The algorithm is :meth:`core._llm_throttle.Throttle.wait`
 generalised to a dictionary of keys.
 
 **Do not use ``services.warming.account_lock`` for this.** That lock is the

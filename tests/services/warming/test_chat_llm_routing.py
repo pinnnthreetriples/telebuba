@@ -1,13 +1,10 @@
-"""Which LLM writes a warming chat line: DeepSeek when its key is set, else Gemini.
+"""Which LLM writes a warming chat line: the operator's text LLM, else the keyed one.
 
-Warming dialogue is always plain text — it never carries the image that keeps
-neurocomment's photo posts on Gemini — so this whole path can move. Its own module
-rather than another case in ``test_chat.py``, which is already the big one, and
-because the question here is not "did a DM go out" but "who wrote it".
+Its own module rather than another case in ``test_chat.py``, which is already the big
+one, and because the question here is not "did a DM go out" but "who wrote it".
 
-The fallback half matters more than it looks: no DeepSeek key (neither the settings
-page's nor ``.env``'s) is the only way an existing deployment stays on Gemini, and
-warming runs unattended for days.
+The fallback half matters more than it looks: warming runs unattended for days, so a
+chosen provider without a key must hand over to the other one rather than stop.
 """
 
 from __future__ import annotations
@@ -114,3 +111,19 @@ async def test_a_deepseek_key_alone_is_enough_to_chat(monkeypatch: pytest.Monkey
 
     assert deepseek.requests
     assert deepseek.requests[0].api_key == "ds-stored"
+
+
+@pytest.mark.asyncio
+async def test_a_chosen_gemini_writes_the_line_even_with_a_deepseek_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.deepseek, "api_key", "ds-key")
+    await save_warming_settings(gemini_api_key=None, text_llm_provider="gemini")
+    gemini = _CapturingGen()
+    monkeypatch.setattr(_seams, "generate_text", gemini.generate_text)
+    monkeypatch.setattr(_seams, "generate_text_deepseek", _ExplodingGen("DeepSeek").generate_text)
+
+    await _run_cycle(monkeypatch)
+
+    assert gemini.requests
+    assert gemini.requests[0].api_key == "gemini-key"

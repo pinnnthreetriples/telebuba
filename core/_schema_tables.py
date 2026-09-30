@@ -149,6 +149,7 @@ _warming_settings = Table(
     Column("openai_model", String, nullable=True),
     Column("captcha_llm_provider", String, nullable=True),
     Column("deepseek_api_key", String, nullable=True),
+    Column("text_llm_provider", String, nullable=True),
     # Retired: the Telemetr.io discovery source is gone, but migration #37 added this
     # column and nothing drops it — the operator's stored key stays where it is, simply
     # unread. Declared so the model still matches the live schema.

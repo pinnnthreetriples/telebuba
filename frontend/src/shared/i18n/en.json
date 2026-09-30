@@ -893,9 +893,9 @@
     "cancel": "Cancel",
     "api": {
       "title": "API keys",
-      "subtitle": "Access to the comment-generation and captcha models",
+      "subtitle": "Access to the models that write texts and solve captchas",
       "geminiKey": "Gemini API key",
-      "openaiKey": "OpenAI API key (captcha)",
+      "openaiKey": "OpenAI API key (captcha only)",
       "deepseekKey": "DeepSeek API key",
       "keySet": "Key is set — leave blank to keep it",
       "keySetHint": "Key is set: {{hint}} — leave blank to keep it",
@@ -903,19 +903,30 @@
       "clearKey": "Clear key",
       "keyCleared": "Key will be cleared on save",
       "toggleVisibility": "Toggle key visibility",
-      "geminiRetries": "Gemini retries",
-      "geminiRetriesHelp": "How many times to retry a request when Gemini returns a rate-limit error before skipping the post.",
-      "geminiRetriesExample": "Example: 3 — retries 3 more times. 0 — no retries.",
-      "geminiInterval": "Pause between generations (sec)",
-      "geminiIntervalHelp": "Minimum pause before each Gemini call so a burst doesn't hit the per-minute request limit.",
-      "geminiIntervalExample": "Example: 4 — at most one request every 4s. 0 — no pause."
+      "retries": "Retries on error",
+      "retriesHelp": "How many times to retry a request to the model — Gemini, DeepSeek or ChatGPT — when it returns a rate-limit error or fails, before giving up.",
+      "retriesExample": "Example: 3 — retries 3 more times. 0 — no retries.",
+      "interval": "Pause between requests (sec)",
+      "intervalHelp": "Minimum pause between requests to one model so a burst doesn't hit the per-minute request limit. Captchas skip it: they have a hard time limit.",
+      "intervalExample": "Example: 4 — at most one request every 4s. 0 — no pause."
+    },
+    "textLlm": {
+      "title": "Text LLM",
+      "subtitle": "Writes comments, warming chat lines, bulk messages and neuroshilling dialogues, and suggests channel-search keywords",
+      "gemini": "Gemini",
+      "deepseek": "DeepSeek",
+      "fallback": "No {{chosen}} key is set — {{other}} will write the texts.",
+      "noKey": "No key is set — nothing can write the texts."
     },
     "captchaLlm": {
       "title": "Captcha solver LLM",
       "subtitle": "Which model reads and solves channel captchas",
       "gemini": "Gemini",
       "openai": "ChatGPT",
-      "deepseek": "DeepSeek"
+      "deepseek": "DeepSeek",
+      "fallback": "No {{chosen}} key is set — Gemini will solve captchas.",
+      "noKey": "No Gemini key is set — captchas will not be solved.",
+      "noKeys": "Neither the {{chosen}} nor the Gemini key is set — captchas will not be solved."
     }
   },
   "logTerminal": {
@@ -1315,7 +1326,7 @@
     "neurocomment_no_account_available": "No account in the campaign can post in this channel. The exact reason is next to the row. Clears on its own: \"account paused\", \"re-joining the chat after losing access\", \"no data yet: the account has not been onboarded to this channel\" (onboarding reaches the pair on a later pass) and \"join by request: waiting for an admin to approve\" (if it is never approved, the whole channel leaves the campaign). Yours to set: \"per-account hourly limit reached\" — \"Comments per hour (per account)\"; \"per-channel daily limit reached\" — \"Comments per day per channel\"; \"the account is not warmed up, or its Trust-score is below the threshold\" — warming, or \"Min. trust-score to run\"; \"warming has not handed the account over to neurocomment yet\" — the Warming page; \"the account was taken off this channel by the operator\". Needs attention: \"chat restricted: a mute, an unconfirmed ban, or a captcha not passed\", \"joining the chat failed\", \"the account is banned in the channel's chat\", \"join attempts used up\", \"no accounts linked\" and \"the account is in the chat but not commenting: no more specific reason\" — link another account, or link the channel again.",
     "neurocomment_posted_row_missing": "The comment reached Telegram, but its row in our history was not saved. The comment itself is live in the channel — we simply will not show it in the feed, will not count it towards the limits, and will not notice if it gets deleted. By the app's own logic this cannot happen, which is why the row is flagged as an error: there is nothing to fix by hand, but the failure is worth reporting to the developers.",
     "neurocomment_generation_retry": "The previous text did not fit: too long or too short, blocked by the filter, or a repeat of a comment we already sent. We are writing this same post again — the counter next to the row says which repeat it is and how many are allowed. No action needed: if nothing fits, a \"Text generation failed\" row next to it gives the reason.",
-    "neurocomment_generation_exhausted": "The AI produced no acceptable text. Beside the reason is which generator answered and what it said: DeepSeek writes the text, Gemini handles caption-less photo posts. Check that provider's key, the campaign prompt, and the rate limit.",
+    "neurocomment_generation_exhausted": "The AI produced no acceptable text. Beside the reason is which generator answered and what it said: the texts are written by the model chosen in Settings (“Text LLM”). Check its key, the campaign prompt, and the rate limit.",
     "neurocomment_challenge_attempt": "The AI read the captcha and is sending its answer to the bot. The counter next to the row says which attempt this is and how many are allowed: if the bot asks again, we answer once more. No action needed.",
     "neurocomment_challenge_result": "How the captcha ended is written next to the row. \"Passed\": the account can comment on the channel. \"AI request limit\": the pair is queued nowhere and we retry later on our own — nothing to do. Every other outcome the engine finishes by itself: the pair gets a second and last attempt within five minutes, and if that one fails too the account leaves this discussion chat and never returns to the channel. There is nothing to press — the \"Captcha solving\" block only shows who the engine is working on right now. If this keeps happening across channels, check the model and the key in settings.",
     "neurocomment_post_skipped": "There is nothing to comment on: a repost, an empty post, a bare link, or a file there is nothing to say about. The exact reason is written next to the row. A photo with no caption IS commented on — the account looks at the picture.",
@@ -1570,7 +1581,7 @@
     "captcha": {
       "title": "Captcha solving",
       "sub": "Auto bot-check pass",
-      "tooltip": "The engine solves the channel's bot-check itself via Gemini or a cache of past answers. Turn it on when a channel asks you to prove you're not a bot — otherwise those channels get skipped.",
+      "tooltip": "The engine solves the channel's bot-check itself via the model chosen in Settings or a cache of past answers. Turn it on when a channel asks you to prove you're not a bot — otherwise those channels get skipped.",
       "pending": "Being solved now · {{count}}",
       "retrying": "Second attempt · within 5 minutes"
     },
@@ -1724,7 +1735,7 @@
           "expandTooLong": "The topic is longer than {{max}} characters — shorten it, the suggester accepts no more.",
           "expandFailed": "Couldn't request suggestions. Try again.",
           "expandError": {
-            "llm_unavailable": "Suggestions are unavailable: no DeepSeek key is set. Type the keywords yourself.",
+            "llm_unavailable": "Suggestions are unavailable: neither a DeepSeek nor a Gemini key is set. Type the keywords yourself.",
             "llm_failed": "The model did not answer. Try again, or type the keywords yourself.",
             "llm_empty": "Nothing usable came back from the model. Rephrase the topic."
           },
@@ -2631,7 +2642,7 @@
           "example": "For example: the article card under a link in a channel."
         },
         "interAccountChat": {
-          "text": "Your accounts have short chats with each other. Needs a Gemini key in Settings.",
+          "text": "Your accounts have short chats with each other. Needs a Gemini or DeepSeek key in Settings.",
           "example": "For example: two accounts exchange a couple of messages."
         },
         "typing": {

@@ -291,3 +291,41 @@ async def test_a_key_that_cannot_be_encoded_is_an_error_not_an_exception() -> No
         result = await generate_text(request)
     assert result.status == "error"
     assert "sk-t" not in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_the_request_retry_count_wins_over_the_providers_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The operator's retries (Settings) reach DeepSeek, not only Gemini."""
+    monkeypatch.setattr(settings.deepseek, "max_retries", 0)
+    monkeypatch.setattr(settings.deepseek, "retry_backoff_seconds", 0.0)
+    request = _request().model_copy(update={"max_retries": 2})
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(return_value=httpx.Response(429))
+        result = await generate_text_deepseek(request)
+    assert result.status == "rate_limited"
+    assert route.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_the_pause_spaces_one_providers_calls_and_not_the_others(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One clock per provider: a DeepSeek call does not wait out an OpenAI one."""
+    monkeypatch.setattr("core.openai._throttles", {})
+    monkeypatch.setattr("core._llm_throttle.time.monotonic", lambda: 100.0)  # frozen clock
+    slept: list[float] = []
+
+    async def _capture(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("core._llm_throttle.asyncio.sleep", _capture)
+    request = _request().model_copy(update={"min_interval_seconds": 5.0})
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(return_value=_ok("ok"))
+        await generate_text_deepseek(request)  # first on its clock: no wait
+        await generate_text(request)  # first on OpenAI's clock: no wait either
+        await generate_text_deepseek(request)  # second on DeepSeek's: 100+5-100
+
+    assert slept == [5.0]

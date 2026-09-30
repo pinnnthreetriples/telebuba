@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from core.config import settings
+from core.db import save_warming_settings
 from schemas.gemini import GeminiResult
 from services.neuroshilling import _generate, _seams, _state, scenario
 from services.neuroshilling._prompt import DialogueAsk
@@ -210,8 +211,9 @@ async def test_a_provider_error_string_is_never_read(monkeypatch: pytest.MonkeyP
 async def test_an_attempt_is_charged_at_the_gateways_own_retry_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """``core.openai`` retries inside ONE call, so an attempt is several requests."""
-    monkeypatch.setattr(settings.deepseek, "max_retries", 2)
+    """The gateway retries inside ONE call, so an attempt is several requests."""
+    # The operator's retries (Settings), which every provider's gateway honours.
+    await save_warming_settings(gemini_api_key=None, gemini_max_retries=2)
     monkeypatch.setattr(settings.neuroshilling, "llm_max_attempts", 3)
     monkeypatch.setattr(settings.neuroshilling, "max_llm_calls_per_day", 9)
     gateway = _Gateway(GeminiResult(status="error"), GeminiResult(status="error"))
@@ -228,7 +230,7 @@ async def test_the_budget_running_out_mid_generation_stops_the_loop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The cap is re-read every pass: nothing reserved it when the click was let in."""
-    monkeypatch.setattr(settings.deepseek, "max_retries", 0)
+    await save_warming_settings(gemini_api_key=None, gemini_max_retries=0)
     monkeypatch.setattr(settings.neuroshilling, "llm_max_attempts", 5)
     monkeypatch.setattr(settings.neuroshilling, "max_llm_calls_per_day", 2)
     gateway = _Gateway(GeminiResult(status="error"), GeminiResult(status="error"))
@@ -442,3 +444,21 @@ async def test_an_answer_whose_every_step_is_dropped_is_re_asked(
     assert draft is not None
     assert [step.text for step in draft.steps] == ["anyone tried it?", "a year now"]
     assert "every step was unusable" in gateway.requests[1].prompt
+
+
+@pytest.mark.asyncio
+async def test_a_chosen_gemini_writes_the_dialogue_in_json_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The text LLM choice reaches neuroshilling too, with Gemini's schema-less JSON."""
+    monkeypatch.setattr(settings.gemini, "api_key", "g-key")
+    await save_warming_settings(gemini_api_key=None, text_llm_provider="gemini")
+    gemini = _Gateway(_answer())
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+
+    draft = await _generate_with(monkeypatch, _Gateway())
+
+    assert draft is not None
+    [request] = gemini.requests
+    assert request.api_key == "g-key"
+    assert request.response_json_object is True

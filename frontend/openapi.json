@@ -20938,6 +20938,15 @@
             "title": "Gemini Min Interval Seconds",
             "default": 0.0
           },
+          "text_llm_provider": {
+            "type": "string",
+            "enum": [
+              "gemini",
+              "deepseek"
+            ],
+            "title": "Text Llm Provider",
+            "default": "deepseek"
+          },
           "has_openai_key": {
             "type": "boolean",
             "title": "Has Openai Key",
@@ -21096,6 +21105,21 @@
               }
             ],
             "title": "Gemini Min Interval Seconds"
+          },
+          "text_llm_provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "deepseek"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Llm Provider"
           },
           "clear_gemini_key": {
             "type": "boolean",

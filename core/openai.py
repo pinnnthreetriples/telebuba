@@ -5,10 +5,10 @@ services pass the shared :class:`GeminiRequest` (the provider-neutral LLM
 contract) and get a typed :class:`GeminiResult` back — never an exception.
 
 Two providers ride it, and the ONLY thing separating them is which settings block
-supplies the endpoint and the retry budget (``config``, defaulting to OpenAI's):
+supplies the endpoint and the default retry budget (``config``, defaulting to OpenAI's):
 the captcha solver when the operator selects the ``openai`` provider, and DeepSeek
-for every text generation and the ``deepseek`` captcha provider
-(:func:`generate_text_deepseek`). One gateway rather
+for text generation when it is the operator's text LLM and for the ``deepseek``
+captcha provider (:func:`generate_text_deepseek`). One gateway rather
 than two because DeepSeek publishes this exact format — a second module would be
 this one with a different base URL.
 
@@ -44,12 +44,18 @@ from typing import cast
 import httpx
 
 from core._llm_redact import exception_text
+from core._llm_throttle import Throttle
 from core.config import OpenAISettings, settings
 from schemas.gemini import GeminiRequest, GeminiResult
 
 _HTTP_OK = 200
 _HTTP_TOO_MANY_REQUESTS = 429
 _HTTP_SERVER_ERROR_MIN = 500
+
+
+# One spacing clock per provider, keyed by endpoint: OpenAI and DeepSeek share this
+# gateway but not a quota.
+_throttles: dict[str, Throttle] = {}
 
 
 class _ClientHolder:
@@ -183,7 +189,9 @@ async def generate_text(
     Never raises: HTTP errors, timeouts, and unexpected payloads map to
     ``GeminiResult(status="error", ...)``; a 429 maps to ``status="rate_limited"``.
     Retries a transient failure (429 / 5xx / transport error) up to
-    ``config.max_retries`` times with a short backoff.
+    ``request.max_retries`` (or ``config.max_retries``) times with a short backoff,
+    and spaces this provider's calls by ``request.min_interval_seconds`` (no
+    spacing when unset).
 
     ``config`` picks the provider — the endpoint, timeout and retry budget — while
     the key, model and temperature stay on the request, because those are the
@@ -191,8 +199,11 @@ async def generate_text(
     keeps its behaviour without naming a provider it never had to think about.
     """
     provider = config or settings.openai
+    throttle = _throttles.setdefault(provider.base_url, Throttle())
+    await throttle.wait(request.min_interval_seconds or 0.0)
     client = _get_client()
-    attempts = provider.max_retries + 1
+    max_retries = request.max_retries if request.max_retries is not None else provider.max_retries
+    attempts = max_retries + 1
     result = GeminiResult(status="error", error="No attempt made")
     for attempt in range(attempts):
         try:

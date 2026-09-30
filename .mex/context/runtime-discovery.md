@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-09-28
+last_updated: 2026-09-30
 edges:
   - target: context/runtime-neurocomment.md
     condition: what the campaign does with a discovered channel
@@ -19,4 +19,4 @@ grounds_to:
 - Whether a read failure is a rate limit is the gateway's `kind`, never the reason text; a limit with no duration takes the configured no-duration cooldown.
 - Merge interleaves per OUTCOME, not per source, before the cap: source priority decides dedup spelling, not which source fills the cap.
 - Every source reports `ran`/`failed`/`skipped`; `hits` are DISTINCT usable channels. Replace stored candidates only when at least one source answered; an EMPTY result additionally needs the keyword sweep itself to have answered and nothing dropped as seen. A run stopped by a flood or a cooldown never displaces the stored set. Per-run progress, provenance and verdict fields are ephemeral across restart; `kind`, the seen table and the cached `about`/`join_request` are the persisted exceptions.
-- Keyword suggestion is not part of a run: no campaign, no account, no Telegram read; single WORDS; DeepSeek only; an unusable answer is a 200 carrying a code.
+- Keyword suggestion is not part of a run: no campaign, no account, no Telegram read; single WORDS; the Settings text LLM writes it; an unusable answer is a 200 carrying a code.

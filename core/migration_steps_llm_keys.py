@@ -46,3 +46,14 @@ def _add_warming_settings_deepseek_key(connection: Connection) -> None:
         connection.exec_driver_sql(
             "ALTER TABLE warming_settings ADD COLUMN deepseek_api_key VARCHAR",
         )
+
+
+def _add_warming_settings_text_llm_provider(connection: Connection) -> None:
+    # Nullable: NULL reads as the default provider, which is how every text was routed
+    # before the choice existed.
+    if not _sqlite_table_exists(connection, "warming_settings"):
+        return
+    if "text_llm_provider" not in _sqlite_columns(connection, "warming_settings"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_settings ADD COLUMN text_llm_provider VARCHAR",
+        )

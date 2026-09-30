@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -36,6 +36,9 @@ function jsonResponse(body: unknown): Response {
 function routeSettings() {
   vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse(SETTINGS)));
 }
+
+const captchaGroup = () => screen.getByRole('radiogroup', { name: 'LLM для решения капчи' });
+const textGroup = () => screen.getByRole('radiogroup', { name: 'LLM для текстов' });
 
 async function warmingPutBody(): Promise<Record<string, unknown>> {
   const calls = vi.mocked(fetch).mock.calls.map(([i]) => i as Request);
@@ -93,11 +96,11 @@ test('a DeepSeek key and the DeepSeek captcha provider are saved', async () => {
   renderWithClient(<SettingsPage />);
   await screen.findByText('Сохранить');
 
-  // OpenAI and DeepSeek have no stored key in this fixture, in that order.
-  const [, deepseekField] = screen.getAllByPlaceholderText('Ключ не задан');
+  // DeepSeek and OpenAI have no stored key in this fixture, in that order.
+  const [deepseekField] = screen.getAllByPlaceholderText('Ключ не задан');
   expect(screen.getByText('DeepSeek API key')).toBeInTheDocument();
   await userEvent.type(deepseekField!, 'sk-deepseek-typed');
-  await userEvent.click(screen.getByRole('radio', { name: 'DeepSeek' }));
+  await userEvent.click(within(captchaGroup()).getByRole('radio', { name: 'DeepSeek' }));
   await userEvent.click(screen.getByText('Сохранить'));
   await waitFor(async () => {
     const body = await warmingPutBody();
@@ -162,15 +165,15 @@ test('the clear-key action sends clear_gemini_key: true', async () => {
   });
 });
 
-test('Gemini tuning fields load, show help hints, and are sent in the warming PUT', async () => {
+test('retry and pause fields load, show help hints, and are sent in the warming PUT', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
   await waitFor(() => {
     expect(screen.getByText('Сохранить')).toBeInTheDocument();
   });
 
-  const retries = screen.getByLabelText('Повторные попытки Gemini');
-  const interval = screen.getByLabelText('Пауза между генерациями (сек)');
+  const retries = screen.getByLabelText('Повторные попытки при ошибке');
+  const interval = screen.getByLabelText('Пауза между запросами (сек)');
   // loaded from the settings row
   expect(retries).toHaveValue(2);
   expect(interval).toHaveValue(1.5);
@@ -191,14 +194,14 @@ test('Gemini tuning fields load, show help hints, and are sent in the warming PU
   });
 });
 
-test('an out-of-range Gemini retry value is clamped before the PUT', async () => {
+test('an out-of-range retry value is clamped before the PUT', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
   await waitFor(() => {
     expect(screen.getByText('Сохранить')).toBeInTheDocument();
   });
 
-  const retries = screen.getByLabelText('Повторные попытки Gemini');
+  const retries = screen.getByLabelText('Повторные попытки при ошибке');
   // Set an over-max value directly (a number input rejects out-of-range typing).
   fireEvent.change(retries, { target: { value: '99' } });
   await userEvent.click(screen.getByText('Сохранить'));
@@ -226,10 +229,61 @@ test('a pasted key is sent trimmed', async () => {
   renderWithClient(<SettingsPage />);
   await screen.findByText('Сохранить');
 
-  const [openaiField] = screen.getAllByPlaceholderText('Ключ не задан');
+  const [, openaiField] = screen.getAllByPlaceholderText('Ключ не задан');
   await userEvent.type(openaiField!, '  sk-openai-pasted  ');
   await userEvent.click(screen.getByText('Сохранить'));
   await waitFor(async () => {
     expect((await warmingPutBody()).openai_api_key).toBe('sk-openai-pasted');
   });
+});
+
+test('the keys come Gemini, DeepSeek, then OpenAI marked as captcha-only', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  const labels = screen
+    .getAllByText(/API key/)
+    .map((label) => label.textContent)
+    .filter(Boolean);
+  expect(labels).toEqual(['Gemini API key', 'DeepSeek API key', 'OpenAI API key (только капча)']);
+});
+
+test('the text LLM defaults to DeepSeek and a switch to Gemini is saved', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  expect(within(textGroup()).getByRole('radio', { name: 'DeepSeek' })).toBeChecked();
+  // OpenAI solves captchas only, so it is no text provider.
+  expect(within(textGroup()).queryByRole('radio', { name: 'ChatGPT' })).not.toBeInTheDocument();
+  await userEvent.click(within(textGroup()).getByRole('radio', { name: 'Gemini' }));
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    expect((await warmingPutBody()).text_llm_provider).toBe('gemini');
+  });
+});
+
+test('a choice without its key warns which model stands in, following the draft', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await screen.findByText('Сохранить');
+
+  // Only Gemini is keyed: the default DeepSeek hands the texts over.
+  const textFallback = 'Ключ DeepSeek не задан — тексты будет писать Gemini.';
+  expect(screen.getByText(textFallback)).toBeInTheDocument();
+  const [deepseekField] = screen.getAllByPlaceholderText('Ключ не задан');
+  await userEvent.type(deepseekField!, 'sk-deepseek-typed');
+  expect(screen.queryByText(textFallback)).not.toBeInTheDocument();
+
+  await userEvent.click(within(captchaGroup()).getByRole('radio', { name: 'ChatGPT' }));
+  expect(screen.getByText('Ключ OpenAI не задан — капчу будет решать Gemini.')).toBeInTheDocument();
+
+  // A pending clear counts as no key: nothing is left to solve the captcha.
+  await userEvent.click(screen.getByText('Очистить ключ'));
+  expect(
+    screen.getByText('Ключи OpenAI и Gemini не заданы — капча решаться не будет.'),
+  ).toBeInTheDocument();
+  await userEvent.clear(deepseekField!);
+  expect(screen.getByText('Не задан ни один ключ — тексты писать некому.')).toBeInTheDocument();
 });

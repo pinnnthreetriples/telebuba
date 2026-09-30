@@ -451,3 +451,16 @@ async def test_settings_round_trip_shows_key_hints_and_never_a_key(app: FastAPI)
     assert body["deepseek_key_hint"] == "sk-d…7c1e"
     assert body["captcha_llm_provider"] == "deepseek"
     assert key not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_settings_save_the_text_llm_choice_and_refuse_an_unknown_one(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.put("/api/v1/warming/settings", json={"text_llm_provider": "gemini"})
+        assert resp.status_code == 200
+        assert (await client.get("/api/v1/warming/settings")).json()["text_llm_provider"] == (
+            "gemini"
+        )
+        # OpenAI solves captchas only; it is not a text provider.
+        resp = await client.put("/api/v1/warming/settings", json={"text_llm_provider": "openai"})
+    assert resp.status_code == 422

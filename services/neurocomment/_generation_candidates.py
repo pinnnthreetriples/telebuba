@@ -11,6 +11,7 @@ from core.db import (
     load_warming_settings,
     touch_comment_claim,
 )
+from services._text_llm import uses_deepseek
 from services.content import (
     is_acceptable,
     release_sent_text,
@@ -19,7 +20,7 @@ from services.content import (
     try_reserve_sent,
 )
 from services.neurocomment import _seams
-from services.neurocomment._llm import _build_request, _deepseek_generates, _gemini_reason, _Subject
+from services.neurocomment._llm import _build_request, _gemini_reason, _Subject
 from services.neurocomment._outcomes import _add_inflight, _inflight_texts, _provider_error
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ async def generate_acceptable(
         # Reply mode: an answer that echoes the quoted comment is a ``duplicate`` of thread text.
         recent = [*recent, target.text]
     secret = await load_warming_settings()
-    use_deepseek = _deepseek_generates(image_b64, secret)
+    use_deepseek = uses_deepseek(secret)
     generate = _seams.generate_text_deepseek if use_deepseek else _seams.generate_text
     reason: str | None = None
     error: str | None = None
@@ -65,7 +66,6 @@ async def generate_acceptable(
                 _Subject(event.text, target),
                 secret=secret,
                 image_b64=image_b64,
-                use_deepseek=use_deepseek,
             ),
         )
         if generated.status != "ok" or not generated.text:
@@ -124,5 +124,4 @@ async def recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
 
 
 # Compatibility names used through ``_generate`` and ``engine`` test seams.
-deepseek_generates = _deepseek_generates
 build_request = _build_request

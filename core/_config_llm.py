@@ -81,12 +81,12 @@ class DeepseekSettings(OpenAISettings):
 
     ``api_key`` here is only the FALLBACK: like the Gemini/OpenAI keys, the operator
     sets it on the settings page and the stored row wins; an empty column reads this
-    value. No key at all is the fallback switch — text generation goes back to Gemini
-    rather than failing, so a deployment that never set one keeps working unchanged.
+    value. Whether DeepSeek writes the texts is the operator's "text LLM" choice
+    (``services._text_llm``); a chosen DeepSeek without a key hands over to Gemini
+    rather than failing.
 
-    ``deepseek-flash`` (V4.1, 2026-09) reads images natively, which is what lets the
-    captcha solver offer it. The comment and warming-chat image paths still stay on
-    Gemini (``_llm._deepseek_generates``) — a routing choice, no longer a hard limit.
+    ``deepseek-flash`` (V4.1, 2026-09) reads images natively, so it takes the
+    caption-less photo posts too and is offered to the captcha solver.
     """
 
     model_config = SettingsConfigDict(env_prefix="DEEPSEEK__", extra="ignore")

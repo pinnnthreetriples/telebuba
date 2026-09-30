@@ -9,7 +9,6 @@ from contextlib import suppress
 from uuid import uuid4
 
 from core.channel_tokens import normalize_channel
-from core.config import settings
 from core.db import load_warming_settings
 from core.gemini import generate_text
 from core.openai import generate_text_deepseek
@@ -20,8 +19,8 @@ from schemas.bulk_messages import (
     BulkMessageOutcome,
     BulkMessageRequest,
 )
-from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import ActionResult, SendChatMessage
+from services._text_llm import text_llm
 from services.accounts._result import AccountActionError, raise_for_result
 
 _jobs: dict[str, BulkMessageJob] = {}
@@ -267,32 +266,16 @@ async def run_bulk_message_job(job_id: str) -> None:
 
 async def generate_bulk_message(prompt: str) -> BulkMessageGenerated:
     """Use the configured text provider; generated text remains an editable draft."""
-    secret = await load_warming_settings()
-    use_deepseek = bool(secret.deepseek_api_key)
-    if use_deepseek:
-        api_key = secret.deepseek_api_key
-        model = settings.deepseek.model
-        llm = settings.deepseek
-        generate = generate_text_deepseek
-    else:
-        api_key = secret.gemini_api_key
-        model = secret.gemini_model
-        llm = settings.gemini
-        generate = generate_text
-    if not api_key:
+    llm = text_llm(await load_warming_settings())
+    if not llm.api_key:
         msg = "generator_unavailable"
         raise ValueError(msg)
+    generate = generate_text_deepseek if llm.use_deepseek else generate_text
     result = await generate(
-        GeminiRequest(
-            api_key=api_key,
-            model=model,
-            prompt=(
-                "Write one Telegram message based on this instruction. "
-                "Return only the message text, without a preface or quotes.\n\n"
-                f"{prompt}"
-            ),
-            temperature=llm.temperature,
-            max_output_tokens=llm.max_output_tokens,
+        llm.request(
+            "Write one Telegram message based on this instruction. "
+            "Return only the message text, without a preface or quotes.\n\n"
+            f"{prompt}"
         )
     )
     if result.status != "ok" or not result.text or not result.text.strip():
@@ -300,5 +283,5 @@ async def generate_bulk_message(prompt: str) -> BulkMessageGenerated:
         raise ValueError(msg)
     return BulkMessageGenerated(
         text=result.text.strip()[:4096],
-        provider="deepseek" if use_deepseek else "gemini",
+        provider="deepseek" if llm.use_deepseek else "gemini",
     )
