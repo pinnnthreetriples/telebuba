@@ -176,6 +176,37 @@ async def test_starting_a_running_campaign_is_a_conflict(
 
 
 @pytest.mark.asyncio
+async def test_a_running_campaign_answers_running_even_to_a_stale_stamp(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A live campaign answers "running" to a Start carrying a stale stamp.
+
+    A live run moves ``updated_at`` on its own, so a page opened before it started holds
+    a stale stamp. "Already running" is the refusal that stays true after a reload;
+    "campaign_changed" sent the operator to reload for an answer that could not change.
+    """
+
+    async def _held_join(_campaign_id: str, _account_id: str, _target: str) -> str:
+        await asyncio.Event().wait()
+        return "joined"
+
+    monkeypatch.setattr(_telegram, "join_target", _held_join)
+    seeded = await seed_campaign()
+    async with _client(app) as client:
+        stale = await _stamp(client, seeded.campaign_id)
+        await client.post(
+            f"{_BASE}/{seeded.campaign_id}/start", json={"expected_updated_at": stale}
+        )
+        response = await client.post(
+            f"{_BASE}/{seeded.campaign_id}/start", json={"expected_updated_at": stale}
+        )
+        await client.post(f"{_BASE}/{seeded.campaign_id}/stop")
+
+    assert response.status_code == 409
+    assert response.json()["error"]["message"] == "campaign_running"
+
+
+@pytest.mark.asyncio
 async def test_an_unknown_campaign_is_a_404_on_both_routes(app: FastAPI) -> None:
     async with _client(app) as client:
         started = await client.post(
