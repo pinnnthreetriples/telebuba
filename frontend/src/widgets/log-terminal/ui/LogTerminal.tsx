@@ -40,7 +40,7 @@ function LogLine({
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-md" title={hint || undefined}>
+    <div className="flex gap-sm" title={hint || undefined}>
       <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>
@@ -152,7 +152,7 @@ export function LogTerminal({
         </>
       }
     >
-      <div className="term tb-scroll max-h-feed overflow-y-auto rounded-lg bg-term px-lg py-md font-mono text-tiny leading-log">
+      <div className="term tb-scroll max-h-feed overflow-y-auto rounded-lg bg-term px-md py-sm font-mono text-tiny leading-log">
         {shown.length === 0 ? (
           <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (

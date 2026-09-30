@@ -489,7 +489,7 @@ function WarmingCard({
               ) : null}
               <div
                 // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own embedded log, one component's internal layout
-                className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-md font-mono text-tiny leading-log"
+                className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-sm font-mono text-tiny leading-log"
               >
                 {visibleLines.length === 0 ? (
                   <div className="text-term-dim">

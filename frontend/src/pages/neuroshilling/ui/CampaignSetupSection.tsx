@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   Button,
+  ChipAddButton,
   HelpHint,
   Icon,
   IconButton,
@@ -181,19 +182,14 @@ export function CampaignSetupSection({
             disabled={live}
           />
         ) : (
-          // `dashedMuted`, а не `dashed`: приглушённый СТРОЧНЫЙ добавитель в ряду чипов,
-          // тогда как блочный добавитель под списком синий. Рисовался руками, пока такой
-          // ступени у кнопки не было; теперь она есть, и второй её экземпляр не нужен.
-          <Button
-            variant="dashedMuted"
-            size="xs"
+          <ChipAddButton
             disabled={live}
             onClick={() => {
               setAdding(true);
             }}
           >
             {t('neuroshilling.setup.targets.add')}
-          </Button>
+          </ChipAddButton>
         )}
       </div>
 

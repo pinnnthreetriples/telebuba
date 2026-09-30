@@ -5,6 +5,7 @@ import type { NeurocommentCampaign } from '@/shared/api';
 import { type FeedbackResult } from '@/shared/lib';
 import {
   Button,
+  ChipAddButton,
   CollapsibleCard,
   FeedbackMark,
   Icon,
@@ -261,15 +262,9 @@ export function CampaignsCard({
                 confirmLabel={t('neurocomment.modal.add')}
               />
             ) : (
-              <Button
-                variant="dashedMuted"
-                size="md"
-                className="px-md font-medium"
-                disabled={campaignId === null}
-                onClick={onStartAdd}
-              >
+              <ChipAddButton disabled={campaignId === null} onClick={onStartAdd}>
                 {t('neurocomment.channels.addPill')}
-              </Button>
+              </ChipAddButton>
             )}
           </div>
         </CollapsibleCard>
