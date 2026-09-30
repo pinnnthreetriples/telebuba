@@ -30,6 +30,7 @@ export { StatusIcon } from './StatusIcon';
 export { SurfHover } from './SurfHover';
 export { Switch } from './Switch';
 export { TabList } from './TabList';
+export { TerminalPane } from './TerminalPane';
 export { Toaster } from './Toaster';
 export { toastError } from './toast';
 export { useWideContainer } from './useWideViewport';

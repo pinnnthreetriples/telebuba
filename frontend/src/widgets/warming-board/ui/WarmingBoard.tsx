@@ -8,7 +8,7 @@ import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { badgeTone, type BadgeTone } from '@/shared/design-system';
 import { eventLabel, eventReason, formatLocalTime, type FeedbackResult } from '@/shared/lib';
-import { Button, Card, FeedbackMark, Icon } from '@/shared/ui';
+import { Button, Card, FeedbackMark, Icon, TerminalPane } from '@/shared/ui';
 
 import { WarmStopModal } from './WarmStopModal';
 
@@ -487,10 +487,7 @@ function WarmingCard({
                   </Button>
                 </div>
               ) : null}
-              <div
-                // eslint-disable-next-line design-tokens/no-raw-values -- see the note in the rule: this card's own embedded log, one component's internal layout
-                className="term tb-scroll max-h-[120px] overflow-y-auto rounded-md bg-term px-md py-sm font-mono text-tiny leading-log"
-              >
+              <TerminalPane size="inline">
                 {visibleLines.length === 0 ? (
                   <div className="text-term-dim">
                     {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
@@ -523,7 +520,7 @@ function WarmingCard({
                     );
                   })
                 )}
-              </div>
+              </TerminalPane>
             </div>
           ) : null}
         </>

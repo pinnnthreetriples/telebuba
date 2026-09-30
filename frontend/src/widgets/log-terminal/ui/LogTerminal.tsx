@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
-import { Badge, Button, CollapsibleCard, Icon, IconButton } from '@/shared/ui';
+import { Badge, Button, CollapsibleCard, Icon, IconButton, TerminalPane } from '@/shared/ui';
 
 // Activity-feed line tone by the event's display severity (see `logSeverity`). The
 // dark-surface tokens, shared with the warming card's log — three parallel triples
@@ -152,7 +152,7 @@ export function LogTerminal({
         </>
       }
     >
-      <div className="term tb-scroll max-h-feed overflow-y-auto rounded-lg bg-term px-md py-sm font-mono text-tiny leading-log">
+      <TerminalPane>
         {shown.length === 0 ? (
           <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (
@@ -166,7 +166,7 @@ export function LogTerminal({
             />
           ))
         )}
-      </div>
+      </TerminalPane>
     </CollapsibleCard>
   );
 }
