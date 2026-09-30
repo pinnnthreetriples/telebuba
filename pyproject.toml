@@ -15,7 +15,7 @@ dependencies = [
     "pillow>=11.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
-    "pyjwt>=2.14.0",
+    "pyjwt>=2.15.0",
     "python-dotenv>=1.2.2",
     "python-multipart>=0.0.20",
     "python-socks>=2.8.1",
@@ -64,10 +64,13 @@ override-dependencies = [
     "click>=8.3.3",
     # CVE-2026-52870 in mcp <1.27.2 (semgrep pins mcp==1.23.3).
     "mcp>=1.27.2",
-    # CVE-2026-102274 in pyjwt 2.13.0, after the PYSEC-2026-175/177/178/179
-    # fixes (pulled by semgrep -> mcp, which upper-pins <2.13). Fix: 2.14.0.
-    # Recheck when semgrep's mcp pin catches up.
-    "pyjwt>=2.14.0",
+    # CVE-2026-101918 in pyjwt 2.14.0, after CVE-2026-102274 (2.13.0) and the
+    # PYSEC-2026-175/177/178/179 fixes (pulled by semgrep -> mcp, which
+    # upper-pins <2.13). Fix: 2.15.0. Recheck when semgrep's mcp pin catches up.
+    "pyjwt>=2.15.0",
+    # CVE-2026-97687/97688/97689 in urllib3 2.7.0 (pulled transitively via
+    # requests/sentry-sdk). Fix line is 2.8.0.
+    "urllib3>=2.8.0",
     # CVE-2026-54282/54283 in starlette 1.2.1 (pulled transitively via fastapi).
     # Fix line is 1.3.1. Recheck when fastapi's starlette pin catches up.
     "starlette>=1.3.1",
