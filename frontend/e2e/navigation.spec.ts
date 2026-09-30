@@ -127,12 +127,18 @@ test('return navigation waits for an invalidated campaign list', async ({ page }
   expect(await page.getByText('Крипта', { exact: true }).count()).toBe(0);
 });
 
-test('a stalled secondary request cannot hold navigation indefinitely', async ({ page }) => {
+test('a stalled logs request cannot hold neurocomment navigation indefinitely', async ({
+  page,
+}) => {
   await setup(page);
-  await page.route('**/api/v1/neurocomment/settings', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
-    await route.abort();
-  });
+  await page.route(
+    (url) =>
+      url.pathname.endsWith('/logs') && url.searchParams.get('event_prefix') === 'neurocomment',
+    async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      await route.abort();
+    },
+  );
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Аккаунты' })).toBeVisible();
   await goTo(page, 'Нейрокомментинг');

@@ -10,7 +10,6 @@ import {
   campaignsQueryOptions,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
-  neurocommentSettingsQueryOptions,
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
 import {
@@ -74,8 +73,6 @@ export async function preloadNeurocomment(client: QueryClient): Promise<void> {
       ),
     ]);
   });
-  // The settings snapshot only belongs to the listener edit modal.
-  void Promise.allSettled([client.fetchQuery(neurocommentSettingsQueryOptions())]);
   await waitForFirstScreen([
     campaigns,
     scoped,
@@ -115,8 +112,5 @@ export function preloadLogs(client: QueryClient): Promise<void> {
 }
 
 export function preloadSettings(client: QueryClient): Promise<void> {
-  return waitForFirstScreen([
-    client.fetchQuery(warmingSettingsQueryOptions()),
-    client.fetchQuery(neurocommentSettingsQueryOptions()),
-  ]);
+  return waitForFirstScreen([client.fetchQuery(warmingSettingsQueryOptions())]);
 }
