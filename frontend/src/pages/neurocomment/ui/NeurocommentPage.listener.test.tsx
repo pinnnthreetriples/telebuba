@@ -227,6 +227,41 @@ test('a persisted listener that is warming disables Start under the banner', asy
   expect(screen.getByRole('button', { name: 'Запустить' })).toBeDisabled();
 });
 
+test('a persisted listener cannot start before the warming board is known', async () => {
+  let finishWarming!: (response: Response) => void;
+  const delayedWarming = new Promise<Response>((resolve) => {
+    finishWarming = resolve;
+  });
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname === '/api/v1/warming/board') return delayedWarming;
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: 'acc-2' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<NeurocommentPage />);
+  const start = await screen.findByRole('button', { name: 'Запустить' });
+  expect(start).toBeDisabled();
+  finishWarming(
+    jsonResponse({
+      idle: [],
+      warming: [{ account_id: 'acc-2', label: '+79261119999', state: 'active', health: 'ok' }],
+      channels: { channels: [] },
+    }),
+  );
+  expect(
+    await screen.findByText('Этот аккаунт сейчас в прогреве — его нельзя назначить слушателем'),
+  ).toBeInTheDocument();
+  expect(start).toBeDisabled();
+});
+
 test('surfaces the backend 409 when a picked listener turns out to be warming', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

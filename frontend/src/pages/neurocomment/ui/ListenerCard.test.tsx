@@ -20,6 +20,7 @@ function card(): ReactElement {
     <ListenerCard
       listenerId=""
       running={false}
+      canStart={false}
       activeCampaignCount={0}
       activeChannelCount={0}
       unwatchedChannels={[]}
@@ -39,15 +40,18 @@ function plaque(
   running: boolean,
   activeCampaignCount: number,
   activeChannelCount: number,
+  canStart = true,
+  listenerActionsOpen = false,
 ): ReactElement {
   return (
     <ListenerCard
       listenerId="a1"
       running={running}
+      canStart={canStart}
       activeCampaignCount={activeCampaignCount}
       activeChannelCount={activeChannelCount}
       unwatchedChannels={[]}
-      listenerActionsOpen={false}
+      listenerActionsOpen={listenerActionsOpen}
       onToggleActions={vi.fn()}
       onToggleRuntime={vi.fn()}
       onEdit={vi.fn()}
@@ -80,6 +84,11 @@ test('a paused listener still reads as paused', () => {
   expect(screen.getByText('На паузе')).toBeVisible();
 });
 
+test('resume stays disabled while listener eligibility is unknown', () => {
+  render(plaque(false, 0, 0, false, true));
+  expect(screen.getByRole('button', { name: 'Возобновить' })).toBeDisabled();
+});
+
 test('listener icon actions have names, visible keyboard focus, and keep their callbacks', async () => {
   const onToggleRuntime = vi.fn();
   const onEdit = vi.fn();
@@ -88,6 +97,7 @@ test('listener icon actions have names, visible keyboard focus, and keep their c
     <ListenerCard
       listenerId="a1"
       running
+      canStart
       activeCampaignCount={1}
       activeChannelCount={1}
       unwatchedChannels={[]}

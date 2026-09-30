@@ -74,15 +74,13 @@ export async function preloadNeurocomment(client: QueryClient): Promise<void> {
       ),
     ]);
   });
-  // These queries are useful once the page appears, but must not delay its board.
-  void Promise.allSettled([
-    client.fetchQuery(allAccountsQueryOptions()),
-    client.fetchQuery(warmingBoardQueryOptions()),
-    client.fetchQuery(neurocommentSettingsQueryOptions()),
-  ]);
+  // The settings snapshot only belongs to the listener edit modal.
+  void Promise.allSettled([client.fetchQuery(neurocommentSettingsQueryOptions())]);
   await waitForFirstScreen([
     campaigns,
     scoped,
+    client.fetchQuery(allAccountsQueryOptions()),
+    client.fetchQuery(warmingBoardQueryOptions()),
     client.fetchQuery(warmedAccountsQueryOptions()),
     client.fetchQuery(neurocommentRuntimeQueryOptions()),
     client.fetchQuery(logsQueryOptions({ query: { event_prefix: 'neurocomment', limit: 80 } })),
