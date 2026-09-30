@@ -6,6 +6,7 @@ two routes contain is that mapping, and a mocked service would be asserting the 
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import httpx
@@ -146,7 +147,18 @@ async def test_a_draft_scenario_is_a_conflict(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
-async def test_starting_a_running_campaign_is_a_conflict(app: FastAPI) -> None:
+async def test_starting_a_running_campaign_is_a_conflict(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Hold the run at its first join so it is still live at the second Start. With
+    # ``_seams.sleep`` a no-op a short scenario plays out in a few suspension points,
+    # and its terminal write both frees the campaign (the second Start then answers
+    # 200) and bumps ``updated_at`` (``campaign_changed``) — on a loaded worker, either.
+    async def _held_join(_campaign_id: str, _account_id: str, _target: str) -> str:
+        await asyncio.Event().wait()
+        return "joined"
+
+    monkeypatch.setattr(_telegram, "join_target", _held_join)
     seeded = await seed_campaign()
     async with _client(app) as client:
         await client.post(
