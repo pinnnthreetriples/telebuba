@@ -155,21 +155,32 @@ test('a stalled board request yields to the page loading state', async ({ page }
   });
 });
 
-test('neurocomment counters show their values on the first page frame', async ({ page }) => {
+test('neurocomment counters expose their values while rolling without moving the tiles', async ({
+  page,
+}) => {
   await setup(page);
   await page.goto('/neurocomment');
   await expect(page.getByRole('heading', { name: 'Нейрокомментинг' })).toBeVisible();
-  const position = await page.evaluate(() => {
-    const clip = document.querySelector<HTMLElement>('.type-stat.tabular-nums > span');
-    const digits = clip?.firstElementChild;
-    if (!clip || !digits) return null;
-    return {
-      actual: new DOMMatrix(getComputedStyle(digits).transform).m42,
-      expected: -2 * clip.getBoundingClientRect().height,
-    };
-  });
-  expect(position).not.toBeNull();
-  expect(Math.abs(position!.actual - position!.expected)).toBeLessThan(2);
+  const tile = page.locator('.type-stat.tabular-nums').first().locator('..');
+  await expect(tile.locator('.sr-only')).toHaveText('2');
+  const before = await tile.boundingBox();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const clip = document.querySelector<HTMLElement>(
+          '.type-stat.tabular-nums [aria-hidden="true"] > span',
+        );
+        const digits = clip?.firstElementChild;
+        if (!clip || !digits) return Number.POSITIVE_INFINITY;
+        const actual = new DOMMatrix(getComputedStyle(digits).transform).m42;
+        return Math.abs(actual + 2 * clip.getBoundingClientRect().height);
+      }),
+    )
+    .toBeLessThan(2);
+  const after = await tile.boundingBox();
+  expect(before).not.toBeNull();
+  expect(after).not.toBeNull();
+  expect(Math.abs(after!.height - before!.height)).toBeLessThan(1);
 });
 
 test('add-channel chip hugs its neighbors and matches their height', async ({ page }, testInfo) => {

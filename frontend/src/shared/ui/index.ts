@@ -18,6 +18,7 @@ export { Input, Textarea } from './Input';
 export { IconButton } from './IconButton';
 export { Modal } from './Modal';
 export { Notice } from './Notice';
+export { Odometer } from './Odometer';
 export { NumberedStep } from './NumberedStep';
 export { SegmentedControl } from './SegmentedControl';
 export type { SegmentedOption } from './SegmentedControl';
