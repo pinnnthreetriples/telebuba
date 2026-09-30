@@ -241,6 +241,11 @@ export function NeurocommentPage() {
   // lights up when the backend rejects a start the client thought was fine.
   const listenerIsWarming = listenerId !== '' && warmingIds.has(listenerId);
   const showWarmingBlock = listenerIsWarming || startRejectedWarming;
+  // A timed-out route preload may reveal this page before the warming board
+  // returns. Never offer Start (including the listener's resume action) until
+  // the exclusion list is known and no refresh is in flight.
+  const canStartListener =
+    Boolean(listenerId) && warmingBoard.isSuccess && !warmingBoard.isFetching && !showWarmingBlock;
   const boardAccounts = board.data?.accounts ?? [];
   const boardChannels = board.data?.channels ?? [];
   const boardChannelNames = boardChannels.map((c) => c.channel);
@@ -398,7 +403,7 @@ export function NeurocommentPage() {
   const toggleRuntime = () => {
     if (running) {
       stop.mutate({}, { onSettled: invalidateNeuro });
-    } else if (listenerId && !warmingIds.has(listenerId)) {
+    } else if (canStartListener) {
       void startListener(listenerId);
     }
     // A warming listenerId is not started; showWarmingBlock already renders the banner.
@@ -515,7 +520,7 @@ export function NeurocommentPage() {
         <div className="flex min-w-0 flex-col gap-lg lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
-            canStart={Boolean(listenerId) && !showWarmingBlock}
+            canStart={canStartListener}
             stats={stats}
             events={logLines}
             onToggle={toggleRuntime}
@@ -559,6 +564,7 @@ export function NeurocommentPage() {
           <ListenerCard
             listenerId={listenerId}
             running={running}
+            canStart={canStartListener}
             activeCampaignCount={activeCampaignCount}
             // The same number the «Каналов» tile shows, so the plaque and the tile cannot
             // disagree. `running` is already false until the runtime read lands, so the 0

@@ -9,6 +9,7 @@ import { Card, Icon, IconButton, Select, SurfHover } from '@/shared/ui';
 export function ListenerCard({
   listenerId,
   running,
+  canStart,
   activeCampaignCount,
   activeChannelCount,
   unwatchedChannels,
@@ -22,6 +23,7 @@ export function ListenerCard({
 }: {
   listenerId: string;
   running: boolean;
+  canStart: boolean;
   activeCampaignCount: number;
   activeChannelCount: number;
   unwatchedChannels: string[];
@@ -80,6 +82,7 @@ export function ListenerCard({
                     running ? t('neurocomment.listener.pause') : t('neurocomment.listener.resume')
                   }
                   onClick={onToggleRuntime}
+                  disabled={!running && !canStart}
                   className={
                     running
                       ? 'text-warning-deep hover:bg-warning-tint'

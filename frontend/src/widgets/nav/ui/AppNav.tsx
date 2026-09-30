@@ -23,7 +23,11 @@ import { NavDrawer } from './NavDrawer';
 // to fix first if this ever bites.
 export function AppNav() {
   const { t } = useTranslation();
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // `location` advances at click time, while the old route stays visible until its
+  // loader completes. Keep the active rail on the page the user can actually see.
+  const pathname = useRouterState({
+    select: (state) => (state.resolvedLocation ?? state.location).pathname,
+  });
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
