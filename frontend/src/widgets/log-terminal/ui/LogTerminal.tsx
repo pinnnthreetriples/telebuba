@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
 import { eventLabel, eventReason, formatLocalTime, logSeverity } from '@/shared/lib';
-import { Badge, Button, CollapsibleCard, Icon, IconButton } from '@/shared/ui';
+import { Badge, Button, CollapsibleCard, Icon, IconButton, TerminalPane } from '@/shared/ui';
 
 // Activity-feed line tone by the event's display severity (see `logSeverity`). The
 // dark-surface tokens, shared with the warming card's log — three parallel triples
@@ -40,7 +40,7 @@ function LogLine({
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-md" title={hint || undefined}>
+    <div className="flex gap-tight" title={hint || undefined}>
       <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>
@@ -55,12 +55,12 @@ function LogLine({
           onClick={() => {
             onPickAccount(accountId);
           }}
-          className="w-stamp shrink-0 truncate text-left text-term-text hover:text-on-inverse hover:underline"
+          className="w-logAccount shrink-0 truncate text-left text-term-text hover:text-on-inverse hover:underline"
         >
           {account}
         </button>
       ) : (
-        <span className="w-stamp shrink-0" />
+        <span className="w-logAccount shrink-0" />
       )}
       {channel ? <span className="shrink-0 text-term-link">{channel}</span> : null}
       <span className={LOG_TONE[logSeverity(line)]}>{eventLabel(t, line.event)}</span>
@@ -152,7 +152,7 @@ export function LogTerminal({
         </>
       }
     >
-      <div className="term tb-scroll max-h-feed overflow-y-auto rounded-lg bg-term px-lg py-md font-mono text-tiny leading-log">
+      <TerminalPane>
         {shown.length === 0 ? (
           <div className="text-term-dim">{t('logTerminal.empty')}</div>
         ) : (
@@ -166,7 +166,7 @@ export function LogTerminal({
             />
           ))
         )}
-      </div>
+      </TerminalPane>
     </CollapsibleCard>
   );
 }

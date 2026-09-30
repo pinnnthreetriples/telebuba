@@ -1,6 +1,7 @@
 export { Badge } from './Badge';
 export type { BadgeTone } from './Badge';
 export { Button } from './Button';
+export { ChipAddButton } from './ChipAddButton';
 export { CloseButton } from './CloseButton';
 export { Card } from './Card';
 export { SelectableCard } from './SelectableCard';
@@ -29,6 +30,7 @@ export { StatusIcon } from './StatusIcon';
 export { SurfHover } from './SurfHover';
 export { Switch } from './Switch';
 export { TabList } from './TabList';
+export { TerminalPane } from './TerminalPane';
 export { Toaster } from './Toaster';
 export { toastError } from './toast';
 export { useWideContainer } from './useWideViewport';
