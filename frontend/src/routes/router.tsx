@@ -60,6 +60,7 @@ const indexRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/',
   errorComponent: PageErrorPanel,
+  loader: () => import('./preload').then(({ preloadAccounts }) => preloadAccounts(queryClient)),
   component: lazyRouteComponent(() => import('@/pages/accounts'), 'AccountsPage'),
 });
 
@@ -67,6 +68,7 @@ const warmingRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/warming',
   errorComponent: PageErrorPanel,
+  loader: () => import('./preload').then(({ preloadWarming }) => preloadWarming(queryClient)),
   component: lazyRouteComponent(() => import('@/pages/warming'), 'WarmingPage'),
 });
 
@@ -74,6 +76,8 @@ const neurocommentRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/neurocomment',
   errorComponent: PageErrorPanel,
+  loader: () =>
+    import('./preload').then(({ preloadNeurocomment }) => preloadNeurocomment(queryClient)),
   component: lazyRouteComponent(() => import('@/pages/neurocomment'), 'NeurocommentPage'),
 });
 
@@ -81,6 +85,8 @@ const neuroshillingRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/neuroshilling',
   errorComponent: PageErrorPanel,
+  loader: () =>
+    import('./preload').then(({ preloadNeuroshilling }) => preloadNeuroshilling(queryClient)),
   component: lazyRouteComponent(() => import('@/pages/neuroshilling'), 'NeuroshillingPage'),
 });
 
@@ -88,6 +94,7 @@ const logsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/logs',
   errorComponent: PageErrorPanel,
+  loader: () => import('./preload').then(({ preloadLogs }) => preloadLogs(queryClient)),
   component: lazyRouteComponent(() => import('@/pages/logs'), 'LogsPage'),
 });
 
@@ -95,6 +102,7 @@ const settingsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: '/settings',
   errorComponent: PageErrorPanel,
+  loader: () => import('./preload').then(({ preloadSettings }) => preloadSettings(queryClient)),
   component: lazyRouteComponent(() => import('@/pages/settings'), 'SettingsPage'),
 });
 

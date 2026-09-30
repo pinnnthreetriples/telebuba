@@ -47,15 +47,13 @@ function chipFor(channel: string): HTMLElement {
   return chip;
 }
 
-test('the add-channel control stays at the right edge as channel chips wrap', () => {
-  renderCard();
-  const button = screen.getByRole('button', { name: '+ Канал' });
-  expect(button).toHaveClass('ml-auto');
-  expect(button.parentElement).toHaveClass('flex', 'flex-wrap', 'items-start');
+test('the add-channel control opens an inline editor among the channel chips', async () => {
+  const props = renderCard();
+  await userEvent.click(screen.getByRole('button', { name: '+ Канал' }));
+  expect(props.onStartAdd).toHaveBeenCalledOnce();
 
   renderCard({ addingChannel: true });
-  const input = screen.getByPlaceholderText(/Введите|@|канал/i);
-  expect(input.parentElement).toHaveClass('ml-auto');
+  expect(screen.getByPlaceholderText(/Введите|@|канал/i)).toBeVisible();
 });
 
 test('clicking "Проверить каналы" fires onCheckChannels', async () => {

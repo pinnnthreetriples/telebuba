@@ -252,7 +252,6 @@ export function CampaignsCard({
             ))}
             {addingChannel ? (
               <InlineChipEditor
-                className="ml-auto"
                 value={channelInput}
                 onChange={onChannelInput}
                 onConfirm={onAddChannel}
@@ -264,8 +263,8 @@ export function CampaignsCard({
             ) : (
               <Button
                 variant="dashedMuted"
-                size="xs"
-                className="ml-auto"
+                size="md"
+                className="px-md font-medium"
                 disabled={campaignId === null}
                 onClick={onStartAdd}
               >
