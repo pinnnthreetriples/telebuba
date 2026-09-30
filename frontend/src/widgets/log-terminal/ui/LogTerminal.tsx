@@ -40,7 +40,7 @@ function LogLine({
   const detail = eventReason(t, line);
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
-    <div className="flex gap-sm" title={hint || undefined}>
+    <div className="flex gap-tight" title={hint || undefined}>
       <span className="shrink-0 text-term-dim">
         {formatLocalTime(line.created_at, { seconds: true })}
       </span>
@@ -55,12 +55,12 @@ function LogLine({
           onClick={() => {
             onPickAccount(accountId);
           }}
-          className="w-stamp shrink-0 truncate text-left text-term-text hover:text-on-inverse hover:underline"
+          className="w-logAccount shrink-0 truncate text-left text-term-text hover:text-on-inverse hover:underline"
         >
           {account}
         </button>
       ) : (
-        <span className="w-stamp shrink-0" />
+        <span className="w-logAccount shrink-0" />
       )}
       {channel ? <span className="shrink-0 text-term-link">{channel}</span> : null}
       <span className={LOG_TONE[logSeverity(line)]}>{eventLabel(t, line.event)}</span>

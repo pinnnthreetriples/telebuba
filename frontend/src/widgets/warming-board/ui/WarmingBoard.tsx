@@ -506,7 +506,7 @@ function WarmingCard({
                     const reaction = extraStr(line.extra, 'reaction');
                     const detail = lineDetail(t, line);
                     return (
-                      <div key={line.id} className="flex gap-sm">
+                      <div key={line.id} className="flex gap-tight">
                         <span className="shrink-0 text-term-dim">
                           {formatLocalTime(line.created_at)}
                         </span>
