@@ -1,6 +1,6 @@
 // The scenario form's shape and the two translations around it: server → draft,
 // draft → request body. Page-local, beside the card that edits it, the same way
-// `pages/settings/ui/neuroSettingsForm.ts` sits beside its form.
+// `entities/campaign/ui/neuroLimitsForm.ts` sits beside its form.
 //
 // It lives apart from `ScenarioCard.tsx` because the preview card and the page
 // need the same vocabulary — the role palette, the reaction set, the draft type —

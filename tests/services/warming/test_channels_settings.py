@@ -272,3 +272,46 @@ def test_parse_channels_keeps_case_distinct_invite_hashes() -> None:
 
     assert _parse_channels("t.me/+AbCdEfGh12 t.me/+abcdefgh12") == ["+AbCdEfGh12", "+abcdefgh12"]
     assert _parse_channels("@Alpha @alpha") == ["Alpha"]
+
+
+@pytest.mark.asyncio
+async def test_saved_keys_come_back_as_hints_never_as_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """First and last four characters only — recognisable, not usable."""
+    monkeypatch.setattr(settings.openai, "api_key", "")
+    masked = await warming.save_settings(
+        WarmingSettingsUpdate(
+            gemini_api_key="AIza-fake-middle-x7Qp",
+            openai_api_key="short-key",
+            deepseek_api_key="sk-fake-middle-9f2a",
+        ),
+    )
+
+    assert masked.gemini_key_hint == "AIza…x7Qp"
+    assert masked.openai_key_hint == "••••"  # too short to show any of it
+    assert masked.has_deepseek_key is True
+    assert masked.deepseek_key_hint == "sk-f…9f2a"
+    dumped = masked.model_dump_json()
+    assert "middle" not in dumped
+    assert "short-key" not in dumped
+
+
+@pytest.mark.asyncio
+async def test_deepseek_key_keeps_clears_and_falls_back_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await warming.save_settings(WarmingSettingsUpdate(deepseek_api_key="ds-stored-key-1234"))
+    # An unrelated save (no DeepSeek field) keeps the stored key.
+    kept = await warming.save_settings(WarmingSettingsUpdate(reactions_enabled=False))
+    assert kept.deepseek_key_hint == "ds-s…1234"
+
+    monkeypatch.setattr(settings.deepseek, "api_key", "")
+    cleared = await warming.save_settings(WarmingSettingsUpdate(clear_deepseek_key=True))
+    assert cleared.has_deepseek_key is False
+
+    # A blank stored key reads the deployment's .env value, like the other providers.
+    monkeypatch.setattr(settings.deepseek, "api_key", "env-deepseek-key-5678")
+    await warming.save_settings(WarmingSettingsUpdate())
+    reloaded = await warming.load_settings()
+    assert reloaded.deepseek_key_hint == "env-…5678"

@@ -261,8 +261,8 @@ export const neurocommentRuntime = {
   onboarding: false,
 };
 
-// Все поля контракта, включая числовые: без них экран настроек рисовал `undefined` в
-// четырёх полях, и снимок-эталон закрепил бы это как норму.
+// Все поля контракта, включая числовые: без них вкладка «Лимиты» окна слушателя на
+// странице нейрокомментинга рисует `undefined`, и снимок-эталон закрепил бы это как норму.
 export const neurocommentSettings = {
   max_comments_per_hour: 4,
   max_comments_per_channel_per_day: 12,

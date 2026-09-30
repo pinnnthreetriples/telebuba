@@ -107,8 +107,17 @@ def _no_ambient_deepseek_key(monkeypatch: pytest.MonkeyPatch) -> None:
     reopen the hole by stubbing one provider and forgetting the other. A test that
     means to exercise DeepSeek sets the key itself and stubs both
     (``tests/services/neurocomment/test_llm_routing.py``).
+
+    The key is now resolved INTO the cached settings row (stored column, else this
+    value), so the cache is dropped too: a row resolved by an earlier test would
+    otherwise pin that test's key into this one.
     """
+    from core.repositories._warming_settings import (  # noqa: PLC0415 - core.db import cycle
+        _invalidate_warming_settings_cache,
+    )
+
     monkeypatch.setattr(settings.deepseek, "api_key", "")
+    _invalidate_warming_settings_cache()
 
 
 @pytest.fixture(autouse=True)

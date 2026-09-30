@@ -213,6 +213,8 @@ class NeurocommentSettings(BaseSettings):
     # gpt-4o/Gemini and routinely runs well past 10s. The gateway's own budget is 30s, so
     # the text timeout truncated our own request and the solver gave up on a captcha the
     # provider was still answering; 45s sits above the gateway budget so its result wins.
+    # Not above DeepSeek's (60s, `DeepseekSettings.timeout_seconds`): a DeepSeek photo
+    # captcha answered after 45s is cut off here and becomes a give-up.
     challenge_vision_timeout_seconds: float = Field(default=45.0, gt=0.0)
     # Hard cutoff on the click/send dispatch (the only unbounded Telethon await in
     # the solver); a hung click times out and is treated as a failed dispatch.
@@ -222,10 +224,11 @@ class NeurocommentSettings(BaseSettings):
     challenge_click_delay_min_seconds: float = Field(default=8.0, ge=0.0)
     challenge_click_delay_max_seconds: float = Field(default=40.0, ge=0.0)
     # Default captcha-solver LLM (the operator overrides it via the DB setting).
-    # "openai" uses settings.openai + the OpenAI key; "gemini" uses the Gemini one.
+    # "openai" uses settings.openai + the OpenAI key, "deepseek" settings.deepseek + the
+    # DeepSeek key; "gemini" uses the Gemini one.
     # Named to match the DB/runtime `captcha_llm_provider` secret (the DB value wins;
     # this is only the fallback default).
-    captcha_llm_provider: Literal["gemini", "openai"] = "gemini"
+    captcha_llm_provider: Literal["gemini", "openai", "deepseek"] = "gemini"
     # Attempts before giving up: on a wrong answer the guardian bot usually
     # re-challenges, so we retry with the fresh challenge up to this many times
     # (a wrong click can get the account kicked — do not retry forever).

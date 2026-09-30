@@ -34,7 +34,7 @@ function EyeIcon({ off }: { off: boolean }) {
   );
 }
 
-// One masked API-key input (Gemini or OpenAI): password field + show/hide toggle
+// One masked API-key input (one per provider): password field + show/hide toggle
 // + a "clear stored key" affordance. Blank = keep; clear = wipe the stored key.
 export function ApiKeyField({
   label,

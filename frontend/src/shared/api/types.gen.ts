@@ -1930,8 +1930,8 @@ export type DiscoveryKeywordRequest = {
  * ``DiscoverySourceReport.reason`` — the SPA maps it to text and renders the raw
  * code when it has no copy. Three values, and each names a different thing for the
  * operator to do:
- * llm_unavailable — ``settings.deepseek.api_key`` is empty, so nothing was asked
- * at all; type the keywords by hand or set the key.
+ * llm_unavailable — no DeepSeek key is set (Settings page or ``.env``), so nothing
+ * was asked at all; type the keywords by hand or set the key.
  * llm_failed      — the gateway answered with an error, a rate limit, or no
  * text; retrying may work.
  * llm_empty       — the model answered but nothing in it survived validation;
@@ -4543,7 +4543,11 @@ export type WarmingReadiness = {
 /**
  * WarmingSettings
  *
- * Masked, UI-facing warming settings — never carries the raw Gemini key.
+ * Masked, UI-facing warming settings — never carries a raw LLM key.
+ *
+ * Each ``*_key_hint`` is at most the key's first and last four characters (see
+ * ``services.warming.settings_store._key_hint``), so the operator can tell which key
+ * is set without the secret ever reaching the browser.
  */
 export type WarmingSettings = {
   /**
@@ -4567,6 +4571,10 @@ export type WarmingSettings = {
    */
   has_gemini_key?: boolean;
   /**
+   * Gemini Key Hint
+   */
+  gemini_key_hint?: string | null;
+  /**
    * Gemini Model
    */
   gemini_model: string;
@@ -4583,13 +4591,25 @@ export type WarmingSettings = {
    */
   has_openai_key?: boolean;
   /**
+   * Openai Key Hint
+   */
+  openai_key_hint?: string | null;
+  /**
    * Openai Model
    */
   openai_model?: string;
   /**
    * Captcha Llm Provider
    */
-  captcha_llm_provider?: 'gemini' | 'openai';
+  captcha_llm_provider?: 'gemini' | 'openai' | 'deepseek';
+  /**
+   * Has Deepseek Key
+   */
+  has_deepseek_key?: boolean;
+  /**
+   * Deepseek Key Hint
+   */
+  deepseek_key_hint?: string | null;
   extra_toggles?: ExtraToggles;
   /**
    * Updated At
@@ -4660,7 +4680,15 @@ export type WarmingSettingsUpdate = {
   /**
    * Captcha Llm Provider
    */
-  captcha_llm_provider?: 'gemini' | 'openai' | null;
+  captcha_llm_provider?: 'gemini' | 'openai' | 'deepseek' | null;
+  /**
+   * Deepseek Api Key
+   */
+  deepseek_api_key?: string | null;
+  /**
+   * Clear Deepseek Key
+   */
+  clear_deepseek_key?: boolean;
   extra_toggles?: ExtraToggles | null;
 };
 

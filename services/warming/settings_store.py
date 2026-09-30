@@ -1,7 +1,7 @@
 """Warming settings — load/save the singleton settings row, masking the API key.
 
-Thin orchestration over ``core.db``: the read model masks the stored Gemini key
-(presence only) so it can be shown in the UI without leaking the secret.
+Thin orchestration over ``core.db``: the read model masks the stored LLM keys
+(presence + a short hint) so they can be shown in the UI without leaking the secret.
 
 Named ``settings_store`` rather than ``settings`` to avoid shadowing the
 ``settings`` object from ``core.config`` in the package namespace (importing a
@@ -20,6 +20,19 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingSettingsSecret, WarmingSettingsUpdate
 
 
+# Below this length the first-and-last-four hint would reveal most of the key.
+_HINT_MIN_KEY_LENGTH = 12
+
+
+def _key_hint(key: str) -> str | None:
+    """Enough of a key to recognise it — never enough to use it."""
+    if not key:
+        return None
+    if len(key) < _HINT_MIN_KEY_LENGTH:
+        return "••••"
+    return f"{key[:4]}…{key[-4:]}"
+
+
 def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
     return WarmingSettings(
         inter_account_chat=secret.inter_account_chat,
@@ -27,12 +40,16 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         join_enabled=secret.join_enabled,
         enforce_readiness=secret.enforce_readiness,
         has_gemini_key=bool(secret.gemini_api_key),
+        gemini_key_hint=_key_hint(secret.gemini_api_key),
         gemini_model=secret.gemini_model,
         gemini_max_retries=secret.gemini_max_retries,
         gemini_min_interval_seconds=secret.gemini_min_interval_seconds,
         has_openai_key=bool(secret.openai_api_key),
+        openai_key_hint=_key_hint(secret.openai_api_key),
         openai_model=secret.openai_model,
         captcha_llm_provider=secret.captcha_llm_provider,
+        has_deepseek_key=bool(secret.deepseek_api_key),
+        deepseek_key_hint=_key_hint(secret.deepseek_api_key),
         extra_toggles=secret.extra_toggles,
         updated_at=secret.updated_at,
     )
@@ -48,6 +65,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
     # also clears it; passing ``None`` (and no flag) preserves the existing key.
     api_key: str | None = "" if data.clear_gemini_key else data.gemini_api_key
     openai_key: str | None = "" if data.clear_openai_key else data.openai_api_key
+    deepseek_key: str | None = "" if data.clear_deepseek_key else data.deepseek_api_key
 
     secret = await save_warming_settings(
         inter_account_chat=data.inter_account_chat,
@@ -61,6 +79,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         openai_api_key=openai_key,
         openai_model=data.openai_model,
         captcha_llm_provider=data.captcha_llm_provider,
+        deepseek_api_key=deepseek_key,
         extra_toggles=data.extra_toggles,
     )
     await log_event(
@@ -77,6 +96,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
             "gemini_min_interval_seconds": secret.gemini_min_interval_seconds,
             "has_openai_key": bool(secret.openai_api_key),
             "captcha_llm_provider": secret.captcha_llm_provider,
+            "has_deepseek_key": bool(secret.deepseek_api_key),
             "extras_enabled": sum(secret.extra_toggles.values()),
         },
     )

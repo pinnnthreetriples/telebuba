@@ -14,7 +14,6 @@ export {
   neurocommentBoardQueryOptions,
   neurocommentCommentsQueryOptions,
   neurocommentRuntimeQueryOptions,
-  neurocommentSettingsQueryOptions,
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   setCampaignAccountChannelMutation,
@@ -25,7 +24,6 @@ export {
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,
-  updateNeurocommentSettingsMutation,
 } from './api/campaign.queries';
 export { CampaignDeleteModal } from './ui/CampaignDeleteModal';
 export { CampaignPromptModal, type PromptAccount } from './ui/CampaignPromptModal';
