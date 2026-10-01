@@ -506,6 +506,7 @@
       "failedCount": "{{n}} failed",
       "rowQueued": "Waiting",
       "rowRunning": "Applying",
+      "rowSkipped": "Skipped",
       "rowOk": "Done",
       "stop": "Stop",
       "done": "Close",

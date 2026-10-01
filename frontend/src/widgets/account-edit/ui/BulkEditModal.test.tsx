@@ -53,7 +53,8 @@ type ProfileBody = { account_id: string; bio?: string; first_name?: string; last
 //
 // `profileFails` refuses exactly one account, so a batch can be watched carrying
 // on past a refusal — the whole reason the rows keep their own state.
-function routeApi(profileFails?: string): ProfileBody[] {
+// `hold` keeps acc-1's request in flight until it resolves, so a Stop can land mid-batch.
+function routeApi(profileFails?: string, hold?: Promise<void>): ProfileBody[] {
   const bodies: ProfileBody[] = [];
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
@@ -64,6 +65,7 @@ function routeApi(profileFails?: string): ProfileBody[] {
     if (pathname === '/api/v1/accounts/profile') {
       const body = (await request.clone().json()) as ProfileBody;
       bodies.push(body);
+      if (hold && body.account_id === 'acc-1') await hold;
       if (body.account_id === profileFails) {
         return jsonResponse(
           { error: { code: 'flood_wait', message: 'flood_wait', details: [] } },
@@ -151,4 +153,43 @@ test('an empty first name blocks the apply, an empty bio does not', async () => 
   // stays applicable — and says so.
   expect(screen.getByRole('button', { name: 'Применить к 1 аккаунту' })).toBeEnabled();
   expect(screen.getByText('Пустое поле сотрёт значение у всех выбранных')).toBeInTheDocument();
+});
+
+test('a stopped batch skips the rest and lets the operator leave', async () => {
+  let release = () => {};
+  const bodies = routeApi(
+    undefined,
+    new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+  );
+  const user = userEvent.setup();
+  const { onClose } = renderModal();
+
+  await user.click(screen.getByRole('button', { name: 'Добавить аккаунты' }));
+  await screen.findByRole('checkbox', { name: 'Выбрать все (3)' });
+  await user.click(screen.getByRole('checkbox', { name: 'Выбрать все (3)' }));
+  await user.click(screen.getByRole('button', { name: 'Добавить (3)' }));
+
+  await user.click(screen.getByRole('checkbox', { name: 'Описание (bio)' }));
+  await user.type(screen.getByRole('textbox', { name: 'Описание (bio)' }), 'Новое био');
+  await user.click(screen.getByRole('button', { name: 'Применить к 3 аккаунтам' }));
+
+  await waitFor(() => {
+    expect(bodies).toHaveLength(1);
+  });
+  await user.click(screen.getByRole('button', { name: 'Остановить' }));
+  release();
+
+  // The in-flight account still lands; the two behind it never start.
+  await waitFor(() => {
+    expect(screen.queryByRole('button', { name: 'Остановить' })).not.toBeInTheDocument();
+  });
+  expect(bodies).toHaveLength(1);
+  expect(screen.getByText('Готово')).toBeInTheDocument();
+  expect(screen.getAllByText('Пропущен')).toHaveLength(2);
+  expect(screen.queryByText('Ждёт')).not.toBeInTheDocument();
+
+  await user.keyboard('{Escape}');
+  expect(onClose).toHaveBeenCalled();
 });
