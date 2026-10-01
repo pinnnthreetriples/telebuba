@@ -44,6 +44,11 @@ export const PRIVACY_LEVELS = [
   'nobody',
 ] as const satisfies readonly PrivacyLevel[];
 
+// Controls on a photo / story tile show only while the tile is hovered, and stay
+// reachable by keyboard: focusing any control inside reveals them too.
+export const HOVER_ONLY =
+  'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100';
+
 export function tileStyle(uri: string | null | undefined, ratio: string): CSSProperties {
   if (!uri) return { aspectRatio: ratio, background: TILE };
   return {

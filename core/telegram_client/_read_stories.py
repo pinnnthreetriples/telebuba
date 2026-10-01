@@ -17,6 +17,7 @@ from telethon import errors
 from telethon.tl.functions.stories import (
     GetPeerStoriesRequest,
     GetPinnedStoriesRequest,
+    GetStoriesByIDRequest,
     ReadStoriesRequest,
 )
 from telethon.tl.types import InputPeerSelf, MessageMediaDocument, MessageMediaPhoto
@@ -26,13 +27,14 @@ from schemas.telegram_profile_snapshot import (
     StoryPrivacyPreset,
     TelegramActiveStories,
     TelegramPinnedStories,
+    TelegramStoryMedia,
     TelegramStoryThumb,
 )
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
-    from schemas.telegram_actions import ListPinnedStories, WatchPeerStories
+    from schemas.telegram_actions import DownloadStoryMedia, ListPinnedStories, WatchPeerStories
 
 
 def _optional_str(value: object) -> str | None:
@@ -249,3 +251,28 @@ async def _download_story_thumb(client: TelegramClient, story: object) -> bytes 
         # the whole dialog open.
         return None
     return data if isinstance(data, (bytes, bytearray)) else None
+
+
+async def dispatch_download_story_media(
+    client: TelegramClient,
+    action: DownloadStoryMedia,
+) -> TelegramStoryMedia:
+    """Download one own story's full media for the story player.
+
+    ``stories.getStoriesByID`` returns the ``StoryItem`` (with a fresh file
+    reference); a deleted or unknown id comes back empty, which maps to an
+    empty result rather than an error so the endpoint can 404 cleanly.
+    """
+    result = await client(GetStoriesByIDRequest(peer=InputPeerSelf(), id=[action.story_id]))
+    story = next(iter(getattr(result, "stories", []) or []), None)
+    media = getattr(story, "media", None)
+    if media is None:
+        return TelegramStoryMedia()
+    # ``file=bytes`` (the type) is Telethon's in-memory mode; see above.
+    data = await client.download_media(media, file=bytes)  # ty: ignore[invalid-argument-type]
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        return TelegramStoryMedia()
+    mime = "image/jpeg"
+    if _story_kind(story) == "video":
+        mime = str(getattr(getattr(media, "document", None), "mime_type", "") or "video/mp4")
+    return TelegramStoryMedia(content=bytes(data), mime_type=mime)

@@ -4,6 +4,7 @@ import {
   AudioLines,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleCheck,
   CircleX,
@@ -29,7 +30,10 @@ import {
   UserRound,
   Users,
   Video,
+  Volume2,
+  VolumeX,
   X,
+  ZoomIn,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -65,6 +69,7 @@ const GLYPH = {
   check: Check,
   'check-circle': CircleCheck,
   'chevron-down': ChevronDown,
+  'chevron-left': ChevronLeft,
   'chevron-right': ChevronRight,
   close: X,
   eye: Eye,
@@ -93,7 +98,10 @@ const GLYPH = {
   'user-round': UserRound,
   users: Users,
   video: Video,
+  volume: Volume2,
+  'volume-off': VolumeX,
   'x-circle': CircleX,
+  'zoom-in': ZoomIn,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof GLYPH;

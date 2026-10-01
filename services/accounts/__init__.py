@@ -100,6 +100,7 @@ from services.accounts.profile_read import (
     account_avatar_image,
     account_profile_image,
     account_profile_view,
+    account_story_media,
     fetch_live_account_profile,
     invalidate_account_profile_cache,
 )
@@ -133,6 +134,7 @@ __all__ = [
     "account_profile_image",
     "account_profile_view",
     "account_stats",
+    "account_story_media",
     "add_account",
     "add_account_profile_music",
     "apply_account_privacy",

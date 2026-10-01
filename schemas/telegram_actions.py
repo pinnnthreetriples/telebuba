@@ -76,6 +76,7 @@ from schemas.telegram_actions_discovery import (
 # here keeps ``from schemas.telegram_actions import PostStory`` working unchanged.
 from schemas.telegram_actions_media import (
     AddProfileMusic,
+    DownloadStoryMedia,
     ListActiveStories,
     ListPinnedStories,
     ListProfilePhotos,
@@ -394,6 +395,7 @@ TelegramReadAction = Annotated[
     | GetTwoFactorStatus
     | ListPinnedStories
     | ListActiveStories
+    | DownloadStoryMedia
     | ListProfileMusic
     | ListProfilePhotos
     | WaitForBotChallenge

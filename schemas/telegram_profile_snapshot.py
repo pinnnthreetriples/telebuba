@@ -74,6 +74,13 @@ class TelegramActiveStories(BaseModel):
     items: list[TelegramStoryThumb] = Field(default_factory=list)
 
 
+class TelegramStoryMedia(BaseModel):
+    """One story's full media bytes; ``content`` is ``None`` when unavailable."""
+
+    content: bytes | None = None
+    mime_type: str = "image/jpeg"
+
+
 class TelegramMusicItem(BaseModel):
     file_id: int
     title: str | None = None
