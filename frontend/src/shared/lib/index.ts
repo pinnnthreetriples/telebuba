@@ -1,5 +1,5 @@
 export { cn } from './cn';
-export { formatLocalTime } from './formatTime';
+export { formatLocalDateTime, formatLocalTime, formatRelativeTo } from './formatTime';
 // Everything about a log row, in its own segment: deliver it, then label it, colour it
 // and explain why. Grouped when `eventReason` split out of ActivityLogCard and made
 // shared/lib the sixteenth file — steiger's fsd/shared-lib-grouping asks for exactly this

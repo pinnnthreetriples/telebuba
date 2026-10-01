@@ -86,6 +86,15 @@ _MEDIA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     (errors.MediaEmptyError, "media_invalid"),
 )
 
+# Story quota refusals have no Telethon class (they arrive as a bare RPCError), so
+# they are matched by message prefix; ``STORY_SEND_FLOOD_WEEKLY_<n>`` and its
+# monthly twin carry no ``.seconds``, so they are terminal, not a flood wait.
+StoryLimitErrorCode = Literal["stories_too_much", "story_send_flood"]
+_STORY_LIMIT_CODES: tuple[tuple[str, StoryLimitErrorCode], ...] = (
+    ("STORIES_TOO_MUCH", "stories_too_much"),
+    ("STORY_SEND_FLOOD", "story_send_flood"),
+)
+
 # The saved-music codes this module raises DIRECTLY, not through the ladder above.
 # A Literal because the i18n parity gate can only enumerate what it can import:
 # it walks the four error ladders plus ``StoryVideoErrorCode``, so a hand-raised
@@ -109,6 +118,10 @@ async def _dispatch_profile_media_action(
         for error_cls, code in _MEDIA_ERROR_CODES:
             if isinstance(exc, error_cls):
                 raise ProfileGatewayError(code) from exc
+        message = str(getattr(exc, "message", "") or "")
+        for prefix, limit_code in _STORY_LIMIT_CODES:
+            if message.startswith(prefix):
+                raise ProfileGatewayError(limit_code) from exc
         raise
 
 

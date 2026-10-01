@@ -99,6 +99,8 @@ export {
   listAccountChannelPostsQueryKey as accountChannelPostsQueryKey,
   listAccountChannelsOptions as accountChannelsQueryOptions,
   listAccountChannelsQueryKey as accountChannelsQueryKey,
+  listAccountScheduledPostsOptions as accountScheduledPostsQueryOptions,
+  listAccountScheduledPostsQueryKey as accountScheduledPostsQueryKey,
   listAccountsOptions as accountsQueryOptions,
   listAccountsQueryKey as accountsQueryKey,
 } from '@/shared/api/@tanstack/react-query.gen';

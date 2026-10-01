@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfileStoryView } from '@/shared/api';
@@ -17,12 +17,15 @@ export function StoriesTab({
   onAdd,
   onRemove,
   onPinToggle,
+  scheduled,
 }: {
   stories: ProfileStoryView[];
   pinPending: boolean;
   onAdd: () => void;
   onRemove: (story: ProfileStoryView) => void;
   onPinToggle: (story: ProfileStoryView) => void;
+  // The account's scheduled stories (the composer itself offers "on schedule").
+  scheduled: ReactNode;
 }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState<number | null>(null);
@@ -122,6 +125,7 @@ export function StoriesTab({
         ))}
         <DashedAdd ratio="9 / 16" label={t('accounts.profile.addStory')} onClick={onAdd} />
       </div>
+      {scheduled}
       {viewing !== null && (
         <StoryViewer
           stories={stories}

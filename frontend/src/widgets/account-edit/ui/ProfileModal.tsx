@@ -52,6 +52,8 @@ import { MusicTab } from './MusicTab';
 import { PhotoTab } from './PhotoTab';
 import { PrivacyTab } from './PrivacyTab';
 import { RetryNotice } from './RetryNotice';
+import { ScheduledPostsList } from './ScheduledPostsList';
+import { SchedulePhotosModal } from './SchedulePhotosModal';
 import { StoriesTab } from './StoriesTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
@@ -237,6 +239,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [tab, setTab] = useState<Tab>('text');
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [schedulePhotosOpen, setSchedulePhotosOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   // The bio the last successful save sent, or null if nothing was saved since
@@ -885,6 +888,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     { onSettled: refresh },
                   );
                 }}
+                onSchedule={() => {
+                  setSchedulePhotosOpen(true);
+                }}
+                scheduled={<ScheduledPostsList accountId={account.account_id} kind="photo" />}
               />
             )}
 
@@ -916,6 +923,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     { onSettled: refresh },
                   );
                 }}
+                scheduled={<ScheduledPostsList accountId={account.account_id} kind="story" />}
               />
             )}
 
@@ -1034,6 +1042,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             setStoryOpen(false);
           }}
           onPosted={refresh}
+        />
+      )}
+      {schedulePhotosOpen && (
+        <SchedulePhotosModal
+          accountId={account.account_id}
+          onClose={() => {
+            setSchedulePhotosOpen(false);
+          }}
         />
       )}
       {confirm ? (

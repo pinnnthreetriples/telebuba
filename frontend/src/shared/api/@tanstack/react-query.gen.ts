@@ -20,6 +20,7 @@ import {
   cancelAccountTwofaEmail,
   cancelBulkMessageJob,
   cancelContactLookupJob,
+  cancelScheduledPost,
   checkAccount,
   checkAccountChannelUsername,
   checkCampaignChannelBans,
@@ -77,6 +78,7 @@ import {
   listAccountChatMessages,
   listAccountChats,
   listAccounts,
+  listAccountScheduledPosts,
   listCampaignChallenges,
   listCampaigns,
   listChannelChallenges,
@@ -106,10 +108,13 @@ import {
   removeCampaignChannel,
   removeWarmingChannel,
   requestLoginCode,
+  rescheduleScheduledPost,
   resendAccountTwofaEmail,
   resetAccountSession,
   resyncAccountAvatar,
   saveNeuroshillingSettings,
+  scheduleAccountPhoto,
+  scheduleAccountStory,
   sendAccountChatMessage,
   sendBulkMessages,
   setAccountChannelPhoto,
@@ -146,6 +151,7 @@ import {
   updateNeurocommentSettings,
   updateNeuroshillingCampaign,
   updateWarmingSettings,
+  uploadScheduledMedia,
 } from '../sdk.gen';
 import type {
   AccountStatsData,
@@ -181,6 +187,9 @@ import type {
   CancelContactLookupJobData,
   CancelContactLookupJobError,
   CancelContactLookupJobResponse,
+  CancelScheduledPostData,
+  CancelScheduledPostError,
+  CancelScheduledPostResponse,
   CheckAccountChannelUsernameData,
   CheckAccountChannelUsernameError,
   CheckAccountChannelUsernameResponse,
@@ -348,6 +357,9 @@ import type {
   ListAccountChatsData,
   ListAccountChatsError,
   ListAccountChatsResponse,
+  ListAccountScheduledPostsData,
+  ListAccountScheduledPostsError,
+  ListAccountScheduledPostsResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
@@ -435,6 +447,9 @@ import type {
   RequestLoginCodeData,
   RequestLoginCodeError,
   RequestLoginCodeResponse,
+  RescheduleScheduledPostData,
+  RescheduleScheduledPostError,
+  RescheduleScheduledPostResponse,
   ResendAccountTwofaEmailData,
   ResendAccountTwofaEmailError,
   ResendAccountTwofaEmailResponse,
@@ -447,6 +462,12 @@ import type {
   SaveNeuroshillingSettingsData,
   SaveNeuroshillingSettingsError,
   SaveNeuroshillingSettingsResponse,
+  ScheduleAccountPhotoData,
+  ScheduleAccountPhotoError,
+  ScheduleAccountPhotoResponse,
+  ScheduleAccountStoryData,
+  ScheduleAccountStoryError,
+  ScheduleAccountStoryResponse,
   SendAccountChatMessageData,
   SendAccountChatMessageError,
   SendAccountChatMessageResponse,
@@ -555,6 +576,9 @@ import type {
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
+  UploadScheduledMediaData,
+  UploadScheduledMediaError,
+  UploadScheduledMediaResponse,
 } from '../types.gen';
 
 /**
@@ -2581,6 +2605,167 @@ export const cancelContactLookupJobMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await cancelContactLookupJob({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Upload Scheduled Media
+ */
+export const uploadScheduledMediaMutation = (
+  options?: Partial<Options<UploadScheduledMediaData>>,
+): UseMutationOptions<
+  UploadScheduledMediaResponse,
+  UploadScheduledMediaError,
+  Options<UploadScheduledMediaData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UploadScheduledMediaResponse,
+    UploadScheduledMediaError,
+    Options<UploadScheduledMediaData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await uploadScheduledMedia({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Schedule Account Photo
+ */
+export const scheduleAccountPhotoMutation = (
+  options?: Partial<Options<ScheduleAccountPhotoData>>,
+): UseMutationOptions<
+  ScheduleAccountPhotoResponse,
+  ScheduleAccountPhotoError,
+  Options<ScheduleAccountPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ScheduleAccountPhotoResponse,
+    ScheduleAccountPhotoError,
+    Options<ScheduleAccountPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await scheduleAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Schedule Account Story
+ */
+export const scheduleAccountStoryMutation = (
+  options?: Partial<Options<ScheduleAccountStoryData>>,
+): UseMutationOptions<
+  ScheduleAccountStoryResponse,
+  ScheduleAccountStoryError,
+  Options<ScheduleAccountStoryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ScheduleAccountStoryResponse,
+    ScheduleAccountStoryError,
+    Options<ScheduleAccountStoryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await scheduleAccountStory({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listAccountScheduledPostsQueryKey = (
+  options: Options<ListAccountScheduledPostsData>,
+) => createQueryKey('listAccountScheduledPosts', options);
+
+/**
+ * List Account Scheduled Posts
+ */
+export const listAccountScheduledPostsOptions = (options: Options<ListAccountScheduledPostsData>) =>
+  queryOptions<
+    ListAccountScheduledPostsResponse,
+    ListAccountScheduledPostsError,
+    ListAccountScheduledPostsResponse,
+    ReturnType<typeof listAccountScheduledPostsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountScheduledPosts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountScheduledPostsQueryKey(options),
+  });
+
+/**
+ * Cancel Scheduled Post
+ */
+export const cancelScheduledPostMutation = (
+  options?: Partial<Options<CancelScheduledPostData>>,
+): UseMutationOptions<
+  CancelScheduledPostResponse,
+  CancelScheduledPostError,
+  Options<CancelScheduledPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CancelScheduledPostResponse,
+    CancelScheduledPostError,
+    Options<CancelScheduledPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await cancelScheduledPost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Reschedule Scheduled Post
+ */
+export const rescheduleScheduledPostMutation = (
+  options?: Partial<Options<RescheduleScheduledPostData>>,
+): UseMutationOptions<
+  RescheduleScheduledPostResponse,
+  RescheduleScheduledPostError,
+  Options<RescheduleScheduledPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RescheduleScheduledPostResponse,
+    RescheduleScheduledPostError,
+    Options<RescheduleScheduledPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await rescheduleScheduledPost({
         ...options,
         ...fnOptions,
         throwOnError: true,

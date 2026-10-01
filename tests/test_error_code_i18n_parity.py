@@ -39,12 +39,17 @@ from pathlib import Path
 from typing import get_args
 
 from core.telegram_client._channels import _TELETHON_ERROR_CODES
-from core.telegram_client._media import _MEDIA_ERROR_CODES, MusicSaveErrorCode
+from core.telegram_client._media import (
+    _MEDIA_ERROR_CODES,
+    MusicSaveErrorCode,
+    StoryLimitErrorCode,
+)
 from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ERROR_CODES
 from core.telegram_client._twofa import _TWOFA_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.neurocomment import NeurocommentRefusalCode
 from schemas.neuroshilling import NeuroshillingRefusalCode
+from schemas.scheduled_posts import ScheduledPostRefusalCode
 from schemas.telegram_actions import ActionStatus
 from schemas.twofa import TwoFactorRefusalCode
 from schemas.warming import WarmingRefusalCode
@@ -111,6 +116,10 @@ def _expected_codes() -> set[str]:
     # which answers the 409 ``detail`` with a code the way the two above do. It exists
     # so a refusal added there is enumerable here instead of reaching the operator the
     # way that route's warming refusal still does, as an English sentence.
+    #
+    # ``ScheduledPostRefusalCode`` is the scheduling policy's own refusals, and
+    # ``StoryLimitErrorCode`` the story quota codes ``_media`` matches by message
+    # prefix (Telethon has no class for them), so neither is a ladder entry.
     return (
         set(get_args(StoryVideoErrorCode))
         | set(get_args(MusicSaveErrorCode))
@@ -118,6 +127,8 @@ def _expected_codes() -> set[str]:
         | set(get_args(NeuroshillingRefusalCode))
         | set(get_args(WarmingRefusalCode))
         | set(get_args(TwoFactorRefusalCode))
+        | set(get_args(ScheduledPostRefusalCode))
+        | set(get_args(StoryLimitErrorCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)
         | _mapped_codes()
     )

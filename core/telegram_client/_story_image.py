@@ -186,6 +186,12 @@ def _collage_cells(count: int, layout: str) -> list[tuple[float, float, float, f
     return cells
 
 
+def is_known_collage_layout(count: int, layout: str | None) -> bool:
+    """Whether ``count`` images can form a collage with ``layout`` (None = default)."""
+    templates = _COLLAGE_TEMPLATES.get(count)
+    return templates is not None and (layout is None or layout in templates)
+
+
 def _default_collage_layout(count: int) -> str:
     """The first template id for ``count`` — the default when none is requested."""
     templates = _COLLAGE_TEMPLATES.get(count)

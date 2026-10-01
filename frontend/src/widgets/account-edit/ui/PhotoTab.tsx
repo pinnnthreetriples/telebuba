@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ProfilePhotoView } from '@/shared/api';
@@ -20,6 +20,8 @@ export function PhotoTab({
   onUpload,
   onRemove,
   onMakeMain,
+  onSchedule,
+  scheduled,
 }: {
   photos: ProfilePhotoView[];
   busy: boolean;
@@ -27,6 +29,10 @@ export function PhotoTab({
   onUpload: (files: File[]) => void;
   onRemove: (photo: ProfilePhotoView) => void;
   onMakeMain: (photo: ProfilePhotoView) => void;
+  // Opens the timed-upload dialog; the drop zone and the upload tile stay "now".
+  onSchedule: () => void;
+  // The account's scheduled photos, shown under the grid they will join.
+  scheduled: ReactNode;
 }) {
   const { t } = useTranslation();
   const photoInput = useRef<HTMLInputElement>(null);
@@ -127,7 +133,14 @@ export function PhotoTab({
           disabled={busy}
           onClick={() => photoInput.current?.click()}
         />
+        <DashedAdd
+          ratio="1"
+          label={t('accounts.schedule.tile')}
+          disabled={busy}
+          onClick={onSchedule}
+        />
       </div>
+      {scheduled}
       <input
         ref={photoInput}
         type="file"

@@ -43,6 +43,7 @@ def _large_upload_patterns() -> tuple[str, ...]:
     return (
         rf"{prefix}/accounts/import-(?:tdata|session)",
         rf"{prefix}/accounts/photo",
+        rf"{prefix}/scheduled/media",
         rf"{prefix}/accounts/{segment}/(?:story|music)",
         rf"{prefix}/accounts/{segment}/channels/{segment}/(?:photo|posts)",
         rf"{prefix}/accounts/{segment}/chats/{segment}/{segment}/messages",

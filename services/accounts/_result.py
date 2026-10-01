@@ -13,6 +13,7 @@ __all__ = [
     "AccountNotFoundError",
     "action_error_for_read",
     "raise_for_result",
+    "result_code",
 ]
 
 
@@ -85,6 +86,12 @@ _STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
         "TwoFactorGatewayError",
     },
 )
+
+
+def result_code(result: ActionResult) -> str:
+    """The bounded code of a non-``ok`` result: a gateway stable code or the status."""
+    stable = result.error_message if result.error_type in _STABLE_CODE_ERROR_TYPES else None
+    return stable or result.status
 
 
 def raise_for_result(result: ActionResult) -> None:

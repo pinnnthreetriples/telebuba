@@ -97,6 +97,20 @@ def _purge_neurocomment(connection: Connection, account_id: str) -> None:
     )
 
 
+def _delete_scheduled_posts(connection: Connection, account_id: str) -> None:
+    # Scheduled posts FK accounts.account_id; their media rows cascade from the
+    # post. The stored files are swept by the service once the rows are gone.
+    from core.repositories.scheduled_posts._tables import (  # noqa: PLC0415
+        _scheduled_profile_posts,
+    )
+
+    connection.execute(
+        delete(_scheduled_profile_posts).where(
+            _scheduled_profile_posts.c.account_id == account_id,
+        ),
+    )
+
+
 def _delete_account(account_id: str) -> None:
     # F4: schema declares ForeignKey on warming_account_state /
     # account_spam_status without ON DELETE CASCADE, and PRAGMA foreign_keys=ON,
@@ -110,6 +124,7 @@ def _delete_account(account_id: str) -> None:
     from core.repositories.neuroshilling._tables import _neuroshilling_accounts  # noqa: PLC0415
 
     with _get_engine().begin() as connection:
+        _delete_scheduled_posts(connection, account_id)
         # neuroshilling_accounts.account_id is an FK (part of the roster's primary
         # key), so a rostered account could not be deleted at all. Only the roster
         # link goes: ``replaced_by_account_id`` on OTHER rows is not an FK and stays —
@@ -163,8 +178,8 @@ async def delete_account(account_id: str) -> None:
     SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
     helper manually purges ``warming_account_state`` /
     ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
-    joined channels / neurocomment and neuroshilling roster rows before
-    deleting the ``accounts`` row. The shared pool
+    joined channels / neurocomment and neuroshilling roster rows / scheduled posts
+    before deleting the ``accounts`` row. The shared pool
     proxy is left intact. New per-account tables MUST be added to
     ``_delete_account`` — relying on FK cascade is a bug.
 

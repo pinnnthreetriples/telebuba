@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi import status as http_status
 
 from core.config import settings
-from services import accounts
+from services import accounts, scheduled_posts
 
 if TYPE_CHECKING:
     from schemas.profile_media import ProfileImage
@@ -88,3 +88,13 @@ async def get_account_story_media(account_id: str, story_id: int, request: Reque
             status_code=http_status.HTTP_404_NOT_FOUND, detail="story media not found"
         )
     return _image_response(request, media)
+
+
+@router.get("/accounts/{account_id}/scheduled/{post_id}/thumb", include_in_schema=False)
+async def get_scheduled_post_thumb(account_id: str, post_id: str, request: Request) -> Response:
+    image = await scheduled_posts.scheduled_post_thumbnail(account_id, post_id)
+    if image is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND, detail="thumbnail not found"
+        )
+    return _image_response(request, image)

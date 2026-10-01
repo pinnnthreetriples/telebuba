@@ -39,6 +39,8 @@ function renderPhotos(onRemove = vi.fn()) {
       onUpload={vi.fn()}
       onRemove={onRemove}
       onMakeMain={vi.fn()}
+      onSchedule={vi.fn()}
+      scheduled={null}
     />,
   );
 }
@@ -51,6 +53,7 @@ function renderStories(stories: ProfileStoryView[]) {
       onAdd={vi.fn()}
       onRemove={vi.fn()}
       onPinToggle={vi.fn()}
+      scheduled={null}
     />,
   );
 }

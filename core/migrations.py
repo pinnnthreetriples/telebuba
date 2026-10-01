@@ -83,6 +83,7 @@ from core.migration_steps_pool import (
 )
 from core.migration_steps_proxy_hardening import _harden_proxy_hosts
 from core.migration_steps_rejoin import _add_readiness_rejoin, _add_readiness_rejoin_gave_up
+from core.migration_steps_scheduled_posts import _add_scheduled_posts_tables
 from core.migration_steps_unconfirmed_ban import _add_readiness_unconfirmed_ban
 from core.migration_steps_warming_extras import (
     _add_warming_joined_left_at,
@@ -194,6 +195,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (64, "drop_warming_settings_dead_columns", _drop_warming_settings_dead_columns),
     (65, "add_warming_settings_deepseek_key", _add_warming_settings_deepseek_key),
     (66, "add_warming_settings_text_llm_provider", _add_warming_settings_text_llm_provider),
+    (67, "add_scheduled_posts_tables", _add_scheduled_posts_tables),
 )
 
 

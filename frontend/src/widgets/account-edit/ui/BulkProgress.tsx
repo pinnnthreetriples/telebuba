@@ -15,9 +15,13 @@ import type { BulkRow } from './useBulkRun';
 export function BulkProgress({
   rows,
   label,
+  okLabel,
 }: {
   rows: BulkRow[];
   label: (accountId: string) => string;
+  // What a finished row says when "done" is not the whole story (a scheduled
+  // post: WHEN it will go out).
+  okLabel?: (accountId: string) => string;
 }) {
   const { t } = useTranslation();
   const done = rows.filter((row) => row.state === 'ok' || row.state === 'error').length;
@@ -62,7 +66,7 @@ export function BulkProgress({
                   ? row.error.message
                   : mutationErrorText(row.error)
                 : row.state === 'ok'
-                  ? t('accounts.bulk.rowOk')
+                  ? (okLabel?.(row.accountId) ?? t('accounts.bulk.rowOk'))
                   : row.state === 'running'
                     ? t('accounts.bulk.rowRunning')
                     : row.state === 'skipped'
