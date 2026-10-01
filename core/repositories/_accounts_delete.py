@@ -9,6 +9,7 @@ so existing call sites are unaffected.
 from __future__ import annotations
 
 import asyncio
+from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, update
 
@@ -19,6 +20,81 @@ from core.db import (
     _now_iso,
     _warming_joined_channels,
 )
+
+if TYPE_CHECKING:
+    from sqlalchemy.engine import Connection
+
+
+def _purge_neurocomment(connection: Connection, account_id: str) -> None:
+    from core.repositories.neurocomment._tables import (  # noqa: PLC0415
+        _neurocomment_account_limits,
+        _neurocomment_campaign_account_channels,
+        _neurocomment_campaign_accounts,
+        _neurocomment_challenges,
+        _neurocomment_comments,
+        _neurocomment_cooldowns,
+        _neurocomment_readiness,
+        _neurocomment_runtime,
+    )
+
+    # Neurocomment children FK accounts.account_id (campaign serving links,
+    # per-channel readiness, posted/claimed comments) → clear them first too.
+    connection.execute(
+        delete(_neurocomment_campaign_accounts).where(
+            _neurocomment_campaign_accounts.c.account_id == account_id,
+        ),
+    )
+    connection.execute(
+        delete(_neurocomment_campaign_account_channels).where(
+            _neurocomment_campaign_account_channels.c.account_id == account_id,
+        ),
+    )
+    connection.execute(
+        delete(_neurocomment_readiness).where(
+            _neurocomment_readiness.c.account_id == account_id,
+        ),
+    )
+    connection.execute(
+        delete(_neurocomment_comments).where(
+            _neurocomment_comments.c.account_id == account_id,
+        ),
+    )
+    # audit #1: neurocomment_challenges carries account_id but no FK, so
+    # orphan give-up/challenge rows would keep the channel flagged
+    # "challenged" on the board forever (count/list-by-outcome scan by
+    # channel). Purge the deleted account's rows in the same transaction.
+    connection.execute(
+        delete(_neurocomment_challenges).where(
+            _neurocomment_challenges.c.account_id == account_id,
+        ),
+    )
+    # neurocomment_cooldowns carries account_id but no FK (migration #34); a
+    # deleted-then-reimported account (same account_id) would inherit stale
+    # flood/slow-mode deadlines via hydrate_cooldowns and be wrongly parked
+    # after a restart. Purge its rows in the same transaction.
+    connection.execute(
+        delete(_neurocomment_cooldowns).where(
+            _neurocomment_cooldowns.c.account_id == account_id,
+        ),
+    )
+    # neurocomment_account_limits carries account_id but no FK (migration #58),
+    # and the same re-import hazard is sharper here than for a cooldown: a stale
+    # ``max_joins_per_day = 0`` reads as "no cap", so a brand-new account under a
+    # reused id would join without any rolling-24h budget in EITHER feature, and
+    # nothing on screen says so until somebody opens the limits modal.
+    connection.execute(
+        delete(_neurocomment_account_limits).where(
+            _neurocomment_account_limits.c.account_id == account_id,
+        ),
+    )
+    # If this account was the persisted listener, clear the pointer AND the
+    # run flag so reconcile_neurocomment_on_startup does not re-point at a
+    # ghost (and a paused-listener row can't resume onto a deleted account).
+    connection.execute(
+        update(_neurocomment_runtime)
+        .where(_neurocomment_runtime.c.listener_account_id == account_id)
+        .values(listener_account_id=None, listener_running=False, updated_at=_now_iso()),
+    )
 
 
 def _delete_account(account_id: str) -> None:
@@ -31,16 +107,6 @@ def _delete_account(account_id: str) -> None:
     # must outlive the account, so it is left untouched here.
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
-    from core.repositories.neurocomment._tables import (  # noqa: PLC0415
-        _neurocomment_account_limits,
-        _neurocomment_campaign_account_channels,
-        _neurocomment_campaign_accounts,
-        _neurocomment_challenges,
-        _neurocomment_comments,
-        _neurocomment_cooldowns,
-        _neurocomment_readiness,
-        _neurocomment_runtime,
-    )
     from core.repositories.neuroshilling._tables import _neuroshilling_accounts  # noqa: PLC0415
 
     with _get_engine().begin() as connection:
@@ -55,64 +121,7 @@ def _delete_account(account_id: str) -> None:
                 _neuroshilling_accounts.c.account_id == account_id,
             ),
         )
-        # Neurocomment children FK accounts.account_id (campaign serving links,
-        # per-channel readiness, posted/claimed comments) → clear them first too.
-        connection.execute(
-            delete(_neurocomment_campaign_accounts).where(
-                _neurocomment_campaign_accounts.c.account_id == account_id,
-            ),
-        )
-        connection.execute(
-            delete(_neurocomment_campaign_account_channels).where(
-                _neurocomment_campaign_account_channels.c.account_id == account_id,
-            ),
-        )
-        connection.execute(
-            delete(_neurocomment_readiness).where(
-                _neurocomment_readiness.c.account_id == account_id,
-            ),
-        )
-        connection.execute(
-            delete(_neurocomment_comments).where(
-                _neurocomment_comments.c.account_id == account_id,
-            ),
-        )
-        # audit #1: neurocomment_challenges carries account_id but no FK, so
-        # orphan give-up/challenge rows would keep the channel flagged
-        # "challenged" on the board forever (count/list-by-outcome scan by
-        # channel). Purge the deleted account's rows in the same transaction.
-        connection.execute(
-            delete(_neurocomment_challenges).where(
-                _neurocomment_challenges.c.account_id == account_id,
-            ),
-        )
-        # neurocomment_cooldowns carries account_id but no FK (migration #34); a
-        # deleted-then-reimported account (same account_id) would inherit stale
-        # flood/slow-mode deadlines via hydrate_cooldowns and be wrongly parked
-        # after a restart. Purge its rows in the same transaction.
-        connection.execute(
-            delete(_neurocomment_cooldowns).where(
-                _neurocomment_cooldowns.c.account_id == account_id,
-            ),
-        )
-        # neurocomment_account_limits carries account_id but no FK (migration #58),
-        # and the same re-import hazard is sharper here than for a cooldown: a stale
-        # ``max_joins_per_day = 0`` reads as "no cap", so a brand-new account under a
-        # reused id would join without any rolling-24h budget in EITHER feature, and
-        # nothing on screen says so until somebody opens the limits modal.
-        connection.execute(
-            delete(_neurocomment_account_limits).where(
-                _neurocomment_account_limits.c.account_id == account_id,
-            ),
-        )
-        # If this account was the persisted listener, clear the pointer AND the
-        # run flag so reconcile_neurocomment_on_startup does not re-point at a
-        # ghost (and a paused-listener row can't resume onto a deleted account).
-        connection.execute(
-            update(_neurocomment_runtime)
-            .where(_neurocomment_runtime.c.listener_account_id == account_id)
-            .values(listener_account_id=None, listener_running=False, updated_at=_now_iso()),
-        )
+        _purge_neurocomment(connection, account_id)
         connection.execute(
             delete(_warming_joined_channels).where(
                 _warming_joined_channels.c.account_id == account_id,
