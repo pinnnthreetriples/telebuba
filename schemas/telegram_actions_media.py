@@ -125,6 +125,17 @@ class ListActiveStories(BaseModel):
     action_type: Literal["list_active_stories"] = "list_active_stories"
 
 
+class DownloadStoryMedia(BaseModel):
+    """Read-only: download one own story's full media (photo or video).
+
+    Backs the profile modal's story player — the snapshot only carries the
+    poster thumbnail, so the playable file is fetched on demand.
+    """
+
+    action_type: Literal["download_story_media"] = "download_story_media"
+    story_id: int = Field(gt=0)
+
+
 class RemoveStory(BaseModel):
     """Delete one story from the account (active and/or pinned in one call).
 

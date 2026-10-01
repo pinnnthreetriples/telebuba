@@ -37,6 +37,7 @@ from schemas.profile_media import (
     ProfileStoryView,
 )
 from schemas.telegram_actions import (
+    DownloadStoryMedia,
     GetUserProfile,
     ListActiveStories,
     ListPinnedStories,
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
         TelegramProfileMusic,
         TelegramProfilePhotos,
         TelegramProfileSnapshot,
+        TelegramStoryMedia,
         TelegramStoryThumb,
     )
 
@@ -61,6 +63,7 @@ __all__ = [
     "account_avatar_image",
     "account_profile_image",
     "account_profile_view",
+    "account_story_media",
     "fetch_live_account_profile",
     "invalidate_account_profile_cache",
 ]
@@ -79,9 +82,9 @@ async def account_avatar_image(account_id: str) -> ProfileImage | None:
     return ProfileImage(content=content, etag=etag)
 
 
-def _thumb_url(account_id: str, kind: str, item_id: int | str) -> str:
-    """Build the browser-cacheable thumbnail URL for one photo/story item."""
-    return f"/api/{settings.api.version}/accounts/{account_id}/profile/{kind}/{item_id}/thumb"
+def _thumb_url(account_id: str, kind: str, item_id: int | str, leaf: str = "thumb") -> str:
+    """Build the browser-cacheable thumbnail (or full-media) URL for one item."""
+    return f"/api/{settings.api.version}/accounts/{account_id}/profile/{kind}/{item_id}/{leaf}"
 
 
 async def account_profile_view(
@@ -125,6 +128,7 @@ async def account_profile_view(
                 thumb_url=(
                     _thumb_url(account_id, "stories", story.story_id) if story.thumb_bytes else None
                 ),
+                media_url=_thumb_url(account_id, "stories", story.story_id, "media"),
             )
             for story in snapshot.stories
         ],
@@ -159,6 +163,27 @@ async def account_profile_image(
         return None
     etag = hashlib.blake2b(data, digest_size=16).hexdigest()
     return ProfileImage(content=data, etag=etag)
+
+
+async def account_story_media(account_id: str, story_id: int) -> ProfileImage | None:
+    """Download one story's full media (photo or video) for the story player.
+
+    Only ids present in the account's current snapshot are fetched, so a stray
+    URL can't turn into an arbitrary Telegram download. Read failures degrade
+    to ``None`` (404) — the player falls back to the poster thumbnail.
+    """
+    snapshot = await fetch_live_account_profile(account_id)
+    if not any(story.story_id == story_id for story in snapshot.stories):
+        return None
+    try:
+        (result,) = await execute_read_many(account_id, [DownloadStoryMedia(story_id=story_id)])
+    except (TelegramReadError, TelegramAccountNotFoundError):
+        return None
+    media = cast("TelegramStoryMedia", result)
+    if not media.content:
+        return None
+    etag = hashlib.blake2b(media.content, digest_size=16).hexdigest()
+    return ProfileImage(content=media.content, media_type=media.mime_type, etag=etag)
 
 
 def _locate_thumb_bytes(

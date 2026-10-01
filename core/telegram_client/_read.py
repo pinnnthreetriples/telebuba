@@ -44,6 +44,7 @@ from core.telegram_client._read_profile import (
 )
 from core.telegram_client._read_rights import dispatch_check_write_rights
 from core.telegram_client._read_stories import (
+    dispatch_download_story_media,
     dispatch_list_active_stories,
     dispatch_list_pinned_stories,
 )
@@ -53,6 +54,7 @@ from schemas.telegram_actions import (
     CheckBannedInChannel,
     CheckMessagesAlive,
     CheckMessagesAliveResult,
+    DownloadStoryMedia,
     GetLinkedDiscussionGroup,
     GetPrivacySettings,
     GetTwoFactorStatus,
@@ -233,6 +235,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await dispatch_list_pinned_stories(client, action)
         case ListActiveStories():
             return await dispatch_list_active_stories(client)
+        case DownloadStoryMedia():
+            return await dispatch_download_story_media(client, action)
         case ListProfileMusic():
             # The optional-import flag + request class live in THIS module (the
             # patch seam tests target); the dispatcher itself moved out.

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from telethon import errors
-from telethon.tl.functions.stories import GetPinnedStoriesRequest
+from telethon.tl.functions.stories import GetPinnedStoriesRequest, GetStoriesByIDRequest
 from telethon.tl.types import (
     MessageMediaDocument,
     MessageMediaPhoto,
@@ -18,12 +18,14 @@ from core.telegram_client import (
     execute_read,
 )
 from schemas.telegram_actions import (
+    DownloadStoryMedia,
     ListActiveStories,
     ListPinnedStories,
 )
 from schemas.telegram_profile_snapshot import (
     TelegramActiveStories,
     TelegramPinnedStories,
+    TelegramStoryMedia,
 )
 from tests.core.telegram_client.helpers import patch_read_client as _patch_client
 
@@ -294,3 +296,61 @@ async def test_list_pinned_stories_flood_wait_breaks_thumb_batch(
     assert [item.story_id for item in result.items] == [1, 2, 3]
     assert all(item.thumb_bytes is None for item in result.items)
     assert len(attempts) == 1, "siblings must skip after the breaker trips"
+
+
+class _MediaClient:
+    """Answers ``GetStoriesByIDRequest`` with ``stories`` and serves ``data``."""
+
+    def __init__(self, stories: list[object], data: object = b"bytes") -> None:
+        self.stories = stories
+        self.data = data
+        self.requested: list[object] = []
+
+    async def connect(self) -> None:
+        return None
+
+    async def __call__(self, request: object) -> object:
+        self.requested.append(request)
+        return MagicMock(stories=self.stories)
+
+    async def download_media(self, _media: object, *, file: object) -> object:  # noqa: ARG002
+        return self.data
+
+
+@pytest.mark.asyncio
+async def test_download_story_media_returns_video_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    video_media = MagicMock(spec=MessageMediaDocument)
+    video_media.document = MagicMock(mime_type="video/mp4")
+    fake = _MediaClient([MagicMock(id=7, media=video_media)], b"mp4")
+    _patch_client(monkeypatch, fake)
+
+    result = await execute_read("acc-stories", DownloadStoryMedia(story_id=7))
+
+    assert isinstance(result, TelegramStoryMedia)
+    assert result.content == b"mp4"
+    assert result.mime_type == "video/mp4"
+    (request,) = fake.requested
+    assert isinstance(request, GetStoriesByIDRequest)
+    assert request.id == [7]
+
+
+@pytest.mark.asyncio
+async def test_download_story_media_photo_is_jpeg(monkeypatch: pytest.MonkeyPatch) -> None:
+    photo_media = MagicMock(spec=MessageMediaPhoto)
+    _patch_client(monkeypatch, _MediaClient([MagicMock(id=7, media=photo_media)], b"jpg"))
+
+    result = await execute_read("acc-stories", DownloadStoryMedia(story_id=7))
+
+    assert isinstance(result, TelegramStoryMedia)
+    assert result.content == b"jpg"
+    assert result.mime_type == "image/jpeg"
+
+
+@pytest.mark.asyncio
+async def test_download_story_media_missing_story_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_client(monkeypatch, _MediaClient([]))
+
+    result = await execute_read("acc-stories", DownloadStoryMedia(story_id=7))
+
+    assert isinstance(result, TelegramStoryMedia)
+    assert result.content is None

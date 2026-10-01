@@ -3676,6 +3676,10 @@ export type ProfileStoryView = {
    * Thumb Url
    */
   thumb_url?: string | null;
+  /**
+   * Media Url
+   */
+  media_url?: string | null;
 };
 
 /**
